@@ -9,6 +9,7 @@ Part 1: Bundle Creation (Internet Connected)
 Part 2: Bundle Publishing (Disconnected)  
 
 ## Usage
+```
 Command: oc bundle   
   
 Requires: bundle-config.yaml in target directory  
@@ -29,8 +30,8 @@ publish
     --tls-verify (boolean | optional)  
     --to-directory (string | oc bundle managed directory)  
     --to-mirror (string | target registry url)  
-  
-  
+```  
+
 ## Bundle Spec
 
 Note: The `bundle-config.yaml` needs to be placed in the directory specified by the --dir flag.
