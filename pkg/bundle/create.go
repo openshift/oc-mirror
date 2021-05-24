@@ -9,3 +9,9 @@ package bundle
 // Download additional images
 
 // create bundle files
+
+func CreateFull(rootDir string) {
+
+}
+
+func CreateDiff(rootDir string) {}

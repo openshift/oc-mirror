@@ -17,3 +17,6 @@ package bundle
 // install imagecontentsourcepolicy
 
 // install catalogsource
+
+func Publish(rootDir string) {
+}
