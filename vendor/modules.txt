@@ -1,0 +1,52 @@
+# github.com/blang/semver/v4 v4.0.0
+github.com/blang/semver/v4
+# github.com/go-logr/logr v0.4.0
+github.com/go-logr/logr
+# github.com/google/uuid v1.2.0
+## explicit
+github.com/google/uuid
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/kr/text v0.2.0
+## explicit
+# github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
+## explicit
+# github.com/openshift/cluster-version-operator v1.0.1-0.20200804150713-ea6899ae6f7c
+## explicit
+github.com/openshift/cluster-version-operator/pkg/cincinnati
+# github.com/pkg/errors v0.9.1
+## explicit
+github.com/pkg/errors
+# github.com/sirupsen/logrus v1.8.1
+## explicit
+github.com/sirupsen/logrus
+# github.com/spf13/cobra v1.1.3
+## explicit
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.5
+github.com/spf13/pflag
+# github.com/stretchr/testify v1.6.1
+## explicit
+# golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+## explicit
+golang.org/x/crypto/ssh/terminal
+# golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073
+## explicit
+golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/plan9
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
+## explicit
+golang.org/x/term
+# gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f
+## explicit
+# gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+## explicit
+gopkg.in/yaml.v3
+# k8s.io/klog v1.0.0
+## explicit
+k8s.io/klog
+# k8s.io/klog/v2 v2.8.0
+## explicit
+k8s.io/klog/v2

@@ -18,5 +18,5 @@ package bundle
 
 // install catalogsource
 
-func Publish(rootDir string) {
-}
+//func Publish(rootDir string) error {
+//}

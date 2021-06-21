@@ -44,7 +44,7 @@ type AdditionalImages struct {
 
 type Ocp struct {
 	Graph    bool      `json:"graph,omitempty"`
-	Versions []Version `json:"versions,omitempty"`
+	Channels []channel `json:"channels,omitempty"`
 }
 
 type Version struct {
@@ -61,3 +61,30 @@ type Package struct {
 	Name       string `json:"name"`
 	MinVersion string `json:"minVersion,omitempty"`
 }
+
+type channel struct {
+	name     string    `json:"name"`
+	versions []version `json:"versions`
+}
+type channels []channel
+type version string
+
+// Metadata is the data format used to track generated imagesets
+
+type Metadata struct {
+	Timestamp int `json:"timestamp"`
+	Sequence  int `json:"sequence"`
+	Mirror    `json:"mirror"`
+	Files     []File `json:"file"`
+}
+
+type File struct {
+	Name     string `json:"name"`
+	Filename string `json:"filename"`
+}
+
+type Imagesets struct {
+	Imagesets []Metadata `json:"imagesets"`
+}
+
+type rootDir string
