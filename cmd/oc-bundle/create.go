@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +28,10 @@ func newCreateFullCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create full called")
-			err := bundle.CreateFull(rootOpts.dir)
-			if err != nil {
-				logrus.Fatal(err)
-			}
+			//err := bundle.CreateFull(rootOpts.dir)
+			//if err != nil {
+			//	logrus.Fatal(err)
+			//}
 
 		},
 	}

@@ -30,7 +30,9 @@ func readMeta(r string) (*Imagesets, error) {
 
 }
 
+/*
 func writeMeta() {
 	// append current object to the end of the metadata file
 
 }
+*/

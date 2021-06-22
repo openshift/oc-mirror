@@ -89,7 +89,7 @@ func GetReleases(i *Imagesets, rootDir string) error {
 		lastVersions = i.Imagesets[len(i.Imagesets)-1]
 		for _, r := range lastVersions.Ocp.Channels {
 			var nv channels
-			neededVersions, err := r.calculateUpgradePath(config)
+			newest, neededVersions, err := r.calculateUpgradePath(config)
 			if err != nil {
 				logrus.Errorln("Failed get upgrade graph")
 				logrus.Error(err)
