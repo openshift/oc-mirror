@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -14,10 +13,11 @@ func newPublishCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, _ []string) {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
-			err := bundle.Publish(rootOpts.dir)
-			if err != nil {
-				logrus.Fatal(err)
-			}
+			//err := bundle.Publish(rootOpts.dir)
+			logrus.Infoln("Publish Was called")
+			//if err != nil {
+			//	logrus.Fatal(err)
+			//}
 		},
 	}
 }

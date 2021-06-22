@@ -28,10 +28,12 @@ func newCreateFullCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, _ []string) {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
+			logrus.Infoln("Create full called")
 			err := bundle.CreateFull(rootOpts.dir)
 			if err != nil {
 				logrus.Fatal(err)
 			}
+
 		},
 	}
 }
@@ -44,10 +46,13 @@ func newCreateDiffCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, _ []string) {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
-			err := bundle.CreateDiff(rootOpts.dir)
-			if err != nil {
-				logrus.Fatal(err)
-			}
+			logrus.Infoln("Create Diff called")
+			/*
+				err := bundle.CreateDiff(rootOpts.dir)
+				if err != nil {
+					logrus.Fatal(err)
+				}
+			*/
 		},
 	}
 }
