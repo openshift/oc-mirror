@@ -14,21 +14,23 @@ import (
 //	// check for complete metadata
 //
 //}
-
-func validateCreateDir(rootDir string) (bool, error) {
+/*
+func ValidateCreateDir(rootDir string) error {
 	// check for declared imageset root directory
 	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
-		return false, err
-
+		//return false, err
+		logrus.Infoln("referenced directory does not exist")
+		return err
 	} else {
-		return true, err
+		//return true, err
+		logrus.Infoln("referenced directory found")
+		return err
 	}
 	// check for expected metadata locations
 	// check for complete metadata
-
 }
-
-func makeCreateDirs(rootDir string) error {
+*/
+func MakeCreateDirs(rootDir string) error {
 	paths := []string{
 		"/bundle/publish",
 		"/bundle/v2",
@@ -41,9 +43,9 @@ func makeCreateDirs(rootDir string) error {
 			if err != nil {
 				logrus.Errorln(err)
 			}
-			logrus.Infoln("Creating directory: %v", rootDir+p)
+			logrus.Infof("Creating directory: %v", rootDir+p)
 		} else {
-			logrus.Infoln("Found %v", rootDir+p)
+			logrus.Infof("Found %v", rootDir+p)
 		}
 	}
 	return nil

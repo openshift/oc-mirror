@@ -1,4 +1,4 @@
-package cincinnati
+package bundle
 
 import (
 	"context"
@@ -68,7 +68,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	transport := http.Transport{}
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
-	queryParams.Add("arch", arch)
+	//queryParams.Add("arch", arch)
 	queryParams.Add("channel", channel)
 	queryParams.Add("id", c.id.String())
 	queryParams.Add("version", version.String())

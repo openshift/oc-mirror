@@ -4,9 +4,9 @@ mirror:
     versions:
       - 4.6.13
       - 4.6.15
-      - 4.7.*
-    graph: true <2>
-  operators: <3>
+      - 4.7
+    graph: true
+  operators:
     - catalog: redhat-operators:v4.7
     - catalog: certified-operators:v4.7
       packages: 

@@ -31,7 +31,7 @@ type BundleSpec struct {
 }
 
 type Mirror struct {
-	AdditionalImages `json:"additionalImages,omitempty"`
+	AdditionalImages []string `json:"additionalImages,omitempty"`
 	BlockedImages    []string `json:"blockedImages,omitempty"`
 	Ocp              `json:"ocp,omitempty"`
 	Operators        []Operator `json:"operators,omitempty"`
@@ -63,19 +63,17 @@ type Package struct {
 }
 
 type channel struct {
-	name     string    `json:"name"`
-	versions []version `json:"versions`
+	Name     string   `json:"name"`
+	Versions []string `json:"versions"`
 }
-type channels []channel
-type version string
 
 // Metadata is the data format used to track generated imagesets
 
-type Metadata struct {
+type Imageset struct {
 	Timestamp int `json:"timestamp"`
 	Sequence  int `json:"sequence"`
 	Mirror    `json:"mirror"`
-	Files     []File `json:"file"`
+	Files     []string `json:"files"`
 }
 
 type File struct {
@@ -84,7 +82,7 @@ type File struct {
 }
 
 type Imagesets struct {
-	Imagesets []Metadata `json:"imagesets"`
+	Imagesets []Imageset `json:"imagesets"`
 }
 
-type rootDir string
+type RootDir string

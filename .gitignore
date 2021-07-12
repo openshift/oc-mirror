@@ -1,0 +1,4 @@
+.openshift_bundle.log
+cmd/oc-bundle/test/
+oc-bundle
+!cmd/oc-bundle

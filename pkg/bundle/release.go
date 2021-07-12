@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 
-	"github.com/blang/semver/v4"
+	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	cincinnati "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,32 +36,31 @@ func getTLSConfig() (*tls.Config, error) {
 }
 
 // Next calculate the upgrade path from the current version to the channel's latest
-func (c channel) calculateUpgradePath(b *BundleSpec) (cincinnati.Update, []cincinnati.Update, error) {
+func calculateUpgradePath(b channel, v *semver.Version) (Update, []Update, error) {
 
-	upstream, err := url.Parse("https://api.openshift.com/api/upgrades_info/v1/graph")
-	if err != nil {
-		logrus.Error(err)
-	}
-	proxy, err := url.Parse("")
+	upstream, err := url.Parse(UpdateUrl)
 	if err != nil {
 		logrus.Error(err)
 	}
 
-	tls, err := getTLSConfig()
-	client := cincinnati.NewClient(uuid.New(), proxy, tls)
+	// This needs to handle user input at some point.
+	var proxy *url.URL
+
+	var tls *tls.Config
+	/*tls, err := getTLSConfig()
+	if err != nil {
+		logrus.Error(err)
+	}*/
+	client := NewClient(uuid.New(), proxy, tls)
 
 	ctx := context.Background()
+
+	// Does not currently handle arch selection
 	arch := "x86_64"
 
-	channel := "stable-4.7"
+	channel := b.Name
 
-	var version = semver.Version{
-		Major: 4,
-		Minor: 7,
-		Patch: 3,
-	}
-
-	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, version)
+	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, *v)
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -75,35 +76,149 @@ func (c channel) calculateUpgradePath(b *BundleSpec) (cincinnati.Update, []cinci
 //	// Download the referneced versions by channel
 //}
 
-func GetReleases(i *Imagesets, rootDir string) error {
-	// Get latest downloaded versions by channel
-	// Get bundle config release info
-	config, err := readBundleConfig(rootDir)
+func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string, channel string, version semver.Version) (Update, error) {
+	var latest Update
+	transport := http.Transport{}
+	// Prepare parametrized cincinnati query.
+	queryParams := uri.Query()
+	//queryParams.Add("arch", arch)
+	queryParams.Add("channel", channel)
+	queryParams.Add("id", c.id.String())
+	uri.RawQuery = queryParams.Encode()
+
+	// Download the update graph.
+	req, err := http.NewRequest("GET", uri.String(), nil)
 	if err != nil {
-		logrus.Errorln("Failed to load config file")
-		logrus.Error(err)
-		return err
+		return latest, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
 	}
-	if i != nil {
-		var lastVersions Metadata
-		lastVersions = i.Imagesets[len(i.Imagesets)-1]
-		for _, r := range lastVersions.Ocp.Channels {
-			var nv channels
-			newest, neededVersions, err := r.calculateUpgradePath(config)
-			if err != nil {
-				logrus.Errorln("Failed get upgrade graph")
-				logrus.Error(err)
-				return err
-			}
-			nv = append(nv, neededVersions)
+	req.Header.Add("Accept", GraphMediaType)
+	if c.tlsConfig != nil {
+		transport.TLSClientConfig = c.tlsConfig
+	}
+
+	if c.proxyURL != nil {
+		transport.Proxy = http.ProxyURL(c.proxyURL)
+	}
+
+	client := http.Client{Transport: &transport}
+	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
+	defer cancel()
+	resp, err := client.Do(req.WithContext(timeoutCtx))
+	if err != nil {
+		return latest, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return latest, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
+	}
+
+	// Parse the graph.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return latest, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
+	}
+
+	var graph graph
+	if err = json.Unmarshal(body, &graph); err != nil {
+		return latest, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+	}
+
+	// Find the current version within the graph.
+	var currentIdx int
+	found := false
+	for i, node := range graph.Nodes {
+		if version.EQ(node.Version) {
+			currentIdx = i
+			latest = Update(graph.Nodes[i])
+			found = true
+			break
 		}
-
-		// Download each referenced version from
-		//downloadRelease(nv)
-	} else {
-		// download release speficied in imageset
 	}
+	if !found {
+		return latest, &Error{
+			Reason:  "VersionNotFound",
+			Message: fmt.Sprintf("currently reconciling cluster version %s not found in the %q channel", version, channel),
+		}
+	}
+	logrus.Infoln(currentIdx)
+	return latest, err
+}
 
-	return err
+func GetReleases(i *Imageset, c *BundleSpec) error {
+	//var nv []Update
+	if i != nil {
+		for _, r := range i.Mirror.Ocp.Channels {
+			if r.Versions != nil {
+				for _, rn := range r.Versions {
+					rs, err := semver.New(rn)
+					if err != nil {
+						logrus.Errorln(err)
+						return err
+					}
+					newest, neededVersions, err := calculateUpgradePath(r, rs)
+					if err != nil {
+						logrus.Errorln("Failed get upgrade graph")
+						logrus.Error(err)
+						return err
+					}
+
+					// If specific version, lookup version in channel and download
+
+					// Else if channel, download latest from channel.
+
+					// Use
+					/*for _, u := range neededVersions {
+											n := Update{}
+											var buff bytes.Buffer
+					                        enc :=gob.New
+											e := json.Unmarshal(gob.NewDecoder(), n)
+					*/
+
+					logrus.Infof("Current Object: %v", rn)
+					logrus.Infoln("")
+					logrus.Infof("Newest: %v", newest)
+					logrus.Infoln("")
+					logrus.Infof("Next-Versions: %v", neededVersions)
+					//nv = append(nv, neededVersions)
+				}
+			}
+		}
+	} else {
+		for _, r := range c.Mirror.Ocp.Channels {
+			for _, rn := range r.Versions {
+				rs, err := semver.New(rn)
+				if err != nil {
+					logrus.Errorln(err)
+					return err
+				}
+				newest, neededVersions, err := calculateUpgradePath(r, rs)
+				if err != nil {
+					logrus.Errorln("Failed get upgrade graph")
+					logrus.Error(err)
+					return err
+				}
+
+				// Use
+				/*for _, u := range neededVersions {
+				n := Update{}
+				var buff bytes.Buffer
+				enc :=gob.New
+				e := json.Unmarshal(gob.NewDecoder(), n)
+				*/
+
+				logrus.Infof("No Meta Found. Requesting: %v", rn)
+				logrus.Infoln("")
+				logrus.Infof("Newest: %v", newest)
+				logrus.Infoln("")
+				logrus.Infof("Next-Versions: %v", neededVersions)
+				//nv = append(nv, neededVersions)
+
+			}
+		}
+	}
+	return nil
+	// Download each referenced version from
+	//downloadRelease(nv)
 
 }

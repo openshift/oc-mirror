@@ -1,4 +1,4 @@
-package bundle
+package publish
 
 // load incoming tar
 

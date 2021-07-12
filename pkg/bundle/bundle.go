@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+/*
 var (
 	bundleExample = `
 	# Reference a bundle-config.yaml to create a new full OCP bundle.
@@ -19,13 +20,15 @@ var (
 	%[1]s bundle publish --from-bundle=bundle.x.y.z.tar.gz --to-directory=v2-directory --to-mirror=registry.url.local:5000 --install
 `
 )
+*/
 
 const (
 	configName string = "/bundle-config.yaml"
-	metadata   string = "/src/publish/.meta"
+	metadata   string = "/src/publish/.metadata.json"
+	UpdateUrl  string = "https://api.openshift.com/api/upgrades_info/v1/graph"
 )
 
-func readBundleConfig(rootDir string) (*BundleSpec, error) {
+func ReadBundleConfig(rootDir string) (*BundleSpec, error) {
 	buf, err := ioutil.ReadFile(rootDir + configName)
 	if err != nil {
 		return nil, err

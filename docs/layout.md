@@ -11,6 +11,7 @@ publish.go: publish subcommands
 
 individual.go: individual image handling
 bundle.go: metadata handling
+cincinnati.go: Temporary import due to needing to change API request. Needs to PR CVO.
 create.go: create top level functions
 doc.go: godoc
 init.go: directory and file management
