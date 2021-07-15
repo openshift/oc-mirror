@@ -1,5 +1,39 @@
 # Bundle
 
+# Development!
+
+This repo is being developed.
+
+### Build 
+
+Not automated yet.   
+
+go version 1.16  
+
+Manual Build:
+```
+cd cmd/oc-bundle && go build .
+```
+
+### Test
+
+No unit tests... yet.  
+  
+  
+Function test:  
+1. Download pull secret and place at ~/.docker/config.josn   
+2. Build and test:  
+```
+mkdir cmd/oc-bundle/test
+cp data/bundle-config.yaml cmd/oc-bundle/test/
+cd cmd/oc-bundle
+go build .
+./oc-bundle create full --dir=test  --log-level=debug
+```   
+
+
+
+
 ## Overview
 Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container image bundles.   
 

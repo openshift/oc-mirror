@@ -1,10 +1,13 @@
-apiVersion: v1alpha1
+---
+apiversion: v1alpha1
 mirror:
   ocp:
-    versions:
-      - 4.6.13
-      - 4.6.15
-      - 4.7
+    channels:
+      - name: stable-4.7
+      - name: stable-4.6
+        versions:
+        - 4.6.36
+        - 4.6.13
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
@@ -16,13 +19,14 @@ mirror:
         - name: crunchy-postgresql-operator
           channel: 'stable'
     - catalog: community-operators:v4.7
-      latestOnly: true
+      latestonly: true
   samples:
     - ruby
     - python
     - nginx
-  additionalImages:
+  additionalimages:
     - registry.redhat.io/ubi8/ubi:latest
-  blockedImages:
+  blockedimages:
     - alpine
     - redis
+pullsecret: '{"auths":{"cloud.openshift.com":..."}}}'

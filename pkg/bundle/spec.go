@@ -1,5 +1,9 @@
 package bundle
 
+import (
+	"github.com/google/uuid"
+)
+
 // The bundlespec and the directory tree structs live here.
 
 // Directory structure
@@ -73,7 +77,8 @@ type Imageset struct {
 	Timestamp int `json:"timestamp"`
 	Sequence  int `json:"sequence"`
 	Mirror    `json:"mirror"`
-	Files     []string `json:"files"`
+	Files     []string  `json:"files"`
+	Uid       uuid.UUID `json:"uid"`
 }
 
 type File struct {
