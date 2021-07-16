@@ -24,8 +24,9 @@ Function test:
 1. Download pull secret and place at ~/.docker/config.josn   
 2. Build and test:  
 ```
-mkdir cmd/oc-bundle/test
+mkdir -p cmd/oc-bundle/test/
 cp data/bundle-config.yaml cmd/oc-bundle/test/
+cp data/.metadata.json cmd/oc-bundle/test/src/publish
 cd cmd/oc-bundle
 go build .
 ./oc-bundle create full --dir=test  --log-level=debug
