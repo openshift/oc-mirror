@@ -29,7 +29,7 @@ func CreateFull(rootDir string) error {
 	}
 	logrus.Info(config)
 	if &config.Mirror.Ocp != nil {
-		bundle.GetReleases(&lastRun, config)
+		bundle.GetReleases(&lastRun, config, rootDir)
 	}
 	/*if &config.Mirror.Operators != nil {
 	//GetOperators(*config, rootDir)

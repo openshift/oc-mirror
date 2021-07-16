@@ -179,7 +179,7 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func downloadMirror(i string) error {
+func downloadMirror(i string, rootDir string) error {
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
 		Out:    os.Stdout,
@@ -188,7 +188,7 @@ func downloadMirror(i string) error {
 	opts := release.NewMirrorOptions(stream)
 
 	opts.From = i
-	opts.ToDir = "test/src/"
+	opts.ToDir = rootDir + "/src/"
 
 	if err := opts.Run(); err != nil {
 		return err
@@ -197,7 +197,7 @@ func downloadMirror(i string) error {
 
 }
 
-func GetReleases(i *Imageset, c *BundleSpec) error {
+func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 	// First check for metadata
 	if i != nil {
 		// For each channel in the config file
@@ -222,7 +222,7 @@ func GetReleases(i *Imageset, c *BundleSpec) error {
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
-					err = downloadMirror(requested.Image)
+					err = downloadMirror(requested.Image, rootDir)
 					if err != nil {
 						logrus.Errorln(err)
 					}
@@ -259,7 +259,7 @@ func GetReleases(i *Imageset, c *BundleSpec) error {
 				}
 				logrus.Infof("Image to download: %v", latest.Image)
 				// Download the release
-				err = downloadMirror(latest.Image)
+				err = downloadMirror(latest.Image, rootDir)
 				if err != nil {
 					logrus.Errorln(err)
 				}
@@ -288,7 +288,7 @@ func GetReleases(i *Imageset, c *BundleSpec) error {
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
-					err = downloadMirror(requested.Image)
+					err = downloadMirror(requested.Image, rootDir)
 					if err != nil {
 						logrus.Errorln(err)
 					}
@@ -323,7 +323,7 @@ func GetReleases(i *Imageset, c *BundleSpec) error {
 					return err
 				}
 				logrus.Infof("Image to download: %v", latest.Image)
-				err = downloadMirror(latest.Image)
+				err = downloadMirror(latest.Image, rootDir)
 				if err != nil {
 					logrus.Errorln(err)
 				}
