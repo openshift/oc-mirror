@@ -10,22 +10,27 @@ import (
 
 func ReadMeta(rootDir string) (Imagesets, error) {
 	metaPath := rootDir + metadata
-	jsonFile, err := os.Open(metaPath)
-	if err != nil {
-		logrus.Errorln(err)
+	if _, err := os.Stat(metaPath); err == nil {
+
+		jsonFile, err := os.Open(metaPath)
+		if err != nil {
+			logrus.Errorln(err)
+		}
+
+		logrus.Infof("Successfully Opened %v", metaPath)
+		// defer the closing of our jsonFile so that we can parse it later on
+		defer jsonFile.Close()
+
+		byteValue, _ := ioutil.ReadAll(jsonFile)
+
+		var imagesets Imagesets
+
+		json.Unmarshal(byteValue, &imagesets)
+		return imagesets, err
+	} else {
+		empty := Imagesets{}
+		return empty, err
 	}
-
-	logrus.Infof("Successfully Opened %v", metaPath)
-	// defer the closing of our jsonFile so that we can parse it later on
-	defer jsonFile.Close()
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-
-	var imagesets Imagesets
-
-	json.Unmarshal(byteValue, &imagesets)
-	return imagesets, err
-
 }
 
 /*
