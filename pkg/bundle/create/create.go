@@ -8,7 +8,7 @@ import (
 )
 
 // CreateFull performs all tasks in creating full imagesets
-func CreateFull(rootDir string) error {
+func CreateFull(ext, rootDir string, segSize int64) error {
 	err := bundle.MakeCreateDirs(rootDir)
 	if err != nil {
 		logrus.Error(err)
@@ -48,6 +48,30 @@ func CreateFull(rootDir string) error {
 		if err := bundle.GetAdditional(cfg, rootDir); err != nil {
 			return err
 		}
+	//}
+	//if &config.Mirror.AdditionalImages != nil {
+	//	getAdditional(*config, rootDir)
+	//}
+	*/
+	// Get current working directory
+	cwd, err := os.Getwd()
+
+	if err != nil {
+		return err
+	}
+
+	// Create archiver
+	arc, err := archive.NewArchiver(ext)
+
+	if err != nil {
+		return fmt.Errorf("failed to create archiver: %v", err)
+	}
+
+	os.Chdir(rootDir)
+
+	// Create tar archive
+	if err := archive.CreateSplitArchive(arc, cwd, "bundle", segSize, "."); err != nil {
+		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
 	return nil

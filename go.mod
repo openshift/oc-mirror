@@ -10,6 +10,8 @@ require (
 	github.com/openshift/library-go v0.0.0-20210521084623-7392ea9b02ca
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
 	github.com/operator-framework/operator-registry v0.0.0-00010101000000-000000000000
+	github.com/mholt/archiver/v3 v3.5.0
+	github.com/openshift/oc v0.0.0-alpha.0.0.20210612233142-1077b0516d5b
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.1.3
