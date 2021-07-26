@@ -1,4 +1,12 @@
-.openshift_bundle.log
-cmd/oc-bundle/test/
-oc-bundle
-!cmd/oc-bundle
+# Build artifacts.
+/bin/
+
+# Test artifacts.
+/cmd/oc-bundle/test/
+coverage.out
+
+# Logs.
+**/.openshift_bundle.log
+
+# Local vendor. Remove when ready to vendor dependencies.
+/vendor/

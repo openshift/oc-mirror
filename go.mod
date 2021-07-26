@@ -24,17 +24,3 @@ replace (
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210521075216-71b63307b5df
 	k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210521075729-633333dfccda
 )
-
-exclude (
-	github.com/kubevirt/terraform-provider-kubevirt v0.0.0-00010101000000-000000000000
-	github.com/metal3-io/baremetal-operator v0.0.0-20210422153428-d22c5f710cdc
-	github.com/metal3-io/cluster-api-provider-baremetal v0.0.0
-	github.com/tencentcloud/tencentcloud-sdk-go v3.0.82+incompatible
-	github.com/terraform-providers/terraform-provider-ignition/v2 v2.1.0
-	kubevirt.io/client-go v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api-provider-aws v0.0.0
-	sigs.k8s.io/cluster-api-provider-aws v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api-provider-azure v0.0.0
-	sigs.k8s.io/cluster-api-provider-azure v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api-provider-openstack v0.0.0
-)
