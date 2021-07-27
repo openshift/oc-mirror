@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func Test__Verify_Archive(t *testing.T) {
+func Test_Verify_Archive(t *testing.T) {
 
 	source := "../../testdata/archives/testbundle.tar.gz"
 	hash := "../../testdata/archives/testsum.txt"
@@ -28,7 +28,7 @@ func Test__Verify_Archive(t *testing.T) {
 	}
 }
 
-func Test__Map_Checksum(t *testing.T) {
+func Test_Map_Checksum(t *testing.T) {
 
 	known := make(map[string]string)
 

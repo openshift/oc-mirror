@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const delimeter = "\t"
+
 // Define error for archive validation
 type ValidationError struct {
 	Path string
@@ -39,7 +41,7 @@ func AppendChecksum(hashFile *os.File, archivePath string) error {
 	}
 
 	// append checksum to file
-	if _, err = hashFile.Write([]byte(sum + "\t" + file.Name() + "\n")); err != nil {
+	if _, err = hashFile.Write([]byte(sum + delimeter + file.Name() + "\n")); err != nil {
 		return err
 	}
 
@@ -101,7 +103,7 @@ func MapChecksum(src string) (map[string]string, error) {
 
 	// Scan each line to create map
 	for scanner.Scan() {
-		line := strings.Split(scanner.Text(), "\t")
+		line := strings.Split(scanner.Text(), delimeter)
 		checksums[line[1]] = line[0]
 
 	}
