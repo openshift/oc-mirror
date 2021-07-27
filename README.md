@@ -4,68 +4,67 @@
 
 This repo is being developed.
 
-### Build 
+### Build
 
-Not automated yet.   
+Not automated yet.
 
-go version 1.16  
+Requires go version 1.16.
 
 Manual Build:
 ```
-cd cmd/oc-bundle && go build .
+make
+./bin/oc-bundle -h
 ```
 
 ### Test
 
-No unit tests... yet.  
-  
-  
-Function test:  
-1. Download pull secret and place at ~/.docker/config.josn   
-2. Build and test:  
-```
-mkdir -p cmd/oc-bundle/test/
-cp data/bundle-config.yaml cmd/oc-bundle/test/
-cp data/.metadata.json cmd/oc-bundle/test/src/publish
-cd cmd/oc-bundle
-go build .
-./oc-bundle create full --dir=test  --log-level=debug
-```   
+No unit tests... yet.
 
 
-
+Function test:
+1. Download pull secret and place at ~/.docker/config.josn
+2. Build and test:
+  ```sh
+  mkdir -p test-output/src/publish
+  cp data/bundle-config.yaml test-output/
+  cp data/.metadata.json test-output/src/publish
+  make
+  ./bin/oc-bundle create full --dir=test-output --log-level=debug
+  ```
 
 ## Overview
-Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container image bundles.   
 
-Bundle managment is a two part process:  
-  
-Part 1: Bundle Creation (Internet Connected)  
-Part 2: Bundle Publishing (Disconnected)  
+Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container image bundles.
+
+Bundle managment is a two part process:
+
+Part 1: Bundle Creation (Internet Connected)
+Part 2: Bundle Publishing (Disconnected)
 
 ## Usage
+
 ```
-Command: oc bundle   
-  
-Requires: bundle-config.yaml in target directory  
-  
-Sub-commands:   
-create  
-  Options:  
-    full  
-    diff  
-  Flags:  
-    --directory (string | oc bundle managed directory)  
-    --bundle-name (string | name of bundle archive | optional)  
-publish  
-  Flags:  
-    --from-bundle (string | archive name)  
-    --install (optional)  
-    --no-mirror (optional)  
-    --tls-verify (boolean | optional)  
-    --to-directory (string | oc bundle managed directory)  
-    --to-mirror (string | target registry url)  
-```  
+Command: oc bundle
+
+Requires: bundle-config.yaml in target directory
+
+Sub-commands:
+create
+  Options:
+    full
+    diff
+  Flags:
+    --directory (string | oc bundle managed directory)
+    --bundle-name (string | name of bundle archive | optional)
+publish
+  Flags:
+    --from-bundle (string | archive name)
+    --install (optional)
+    --no-mirror (optional)
+    --tls-verify (boolean | optional)
+    --to-directory (string | oc bundle managed directory)
+    --to-mirror (string | target registry url)
+```
 
 ## Bundle Spec
 
