@@ -1,8 +1,10 @@
 package create
 
 import (
-	bundle "github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/sirupsen/logrus"
+
+	"github.com/RedHatGov/bundle/pkg/bundle"
+	"github.com/RedHatGov/bundle/pkg/config"
 )
 
 // CreateFull performs all tasks in creating full imagesets
@@ -13,32 +15,39 @@ func CreateFull(rootDir string) error {
 		return err
 	}
 	// Open Metadata
-	metadata, err := bundle.ReadMeta(rootDir)
+	metadata, err := config.LoadMetadata(rootDir)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	lastRun := metadata.Imagesets[len(metadata.Imagesets)-1]
+	lastRun := metadata.PastMirrors[len(metadata.PastMirrors)-1]
 	logrus.Info(lastRun)
 
-	// Read the bundle-config.yaml
-	config, err := bundle.ReadBundleConfig(rootDir)
+	// Read the imageset-config.yaml
+	cfg, err := config.LoadConfig(rootDir)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	logrus.Info(config)
-	if len(config.Mirror.Ocp.Channels) != 0 {
-		bundle.GetReleases(&lastRun, config, rootDir)
+	logrus.Info(cfg)
+
+	if len(cfg.Mirror.OCP.Channels) != 0 {
+		if err := bundle.GetReleases(&lastRun, cfg, rootDir); err != nil {
+			return err
+		}
 	}
+
 	/*if &config.Mirror.Operators != nil {
 	//GetOperators(*config, rootDir)
 	//}
 	//if &config.Mirror.Samples != nil {
 	//GetSamples(*config, rootDir)
 	//}*/
-	if len(config.Mirror.AdditionalImages) != 0 {
-		bundle.GetAdditional(config, rootDir)
+
+	if len(cfg.Mirror.AdditionalImages) != 0 {
+		if err := bundle.GetAdditional(cfg, rootDir); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -26,7 +26,7 @@ Function test:
 2. Build and test:
   ```sh
   mkdir -p test-output/src/publish
-  cp data/bundle-config.yaml test-output/
+  cp data/imageset-config.yaml test-output/
   cp data/.metadata.json test-output/src/publish
   make
   ./bin/oc-bundle create full --dir=test-output --log-level=debug
@@ -46,7 +46,7 @@ Part 2: Bundle Publishing (Disconnected)
 ```
 Command: oc bundle
 
-Requires: bundle-config.yaml in target directory
+Requires: imageset-config.yaml in target directory
 
 Sub-commands:
 create
@@ -68,10 +68,10 @@ publish
 
 ## Bundle Spec
 
-Note: The `bundle-config.yaml` needs to be placed in the directory specified by the --dir flag.
-Note: The `bundle-config.yaml` is only used during bundle creation.
+Note: The `imageset-config.yaml` needs to be placed in the directory specified by the --dir flag.
+Note: The `imageset-config.yaml` is only used during bundle creation.
 ```
-bundleSpec: {{ version of bundle-config | String | Required }}
+bundleSpec: {{ version of imageset-config | String | Required }}
 targetOCPRelease: {{ version of OCP to be bundled | String | Optional }}
 operators: {{ Optional }}
   - channel: {{ update stream | string | if operators, then required}}
