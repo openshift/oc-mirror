@@ -34,7 +34,7 @@ Function test:
 
 ## Overview
 
-Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container image bundles.
+Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container images.
 
 Bundle managment is a two part process:
 
@@ -70,16 +70,11 @@ publish
 
 Note: The `imageset-config.yaml` needs to be placed in the directory specified by the --dir flag.
 Note: The `imageset-config.yaml` is only used during bundle creation.
-```
-bundleSpec: {{ version of imageset-config | String | Required }}
-targetOCPRelease: {{ version of OCP to be bundled | String | Optional }}
-operators: {{ Optional }}
-  - channel: {{ update stream | string | if operators, then required}}
-    full: {{ bolean }}
-    operatorList: {{ list of strings | if full catalog, then required}}
-additionalImages: {{ list of additional images to be bundled }}
-blockedImages: {{ list of blocked images / no download }}
-pullSecret: {{ cloud.redhat.com pull secret }}
-bundleSize: {{ Number in GB to limit bundle file size to }}
-```
 
+See the [config spec][config-spec] for an in-depth description of fields.
+
+<!--
+TODO(estroz): link to the following once public
+[config-spec]:https://pkg.go.dev/github.com/redhatgov/bundle/pkg/config/v1alpha1#ImageSetConfiguration
+-->
+[config-spec]:pkg/config/v1alpha1/config_types.go
