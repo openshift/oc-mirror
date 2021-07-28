@@ -90,4 +90,9 @@ type Imagesets struct {
 	Imagesets []Imageset `json:"imagesets"`
 }
 
+type Compare struct {
+	Imageset
+	BundleSpec
+}
+
 type RootDir string

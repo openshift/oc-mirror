@@ -197,11 +197,11 @@ func downloadMirror(i string, rootDir string) error {
 
 }
 
-func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
+func GetReleases(c Compare, rootDir string) error {
 	// First check for metadata
-	if i != nil {
+	if c.Imageset.Files != nil {
 		// For each channel in the config file
-		for _, r := range c.Mirror.Ocp.Channels {
+		for _, r := range c.BundleSpec.Mirror.Ocp.Channels {
 			// Check for specific version declarations
 			if r.Versions != nil {
 				// for each specific version
@@ -267,7 +267,7 @@ func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 			}
 		}
 	} else {
-		for _, r := range c.Mirror.Ocp.Channels {
+		for _, r := range c.BundleSpec.Mirror.Ocp.Channels {
 			// Check for specific version declarations
 			if r.Versions != nil {
 				// for each specific version

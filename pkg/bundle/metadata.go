@@ -10,8 +10,14 @@ import (
 
 func ReadMeta(rootDir string) (Imagesets, error) {
 	metaPath := rootDir + metadata
-	if _, err := os.Stat(metaPath); err == nil {
-
+	_, err := os.Stat(metaPath)
+	if err != nil {
+		logrus.Warn(err)
+	}
+	if os.IsNotExist(err) {
+		empty := Imagesets{}
+		return empty, err
+	} else {
 		jsonFile, err := os.Open(metaPath)
 		if err != nil {
 			logrus.Errorln(err)
@@ -27,9 +33,6 @@ func ReadMeta(rootDir string) (Imagesets, error) {
 
 		json.Unmarshal(byteValue, &imagesets)
 		return imagesets, err
-	} else {
-		empty := Imagesets{}
-		return empty, err
 	}
 }
 

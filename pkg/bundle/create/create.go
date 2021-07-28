@@ -14,22 +14,25 @@ func CreateFull(rootDir string) error {
 	}
 	// Open Metadata
 	metadata, err := bundle.ReadMeta(rootDir)
+	var lastRun bundle.Imageset
 	if err != nil {
-		logrus.Error(err)
-		return err
+		logrus.Warn(err)
+	} else {
+		lastRun := metadata.Imagesets[len(metadata.Imagesets)-1]
+		logrus.Info(lastRun)
 	}
-	lastRun := metadata.Imagesets[len(metadata.Imagesets)-1]
-	logrus.Info(lastRun)
-
 	// Read the bundle-config.yaml
 	config, err := bundle.ReadBundleConfig(rootDir)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	logrus.Info(config)
+	configs := bundle.Compare{
+		Imageset:   lastRun,
+		BundleSpec: *config,
+	}
 	if &config.Mirror.Ocp != nil {
-		bundle.GetReleases(&lastRun, config, rootDir)
+		bundle.GetReleases(configs, rootDir)
 	}
 	/*if &config.Mirror.Operators != nil {
 	//GetOperators(*config, rootDir)
