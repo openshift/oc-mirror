@@ -28,7 +28,7 @@ func CreateFull(rootDir string) error {
 		return err
 	}
 	logrus.Info(config)
-	if &config.Mirror.Ocp != nil {
+	if len(config.Mirror.Ocp.Channels) != 0 {
 		bundle.GetReleases(&lastRun, config, rootDir)
 	}
 	/*if &config.Mirror.Operators != nil {
@@ -36,11 +36,11 @@ func CreateFull(rootDir string) error {
 	//}
 	//if &config.Mirror.Samples != nil {
 	//GetSamples(*config, rootDir)
-	//}
-	//if &config.Mirror.AdditionalImages != nil {
-	//	getAdditional(*config, rootDir)
-	//}
-	*/
+	//}*/
+	if len(config.Mirror.AdditionalImages) != 0 {
+		bundle.GetAdditional(config, rootDir)
+	}
+
 	return nil
 }
 
