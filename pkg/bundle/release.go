@@ -22,6 +22,15 @@ import (
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
 
+// Define interface and var for http client to support testing
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	HClient HTTPClient
+)
+
 // This file is for managing OCP release related tasks
 
 func getTLSConfig() (*tls.Config, error) {
@@ -142,10 +151,10 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 		transport.Proxy = http.ProxyURL(c.proxyURL)
 	}
 
-	client := http.Client{Transport: &transport}
+	HClient = &http.Client{Transport: &transport}
 	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
 	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
+	resp, err := HClient.Do(req.WithContext(timeoutCtx))
 	if err != nil {
 		return latest.Version, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
 	}
