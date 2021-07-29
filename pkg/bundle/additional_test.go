@@ -3,14 +3,20 @@ package bundle
 import (
 	"os"
 	"testing"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 func Test_GetAdditional(t *testing.T) {
 
-	cfg := &BundleSpec{
-		Mirror: Mirror{
-			BlockedImages:    []string{"alpine"},
-			AdditionalImages: []string{"docker.io/library/alpine:latest", "docker.io/library/busybox:latest"},
+	cfg := v1alpha1.ImageSetConfiguration{}
+	cfg.Mirror = v1alpha1.Mirror{
+		BlockedImages: []v1alpha1.BlockedImages{
+			{Name: "alpine"},
+		},
+		AdditionalImages: []v1alpha1.AdditionalImages{
+			{Name: "docker.io/library/alpine:latest"},
+			{Name: "docker.io/library/busybox:latest"},
 		},
 	}
 

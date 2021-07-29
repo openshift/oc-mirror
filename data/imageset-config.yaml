@@ -1,32 +1,34 @@
----
-apiversion: v1alpha1
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
 mirror:
   ocp:
     channels:
       - name: stable-4.7
       - name: stable-4.6
         versions:
-        - 4.6.36
-        - 4.6.13
+          - '4.6.36'
+          - '4.6.13'
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
     - catalog: certified-operators:v4.7
-      packages: 
+      packages:
         - name: couchbase-operator
         - name: mongodb-operator
-          version: '>1.4.0'
+          versions:
+            - '1.4.0'
         - name: crunchy-postgresql-operator
-          channel: 'stable'
+          channels:
+            - name: 'stable'
     - catalog: community-operators:v4.7
       latestonly: true
   samples:
-    - ruby
-    - python
-    - nginx
+    - name: ruby
+    - name: python
+    - name: nginx
   additionalimages:
-    - registry.redhat.io/ubi8/ubi:latest
+    - name: registry.redhat.io/ubi8/ubi:latest
   blockedimages:
-    - alpine
-    - redis
+    - name: alpine
+    - name: redis
 pullsecret: '{"auths":{"cloud.openshift.com":..."}}}'

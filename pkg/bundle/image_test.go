@@ -3,12 +3,13 @@ package bundle
 import (
 	"testing"
 
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 )
 
 func Test_ImageBlocking(t *testing.T) {
 	type fields struct {
-		blockedImages []string
+		blockedImages []v1alpha1.BlockedImages
 	}
 	tests := []struct {
 		name   string
@@ -19,7 +20,9 @@ func Test_ImageBlocking(t *testing.T) {
 		{
 			name: "testing want to block",
 			fields: fields{
-				blockedImages: []string{"alpine"},
+				blockedImages: []v1alpha1.BlockedImages{
+					{Name: "alpine"},
+				},
 			},
 			ref: reference.DockerImageReference{
 				Name: "alpine",
@@ -29,7 +32,9 @@ func Test_ImageBlocking(t *testing.T) {
 		{
 			name: "testing do not want to block",
 			fields: fields{
-				blockedImages: []string{"alpine"},
+				blockedImages: []v1alpha1.BlockedImages{
+					{Name: "alpine"},
+				},
 			},
 			ref: reference.DockerImageReference{
 				Name: "ubi8",
@@ -38,10 +43,9 @@ func Test_ImageBlocking(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		cfg := &BundleSpec{
-			Mirror: Mirror{
-				BlockedImages: tt.fields.blockedImages,
-			},
+		cfg := v1alpha1.ImageSetConfiguration{}
+		cfg.Mirror = v1alpha1.Mirror{
+			BlockedImages: tt.fields.blockedImages,
 		}
 
 		actual := IsBlocked(cfg, tt.ref)
