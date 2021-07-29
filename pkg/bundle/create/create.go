@@ -175,7 +175,13 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		logrus.Debugf("operator catalog image diff not implemented")
+		opts := operator.NewOperatorOptions()
+		opts.RootDestDir = rootDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err := opts.Diff(ctx, cfg, lastRun); err != nil {
+			return err
+		}
 	}
 
 	if len(cfg.Mirror.Samples) != 0 {
