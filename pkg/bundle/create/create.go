@@ -1,8 +1,12 @@
 package create
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/sirupsen/logrus"
 
+	"github.com/RedHatGov/bundle/pkg/archive"
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 )
@@ -48,11 +52,8 @@ func CreateFull(ext, rootDir string, segSize int64) error {
 		if err := bundle.GetAdditional(cfg, rootDir); err != nil {
 			return err
 		}
-	//}
-	//if &config.Mirror.AdditionalImages != nil {
-	//	getAdditional(*config, rootDir)
-	//}
-	*/
+	}
+
 	// Get current working directory
 	cwd, err := os.Getwd()
 
