@@ -72,9 +72,11 @@ func (h *fileHook) Fire(entry *logrus.Entry) error {
 }
 
 func setupFileHook(baseDir string) func() {
-	/*if err := os.MkdirAll(baseDir, 0755); err != nil {
-		logrus.Fatal(errors.Wrap(err, "failed to create base directory for logs"))
-	}*/
+	if baseDir != "" && baseDir != "." {
+		if err := os.MkdirAll(baseDir, 0755); err != nil {
+			logrus.Fatal(errors.Wrap(err, "failed to create base directory for logs"))
+		}
+	}
 
 	logfile, err := os.OpenFile(filepath.Join(baseDir, ".openshift_bundle.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {

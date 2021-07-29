@@ -6,6 +6,7 @@
 coverage.out
 bundle*.tar.gz
 sha256sum.txt
+/test/operator-test.**
 
 # Logs.
 **/.openshift_bundle.log

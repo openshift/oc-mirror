@@ -24,6 +24,10 @@ import (
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
 
+const (
+	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+)
+
 // This file is for managing OCP release related tasks
 
 const updateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"

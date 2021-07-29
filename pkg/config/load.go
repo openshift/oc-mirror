@@ -69,7 +69,7 @@ func LoadMetadata(rootDir string) (metadata v1alpha1.Metadata, err error) {
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
-	if err := yaml.UnmarshalStrict(data, &typeMeta); err != nil {
+	if err := yaml.Unmarshal(data, &typeMeta); err != nil {
 		return typeMeta, fmt.Errorf("get type meta: %v", err)
 	}
 	return typeMeta, nil
