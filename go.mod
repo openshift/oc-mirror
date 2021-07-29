@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/google/uuid v1.2.0
+	github.com/openshift/library-go v0.0.0-20210521084623-7392ea9b02ca
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210612233142-1077b0516d5b
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1

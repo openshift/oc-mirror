@@ -4,9 +4,12 @@
 # Test artifacts.
 /cmd/oc-bundle/test/
 coverage.out
+bundle*.tar.gz
+sha256sum.txt
 
 # Logs.
 **/.openshift_bundle.log
 
 # Local vendor. Remove when ready to vendor dependencies.
 /vendor/
+
