@@ -16,6 +16,8 @@ import (
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 // import(
@@ -24,11 +26,12 @@ import (
 
 // This file is for managing OCP release related tasks
 
-func getTLSConfig() (*tls.Config, error) {
-	certPool := x509.NewCertPool()
+const updateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
 
-	if ok := certPool.AppendCertsFromPEM([]byte("/etc/ssl/cert.pem")); !ok {
-		return nil, fmt.Errorf("unable to add ca-bundle.crt certificates")
+func getTLSConfig() (*tls.Config, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
 	}
 
 	config := &tls.Config{
@@ -38,37 +41,43 @@ func getTLSConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-// Next calculate the upgrade path from the current version to the channel's latest
-func calculateUpgradePath(b channel, v semver.Version) (Update, []Update, error) {
-
-	upstream, err := url.Parse(UpdateUrl)
+func newClient() (Client, *url.URL, error) {
+	upstream, err := url.Parse(updateUrl)
 	if err != nil {
-		logrus.Error(err)
+		return Client{}, nil, err
 	}
 
 	// This needs to handle user input at some point.
 	var proxy *url.URL
 
-	var tls *tls.Config
-	/*tls, err := getTLSConfig()
+	tls, err := getTLSConfig()
 	if err != nil {
-		logrus.Error(err)
-	}*/
-	client := NewClient(uuid.New(), proxy, tls)
+		return Client{}, nil, err
+	}
+	return NewClient(uuid.New(), proxy, tls), upstream, nil
+}
+
+// Next calculate the upgrade path from the current version to the channel's latest
+func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version) (Update, []Update, error) {
+
+	client, upstream, err := newClient()
+	if err != nil {
+		return Update{}, nil, err
+	}
 
 	ctx := context.Background()
 
 	// Does not currently handle arch selection
 	arch := "x86_64"
 
-	channel := b.Name
+	channel := ch.Name
 
 	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, v)
 	if err != nil {
-		logrus.Error(err)
+		return Update{}, nil, err
 	}
 
-	return upgrade, upgrades, err
+	return upgrade, upgrades, nil
 	//	// get latest channel version dowloaded
 
 	//	// output a channel (struct) with the upgrade versions needed
@@ -78,37 +87,27 @@ func calculateUpgradePath(b channel, v semver.Version) (Update, []Update, error)
 //func downloadRelease(c channel) error {
 //	// Download the referneced versions by channel
 //}
-func GetLatestVersion(b channel) (Update, error) {
+func GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, error) {
 
-	upstream, err := url.Parse(UpdateUrl)
+	client, upstream, err := newClient()
 	if err != nil {
-		logrus.Error(err)
+		return Update{}, err
 	}
-
-	// This needs to handle user input at some point.
-	var proxy *url.URL
-
-	var tls *tls.Config
-	/*tls, err := getTLSConfig()
-	if err != nil {
-		logrus.Error(err)
-	}*/
-	client := NewClient(uuid.New(), proxy, tls)
 
 	ctx := context.Background()
 
 	// Does not currently handle arch selection
 	arch := "x86_64"
 
-	channel := b.Name
+	channel := ch.Name
 
 	latest, err := client.GetChannelLatest(ctx, upstream, arch, channel)
 	if err != nil {
-		logrus.Error(err)
+		return Update{}, err
 	}
 	upgrade, _, err := client.GetUpdates(ctx, upstream, arch, channel, latest)
 	if err != nil {
-		logrus.Error(err)
+		return Update{}, err
 	}
 
 	return upgrade, err
@@ -197,11 +196,12 @@ func downloadMirror(i string, rootDir string) error {
 
 }
 
-func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
+// TODO: refactor this into functions for when no past mirrors exist vs. do exist.
+func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
 	// First check for metadata
 	if i != nil {
 		// For each channel in the config file
-		for _, r := range c.Mirror.Ocp.Channels {
+		for _, r := range c.Mirror.OCP.Channels {
 			// Check for specific version declarations
 			if r.Versions != nil {
 				// for each specific version
@@ -217,14 +217,13 @@ func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 					requested, _, err := calculateUpgradePath(r, rs)
 					if err != nil {
 						logrus.Errorln("Failed get upgrade graph")
-						logrus.Error(err)
 						return err
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
 					err = downloadMirror(requested.Image, rootDir)
 					if err != nil {
-						logrus.Errorln(err)
+						return err
 					}
 					logrus.Infof("Channel Latest version %v", requested.Version)
 
@@ -267,7 +266,7 @@ func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 			}
 		}
 	} else {
-		for _, r := range c.Mirror.Ocp.Channels {
+		for _, r := range c.Mirror.OCP.Channels {
 			// Check for specific version declarations
 			if r.Versions != nil {
 				// for each specific version
@@ -283,14 +282,13 @@ func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 					requested, _, err := calculateUpgradePath(r, rs)
 					if err != nil {
 						logrus.Errorln("Failed get upgrade graph")
-						logrus.Error(err)
 						return err
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
 					err = downloadMirror(requested.Image, rootDir)
 					if err != nil {
-						logrus.Errorln(err)
+						return err
 					}
 					logrus.Infof("Channel Latest version %v", requested.Version)
 
@@ -325,7 +323,7 @@ func GetReleases(i *Imageset, c *BundleSpec, rootDir string) error {
 				logrus.Infof("Image to download: %v", latest.Image)
 				err = downloadMirror(latest.Image, rootDir)
 				if err != nil {
-					logrus.Errorln(err)
+					return err
 				}
 				logrus.Infof("Channel Latest version %v", latest.Version)
 			}
