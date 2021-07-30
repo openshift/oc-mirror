@@ -13,30 +13,21 @@ func Test__Split_Archive(t *testing.T) {
 		name         string
 		source       string
 		maxSplitSize int64
-		ext          string
 		want         string
 	}{
 		{
 			name:         "testing gz format",
 			source:       "../../testdata/archives",
 			maxSplitSize: 1000000,
-			ext:          ".tar.gz",
-			want:         "testbundle",
-		},
-		{
-			name:         "testing tar format",
-			source:       "../../testdata/archives",
-			maxSplitSize: 1000000,
-			ext:          ".tar",
 			want:         "testbundle",
 		},
 	}
 	for _, tt := range tests {
 
-		a, err := NewArchiver(tt.ext)
+		a, err := NewArchiver()
 
 		if err != nil {
-			t.Errorf("Test %s: cannot create archiver for file %s%s", tt.name, tt.want, tt.ext)
+			t.Errorf("Test %s: cannot create archiver for file %s.tar.gz", tt.name, tt.want)
 		}
 
 		if err = CreateSplitArchive(a, ".", tt.want, tt.maxSplitSize, tt.source); err != nil {
@@ -52,7 +43,6 @@ func Test__Split_Archive(t *testing.T) {
 				}
 
 				os.RemoveAll(path)
-				os.Remove("sha256sum.txt")
 			}
 
 			return nil

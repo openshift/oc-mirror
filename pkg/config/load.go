@@ -18,20 +18,19 @@ import (
 // See https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/config/config.go
 
 const (
-	configFile   = "imageset-config.yaml"
 	metadataFile = ".metadata.json"
 )
 
 var metadataBasePath = filepath.Join("src", "publish", metadataFile)
 
-func LoadConfig(rootDir string) (c v1alpha1.ImageSetConfiguration, err error) {
+func LoadConfig(configPath string) (c v1alpha1.ImageSetConfiguration, err error) {
 
-	configPath := filepath.Join(rootDir, configFile)
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return c, err
 	}
 	typeMeta, err := getTypeMeta(data)
+
 	if err != nil {
 		return c, err
 	}
@@ -69,7 +68,7 @@ func LoadMetadata(rootDir string) (metadata v1alpha1.Metadata, err error) {
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
-	if err := yaml.UnmarshalStrict(data, &typeMeta); err != nil {
+	if err := yaml.Unmarshal(data, &typeMeta); err != nil {
 		return typeMeta, fmt.Errorf("get type meta: %v", err)
 	}
 	return typeMeta, nil

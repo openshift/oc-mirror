@@ -7,7 +7,9 @@ import (
 )
 
 type createOpts struct {
-	segSize int64
+	segSize    int64
+	configPath string
+	outputDir  string
 }
 
 func newCreateCmd() *cobra.Command {
@@ -37,7 +39,7 @@ func newCreateFullCmd() *cobra.Command {
 
 			// Convert size to bytes
 			segSizeBytes := opts.segSize * 1024 * 1024
-			err := create.CreateFull(".tar.gz", rootOpts.dir, segSizeBytes)
+			err := create.CreateFull(opts.configPath, opts.outputDir, rootOpts.dir, segSizeBytes)
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -48,6 +50,8 @@ func newCreateFullCmd() *cobra.Command {
 	f := cmd.Flags()
 	//TODO convert to bytes with input + suffix
 	f.Int64VarP(&opts.segSize, "archive-size", "s", 1000, "Size of each segemented archive in MB")
+	f.StringVarP(&opts.configPath, "config", "c", "imageset-config.yaml", "Path to imageset configuration file")
+	f.StringVarP(&opts.outputDir, "output", "o", ".", "Directory to output archived bundles")
 
 	return cmd
 }

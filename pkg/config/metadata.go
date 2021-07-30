@@ -1,26 +1,26 @@
 package config
 
-/*
-func SetupMetadata(rootDir string) (string, error) {
+import (
+	"encoding/json"
+	"io/ioutil"
+	"path/filepath"
 
-	if _, err := os.Stat(filepath.Join(rootDir, "src/publish/.")); os.IsNotExist(err) {
-		logrus.Infof("Metadata not found. Creating new metadata")
-	} else {
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+)
 
-		metafile, err := os.OpenFile(filepath.Join(rootDir, "src/publish/openshift_bundle.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			logrus.Fatal(errors.Wrap(err, "failed to open metadata file"))
-		}
+func WriteMetadata(metadata *v1alpha1.Metadata, rootDir string) error {
 
-		return func() {
-			metafile.Close()
-		}
+	metadataPath := filepath.Join(rootDir, metadataBasePath)
+
+	data, err := json.Marshal(metadata)
+
+	if err != nil {
+		return err
 	}
-}
-*/
-/*
-func writeMeta() {
-	// append current object to the end of the metadata file
 
+	if err := ioutil.WriteFile(metadataPath, data, 0640); err != nil {
+		return err
+	}
+
+	return nil
 }
-*/

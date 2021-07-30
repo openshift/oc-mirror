@@ -12,6 +12,8 @@ import (
 // Metadata object kind.
 const MetadataKind = "Metadata"
 
+const MetadataAPIVersion = "tmp-redhatgov.com/v1alpha1"
+
 // Metadata configures image set creation.
 type Metadata struct {
 	metav1.TypeMeta `json:",inline"`
@@ -35,6 +37,15 @@ type File struct {
 	Name string `json:"name"`
 }
 
+func NewMetadata() *Metadata {
+	return &Metadata{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: MetadataAPIVersion,
+			Kind:       MetadataKind,
+		},
+	}
+
+}
 func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	gvk := GroupVersion.WithKind(MetadataKind)

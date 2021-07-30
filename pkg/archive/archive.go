@@ -1,14 +1,19 @@
 package archive
 
 import (
-	"compress/flate"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	bundleBasePath = "bundle"
+	srcBasePath    = "src"
 )
 
 type Archiver interface {
@@ -19,49 +24,111 @@ type Archiver interface {
 	Create(io.Writer) error
 	Close() error
 	Walk(string, archiver.WalkFunc) error
+	Open(io.Reader, int64) error
 }
 
 // NewArchiver create a new archiver for tar archive manipultation
-func NewArchiver(ext string) (Archiver, error) {
+func NewArchiver() (Archiver, error) {
 
-	// Check extestion of target file
-	f, err := archiver.ByExtension(ext)
+	// Create tar specifically with overrite on false
+	return &archiver.TarGz{
+
+		Tar: &archiver.Tar{
+			OverwriteExisting:      true,
+			MkdirAll:               true,
+			ImplicitTopLevelFolder: false,
+			StripComponents:        0,
+			ContinueOnError:        false,
+		},
+	}, nil
+}
+
+// CreateDiffArchive create an archive by first archive the past mirror data and then
+//current data with no-clobber
+func CreateDiffArchive(a Archiver, destFile, rootDir, prefix string) error {
+	bundleDir := filepath.Join(rootDir, bundleBasePath)
+	srcDir := filepath.Join(rootDir, srcBasePath)
+
+	if err := a.Archive([]string{bundleDir}, destFile); err != nil {
+		return err
+	}
+
+	sourceInfo, err := os.Stat(srcDir)
 
 	if err != nil {
-		return nil, fmt.Errorf("error parsing type %s for format: %v", ext, err)
+		return fmt.Errorf("%s: stat: %v", srcDir, err)
 	}
 
-	// Create tar
-	mytar := &archiver.Tar{
-		OverwriteExisting:      true,
-		MkdirAll:               true,
-		ImplicitTopLevelFolder: false,
-		StripComponents:        0,
-		ContinueOnError:        false,
+	file, err := os.Open(destFile)
+
+	if err != nil {
+		return err
 	}
 
-	// Check compression type (if using)
-	// TODO(jpower): Allow user to specify compression level
-	switch v := f.(type) {
-	case *archiver.Tar:
-		return mytar, nil
-	case *archiver.TarGz:
-		v.Tar = mytar
-		v.CompressionLevel = flate.DefaultCompression
-		return v, nil
-	default:
-		return nil, fmt.Errorf("format does not support customization: %s", f)
-	}
+	a.Open(file, 0)
+
+	return filepath.Walk(srcDir, func(fpath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("traversing %s: %v", fpath, err)
+		}
+		if info == nil {
+			return fmt.Errorf("no file info")
+		}
+
+		// build the name to be used within the archive
+		nameInArchive, err := archiver.NameInArchive(sourceInfo, srcDir, fpath)
+		if err != nil {
+			return fmt.Errorf("creating %s: %v", nameInArchive, err)
+		}
+
+		var file io.ReadCloser
+		if info.Mode().IsRegular() {
+			file, err = os.Open(fpath)
+			if err != nil {
+				return fmt.Errorf("%s: opening: %v", fpath, err)
+			}
+			defer file.Close()
+		}
+
+		f := archiver.File{
+			FileInfo: archiver.FileInfo{
+				FileInfo:   info,
+				CustomName: nameInArchive,
+			},
+			ReadCloser: file,
+		}
+
+		// Write file to current archive file
+		if err = a.Write(f); err != nil {
+			return fmt.Errorf("%s: writing: %s", fpath, err)
+		}
+
+		// Write empty file to bundle path
+		if err := writeBundlePath(info, fpath, bundleDir, srcDir); err != nil {
+			return fmt.Errorf("error writing file %s: %v", fpath, err)
+		}
+
+		return nil
+	})
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, sourceDir string) error {
+func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, rootDir string) error {
+
+	base, err := filepath.Abs(rootDir)
+
+	if err != nil {
+		return err
+	}
+
+	bundleDir := filepath.Join(base, bundleBasePath)
+
+	srcDir := filepath.Join(rootDir, srcBasePath)
 
 	// Declare split variables
 	splitNum := 0
 	splitSize := int64(0)
 	splitPath := fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
-	shaPath := fmt.Sprintf("%s/sha256sum.txt", destDir)
 
 	splitFile, err := os.Create(splitPath)
 
@@ -69,28 +136,19 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 		return fmt.Errorf("creating %s: %v", splitPath, err)
 	}
 
-	// Create fsha256sum.txt file
-	shaFile, err := os.Create(shaPath)
-
-	if err != nil {
-		return fmt.Errorf("creating %s: %v", shaPath, err)
-	}
-
-	defer shaFile.Close()
-
 	// Create a new tar archive for writing
 	logrus.Infof("Creating archive %s", splitPath)
 	if a.Create(splitFile); err != nil {
 		return fmt.Errorf("creating archive %s: %v", splitPath, err)
 	}
 
-	sourceInfo, err := os.Stat(sourceDir)
+	sourceInfo, err := os.Stat(srcDir)
 
 	if err != nil {
-		return fmt.Errorf("%s: stat: %v", sourceDir, err)
+		return fmt.Errorf("%s: stat: %v", srcDir, err)
 	}
 
-	filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
+	err = filepath.Walk(srcDir, func(fpath string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return fmt.Errorf("traversing %s: %v", fpath, err)
@@ -100,7 +158,7 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 		}
 
 		// build the name to be used within the archive
-		nameInArchive, err := archiver.NameInArchive(sourceInfo, sourceDir, fpath)
+		nameInArchive, err := archiver.NameInArchive(sourceInfo, srcDir, fpath)
 		if err != nil {
 			return fmt.Errorf("creating %s: %v", nameInArchive, err)
 		}
@@ -127,12 +185,6 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 
 			// Current current tar archive
 			a.Close()
-
-			// Calculate checksum and append to checksum file
-			if err := AppendChecksum(shaFile, splitPath); err != nil {
-				return fmt.Errorf("error appending checksum for %s: %v", splitPath, err)
-			}
-
 			splitFile.Close()
 
 			// Increment split number and reset splitSize
@@ -141,13 +193,13 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
 
 			// Create a new tar archive for writing
-			logrus.Infof("Creating archive %s", splitPath)
-
 			splitFile, err = os.Create(splitPath)
 
 			if err != nil {
 				return fmt.Errorf("creating %s: %v", splitPath, err)
 			}
+
+			logrus.Infof("Creating archive %s", splitPath)
 
 			if err := a.Create(splitFile); err != nil {
 				return fmt.Errorf("creating archive %s: %v", splitPath, err)
@@ -160,6 +212,11 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 			return fmt.Errorf("%s: writing: %s", fpath, err)
 		}
 
+		// Write empty file to bundle path
+		if err := writeBundlePath(info, fpath, bundleDir, srcDir); err != nil {
+			return fmt.Errorf("error writing file %s: %v", fpath, err)
+		}
+
 		splitSize += info.Size()
 
 		return nil
@@ -167,18 +224,33 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 
 	// Close final archive
 	a.Close()
-
-	// Calculate checksum and append to checksum file
-	if err := AppendChecksum(shaFile, splitPath); err != nil {
-		return fmt.Errorf("error appending checksum for %s: %v", splitPath, err)
-	}
-
 	splitFile.Close()
 
-	return nil
+	return err
 }
 
 // ExtractArchive will unpack the archive at the specified directory
 func ExtractArchive(a Archiver, src, dest string) error {
 	return a.Unarchive(src, dest)
+}
+
+// writeBundlePAth is a helper function to write an empty file from src to
+// the the bundle diretory for history
+func writeBundlePath(info os.FileInfo, fpath, bundleDir, srcDir string) error {
+
+	newfile := strings.Split(fpath, srcDir)
+
+	if info.IsDir() {
+		os.MkdirAll(filepath.Join(bundleDir, newfile[1]), 0755)
+	} else {
+		emptyFile, err := os.Create(filepath.Join(bundleDir, newfile[1]))
+
+		if err != nil {
+			return fmt.Errorf("could not create file %s: %v", newfile[1], err)
+		}
+
+		emptyFile.Close()
+	}
+
+	return nil
 }

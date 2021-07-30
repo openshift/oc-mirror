@@ -17,7 +17,7 @@ func Test_Verify_Archive(t *testing.T) {
 		t.Errorf("Invalid path to test file %s: %v", source, err)
 	}
 
-	a, err := NewArchiver(file.Name())
+	a, err := NewArchiver()
 
 	if err != nil {
 		t.Errorf("Cannot create archiver for file %s", file.Name())
@@ -62,7 +62,7 @@ func Test_Checksum_Generation(t *testing.T) {
 	}{
 		{
 			name:   "testing checksum veriftion",
-			source: "../../testdata/archives/test.txt",
+			source: "../../testdata/archives/src/test.txt",
 			want:   "b1ab25c55913c95cc6913f1dbce9bef185ebf00a64553a8ef194193e52ea5015",
 		},
 	}

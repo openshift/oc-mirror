@@ -4,39 +4,61 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/RedHatGov/bundle/pkg/archive"
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 // CreateFull performs all tasks in creating full imagesets
-func CreateFull(ext, rootDir string, segSize int64) error {
+func CreateFull(configPath, outputDir, rootDir string, segSize int64) error {
+
+	var lastRun *v1alpha1.PastMirror
+	var newRuns []v1alpha1.PastMirror
+
 	err := bundle.MakeCreateDirs(rootDir)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	// Open Metadata
+
+	// Open metadata for writing
+	newMeta := v1alpha1.NewMetadata()
+
+	// Read in current metadata
 	metadata, err := config.LoadMetadata(rootDir)
 	if err != nil {
 		logrus.Error(err)
 		return err
 	}
-	lastRun := metadata.PastMirrors[len(metadata.PastMirrors)-1]
-	logrus.Info(lastRun)
+
+	newMeta.MetadataSpec = metadata.MetadataSpec
+
+	if len(metadata.PastMirrors) != 0 {
+		lastRun = &metadata.PastMirrors[len(metadata.PastMirrors)-1]
+	} else {
+		lastRun = &v1alpha1.PastMirror{
+			Sequence: 0,
+			Uid:      uuid.New(),
+		}
+	}
 
 	// Read the imageset-config.yaml
-	cfg, err := config.LoadConfig(rootDir)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		logrus.Error(err)
 		return err
 	}
-	logrus.Info(cfg)
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		if err := bundle.GetReleases(&lastRun, cfg, rootDir); err != nil {
+		currentRun, err := bundle.GetReleases(lastRun, cfg, rootDir)
+
+		newRuns = append(newRuns, *currentRun)
+		logrus.Debug(newRuns)
+
+		if err != nil {
 			return err
 		}
 	}
@@ -54,15 +76,18 @@ func CreateFull(ext, rootDir string, segSize int64) error {
 		}
 	}
 
-	// Get current working directory
-	cwd, err := os.Getwd()
+	newMeta.PastMirrors = append(newMeta.PastMirrors, newRuns...)
+
+	if err := config.WriteMetadata(newMeta, rootDir); err != nil {
+		return fmt.Errorf("error writing metadata: %v", err)
+	}
 
 	if err != nil {
 		return err
 	}
 
 	// Create archiver
-	arc, err := archive.NewArchiver(ext)
+	arc, err := archive.NewArchiver()
 
 	if err != nil {
 		return fmt.Errorf("failed to create archiver: %v", err)
@@ -71,7 +96,7 @@ func CreateFull(ext, rootDir string, segSize int64) error {
 	os.Chdir(rootDir)
 
 	// Create tar archive
-	if err := archive.CreateSplitArchive(arc, cwd, "bundle", segSize, "."); err != nil {
+	if err := archive.CreateSplitArchive(arc, outputDir, "bundle", segSize, "."); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
