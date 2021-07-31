@@ -1,8 +1,10 @@
 package archive
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,8 +29,8 @@ type Archiver interface {
 	Open(io.Reader, int64) error
 }
 
-// NewArchiver create a new archiver for tar archive manipultation
-func NewArchiver() (Archiver, error) {
+// NewArchiver creates a new archiver for tar archive manipultation
+func NewArchiver() Archiver {
 
 	// Create tar specifically with overrite on false
 	return &archiver.TarGz{
@@ -40,11 +42,22 @@ func NewArchiver() (Archiver, error) {
 			StripComponents:        0,
 			ContinueOnError:        false,
 		},
-	}, nil
+	}
+}
+
+// NewCompress create a new compressor far tar archiver compression and decompression
+func NewCompressor() *archiver.FileCompressor {
+
+	// Create tar specifically with overrite on false
+	return &archiver.FileCompressor{
+		Compressor:   &archiver.Gz{},
+		Decompressor: &archiver.Gz{},
+	}
 }
 
 // CreateDiffArchive create an archive by first archive the past mirror data and then
 //current data with no-clobber
+// FIXME(jpower): This could be more efficient than archiving and reopening.
 func CreateDiffArchive(a Archiver, destFile, rootDir, prefix string) error {
 	bundleDir := filepath.Join(rootDir, bundleBasePath)
 	srcDir := filepath.Join(rootDir, srcBasePath)
@@ -201,6 +214,12 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 
 			logrus.Infof("Creating archive %s", splitPath)
 
+			_, err := os.Stat(splitPath)
+
+			if err != nil {
+				return err
+			}
+
 			if err := a.Create(splitFile); err != nil {
 				return fmt.Errorf("creating archive %s: %v", splitPath, err)
 			}
@@ -227,6 +246,46 @@ func CreateSplitArchive(a Archiver, destDir, prefix string, maxSplitSize int64, 
 	splitFile.Close()
 
 	return err
+}
+
+// CombineArchives take a list of archives and combines them into one file
+// FIXME(jpower): This needs to cleanup up alot
+func CombineArchives(name string, paths ...string) error {
+
+	c := NewCompressor()
+
+	var buf bytes.Buffer
+
+	for _, path := range paths {
+
+		outfile := path + "out"
+
+		if err := c.DecompressFile(path, outfile); err != nil {
+			return err
+		}
+
+		data, err := ioutil.ReadFile(outfile)
+
+		defer os.Remove(outfile)
+
+		if err != nil {
+			return fmt.Errorf("error reading file %s: %v", path, err)
+		}
+
+		buf.Write(data)
+	}
+
+	if err := ioutil.WriteFile(name+".tar", buf.Bytes(), os.ModePerm); err != nil {
+		return err
+	}
+
+	if err := c.CompressFile(name+".tar", name+".tar.gz"); err != nil {
+		return err
+	}
+
+	os.Remove(name + ".tar")
+
+	return nil
 }
 
 // ExtractArchive will unpack the archive at the specified directory

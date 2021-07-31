@@ -11,17 +11,13 @@ func Test_Verify_Archive(t *testing.T) {
 	source := "../../testdata/archives/testbundle.tar.gz"
 	hash := "../../testdata/archives/testsum.txt"
 
-	file, err := os.Stat(source)
+	_, err := os.Stat(source)
 
 	if err != nil {
 		t.Errorf("Invalid path to test file %s: %v", source, err)
 	}
 
-	a, err := NewArchiver()
-
-	if err != nil {
-		t.Errorf("Cannot create archiver for file %s", file.Name())
-	}
+	a := NewArchiver()
 
 	if err = VerifyArchive(a, source, hash); err != nil {
 		t.Errorf("Failed to verify for %s: %v", source, err)

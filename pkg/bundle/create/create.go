@@ -87,12 +87,18 @@ func CreateFull(configPath, outputDir, rootDir string, segSize int64) error {
 	}
 
 	// Create archiver
-	arc, err := archive.NewArchiver()
+	arc := archive.NewArchiver()
 
-	if err != nil {
-		return fmt.Errorf("failed to create archiver: %v", err)
+	// Set ouput directory so bundles do not get write to the rootDir
+	if outputDir == "." {
+		outputDir, err = os.Getwd()
+
+		if err != nil {
+			return err
+		}
 	}
 
+	// Change dir before archving to avoid issues with symlink paths
 	os.Chdir(rootDir)
 
 	// Create tar archive
