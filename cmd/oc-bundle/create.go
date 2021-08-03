@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/RedHatGov/bundle/pkg/bundle/create"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/RedHatGov/bundle/pkg/bundle/create"
 )
 
 func newCreateCmd() *cobra.Command {
@@ -29,7 +30,7 @@ func newCreateFullCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create full called")
-			err := create.CreateFull(rootOpts.dir)
+			err := create.CreateFull(rootOpts.dir, rootOpts.dryRun, rootOpts.skipTLS)
 			if err != nil {
 				logrus.Fatal(err)
 			}

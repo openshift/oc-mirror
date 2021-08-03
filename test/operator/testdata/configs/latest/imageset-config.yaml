@@ -1,0 +1,6 @@
+---
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  operators:
+  - catalog: REGISTRY_CATALOGNAMESPACE/test-catalog:latest
