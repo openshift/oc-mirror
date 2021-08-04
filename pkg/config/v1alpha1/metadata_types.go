@@ -20,7 +20,12 @@ type Metadata struct {
 }
 
 type MetadataSpec struct {
+	// Past is a slice containing information for
+	// all mirrors created for an imageset
 	PastMirrors []PastMirror `json:"pastMirrors"`
+	// PastFiles is a slice containing information for
+	// all files created for an imageset
+	PastFiles []File `json:"files"`
 }
 
 type PastMirror struct {
@@ -35,6 +40,15 @@ type File struct {
 	Name string `json:"name"`
 }
 
+func NewMetadata() Metadata {
+	return Metadata{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: GroupVersion.String(),
+			Kind:       MetadataKind,
+		},
+	}
+
+}
 func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	gvk := GroupVersion.WithKind(MetadataKind)

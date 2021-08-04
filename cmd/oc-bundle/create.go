@@ -22,7 +22,8 @@ func newCreateCmd() *cobra.Command {
 }
 
 func newCreateFullCmd() *cobra.Command {
-	return &cobra.Command{
+
+	cmd := &cobra.Command{
 		Use:   "full",
 		Short: "Create a full OCP related container image mirror",
 		Args:  cobra.ExactArgs(0),
@@ -30,13 +31,15 @@ func newCreateFullCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create full called")
-			err := create.CreateFull(rootOpts.dir, rootOpts.dryRun, rootOpts.skipTLS)
+			err := create.CreateFull(rootOpts.configPath, rootOpts.dir, rootOpts.dryRun, rootOpts.skipTLS)
 			if err != nil {
 				logrus.Fatal(err)
 			}
 
 		},
 	}
+
+	return cmd
 }
 
 func newCreateDiffCmd() *cobra.Command {
@@ -48,12 +51,11 @@ func newCreateDiffCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create Diff called")
-			/*
-				err := bundle.CreateDiff(rootOpts.dir)
-				if err != nil {
-					logrus.Fatal(err)
-				}
-			*/
+			err := create.CreateDiff(rootOpts.configPath, rootOpts.dir)
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
 		},
 	}
 }

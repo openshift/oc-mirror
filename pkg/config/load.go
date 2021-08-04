@@ -18,20 +18,21 @@ import (
 // See https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/config/config.go
 
 const (
-	configFile   = "imageset-config.yaml"
-	metadataFile = ".metadata.json"
+	MetadataFile = ".metadata.json"
+	SourcePath   = "src"
+	BundlePath   = "bundle"
 )
 
-var metadataBasePath = filepath.Join("src", "publish", metadataFile)
+var metadataBasePath = filepath.Join(SourcePath, "publish", MetadataFile)
 
-func LoadConfig(rootDir string) (c v1alpha1.ImageSetConfiguration, err error) {
+func LoadConfig(configPath string) (c v1alpha1.ImageSetConfiguration, err error) {
 
-	configPath := filepath.Join(rootDir, configFile)
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return c, err
 	}
 	typeMeta, err := getTypeMeta(data)
+
 	if err != nil {
 		return c, err
 	}
@@ -51,7 +52,7 @@ func LoadMetadata(rootDir string) (metadata v1alpha1.Metadata, err error) {
 	if err != nil {
 		// Non-existent metadata is allowed.
 		if errors.Is(err, os.ErrNotExist) {
-			return metadata, nil
+			return v1alpha1.NewMetadata(), nil
 		}
 		return metadata, err
 	}

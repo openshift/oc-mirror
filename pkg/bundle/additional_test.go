@@ -9,6 +9,7 @@ import (
 
 func Test_GetAdditional(t *testing.T) {
 
+	mirror := &v1alpha1.PastMirror{}
 	cfg := v1alpha1.ImageSetConfiguration{}
 	cfg.Mirror = v1alpha1.Mirror{
 		BlockedImages: []v1alpha1.BlockedImages{
@@ -28,7 +29,7 @@ func Test_GetAdditional(t *testing.T) {
 
 	defer os.RemoveAll(tmpdir)
 
-	if err := GetAdditional(cfg, tmpdir); err != nil {
+	if err := GetAdditional(mirror, cfg, tmpdir); err != nil {
 		t.Error(err)
 	}
 }

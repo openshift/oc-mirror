@@ -16,10 +16,11 @@ import (
 
 var (
 	rootOpts struct {
-		dir      string
-		logLevel string
-		dryRun   bool
-		skipTLS  bool
+		dir        string
+		logLevel   string
+		dryRun     bool
+		skipTLS    bool
+		configPath string
 	}
 )
 
@@ -69,6 +70,8 @@ func newRootCmd() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&rootOpts.dryRun, "dry-run", false, "print actions without mirroring images "+
 		"(experimental: only works for operator catalogs)")
 	cmd.PersistentFlags().BoolVar(&rootOpts.skipTLS, "skip-tls", false, "skip client-side TLS validation")
+	cmd.PersistentFlags().StringVarP(&rootOpts.configPath, "config", "c", "imageset-config.yaml", "Path to imageset configuration file")
+
 	return cmd
 }
 
