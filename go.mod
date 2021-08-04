@@ -33,4 +33,4 @@ replace (
 )
 
 // TODO(estroz): remove this once main operator-registry repo exposes libs needed.
-replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20210723182709-28179ca932d8
+replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20210804165747-1787329c541f
