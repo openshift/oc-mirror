@@ -18,7 +18,15 @@ make
 
 ### Test
 
-No unit tests... yet.
+Maunal Unit Tests:
+```bash
+make test-unit
+```
+
+Manual E2E:
+```bash
+make test-e2e
+```
 
 
 Function test:
@@ -29,7 +37,7 @@ Function test:
   cp data/imageset-config.yaml test-output/
   cp data/.metadata.json test-output/src/publish
   make
-  ./bin/oc-bundle create full --dir=test-output --log-level=debug
+  ./bin/oc-bundle create full --config imageset-config.yaml --dir=test-output --log-level=debug
   ```
 
 ## Overview
@@ -46,8 +54,6 @@ Part 2: Bundle Publishing (Disconnected)
 ```
 Command: oc bundle
 
-Requires: imageset-config.yaml in target directory
-
 Sub-commands:
 create
   Options:
@@ -56,6 +62,7 @@ create
   Flags:
     --directory (string | oc bundle managed directory)
     --bundle-name (string | name of bundle archive | optional)
+    --config (string | path to imageset-config.yaml | defaults to current directory)
 publish
   Flags:
     --from-bundle (string | archive name)
@@ -68,7 +75,6 @@ publish
 
 ## Bundle Spec
 
-Note: The `imageset-config.yaml` needs to be placed in the directory specified by the --dir flag.
 Note: The `imageset-config.yaml` is only used during bundle creation.
 
 See the [config spec][config-spec] for an in-depth description of fields.

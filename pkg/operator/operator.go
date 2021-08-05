@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -58,7 +59,7 @@ func (o *OperatorOptions) Full(_ context.Context, cfg v1alpha1.ImageSetConfigura
 		}
 		opts := catalog.NewMirrorCatalogOptions(stream)
 		opts.DryRun = o.DryRun
-		opts.FileDir = filepath.Join(o.RootDestDir, "src")
+		opts.FileDir = filepath.Join(o.RootDestDir, config.SourcePath)
 		opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", opts.SourceRef.Ref.Name, time.Now().Unix()))
 		opts.SecurityOptions.Insecure = o.SkipTLS
 

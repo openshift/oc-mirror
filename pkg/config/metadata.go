@@ -1,26 +1,54 @@
 package config
 
-/*
-func SetupMetadata(rootDir string) (string, error) {
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"path/filepath"
 
-	if _, err := os.Stat(filepath.Join(rootDir, "src/publish/.")); os.IsNotExist(err) {
-		logrus.Infof("Metadata not found. Creating new metadata")
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+)
+
+// Define error for metadata managment
+type MetadataError struct {
+	Path string
+	Type string
+}
+
+func (e *MetadataError) Error() string {
+	if e.Type == "diff" {
+		return fmt.Sprintf("no metadata found at %s, please run a create full", e.Path)
 	} else {
-
-		metafile, err := os.OpenFile(filepath.Join(rootDir, "src/publish/openshift_bundle.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			logrus.Fatal(errors.Wrap(err, "failed to open metadata file"))
-		}
-
-		return func() {
-			metafile.Close()
-		}
+		return fmt.Sprintf("metadata found at %s, please run a create diff", e.Path)
 	}
 }
-*/
-/*
-func writeMeta() {
-	// append current object to the end of the metadata file
 
+// WriteMetadata write provided metadata to disk
+func WriteMetadata(metadata v1alpha1.Metadata, rootDir string) error {
+
+	metadataPath := filepath.Join(rootDir, metadataBasePath)
+
+	data, err := json.Marshal(metadata)
+
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(metadataPath, data, 0640); err != nil {
+		return err
+	}
+
+	return nil
 }
-*/
+
+// NewFullMetadtaError is a helper function for returning a
+// MetadataError for full bundles
+func NewFullMetadataError(fpath string) error {
+	return &MetadataError{Path: fpath, Type: "full"}
+}
+
+// NewDiffMetadtaError is a helper function for returning a
+// MetadataError for diff bundles
+func NewDiffMetadataError(fpath string) error {
+	return &MetadataError{Path: fpath, Type: "diff"}
+}
