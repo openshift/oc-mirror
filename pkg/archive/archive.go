@@ -71,6 +71,8 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	for _, fpath := range newFiles {
 		foundFiles[fpath] = struct{}{}
 	}
+	// Ignore the current dir.
+	foundFiles["."] = struct{}{}
 
 	walkErr := filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
 
@@ -87,68 +89,67 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 			foundFiles[fpath] = struct{}{}
 		}
 
-		if _, found := foundFiles[fpath]; found {
-
-			// build the name to be used within the archive
-			nameInArchive, err := archiver.NameInArchive(sourceInfo, sourceDir, fpath)
-			if err != nil {
-				return fmt.Errorf("creating %s: %v", nameInArchive, err)
-			}
-
-			var file io.ReadCloser
-			if info.Mode().IsRegular() {
-				file, err = os.Open(fpath)
-				if err != nil {
-					return fmt.Errorf("%s: opening: %v", fpath, err)
-				}
-				defer file.Close()
-			}
-
-			f := archiver.File{
-				FileInfo: archiver.FileInfo{
-					FileInfo:   info,
-					CustomName: nameInArchive,
-				},
-				ReadCloser: file,
-			}
-
-			// If the file is too large create a new one
-			if info.Size()+splitSize > maxSplitSize {
-
-				// Close current tar archive
-				a.Close()
-				splitFile.Close()
-
-				// Increment split number and reset splitSize
-				splitNum += 1
-				splitSize = int64(0)
-				splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
-
-				// Create a new tar archive for writing
-				logrus.Infof("Creating archive %s", splitPath)
-
-				splitFile, err = os.Create(splitPath)
-
-				if err != nil {
-					return fmt.Errorf("creating %s: %v", splitPath, err)
-				}
-
-				if err := a.Create(splitFile); err != nil {
-					return fmt.Errorf("creating archive %s: %v", splitPath, err)
-				}
-
-			}
-
-			// Write file to current archive file
-			if err = a.Write(f); err != nil {
-				return fmt.Errorf("%s: writing: %s", fpath, err)
-			}
-
-			splitSize += info.Size()
-
-		} else {
+		if _, found := foundFiles[fpath]; !found {
 			logrus.Debugf("File %s not found, skipping...", fpath)
+			return nil
 		}
+
+		// build the name to be used within the archive
+		nameInArchive, err := archiver.NameInArchive(sourceInfo, sourceDir, fpath)
+		if err != nil {
+			return fmt.Errorf("creating %s: %v", nameInArchive, err)
+		}
+
+		var file io.ReadCloser
+		if info.Mode().IsRegular() {
+			file, err = os.Open(fpath)
+			if err != nil {
+				return fmt.Errorf("%s: opening: %v", fpath, err)
+			}
+			defer file.Close()
+		}
+
+		f := archiver.File{
+			FileInfo: archiver.FileInfo{
+				FileInfo:   info,
+				CustomName: nameInArchive,
+			},
+			ReadCloser: file,
+		}
+
+		// If the file is too large create a new one
+		if info.Size()+splitSize > maxSplitSize {
+
+			// Close current tar archive
+			a.Close()
+			splitFile.Close()
+
+			// Increment split number and reset splitSize
+			splitNum += 1
+			splitSize = int64(0)
+			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
+
+			// Create a new tar archive for writing
+			logrus.Infof("Creating archive %s", splitPath)
+
+			splitFile, err = os.Create(splitPath)
+
+			if err != nil {
+				return fmt.Errorf("creating %s: %v", splitPath, err)
+			}
+
+			if err := a.Create(splitFile); err != nil {
+				return fmt.Errorf("creating archive %s: %v", splitPath, err)
+			}
+
+		}
+
+		// Write file to current archive file
+		if err = a.Write(f); err != nil {
+			return fmt.Errorf("%s: writing: %s", fpath, err)
+		}
+
+		splitSize += info.Size()
 
 		return nil
 	})

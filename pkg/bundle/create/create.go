@@ -2,6 +2,7 @@ package create
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,17 @@ import (
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/metadata"
+	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 	"github.com/RedHatGov/bundle/pkg/operator"
+)
+
+var (
+	// FullMetadataError should be returned when past runs exist in metadata.
+	FullMetadataError = errors.New("prior run metadata found, please run 'create diff' instead")
+
+	// FullMetadataError should be returned when no past runs exist in metadata.
+	DiffMetadataError = errors.New("no prior run metadata found, please run 'create full' instead")
 )
 
 // CreateFull performs all tasks in creating full imagesets
@@ -22,31 +33,34 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	ctx := context.Background()
 
-	sourceDir := filepath.Join(rootDir, config.SourcePath)
-	metadataPath := filepath.Join(sourceDir, "publish", config.MetadataFile)
+	sourceDir := filepath.Join(rootDir, config.SourceDir)
 
 	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
 	}
 
-	// Read in current metadata
-	metadata, err := config.LoadMetadata(rootDir)
+	// TODO: make backend configurable.
+	backend, err := storage.NewLocalBackend(rootDir)
 	if err != nil {
+		return fmt.Errorf("error opening local backend: %v", err)
+	}
+
+	// Read in current metadata
+	meta := v1alpha1.Metadata{}
+	switch err := backend.ReadMetadata(ctx, &meta); {
+	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return err
+	case err == nil && len(meta.PastMirrors) != 0:
+		// No past run(s) are allowed when generating a full imageset.
+		// QUESTION: should the command just log a warning and ignore this metadata instead?
+		return FullMetadataError
 	}
 
-	// If metdata is found throw an error, else create new metadata
-	if len(metadata.PastMirrors) != 0 {
-		return config.NewFullMetadataError(metadataPath)
+	meta.Uid = uuid.New()
+	run := v1alpha1.PastMirror{
+		Sequence:  1,
+		Timestamp: int(time.Now().Unix()),
 	}
-
-	lastRun := v1alpha1.PastMirror{
-		Sequence: 1,
-		Uid:      uuid.New(),
-	}
-
-	// Set timestamp
-	lastRun.Timestamp = int(time.Now().Unix())
 
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(configPath)
@@ -56,8 +70,7 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-
-		if err = bundle.GetReleases(&lastRun, cfg, sourceDir); err != nil {
+		if err = bundle.GetReleasesInitial(cfg, sourceDir); err != nil {
 			return err
 		}
 	}
@@ -78,24 +91,24 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
-		if err = bundle.GetAdditional(&lastRun, cfg, sourceDir); err != nil {
+		if err = bundle.GetAdditional(run, cfg, sourceDir, dryRun, insecure); err != nil {
 			return err
 		}
 	}
 
-	// Add mirror as a new PastMirror
-	metadata.PastMirrors = append(metadata.PastMirrors, lastRun)
-
 	// Update metadata files
-	files, err := getFiles(sourceDir, &metadata)
-
+	files, err := getFiles(sourceDir, &meta)
 	if err != nil {
-		return fmt.Errorf("error updates metadata files: %v", err)
+		return err
 	}
 
-	// Write updated metadata
-	if err := config.WriteMetadata(metadata, rootDir); err != nil {
-		return fmt.Errorf("error writing metadata: %v", err)
+	// Add mirror as a new PastMirror
+	run.Mirror = cfg.Mirror
+	meta.PastMirrors = append(meta.PastMirrors, run)
+
+	// Update the metadata.
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, insecure); err != nil {
+		return err
 	}
 
 	var segSize int64
@@ -107,7 +120,7 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	}
 
 	// Run archiver
-	if err := prepareArchive(sourceDir, outputDir, segSize, &metadata, files); err != nil {
+	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
 		return err
 	}
 
@@ -117,30 +130,35 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 // CreateDiff performs all tasks in creating differential imagesets
 func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) error {
 
-	_ = context.Background()
+	ctx := context.Background()
 
-	sourceDir := filepath.Join(rootDir, config.SourcePath)
-	metadataPath := filepath.Join(sourceDir, "publish", config.MetadataFile)
+	sourceDir := filepath.Join(rootDir, config.SourceDir)
 
 	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
 	}
 
-	// Read in current metadata
-	metadata, err := config.LoadMetadata(rootDir)
+	// TODO: make backend configurable.
+	backend, err := storage.NewLocalBackend(rootDir)
 	if err != nil {
+		return fmt.Errorf("error opening local backend: %v", err)
+	}
+
+	// Read in current metadata
+	meta := v1alpha1.Metadata{}
+	switch err := backend.ReadMetadata(ctx, &meta); {
+	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return err
+	case (err != nil && errors.Is(err, storage.ErrMetadataNotExist)) || len(meta.PastMirrors) == 0:
+		// Some past run(s) are required to generate a diff.
+		return DiffMetadataError
 	}
 
-	// If metdata is not found throw an error, else set lastRun
-	if len(metadata.PastMirrors) == 0 {
-		return config.NewDiffMetadataError(metadataPath)
+	lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
+	run := v1alpha1.PastMirror{
+		Sequence:  lastRun.Sequence + 1,
+		Timestamp: int(time.Now().Unix()),
 	}
-
-	lastRun := metadata.PastMirrors[len(metadata.PastMirrors)-1]
-
-	// Set timestamp
-	lastRun.Timestamp = int(time.Now().Unix())
 
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(configPath)
@@ -151,7 +169,7 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 
-		if err = bundle.GetReleases(&lastRun, cfg, sourceDir); err != nil {
+		if err = bundle.GetReleasesDiff(lastRun, cfg, sourceDir); err != nil {
 			return err
 		}
 	}
@@ -166,29 +184,24 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
-		if err = bundle.GetAdditional(&lastRun, cfg, sourceDir); err != nil {
+		if err = bundle.GetAdditional(lastRun, cfg, sourceDir, dryRun, insecure); err != nil {
 			return err
 		}
 	}
 
+	// Update metadata files
+	files, err := getFiles(sourceDir, &meta)
 	if err != nil {
 		return err
 	}
 
 	// Add mirror as a new PastMirror
-	lastRun.Sequence++
-	metadata.PastMirrors = append(metadata.PastMirrors, lastRun)
+	run.Mirror = cfg.Mirror
+	meta.PastMirrors = append(meta.PastMirrors, run)
 
-	// Update metadata files
-	files, err := getFiles(sourceDir, &metadata)
-
-	if err != nil {
-		return fmt.Errorf("error updates metadata files: %v", err)
-	}
-
-	// Write updated metadata
-	if err := config.WriteMetadata(metadata, rootDir); err != nil {
-		return fmt.Errorf("error writing metadata: %v", err)
+	// Update the metadata.
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, insecure); err != nil {
+		return err
 	}
 
 	var segSize int64
@@ -200,14 +213,14 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	}
 
 	// Run archiver
-	if err := prepareArchive(sourceDir, outputDir, segSize, &metadata, files); err != nil {
+	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func prepareArchive(rootDir, outputDir string, segSize int64, metadata *v1alpha1.Metadata, files []string) error {
+func prepareArchive(rootDir, outputDir string, segSize int64, files []string) error {
 
 	cwd, err := os.Getwd()
 
@@ -240,7 +253,7 @@ func prepareArchive(rootDir, outputDir string, segSize int64, metadata *v1alpha1
 
 }
 
-func getFiles(rootDir string, metadata *v1alpha1.Metadata) ([]string, error) {
+func getFiles(rootDir string, meta *v1alpha1.Metadata) ([]string, error) {
 
 	cwd, err := os.Getwd()
 
@@ -255,5 +268,5 @@ func getFiles(rootDir string, metadata *v1alpha1.Metadata) ([]string, error) {
 	defer os.Chdir(cwd)
 
 	// Gather files we pulled
-	return bundle.ReconcileFiles(&metadata.MetadataSpec, ".")
+	return bundle.ReconcileFiles(meta, ".")
 }

@@ -80,7 +80,7 @@ Note: The `imageset-config.yaml` is only used during bundle creation.
 See the [config spec][config-spec] for an in-depth description of fields.
 
 <!--
-TODO(estroz): link to the following once public
+TODO: link to the following once a release is cut.
 [config-spec]:https://pkg.go.dev/github.com/redhatgov/bundle/pkg/config/v1alpha1#ImageSetConfiguration
 -->
 [config-spec]:pkg/config/v1alpha1/config_types.go

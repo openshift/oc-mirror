@@ -12,4 +12,4 @@ trap "rm -rf $DATA_TMP; ${DIR}/stop-docker-registry.sh" EXIT
 
 "${DIR}/start-docker-registry.sh"
 "${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$OUTPUT_DIR"
-"$CMD" create full --dir "$OUTPUT_DIR" --log-level debug --skip-tls -c $OUTPUT_DIR/imageset-config.yaml
+"$CMD" create full --dir "$OUTPUT_DIR" --log-level debug --skip-tls -c "${OUTPUT_DIR}/imageset-config.yaml"

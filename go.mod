@@ -6,6 +6,7 @@ require (
 	github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d // indirect
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
+	github.com/containerd/containerd v1.4.8
 	github.com/google/uuid v1.2.0
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
 	github.com/mholt/archiver/v3 v3.5.0
@@ -14,6 +15,7 @@ require (
 	github.com/operator-framework/operator-registry v0.0.0-00010101000000-000000000000
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
+	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.1.3
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a

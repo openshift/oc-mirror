@@ -1,11 +1,11 @@
 {
   "apiVersion": "tmp-redhatgov.com/v1alpha1",
   "kind": "Metadata",
+  "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
   "pastMirrors": [
     {
       "timestamp": 1624543862,
       "sequence": 1,
-      "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
       "mirror": {
         "additionalImages": [
           {
@@ -66,7 +66,6 @@
     {
       "timestamp": 1624543852,
       "sequence": 2,
-      "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
       "mirror": {
         "additionalImages": [
           {

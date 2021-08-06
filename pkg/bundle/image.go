@@ -1,9 +1,10 @@
 package bundle
 
 import (
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/sirupsen/logrus"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 // IsBlocked will return a boolean value on whether an image

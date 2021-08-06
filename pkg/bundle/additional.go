@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func GetAdditional(i *v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
+func GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, rootDir string, dryRun, insecure bool) error {
 
 	var mappings []mirror.Mapping
 
@@ -24,6 +25,8 @@ func GetAdditional(i *v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, r
 
 	opts := mirror.NewMirrorImageOptions(stream)
 	opts.FileDir = rootDir
+	opts.DryRun = dryRun
+	opts.SecurityOptions.Insecure = insecure
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
@@ -60,10 +63,5 @@ func GetAdditional(i *v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, r
 	opts.Mappings = mappings
 
 	err := opts.Run()
-
-	// Add images and blocked images to metadata
-	i.Mirror.AdditionalImages = cfg.Mirror.AdditionalImages
-	i.Mirror.BlockedImages = cfg.Mirror.BlockedImages
-
 	return err
 }

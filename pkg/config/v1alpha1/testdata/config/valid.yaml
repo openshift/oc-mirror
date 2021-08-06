@@ -9,10 +9,12 @@ mirror:
         versions:
           - '4.6.36'
           - '4.6.13'
+    pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
     - catalog: certified-operators:v4.7
+      pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
       packages:
         - name: couchbase-operator
         - name: mongodb-operator
@@ -22,7 +24,7 @@ mirror:
           channels:
             - name: 'stable'
     - catalog: community-operators:v4.7
-      latestonly: true
+      headsOnly: true
   samples:
     - name: ruby
     - name: python
@@ -32,4 +34,3 @@ mirror:
   blockedimages:
     - name: alpine
     - name: redis
-pullsecret: '{"auths":{"cloud.openshift.com":..."}}}'
