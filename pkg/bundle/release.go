@@ -24,6 +24,7 @@ import (
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
 
+
 // Define interface and var for http client to support testing
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -33,9 +34,10 @@ var (
 	HClient HTTPClient
 )
 
-// This file is for managing OCP release related tasks
+const (
+	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
 
-const updateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+)
 
 func getTLSConfig() (*tls.Config, error) {
 	certPool, err := x509.SystemCertPool()
@@ -51,7 +53,7 @@ func getTLSConfig() (*tls.Config, error) {
 }
 
 func newClient() (Client, *url.URL, error) {
-	upstream, err := url.Parse(updateUrl)
+	upstream, err := url.Parse(UpdateUrl)
 	if err != nil {
 		return Client{}, nil, err
 	}
@@ -196,7 +198,7 @@ func downloadMirror(i string, rootDir string) error {
 	opts := release.NewMirrorOptions(stream)
 
 	opts.From = i
-	opts.ToDir = rootDir + "/src/"
+	opts.ToDir = rootDir
 
 	if err := opts.Run(); err != nil {
 		return err
@@ -207,26 +209,27 @@ func downloadMirror(i string, rootDir string) error {
 
 // TODO: refactor this into functions for when no past mirrors exist vs. do exist.
 func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
+
 	// First check for metadata
-	if i != nil {
+	if i.Sequence == 0 {
 		// For each channel in the config file
-		for _, r := range c.Mirror.OCP.Channels {
+		for _, ch := range c.Mirror.OCP.Channels {
 			// Check for specific version declarations
-			if r.Versions != nil {
+			if ch.Versions != nil {
 				// for each specific version
-				for _, rn := range r.Versions {
+				for _, v := range ch.Versions {
+
 					// Convert the string to a semver
-					logrus.Infof("rn is: %v", rn)
-					rs, err := semver.Parse(rn)
+					ver, err := semver.Parse(v)
+
 					if err != nil {
-						logrus.Errorln(err)
 						return err
 					}
+
 					// This dumps the available upgrades from the last downloaded version
-					requested, _, err := calculateUpgradePath(r, rs)
+					requested, _, err := calculateUpgradePath(ch, ver)
 					if err != nil {
-						logrus.Errorln("Failed get upgrade graph")
-						return err
+						return fmt.Errorf("failed to get upgrade graph: %v", err)
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
@@ -252,15 +255,13 @@ func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootD
 
 					// download the selected version
 
-					logrus.Infof("Current Object: %v", rn)
-					logrus.Infoln("")
-					logrus.Infoln("")
+					logrus.Infof("Current Object: %v", v)
 					//logrus.Infof("Next-Versions: %v", neededVersions.)
 					//nv = append(nv, neededVersions)
 				}
 			} else {
 				// If no version was specified from the channel, then get the latest release
-				latest, err := GetLatestVersion(r)
+				latest, err := GetLatestVersion(ch)
 				if err != nil {
 					logrus.Errorln(err)
 					return err
@@ -275,23 +276,23 @@ func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootD
 			}
 		}
 	} else {
-		for _, r := range c.Mirror.OCP.Channels {
+		for _, ch := range c.Mirror.OCP.Channels {
 			// Check for specific version declarations
-			if r.Versions != nil {
+			if ch.Versions != nil {
 				// for each specific version
-				for _, rn := range r.Versions {
+				for _, v := range ch.Versions {
+
 					// Convert the string to a semver
-					logrus.Infof("rn is: %v", rn)
-					rs, err := semver.Parse(rn)
+					ver, err := semver.Parse(v)
+
 					if err != nil {
-						logrus.Errorln(err)
 						return err
 					}
+
 					// This dumps the available upgrades from the last downloaded version
-					requested, _, err := calculateUpgradePath(r, rs)
+					requested, _, err := calculateUpgradePath(ch, ver)
 					if err != nil {
-						logrus.Errorln("Failed get upgrade graph")
-						return err
+						return fmt.Errorf("failed to get upgrade graph: %v", err)
 					}
 
 					logrus.Infof("requested: %v", requested.Version)
@@ -317,27 +318,17 @@ func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootD
 
 					// download the selected version
 
-					logrus.Infof("Current Object: %v", rn)
-					logrus.Infoln("")
-					logrus.Infoln("")
+					logrus.Infof("Current Object: %v", v)
 					//logrus.Infof("Next-Versions: %v", neededVersions.)
-					//nv = append(nv, neededVersions)
+					//nv = append(nv, neededVersions
 				}
-			} else {
-				latest, err := GetLatestVersion(r)
-				if err != nil {
-					logrus.Errorln(err)
-					return err
-				}
-				logrus.Infof("Image to download: %v", latest.Image)
-				err = downloadMirror(latest.Image, rootDir)
-				if err != nil {
-					return err
-				}
-				logrus.Infof("Channel Latest version %v", latest.Version)
 			}
 		}
 	}
+
+	// Add OCP Releases to metadata
+	i.Mirror.OCP = c.Mirror.OCP
+
 	return nil
 	// Download each referenced version from
 	//downloadRelease(nv)

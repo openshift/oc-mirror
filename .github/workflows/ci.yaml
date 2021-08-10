@@ -10,12 +10,13 @@ on:
       - main
 
 jobs:
+  # Static build and tests.
   test:
     strategy:
       matrix:
         go-version: [1.16.x]
         os: [ubuntu-latest, macos-latest]
-    
+
     runs-on: ${{ matrix.os }}
     steps:
     - name: Install Go
@@ -24,5 +25,23 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v2
-    - name: Makefile Go tasks
+    - name: Build and run tests
       run: make
+
+  # E2E tests.
+  e2e:
+    strategy:
+      matrix:
+        go-version: [1.16.x]
+
+    # TODO(estroz): get docker running on macOS, or use podman.
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Run e2e tests
+      run: make test-e2e

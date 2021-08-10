@@ -12,7 +12,7 @@ import (
 )
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func GetAdditional(cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
+func GetAdditional(i *v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
 
 	var mappings []mirror.Mapping
 
@@ -23,7 +23,7 @@ func GetAdditional(cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
 	}
 
 	opts := mirror.NewMirrorImageOptions(stream)
-	opts.FileDir = rootDir + "/src/"
+	opts.FileDir = rootDir
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
@@ -60,6 +60,10 @@ func GetAdditional(cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
 	opts.Mappings = mappings
 
 	err := opts.Run()
+
+	// Add images and blocked images to metadata
+	i.Mirror.AdditionalImages = cfg.Mirror.AdditionalImages
+	i.Mirror.BlockedImages = cfg.Mirror.BlockedImages
 
 	return err
 }

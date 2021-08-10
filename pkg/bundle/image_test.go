@@ -41,6 +41,18 @@ func Test_ImageBlocking(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "testing do not want to block, contains keyword",
+			fields: fields{
+				blockedImages: []v1alpha1.BlockedImages{
+					{Name: "alpine"},
+				},
+			},
+			ref: reference.DockerImageReference{
+				Name: "notalpine",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		cfg := v1alpha1.ImageSetConfiguration{}

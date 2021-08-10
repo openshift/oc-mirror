@@ -7,6 +7,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
 	github.com/google/uuid v1.2.0
+	github.com/mattn/go-sqlite3 v1.14.8 // indirect
 	github.com/openshift/library-go v0.0.0-20210521084623-7392ea9b02ca
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
 	github.com/operator-framework/operator-registry v0.0.0-00010101000000-000000000000
@@ -33,4 +34,4 @@ replace (
 )
 
 // TODO(estroz): remove this once main operator-registry repo exposes libs needed.
-replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20210723182709-28179ca932d8
+replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20210804165747-1787329c541f
