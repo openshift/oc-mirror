@@ -7,7 +7,14 @@ import (
 	"github.com/RedHatGov/bundle/pkg/bundle/create"
 )
 
+type createOpts struct {
+	outputDir string
+}
+
 func newCreateCmd() *cobra.Command {
+
+	opts := createOpts{}
+
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create image mirror bundles of OCP related resources",
@@ -16,14 +23,17 @@ func newCreateCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newCreateFullCmd())
-	cmd.AddCommand(newCreateDiffCmd())
+	cmd.AddCommand(newCreateFullCmd(&opts))
+	cmd.AddCommand(newCreateDiffCmd(&opts))
+
+	cmd.PersistentFlags().StringVarP(&opts.outputDir, "output", "o", ".", "output directory for archives")
+
 	return cmd
 }
 
-func newCreateFullCmd() *cobra.Command {
+func newCreateFullCmd(o *createOpts) *cobra.Command {
 
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "full",
 		Short: "Create a full OCP related container image mirror",
 		Args:  cobra.ExactArgs(0),
@@ -31,18 +41,17 @@ func newCreateFullCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create full called")
-			err := create.CreateFull(rootOpts.configPath, rootOpts.dir, rootOpts.dryRun, rootOpts.skipTLS)
+
+			err := create.CreateFull(rootOpts.configPath, rootOpts.dir, o.outputDir, rootOpts.dryRun, rootOpts.skipTLS)
 			if err != nil {
 				logrus.Fatal(err)
 			}
 
 		},
 	}
-
-	return cmd
 }
 
-func newCreateDiffCmd() *cobra.Command {
+func newCreateDiffCmd(o *createOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff",
 		Short: "Create a differential OCP related container image mirror updates",
@@ -51,7 +60,8 @@ func newCreateDiffCmd() *cobra.Command {
 			cleanup := setupFileHook(rootOpts.dir)
 			defer cleanup()
 			logrus.Infoln("Create Diff called")
-			err := create.CreateDiff(rootOpts.configPath, rootOpts.dir)
+
+			err := create.CreateDiff(rootOpts.configPath, rootOpts.dir, o.outputDir, rootOpts.dryRun, rootOpts.skipTLS)
 			if err != nil {
 				logrus.Fatal(err)
 			}

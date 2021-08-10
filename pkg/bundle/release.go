@@ -204,7 +204,7 @@ func downloadMirror(i string, rootDir string) error {
 func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
 
 	// First check for metadata
-	if i.Sequence == 0 {
+	if i.Sequence == 1 {
 		// For each channel in the config file
 		for _, ch := range c.Mirror.OCP.Channels {
 			// Check for specific version declarations

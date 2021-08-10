@@ -3,12 +3,14 @@ package create
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/RedHatGov/bundle/pkg/archive"
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
@@ -16,15 +18,14 @@ import (
 )
 
 // CreateFull performs all tasks in creating full imagesets
-func CreateFull(configPath, rootDir string, dryRun, insecure bool) error {
+func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) error {
 
 	ctx := context.Background()
 
 	sourceDir := filepath.Join(rootDir, config.SourcePath)
 	metadataPath := filepath.Join(sourceDir, "publish", config.MetadataFile)
 
-	err := bundle.MakeCreateDirs(rootDir)
-	if err != nil {
+	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
 	}
 
@@ -82,30 +83,46 @@ func CreateFull(configPath, rootDir string, dryRun, insecure bool) error {
 		}
 	}
 
-	// Gather files we pulled
-	if err = bundle.ReconcileFiles(&metadata.MetadataSpec, rootDir); err != nil {
-		return err
-	}
-
 	// Add mirror as a new PastMirror
 	metadata.PastMirrors = append(metadata.PastMirrors, lastRun)
+
+	// Update metadata files
+	files, err := getFiles(sourceDir, &metadata)
+
+	if err != nil {
+		return fmt.Errorf("error updates metadata files: %v", err)
+	}
+
+	// Write updated metadata
 	if err := config.WriteMetadata(metadata, rootDir); err != nil {
 		return fmt.Errorf("error writing metadata: %v", err)
+	}
+
+	var segSize int64
+
+	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
+		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize * 1024 * 1024 * 1024
+	} else {
+		segSize = 500 * 1024 * 1024 * 1024
+	}
+
+	// Run archiver
+	if err := prepareArchive(sourceDir, outputDir, segSize, &metadata, files); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // CreateDiff performs all tasks in creating differential imagesets
-func CreateDiff(configPath, rootDir string) error {
+func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) error {
 
 	_ = context.Background()
 
 	sourceDir := filepath.Join(rootDir, config.SourcePath)
 	metadataPath := filepath.Join(sourceDir, "publish", config.MetadataFile)
 
-	err := bundle.MakeCreateDirs(rootDir)
-	if err != nil {
+	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
 	}
 
@@ -154,17 +171,89 @@ func CreateDiff(configPath, rootDir string) error {
 		}
 	}
 
-	// Gather files we pulled
-	if err = bundle.ReconcileFiles(&metadata.MetadataSpec, rootDir); err != nil {
+	if err != nil {
 		return err
 	}
 
 	// Add mirror as a new PastMirror
 	lastRun.Sequence++
 	metadata.PastMirrors = append(metadata.PastMirrors, lastRun)
+
+	// Update metadata files
+	files, err := getFiles(sourceDir, &metadata)
+
+	if err != nil {
+		return fmt.Errorf("error updates metadata files: %v", err)
+	}
+
+	// Write updated metadata
 	if err := config.WriteMetadata(metadata, rootDir); err != nil {
 		return fmt.Errorf("error writing metadata: %v", err)
 	}
 
+	var segSize int64
+
+	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
+		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize * 1024 * 1024
+	} else {
+		segSize = 1024 * 1024 * 1024
+	}
+
+	// Run archiver
+	if err := prepareArchive(sourceDir, outputDir, segSize, &metadata, files); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func prepareArchive(rootDir, outputDir string, segSize int64, metadata *v1alpha1.Metadata, files []string) error {
+
+	cwd, err := os.Getwd()
+
+	if err != nil {
+		return err
+	}
+
+	// Create archiver
+	arc := archive.NewArchiver()
+
+	// Set get absolute path to output dir
+	output, err := filepath.Abs(outputDir)
+
+	if err != nil {
+		return err
+	}
+
+	// Change dir before archiving to avoid issues with symlink paths
+	if err := os.Chdir(rootDir); err != nil {
+		return err
+	}
+	defer os.Chdir(cwd)
+
+	// Create tar archive
+	if err := archive.CreateSplitArchive(arc, segSize, output, ".", "bundle", files); err != nil {
+		return fmt.Errorf("failed to create archive: %v", err)
+	}
+
+	return nil
+
+}
+
+func getFiles(rootDir string, metadata *v1alpha1.Metadata) ([]string, error) {
+
+	cwd, err := os.Getwd()
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Change dir before archiving to avoid issues with symlink paths
+	if err := os.Chdir(rootDir); err != nil {
+		return nil, err
+	}
+	defer os.Chdir(cwd)
+
+	// Gather files we pulled
+	return bundle.ReconcileFiles(&metadata.MetadataSpec, ".")
 }

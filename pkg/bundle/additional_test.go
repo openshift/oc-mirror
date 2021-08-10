@@ -16,7 +16,6 @@ func Test_GetAdditional(t *testing.T) {
 			{Name: "alpine"},
 		},
 		AdditionalImages: []v1alpha1.AdditionalImages{
-			{Name: "docker.io/library/alpine:latest"},
 			{Name: "docker.io/library/busybox:latest"},
 		},
 	}

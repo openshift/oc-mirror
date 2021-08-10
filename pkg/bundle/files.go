@@ -10,7 +10,9 @@ import (
 
 // ReconcileFiles gather all files that were collected during a run
 // and checks against the current list
-func ReconcileFiles(i *v1alpha1.MetadataSpec, rootDir string) error {
+func ReconcileFiles(i *v1alpha1.MetadataSpec, rootDir string) ([]string, error) {
+
+	var newFiles []string
 
 	foundFiles := make(map[string]struct{}, len(i.PastFiles))
 	for _, fpath := range i.PastFiles {
@@ -32,10 +34,11 @@ func ReconcileFiles(i *v1alpha1.MetadataSpec, rootDir string) error {
 		if _, found := foundFiles[fpath]; !found {
 			i.PastFiles = append(i.PastFiles, file)
 			foundFiles[fpath] = struct{}{}
+			newFiles = append(newFiles, fpath)
 		}
 
 		return nil
 	})
 
-	return err
+	return newFiles, err
 }
