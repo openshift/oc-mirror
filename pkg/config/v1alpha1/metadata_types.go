@@ -25,7 +25,7 @@ type MetadataSpec struct {
 	PastMirrors []PastMirror `json:"pastMirrors"`
 	// PastFiles is a slice containing information for
 	// all files created for an imageset
-	PastFiles []File `json:"files"`
+	PastFiles []File `json:"pastFiles"`
 }
 
 type PastMirror struct {

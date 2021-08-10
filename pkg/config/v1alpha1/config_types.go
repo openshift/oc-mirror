@@ -23,6 +23,8 @@ type ImageSetConfiguration struct {
 type ImageSetConfigurationSpec struct {
 	Mirror     Mirror `json:"mirror"`
 	PullSecret string `json:"pullSecret,omitempty"`
+	// ArchiveSize is the size of the segmented archive in GB
+	ArchiveSize int64 `json:"archiveSize,omitempty"`
 }
 
 type Mirror struct {
