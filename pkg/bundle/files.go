@@ -10,15 +10,16 @@ import (
 
 // ReconcileFiles gather all files that were collected during a run
 // and checks against the current list
-func ReconcileFiles(i *v1alpha1.MetadataSpec, rootDir string) ([]string, error) {
+func ReconcileFiles(meta *v1alpha1.Metadata, rootDir string) (newFiles []string, err error) {
 
-	var newFiles []string
-
-	foundFiles := make(map[string]struct{}, len(i.PastFiles))
-	for _, fpath := range i.PastFiles {
+	foundFiles := make(map[string]struct{}, len(meta.PastFiles))
+	for _, fpath := range meta.PastFiles {
 		foundFiles[fpath.Name] = struct{}{}
 	}
-	err := filepath.Walk(rootDir, func(fpath string, info os.FileInfo, err error) error {
+	// Ignore the current dir.
+	foundFiles["."] = struct{}{}
+
+	err = filepath.Walk(rootDir, func(fpath string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return fmt.Errorf("traversing %s: %v", fpath, err)
@@ -32,7 +33,7 @@ func ReconcileFiles(i *v1alpha1.MetadataSpec, rootDir string) ([]string, error) 
 		}
 
 		if _, found := foundFiles[fpath]; !found {
-			i.PastFiles = append(i.PastFiles, file)
+			meta.PastFiles = append(meta.PastFiles, file)
 			foundFiles[fpath] = struct{}{}
 			newFiles = append(newFiles, fpath)
 		}

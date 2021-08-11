@@ -58,8 +58,9 @@ func (o *OperatorOptions) Full(_ context.Context, cfg v1alpha1.ImageSetConfigura
 			ErrOut: os.Stderr,
 		}
 		opts := catalog.NewMirrorCatalogOptions(stream)
+		opts.SecurityOptions.RegistryConfig = ctlg.PullSecret
 		opts.DryRun = o.DryRun
-		opts.FileDir = filepath.Join(o.RootDestDir, config.SourcePath)
+		opts.FileDir = filepath.Join(o.RootDestDir, config.SourceDir)
 		opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", opts.SourceRef.Ref.Name, time.Now().Unix()))
 		opts.SecurityOptions.Insecure = o.SkipTLS
 

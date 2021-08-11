@@ -21,7 +21,7 @@ func Test_ImageBlocking(t *testing.T) {
 			name: "testing want to block",
 			fields: fields{
 				blockedImages: []v1alpha1.BlockedImages{
-					{Name: "alpine"},
+					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
 			ref: reference.DockerImageReference{
@@ -33,7 +33,7 @@ func Test_ImageBlocking(t *testing.T) {
 			name: "testing do not want to block",
 			fields: fields{
 				blockedImages: []v1alpha1.BlockedImages{
-					{Name: "alpine"},
+					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
 			ref: reference.DockerImageReference{
@@ -45,7 +45,7 @@ func Test_ImageBlocking(t *testing.T) {
 			name: "testing do not want to block, contains keyword",
 			fields: fields{
 				blockedImages: []v1alpha1.BlockedImages{
-					{Name: "alpine"},
+					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
 			ref: reference.DockerImageReference{
