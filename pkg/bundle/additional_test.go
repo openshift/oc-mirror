@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"os"
 	"testing"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
@@ -9,27 +8,22 @@ import (
 
 func Test_GetAdditional(t *testing.T) {
 
-	mirror := &v1alpha1.PastMirror{}
+	mirror := v1alpha1.PastMirror{}
 	cfg := v1alpha1.ImageSetConfiguration{}
 	cfg.Mirror = v1alpha1.Mirror{
 		BlockedImages: []v1alpha1.BlockedImages{
-			{Name: "alpine"},
+			{Image: v1alpha1.Image{Name: "alpine"}},
 		},
 		AdditionalImages: []v1alpha1.AdditionalImages{
-			{Name: "docker.io/library/alpine:latest"},
-			{Name: "docker.io/library/busybox:latest"},
+			{Image: v1alpha1.Image{Name: "docker.io/library/busybox:latest"}},
 		},
 	}
 
-	tmpdir, err := os.MkdirTemp("", "test")
+	tmpdir := t.TempDir()
 
-	if err != nil {
-		t.Error(err)
-	}
-
-	defer os.RemoveAll(tmpdir)
-
-	if err := GetAdditional(mirror, cfg, tmpdir); err != nil {
+	// Use dry run to avoid hitting docker limits.
+	dryRun := true
+	if err := GetAdditional(mirror, cfg, tmpdir, dryRun, false); err != nil {
 		t.Error(err)
 	}
 }

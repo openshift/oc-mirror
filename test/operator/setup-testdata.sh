@@ -15,8 +15,8 @@ function setup() {
   mkdir -p "${DATA_DIR}/index"
   cp -r "${DIR}/testdata/indices/latest/"* "${DATA_DIR}/index/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_ONLY@'"$REGISTRY"'@g' {} \;
-  mkdir -p "${OUTPUT_DIR}"
-  cp "${DIR}/testdata/configs/latest/imageset-config.yaml" "$OUTPUT_DIR/"
+  mkdir -p "$OUTPUT_DIR"
+  cp "${DIR}/testdata/configs/latest/imageset-config.yaml" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
 }
 
@@ -36,7 +36,7 @@ function build_push_related_images() {
   for img in `yq eval '.relatedImages[].image' "${DATA_DIR}/index/index.yaml" --no-doc`; do
     local tmp=$(mktemp -d ${DATA_DIR}/bundle-image.XXXXX)
     pushd "$tmp"
-    echo -e "#!/bin/sh\n\necho \"relatedImage: $img\"" > run.sh
+    echo -e "#!/bin/sh\n\necho \"relatedImage: ${img}\"" > run.sh
     chmod +x run.sh
     cat <<EOF > Dockerfile
 FROM alpine

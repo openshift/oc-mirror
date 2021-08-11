@@ -207,130 +207,128 @@ func downloadMirror(i string, rootDir string) error {
 
 }
 
-// TODO: refactor this into functions for when no past mirrors exist vs. do exist.
-func GetReleases(i *v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
+func GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
 
-	// First check for metadata
-	if i.Sequence == 0 {
-		// For each channel in the config file
-		for _, ch := range c.Mirror.OCP.Channels {
-			// Check for specific version declarations
-			if ch.Versions != nil {
-				// for each specific version
-				for _, v := range ch.Versions {
+	// For each channel in the config file
+	for _, ch := range cfg.Mirror.OCP.Channels {
 
-					// Convert the string to a semver
-					ver, err := semver.Parse(v)
-
-					if err != nil {
-						return err
-					}
-
-					// This dumps the available upgrades from the last downloaded version
-					requested, _, err := calculateUpgradePath(ch, ver)
-					if err != nil {
-						return fmt.Errorf("failed to get upgrade graph: %v", err)
-					}
-
-					logrus.Infof("requested: %v", requested.Version)
-					err = downloadMirror(requested.Image, rootDir)
-					if err != nil {
-						return err
-					}
-					logrus.Infof("Channel Latest version %v", requested.Version)
-
-					/* Select the requested version from the available versions
-					for _, d := range neededVersions {
-						logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
-						if d.Version.Equals(rs) {
-							logrus.Infof("Image to download: %v", d.Image)
-							err := downloadMirror(d.Image)
-							if err != nil {
-								logrus.Errorln(err)
-							}
-							logrus.Infof("Image to download: %v", d.Image)
-							break
-						}
-					} */
-
-					// download the selected version
-
-					logrus.Infof("Current Object: %v", v)
-					//logrus.Infof("Next-Versions: %v", neededVersions.)
-					//nv = append(nv, neededVersions)
-				}
-			} else {
-				// If no version was specified from the channel, then get the latest release
-				latest, err := GetLatestVersion(ch)
-				if err != nil {
-					logrus.Errorln(err)
-					return err
-				}
-				logrus.Infof("Image to download: %v", latest.Image)
-				// Download the release
-				err = downloadMirror(latest.Image, rootDir)
-				if err != nil {
-					logrus.Errorln(err)
-				}
-				logrus.Infof("Channel Latest version %v", latest.Version)
+		if len(ch.Versions) == 0 {
+			// If no version was specified from the channel, then get the latest release
+			latest, err := GetLatestVersion(ch)
+			if err != nil {
+				logrus.Errorln(err)
+				return err
 			}
+			logrus.Infof("Image to download: %v", latest.Image)
+			// Download the release
+			err = downloadMirror(latest.Image, rootDir)
+			if err != nil {
+				logrus.Errorln(err)
+			}
+			logrus.Infof("Channel Latest version %v", latest.Version)
 		}
-	} else {
-		for _, ch := range c.Mirror.OCP.Channels {
-			// Check for specific version declarations
-			if ch.Versions != nil {
-				// for each specific version
-				for _, v := range ch.Versions {
 
-					// Convert the string to a semver
-					ver, err := semver.Parse(v)
+		// Check for specific version declarations for each specific version
+		for _, v := range ch.Versions {
 
-					if err != nil {
-						return err
-					}
+			// Convert the string to a semver
+			ver, err := semver.Parse(v)
 
-					// This dumps the available upgrades from the last downloaded version
-					requested, _, err := calculateUpgradePath(ch, ver)
-					if err != nil {
-						return fmt.Errorf("failed to get upgrade graph: %v", err)
-					}
-
-					logrus.Infof("requested: %v", requested.Version)
-					err = downloadMirror(requested.Image, rootDir)
-					if err != nil {
-						return err
-					}
-					logrus.Infof("Channel Latest version %v", requested.Version)
-
-					/* Select the requested version from the available versions
-					for _, d := range neededVersions {
-						logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
-						if d.Version.Equals(rs) {
-							logrus.Infof("Image to download: %v", d.Image)
-							err := downloadMirror(d.Image)
-							if err != nil {
-								logrus.Errorln(err)
-							}
-							logrus.Infof("Image to download: %v", d.Image)
-							break
-						}
-					} */
-
-					// download the selected version
-
-					logrus.Infof("Current Object: %v", v)
-					//logrus.Infof("Next-Versions: %v", neededVersions.)
-					//nv = append(nv, neededVersions
-				}
+			if err != nil {
+				return err
 			}
+
+			// This dumps the available upgrades from the last downloaded version
+			requested, _, err := calculateUpgradePath(ch, ver)
+			if err != nil {
+				return fmt.Errorf("failed to get upgrade graph: %v", err)
+			}
+
+			logrus.Infof("requested: %v", requested.Version)
+			err = downloadMirror(requested.Image, rootDir)
+			if err != nil {
+				return err
+			}
+			logrus.Infof("Channel Latest version %v", requested.Version)
+
+			/* Select the requested version from the available versions
+			for _, d := range neededVersions {
+				logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
+				if d.Version.Equals(rs) {
+					logrus.Infof("Image to download: %v", d.Image)
+					err := downloadMirror(d.Image)
+					if err != nil {
+						logrus.Errorln(err)
+					}
+					logrus.Infof("Image to download: %v", d.Image)
+					break
+				}
+			} */
+
+			// download the selected version
+
+			logrus.Infof("Current Object: %v", v)
+			//logrus.Infof("Next-Versions: %v", neededVersions.)
+			//nv = append(nv, neededVersions)
 		}
 	}
 
-	// Add OCP Releases to metadata
-	i.Mirror.OCP = c.Mirror.OCP
-
-	return nil
 	// Download each referenced version from
 	//downloadRelease(nv)
 
+	return nil
+}
+
+func GetReleasesDiff(_ v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
+
+	for _, ch := range c.Mirror.OCP.Channels {
+		// Check for specific version declarations for each specific version
+		for _, v := range ch.Versions {
+
+			// Convert the string to a semver
+			ver, err := semver.Parse(v)
+
+			if err != nil {
+				return err
+			}
+
+			// This dumps the available upgrades from the last downloaded version
+			requested, _, err := calculateUpgradePath(ch, ver)
+			if err != nil {
+				return fmt.Errorf("failed to get upgrade graph: %v", err)
+			}
+
+			logrus.Infof("requested: %v", requested.Version)
+			err = downloadMirror(requested.Image, rootDir)
+			if err != nil {
+				return err
+			}
+			logrus.Infof("Channel Latest version %v", requested.Version)
+
+			/* Select the requested version from the available versions
+			for _, d := range neededVersions {
+				logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
+				if d.Version.Equals(rs) {
+					logrus.Infof("Image to download: %v", d.Image)
+					err := downloadMirror(d.Image)
+					if err != nil {
+						logrus.Errorln(err)
+					}
+					logrus.Infof("Image to download: %v", d.Image)
+					break
+				}
+			} */
+
+			// download the selected version
+
+			logrus.Infof("Current Object: %v", v)
+			//logrus.Infof("Next-Versions: %v", neededVersions.)
+			//nv = append(nv, neededVersions
+		}
+	}
+
+	// Download each referenced version from
+	//downloadRelease(nv)
+
+	return nil
 }

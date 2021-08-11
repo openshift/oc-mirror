@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"sort"
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,24 +22,72 @@ type Metadata struct {
 }
 
 type MetadataSpec struct {
+	// Uid uniquely identifies this metadata object.
+	Uid uuid.UUID `json:"uid"`
 	// Past is a slice containing information for
 	// all mirrors created for an imageset
-	PastMirrors []PastMirror `json:"pastMirrors"`
+	PastMirrors PastMirrors `json:"pastMirrors"`
 	// PastFiles is a slice containing information for
 	// all files created for an imageset
-	PastFiles []File `json:"files"`
+	PastFiles []File `json:"pastFiles"`
 }
 
 type PastMirror struct {
-	Timestamp int       `json:"timestamp"`
-	Sequence  int       `json:"sequence"`
-	Uid       uuid.UUID `json:"uid"`
-	Files     []File    `json:"files"`
-	Mirror    Mirror    `json:"mirror"`
+	Timestamp int    `json:"timestamp"`
+	Sequence  int    `json:"sequence"`
+	Files     []File `json:"files"`
+	Mirror    Mirror `json:"mirror"`
+	// Operators are metadata about the set of mirrored operators in a mirror operation.
+	Operators []OperatorMetadata `json:"operators,omitempty"`
 }
+
+var _ sort.Interface = PastMirrors{}
+
+// PastMirrors is a sortable slice of PastMirro's.
+type PastMirrors []PastMirror
+
+func (pms PastMirrors) Len() int           { return len(pms) }
+func (pms PastMirrors) Swap(i, j int)      { pms[i], pms[j] = pms[j], pms[i] }
+func (pms PastMirrors) Less(i, j int) bool { return pms[i].Sequence < pms[j].Sequence }
 
 type File struct {
 	Name string `json:"name"`
+}
+
+// OperatorMetadata holds an Operator's post-mirror metadata.
+type OperatorMetadata struct {
+	// Catalog references a catalog name from the mirror spec.
+	Catalog string `json:"catalog"`
+	// ImagePin is the resolved sha256 image name of Catalog.
+	// This image will be pulled if RelIndexPath and Index are unset
+	// using the pull secret in the metadata's Mirror config for this catalog.
+	ImagePin string `json:"imagePin"`
+	// RelIndexPath is the path to the catalog's declarative config index
+	// relative to the metadata file.
+	// This path will be used to load the prior catalog's state if set.
+	RelIndexPath string `json:"relIndexPath,omitempty"`
+	// Index is the catalog's inlined declarative config index.
+	// Only set this field if the index is relatively small.
+	// This data will be used to load the prior catalog's state if set
+	// and RelIndexPath is unset.
+	Index InlinedIndex `json:"index,omitempty"`
+}
+
+var _ io.Writer = &InlinedIndex{}
+
+type InlinedIndex json.RawMessage
+
+func (index *InlinedIndex) Write(data []byte) (int, error) {
+	msg := json.RawMessage{}
+	if err := msg.UnmarshalJSON(data); err != nil {
+		return 0, err
+	}
+	*index = InlinedIndex(msg)
+	return len(data), nil
+}
+
+func (index InlinedIndex) MarshalJSON() ([]byte, error) {
+	return json.Marshal(index)
 }
 
 func NewMetadata() Metadata {
@@ -47,8 +97,8 @@ func NewMetadata() Metadata {
 			Kind:       MetadataKind,
 		},
 	}
-
 }
+
 func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	gvk := GroupVersion.WithKind(MetadataKind)
@@ -61,5 +111,32 @@ func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	m.SetGroupVersionKind(gvk)
 
+	// Make sure sequences are sorted in ascending order before returning m.
+	sort.Sort(m.PastMirrors)
+
 	return m, nil
+}
+
+func (m *Metadata) MarshalJSON() ([]byte, error) {
+
+	gvk := GroupVersion.WithKind(MetadataKind)
+	m.SetGroupVersionKind(gvk)
+
+	// Make sure sequences are sorted in ascending order before writing m.
+	sort.Sort(m.PastMirrors)
+
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	// Use anonymous struct to avoid recursive marshal calls.
+	var tmp struct {
+		metav1.TypeMeta `json:",inline"`
+		MetadataSpec    `json:",inline"`
+	}
+	tmp.TypeMeta = m.TypeMeta
+	tmp.MetadataSpec = m.MetadataSpec
+	if err := enc.Encode(tmp); err != nil {
+		return nil, fmt.Errorf("encode %s: %v", gvk, err)
+	}
+
+	return buf.Bytes(), nil
 }
