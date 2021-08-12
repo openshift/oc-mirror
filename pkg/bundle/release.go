@@ -20,10 +20,11 @@ import (
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
+// This file is for managing OCP release related tasks
+
 // import(
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
-
 
 // Define interface and var for http client to support testing
 type HTTPClient interface {
@@ -36,8 +37,11 @@ var (
 
 const (
 	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
-
 )
+
+func init() {
+	HClient = &http.Client{}
+}
 
 func getTLSConfig() (*tls.Config, error) {
 	certPool, err := x509.SystemCertPool()
@@ -152,7 +156,11 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 		transport.Proxy = http.ProxyURL(c.proxyURL)
 	}
 
-	HClient = &http.Client{Transport: &transport}
+	//HClient = &http.Client{Transport: &transport}
+	hc, ok := HClient.(*http.Client)
+	if ok {
+		hc.Transport = &transport
+	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
 	defer cancel()
 	resp, err := HClient.Do(req.WithContext(timeoutCtx))
