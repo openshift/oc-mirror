@@ -91,9 +91,14 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
-		if err = bundle.GetAdditional(run, cfg, sourceDir, dryRun, insecure); err != nil {
+		opts := bundle.NewAdditionalOptions()
+		opts.DestDir = rootDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err := opts.GetAdditional(run, cfg); err != nil {
 			return err
 		}
+
 	}
 
 	// Update metadata files
@@ -190,7 +195,11 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
-		if err = bundle.GetAdditional(lastRun, cfg, sourceDir, dryRun, insecure); err != nil {
+		opts := bundle.NewAdditionalOptions()
+		opts.DestDir = rootDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err := opts.GetAdditional(lastRun, cfg); err != nil {
 			return err
 		}
 	}

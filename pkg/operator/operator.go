@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
@@ -69,10 +70,10 @@ func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 				IncludeConfig: ctlg.IncludeCatalog,
 			}
 
-			err = o.diff(ctx, a, ctlg, tmp)
+			err = o.diff(ctx, a, ctlg, cfg, tmp)
 		} else {
 			// Mirror the entire catalog.
-			err = o.full(ctx, ctlg, tmp)
+			err = o.full(ctx, ctlg, cfg, tmp)
 		}
 		if err != nil {
 			return err
@@ -124,7 +125,7 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 			break
 		}
 
-		if err := o.diff(ctx, a, ctlg, tmp); err != nil {
+		if err := o.diff(ctx, a, ctlg, cfg, tmp); err != nil {
 			return err
 		}
 	}
@@ -132,7 +133,7 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	return nil
 }
 
-func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, tmp string) (err error) {
+func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
 
 	opts := o.newMirrorCatalogOptions(ctlg)
 
@@ -160,7 +161,7 @@ func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, tmp st
 	// because the default ImageMirrorer does not set FileDir from opts.
 	// This isn't great because the default ImageMirrorer is a closure
 	// and may contain configuration that gets overridden here.
-	if opts.ImageMirrorer, err = newMirrorerFunc(opts); err != nil {
+	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
 		return fmt.Errorf("error : %v", err)
 	}
 
@@ -175,7 +176,7 @@ func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, tmp st
 	return nil
 }
 
-func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.Operator, tmp string) (err error) {
+func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
 
 	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 	if err != nil {
@@ -220,7 +221,7 @@ func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.O
 
 	opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
 
-	if opts.ImageMirrorer, err = newMirrorerFunc(opts); err != nil {
+	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
 		return fmt.Errorf("error constructing mirror func: %v", err)
 	}
 
@@ -274,15 +275,21 @@ func refToFileScheme(ref imgreference.DockerImageReference) string {
 // Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L284-L313
 // Hoping this can be temporary, and `oc adm mirror catalog` libs support index.yaml direct mirroring.
 
-func newMirrorerFunc(opts *catalog.MirrorCatalogOptions) (catalog.ImageMirrorerFunc, error) {
+func newMirrorerFunc(cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCatalogOptions) (catalog.ImageMirrorerFunc, error) {
 	allmanifestsFilter := imagemanifest.FilterOptions{FilterByOS: ".*"}
 	if err := allmanifestsFilter.Validate(); err != nil {
 		return nil, err
 	}
 
 	return func(mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
+
 		mappings := []imgmirror.Mapping{}
 		for from, to := range mapping {
+
+			if bundle.IsBlocked(cfg, from.Ref) {
+				logrus.Debugf("image %s was specified as blocked per config, skipping...", from.Ref.Name)
+				continue
+			}
 			mappings = append(mappings, imgmirror.Mapping{
 				Source:      from,
 				Destination: to,
