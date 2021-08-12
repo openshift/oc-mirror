@@ -124,6 +124,13 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		return err
 	}
 
+	// Handle Committer backends.
+	if committer, isCommitter := backend.(storage.Committer); isCommitter {
+		if err := committer.Commit(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -221,6 +228,13 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	// Run archiver
 	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
 		return err
+	}
+
+	// Handle Committer backends.
+	if committer, isCommitter := backend.(storage.Committer); isCommitter {
+		if err := committer.Commit(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
