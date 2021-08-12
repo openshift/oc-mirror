@@ -1,23 +1,16 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/RedHatGov/bundle/pkg/bundle/create"
+	"github.com/RedHatGov/bundle/pkg/cli"
 )
 
-type createOpts struct {
-	*rootOpts
+func newCreateCmd(ro *cli.RootOptions) *cobra.Command {
 
-	outputDir  string
-	configPath string
-}
-
-func newCreateCmd(ro *rootOpts) *cobra.Command {
-
-	opts := createOpts{
-		rootOpts: ro,
+	opts := create.Options{
+		RootOptions: ro,
 	}
 
 	cmd := &cobra.Command{
@@ -33,51 +26,30 @@ func newCreateCmd(ro *rootOpts) *cobra.Command {
 		newCreateDiffCmd(&opts),
 	)
 
-	cmd.PersistentFlags().StringVarP(&opts.configPath, "config", "c", "imageset-config.yaml", "Path to imageset configuration file")
-	cmd.PersistentFlags().StringVarP(&opts.outputDir, "output", "o", ".", "output directory for archives")
+	opts.BindFlags(cmd.PersistentFlags())
 
 	return cmd
 }
 
-func newCreateFullCmd(o *createOpts) *cobra.Command {
+func newCreateFullCmd(o *create.Options) *cobra.Command {
 
 	return &cobra.Command{
 		Use:   "full",
 		Short: "Create a full OCP related container image mirror",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {
-			cleanup := setupFileHook(o.dir)
-			defer cleanup()
-			logrus.Infoln("Create full called")
-
-			creator := create.NewCreator(o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
-
-			err := creator.CreateFull(cmd.Context())
-			if err != nil {
-				logrus.Fatal(err)
-			}
-
+			checkErr(o.RunFull(cmd.Context()))
 		},
 	}
 }
 
-func newCreateDiffCmd(o *createOpts) *cobra.Command {
+func newCreateDiffCmd(o *create.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff",
 		Short: "Create a differential OCP related container image mirror updates",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {
-			cleanup := setupFileHook(o.dir)
-			defer cleanup()
-			logrus.Infoln("Create Diff called")
-
-			creator := create.NewCreator(o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
-
-			err := creator.CreateDiff(cmd.Context())
-			if err != nil {
-				logrus.Fatal(err)
-			}
-
+			checkErr(o.RunDiff(cmd.Context()))
 		},
 	}
 }

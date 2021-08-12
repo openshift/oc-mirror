@@ -9,15 +9,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -32,15 +31,12 @@ import (
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
-	RootDestDir string
-	DryRun      bool
-	Cleanup     bool
-	SkipTLS     bool
+	cli.RootOptions
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
-func NewReleaseOptions() *ReleaseOptions {
-	return &ReleaseOptions{}
+func NewReleaseOptions(ro cli.RootOptions) *ReleaseOptions {
+	return &ReleaseOptions{RootOptions: ro}
 }
 
 // Define interface and var for http client to support testing
@@ -214,14 +210,8 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func downloadMirror(secret []byte, toDir, from string, skipTlS, dryRun bool) (assocs image.Associations, err error) {
-	stream := genericclioptions.IOStreams{
-		In:     os.Stdin,
-		Out:    os.Stdout,
-		ErrOut: os.Stderr,
-	}
-	opts := release.NewMirrorOptions(stream)
-
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (assocs image.Associations, err error) {
+	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
 
@@ -229,15 +219,15 @@ func downloadMirror(secret []byte, toDir, from string, skipTlS, dryRun bool) (as
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(secret) != 0 {
-		ctx, err := config.CreateContext(secret, false, skipTlS)
+		ctx, err := config.CreateContext(secret, false, o.SkipTLS)
 		if err != nil {
 			return assocs, err
 		}
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
-	opts.SecurityOptions.Insecure = skipTlS
-	opts.DryRun = dryRun
+	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.DryRun = o.DryRun
 
 	if err := opts.Run(); err != nil {
 		return assocs, err
@@ -258,7 +248,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 
 	allAssocs := image.Associations{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
-	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
@@ -271,7 +261,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			}
 			logrus.Infof("Image to download: %v", latest.Image)
 			// Download the release
-			assocs, err := downloadMirror([]byte(pullSecret), srcDir, latest.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image)
 			if err != nil {
 				return image.Associations{}, err
 			}
@@ -296,7 +286,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			assocs, err := downloadMirror([]byte(pullSecret), srcDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
 			if err != nil {
 				return image.Associations{}, err
 			}
@@ -335,7 +325,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 
 	allAssocs := image.Associations{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
-	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 		// Check for specific version declarations for each specific version
@@ -355,7 +345,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			assocs, err := downloadMirror([]byte(pullSecret), srcDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
 			if err != nil {
 				return image.Associations{}, err
 			}

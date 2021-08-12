@@ -23,9 +23,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/RedHatGov/bundle/pkg/bundle"
+	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -34,18 +34,19 @@ import (
 // MirrorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
 type MirrorOptions struct {
-	RootDestDir string
-	DryRun      bool
-	SkipCleanup bool
-	SkipTLS     bool
+	cli.RootOptions
 
 	Logger *logrus.Entry
 }
 
+func NewMirrorOptions(ro cli.RootOptions) *MirrorOptions {
+	return &MirrorOptions{RootOptions: ro}
+}
+
 // complete defaults MirrorOptions.
 func (o *MirrorOptions) complete() {
-	if o.RootDestDir == "" {
-		o.RootDestDir = "create"
+	if o.Dir == "" {
+		o.Dir = "create"
 	}
 
 	if o.Logger == nil {
@@ -54,7 +55,7 @@ func (o *MirrorOptions) complete() {
 }
 
 func (o *MirrorOptions) mktempDir() (string, func(), error) {
-	dir := filepath.Join(o.RootDestDir, fmt.Sprintf("operators.%d", time.Now().Unix()))
+	dir := filepath.Join(o.Dir, fmt.Sprintf("operators.%d", time.Now().Unix()))
 	return dir, func() {
 		if err := os.RemoveAll(dir); err != nil {
 			logrus.Error(err)
@@ -82,7 +83,7 @@ func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
 	)
 }
 
-// Full mirrors each catalog image in its entirety to the <RootDestDir>/src directory.
+// Full mirrors each catalog image in its entirety to the <Dir>/src directory.
 func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 	o.complete()
 
@@ -136,7 +137,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 }
 
 // Diff mirrors only the diff between each old and new catalog image pair
-// to the <rootDir>/src directory.
+// to the <Dir>/src directory.
 func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.Associations, error) {
 	o.complete()
 
@@ -220,7 +221,7 @@ func (o *MirrorOptions) full(ctx context.Context, a action.Render, ctlg v1alpha1
 	args := []string{
 		// The source is the catalog image itself.
 		ctlg.Catalog,
-		// The destination is within <RootDestDir>/src/v2/<image-name>.
+		// The destination is within <Dir>/src/v2/<image-name>.
 		refToFileScheme(ctlgRef),
 	}
 	if err := opts.Complete(&cobra.Command{}, args); err != nil {
@@ -250,7 +251,7 @@ func (o *MirrorOptions) full(ctx context.Context, a action.Render, ctlg v1alpha1
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
-	indexDir, err := dcDirForImage(o.RootDestDir, ctlgRef)
+	indexDir, err := dcDirForImage(o.Dir, ctlgRef)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +285,7 @@ func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, ctlg v1alpha1.O
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
-	indexDir, err := dcDirForImage(o.RootDestDir, ctlgRef)
+	indexDir, err := dcDirForImage(o.Dir, ctlgRef)
 	if err != nil {
 		return nil, err
 	}
@@ -365,15 +366,9 @@ func dcDirForImage(rootDir string, ref imgreference.DockerImageReference) (strin
 }
 
 func (o *MirrorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) (*catalog.MirrorCatalogOptions, error) {
-	stream := genericclioptions.IOStreams{
-		In:     os.Stdin,
-		Out:    os.Stdout,
-		ErrOut: os.Stderr,
-	}
-
-	opts := catalog.NewMirrorCatalogOptions(stream)
+	opts := catalog.NewMirrorCatalogOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
-	opts.FileDir = filepath.Join(o.RootDestDir, config.SourceDir)
+	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
@@ -421,7 +416,7 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 			return err
 		}
 
-		srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+		srcDir := filepath.Join(o.Dir, config.SourceDir)
 		assocs, err := image.AssociateImageLayers(srcDir, imgMappings, images)
 		if err != nil {
 			merr := &image.MirrorError{}

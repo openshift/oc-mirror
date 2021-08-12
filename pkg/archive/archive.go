@@ -69,7 +69,7 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 	// Declare split variables
 	splitNum := 0
 	splitSize := int64(0)
-	splitPath := fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, p.String())
+	splitPath := filepath.Join(destDir, fmt.Sprintf("%s_%06d.%s", prefix, splitNum, p.String()))
 
 	splitFile, err := p.createArchive(splitPath)
 
@@ -143,7 +143,7 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 			// Increment split number and reset splitSize
 			splitNum += 1
 			splitSize = int64(0)
-			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, p.String())
+			splitPath = filepath.Join(destDir, fmt.Sprintf("%s_%06d.%s", prefix, splitNum, p.String()))
 
 			// Create a new tar archive for writing
 			splitFile, err = p.createArchive(splitPath)
