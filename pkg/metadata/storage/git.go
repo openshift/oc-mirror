@@ -12,6 +12,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/sirupsen/logrus"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 var (
@@ -35,8 +37,13 @@ type gitBackend struct {
 
 // NewGitBackend returns a Backend that transacts with a remote git repo.
 // This repo must already exist and be accessible using CloneOptions.{Auth,CABundle,InsecureSkipTLS}.
-func NewGitBackend(ctx context.Context, dir string, clOpts git.CloneOptions, cmtOpts git.CommitOptions) (Backend, error) {
+func NewGitBackend(ctx context.Context, cfg *v1alpha1.GitConfig) (Backend, error) {
 	b := &gitBackend{}
+
+	clOpts, err := cfg.GetCloneOptions()
+	if err != nil {
+		return nil, err
+	}
 
 	// Default to a common branch name.
 	if clOpts.ReferenceName == "" {
@@ -59,28 +66,35 @@ func NewGitBackend(ctx context.Context, dir string, clOpts git.CloneOptions, cmt
 		Progress:          clOpts.Progress,
 	}
 
+	if b.cmtOpts, err = cfg.GetCommitOptions(); err != nil {
+		return nil, err
+	}
 	// Commit() will handle staging.
-	cmtOpts.All = false
-	b.cmtOpts = &cmtOpts
+	b.cmtOpts.All = false
 
 	if err := b.validate(); err != nil {
 		return nil, fmt.Errorf("invalid git backend configuration: %v", err)
 	}
 
-	// Create the local dir backend for local r/w.
-	lb, err := NewLocalBackend(dir)
-	if err != nil {
-		return nil, fmt.Errorf("error creating local backend for git repo: %w", err)
+	if b.localDirBackend == nil {
+		// Create the local dir backend for local r/w.
+		lb, err := NewLocalBackend(cfg.Dir)
+		if err != nil {
+			return nil, fmt.Errorf("error creating local backend for git repo: %w", err)
+		}
+		b.localDirBackend = lb.(*localDirBackend)
 	}
-	b.localDirBackend = lb.(*localDirBackend)
+
+	// TODO(estroz): if the repo exists and has local commits to the desired branch,
+	// ask the user to continue a prior run and push that commit before proceeding,
+	// If so, push the commit then ask to retry.
 
 	// Try to clone the repo first using the provided clone options,
 	// since it may not exist locally.
 	logrus.Debugf("attempting to clone repo %q remote %q branch %q", clOpts.URL, clOpts.RemoteName, clOpts.ReferenceName)
-	clonedRepo, err := git.PlainCloneContext(ctx, dir, false, &clOpts)
-	if err == nil {
+	if clonedRepo, err := git.PlainCloneContext(ctx, cfg.Dir, false, clOpts); err == nil {
 		b.repo = clonedRepo
-		return b, b.init()
+		return b, nil
 	}
 	// Ignore ErrRepositoryAlreadyExists since the repo should be open-able
 	// if not clonable.
@@ -90,18 +104,25 @@ func NewGitBackend(ctx context.Context, dir string, clOpts git.CloneOptions, cmt
 
 	// Try to open the repo. It should be open-able since dir exists.
 	// If dir is not a git repo, this will fail and return a helpful error message.
-	b.repo, err = git.PlainOpen(dir)
-	if err != nil {
+	if b.repo, err = git.PlainOpen(cfg.Dir); err != nil {
 		return nil, fmt.Errorf("error opening repo: %v", err)
 	}
 
-	// Validate CommitOptions after the repo has been set.
+	// Validate CommitOptions after the repo has been initialized.
 	if err := b.cmtOpts.Validate(b.repo); err != nil {
 		return nil, fmt.Errorf("invalid CommitOptions: %v", err)
 	}
 
 	// Pull the latest changes for the desired branch.
 	logrus.Debugf("pulling branch %q", b.pullOpts.ReferenceName)
+	if _, err := b.pull(ctx); err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+func (b *gitBackend) pull(ctx context.Context) (*git.Worktree, error) {
 	wt, err := b.repo.Worktree()
 	if err != nil {
 		return nil, fmt.Errorf("error getting git working tree: %v", err)
@@ -109,12 +130,7 @@ func NewGitBackend(ctx context.Context, dir string, clOpts git.CloneOptions, cmt
 	if err := wt.PullContext(ctx, b.pullOpts); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil, fmt.Errorf("error pulling branch %q state: %v", b.pullOpts.ReferenceName.Short(), err)
 	}
-
-	return b, b.init()
-}
-
-func (b *gitBackend) init() error {
-	return nil
+	return wt, nil
 }
 
 func (b *gitBackend) validate() error {
@@ -160,14 +176,10 @@ func (b *gitBackend) Commit(ctx context.Context) error {
 		return fmt.Errorf("current HEAD %q of git repo is not at expected ref %q", head.Name().String(), b.pullOpts.ReferenceName.String())
 	}
 
-	wt, err := b.repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("error getting git working tree: %v", err)
-	}
-
 	// Make sure git state is fresh.
-	if err := wt.PullContext(ctx, b.pullOpts); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return fmt.Errorf("error pulling branch %q state: %v", b.pullOpts.ReferenceName.Short(), err)
+	wt, err := b.pull(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Stage changes.

@@ -102,7 +102,18 @@ func (b *localDirBackend) ReadObject(_ context.Context, fpath string, obj interf
 		return err
 	}
 
-	return json.Unmarshal(data, obj)
+	switch v := obj.(type) {
+	case []byte:
+		if len(v) < len(data) {
+			return io.ErrShortBuffer
+		}
+		copy(v, data)
+	case io.Writer:
+		_, err = v.Write(data)
+	default:
+		err = json.Unmarshal(data, obj)
+	}
+	return err
 }
 
 // WriteObject writes the provided object to disk.
@@ -115,7 +126,17 @@ func (b *localDirBackend) WriteObject(ctx context.Context, fpath string, obj int
 	}
 	defer w.(io.WriteCloser).Close()
 
-	data, err := json.Marshal(obj)
+	var data []byte
+	switch v := obj.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	case io.Reader:
+		data, err = io.ReadAll(v)
+	default:
+		data, err = json.Marshal(obj)
+	}
 	if err != nil {
 		return err
 	}

@@ -40,8 +40,8 @@ func NewOperatorOptions() *OperatorOptions {
 	return &OperatorOptions{}
 }
 
-func (o *OperatorOptions) mktempDir() (string, func(), error) {
-	dir := filepath.Join(o.RootDestDir, fmt.Sprintf("operators.%d", time.Now().Unix()))
+func mktempDir(srcDir string) (string, func(), error) {
+	dir := filepath.Join(srcDir, fmt.Sprintf("operators.%d", time.Now().Unix()))
 	return dir, func() {
 		if err := os.RemoveAll(dir); err != nil {
 			logrus.Error(err)
@@ -52,7 +52,8 @@ func (o *OperatorOptions) mktempDir() (string, func(), error) {
 // Full mirrors each catalog image in its entirety to the <RootDestDir>/src directory.
 func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (err error) {
 
-	tmp, cleanup, err := o.mktempDir()
+	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+	tmp, cleanup, err := mktempDir(srcDir)
 	if err != nil {
 		return err
 	}
@@ -61,6 +62,8 @@ func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	}
 
 	for _, ctlg := range cfg.Mirror.Operators {
+		opts := o.newMirrorCatalogOptions(ctlg, srcDir)
+
 		if ctlg.HeadsOnly {
 			// Generate and mirror a heads-only diff using only the catalog as a new ref.
 			catLogger := logrus.WithField("catalog", ctlg.Catalog)
@@ -70,10 +73,10 @@ func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 				IncludeConfig: ctlg.IncludeCatalog,
 			}
 
-			err = o.diff(ctx, a, ctlg, cfg, tmp)
+			err = o.diff(ctx, a, ctlg, cfg, opts, tmp)
 		} else {
 			// Mirror the entire catalog.
-			err = o.full(ctx, ctlg, cfg, tmp)
+			err = o.full(ctx, ctlg, cfg, opts, tmp)
 		}
 		if err != nil {
 			return err
@@ -84,10 +87,11 @@ func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 }
 
 // Diff mirrors only the diff between each old and new catalog image pair
-// to the <rootDir>/src directory.
+// to the <RootDestDir>/src directory.
 func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (err error) {
 
-	tmp, cleanup, err := o.mktempDir()
+	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+	tmp, cleanup, err := mktempDir(srcDir)
 	if err != nil {
 		return err
 	}
@@ -96,6 +100,8 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	}
 
 	for _, ctlg := range cfg.Mirror.Operators {
+		opts := o.newMirrorCatalogOptions(ctlg, srcDir)
+
 		// Generate and mirror a heads-only diff using the catalog as a new ref,
 		// and an old ref found for this catalog in lastRun.
 		// TODO(estroz): registry
@@ -125,7 +131,7 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 			break
 		}
 
-		if err := o.diff(ctx, a, ctlg, cfg, tmp); err != nil {
+		if err := o.diff(ctx, a, ctlg, cfg, opts, tmp); err != nil {
 			return err
 		}
 	}
@@ -133,9 +139,7 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	return nil
 }
 
-func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
-
-	opts := o.newMirrorCatalogOptions(ctlg)
+func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCatalogOptions, tmp string) (err error) {
 
 	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 	if err != nil {
@@ -176,7 +180,7 @@ func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1
 	return nil
 }
 
-func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
+func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCatalogOptions, tmp string) (err error) {
 
 	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 	if err != nil {
@@ -211,8 +215,6 @@ func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.O
 	close()
 
 	a.Logger.Debugf("wrote index to file: %s", catalogIndexPath)
-
-	opts := o.newMirrorCatalogOptions(ctlg)
 
 	opts.IndexExtractor = catalog.IndexExtractorFunc(func(imagesource.TypedImageReference) (string, error) {
 		a.Logger.Debugf("returning index dir in extractor: %s", indexDir)
@@ -250,7 +252,7 @@ func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.O
 	return nil
 }
 
-func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) *catalog.MirrorCatalogOptions {
+func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator, srcDir string) *catalog.MirrorCatalogOptions {
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
 		Out:    os.Stdout,
@@ -259,7 +261,7 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) *catal
 
 	opts := catalog.NewMirrorCatalogOptions(stream)
 	opts.DryRun = o.DryRun
-	opts.FileDir = filepath.Join(o.RootDestDir, config.SourceDir)
+	opts.FileDir = srcDir
 	// TODO(estroz): this expects a file and PullSecret can be either a string or a file reference.
 	opts.SecurityOptions.RegistryConfig = ctlg.PullSecret
 	opts.SecurityOptions.Insecure = o.SkipTLS

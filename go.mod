@@ -8,6 +8,7 @@ require (
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
 	github.com/containerd/containerd v1.4.8
 	github.com/go-git/go-git/v5 v5.4.2
+	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
