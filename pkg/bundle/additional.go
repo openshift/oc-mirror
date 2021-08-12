@@ -12,8 +12,18 @@ import (
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
+type AdditionalOptions struct {
+	DestDir string
+	DryRun  bool
+	SkipTLS bool
+}
+
+func NewAdditionalOptions() *AdditionalOptions {
+	return &AdditionalOptions{}
+}
+
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, rootDir string, dryRun, insecure bool) error {
+func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
 
 	var mappings []mirror.Mapping
 
@@ -24,9 +34,9 @@ func GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, ro
 	}
 
 	opts := mirror.NewMirrorImageOptions(stream)
-	opts.FileDir = rootDir
-	opts.DryRun = dryRun
-	opts.SecurityOptions.Insecure = insecure
+	opts.DryRun = o.DryRun
+	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.FileDir = o.DestDir
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
