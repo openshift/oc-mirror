@@ -37,9 +37,17 @@ func Test_ReconcilingFiles(t *testing.T) {
 
 		tmpdir := t.TempDir()
 
+		cwd, err := os.Getwd()
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		if err := os.Chdir(tmpdir); err != nil {
 			t.Fatal(err)
 		}
+
+		defer os.Chdir(cwd)
 
 		d1 := []byte("hello\ngo\n")
 		if err := ioutil.WriteFile("test2", d1, 0644); err != nil {
