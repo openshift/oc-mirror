@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -41,6 +42,19 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
 	for _, img := range cfg.Mirror.AdditionalImages {
+
+		// FIXME(jpower): need to have the user set skipVerification value
+		// If the pullSecret is not empty create a cached context
+		// else let `oc mirror` use the default docker config location
+		if len(img.PullSecret) != 0 {
+			ctx, err := config.CreateContext([]byte(img.PullSecret), false, o.SkipTLS)
+
+			if err != nil {
+				return nil
+			}
+
+			opts.SecurityOptions.CachedContext = ctx
+		}
 
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)

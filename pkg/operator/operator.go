@@ -260,8 +260,19 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) *catal
 	opts := catalog.NewMirrorCatalogOptions(stream)
 	opts.DryRun = o.DryRun
 	opts.FileDir = filepath.Join(o.RootDestDir, config.SourceDir)
-	// TODO(estroz): this expects a file and PullSecret can be either a string or a file reference.
-	opts.SecurityOptions.RegistryConfig = ctlg.PullSecret
+	// FIXME(jpower): need to have the user set skipVerification value
+	// If the pullSecret is not empty create a cached context
+	// else let `oc mirror` use the default docker config location
+	if len(ctlg.PullSecret) != 0 {
+		ctx, err := config.CreateContext([]byte(ctlg.PullSecret), false, o.SkipTLS)
+
+		if err != nil {
+			return nil
+		}
+
+		opts.SecurityOptions.CachedContext = ctx
+	}
+
 	opts.SecurityOptions.Insecure = o.SkipTLS
 
 	return opts
