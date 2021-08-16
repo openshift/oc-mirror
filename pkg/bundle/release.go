@@ -20,17 +20,28 @@ import (
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
+// This file is for managing OCP release related tasks
+
 // import(
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
+
+// Define interface and var for http client to support testing
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	HClient HTTPClient
+)
 
 const (
 	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
 )
 
-// This file is for managing OCP release related tasks
-
-const updateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+func init() {
+	HClient = &http.Client{}
+}
 
 func getTLSConfig() (*tls.Config, error) {
 	certPool, err := x509.SystemCertPool()
@@ -46,7 +57,7 @@ func getTLSConfig() (*tls.Config, error) {
 }
 
 func newClient() (Client, *url.URL, error) {
-	upstream, err := url.Parse(updateUrl)
+	upstream, err := url.Parse(UpdateUrl)
 	if err != nil {
 		return Client{}, nil, err
 	}
@@ -145,10 +156,14 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 		transport.Proxy = http.ProxyURL(c.proxyURL)
 	}
 
-	client := http.Client{Transport: &transport}
+	//HClient = &http.Client{Transport: &transport}
+	hc, ok := HClient.(*http.Client)
+	if ok {
+		hc.Transport = &transport
+	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
 	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
+	resp, err := HClient.Do(req.WithContext(timeoutCtx))
 	if err != nil {
 		return latest.Version, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
 	}
