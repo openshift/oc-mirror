@@ -31,6 +31,23 @@ type Client struct {
 	tlsConfig *tls.Config
 }
 
+// Define interface and var for http client to support testing
+/*  This interface is already defined in release.go in the same package. Uncomment this
+ *  if moving to it's own package
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	CHClient HTTPClient
+)
+
+*/
+
+func init() {
+	HClient = &http.Client{}
+}
+
 // NewClient creates a new Cincinnati client with the given client identifier.
 func NewClient(id uuid.UUID, proxyURL *url.URL, tlsConfig *tls.Config) Client {
 	return Client{id: id, proxyURL: proxyURL, tlsConfig: tlsConfig}
@@ -88,10 +105,14 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 		transport.Proxy = http.ProxyURL(c.proxyURL)
 	}
 
-	client := http.Client{Transport: &transport}
+	//HClient = &http.Client{Transport: &transport}
+	hc, ok := HClient.(*http.Client)
+	if ok {
+		hc.Transport = &transport
+	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
 	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
+	resp, err := HClient.Do(req.WithContext(timeoutCtx))
 	if err != nil {
 		return current, nil, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
 	}
