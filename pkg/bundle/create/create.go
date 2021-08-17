@@ -69,8 +69,18 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		return err
 	}
 
+	logrus.Info("Verifying pull secrets")
+	// Validating pull secrets
+	if err := config.ValidateSecret(cfg); err != nil {
+		return err
+	}
+
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		if err = bundle.GetReleasesInitial(cfg, sourceDir); err != nil {
+		opts := bundle.NewReleaseOptions()
+		opts.RootDestDir = sourceDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err = opts.GetReleasesInitial(cfg); err != nil {
 			return err
 		}
 	}
@@ -91,9 +101,14 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
-		if err = bundle.GetAdditional(run, cfg, sourceDir, dryRun, insecure); err != nil {
+		opts := bundle.NewAdditionalOptions()
+		opts.DestDir = rootDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err := opts.GetAdditional(run, cfg); err != nil {
 			return err
 		}
+
 	}
 
 	// Update metadata files
@@ -122,6 +137,13 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	// Run archiver
 	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
 		return err
+	}
+
+	// Handle Committer backends.
+	if committer, isCommitter := backend.(storage.Committer); isCommitter {
+		if err := committer.Commit(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -167,9 +189,18 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		return err
 	}
 
-	if len(cfg.Mirror.OCP.Channels) != 0 {
+	logrus.Info("Verifying pull secrets")
+	// Validating pull secrets
+	if err := config.ValidateSecret(cfg); err != nil {
+		return err
+	}
 
-		if err = bundle.GetReleasesDiff(lastRun, cfg, sourceDir); err != nil {
+	if len(cfg.Mirror.OCP.Channels) != 0 {
+		opts := bundle.NewReleaseOptions()
+		opts.RootDestDir = sourceDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err = opts.GetReleasesDiff(lastRun, cfg); err != nil {
 			return err
 		}
 	}
@@ -189,8 +220,11 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	}
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-
-		if err = bundle.GetAdditional(lastRun, cfg, sourceDir, dryRun, insecure); err != nil {
+		opts := bundle.NewAdditionalOptions()
+		opts.DestDir = rootDir
+		opts.DryRun = dryRun
+		opts.SkipTLS = insecure
+		if err := opts.GetAdditional(lastRun, cfg); err != nil {
 			return err
 		}
 	}
@@ -221,6 +255,13 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	// Run archiver
 	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
 		return err
+	}
+
+	// Handle Committer backends.
+	if committer, isCommitter := backend.(storage.Committer); isCommitter {
+		if err := committer.Commit(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil

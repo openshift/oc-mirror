@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -25,6 +26,21 @@ import (
 // import(
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
+
+
+// ReleaseOptions configures either a Full or Diff mirror operation
+// on a particular release image.
+type ReleaseOptions struct {
+	RootDestDir string
+	DryRun      bool
+	Cleanup     bool
+	SkipTLS     bool
+}
+
+// NewReleaseOptions defaults ReleaseOptions.
+func NewReleaseOptions() *ReleaseOptions {
+	return &ReleaseOptions{}
+}
 
 // Define interface and var for http client to support testing
 type HTTPClient interface {
@@ -197,7 +213,7 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func downloadMirror(i string, rootDir string) error {
+func downloadMirror(secret []byte, rootDir, from string, skipTlS, dryRun bool) error {
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
 		Out:    os.Stdout,
@@ -205,8 +221,24 @@ func downloadMirror(i string, rootDir string) error {
 	}
 	opts := release.NewMirrorOptions(stream)
 
-	opts.From = i
+	opts.From = from
 	opts.ToDir = rootDir
+
+	// FIXME(jpower): need to have the user set skipVerification value
+	// If the pullSecret is not empty create a cached context
+	// else let `oc mirror` use the default docker config location
+	if len(secret) != 0 {
+		ctx, err := config.CreateContext(secret, false, skipTlS)
+
+		if err != nil {
+			return nil
+		}
+
+		opts.SecurityOptions.CachedContext = ctx
+	}
+
+	opts.SecurityOptions.Insecure = skipTlS
+	opts.DryRun = dryRun
 
 	if err := opts.Run(); err != nil {
 		return err
@@ -215,7 +247,9 @@ func downloadMirror(i string, rootDir string) error {
 
 }
 
-func GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration, rootDir string) error {
+func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) error {
+
+	pullSecret := cfg.Mirror.OCP.PullSecret
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
@@ -229,7 +263,7 @@ func GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration, rootDir string) erro
 			}
 			logrus.Infof("Image to download: %v", latest.Image)
 			// Download the release
-			err = downloadMirror(latest.Image, rootDir)
+			err = downloadMirror([]byte(pullSecret), o.RootDestDir, latest.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
 				logrus.Errorln(err)
 			}
@@ -253,7 +287,7 @@ func GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration, rootDir string) erro
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror(requested.Image, rootDir)
+			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
 				return err
 			}
@@ -287,9 +321,11 @@ func GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration, rootDir string) erro
 	return nil
 }
 
-func GetReleasesDiff(_ v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, rootDir string) error {
+func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
 
-	for _, ch := range c.Mirror.OCP.Channels {
+	pullSecret := cfg.Mirror.OCP.PullSecret
+
+	for _, ch := range cfg.Mirror.OCP.Channels {
 		// Check for specific version declarations for each specific version
 		for _, v := range ch.Versions {
 
@@ -307,7 +343,7 @@ func GetReleasesDiff(_ v1alpha1.PastMirror, c v1alpha1.ImageSetConfiguration, ro
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror(requested.Image, rootDir)
+			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
 				return err
 			}

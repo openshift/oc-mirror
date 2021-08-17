@@ -9,11 +9,22 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
+type AdditionalOptions struct {
+	DestDir string
+	DryRun  bool
+	SkipTLS bool
+}
+
+func NewAdditionalOptions() *AdditionalOptions {
+	return &AdditionalOptions{}
+}
+
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, rootDir string, dryRun, insecure bool) error {
+func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
 
 	var mappings []mirror.Mapping
 
@@ -24,13 +35,26 @@ func GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration, ro
 	}
 
 	opts := mirror.NewMirrorImageOptions(stream)
-	opts.FileDir = rootDir
-	opts.DryRun = dryRun
-	opts.SecurityOptions.Insecure = insecure
+	opts.DryRun = o.DryRun
+	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.FileDir = o.DestDir
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
 	for _, img := range cfg.Mirror.AdditionalImages {
+
+		// FIXME(jpower): need to have the user set skipVerification value
+		// If the pullSecret is not empty create a cached context
+		// else let `oc mirror` use the default docker config location
+		if len(img.PullSecret) != 0 {
+			ctx, err := config.CreateContext([]byte(img.PullSecret), false, o.SkipTLS)
+
+			if err != nil {
+				return nil
+			}
+
+			opts.SecurityOptions.CachedContext = ctx
+		}
 
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)

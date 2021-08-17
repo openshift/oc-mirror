@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
 func Test_ImageBlocking(t *testing.T) {
@@ -14,7 +14,7 @@ func Test_ImageBlocking(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		ref    reference.DockerImageReference
+		ref    string
 		want   bool
 	}{
 		{
@@ -24,9 +24,7 @@ func Test_ImageBlocking(t *testing.T) {
 					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
-			ref: reference.DockerImageReference{
-				Name: "alpine",
-			},
+			ref:  "docker.io/library/alpine:latest",
 			want: true,
 		},
 		{
@@ -36,9 +34,7 @@ func Test_ImageBlocking(t *testing.T) {
 					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
-			ref: reference.DockerImageReference{
-				Name: "ubi8",
-			},
+			ref:  "registry.redhat.io/ubi8/ubi:latest",
 			want: false,
 		},
 		{
@@ -48,10 +44,18 @@ func Test_ImageBlocking(t *testing.T) {
 					{Image: v1alpha1.Image{Name: "alpine"}},
 				},
 			},
-			ref: reference.DockerImageReference{
-				Name: "notalpine",
-			},
+			ref:  "docker.io/library/notalpine:latest",
 			want: false,
+		},
+		{
+			name: "testing with image not tag",
+			fields: fields{
+				blockedImages: []v1alpha1.BlockedImages{
+					{Image: v1alpha1.Image{Name: "openshift-migration-velero-restic-restore-helper-rhel8"}},
+				},
+			},
+			ref:  "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8",
+			want: true,
 		},
 	}
 	for _, tt := range tests {
@@ -60,7 +64,13 @@ func Test_ImageBlocking(t *testing.T) {
 			BlockedImages: tt.fields.blockedImages,
 		}
 
-		actual := IsBlocked(cfg, tt.ref)
+		img, err := imagesource.ParseReference(tt.ref)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actual := IsBlocked(cfg, img.Ref)
 
 		if actual != tt.want {
 			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)

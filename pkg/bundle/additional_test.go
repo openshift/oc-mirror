@@ -24,8 +24,11 @@ func Test_GetAdditional(t *testing.T) {
 	tmpdir := t.TempDir()
 
 	// Use dry run to avoid hitting docker limits.
-	dryRun := true
-	if err := GetAdditional(mirror, cfg, tmpdir, dryRun, false); err != nil {
+	opts := NewAdditionalOptions()
+	opts.DestDir = tmpdir
+	opts.DryRun = true
+
+	if err := opts.GetAdditional(mirror, cfg); err != nil {
 		t.Error(err)
 	}
 }
