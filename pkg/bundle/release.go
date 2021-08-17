@@ -27,6 +27,7 @@ import (
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
 
+
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
