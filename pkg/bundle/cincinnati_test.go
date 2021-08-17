@@ -11,7 +11,7 @@ import (
 	"github.com/blang/semver/v4"
 )
 
-func Test_GetUpdateLatest(t *testing.T) {
+func Test_GetUpdates(t *testing.T) {
 
 	client, upstream, err := newClient()
 	if err != nil {
