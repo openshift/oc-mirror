@@ -93,7 +93,7 @@ func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Meta
 	return b.WriteObject(ctx, config.MetadataBasePath, meta)
 }
 
-// ReadObject writes the provided object to disk.
+// ReadObject reads the provided object from disk.
 // In this implementation, key is a file path.
 func (b *localDirBackend) ReadObject(_ context.Context, fpath string, obj interface{}) error {
 
