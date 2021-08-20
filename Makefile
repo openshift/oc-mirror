@@ -1,12 +1,12 @@
-# Add build flags to GOFLAGS=<flags> here.
 GO := go
+GO_BUILD_FLAGS := -tags=json1
 
 .PHONY: all
 all: clean tidy test-unit build
 
 .PHONY: build
 build: clean
-	$(GO) build -o bin/oc-bundle ./cmd/oc-bundle
+	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-bundle ./cmd/oc-bundle
 
 .PHONY: tidy
 tidy:
@@ -19,7 +19,7 @@ clean:
 
 .PHONY: test-unit
 test-unit:
-	$(GO) test -coverprofile=coverage.out -race -count=1 ./pkg/...
+	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e
 test-e2e: test-e2e-operator
