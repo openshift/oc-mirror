@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,7 +16,9 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	imgmirror "github.com/openshift/oc/pkg/cli/image/mirror"
-	"github.com/operator-framework/operator-registry/pkg/action"
+	"github.com/operator-framework/operator-registry/alpha/action"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -24,23 +27,32 @@ import (
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 )
 
-// OperatorOptions configures either a Full or Diff mirror operation
+// MirrorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
-type OperatorOptions struct {
+type MirrorOptions struct {
 	RootDestDir string
 	DryRun      bool
-	Cleanup     bool
+	SkipCleanup bool
 	SkipTLS     bool
+
+	Logger *logrus.Entry
 }
 
-// NewOperatorOptions defaults OperatorOptions.
-func NewOperatorOptions() *OperatorOptions {
-	return &OperatorOptions{}
+// complete defaults MirrorOptions.
+func (o *MirrorOptions) complete() {
+	if o.RootDestDir == "" {
+		o.RootDestDir = "create"
+	}
+
+	if o.Logger == nil {
+		o.Logger = logrus.NewEntry(logrus.New())
+	}
 }
 
-func (o *OperatorOptions) mktempDir() (string, func(), error) {
+func (o *MirrorOptions) mktempDir() (string, func(), error) {
 	dir := filepath.Join(o.RootDestDir, fmt.Sprintf("operators.%d", time.Now().Unix()))
 	return dir, func() {
 		if err := os.RemoveAll(dir); err != nil {
@@ -49,61 +61,108 @@ func (o *OperatorOptions) mktempDir() (string, func(), error) {
 	}, os.MkdirAll(dir, os.ModePerm)
 }
 
+func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
+	cacheDir, err := os.MkdirTemp("", "imageset-catalog-registry-")
+	if err != nil {
+		return nil, err
+	}
+
+	logger := logrus.New()
+	logger.SetOutput(ioutil.Discard)
+	nullLogger := logrus.NewEntry(logger)
+
+	return containerdregistry.NewRegistry(
+		containerdregistry.WithCacheDir(cacheDir),
+		containerdregistry.SkipTLS(o.SkipTLS),
+		// The containerd registry impl is somewhat verbose, even on the happy path,
+		// so discard all logger logs. Any important failures will be returned from
+		// registry methods and eventually logged as fatal errors.
+		containerdregistry.WithLog(nullLogger),
+	)
+}
+
 // Full mirrors each catalog image in its entirety to the <RootDestDir>/src directory.
-func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (err error) {
+func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
+	o.complete()
 
 	tmp, cleanup, err := o.mktempDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if o.Cleanup {
+	if !o.SkipCleanup {
 		defer cleanup()
 	}
 
+	reg, err := o.createRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("error creating container registry: %v", err)
+	}
+	defer reg.Destroy()
+
+	allAssocs := image.Associations{}
 	for _, ctlg := range cfg.Mirror.Operators {
+		catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+		var dc *declcfg.DeclarativeConfig
 		if ctlg.HeadsOnly {
 			// Generate and mirror a heads-only diff using only the catalog as a new ref.
-			catLogger := logrus.WithField("catalog", ctlg.Catalog)
 			a := action.Diff{
+				Registry:      reg,
 				NewRefs:       []string{ctlg.Catalog},
 				Logger:        catLogger,
-				IncludeConfig: ctlg.IncludeCatalog,
+				IncludeConfig: ctlg.DiffIncludeConfig,
 			}
 
-			err = o.diff(ctx, a, ctlg, cfg, tmp)
+			dc, err = o.diff(ctx, a, ctlg, cfg, tmp)
 		} else {
 			// Mirror the entire catalog.
-			err = o.full(ctx, ctlg, cfg, tmp)
+			a := action.Render{
+				Registry: reg,
+				Refs:     []string{ctlg.Catalog},
+			}
+
+			dc, err = o.full(ctx, a, ctlg, cfg, tmp)
 		}
 		if err != nil {
-			return err
+			return nil, err
+		}
+
+		if err := o.associateDeclarativeConfigImageLayers(tmp, dc, allAssocs); err != nil {
+			return nil, err
 		}
 	}
 
-	return nil
+	return allAssocs, nil
 }
 
 // Diff mirrors only the diff between each old and new catalog image pair
 // to the <rootDir>/src directory.
-func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (err error) {
+func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.Associations, error) {
+	o.complete()
 
 	tmp, cleanup, err := o.mktempDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if o.Cleanup {
+	if !o.SkipCleanup {
 		defer cleanup()
 	}
 
+	reg, err := o.createRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("error creating container registry: %v", err)
+	}
+	defer reg.Destroy()
+
+	allAssocs := image.Associations{}
 	for _, ctlg := range cfg.Mirror.Operators {
 		// Generate and mirror a heads-only diff using the catalog as a new ref,
 		// and an old ref found for this catalog in lastRun.
-		// TODO(estroz): registry
-		catLogger := logrus.WithField("catalog", ctlg.Catalog)
+		catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 		a := action.Diff{
+			Registry:      reg,
 			NewRefs:       []string{ctlg.Catalog},
 			Logger:        catLogger,
-			IncludeConfig: ctlg.IncludeCatalog,
+			IncludeConfig: ctlg.DiffIncludeConfig,
 		}
 
 		// An old ref is always required to generate a latest diff.
@@ -120,31 +179,41 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 			case operator.ImagePin != "":
 				a.OldRefs = []string{operator.ImagePin}
 			default:
-				return fmt.Errorf("metadata sequence %d catalog %q: at least one of RelIndexPath, Index, or ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
+				return nil, fmt.Errorf("metadata sequence %d catalog %q: at least one of RelIndexPath, Index, or ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
 			}
 			break
 		}
 
-		if err := o.diff(ctx, a, ctlg, cfg, tmp); err != nil {
-			return err
+		dc, err := o.diff(ctx, a, ctlg, cfg, tmp)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := o.associateDeclarativeConfigImageLayers(tmp, dc, allAssocs); err != nil {
+			return nil, err
 		}
 	}
 
-	return nil
+	return allAssocs, nil
 }
 
-func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
+func (o *MirrorOptions) full(ctx context.Context, a action.Render, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (*declcfg.DeclarativeConfig, error) {
 
-	opts := o.newMirrorCatalogOptions(ctlg)
+	opts, err := o.newMirrorCatalogOptions(ctlg)
+	if err != nil {
+		return nil, err
+	}
 
 	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 	if err != nil {
-		return fmt.Errorf("error parsing catalog: %v", err)
+		return nil, fmt.Errorf("error parsing catalog: %v", err)
 	}
 	ctlgRef = ctlgRef.DockerClientDefaults()
 
 	// Create the manifests dir in tmp so it gets cleaned up if desired.
 	// opts.Complete() will create this directory.
+	// TODO(estroz): if the CLI is meant to be re-entrant, check if this file exists
+	// and use it directly if so.
 	opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", ctlgRef.Name, time.Now().Unix()))
 
 	args := []string{
@@ -154,7 +223,7 @@ func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1
 		refToFileScheme(ctlgRef),
 	}
 	if err := opts.Complete(&cobra.Command{}, args); err != nil {
-		return fmt.Errorf("error constructing catalog options: %v", err)
+		return nil, fmt.Errorf("error constructing catalog options: %v", err)
 	}
 
 	// TODO(estroz): the mirrorer needs to be set after Complete() is called
@@ -162,95 +231,139 @@ func (o *OperatorOptions) full(_ context.Context, ctlg v1alpha1.Operator, cfg v1
 	// This isn't great because the default ImageMirrorer is a closure
 	// and may contain configuration that gets overridden here.
 	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
-		return fmt.Errorf("error : %v", err)
+		return nil, fmt.Errorf("error creating mirror function: %v", err)
 	}
 
 	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("catalog opts validation failed: %v", err)
+		return nil, fmt.Errorf("catalog opts invalid: %v", err)
 	}
 
 	if err := opts.Run(); err != nil {
-		return fmt.Errorf("error running catalog mirror: %v", err)
+		return nil, fmt.Errorf("error mirroring catalog: %v", err)
 	}
 
-	return nil
+	dc, err := a.Run(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error generating diff: %v", err)
+	}
+
+	// Write catalog declarative config file to src so it is included in the archive
+	// at a path unique to the image.
+	indexDir, err := dcDirForImage(o.RootDestDir, ctlgRef)
+	if err != nil {
+		return nil, err
+	}
+
+	o.Logger.Debugf("generating catalog diff in %s", indexDir)
+
+	catalogIndexPath := filepath.Join(indexDir, fmt.Sprintf("%s-index-full.yaml", ctlgRef.Tag))
+	f, err := os.Create(catalogIndexPath)
+	if err != nil {
+		return nil, fmt.Errorf("error creating full index file: %v", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			o.Logger.Error(err)
+		}
+	}()
+	if err := declcfg.WriteJSON(*dc, f); err != nil {
+		return nil, fmt.Errorf("error writing full catalog: %v", err)
+	}
+
+	return dc, nil
 }
 
-func (o *OperatorOptions) diff(_ context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (err error) {
+func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (*declcfg.DeclarativeConfig, error) {
 
 	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 	if err != nil {
-		return fmt.Errorf("error parsing catalog: %v", err)
+		return nil, fmt.Errorf("error parsing catalog: %v", err)
 	}
 	ctlgRef = ctlgRef.DockerClientDefaults()
 
-	imgIndexDir := filepath.Join(ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name)
-	indexDir := filepath.Join(tmp, imgIndexDir)
-	a.Logger.Debugf("creating temporary index directory: %s", indexDir)
-	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
-		return fmt.Errorf("error creating diff index dir: %v", err)
+	// Write catalog declarative config file to src so it is included in the archive
+	// at a path unique to the image.
+	indexDir, err := dcDirForImage(o.RootDestDir, ctlgRef)
+	if err != nil {
+		return nil, err
+	}
+
+	o.Logger.Debugf("generating catalog %q diff in %s", ctlg.Catalog, indexDir)
+
+	dc, err := a.Run(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error generating diff: %v", err)
 	}
 
 	catalogIndexPath := filepath.Join(indexDir, fmt.Sprintf("%s-index-diff.yaml", ctlgRef.Tag))
 	f, err := os.Create(catalogIndexPath)
 	if err != nil {
-		return fmt.Errorf("error creating diff index file: %v", err)
+		return nil, fmt.Errorf("error creating diff index file: %v", err)
 	}
-	close := func() {
+	defer func() {
 		if err := f.Close(); err != nil {
-			a.Logger.Error(err)
+			o.Logger.Error(err)
 		}
+	}()
+	if err := declcfg.WriteJSON(*dc, f); err != nil {
+		return nil, fmt.Errorf("error writing diff catalog: %v", err)
 	}
 
-	a.Logger.Debugf("generating diff: %s", catalogIndexPath)
-	ctx := context.Background()
-	if err := a.RunAndWrite(ctx, f); err != nil {
-		close()
-		return fmt.Errorf("error generating diff: %v", err)
+	o.Logger.Debugf("wrote index to file: %s", catalogIndexPath)
+
+	opts, err := o.newMirrorCatalogOptions(ctlg)
+	if err != nil {
+		return nil, err
 	}
-	close()
-
-	a.Logger.Debugf("wrote index to file: %s", catalogIndexPath)
-
-	opts := o.newMirrorCatalogOptions(ctlg)
 
 	opts.IndexExtractor = catalog.IndexExtractorFunc(func(imagesource.TypedImageReference) (string, error) {
-		a.Logger.Debugf("returning index dir in extractor: %s", indexDir)
+		o.Logger.Debugf("returning index dir in extractor: %s", indexDir)
 		return indexDir, nil
 	})
 
 	opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
 
 	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
-		return fmt.Errorf("error constructing mirror func: %v", err)
+		return nil, fmt.Errorf("error constructing mirror func: %v", err)
 	}
 
 	opts.IndexPath = indexDir
 
 	if opts.SourceRef, err = imagesource.ParseReference(ctlgRef.Exact()); err != nil {
-		return fmt.Errorf("error parsing source reference: %v", err)
+		return nil, fmt.Errorf("error parsing source reference: %v", err)
 	}
-	a.Logger.Debugf("source ref %s", opts.SourceRef.String())
+	o.Logger.Debugf("source ref %s", opts.SourceRef.String())
 
 	if opts.DestRef, err = imagesource.ParseReference(refToFileScheme(ctlgRef)); err != nil {
-		return fmt.Errorf("error parsing dest reference: %v", err)
+		return nil, fmt.Errorf("error parsing dest reference: %v", err)
 	}
-	a.Logger.Debugf("dest ref %s", opts.DestRef.String())
+	o.Logger.Debugf("dest ref %s", opts.DestRef.String())
 
+	// TODO(estroz): if the CLI is meant to be re-entrant, check if this file exists
+	// and use it directly if so.
 	opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", opts.SourceRef.Ref.Name, time.Now().Unix()))
 	if err = os.MkdirAll(opts.ManifestDir, os.ModePerm); err != nil {
-		return fmt.Errorf("error creating manifests dir: %v", err)
+		return nil, fmt.Errorf("error creating manifests dir: %v", err)
 	}
-	a.Logger.Debugf("running mirrorer with manifests dir: %s", opts.ManifestDir)
+	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
 	if err := opts.Run(); err != nil {
-		return fmt.Errorf("error running catalog mirror: %v", err)
+		return nil, fmt.Errorf("error running catalog mirror: %v", err)
 	}
 
-	return nil
+	return dc, nil
 }
 
-func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) *catalog.MirrorCatalogOptions {
+func dcDirForImage(rootDir string, ref imgreference.DockerImageReference) (string, error) {
+	indexDir := filepath.Join(rootDir, config.SourceDir, "catalogs",
+		ref.Registry, ref.Namespace, ref.Name)
+	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
+		return "", fmt.Errorf("error creating diff index dir: %v", err)
+	}
+	return indexDir, nil
+}
+
+func (o *MirrorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) (*catalog.MirrorCatalogOptions, error) {
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
 		Out:    os.Stdout,
@@ -265,22 +378,63 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) *catal
 	// else let `oc mirror` use the default docker config location
 	if len(ctlg.PullSecret) != 0 {
 		ctx, err := config.CreateContext([]byte(ctlg.PullSecret), false, o.SkipTLS)
-
 		if err != nil {
-			return nil
+			return nil, err
 		}
-
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
 	opts.SecurityOptions.Insecure = o.SkipTLS
 
-	return opts
+	return opts, nil
 }
 
 // Input refs to the mirror library must be prefixed with "file://" if a local file ref.
 func refToFileScheme(ref imgreference.DockerImageReference) string {
 	return "file://" + filepath.Join(ref.Namespace, ref.Name)
+}
+
+func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string, dc *declcfg.DeclarativeConfig, allAssocs image.Associations) error {
+
+	images := []string{}
+	for _, b := range dc.Bundles {
+		images = append(images, b.Image)
+		for _, relatedImg := range b.RelatedImages {
+			images = append(images, relatedImg.Image)
+		}
+	}
+
+	foundAtLeastOneMapping := false
+	if err := filepath.Walk(mappingDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		if filepath.Base(path) != "mapping.txt" {
+			return nil
+		}
+		foundAtLeastOneMapping = true
+
+		o.Logger.Debugf("reading mapping file %s", path)
+		imgMappings, err := image.ReadImageMapping(path)
+		if err != nil {
+			return err
+		}
+
+		assocs, err := image.AssociateImageLayers(o.RootDestDir, imgMappings, images)
+		if err != nil {
+			return err
+		}
+		allAssocs.Merge(assocs)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if !foundAtLeastOneMapping {
+		return fmt.Errorf("no operator catalog mappings found")
+	}
+
+	return nil
 }
 
 // Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L284-L313

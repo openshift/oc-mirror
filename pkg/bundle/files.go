@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -13,8 +14,8 @@ import (
 func ReconcileFiles(meta *v1alpha1.Metadata, rootDir string) (newFiles []string, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastFiles))
-	for _, fpath := range meta.PastFiles {
-		foundFiles[fpath.Name] = struct{}{}
+	for _, pf := range meta.PastFiles {
+		foundFiles[pf.Name] = struct{}{}
 	}
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
@@ -33,7 +34,10 @@ func ReconcileFiles(meta *v1alpha1.Metadata, rootDir string) (newFiles []string,
 		}
 
 		if _, found := foundFiles[fpath]; !found {
-			meta.PastFiles = append(meta.PastFiles, file)
+			// Past files should only be image data, not tool metadata.
+			if base := filepath.Base(fpath); base != config.MetadataFile && base != config.AssociationsFile {
+				meta.PastFiles = append(meta.PastFiles, file)
+			}
 			foundFiles[fpath] = struct{}{}
 			newFiles = append(newFiles, fpath)
 		}

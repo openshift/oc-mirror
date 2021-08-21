@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 // This file is for managing OCP release related tasks
@@ -26,7 +28,6 @@ import (
 // import(
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
-
 
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
@@ -213,7 +214,7 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func downloadMirror(secret []byte, rootDir, from string, skipTlS, dryRun bool) error {
+func downloadMirror(secret []byte, toDir, from string, skipTlS, dryRun bool) (assocs image.Associations, err error) {
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
 		Out:    os.Stdout,
@@ -222,18 +223,16 @@ func downloadMirror(secret []byte, rootDir, from string, skipTlS, dryRun bool) e
 	opts := release.NewMirrorOptions(stream)
 
 	opts.From = from
-	opts.ToDir = rootDir
+	opts.ToDir = toDir
 
 	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(secret) != 0 {
 		ctx, err := config.CreateContext(secret, false, skipTlS)
-
 		if err != nil {
-			return nil
+			return assocs, err
 		}
-
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
@@ -241,15 +240,23 @@ func downloadMirror(secret []byte, rootDir, from string, skipTlS, dryRun bool) e
 	opts.DryRun = dryRun
 
 	if err := opts.Run(); err != nil {
-		return err
+		return assocs, err
 	}
-	return nil
 
+	// There is currently no way to retrieve mappings created by mirror options,
+	// so we must assume the release image is mirrored directly to the specified
+	// dir at the image name path.
+	mapping := map[string]string{
+		from: fmt.Sprintf("file://%s", from),
+	}
+	return image.AssociateImageLayers(toDir, mapping, []string{from})
 }
 
-func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) error {
+func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 
+	allAssocs := image.Associations{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
+	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
@@ -258,15 +265,15 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			// If no version was specified from the channel, then get the latest release
 			latest, err := GetLatestVersion(ch)
 			if err != nil {
-				logrus.Errorln(err)
-				return err
+				return image.Associations{}, err
 			}
 			logrus.Infof("Image to download: %v", latest.Image)
 			// Download the release
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, latest.Image, o.SkipTLS, o.DryRun)
+			assocs, err := downloadMirror([]byte(pullSecret), srcDir, latest.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
-				logrus.Errorln(err)
+				return image.Associations{}, err
 			}
+			allAssocs.Merge(assocs)
 			logrus.Infof("Channel Latest version %v", latest.Version)
 		}
 
@@ -277,20 +284,21 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			ver, err := semver.Parse(v)
 
 			if err != nil {
-				return err
+				return image.Associations{}, err
 			}
 
 			// This dumps the available upgrades from the last downloaded version
 			requested, _, err := calculateUpgradePath(ch, ver)
 			if err != nil {
-				return fmt.Errorf("failed to get upgrade graph: %v", err)
+				return image.Associations{}, fmt.Errorf("failed to get upgrade graph: %v", err)
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := downloadMirror([]byte(pullSecret), srcDir, requested.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
-				return err
+				return image.Associations{}, err
 			}
+			allAssocs.Merge(assocs)
 			logrus.Infof("Channel Latest version %v", requested.Version)
 
 			/* Select the requested version from the available versions
@@ -318,12 +326,14 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 	// Download each referenced version from
 	//downloadRelease(nv)
 
-	return nil
+	return allAssocs, nil
 }
 
-func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
+func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 
+	allAssocs := image.Associations{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
+	srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 		// Check for specific version declarations for each specific version
@@ -333,20 +343,22 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 			ver, err := semver.Parse(v)
 
 			if err != nil {
-				return err
+				return image.Associations{}, err
 			}
 
 			// This dumps the available upgrades from the last downloaded version
 			requested, _, err := calculateUpgradePath(ch, ver)
 			if err != nil {
-				return fmt.Errorf("failed to get upgrade graph: %v", err)
+				return image.Associations{}, fmt.Errorf("failed to get upgrade graph: %v", err)
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := downloadMirror([]byte(pullSecret), srcDir, requested.Image, o.SkipTLS, o.DryRun)
 			if err != nil {
-				return err
+				return image.Associations{}, err
 			}
+			allAssocs.Merge(assocs)
+
 			logrus.Infof("Channel Latest version %v", requested.Version)
 
 			/* Select the requested version from the available versions
@@ -374,5 +386,5 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	// Download each referenced version from
 	//downloadRelease(nv)
 
-	return nil
+	return allAssocs, nil
 }
