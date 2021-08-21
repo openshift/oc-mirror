@@ -16,19 +16,36 @@ func Test_ReconcilingFiles(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   []string
+		files  []string
+		want   []v1alpha1.File
 	}{
 		{
-			name: "testing want to block",
+			name: "testing basic example",
 			fields: fields{
 				files: []v1alpha1.File{
 					{Name: "test1"},
 				},
 			},
-			want: []string{"test2"},
+			files: []string{"test1", "test2"},
+			want: []v1alpha1.File{
+				{Name: "test2"},
+			},
+		},
+		{
+			name: "testing duplicate entries",
+			fields: fields{
+				files: []v1alpha1.File{
+					{Name: "test1"},
+				},
+			},
+			files: []string{"test1", "test2", "test2"},
+			want: []v1alpha1.File{
+				{Name: "test2"},
+			},
 		},
 	}
 	for _, tt := range tests {
+
 		meta := v1alpha1.Metadata{
 			MetadataSpec: v1alpha1.MetadataSpec{
 				PastFiles: tt.fields.files,
@@ -50,15 +67,14 @@ func Test_ReconcilingFiles(t *testing.T) {
 		defer os.Chdir(cwd)
 
 		d1 := []byte("hello\ngo\n")
-		if err := ioutil.WriteFile("test2", d1, 0644); err != nil {
-			t.Fatal(err)
+
+		for _, name := range tt.files {
+			if err := ioutil.WriteFile(name, d1, 0644); err != nil {
+				t.Fatal(err)
+			}
 		}
 
-		if err := ioutil.WriteFile("test1", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		actual, err := ReconcileFiles(&meta, ".")
+		actual, err := ReconcileFiles(meta, ".")
 
 		if err != nil {
 			t.Fatal(err)

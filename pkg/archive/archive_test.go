@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 func Test_SplitArchive(t *testing.T) {
@@ -24,13 +26,15 @@ func Test_SplitArchive(t *testing.T) {
 		name         string
 		source       string
 		maxSplitSize int64
-		files        []string
+		files        []v1alpha1.File
 		want         string
 	}{
 		{
-			name:         "testing gz format",
-			source:       "../../test",
-			files:        []string{"../../test"},
+			name:   "testing gz format",
+			source: "../../test",
+			files: []v1alpha1.File{
+				{Name: "../../test"},
+			},
 			maxSplitSize: 1000000,
 			want:         "testbundle",
 		},

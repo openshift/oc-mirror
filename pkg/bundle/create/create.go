@@ -122,7 +122,7 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	// Update metadata files
 	sourceDir := filepath.Join(rootDir, config.SourceDir)
-	files, err := getFiles(sourceDir, &meta)
+	files, err := getFiles(sourceDir, meta)
 	if err != nil {
 		return err
 	}
@@ -130,6 +130,7 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
 	meta.PastMirrors = append(meta.PastMirrors, run)
+	meta.PastFiles = append(meta.PastFiles, files...)
 
 	// Update the metadata.
 	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
@@ -242,7 +243,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	// Update metadata files
 	sourceDir := filepath.Join(rootDir, config.SourceDir)
-	files, err := getFiles(sourceDir, &meta)
+	files, err := getFiles(sourceDir, meta)
 	if err != nil {
 		return err
 	}
@@ -250,6 +251,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
 	meta.PastMirrors = append(meta.PastMirrors, run)
+	meta.PastFiles = append(meta.PastFiles, files...)
 
 	// Update the metadata.
 	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
@@ -271,7 +273,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	return nil
 }
 
-func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []string) error {
+func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []v1alpha1.FileInfo) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -311,7 +313,7 @@ func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir strin
 
 }
 
-func getFiles(rootDir string, meta *v1alpha1.Metadata) ([]string, error) {
+func getFiles(rootDir string, meta v1alpha1.Metadata) (files []v1alpha1.File, err error) {
 
 	cwd, err := os.Getwd()
 
@@ -327,6 +329,7 @@ func getFiles(rootDir string, meta *v1alpha1.Metadata) ([]string, error) {
 
 	// Gather files we pulled
 	return bundle.ReconcileFiles(meta, ".")
+
 }
 
 func writeAssociations(rootDir string, assocs image.Associations) error {

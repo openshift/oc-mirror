@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -40,7 +41,7 @@ func NewArchiver() Archiver {
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, prefix string, newFiles []string) error {
+func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, prefix string, newFiles []v1alpha1.File) error {
 
 	logrus.Debugf("Found new files %v", newFiles)
 
