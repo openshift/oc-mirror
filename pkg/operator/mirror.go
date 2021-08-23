@@ -420,7 +420,8 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 			return err
 		}
 
-		assocs, err := image.AssociateImageLayers(o.RootDestDir, imgMappings, images)
+		srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
+		assocs, err := image.AssociateImageLayers(srcDir, imgMappings, images)
 		if err != nil {
 			return err
 		}
