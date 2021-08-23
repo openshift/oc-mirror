@@ -3,6 +3,9 @@ package bundle
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -23,12 +26,12 @@ func Test_GetAdditional(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	// Use dry run to avoid hitting docker limits.
 	opts := NewAdditionalOptions()
 	opts.DestDir = tmpdir
-	opts.DryRun = true
 
-	if err := opts.GetAdditional(mirror, cfg); err != nil {
-		t.Error(err)
+	assocs, err := opts.GetAdditional(mirror, cfg)
+	require.NoError(t, err)
+	if assert.Len(t, assocs, 1) {
+		require.Contains(t, assocs, "quay.io/estroz/pull-tester-additional:latest")
 	}
 }

@@ -3,6 +3,8 @@ package bundle
 import (
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 type AdditionalOptions struct {
@@ -24,9 +27,7 @@ func NewAdditionalOptions() *AdditionalOptions {
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
-
-	var mappings []mirror.Mapping
+func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 
 	stream := genericclioptions.IOStreams{
 		In:     os.Stdin,
@@ -37,22 +38,23 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	opts := mirror.NewMirrorImageOptions(stream)
 	opts.DryRun = o.DryRun
 	opts.SecurityOptions.Insecure = o.SkipTLS
-	opts.FileDir = o.DestDir
+	opts.FileDir = filepath.Join(o.DestDir, config.SourceDir)
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 
-	for _, img := range cfg.Mirror.AdditionalImages {
+	var mappings []mirror.Mapping
+	images := make([]string, len(cfg.Mirror.AdditionalImages))
+	assocMappings := make(map[string]string, len(cfg.Mirror.AdditionalImages))
+	for i, img := range cfg.Mirror.AdditionalImages {
 
 		// FIXME(jpower): need to have the user set skipVerification value
 		// If the pullSecret is not empty create a cached context
 		// else let `oc mirror` use the default docker config location
 		if len(img.PullSecret) != 0 {
 			ctx, err := config.CreateContext([]byte(img.PullSecret), false, o.SkipTLS)
-
 			if err != nil {
-				return nil
+				return nil, err
 			}
-
 			opts.SecurityOptions.CachedContext = ctx
 		}
 
@@ -60,21 +62,21 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 		srcRef, err := imagesource.ParseReference(img.Name)
 
 		if err != nil {
-			return fmt.Errorf("error parsing source image %s: %v", img.Name, err)
+			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
 
 		// Set destination image information
-		path := "file://" + img.Name
+		pathRef := "file://" + img.Name
 
-		dstRef, err := imagesource.ParseReference(path)
-
+		dstRef, err := imagesource.ParseReference(pathRef)
 		if err != nil {
-			return fmt.Errorf("error parsing destination reference %s: %v", path, err)
+			return nil, fmt.Errorf("error parsing destination reference %s: %v", pathRef, err)
 		}
+		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
 
 		// Check if image is specified as a blocked image
 		if IsBlocked(cfg, srcRef.Ref) {
-			return fmt.Errorf("additional image %s also specified as blocked, remove the image one config field or the other", img.Name)
+			return nil, fmt.Errorf("additional image %s also specified as blocked, remove the image one config field or the other", img.Name)
 		}
 		// Create mapping from source and destination images
 		mappings = append(mappings, mirror.Mapping{
@@ -82,10 +84,18 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 			Destination: dstRef,
 			Name:        srcRef.Ref.Name,
 		})
+
+		// Add mapping and image for image association.
+		// The registry component is not included in the final path.
+		assocMappings[srcRef.String()] = "file://" + path.Join(dstRef.Ref.Namespace, dstRef.Ref.NameString())
+		images[i] = srcRef.String()
 	}
 
 	opts.Mappings = mappings
 
-	err := opts.Run()
-	return err
+	if err := opts.Run(); err != nil {
+		return nil, err
+	}
+
+	return image.AssociateImageLayers(o.DestDir, assocMappings, images)
 }

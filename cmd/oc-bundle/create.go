@@ -8,12 +8,17 @@ import (
 )
 
 type createOpts struct {
-	outputDir string
+	*rootOpts
+
+	outputDir  string
+	configPath string
 }
 
-func newCreateCmd() *cobra.Command {
+func newCreateCmd(ro *rootOpts) *cobra.Command {
 
-	opts := createOpts{}
+	opts := createOpts{
+		rootOpts: ro,
+	}
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -23,9 +28,12 @@ func newCreateCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newCreateFullCmd(&opts))
-	cmd.AddCommand(newCreateDiffCmd(&opts))
+	cmd.AddCommand(
+		newCreateFullCmd(&opts),
+		newCreateDiffCmd(&opts),
+	)
 
+	cmd.PersistentFlags().StringVarP(&opts.configPath, "config", "c", "imageset-config.yaml", "Path to imageset configuration file")
 	cmd.PersistentFlags().StringVarP(&opts.outputDir, "output", "o", ".", "output directory for archives")
 
 	return cmd
@@ -37,12 +45,12 @@ func newCreateFullCmd(o *createOpts) *cobra.Command {
 		Use:   "full",
 		Short: "Create a full OCP related container image mirror",
 		Args:  cobra.ExactArgs(0),
-		Run: func(_ *cobra.Command, _ []string) {
-			cleanup := setupFileHook(rootOpts.dir)
+		Run: func(cmd *cobra.Command, _ []string) {
+			cleanup := setupFileHook(o.dir)
 			defer cleanup()
 			logrus.Infoln("Create full called")
 
-			err := create.CreateFull(rootOpts.configPath, rootOpts.dir, o.outputDir, rootOpts.dryRun, rootOpts.skipTLS)
+			err := create.CreateFull(cmd.Context(), o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -56,12 +64,12 @@ func newCreateDiffCmd(o *createOpts) *cobra.Command {
 		Use:   "diff",
 		Short: "Create a differential OCP related container image mirror updates",
 		Args:  cobra.ExactArgs(0),
-		Run: func(_ *cobra.Command, _ []string) {
-			cleanup := setupFileHook(rootOpts.dir)
+		Run: func(cmd *cobra.Command, _ []string) {
+			cleanup := setupFileHook(o.dir)
 			defer cleanup()
 			logrus.Infoln("Create Diff called")
 
-			err := create.CreateDiff(rootOpts.configPath, rootOpts.dir, o.outputDir, rootOpts.dryRun, rootOpts.skipTLS)
+			err := create.CreateDiff(cmd.Context(), o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
 			if err != nil {
 				logrus.Fatal(err)
 			}

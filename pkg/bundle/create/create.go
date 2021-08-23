@@ -15,6 +15,7 @@ import (
 	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 	"github.com/RedHatGov/bundle/pkg/metadata"
 	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 	"github.com/RedHatGov/bundle/pkg/operator"
@@ -29,11 +30,7 @@ var (
 )
 
 // CreateFull performs all tasks in creating full imagesets
-func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) error {
-
-	ctx := context.Background()
-
-	sourceDir := filepath.Join(rootDir, config.SourceDir)
+func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryRun, skipTLS, skipCleanup bool) error {
 
 	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
@@ -62,6 +59,8 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		Timestamp: int(time.Now().Unix()),
 	}
 
+	allAssocs := image.Associations{}
+
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(configPath)
 
@@ -77,22 +76,27 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 		opts := bundle.NewReleaseOptions()
-		opts.RootDestDir = sourceDir
+		opts.RootDestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err = opts.GetReleasesInitial(cfg); err != nil {
+		opts.SkipTLS = skipTLS
+		assocs, err := opts.GetReleasesInitial(cfg)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := operator.NewOperatorOptions()
+		opts := operator.MirrorOptions{}
 		opts.RootDestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err := opts.Full(ctx, cfg); err != nil {
+		opts.SkipTLS = skipTLS
+		opts.SkipCleanup = skipCleanup
+		assocs, err := opts.Full(ctx, cfg)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
 	}
 
 	if len(cfg.Mirror.Samples) != 0 {
@@ -104,14 +108,20 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		opts := bundle.NewAdditionalOptions()
 		opts.DestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err := opts.GetAdditional(run, cfg); err != nil {
+		opts.SkipTLS = skipTLS
+		assocs, err := opts.GetAdditional(run, cfg)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
+	}
 
+	if err := writeAssociations(rootDir, allAssocs); err != nil {
+		return fmt.Errorf("error writing association file: %v", err)
 	}
 
 	// Update metadata files
+	sourceDir := filepath.Join(rootDir, config.SourceDir)
 	files, err := getFiles(sourceDir, &meta)
 	if err != nil {
 		return err
@@ -122,20 +132,12 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, insecure); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
 		return err
 	}
 
-	var segSize int64
-
-	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
-		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize * 1024 * 1024 * 1024
-	} else {
-		segSize = 500 * 1024 * 1024 * 1024
-	}
-
 	// Run archiver
-	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
+	if err := prepareArchive(cfg, sourceDir, outputDir, files); err != nil {
 		return err
 	}
 
@@ -150,11 +152,7 @@ func CreateFull(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 }
 
 // CreateDiff performs all tasks in creating differential imagesets
-func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) error {
-
-	ctx := context.Background()
-
-	sourceDir := filepath.Join(rootDir, config.SourceDir)
+func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryRun, skipTLS, skipCleanup bool) error {
 
 	if err := bundle.MakeCreateDirs(rootDir); err != nil {
 		return err
@@ -182,6 +180,8 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		Timestamp: int(time.Now().Unix()),
 	}
 
+	allAssocs := image.Associations{}
+
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(configPath)
 
@@ -197,22 +197,27 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 		opts := bundle.NewReleaseOptions()
-		opts.RootDestDir = sourceDir
+		opts.RootDestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err = opts.GetReleasesDiff(lastRun, cfg); err != nil {
+		opts.SkipTLS = skipTLS
+		assocs, err := opts.GetReleasesDiff(lastRun, cfg)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := operator.NewOperatorOptions()
+		opts := operator.MirrorOptions{}
 		opts.RootDestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err := opts.Diff(ctx, cfg, lastRun); err != nil {
+		opts.SkipTLS = skipTLS
+		opts.SkipCleanup = skipCleanup
+		assocs, err := opts.Diff(ctx, cfg, lastRun)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
 	}
 
 	if len(cfg.Mirror.Samples) != 0 {
@@ -223,13 +228,20 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 		opts := bundle.NewAdditionalOptions()
 		opts.DestDir = rootDir
 		opts.DryRun = dryRun
-		opts.SkipTLS = insecure
-		if err := opts.GetAdditional(lastRun, cfg); err != nil {
+		opts.SkipTLS = skipTLS
+		assocs, err := opts.GetAdditional(lastRun, cfg)
+		if err != nil {
 			return err
 		}
+		allAssocs.Merge(assocs)
+	}
+
+	if err := writeAssociations(rootDir, allAssocs); err != nil {
+		return fmt.Errorf("error writing association file: %v", err)
 	}
 
 	// Update metadata files
+	sourceDir := filepath.Join(rootDir, config.SourceDir)
 	files, err := getFiles(sourceDir, &meta)
 	if err != nil {
 		return err
@@ -240,20 +252,12 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, insecure); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
 		return err
 	}
 
-	var segSize int64
-
-	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
-		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize * 1024 * 1024
-	} else {
-		segSize = 1024 * 1024 * 1024
-	}
-
 	// Run archiver
-	if err := prepareArchive(sourceDir, outputDir, segSize, files); err != nil {
+	if err := prepareArchive(cfg, sourceDir, outputDir, files); err != nil {
 		return err
 	}
 
@@ -267,7 +271,14 @@ func CreateDiff(configPath, rootDir, outputDir string, dryRun, insecure bool) er
 	return nil
 }
 
-func prepareArchive(rootDir, outputDir string, segSize int64, files []string) error {
+func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []string) error {
+
+	// Default to a 500GiB archive size.
+	var segSize int64 = 500
+	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
+		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize
+	}
+	segSize *= 1024 * 1024 * 1024
 
 	cwd, err := os.Getwd()
 
@@ -316,4 +327,17 @@ func getFiles(rootDir string, meta *v1alpha1.Metadata) ([]string, error) {
 
 	// Gather files we pulled
 	return bundle.ReconcileFiles(meta, ".")
+}
+
+func writeAssociations(rootDir string, assocs image.Associations) error {
+	assocPath := filepath.Join(rootDir, config.AssociationsBasePath)
+	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
+		return fmt.Errorf("mkdir image associations file: %v", err)
+	}
+	f, err := os.OpenFile(assocPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0640)
+	if err != nil {
+		return fmt.Errorf("open image associations file: %v", err)
+	}
+	defer f.Close()
+	return assocs.Encode(f)
 }

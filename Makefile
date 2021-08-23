@@ -26,4 +26,4 @@ test-e2e: test-e2e-operator
 
 .PHONY: test-e2e-operator
 test-e2e-operator: build
-	./test/test-operator.sh ./bin/oc-bundle
+	./test/e2e-simple.sh ./bin/oc-bundle

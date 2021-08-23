@@ -11,6 +11,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 )
 
@@ -49,7 +50,7 @@ func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, ba
 	if err != nil {
 		return v1alpha1.OperatorMetadata{}, fmt.Errorf("error creating image resolver: %v", err)
 	}
-	operatorMeta.ImagePin, err = ResolveToPin(ctx, resolver, operator.Catalog)
+	operatorMeta.ImagePin, err = image.ResolveToPin(ctx, resolver, operator.Catalog)
 	if err != nil {
 		return v1alpha1.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", operator.Catalog, err)
 	}

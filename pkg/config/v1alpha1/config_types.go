@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/operator-framework/operator-registry/pkg/action"
+	"github.com/operator-framework/operator-registry/alpha/action"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -49,7 +49,7 @@ type ReleaseChannel struct {
 
 // Operator configures operator catalog mirroring.
 type Operator struct {
-	action.IncludeCatalog `json:",inline"`
+	action.DiffIncludeConfig `json:",inline"`
 
 	// Catalog image to mirror. This image must be pullable and available for subsequent
 	// pulls on later mirrors unless WriteIndex or InlineIndex are set.
@@ -59,7 +59,7 @@ type Operator struct {
 	// PullSecret for the image. Must be a file ref, as this value may be stored unencrypted.
 	PullSecret string `json:"pullSecret,omitempty"`
 	// HeadsOnly mode mirrors only channel heads of all packages in the catalog.
-	// Channels specified in IncludeCatalog will override this setting;
+	// Channels specified in DiffIncludeConfig will override this setting;
 	// heads will still be included, but prior versions may also be included.
 	HeadsOnly bool `json:"headsOnly,omitempty"`
 	// InlineIndex directs the mirrorer to store the catalog's declarative config

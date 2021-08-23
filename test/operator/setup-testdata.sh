@@ -8,6 +8,19 @@ OUTPUT_DIR="${2:?output dir is required}"
 REGISTRY="localhost:5000"
 CATALOGNAMESPACE="test-catalogs"
 REGISTRY_CATALOGNAMESPACE="${REGISTRY}/${CATALOGNAMESPACE}"
+BUILDX_BUILDER=test-builder
+
+function create_buildx_builder() {
+  # Ensure builder instance uses the host network.
+  if ! docker buildx inspect $BUILDX_BUILDER >/dev/null 2>&1; then
+    echo -e "\nCreating new buildx builder $BUILDX_BUILDER"
+    docker buildx create --name $BUILDX_BUILDER \
+      --use \
+      --driver-opt network=host \
+      --buildkitd-flags '--allow-insecure-entitlement security.insecure' \
+      --platform linux/amd64,linux/arm64
+  fi
+}
 
 function setup() {
   echo -e "\nSetting up test directory in $DATA_DIR"
@@ -18,6 +31,8 @@ function setup() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/testdata/configs/latest/imageset-config.yaml" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
+
+  create_buildx_builder
 }
 
 function build_push_bundles() {
@@ -25,15 +40,14 @@ function build_push_bundles() {
   for d in `find "${DATA_DIR}" -maxdepth 1 -name *-bundle-*`; do
     local img="${REGISTRY}/$(basename $d | cut -d- -f1)-operator/$(basename $d | cut -d- -f1-2):$(basename $d | cut -d- -f3)"
     pushd $d
-    docker build -t $img -f bundle.Dockerfile .
-    docker push $img
+    docker buildx build --push -t $img -f bundle.Dockerfile .
     popd
   done
 }
 
 function build_push_related_images() {
   echo -e "\nBuilding and pushing related images"
-  for img in `yq eval '.relatedImages[].image' "${DATA_DIR}/index/index.yaml" --no-doc`; do
+  for img in `yq eval '.relatedImages[].image' "${DATA_DIR}/index/index/index.yaml" --no-doc`; do
     local tmp=$(mktemp -d ${DATA_DIR}/bundle-image.XXXXX)
     pushd "$tmp"
     echo -e "#!/bin/sh\n\necho \"relatedImage: ${img}\"" > run.sh
@@ -43,8 +57,8 @@ FROM alpine
 COPY run.sh /
 ENTRYPOINT ["/run.sh"]
 EOF
-    docker build -t $img -f Dockerfile .
-    docker push $img
+    # Use buildx to create manifest lists to test image association stuff.
+    docker buildx build --push --platform linux/amd64,linux/arm64 -t $img -f Dockerfile .
     popd
     rm -rf "$tmp"
   done
@@ -55,12 +69,11 @@ function build_push_catalog() {
   echo -e "\nBuilding and pushing catalog image"
   local img="${REGISTRY_CATALOGNAMESPACE}/test-catalog:latest"
   pushd "${DATA_DIR}/index"
-  docker build -t $img -f index.Dockerfile .
-  docker push $img
+  docker buildx build --push -t $img -f index.Dockerfile .
   popd
 }
 
 setup
-build_push_bundles
 build_push_related_images
+build_push_bundles
 build_push_catalog

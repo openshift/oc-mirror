@@ -67,12 +67,12 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 		return fmt.Errorf("%s: stat: %v", sourceDir, err)
 	}
 
-	foundFiles := make(map[string]struct{}, len(newFiles))
+	fileSetToArchive := make(map[string]struct{}, len(newFiles))
 	for _, fpath := range newFiles {
-		foundFiles[fpath] = struct{}{}
+		fileSetToArchive[fpath] = struct{}{}
 	}
 	// Ignore the current dir.
-	foundFiles["."] = struct{}{}
+	fileSetToArchive["."] = struct{}{}
 
 	walkErr := filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
 
@@ -86,11 +86,11 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 		// Make sure the metadata file is always packed
 		if strings.Contains(fpath, config.MetadataFile) {
 			logrus.Debugf("Packing metadata file %s", fpath)
-			foundFiles[fpath] = struct{}{}
+			fileSetToArchive[fpath] = struct{}{}
 		}
 
-		if _, found := foundFiles[fpath]; !found {
-			logrus.Debugf("File %s not found, skipping...", fpath)
+		if _, archive := fileSetToArchive[fpath]; !archive {
+			logrus.Debugf("File %s should not be archived, skipping...", fpath)
 			return nil
 		}
 
@@ -164,11 +164,6 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	}
 
 	return walkErr
-}
-
-// ExtractArchive will unpack the archive at the specified directory
-func ExtractArchive(a Archiver, src, dest string) error {
-	return a.Unarchive(src, dest)
 }
 
 // CombineArchives take a list of archives and combines them into one file
