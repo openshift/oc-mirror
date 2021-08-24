@@ -17,6 +17,14 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
+type MirrorError struct {
+	image string
+}
+
+func (e *MirrorError) Error() string {
+	return fmt.Sprintf("image %q has no mirror mapping", e.image)
+}
+
 // Associations is a set of image Associations.
 type Associations map[string]Association
 
@@ -112,7 +120,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	for _, image := range images {
 		dirRef, hasMapping := imgMappings[image]
 		if !hasMapping {
-			return nil, fmt.Errorf("image %q has no mirror mapping", image)
+			return nil, &MirrorError{image}
 		}
 		dirRef = strings.TrimPrefix(dirRef, "file://")
 		dirRef = filepath.Join(rootDir, "v2", dirRef)
