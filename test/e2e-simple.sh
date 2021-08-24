@@ -2,6 +2,8 @@
 
 set -eu
 
+source test/lib.sh
+
 CMD="${1:?cmd bin path is required}"
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -15,22 +17,35 @@ REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN=disconn_registry
 REGISTRY_DISCONN_PORT=5001
 
-function run_cmd() {
-  local test_flags="--log-level debug --skip-tls --skip-cleanup"
-
-  echo "$CMD" $@ $test_flags
-  echo
-  "$CMD" $@ $test_flags
-}
-
 trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry.sh $REGISTRY_DISCONN" EXIT
 
-"${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
-"${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
-"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR"
+## Test `create full`
 
-run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config.yaml" --output "$DATA_TMP"
+# Test full catalog mode.
+"${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
+"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-full.yaml"
+run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config-full.yaml" --output "$DATA_TMP"
+# Stop the connected registry so we're sure nothing is being pulled from it.
+"${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
+"${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
 run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+check_bundles "${PUBLISH_FULL_DIR}/catalogs/localhost:${REGISTRY_CONN_PORT}/test-catalogs/test-catalog/latest-index.json" \
+  "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1"
+"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
+rm -rf "$DATA_TMP"
+
+# Test heads-only catalog mode.
+mkdir "$DATA_TMP"
+"${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
+"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-headsonly.yaml"
+run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config-headsonly.yaml" --output "$DATA_TMP"
+"${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
+"${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
+run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+check_bundles "${PUBLISH_FULL_DIR}/catalogs/localhost:${REGISTRY_CONN_PORT}/test-catalogs/test-catalog/latest-index.json" \
+  "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1"
+"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
+rm -rf "$DATA_TMP"
 
 # TODO: test `create diff` with new operator bundles and releases.
 # rm "${DATA_TMP}/bundle_000000.tar"
@@ -38,6 +53,3 @@ run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.t
 # cp "${CREATE_FULL_DIR}/src/publish/.metadata.json" "${CREATE_DIFF_DIR}/src/publish/"
 # run_cmd create diff --dir "$CREATE_DIFF_DIR" --config "${CREATE_DIFF_DIR}/imageset-config.yaml" --output "$DATA_TMP"
 # run_cmd publish --dir "$PUBLISH_DIFF_DIR" --archive "${DATA_TMP}/bundle_000000.tar.gz" --to-mirror localhost:$REGISTRY_DISCONN_PORT
-
-# Clean up successful tests.
-rm -rf $DATA_TMP

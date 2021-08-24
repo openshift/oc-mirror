@@ -6,6 +6,6 @@
 REGISTRY_NAME=$1
 PORT=$2
 
-echo -e "\nStarting containerized docker registry $REGISTRY_NAME listening at localhost:${PORT}"
+echo "Starting containerized docker registry $REGISTRY_NAME listening at localhost:${PORT}"
 
 docker run -d -p $PORT:5000 --restart always --name $REGISTRY_NAME registry:2

@@ -215,7 +215,7 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (assocs image.Associations, err error) {
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (image.Associations, error) {
 	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
@@ -226,7 +226,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (asso
 	if len(secret) != 0 {
 		ctx, err := config.CreateContext(secret, false, o.SkipTLS)
 		if err != nil {
-			return assocs, err
+			return image.Associations{}, err
 		}
 		opts.SecurityOptions.CachedContext = ctx
 	}
@@ -235,17 +235,26 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (asso
 	opts.DryRun = o.DryRun
 
 	if err := opts.Run(); err != nil {
-		return assocs, err
+		return image.Associations{}, err
 	}
 
 	// Retrive the mapping information for release
 	mapping, images, err := o.getMapping(*opts)
 
 	if err != nil {
-		return assocs, fmt.Errorf("error could retrieve mapping information: %v", err)
+		return image.Associations{}, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
 
-	return image.AssociateImageLayers(toDir, mapping, images)
+	assocs, err := image.AssociateImageLayers(toDir, mapping, images)
+	if err != nil {
+		return nil, err
+	}
+	for k, assoc := range assocs {
+		assoc.Type = image.TypeOCPRelease
+		assocs[k] = assoc
+	}
+
+	return assocs, nil
 }
 
 func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {

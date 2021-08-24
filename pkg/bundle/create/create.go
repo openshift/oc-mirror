@@ -177,7 +177,7 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	}
 
 	// TODO: make backend configurable.
-	backend, err := storage.NewLocalBackend(o.Dir)
+	backend, err := storage.NewLocalBackend(filepath.Join(o.Dir, config.SourceDir))
 	if err != nil {
 		return fmt.Errorf("error opening local backend: %v", err)
 	}
@@ -292,7 +292,7 @@ func (o *Options) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alp
 }
 
 func (o *Options) writeAssociations(assocs image.Associations) error {
-	assocPath := filepath.Join(o.Dir, config.AssociationsBasePath)
+	assocPath := filepath.Join(o.Dir, config.SourceDir, config.AssociationsBasePath)
 	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
 		return fmt.Errorf("mkdir image associations file: %v", err)
 	}

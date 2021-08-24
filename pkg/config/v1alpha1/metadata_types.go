@@ -53,7 +53,10 @@ func (pms PastMirrors) Swap(i, j int)      { pms[i], pms[j] = pms[j], pms[i] }
 func (pms PastMirrors) Less(i, j int) bool { return pms[i].Sequence < pms[j].Sequence }
 
 type Blob struct {
-	Name string `json:"name"`
+	ID string `json:"id"`
+	// NamespaceName of image that owns this blob.
+	// Required for blob lookups during the publish step.
+	NamespaceName string `json:"namespaceName"`
 }
 
 type Manifest struct {

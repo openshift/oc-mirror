@@ -43,6 +43,7 @@ properties:
 - type: olm.channel
   value:
     name: alpha
+    replaces: bar.v0.1.0
 - type: olm.gvk
   value:
     group: test.bar
@@ -52,10 +53,6 @@ properties:
   value:
     packageName: bar
     version: 0.2.0
-- type: olm.skipRange
-  value: <0.2.0
-- type: olm.skips
-  value: bar.v0.1.0
 relatedImages:
 - image: REGISTRY_ONLY/bar-operator/bar:v0.2.0
   name: operator
@@ -92,6 +89,10 @@ properties:
   value:
     packageName: bar
     version: 1.0.0
+- type: olm.skipRange
+  value: <0.2.0
+- type: olm.skips
+  value: bar.v0.1.0
 relatedImages:
 - image: REGISTRY_ONLY/bar-operator/bar:v1.0.0
   name: operator

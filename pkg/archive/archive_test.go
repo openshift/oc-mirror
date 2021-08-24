@@ -37,7 +37,7 @@ func Test_SplitArchive(t *testing.T) {
 	}{
 		{
 			name:         "testing tar format",
-			blobs:        []v1alpha1.Blob{{Name: "sha256:123456789"}},
+			blobs:        []v1alpha1.Blob{{ID: "sha256:123456789"}},
 			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
 			maxSplitSize: 5 * 1024 * 1024,
 			want:         "testbundle",

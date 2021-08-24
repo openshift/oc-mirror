@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
@@ -53,7 +54,7 @@ func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager
 	}
 
 	for _, blob := range blobs {
-		blobSetToArchive[blob.Name] = struct{}{}
+		blobSetToArchive[blob.ID] = struct{}{}
 	}
 
 	return &packager{
@@ -94,7 +95,7 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 		}
 
 		// pack the image associations and the metadata
-		if filepath.Base(fpath) == config.MetadataFile || filepath.Base(fpath) == config.AssociationsFile {
+		if includeFile(fpath) {
 			p.manifest[fpath] = struct{}{}
 		}
 
@@ -157,7 +158,7 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 			return fmt.Errorf("%s: writing: %s", fpath, err)
 		}
 
-		logrus.Debugf("File %s added to archive %s", fpath, splitPath)
+		logrus.Debugf("File %s added to archive", fpath)
 
 		splitSize += info.Size()
 
@@ -205,4 +206,9 @@ func pack(search map[string]struct{}, file string) bool {
 
 func blobInArchive(file string) string {
 	return filepath.Join("blobs", file)
+}
+
+func includeFile(fpath string) bool {
+	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
+	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
 }

@@ -31,11 +31,11 @@ func Test_ReconcilingBlobs(t *testing.T) {
 			name: "testing pulling new blobs",
 			fields: fields{
 				files: []v1alpha1.Blob{
-					{Name: "test1"},
+					{ID: "test1", NamespaceName: "foo/bar"},
 				},
 			},
 			want: []v1alpha1.Blob{
-				{Name: "test3"},
+				{ID: "test3", NamespaceName: "test3"},
 			},
 		},
 	}

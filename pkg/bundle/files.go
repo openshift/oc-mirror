@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/sirupsen/logrus"
@@ -61,7 +62,7 @@ func ReconcileBlobs(meta v1alpha1.Metadata, sourceDir string) (newBlobs []v1alph
 
 	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
 	for _, pf := range meta.PastBlobs {
-		foundFiles[pf.Name] = struct{}{}
+		foundFiles[pf.ID] = struct{}{}
 	}
 
 	// Ignore the current dir.
@@ -82,7 +83,10 @@ func ReconcileBlobs(meta v1alpha1.Metadata, sourceDir string) (newBlobs []v1alph
 
 		if info.Mode().IsRegular() {
 			file := v1alpha1.Blob{
-				Name: info.Name(),
+				ID: info.Name(),
+				// QUESTION(estroz): if the image name only had one component,
+				// will the publish lookup fail?
+				NamespaceName: strings.TrimPrefix(fpath, "v2"+string(filepath.Separator)),
 			}
 
 			if _, found := foundFiles[info.Name()]; !found {

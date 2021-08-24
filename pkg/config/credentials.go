@@ -40,19 +40,20 @@ func CreateContext(secret []byte, skipVerification, skipTLS bool) (*registryclie
 	if err != nil {
 		return nil, err
 	}
-	creds, err := New(secret)
-	if err != nil {
-		return nil, err
-	}
 
 	ctx := registryclient.NewContext(rt, insecureRT).
-		WithCredentials(creds).
 		WithRequestModifiers(transport.NewHeaderRequestModifier(
 			http.Header{
 				http.CanonicalHeaderKey("User-Agent"): []string{rest.DefaultKubernetesUserAgent()},
 			},
 		))
 	ctx.DisableDigestVerification = skipVerification
+
+	if len(secret) != 0 {
+		if ctx.Credentials, err = New(secret); err != nil {
+			return nil, err
+		}
+	}
 
 	return ctx, nil
 }
