@@ -243,11 +243,13 @@ func downloadMirror(secret []byte, toDir, from string, skipTlS, dryRun bool) (as
 		return assocs, err
 	}
 
+	dst := opts.TargetFn("")
+
 	// There is currently no way to retrieve mappings created by mirror options,
 	// so we must assume the release image is mirrored directly to the specified
 	// dir at the image name path.
 	mapping := map[string]string{
-		from: fmt.Sprintf("file://%s", from),
+		from: dst.Exact(),
 	}
 	return image.AssociateImageLayers(toDir, mapping, []string{from})
 }

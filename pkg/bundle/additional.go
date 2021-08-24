@@ -97,5 +97,5 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 		return nil, err
 	}
 
-	return image.AssociateImageLayers(o.DestDir, assocMappings, images)
+	return image.AssociateImageLayers(opts.FileDir, assocMappings, images)
 }

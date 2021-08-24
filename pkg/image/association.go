@@ -15,8 +15,6 @@ import (
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
-	"github.com/RedHatGov/bundle/pkg/config"
 )
 
 // Associations is a set of image Associations.
@@ -117,7 +115,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 			return nil, fmt.Errorf("image %q has no mirror mapping", image)
 		}
 		dirRef = strings.TrimPrefix(dirRef, "file://")
-		dirRef = filepath.Join(rootDir, config.SourceDir, "v2", dirRef)
+		dirRef = filepath.Join(rootDir, "v2", dirRef)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
