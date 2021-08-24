@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
@@ -70,7 +69,7 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 
 	fileSetToArchive := make(map[string]struct{}, len(newFiles))
 	for _, fpath := range newFiles {
-		fileSetToArchive[fpath] = struct{}{}
+		fileSetToArchive[fpath.Name] = struct{}{}
 	}
 	// Ignore the current dir.
 	fileSetToArchive["."] = struct{}{}
@@ -85,8 +84,8 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 		}
 
 		// Make sure the metadata file is always packed
-		if strings.Contains(fpath, config.MetadataFile) {
-			logrus.Debugf("Packing metadata file %s", fpath)
+		if base := filepath.Base(fpath); base == config.MetadataFile || base == config.AssociationsFile {
+			logrus.Debugf("Packing file %s", fpath)
 			fileSetToArchive[fpath] = struct{}{}
 		}
 

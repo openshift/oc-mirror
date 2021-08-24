@@ -273,7 +273,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	return nil
 }
 
-func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []v1alpha1.FileInfo) error {
+func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []v1alpha1.File) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500

@@ -9,7 +9,6 @@ require (
 	github.com/containerd/containerd v1.4.8
 	github.com/containers/image/v5 v5.15.2
 	github.com/docker/distribution v2.7.1+incompatible
-	github.com/gammazero/workerpool v1.1.2
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/uuid v1.2.0
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2

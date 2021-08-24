@@ -8,7 +8,7 @@ import (
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/gammazero/workerpool"
+	"github.com/openshift/oc/pkg/cli/image/workqueue"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,9 +16,20 @@ import (
 // and checks against the current list
 func ReconcileFiles(meta v1alpha1.Metadata, rootDir string) (newFiles []v1alpha1.File, err error) {
 
-	wp := workerpool.New(10)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	wp := workqueue.New(10, stopCh)
 
 	mu := new(sync.RWMutex)
+
+	if err != nil {
+		return nil, err
+	}
+
 	results := make(chan v1alpha1.File)
 
 	foundFiles := make(map[string]struct{}, len(meta.PastFiles))
@@ -28,6 +39,21 @@ func ReconcileFiles(meta v1alpha1.Metadata, rootDir string) (newFiles []v1alpha1
 
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
+
+	go func() {
+
+		defer wg.Done()
+		for {
+			rst, ok := <-results
+			if !ok {
+				break
+			}
+			if base := filepath.Base(rst.Name); base != config.MetadataFile && base != config.AssociationsFile {
+				newFiles = append(newFiles, rst)
+				logrus.Debugf("File %s added", rst.Name)
+			}
+		}
+	}()
 
 	//Create a work pool
 	logrus.Debug("Creating worker pool")
@@ -45,45 +71,42 @@ func ReconcileFiles(meta v1alpha1.Metadata, rootDir string) (newFiles []v1alpha1
 
 		logrus.Debugf("Creating task for %s", fpath)
 
-		wp.Submit(func() {
-			file := v1alpha1.File{
-				Name: fpath,
-			}
+		wp.Queue(func(w workqueue.Work) {
 
-			mu.RLock()
-			_, found := foundFiles[fpath]
-			mu.RUnlock()
+			w.Parallel(func() {
 
-			if !found {
+				file := v1alpha1.File{
+					Name: fpath,
+				}
 
-				results <- file
+				mu.RLock()
+				_, found := foundFiles[fpath]
+				mu.RUnlock()
 
-				mu.Lock()
-				foundFiles[fpath] = struct{}{}
-				mu.Unlock()
+				if !found {
 
-			} else {
-				logrus.Debugf("File %s exists", fpath)
-			}
+					results <- file
+
+					mu.Lock()
+					foundFiles[fpath] = struct{}{}
+					mu.Unlock()
+
+				} else {
+					logrus.Debugf("File %s exists", fpath)
+				}
+			})
 		})
 
 		return nil
 	})
 
 	go func() {
-		wp.StopWait()
+		wp.Done()
 		close(results)
 	}()
 
-	for {
-		rst, ok := <-results
-		if !ok {
-			break
-		}
-		if base := filepath.Base(fpath); base != config.MetadataFile && base != config.AssociationsFile {
-			newFiles = append(newFiles, rst)
-		}
-	}
+	wg.Wait()
 
-	return newFiles, err
+	return newFiles, nil
+
 }
