@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/sirupsen/logrus"
 )
 
 // ReconcileManifest gather all manifests that were collected during a run
@@ -54,6 +55,8 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 			// Move new manifest to manifests directory
 			if info.Mode().IsRegular() {
 
+				logrus.Debugf("Adding manifest %s", fpath)
+
 				// Copy blob to blobs directory
 				input, err := ioutil.ReadFile(fpath)
 				if err != nil {
@@ -65,6 +68,8 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 				}
 			}
 
+		} else {
+			logrus.Debugf("Manifest %s exists in imageset, skipping...", fpath)
 		}
 
 		return nil
@@ -103,7 +108,9 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 
 			if _, found := foundFiles[info.Name()]; !found {
 				meta.PastBlobs = append(meta.PastBlobs, file)
-				foundFiles[fpath] = struct{}{}
+				foundFiles[info.Name()] = struct{}{}
+
+				logrus.Debugf("Adding blob %s", info.Name())
 
 				// Copy blob to blobs directory
 				input, err := ioutil.ReadFile(fpath)
@@ -115,6 +122,8 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 					return err
 				}
 
+			} else {
+				logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
 			}
 		}
 
