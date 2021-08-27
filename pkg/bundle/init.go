@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,10 +34,10 @@ func ValidateCreateDir(rootDir string) error {
 */
 func MakeCreateDirs(rootDir string) error {
 	paths := []string{
-		filepath.Join("bundle", "publish"),
-		filepath.Join("bundle", "v2"),
-		filepath.Join("src", "publish"),
-		filepath.Join("src", "v2"),
+		filepath.Join(config.SourceDir, config.PublishDir),
+		filepath.Join(config.SourceDir, "v2"),
+		filepath.Join(config.SourceDir, "blobs"),
+		filepath.Join(config.SourceDir, "manifests"),
 	}
 	for _, p := range paths {
 		dir := filepath.Join(rootDir, p)

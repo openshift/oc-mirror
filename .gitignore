@@ -3,7 +3,7 @@
 
 # Test artifacts.
 coverage.out
-**/bundle*.tar.gz
+**/bundle*.tar
 sha256sum.txt
 /test/operator-test.*
 **/publish.tmp.*
