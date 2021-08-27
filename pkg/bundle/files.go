@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -41,8 +42,8 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 		if _, found := foundFiles[fpath]; !found {
 
 			// Past files should only be image data, not tool metadata.
-			foundFiles[fpath] = struct{}{}
 			meta.PastManifests = append(meta.PastManifests, file)
+			foundFiles[fpath] = struct{}{}
 
 			// Make manifest dir in target
 			targetPath := filepath.Join(sourceDir, "manifests", filepath.Dir(fpath))
@@ -53,7 +54,13 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 			// Move new manifest to manifests directory
 			if info.Mode().IsRegular() {
 
-				if err := os.Rename(fpath, filepath.Join(targetPath, info.Name())); err != nil {
+				// Copy blob to blobs directory
+				input, err := ioutil.ReadFile(fpath)
+				if err != nil {
+					return err
+				}
+
+				if err := ioutil.WriteFile(filepath.Join(targetPath, info.Name()), input, os.ModePerm); err != nil {
 					return err
 				}
 			}
@@ -98,10 +105,16 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 				meta.PastBlobs = append(meta.PastBlobs, file)
 				foundFiles[fpath] = struct{}{}
 
-				// Move blob to blobs directory
-				if err := os.Rename(fpath, filepath.Join(sourceDir, "blobs", info.Name())); err != nil {
+				// Copy blob to blobs directory
+				input, err := ioutil.ReadFile(fpath)
+				if err != nil {
 					return err
 				}
+
+				if err := ioutil.WriteFile(filepath.Join(sourceDir, "blobs", info.Name()), input, os.ModePerm); err != nil {
+					return err
+				}
+
 			}
 		}
 

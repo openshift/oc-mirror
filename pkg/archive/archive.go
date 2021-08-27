@@ -117,6 +117,8 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 			return fmt.Errorf("%s: writing: %s", fpath, err)
 		}
 
+		logrus.Debugf("File %s added to archive %s", fpath, splitPath)
+
 		splitSize += info.Size()
 
 		return nil

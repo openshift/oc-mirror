@@ -59,6 +59,26 @@ func (c creator) CreateFull(ctx context.Context) error {
 		return err
 	}
 
+	if !c.skipCleanup {
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(c.sourceDir, "v2")); err != nil {
+				logrus.Fatal(err)
+			}
+		}()
+	}
+
+	defer func() {
+		if err := os.RemoveAll(filepath.Join(c.sourceDir, "blobs")); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
+
+	defer func() {
+		if err := os.RemoveAll(filepath.Join(c.sourceDir, "manifests")); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
+
 	// TODO: make backend configurable.
 	backend, err := storage.NewLocalBackend(c.rootDir)
 	if err != nil {
@@ -178,6 +198,26 @@ func (c creator) CreateDiff(ctx context.Context) error {
 	if err := bundle.MakeCreateDirs(c.rootDir); err != nil {
 		return err
 	}
+
+	if !c.skipCleanup {
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(c.sourceDir, "v2")); err != nil {
+				logrus.Fatal(err)
+			}
+		}()
+	}
+
+	defer func() {
+		if err := os.RemoveAll(filepath.Join(c.sourceDir, "blobs")); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
+
+	defer func() {
+		if err := os.RemoveAll(filepath.Join(c.sourceDir, "manifests")); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
 
 	// TODO: make backend configurable.
 	backend, err := storage.NewLocalBackend(c.rootDir)
