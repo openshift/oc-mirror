@@ -423,11 +423,11 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 		srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
 		assocs, err := image.AssociateImageLayers(srcDir, imgMappings, images)
 		if err != nil {
-			if merr, ok := err.(*image.MirrorError); ok {
-				logrus.Warn(merr)
-			} else {
+			merr := &image.MirrorError{}
+			if !errors.As(err, &merr) {
 				return err
 			}
+			logrus.Warn(err)
 		}
 
 		allAssocs.Merge(assocs)
