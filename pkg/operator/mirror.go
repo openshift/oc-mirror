@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -422,10 +423,12 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 
 		srcDir := filepath.Join(o.RootDestDir, config.SourceDir)
 		assocs, err := image.AssociateImageLayers(srcDir, imgMappings, images)
-		if merr, ok := err.(*image.MirrorError); ok {
-			logrus.Warn(merr)
-		} else {
-			return err
+		if err != nil {
+			merr := &image.MirrorError{}
+			if !errors.As(err, &merr) {
+				return err
+			}
+			logrus.Warn(err)
 		}
 
 		allAssocs.Merge(assocs)
