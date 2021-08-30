@@ -124,9 +124,6 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		dirRef = strings.TrimPrefix(dirRef, "file://")
-		// set path of manifest in archive
-		manifestPath := filepath.Join("manifests", "v2", dirRef)
-
 		dirRef = filepath.Join(rootDir, "v2", dirRef)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
@@ -136,7 +133,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		tag := dirRef[tagIdx+1:]
 		dirRef = dirRef[:tagIdx]
 
-		associations, err := associateImageLayers(image, dirRef, manifestPath, tag, skipParse)
+		associations, err := associateImageLayers(image, dirRef, tag, skipParse)
 		if err != nil {
 			return nil, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err)
 		}
@@ -148,7 +145,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	return bundleAssociations, nil
 }
 
-func associateImageLayers(image, dirRef, assocPath, tag string, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, dirRef, tag string, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
@@ -161,7 +158,7 @@ func associateImageLayers(image, dirRef, assocPath, tag string, skipParse func(s
 
 	association := Association{
 		Name: image,
-		Path: filepath.FromSlash(assocPath),
+		Path: filepath.FromSlash(dirRef),
 	}
 	switch mt := ctrsimgmanifest.GuessMIMEType(manifestBytes); mt {
 	case "":
@@ -178,7 +175,7 @@ func associateImageLayers(image, dirRef, assocPath, tag string, skipParse func(s
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, dirRef, assocPath, digestStr, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, dirRef, digestStr, skipParse)
 			if err != nil {
 				return nil, err
 			}

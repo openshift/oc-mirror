@@ -35,7 +35,6 @@ func Test_ReconcilingBlobs(t *testing.T) {
 				},
 			},
 			want: []v1alpha1.Blob{
-				{Name: "test1"},
 				{Name: "test3"},
 			},
 		},
@@ -82,16 +81,14 @@ func Test_ReconcilingBlobs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := ReconcileBlobs(&meta, "."); err != nil {
+		actual, err := ReconcileBlobs(meta, ".")
+
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		if !reflect.DeepEqual(meta.PastBlobs, tt.want) {
-			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, meta.PastBlobs)
-		}
-
-		if _, err := os.Stat("blobs/test3"); err != nil {
-			t.Fatal(err)
+		if !reflect.DeepEqual(actual, tt.want) {
+			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)
 		}
 
 	}
@@ -123,9 +120,6 @@ func Test_ReconcilingManifest(t *testing.T) {
 				},
 			},
 			want: []v1alpha1.Manifest{
-				{Name: "v2"},
-				{Name: "v2/manifests"},
-				{Name: "v2/manifests/test1"},
 				{Name: "v2/manifests/test2"},
 			},
 		},
@@ -170,16 +164,14 @@ func Test_ReconcilingManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := ReconcileManifests(&meta, "."); err != nil {
+		actual, err := ReconcileManifests(meta, ".")
+
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		if !reflect.DeepEqual(meta.PastManifests, tt.want) {
-			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, meta.PastManifests)
-		}
-
-		if _, err := os.Stat("manifests/v2/manifests/test2"); err != nil {
-			t.Fatal(err)
+		if !reflect.DeepEqual(actual, tt.want) {
+			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)
 		}
 
 	}

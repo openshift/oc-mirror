@@ -67,18 +67,6 @@ func (c creator) CreateFull(ctx context.Context) error {
 		}()
 	}
 
-	defer func() {
-		if err := os.RemoveAll(filepath.Join(c.sourceDir, "blobs")); err != nil {
-			logrus.Fatal(err)
-		}
-	}()
-
-	defer func() {
-		if err := os.RemoveAll(filepath.Join(c.sourceDir, "manifests")); err != nil {
-			logrus.Fatal(err)
-		}
-	}()
-
 	// TODO: make backend configurable.
 	backend, err := storage.NewLocalBackend(c.rootDir)
 	if err != nil {
@@ -164,12 +152,17 @@ func (c creator) CreateFull(ctx context.Context) error {
 	}
 
 	// Update metadata files
-	if err := c.getFiles(&meta); err != nil {
+	manifests, blobs, err := c.getFiles(meta)
+	if err != nil {
 		return err
 	}
+	meta.PastManifests = append(meta.PastManifests, manifests...)
+	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
+	run.Manifests = manifests
+	run.Blobs = blobs
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
@@ -178,7 +171,7 @@ func (c creator) CreateFull(ctx context.Context) error {
 	}
 
 	// Run archiver
-	if err := c.prepareArchive(cfg); err != nil {
+	if err := c.prepareArchive(cfg, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -206,18 +199,6 @@ func (c creator) CreateDiff(ctx context.Context) error {
 			}
 		}()
 	}
-
-	defer func() {
-		if err := os.RemoveAll(filepath.Join(c.sourceDir, "blobs")); err != nil {
-			logrus.Fatal(err)
-		}
-	}()
-
-	defer func() {
-		if err := os.RemoveAll(filepath.Join(c.sourceDir, "manifests")); err != nil {
-			logrus.Fatal(err)
-		}
-	}()
 
 	// TODO: make backend configurable.
 	backend, err := storage.NewLocalBackend(c.rootDir)
@@ -302,12 +283,17 @@ func (c creator) CreateDiff(ctx context.Context) error {
 	}
 
 	// Update metadata files
-	if err := c.getFiles(&meta); err != nil {
+	manifests, blobs, err := c.getFiles(meta)
+	if err != nil {
 		return err
 	}
+	meta.PastManifests = append(meta.PastManifests, manifests...)
+	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
+	run.Manifests = manifests
+	run.Blobs = blobs
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
@@ -316,7 +302,7 @@ func (c creator) CreateDiff(ctx context.Context) error {
 	}
 
 	// Run archiver
-	if err := c.prepareArchive(cfg); err != nil {
+	if err := c.prepareArchive(cfg, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -330,7 +316,7 @@ func (c creator) CreateDiff(ctx context.Context) error {
 	return nil
 }
 
-func (c creator) prepareArchive(cfg v1alpha1.ImageSetConfiguration) error {
+func (c creator) prepareArchive(cfg v1alpha1.ImageSetConfiguration, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -359,10 +345,10 @@ func (c creator) prepareArchive(cfg v1alpha1.ImageSetConfiguration) error {
 	}
 	defer os.Chdir(cwd)
 
-	arc := archive.NewArchiver()
+	packager := archive.NewPackager(manifests, blobs)
 
 	// Create tar archive
-	if err := archive.CreateSplitArchive(arc, segSize, output, ".", "bundle"); err != nil {
+	if err := packager.CreateSplitArchive(segSize, output, ".", "bundle"); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
@@ -370,28 +356,32 @@ func (c creator) prepareArchive(cfg v1alpha1.ImageSetConfiguration) error {
 
 }
 
-func (c creator) getFiles(meta *v1alpha1.Metadata) error {
+func (c creator) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// Change dir before archiving to avoid issues with symlink paths
 	if err := os.Chdir(c.sourceDir); err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer os.Chdir(cwd)
 
 	// Gather manifests we pulled
-	if err := bundle.ReconcileManifests(meta, "."); err != nil {
-		return err
+	manifests, err := bundle.ReconcileManifests(meta, ".")
+
+	if err != nil {
+		return nil, nil, err
 	}
 
-	if err := bundle.ReconcileBlobs(meta, "."); err != nil {
-		return err
+	blobs, err := bundle.ReconcileBlobs(meta, ".")
+
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return nil
+	return manifests, blobs, nil
 }
 
 func (c creator) writeAssociations(assocs image.Associations) error {

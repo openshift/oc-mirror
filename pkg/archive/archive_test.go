@@ -23,8 +23,6 @@ func Test_SplitArchive(t *testing.T) {
 
 	defer os.RemoveAll(testdir)
 
-	a := NewArchiver()
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +45,8 @@ func Test_SplitArchive(t *testing.T) {
 	}
 	for _, tt := range tests {
 
+		packager := NewPackager(tt.manifests, tt.blobs)
+
 		if err := bundle.MakeCreateDirs(testdir); err != nil {
 			t.Fatal(err)
 		}
@@ -66,7 +66,7 @@ func Test_SplitArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := CreateSplitArchive(a, tt.maxSplitSize, cwd, ".", tt.want); err != nil {
+		if err := packager.CreateSplitArchive(tt.maxSplitSize, cwd, ".", tt.want); err != nil {
 			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
 		}
 

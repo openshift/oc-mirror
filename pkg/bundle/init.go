@@ -36,8 +36,6 @@ func MakeCreateDirs(rootDir string) error {
 	paths := []string{
 		filepath.Join(config.SourceDir, config.PublishDir),
 		filepath.Join(config.SourceDir, "v2"),
-		filepath.Join(config.SourceDir, "blobs"),
-		filepath.Join(config.SourceDir, "manifests"),
 	}
 	for _, p := range paths {
 		dir := filepath.Join(rootDir, p)

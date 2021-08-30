@@ -2,7 +2,6 @@ package bundle
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -12,7 +11,7 @@ import (
 
 // ReconcileManifest gather all manifests that were collected during a run
 // and checks against the current list
-func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
+func ReconcileManifests(meta v1alpha1.Metadata, sourceDir string) (newManifest []v1alpha1.Manifest, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastManifests))
 	for _, pf := range meta.PastManifests {
@@ -22,7 +21,7 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
 
-	return filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
+	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return fmt.Errorf("traversing %s: %v", fpath, err)
@@ -43,30 +42,8 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 		if _, found := foundFiles[fpath]; !found {
 
 			// Past files should only be image data, not tool metadata.
-			meta.PastManifests = append(meta.PastManifests, file)
+			newManifest = append(newManifest, file)
 			foundFiles[fpath] = struct{}{}
-
-			// Make manifest dir in target
-			targetPath := filepath.Join(sourceDir, "manifests", filepath.Dir(fpath))
-			if err := os.MkdirAll(targetPath, os.ModePerm); err != nil {
-				return err
-			}
-
-			// Move new manifest to manifests directory
-			if info.Mode().IsRegular() {
-
-				logrus.Debugf("Adding manifest %s", fpath)
-
-				// Copy blob to blobs directory
-				input, err := ioutil.ReadFile(fpath)
-				if err != nil {
-					return err
-				}
-
-				if err := ioutil.WriteFile(filepath.Join(targetPath, info.Name()), input, os.ModePerm); err != nil {
-					return err
-				}
-			}
 
 		} else {
 			logrus.Debugf("Manifest %s exists in imageset, skipping...", fpath)
@@ -74,11 +51,13 @@ func ReconcileManifests(meta *v1alpha1.Metadata, sourceDir string) error {
 
 		return nil
 	})
+
+	return newManifest, err
 }
 
 // ReconcileBlobs gather all blobs that were collected during a run
 // and checks against the current list
-func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
+func ReconcileBlobs(meta v1alpha1.Metadata, sourceDir string) (newBlobs []v1alpha1.Blob, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
 	for _, pf := range meta.PastBlobs {
@@ -88,7 +67,7 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
 
-	return filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
+	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return fmt.Errorf("traversing %s: %v", fpath, err)
@@ -107,20 +86,10 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 			}
 
 			if _, found := foundFiles[info.Name()]; !found {
-				meta.PastBlobs = append(meta.PastBlobs, file)
+				newBlobs = append(newBlobs, file)
 				foundFiles[info.Name()] = struct{}{}
 
 				logrus.Debugf("Adding blob %s", info.Name())
-
-				// Copy blob to blobs directory
-				input, err := ioutil.ReadFile(fpath)
-				if err != nil {
-					return err
-				}
-
-				if err := ioutil.WriteFile(filepath.Join(sourceDir, "blobs", info.Name()), input, os.ModePerm); err != nil {
-					return err
-				}
 
 			} else {
 				logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
@@ -129,4 +98,6 @@ func ReconcileBlobs(meta *v1alpha1.Metadata, sourceDir string) error {
 
 		return nil
 	})
+
+	return newBlobs, err
 }
