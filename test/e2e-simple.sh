@@ -30,10 +30,10 @@ trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry
 "${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR"
 
 run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config.yaml" --output "$DATA_TMP"
-run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar.gz" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
 
 # TODO: test `create diff` with new operator bundles and releases.
-# rm "${DATA_TMP}/bundle_000000.tar.gz"
+# rm "${DATA_TMP}/bundle_000000.tar"
 # mkdir -p "${CREATE_DIFF_DIR}/src/publish"
 # cp "${CREATE_FULL_DIR}/src/publish/.metadata.json" "${CREATE_DIFF_DIR}/src/publish/"
 # run_cmd create diff --dir "$CREATE_DIFF_DIR" --config "${CREATE_DIFF_DIR}/imageset-config.yaml" --output "$DATA_TMP"

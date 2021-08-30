@@ -23,21 +23,52 @@ import (
 
 var (
 	// FullMetadataError should be returned when past runs exist in metadata.
-	FullMetadataError = errors.New("prior run metadata found, please run 'create diff' instead")
+	ErrFullMetadata = errors.New("prior run metadata found, please run 'create diff' instead")
 
 	// FullMetadataError should be returned when no past runs exist in metadata.
-	DiffMetadataError = errors.New("no prior run metadata found, please run 'create full' instead")
+	ErrDiffMetadata = errors.New("no prior run metadata found, please run 'create full' instead")
 )
 
-// CreateFull performs all tasks in creating full imagesets
-func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryRun, skipTLS, skipCleanup bool) error {
+type creator struct {
+	configPath  string
+	rootDir     string
+	sourceDir   string
+	outputDir   string
+	dryRun      bool
+	skipTLS     bool
+	skipCleanup bool
+}
 
-	if err := bundle.MakeCreateDirs(rootDir); err != nil {
+// NewCreator creates a new creator to mirror and package ImageSets
+func NewCreator(configPath, rootDir, outputDir string, dryRun, skipTLS, skipCleanup bool) creator {
+	return creator{
+		configPath:  configPath,
+		rootDir:     rootDir,
+		sourceDir:   filepath.Join(rootDir, config.SourceDir),
+		outputDir:   outputDir,
+		dryRun:      dryRun,
+		skipTLS:     skipTLS,
+		skipCleanup: skipCleanup,
+	}
+}
+
+// CreateFull performs all tasks in creating full imagesets
+func (c creator) CreateFull(ctx context.Context) error {
+
+	if err := bundle.MakeCreateDirs(c.rootDir); err != nil {
 		return err
 	}
 
+	if !c.skipCleanup {
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(c.sourceDir, "v2")); err != nil {
+				logrus.Fatal(err)
+			}
+		}()
+	}
+
 	// TODO: make backend configurable.
-	backend, err := storage.NewLocalBackend(rootDir)
+	backend, err := storage.NewLocalBackend(c.rootDir)
 	if err != nil {
 		return fmt.Errorf("error opening local backend: %v", err)
 	}
@@ -50,7 +81,7 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	case err == nil && len(meta.PastMirrors) != 0:
 		// No past run(s) are allowed when generating a full imageset.
 		// QUESTION: should the command just log a warning and ignore this metadata instead?
-		return FullMetadataError
+		return ErrFullMetadata
 	}
 
 	meta.Uid = uuid.New()
@@ -62,7 +93,7 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	allAssocs := image.Associations{}
 
 	// Read the imageset-config.yaml
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(c.configPath)
 
 	if err != nil {
 		return err
@@ -76,9 +107,9 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 		opts := bundle.NewReleaseOptions()
-		opts.RootDestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
+		opts.RootDestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
 		assocs, err := opts.GetReleasesInitial(cfg)
 		if err != nil {
 			return err
@@ -88,10 +119,10 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	if len(cfg.Mirror.Operators) != 0 {
 		opts := operator.MirrorOptions{}
-		opts.RootDestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
-		opts.SkipCleanup = skipCleanup
+		opts.RootDestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
+		opts.SkipCleanup = c.skipCleanup
 		assocs, err := opts.Full(ctx, cfg)
 		if err != nil {
 			return err
@@ -106,9 +137,9 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 
 		opts := bundle.NewAdditionalOptions()
-		opts.DestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
+		opts.DestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
 		assocs, err := opts.GetAdditional(run, cfg)
 		if err != nil {
 			return err
@@ -116,28 +147,31 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 		allAssocs.Merge(assocs)
 	}
 
-	if err := writeAssociations(rootDir, allAssocs); err != nil {
+	if err := c.writeAssociations(allAssocs); err != nil {
 		return fmt.Errorf("error writing association file: %v", err)
 	}
 
 	// Update metadata files
-	sourceDir := filepath.Join(rootDir, config.SourceDir)
-	files, err := getFiles(sourceDir, &meta)
+	manifests, blobs, err := c.getFiles(meta)
 	if err != nil {
 		return err
 	}
+	meta.PastManifests = append(meta.PastManifests, manifests...)
+	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
+	run.Manifests = manifests
+	run.Blobs = blobs
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, c.rootDir, c.skipTLS); err != nil {
 		return err
 	}
 
 	// Run archiver
-	if err := prepareArchive(cfg, sourceDir, outputDir, files); err != nil {
+	if err := c.prepareArchive(cfg, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -152,14 +186,22 @@ func CreateFull(ctx context.Context, configPath, rootDir, outputDir string, dryR
 }
 
 // CreateDiff performs all tasks in creating differential imagesets
-func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryRun, skipTLS, skipCleanup bool) error {
+func (c creator) CreateDiff(ctx context.Context) error {
 
-	if err := bundle.MakeCreateDirs(rootDir); err != nil {
+	if err := bundle.MakeCreateDirs(c.rootDir); err != nil {
 		return err
 	}
 
+	if !c.skipCleanup {
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(c.sourceDir, "v2")); err != nil {
+				logrus.Fatal(err)
+			}
+		}()
+	}
+
 	// TODO: make backend configurable.
-	backend, err := storage.NewLocalBackend(rootDir)
+	backend, err := storage.NewLocalBackend(c.rootDir)
 	if err != nil {
 		return fmt.Errorf("error opening local backend: %v", err)
 	}
@@ -171,7 +213,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 		return err
 	case (err != nil && errors.Is(err, storage.ErrMetadataNotExist)) || len(meta.PastMirrors) == 0:
 		// Some past run(s) are required to generate a diff.
-		return DiffMetadataError
+		return ErrDiffMetadata
 	}
 
 	lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
@@ -183,7 +225,7 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	allAssocs := image.Associations{}
 
 	// Read the imageset-config.yaml
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(c.configPath)
 
 	if err != nil {
 		return err
@@ -197,9 +239,9 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 		opts := bundle.NewReleaseOptions()
-		opts.RootDestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
+		opts.RootDestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
 		assocs, err := opts.GetReleasesDiff(lastRun, cfg)
 		if err != nil {
 			return err
@@ -209,10 +251,10 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	if len(cfg.Mirror.Operators) != 0 {
 		opts := operator.MirrorOptions{}
-		opts.RootDestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
-		opts.SkipCleanup = skipCleanup
+		opts.RootDestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
+		opts.SkipCleanup = c.skipCleanup
 		assocs, err := opts.Diff(ctx, cfg, lastRun)
 		if err != nil {
 			return err
@@ -226,9 +268,9 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 		opts := bundle.NewAdditionalOptions()
-		opts.DestDir = rootDir
-		opts.DryRun = dryRun
-		opts.SkipTLS = skipTLS
+		opts.DestDir = c.rootDir
+		opts.DryRun = c.dryRun
+		opts.SkipTLS = c.skipTLS
 		assocs, err := opts.GetAdditional(lastRun, cfg)
 		if err != nil {
 			return err
@@ -236,28 +278,31 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 		allAssocs.Merge(assocs)
 	}
 
-	if err := writeAssociations(rootDir, allAssocs); err != nil {
+	if err := c.writeAssociations(allAssocs); err != nil {
 		return fmt.Errorf("error writing association file: %v", err)
 	}
 
 	// Update metadata files
-	sourceDir := filepath.Join(rootDir, config.SourceDir)
-	files, err := getFiles(sourceDir, &meta)
+	manifests, blobs, err := c.getFiles(meta)
 	if err != nil {
 		return err
 	}
+	meta.PastManifests = append(meta.PastManifests, manifests...)
+	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Add mirror as a new PastMirror
 	run.Mirror = cfg.Mirror
+	run.Manifests = manifests
+	run.Blobs = blobs
 	meta.PastMirrors = append(meta.PastMirrors, run)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, rootDir, skipTLS); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, c.rootDir, c.skipTLS); err != nil {
 		return err
 	}
 
 	// Run archiver
-	if err := prepareArchive(cfg, sourceDir, outputDir, files); err != nil {
+	if err := c.prepareArchive(cfg, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -271,12 +316,13 @@ func CreateDiff(ctx context.Context, configPath, rootDir, outputDir string, dryR
 	return nil
 }
 
-func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir string, files []string) error {
+func (c creator) prepareArchive(cfg v1alpha1.ImageSetConfiguration, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
 	if cfg.ImageSetConfigurationSpec.ArchiveSize != 0 {
 		segSize = cfg.ImageSetConfigurationSpec.ArchiveSize
+		logrus.Debugf("Using user provider archive size %d GiB", segSize)
 	}
 	segSize *= 1024 * 1024 * 1024
 
@@ -286,24 +332,23 @@ func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir strin
 		return err
 	}
 
-	// Create archiver
-	arc := archive.NewArchiver()
-
 	// Set get absolute path to output dir
-	output, err := filepath.Abs(outputDir)
+	output, err := filepath.Abs(c.outputDir)
 
 	if err != nil {
 		return err
 	}
 
 	// Change dir before archiving to avoid issues with symlink paths
-	if err := os.Chdir(rootDir); err != nil {
+	if err := os.Chdir(c.sourceDir); err != nil {
 		return err
 	}
 	defer os.Chdir(cwd)
 
+	packager := archive.NewPackager(manifests, blobs)
+
 	// Create tar archive
-	if err := archive.CreateSplitArchive(arc, segSize, output, ".", "bundle", files); err != nil {
+	if err := packager.CreateSplitArchive(segSize, output, ".", "bundle"); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
@@ -311,26 +356,36 @@ func prepareArchive(cfg v1alpha1.ImageSetConfiguration, rootDir, outputDir strin
 
 }
 
-func getFiles(rootDir string, meta *v1alpha1.Metadata) ([]string, error) {
-
+func (c creator) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
 	cwd, err := os.Getwd()
-
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Change dir before archiving to avoid issues with symlink paths
-	if err := os.Chdir(rootDir); err != nil {
-		return nil, err
+	if err := os.Chdir(c.sourceDir); err != nil {
+		return nil, nil, err
 	}
 	defer os.Chdir(cwd)
 
-	// Gather files we pulled
-	return bundle.ReconcileFiles(meta, ".")
+	// Gather manifests we pulled
+	manifests, err := bundle.ReconcileManifests(meta, ".")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	blobs, err := bundle.ReconcileBlobs(meta, ".")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return manifests, blobs, nil
 }
 
-func writeAssociations(rootDir string, assocs image.Associations) error {
-	assocPath := filepath.Join(rootDir, config.AssociationsBasePath)
+func (c creator) writeAssociations(assocs image.Associations) error {
+	assocPath := filepath.Join(c.rootDir, config.AssociationsBasePath)
 	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
 		return fmt.Errorf("mkdir image associations file: %v", err)
 	}

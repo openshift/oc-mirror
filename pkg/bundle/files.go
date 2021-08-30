@@ -5,22 +5,23 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/sirupsen/logrus"
 )
 
-// ReconcileFiles gather all files that were collected during a run
+// ReconcileManifest gather all manifests that were collected during a run
 // and checks against the current list
-func ReconcileFiles(meta *v1alpha1.Metadata, rootDir string) (newFiles []string, err error) {
+func ReconcileManifests(meta v1alpha1.Metadata, sourceDir string) (newManifest []v1alpha1.Manifest, err error) {
 
-	foundFiles := make(map[string]struct{}, len(meta.PastFiles))
-	for _, pf := range meta.PastFiles {
+	foundFiles := make(map[string]struct{}, len(meta.PastManifests))
+	for _, pf := range meta.PastManifests {
 		foundFiles[pf.Name] = struct{}{}
 	}
+
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
 
-	err = filepath.Walk(rootDir, func(fpath string, info os.FileInfo, err error) error {
+	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return fmt.Errorf("traversing %s: %v", fpath, err)
@@ -29,21 +30,74 @@ func ReconcileFiles(meta *v1alpha1.Metadata, rootDir string) (newFiles []string,
 			return fmt.Errorf("no file info")
 		}
 
-		file := v1alpha1.File{
+		if info.IsDir() && info.Name() == "blobs" {
+			return filepath.SkipDir
+		}
+
+		// TODO: figure a robust way to get the namespace from the path
+		file := v1alpha1.Manifest{
 			Name: fpath,
 		}
 
 		if _, found := foundFiles[fpath]; !found {
+
 			// Past files should only be image data, not tool metadata.
-			if base := filepath.Base(fpath); base != config.MetadataFile && base != config.AssociationsFile {
-				meta.PastFiles = append(meta.PastFiles, file)
-			}
+			newManifest = append(newManifest, file)
 			foundFiles[fpath] = struct{}{}
-			newFiles = append(newFiles, fpath)
+
+		} else {
+			logrus.Debugf("Manifest %s exists in imageset, skipping...", fpath)
 		}
 
 		return nil
 	})
 
-	return newFiles, err
+	return newManifest, err
+}
+
+// ReconcileBlobs gather all blobs that were collected during a run
+// and checks against the current list
+func ReconcileBlobs(meta v1alpha1.Metadata, sourceDir string) (newBlobs []v1alpha1.Blob, err error) {
+
+	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
+	for _, pf := range meta.PastBlobs {
+		foundFiles[pf.Name] = struct{}{}
+	}
+
+	// Ignore the current dir.
+	foundFiles["."] = struct{}{}
+
+	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
+
+		if err != nil {
+			return fmt.Errorf("traversing %s: %v", fpath, err)
+		}
+		if info == nil {
+			return fmt.Errorf("no file info")
+		}
+
+		if info.IsDir() && info.Name() == "manifests" {
+			return filepath.SkipDir
+		}
+
+		if info.Mode().IsRegular() {
+			file := v1alpha1.Blob{
+				Name: info.Name(),
+			}
+
+			if _, found := foundFiles[info.Name()]; !found {
+				newBlobs = append(newBlobs, file)
+				foundFiles[info.Name()] = struct{}{}
+
+				logrus.Debugf("Adding blob %s", info.Name())
+
+			} else {
+				logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
+			}
+		}
+
+		return nil
+	})
+
+	return newBlobs, err
 }

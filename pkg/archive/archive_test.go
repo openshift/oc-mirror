@@ -2,11 +2,20 @@ package archive
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedHatGov/bundle/pkg/bundle"
+	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
+
+/* FIXME(jpower): known issue with many small files
+the tar size will end up larger than specified by the
+ user because of the tar header being written*/
 
 func Test_SplitArchive(t *testing.T) {
 
@@ -18,30 +27,50 @@ func Test_SplitArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	a := NewArchiver()
-
 	tests := []struct {
 		name         string
 		source       string
 		maxSplitSize int64
-		files        []string
+		blobs        []v1alpha1.Blob
+		manifests    []v1alpha1.Manifest
 		want         string
 	}{
 		{
-			name:         "testing gz format",
-			source:       "../../test",
-			files:        []string{"../../test"},
-			maxSplitSize: 1000000,
+			name:         "testing tar format",
+			blobs:        []v1alpha1.Blob{{Name: "sha256:123456789"}},
+			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
+			maxSplitSize: 5 * 1024 * 1024,
 			want:         "testbundle",
 		},
 	}
 	for _, tt := range tests {
 
-		if err := CreateSplitArchive(a, tt.maxSplitSize, testdir, tt.source, tt.want, tt.files); err != nil {
+		packager := NewPackager(tt.manifests, tt.blobs)
+
+		if err := bundle.MakeCreateDirs(testdir); err != nil {
+			t.Fatal(err)
+		}
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Change dir before archiving to avoid issues with symlink paths
+		if err := os.Chdir(filepath.Join(testdir, config.SourceDir)); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Chdir(cwd)
+
+		if err := writeFiles(); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := packager.CreateSplitArchive(tt.maxSplitSize, cwd, ".", tt.want); err != nil {
 			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
 		}
 
-		err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
 
 			if strings.Contains(info.Name(), tt.want) {
 
@@ -61,49 +90,15 @@ func Test_SplitArchive(t *testing.T) {
 	}
 }
 
-func Test_CombineArchive(t *testing.T) {
+// writeFiles write out testfiles to be archived
+func writeFiles() error {
+	d1 := []byte("hello\ngo\n")
 
-	in := NewArchiver()
-	out := NewArchiver()
-
-	tests := []struct {
-		name   string
-		source string
-		output string
-	}{
-		{
-			name:   "testing gz format",
-			source: "../../test/archiver/testdata/",
-			output: "testbundle-combined.tar.gz",
-		},
+	for i := 0; i < 100; i++ {
+		if err := ioutil.WriteFile(fmt.Sprintf("test%d", i), d1, 0644); err != nil {
+			return err
+		}
 	}
-	for _, tt := range tests {
 
-		var bundleList []string
-
-		err := filepath.Walk(tt.source, func(path string, info os.FileInfo, err error) error {
-
-			if strings.Contains(info.Name(), "bar-bundle") {
-
-				bundleList = append(bundleList, path)
-			}
-
-			return nil
-		})
-
-		if err != nil {
-			t.Error(err)
-		}
-
-		if err = CombineArchives(in, out, ".", tt.output, bundleList...); err != nil {
-			t.Errorf("Test %s: Failed to combine archives for %s: %v", tt.name, tt.output, err)
-		}
-
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		os.RemoveAll(tt.output)
-
-	}
+	return nil
 }

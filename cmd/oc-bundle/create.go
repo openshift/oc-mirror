@@ -50,7 +50,9 @@ func newCreateFullCmd(o *createOpts) *cobra.Command {
 			defer cleanup()
 			logrus.Infoln("Create full called")
 
-			err := create.CreateFull(cmd.Context(), o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
+			creator := create.NewCreator(o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
+
+			err := creator.CreateFull(cmd.Context())
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -69,7 +71,9 @@ func newCreateDiffCmd(o *createOpts) *cobra.Command {
 			defer cleanup()
 			logrus.Infoln("Create Diff called")
 
-			err := create.CreateDiff(cmd.Context(), o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
+			creator := create.NewCreator(o.configPath, o.dir, o.outputDir, o.dryRun, o.skipTLS, o.skipCleanup)
+
+			err := creator.CreateDiff(cmd.Context())
 			if err != nil {
 				logrus.Fatal(err)
 			}

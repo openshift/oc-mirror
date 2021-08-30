@@ -5,9 +5,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -24,41 +24,57 @@ type Archiver interface {
 	Read() (archiver.File, error)
 }
 
-// NewArchiver create a new archiver for tar archive manipultation
-func NewArchiver() Archiver {
-	// Create tar specifically with overrite on false
-	return &archiver.TarGz{
+type packager struct {
+	manifest    map[string]struct{}
+	blobs       map[string]struct{}
+	packedBlobs map[string]struct{}
+	Archiver
+}
 
-		Tar: &archiver.Tar{
-			OverwriteExisting:      true,
-			MkdirAll:               true,
-			ImplicitTopLevelFolder: false,
-			StripComponents:        0,
-			ContinueOnError:        false,
-		},
+// NewArchiver creates a new archiver for tar archive manipultation
+func NewArchiver() Archiver {
+	return &archiver.Tar{
+		OverwriteExisting:      false,
+		MkdirAll:               true,
+		ImplicitTopLevelFolder: false,
+		StripComponents:        0,
+		ContinueOnError:        false,
+	}
+}
+
+// NewPackager create a new packager for build ImageSets
+func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager {
+	manifestSetToArchive := make(map[string]struct{}, len(manifests))
+	blobSetToArchive := make(map[string]struct{}, len(blobs))
+
+	for _, manifest := range manifests {
+		manifestSetToArchive[manifest.Name] = struct{}{}
+	}
+
+	for _, blob := range blobs {
+		blobSetToArchive[blob.Name] = struct{}{}
+	}
+
+	return &packager{
+		manifest:    manifestSetToArchive,
+		blobs:       blobSetToArchive,
+		packedBlobs: make(map[string]struct{}, len(blobs)),
+		Archiver:    NewArchiver(),
 	}
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, prefix string, newFiles []string) error {
-
-	logrus.Debugf("Found new files %v", newFiles)
+func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, prefix string) error {
 
 	// Declare split variables
 	splitNum := 0
 	splitSize := int64(0)
-	splitPath := fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
+	splitPath := fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, p.String())
 
-	splitFile, err := os.Create(splitPath)
+	splitFile, err := p.createArchive(splitPath)
 
 	if err != nil {
-		return fmt.Errorf("creating %s: %v", splitPath, err)
-	}
-
-	// Create a new tar archive for writing
-	logrus.Infof("Creating archive %s", splitPath)
-	if a.Create(splitFile); err != nil {
-		return fmt.Errorf("creating archive %s: %v", splitPath, err)
+		return fmt.Errorf("error creating archive %s: %v", splitPath, err)
 	}
 
 	sourceInfo, err := os.Stat(sourceDir)
@@ -66,13 +82,6 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	if err != nil {
 		return fmt.Errorf("%s: stat: %v", sourceDir, err)
 	}
-
-	fileSetToArchive := make(map[string]struct{}, len(newFiles))
-	for _, fpath := range newFiles {
-		fileSetToArchive[fpath] = struct{}{}
-	}
-	// Ignore the current dir.
-	fileSetToArchive["."] = struct{}{}
 
 	walkErr := filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
 
@@ -83,21 +92,26 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 			return fmt.Errorf("no file info")
 		}
 
-		// Make sure the metadata file is always packed
-		if strings.Contains(fpath, config.MetadataFile) {
-			logrus.Debugf("Packing metadata file %s", fpath)
-			fileSetToArchive[fpath] = struct{}{}
+		// pack the image associations and the metadata
+		if filepath.Base(fpath) == config.MetadataFile || filepath.Base(fpath) == config.AssociationsFile {
+			p.manifest[fpath] = struct{}{}
 		}
 
-		if _, archive := fileSetToArchive[fpath]; !archive {
-			logrus.Debugf("File %s should not be archived, skipping...", fpath)
+		var nameInArchive string
+
+		switch {
+		case pack(p.manifest, fpath):
+			nameInArchive, err = archiver.NameInArchive(sourceInfo, sourceDir, fpath)
+			if err != nil {
+				return fmt.Errorf("creating %s: %v", nameInArchive, err)
+			}
+		case pack(p.blobs, info.Name()) && !pack(p.packedBlobs, info.Name()):
+			nameInArchive = blobInArchive(info.Name())
+			p.packedBlobs[info.Name()] = struct{}{}
+
+		default:
+			logrus.Debugf("File %s will not be archived, skipping...", fpath)
 			return nil
-		}
-
-		// build the name to be used within the archive
-		nameInArchive, err := archiver.NameInArchive(sourceInfo, sourceDir, fpath)
-		if err != nil {
-			return fmt.Errorf("creating %s: %v", nameInArchive, err)
 		}
 
 		var file io.ReadCloser
@@ -121,33 +135,30 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 		if info.Size()+splitSize > maxSplitSize {
 
 			// Close current tar archive
-			a.Close()
+			p.Close()
 			splitFile.Close()
+
+			logrus.Info(splitSize)
 
 			// Increment split number and reset splitSize
 			splitNum += 1
 			splitSize = int64(0)
-			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
+			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, p.String())
 
 			// Create a new tar archive for writing
-			logrus.Infof("Creating archive %s", splitPath)
-
-			splitFile, err = os.Create(splitPath)
+			splitFile, err = p.createArchive(splitPath)
 
 			if err != nil {
-				return fmt.Errorf("creating %s: %v", splitPath, err)
+				return fmt.Errorf("error creating archive %s: %v", splitPath, err)
 			}
-
-			if err := a.Create(splitFile); err != nil {
-				return fmt.Errorf("creating archive %s: %v", splitPath, err)
-			}
-
 		}
 
 		// Write file to current archive file
-		if err = a.Write(f); err != nil {
+		if err = p.Write(f); err != nil {
 			return fmt.Errorf("%s: writing: %s", fpath, err)
 		}
+
+		logrus.Debugf("File %s added to archive %s", fpath, splitPath)
 
 		splitSize += info.Size()
 
@@ -155,7 +166,7 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	})
 
 	// Close final archive
-	if err := a.Close(); err != nil {
+	if err := p.Close(); err != nil {
 		return err
 	}
 
@@ -166,71 +177,33 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	return walkErr
 }
 
-// CombineArchives take a list of archives and combines them into one file
-func CombineArchives(in Archiver, out Archiver, destDir, name string, paths ...string) error {
+// createArchive is a helper function that prepares a new split archive
+func (p *packager) createArchive(splitPath string) (splitFile *os.File, err error) {
 
-	outPath := filepath.Join(destDir, name)
-
-	// Open new archive
-	outFile, err := os.Create(outPath)
-
+	// create a new target file
+	splitFile, err = os.Create(splitPath)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("creating %s: %v", splitPath, err)
 	}
 
 	// Create a new tar archive for writing
-	if out.Create(outFile); err != nil {
-		return err
+	logrus.Infof("Creating archive %s", splitPath)
+	if p.Create(splitFile); err != nil {
+		return nil, fmt.Errorf("creating archive %s: %v", splitPath, err)
 	}
 
-	for _, p := range paths {
-
-		// Read in the source tar archive
-		inFile, err := os.Open(p)
-
-		if err != nil {
-			return fmt.Errorf("could not open current file %s: %v", p, err)
-		}
-
-		// Open the tar archive for reading
-		if err := in.Open(inFile, 0); err != nil {
-			return fmt.Errorf("error opening archive %s: %v", p, err)
-		}
-
-		// Loop through the files in the source tar
-		readErr := func() error {
-			for {
-				// Read current byte and check if we are at the end of the the file
-				f, err := in.Read()
-				header := f.Header
-				switch {
-				case err == io.EOF:
-					return nil
-				case err != nil:
-					return err
-				case header == nil:
-					continue
-				}
-
-				// Write file to current archive
-				if err := out.Write(f); err != nil {
-					return err
-				}
-			}
-		}()
-
-		if readErr != nil {
-			return readErr
-		}
-
-		if err := in.Close(); err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	if err := out.Close(); err != nil {
-		return err
-	}
+	return splitFile, nil
+}
 
-	return nil
+func pack(search map[string]struct{}, file string) bool {
+	_, archive := search[file]
+	return archive
+}
+
+func blobInArchive(file string) string {
+	return filepath.Join("blobs", file)
 }

@@ -122,6 +122,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		if !hasMapping {
 			return nil, &MirrorError{image}
 		}
+
 		dirRef = strings.TrimPrefix(dirRef, "file://")
 		dirRef = filepath.Join(rootDir, "v2", dirRef)
 
