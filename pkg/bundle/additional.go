@@ -2,43 +2,34 @@ package bundle
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 type AdditionalOptions struct {
-	DestDir string
-	DryRun  bool
-	SkipTLS bool
+	cli.RootOptions
 }
 
-func NewAdditionalOptions() *AdditionalOptions {
-	return &AdditionalOptions{}
+func NewAdditionalOptions(ro cli.RootOptions) *AdditionalOptions {
+	return &AdditionalOptions{RootOptions: ro}
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
 func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 
-	stream := genericclioptions.IOStreams{
-		In:     os.Stdin,
-		Out:    os.Stdout,
-		ErrOut: os.Stderr,
-	}
-
-	opts := mirror.NewMirrorImageOptions(stream)
+	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
 	opts.SecurityOptions.Insecure = o.SkipTLS
-	opts.FileDir = filepath.Join(o.DestDir, config.SourceDir)
+	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 

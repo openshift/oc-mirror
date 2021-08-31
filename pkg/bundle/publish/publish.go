@@ -17,36 +17,19 @@ import (
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
-// mirror to registry
-func mirrorToReg(rootDir string) {
+// TODO: refactor into Complete() -> Validate() -> Run() CLI pattern (thing `oc`).
 
-	// TODO: implement non-local layer pulling, image reconstitution, and pushing to mirror.
+func (o *Options) Run(ctx context.Context) error {
 
-	in, out, errout := os.Stdin, os.Stdout, os.Stderr
-
-	iostreams := genericclioptions.IOStreams{In: in, Out: out, ErrOut: errout}
-
-	imageOpts := mirror.NewMirrorImageOptions(iostreams)
-	// oc image mirror -a dba-ps.json --from-dir=release/ "file://openshift/release:4.7.3*" registry.dbasparta.io:5020/openshift --insecure
-	imageOpts.FromFileDir = rootDir
-	//	imageOpts.Out = PublishOpts.ToMirror
-	// imageOpts.Filenames = "file://openshift/release:4.7.3*"
-	logrus.Info("Dry Run: ", imageOpts.DryRun)
-	logrus.Info("From File Dir: ", imageOpts.FromFileDir)
-
-}
-
-func Publish(ctx context.Context, rootDir, archivePath, toMirror string) error {
-
-	logrus.Infof("Publish image set from archive %q to registry %q", archivePath, toMirror)
+	logrus.Infof("Publish image set from archive %q to registry %q", o.ArchivePath, o.ToMirror)
 
 	// Load tar archive made by `create`.
-	if err := archive.NewArchiver().Unarchive(archivePath, rootDir); err != nil {
+	if err := archive.NewArchiver().Unarchive(o.ArchivePath, o.Dir); err != nil {
 		return err
 	}
 
 	// Load image associations to find layers not present locally.
-	assocs, err := readAssociations(rootDir)
+	assocs, err := readAssociations(o.Dir)
 	if err != nil {
 		return err
 	}
@@ -114,7 +97,7 @@ func Publish(ctx context.Context, rootDir, archivePath, toMirror string) error {
 
 	// mirror to registry
 	logrus.Info("mirroring not implemented")
-	mirrorToReg(rootDir)
+	mirrorToReg(o.Dir)
 
 	// install imagecontentsourcepolicy
 	logrus.Info("ICSP creation not implemented")
@@ -134,4 +117,23 @@ func readAssociations(rootDir string) (assocs image.Associations, err error) {
 	defer f.Close()
 
 	return assocs, assocs.Decode(f)
+}
+
+// mirror to registry
+func mirrorToReg(rootDir string) {
+
+	// TODO: implement non-local layer pulling, image reconstitution, and pushing to mirror.
+
+	in, out, errout := os.Stdin, os.Stdout, os.Stderr
+
+	iostreams := genericclioptions.IOStreams{In: in, Out: out, ErrOut: errout}
+
+	imageOpts := mirror.NewMirrorImageOptions(iostreams)
+	// oc image mirror -a dba-ps.json --from-dir=release/ "file://openshift/release:4.7.3*" registry.dbasparta.io:5020/openshift --insecure
+	imageOpts.FromFileDir = rootDir
+	//	imageOpts.Out = PublishOpts.ToMirror
+	// imageOpts.Filenames = "file://openshift/release:4.7.3*"
+	logrus.Info("Dry Run: ", imageOpts.DryRun)
+	logrus.Info("From File Dir: ", imageOpts.FromFileDir)
+
 }

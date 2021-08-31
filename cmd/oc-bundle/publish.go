@@ -1,22 +1,15 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/RedHatGov/bundle/pkg/bundle/publish"
+	"github.com/RedHatGov/bundle/pkg/cli"
 )
 
-type publishOpts struct {
-	*rootOpts
-
-	archivePath string
-	toMirror    string
-}
-
-func newPublishCmd(ro *rootOpts) *cobra.Command {
-	opts := publishOpts{
-		rootOpts: ro,
+func newPublishCmd(ro *cli.RootOptions) *cobra.Command {
+	opts := publish.Options{
+		RootOptions: ro,
 	}
 
 	cmd := &cobra.Command{
@@ -24,17 +17,11 @@ func newPublishCmd(ro *rootOpts) *cobra.Command {
 		Short: "Publish OCP related content to an internet-disconnected environment",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {
-			cleanup := setupFileHook(opts.dir)
-			defer cleanup()
-
-			if err := publish.Publish(cmd.Context(), opts.dir, opts.archivePath, opts.toMirror); err != nil {
-				logrus.Fatal(err)
-			}
+			checkErr(opts.Run(cmd.Context()))
 		},
 	}
 
-	cmd.PersistentFlags().StringVar(&opts.archivePath, "archive", "", "The archive file path.")
-	cmd.PersistentFlags().StringVar(&opts.toMirror, "to-mirror", "", "The URL to the destination mirror registry")
+	opts.BindFlags(cmd.PersistentFlags())
 
 	return cmd
 }
