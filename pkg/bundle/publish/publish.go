@@ -155,6 +155,7 @@ func (o *Options) Run(ctx context.Context) error {
 		listTypeAssocs []image.Association
 	)
 	for imageName, assoc := range assocs {
+
 		assoc := assoc
 
 		// Skip handling list-type images until all manifest layers have been pulled.
@@ -170,8 +171,7 @@ func (o *Options) Run(ctx context.Context) error {
 		}
 
 		for _, layerDigest := range assoc.LayerDigests {
-
-			logrus.Debugf("Found %d layers for image %s", len(assoc.LayerDigests), imageName)
+			logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
 			// Construct blob path, which is adjacent to the manifests path.
 			// If a layer exists in the archive (err == nil), nothing needs to be done
 			// since the layer is already in the expected location.
@@ -197,8 +197,12 @@ func (o *Options) Run(ctx context.Context) error {
 				}
 
 				logrus.Debugf("Extracting blob %s", blobPath)
-				if err := a.Extract(archive, blobPath, filepath.Join(tmpdir, assoc.Path)); err != nil {
-					return err
+				err := a.Extract(archive, blobPath, filepath.Join(tmpdir, assoc.Path))
+				if err != nil {
+					if !errors.As(err, &os.ErrExist) {
+						return err
+					}
+					logrus.Debugf("Blobs %v exists in target directory %s", layerDigest, assoc.Path)
 				}
 			}
 		}
