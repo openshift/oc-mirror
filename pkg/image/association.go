@@ -34,6 +34,8 @@ type Association struct {
 	Name string `json:"name"`
 	// Path to image data within archive.
 	Path string `json:"path"`
+	// Parent is the name of the parent association
+	Parent string `json:"parent,omitempty"`
 	// ManifestDigests of images if the image is a docker manifest list or OCI index.
 	// These manifests refer to image manifests by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
@@ -124,7 +126,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		dirRef = strings.TrimPrefix(dirRef, "file://")
-		dirRef = filepath.Join(rootDir, "v2", dirRef)
+		dirRef = filepath.Join("v2", dirRef)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
@@ -133,7 +135,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		tag := dirRef[tagIdx+1:]
 		dirRef = dirRef[:tagIdx]
 
-		associations, err := associateImageLayers(image, dirRef, tag, skipParse)
+		associations, err := associateImageLayers(image, "none", rootDir, dirRef, tag, skipParse)
 		if err != nil {
 			return nil, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err)
 		}
@@ -145,20 +147,21 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	return bundleAssociations, nil
 }
 
-func associateImageLayers(image, dirRef, tag string, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, parent, rootDir, dirRef, tag string, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
 
-	manifestPath := filepath.Join(dirRef, "manifests", tag)
+	manifestPath := filepath.Join(rootDir, dirRef, "manifests", tag)
 	manifestBytes, err := ioutil.ReadFile(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading image manifest file: %v", err)
 	}
 
 	association := Association{
-		Name: image,
-		Path: filepath.FromSlash(dirRef),
+		Name:   image,
+		Path:   filepath.FromSlash(dirRef),
+		Parent: parent,
 	}
 	switch mt := ctrsimgmanifest.GuessMIMEType(manifestBytes); mt {
 	case "":
@@ -175,7 +178,7 @@ func associateImageLayers(image, dirRef, tag string, skipParse func(string) bool
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, dirRef, digestStr, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, image, rootDir, dirRef, digestStr, skipParse)
 			if err != nil {
 				return nil, err
 			}

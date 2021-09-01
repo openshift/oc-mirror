@@ -15,6 +15,7 @@ import (
 type Archiver interface {
 	String() string
 	Archive([]string, string) error
+	Extract(string, string, string) error
 	Unarchive(string, string) error
 	Write(archiver.File) error
 	Create(io.Writer) error
@@ -137,8 +138,6 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 			// Close current tar archive
 			p.Close()
 			splitFile.Close()
-
-			logrus.Info(splitSize)
 
 			// Increment split number and reset splitSize
 			splitNum += 1

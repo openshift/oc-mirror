@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -47,7 +48,7 @@ func Test_LocalBackend(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	require.NoError(t, backend.WriteMetadata(ctx, m))
+	require.NoError(t, backend.WriteMetadata(ctx, m, config.MetadataBasePath))
 
 	info, metadataErr := underlyingFS.Stat("foo/src/publish/.metadata.json")
 	require.NoError(t, metadataErr)
@@ -57,7 +58,7 @@ func Test_LocalBackend(t *testing.T) {
 	require.True(t, info.Mode().IsRegular())
 
 	readMeta := &v1alpha1.Metadata{}
-	require.NoError(t, backend.ReadMetadata(ctx, readMeta))
+	require.NoError(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath))
 	require.Equal(t, m, readMeta)
 
 	type object struct {

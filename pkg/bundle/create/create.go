@@ -36,7 +36,7 @@ func (o *Options) RunFull(ctx context.Context) error {
 	f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend) (meta v1alpha1.Metadata, run v1alpha1.PastMirror, err error) {
 
 		// Read in current metadata
-		switch err := backend.ReadMetadata(ctx, &meta); {
+		switch err := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath); {
 		case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 			return meta, run, err
 		case err == nil && len(meta.PastMirrors) != 0:
@@ -99,7 +99,7 @@ func (o *Options) RunDiff(ctx context.Context) error {
 	f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend) (meta v1alpha1.Metadata, run v1alpha1.PastMirror, err error) {
 
 		// Read in current metadata
-		switch err := backend.ReadMetadata(ctx, &meta); {
+		switch err := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath); {
 		case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 			return meta, run, err
 		case (err != nil && errors.Is(err, storage.ErrMetadataNotExist)) || len(meta.PastMirrors) == 0:
