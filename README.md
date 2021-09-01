@@ -30,7 +30,7 @@ make test-e2e
 
 
 Function test:
-1. Download pull secret and place at ~/.docker/config.josn
+1. Download pull secret and place at ~/.docker/config.json
 2. Build and test:
   ```sh
   mkdir -p test-output/src/publish

@@ -14,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -50,11 +49,11 @@ func (b *localDirBackend) init() error {
 }
 
 // WriteMetadata reads the provided metadata from disk.
-func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadata) error {
+func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadata, path string) error {
 
-	logrus.Debugf("looking for metadata file at %q", config.MetadataBasePath)
+	logrus.Debugf("looking for metadata file at %q", path)
 
-	data, err := afero.ReadFile(b.fs, config.MetadataBasePath)
+	data, err := afero.ReadFile(b.fs, path)
 	if err != nil {
 		// Non-existent metadata is allowed.
 		if errors.Is(err, os.ErrNotExist) {
@@ -89,8 +88,8 @@ func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
 }
 
 // WriteMetadata writes the provided metadata to disk.
-func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata) error {
-	return b.WriteObject(ctx, config.MetadataBasePath, meta)
+func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
+	return b.WriteObject(ctx, path, meta)
 }
 
 // ReadObject reads the provided object from disk.

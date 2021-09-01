@@ -18,8 +18,8 @@ var (
 // generic {Read,Write}Object() methods respectively.
 
 type Backend interface {
-	ReadMetadata(context.Context, *v1alpha1.Metadata) error
-	WriteMetadata(context.Context, *v1alpha1.Metadata) error
+	ReadMetadata(context.Context, *v1alpha1.Metadata, string) error
+	WriteMetadata(context.Context, *v1alpha1.Metadata, string) error
 	ReadObject(context.Context, string, interface{}) error
 	WriteObject(context.Context, string, interface{}) error
 	GetWriter(context.Context, string) (io.Writer, error)

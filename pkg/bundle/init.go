@@ -52,6 +52,22 @@ func MakeCreateDirs(rootDir string) error {
 	return nil
 }
 
-//func makePublishDirs() {
-//
-//}
+// func MakePublishDirs(rootDir string) error {
+// 	paths := []string{
+// 		filepath.Join("src", "publish"),
+// 		filepath.Join("src", "v2"),
+// 	}
+// 	for _, p := range paths {
+// 		dir := filepath.Join(rootDir, p)
+// 		if _, err := os.Stat(dir); os.IsNotExist(err) {
+// 			logrus.Infof("Creating directory: %v", dir)
+// 			err := os.MkdirAll(dir, os.ModePerm)
+// 			if err != nil {
+// 				return err
+// 			}
+// 		} else {
+// 			logrus.Infof("Found: %v", dir)
+// 		}
+// 	}
+// 	return nil
+// }
