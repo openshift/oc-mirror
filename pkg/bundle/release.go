@@ -1,6 +1,8 @@
 package bundle
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -9,7 +11,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
@@ -233,15 +238,14 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (asso
 		return assocs, err
 	}
 
-	dst := opts.TargetFn("")
+	// Retrive the mapping information for release
+	mapping, images, err := o.getMapping(*opts)
 
-	// There is currently no way to retrieve mappings created by mirror options,
-	// so we must assume the release image is mirrored directly to the specified
-	// dir at the image name path.
-	mapping := map[string]string{
-		from: dst.Exact(),
+	if err != nil {
+		return assocs, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
-	return image.AssociateImageLayers(toDir, mapping, []string{from})
+
+	return image.AssociateImageLayers(toDir, mapping, images)
 }
 
 func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
@@ -379,4 +383,75 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	//downloadRelease(nv)
 
 	return allAssocs, nil
+}
+
+var archMap = map[string]string{
+	"amd64": "x86_64",
+}
+
+// getMapping will run release mirror with ToMirror set to true to get mapping information
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[string]string, images []string, err error) {
+
+	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
+	file, err := os.Create(mappingPath)
+
+	defer os.Remove(mappingPath)
+
+	if err != nil {
+		return mappings, images, err
+	}
+
+	// Run release mirror with ToMirror set to retrieve mapping information
+	// store in buffer for manipulation before outputting to mapping.txt
+	var buffer bytes.Buffer
+	opts.IOStreams.Out = &buffer
+
+	opts.ToMirror = true
+
+	if err := opts.Run(); err != nil {
+		return mappings, images, err
+	}
+
+	scanner := bufio.NewScanner(&buffer)
+
+	// Scan mapping output and write to file
+	for scanner.Scan() {
+		text := scanner.Text()
+		split := strings.Split(text, " ")
+
+		// Proccess name and add arch to dir name
+		// FIXME(jpower): we need to access the mapping information
+		// during the actual run because we are not getting image
+		// architecture information when just outputting the mapping
+		// Inferring the image arch information from system runtime
+		// as a workaround
+		var names []string
+		name := opts.TargetFn(split[1]).Exact()
+		nameSplit := strings.Split(name, "-")
+
+		val, ok := archMap[runtime.GOARCH]
+
+		if ok {
+			names = []string{nameSplit[1], val}
+			names = append(names, nameSplit[2:]...)
+		} else {
+			names = []string{nameSplit[1], runtime.GOARCH}
+			names = append(names, nameSplit[2:]...)
+		}
+
+		name = strings.Join(names, "-")
+
+		if _, err := file.WriteString(split[0] + "=" + name + "\n"); err != nil {
+			return mappings, images, err
+		}
+		images = append(images, split[0])
+	}
+
+	mappings, err = image.ReadImageMapping(mappingPath)
+
+	if err != nil {
+		return mappings, images, err
+	}
+
+	return mappings, images, nil
 }
