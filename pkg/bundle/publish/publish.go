@@ -218,8 +218,14 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			errs = append(errs, fmt.Errorf("error parsing source ref %q: %v", assoc.Path, err))
 			continue
 		}
-		m.Source.Ref.Tag = assoc.TagSymlink
-		m.Source.Ref.ID = assoc.ID
+		// The mirrorer is not a fan of accepting an image ID when a tag symlink is available
+		// for some reason.
+		// TODO(estroz): investigate the cause of this behavior.
+		if assoc.TagSymlink == "" {
+			m.Source.Ref.ID = assoc.ID
+		} else {
+			m.Source.Ref.Tag = assoc.TagSymlink
+		}
 		m.Destination = toMirrorRef
 		m.Destination.Ref.Namespace = m.Source.Ref.Namespace
 		m.Destination.Ref.Name = m.Source.Ref.Name
