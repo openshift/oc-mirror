@@ -34,8 +34,15 @@ type Association struct {
 	Name string `json:"name"`
 	// Path to image data within archive.
 	Path string `json:"path"`
-	// Parent is the name of the parent association
-	Parent string `json:"parent,omitempty"`
+	// ID of the image. Joining this value with "manifests" and Path
+	// will produce a path to the image's manifest.
+	ID string `json:"id"`
+	// TagSymlink of the blob specified by ID.
+	// This value must be a filename on disk in the "blobs" dir
+	TagSymlink string `json:"tagSymlink"`
+	// Type of the image in the context of this tool.
+	// See the ImageType enum for options.
+	Type ImageType `json:"type"`
 	// ManifestDigests of images if the image is a docker manifest list or OCI index.
 	// These manifests refer to image manifests by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
@@ -44,6 +51,29 @@ type Association struct {
 	// or OCI index. These digests refer to image layer blobs by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
 	LayerDigests []string `json:"layerDigests,omitempty"`
+}
+
+type ImageType int
+
+const (
+	TypeInvalid ImageType = iota
+	TypeOCPRelease
+	TypeOperatorCatalog
+	TypeOperatorBundle
+	TypeOperatorRelatedImage
+	TypeGeneric
+)
+
+var imageTypeStrings = map[ImageType]string{
+	TypeOCPRelease:           "ocpRelease",
+	TypeOperatorCatalog:      "operatorCatalog",
+	TypeOperatorBundle:       "operatorBundle",
+	TypeOperatorRelatedImage: "operatorRelatedImage",
+	TypeGeneric:              "generic",
+}
+
+func (it ImageType) String() string {
+	return imageTypeStrings[it]
 }
 
 // Merge Associations into the receiver.
@@ -72,17 +102,37 @@ func (as *Associations) Decode(r io.Reader) error {
 	if err := dec.Decode(as); err != nil {
 		return fmt.Errorf("error decoding image associations: %v", err)
 	}
+	// Update paths for local usage.
+	for k, assoc := range *as {
+		assoc.Path = filepath.FromSlash(assoc.Path)
+		(*as)[k] = assoc
+	}
 	return nil
 }
 
 func (as Associations) validate() error {
 	var errs []error
 	for _, a := range as {
+		if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
+			continue
+		}
+		switch a.Type {
+		case TypeInvalid:
+			// TypeInvalid is the default value for the concrete type, which means the field was not set.
+			errs = append(errs, fmt.Errorf("image %q: must set image type", a.Name))
+		default:
+			errs = append(errs, fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type))
+		}
+
 		if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
 			errs = append(errs, fmt.Errorf("image %q: child descriptors cannot contain both manifests and image layers", a.Name))
 		}
 		if len(a.ManifestDigests) == 0 && len(a.LayerDigests) == 0 {
 			errs = append(errs, fmt.Errorf("image %q: child descriptors must contain at least one manifest or image layer", a.Name))
+		}
+
+		if a.ID == "" {
+			errs = append(errs, fmt.Errorf("image %q: tag or ID must be set", a.Name))
 		}
 	}
 	return utilerrors.NewAggregate(errs)
@@ -119,6 +169,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		return seen
 	}
 
+	localRoot := filepath.Join(rootDir, "v2")
 	for _, image := range images {
 		dirRef, hasMapping := imgMappings[image]
 		if !hasMapping {
@@ -126,16 +177,20 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		dirRef = strings.TrimPrefix(dirRef, "file://")
-		dirRef = filepath.Join("v2", dirRef)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
-			return nil, fmt.Errorf("image %q mapping %q has no tag component", image, dirRef)
+			return nil, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef)
 		}
-		tag := dirRef[tagIdx+1:]
-		dirRef = dirRef[:tagIdx]
+		idx := tagIdx
+		if idIdx := strings.LastIndex(dirRef, "@"); idIdx != -1 {
+			idx = idIdx
+		}
+		tagOrID := dirRef[idx+1:]
+		dirRef = dirRef[:idx]
 
-		associations, err := associateImageLayers(image, "none", rootDir, dirRef, tag, skipParse)
+		// TODO(estroz): parallelize
+		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, skipParse)
 		if err != nil {
 			return nil, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err)
 		}
@@ -147,21 +202,44 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	return bundleAssociations, nil
 }
 
-func associateImageLayers(image, parent, rootDir, dirRef, tag string, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
 
-	manifestPath := filepath.Join(rootDir, dirRef, "manifests", tag)
+	manifestPath := filepath.Join(localRoot, filepath.FromSlash(dirRef), "manifests", tagOrID)
+	// TODO(estroz): this file mode checking block is likely only necessary
+	// for the first recursion leaf since image manifest layers always contain id's,
+	// so unroll this component into AssociateImageLayers.
+	info, err := os.Stat(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	id, tag := tagOrID, tagOrID
+	switch m := info.Mode(); {
+	case m&os.ModeSymlink != 0:
+		// Tag is the file name, so follow the symlink to the layer ID-named file.
+		dst, err := os.Readlink(manifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating image tag symlink: %v", err)
+		}
+		id = filepath.Base(dst)
+	case m.IsRegular():
+		// Layer ID is the file name.
+		tag = ""
+	default:
+		return nil, fmt.Errorf("expected symlink or regular file mode, got: %b", m)
+	}
 	manifestBytes, err := ioutil.ReadFile(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading image manifest file: %v", err)
 	}
 
 	association := Association{
-		Name:   image,
-		Path:   filepath.FromSlash(dirRef),
-		Parent: parent,
+		Name:       image,
+		Path:       dirRef,
+		ID:         id,
+		TagSymlink: tag,
 	}
 	switch mt := ctrsimgmanifest.GuessMIMEType(manifestBytes); mt {
 	case "":
@@ -178,7 +256,7 @@ func associateImageLayers(image, parent, rootDir, dirRef, tag string, skipParse 
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, image, rootDir, dirRef, digestStr, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, skipParse)
 			if err != nil {
 				return nil, err
 			}
@@ -193,6 +271,8 @@ func associateImageLayers(image, parent, rootDir, dirRef, tag string, skipParse 
 		for _, layerInfo := range manifest.LayerInfos() {
 			association.LayerDigests = append(association.LayerDigests, layerInfo.Digest.String())
 		}
+		// The config is just another blob, so associate it opaquely.
+		association.LayerDigests = append(association.LayerDigests, manifest.ConfigInfo().Digest.String())
 	}
 
 	associations = append(associations, association)

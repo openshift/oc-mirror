@@ -13,8 +13,8 @@ const (
 )
 
 var (
-	MetadataBasePath = filepath.Join(SourceDir, PublishDir, MetadataFile)
+	MetadataBasePath = filepath.Join(PublishDir, MetadataFile)
 
 	// AssociationsBasePath stores image association data in opaque binary format.
-	AssociationsBasePath = filepath.Join(SourceDir, InternalDir, AssociationsFile)
+	AssociationsBasePath = filepath.Join(InternalDir, AssociationsFile)
 )

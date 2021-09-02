@@ -88,5 +88,14 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 		return nil, err
 	}
 
-	return image.AssociateImageLayers(opts.FileDir, assocMappings, images)
+	assocs, err := image.AssociateImageLayers(opts.FileDir, assocMappings, images)
+	if err != nil {
+		return nil, err
+	}
+	for k, assoc := range assocs {
+		assoc.Type = image.TypeGeneric
+		assocs[k] = assoc
+	}
+
+	return assocs, nil
 }

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func Test_LocalBackend(t *testing.T) {
 	underlyingFS := afero.NewMemMapFs()
 	backend := localDirBackend{
 		fs:  underlyingFS,
-		dir: "foo",
+		dir: filepath.Join("foo", config.SourceDir),
 	}
 	require.NoError(t, backend.init())
 
@@ -53,7 +54,7 @@ func Test_LocalBackend(t *testing.T) {
 	info, metadataErr := underlyingFS.Stat("foo/src/publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
-	info, metadataErr = backend.fs.Stat("src/publish/.metadata.json")
+	info, metadataErr = backend.fs.Stat("publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
 
@@ -70,7 +71,7 @@ func Test_LocalBackend(t *testing.T) {
 	}
 	require.NoError(t, backend.WriteObject(ctx, "bar-obj.json", inObj))
 
-	info, objErr := underlyingFS.Stat("foo/bar-obj.json")
+	info, objErr := underlyingFS.Stat("foo/src/bar-obj.json")
 	require.NoError(t, objErr)
 	require.True(t, info.Mode().IsRegular())
 	info, objErr = backend.fs.Stat("bar-obj.json")

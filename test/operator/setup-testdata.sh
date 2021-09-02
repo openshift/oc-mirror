@@ -5,6 +5,7 @@ set -eu
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DATA_DIR="${1:?data dir is required}"
 OUTPUT_DIR="${2:?output dir is required}"
+CONFIG_PATH="${3:?config path is required}"
 REGISTRY="localhost:5000"
 CATALOGNAMESPACE="test-catalogs"
 REGISTRY_CATALOGNAMESPACE="${REGISTRY}/${CATALOGNAMESPACE}"
@@ -29,7 +30,7 @@ function setup() {
   cp -r "${DIR}/testdata/indices/latest/"* "${DATA_DIR}/index/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_ONLY@'"$REGISTRY"'@g' {} \;
   mkdir -p "$OUTPUT_DIR"
-  cp "${DIR}/testdata/configs/latest/imageset-config.yaml" "${OUTPUT_DIR}/"
+  cp "${DIR}/testdata/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
 
   create_buildx_builder
@@ -53,7 +54,7 @@ function build_push_related_images() {
     echo -e "#!/bin/sh\n\necho \"relatedImage: ${img}\"" > run.sh
     chmod +x run.sh
     cat <<EOF > Dockerfile
-FROM alpine
+FROM gcr.io/distroless/static@sha256:912bd2c2b9704ead25ba91b631e3849d940f9d533f0c15cf4fc625099ad145b1
 COPY run.sh /
 ENTRYPOINT ["/run.sh"]
 EOF

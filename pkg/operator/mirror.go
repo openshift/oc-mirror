@@ -37,6 +37,8 @@ type MirrorOptions struct {
 	cli.RootOptions
 
 	Logger *logrus.Entry
+
+	tmp string
 }
 
 func NewMirrorOptions(ro cli.RootOptions) *MirrorOptions {
@@ -54,13 +56,13 @@ func (o *MirrorOptions) complete() {
 	}
 }
 
-func (o *MirrorOptions) mktempDir() (string, func(), error) {
-	dir := filepath.Join(o.Dir, fmt.Sprintf("operators.%d", time.Now().Unix()))
-	return dir, func() {
-		if err := os.RemoveAll(dir); err != nil {
-			logrus.Error(err)
+func (o *MirrorOptions) mktempDir() (func(), error) {
+	o.tmp = filepath.Join(o.Dir, fmt.Sprintf("operators.%d", time.Now().Unix()))
+	return func() {
+		if err := os.RemoveAll(o.tmp); err != nil {
+			o.Logger.Error(err)
 		}
-	}, os.MkdirAll(dir, os.ModePerm)
+	}, os.MkdirAll(o.tmp, os.ModePerm)
 }
 
 func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
@@ -87,7 +89,7 @@ func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
 func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
 	o.complete()
 
-	tmp, cleanup, err := o.mktempDir()
+	cleanup, err := o.mktempDir()
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +105,17 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 
 	allAssocs := image.Associations{}
 	for _, ctlg := range cfg.Mirror.Operators {
+		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing catalog: %v", err)
+		}
+		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
+
+		opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir), []byte(ctlg.PullSecret))
+		if err != nil {
+			return nil, err
+		}
+
 		catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 		var dc *declcfg.DeclarativeConfig
 		if ctlg.HeadsOnly {
@@ -114,7 +127,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 				IncludeConfig: ctlg.DiffIncludeConfig,
 			}
 
-			dc, err = o.diff(ctx, a, ctlg, cfg, tmp)
+			dc, err = o.diff(ctx, a, opts, ctlgRef, cfg)
 		} else {
 			// Mirror the entire catalog.
 			a := action.Render{
@@ -122,13 +135,13 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 				Refs:     []string{ctlg.Catalog},
 			}
 
-			dc, err = o.full(ctx, a, ctlg, cfg, tmp)
+			dc, err = o.full(ctx, a, opts, ctlgRef, cfg)
 		}
 		if err != nil {
 			return nil, err
 		}
 
-		if err := o.associateDeclarativeConfigImageLayers(tmp, dc, allAssocs); err != nil {
+		if err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, allAssocs); err != nil {
 			return nil, err
 		}
 	}
@@ -141,7 +154,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.Associations, error) {
 	o.complete()
 
-	tmp, cleanup, err := o.mktempDir()
+	cleanup, err := o.mktempDir()
 	if err != nil {
 		return nil, err
 	}
@@ -186,12 +199,23 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 			break
 		}
 
-		dc, err := o.diff(ctx, a, ctlg, cfg, tmp)
+		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing catalog: %v", err)
+		}
+		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
+
+		opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir), []byte(ctlg.PullSecret))
 		if err != nil {
 			return nil, err
 		}
 
-		if err := o.associateDeclarativeConfigImageLayers(tmp, dc, allAssocs); err != nil {
+		dc, err := o.diff(ctx, a, opts, ctlgRef, cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, allAssocs); err != nil {
 			return nil, err
 		}
 	}
@@ -199,121 +223,71 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	return allAssocs, nil
 }
 
-func (o *MirrorOptions) full(ctx context.Context, a action.Render, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (*declcfg.DeclarativeConfig, error) {
+func (o *MirrorOptions) mirror(ctx context.Context, opts *catalog.MirrorCatalogOptions, ctlgRef, destRef imagesource.TypedImageReference, isBlockedFuncs ...blockedFunc) (err error) {
 
-	opts, err := o.newMirrorCatalogOptions(ctlg)
-	if err != nil {
-		return nil, err
-	}
-
-	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing catalog: %v", err)
-	}
-	ctlgRef = ctlgRef.DockerClientDefaults()
-
-	// Create the manifests dir in tmp so it gets cleaned up if desired.
-	// opts.Complete() will create this directory.
-	// TODO(estroz): if the CLI is meant to be re-entrant, check if this file exists
-	// and use it directly if so.
-	opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", ctlgRef.Name, time.Now().Unix()))
-
+	// Complete() will do a bunch of setup, so just let it re-parse src and dst.
 	args := []string{
-		// The source is the catalog image itself.
-		ctlg.Catalog,
-		// The destination is within <Dir>/src/v2/<image-name>.
-		refToFileScheme(ctlgRef),
+		ctlgRef.String(),
+		destRef.String(),
 	}
 	if err := opts.Complete(&cobra.Command{}, args); err != nil {
-		return nil, fmt.Errorf("error constructing catalog options: %v", err)
+		return fmt.Errorf("error constructing catalog options: %v", err)
+	}
+	opts.DestRef = imagesource.TypedImageReference{
+		Type: imagesource.DestinationFile,
 	}
 
 	// TODO(estroz): the mirrorer needs to be set after Complete() is called
-	// because the default ImageMirrorer does not set FileDir from opts.
+	// because the default ImageMirrorer does not set FileDir from opts nor
+	// does in understand blocked mappings.
 	// This isn't great because the default ImageMirrorer is a closure
 	// and may contain configuration that gets overridden here.
-	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
-		return nil, fmt.Errorf("error creating mirror function: %v", err)
-	}
+	opts.ImageMirrorer = newMirrorerFunc(opts, isBlockedFuncs...)
 
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("catalog opts invalid: %v", err)
+		return fmt.Errorf("invalid catalog mirror options: %v", err)
 	}
 
 	if err := opts.Run(); err != nil {
-		return nil, fmt.Errorf("error mirroring catalog: %v", err)
+		return fmt.Errorf("error mirroring catalog: %v", err)
 	}
 
-	dc, err := a.Run(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error generating diff: %v", err)
-	}
+	return nil
+}
 
-	// Write catalog declarative config file to src so it is included in the archive
-	// at a path unique to the image.
-	indexDir, err := dcDirForImage(o.Dir, ctlgRef)
-	if err != nil {
+func (o *MirrorOptions) full(ctx context.Context, a action.Render, opts *catalog.MirrorCatalogOptions, ctlgRef imagesource.TypedImageReference, cfg v1alpha1.ImageSetConfiguration) (*declcfg.DeclarativeConfig, error) {
+
+	isBlocked := func(ref imgreference.DockerImageReference) bool {
+		return bundle.IsBlocked(cfg, ref)
+	}
+	if err := o.mirror(ctx, opts, ctlgRef, refToFileRef(ctlgRef.Ref), isBlocked); err != nil {
 		return nil, err
 	}
 
-	o.Logger.Debugf("generating catalog diff in %s", indexDir)
+	o.Logger.Debugf("rendering catalog %q", ctlgRef.Ref.Exact())
 
-	catalogIndexPath := filepath.Join(indexDir, fmt.Sprintf("%s-index-full.yaml", ctlgRef.Tag))
-	f, err := os.Create(catalogIndexPath)
+	dc, err := a.Run(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating full index file: %v", err)
+		return nil, fmt.Errorf("error rendering catalog: %v", err)
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			o.Logger.Error(err)
-		}
-	}()
-	if err := declcfg.WriteJSON(*dc, f); err != nil {
-		return nil, fmt.Errorf("error writing full catalog: %v", err)
+
+	if _, err := o.writeDC(dc, ctlgRef.Ref); err != nil {
+		return nil, err
 	}
 
 	return dc, nil
 }
 
-func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, ctlg v1alpha1.Operator, cfg v1alpha1.ImageSetConfiguration, tmp string) (*declcfg.DeclarativeConfig, error) {
+func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, opts *catalog.MirrorCatalogOptions, ctlgRef imagesource.TypedImageReference, cfg v1alpha1.ImageSetConfiguration) (*declcfg.DeclarativeConfig, error) {
 
-	ctlgRef, err := imgreference.Parse(ctlg.Catalog)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing catalog: %v", err)
-	}
-	ctlgRef = ctlgRef.DockerClientDefaults()
-
-	// Write catalog declarative config file to src so it is included in the archive
-	// at a path unique to the image.
-	indexDir, err := dcDirForImage(o.Dir, ctlgRef)
-	if err != nil {
-		return nil, err
-	}
-
-	o.Logger.Debugf("generating catalog %q diff in %s", ctlg.Catalog, indexDir)
+	o.Logger.Debugf("generating catalog %q diff", ctlgRef.Ref.Exact())
 
 	dc, err := a.Run(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error generating diff: %v", err)
+		return nil, fmt.Errorf("error generating catalog diff: %v", err)
 	}
 
-	catalogIndexPath := filepath.Join(indexDir, fmt.Sprintf("%s-index-diff.yaml", ctlgRef.Tag))
-	f, err := os.Create(catalogIndexPath)
-	if err != nil {
-		return nil, fmt.Errorf("error creating diff index file: %v", err)
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			o.Logger.Error(err)
-		}
-	}()
-	if err := declcfg.WriteJSON(*dc, f); err != nil {
-		return nil, fmt.Errorf("error writing diff catalog: %v", err)
-	}
-
-	o.Logger.Debugf("wrote index to file: %s", catalogIndexPath)
-
-	opts, err := o.newMirrorCatalogOptions(ctlg)
+	indexDir, err := o.writeDC(dc, ctlgRef.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -322,32 +296,23 @@ func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, ctlg v1alpha1.O
 		o.Logger.Debugf("returning index dir in extractor: %s", indexDir)
 		return indexDir, nil
 	})
+	opts.IndexPath = indexDir
 
 	opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
 
-	if opts.ImageMirrorer, err = newMirrorerFunc(cfg, opts); err != nil {
-		return nil, fmt.Errorf("error constructing mirror func: %v", err)
+	isBlocked := func(ref imgreference.DockerImageReference) bool {
+		return bundle.IsBlocked(cfg, ref)
+	}
+	opts.ImageMirrorer = newMirrorerFunc(opts, isBlocked)
+
+	opts.SourceRef = ctlgRef
+	opts.DestRef = imagesource.TypedImageReference{
+		Type: imagesource.DestinationFile,
 	}
 
-	opts.IndexPath = indexDir
-
-	if opts.SourceRef, err = imagesource.ParseReference(ctlgRef.Exact()); err != nil {
-		return nil, fmt.Errorf("error parsing source reference: %v", err)
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid catalog mirror options: %v", err)
 	}
-	o.Logger.Debugf("source ref %s", opts.SourceRef.String())
-
-	if opts.DestRef, err = imagesource.ParseReference(refToFileScheme(ctlgRef)); err != nil {
-		return nil, fmt.Errorf("error parsing dest reference: %v", err)
-	}
-	o.Logger.Debugf("dest ref %s", opts.DestRef.String())
-
-	// TODO(estroz): if the CLI is meant to be re-entrant, check if this file exists
-	// and use it directly if so.
-	opts.ManifestDir = filepath.Join(tmp, fmt.Sprintf("manifests-%s-%d", opts.SourceRef.Ref.Name, time.Now().Unix()))
-	if err = os.MkdirAll(opts.ManifestDir, os.ModePerm); err != nil {
-		return nil, fmt.Errorf("error creating manifests dir: %v", err)
-	}
-	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
 	if err := opts.Run(); err != nil {
 		return nil, fmt.Errorf("error running catalog mirror: %v", err)
@@ -356,56 +321,114 @@ func (o *MirrorOptions) diff(ctx context.Context, a action.Diff, ctlg v1alpha1.O
 	return dc, nil
 }
 
-func dcDirForImage(rootDir string, ref imgreference.DockerImageReference) (string, error) {
-	indexDir := filepath.Join(rootDir, config.SourceDir, "catalogs",
-		ref.Registry, ref.Namespace, ref.Name)
+func (o *MirrorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
+
+	// Write catalog declarative config file to src so it is included in the archive
+	// at a path unique to the image.
+	indexDir := filepath.Join(o.Dir, config.SourceDir, "catalogs", ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
+
+	prefix := ctlgRef.Tag
+	if prefix == "" {
+		prefix = ctlgRef.ID
+	}
+	catalogIndexPath := filepath.Join(indexDir, fmt.Sprintf("%s-index.json", prefix))
+
+	o.Logger.Debugf("writing catalog %q diff to %s", ctlgRef.Exact(), catalogIndexPath)
+
+	f, err := os.Create(catalogIndexPath)
+	if err != nil {
+		return "", fmt.Errorf("error creating diff index file: %v", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			o.Logger.Error(err)
+		}
+	}()
+	if err := declcfg.WriteJSON(*dc, f); err != nil {
+		return "", fmt.Errorf("error writing diff catalog: %v", err)
+	}
+
 	return indexDir, nil
 }
 
-func (o *MirrorOptions) newMirrorCatalogOptions(ctlg v1alpha1.Operator) (*catalog.MirrorCatalogOptions, error) {
+func (o *MirrorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string, pullSecret []byte) (*catalog.MirrorCatalogOptions, error) {
 	opts := catalog.NewMirrorCatalogOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
-	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
+	opts.FileDir = fileDir
+	opts.MaxPathComponents = 2
+
+	// Create the manifests dir in tmp so it gets cleaned up if desired.
+	// TODO(estroz): if the CLI is meant to be re-entrant, check if this file exists
+	// and use it directly if so.
+	opts.ManifestDir = filepath.Join(o.tmp, fmt.Sprintf("manifests-%s-%d", ctlgRef.Name, time.Now().Unix()))
+	if err := os.MkdirAll(opts.ManifestDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("error creating manifests dir: %v", err)
+	}
+	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
+
+	opts.SecurityOptions.Insecure = o.SkipTLS
+
 	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
-	if len(ctlg.PullSecret) != 0 {
-		ctx, err := config.CreateContext([]byte(ctlg.PullSecret), false, o.SkipTLS)
+	if len(pullSecret) != 0 {
+		ctx, err := config.CreateContext(pullSecret, false, o.SkipTLS)
 		if err != nil {
 			return nil, err
 		}
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
-	opts.SecurityOptions.Insecure = o.SkipTLS
-
 	return opts, nil
 }
 
 // Input refs to the mirror library must be prefixed with "file://" if a local file ref.
-func refToFileScheme(ref imgreference.DockerImageReference) string {
-	return "file://" + filepath.Join(ref.Namespace, ref.Name)
+func refToFileRef(ref imgreference.DockerImageReference) imagesource.TypedImageReference {
+	ref.Registry = ""
+	return imagesource.TypedImageReference{
+		Type: imagesource.DestinationFile,
+		Ref:  ref,
+	}
 }
 
-func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string, dc *declcfg.DeclarativeConfig, allAssocs image.Associations) error {
+// isMappingFile returns true if p has a mapping file name.
+func isMappingFile(p string) bool {
+	const mappingFile = "mapping.txt"
+	return filepath.Base(p) == mappingFile
+}
 
-	images := []string{}
+func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesource.TypedImageReference, dc *declcfg.DeclarativeConfig, allAssocs image.Associations) error {
+
+	var bundleImages, relatedImages []string
 	for _, b := range dc.Bundles {
-		images = append(images, b.Image)
+		bundleImages = append(bundleImages, b.Image)
 		for _, relatedImg := range b.RelatedImages {
-			images = append(images, relatedImg.Image)
+			relatedImages = append(relatedImages, relatedImg.Image)
 		}
 	}
 
+	srcDir := filepath.Join(o.Dir, config.SourceDir)
+	associateWithType := func(mappings map[string]string, images []string, typ image.ImageType) error {
+		assocs, err := image.AssociateImageLayers(srcDir, mappings, images)
+		if err == nil {
+			for k, assoc := range assocs {
+				assoc.Type = typ
+				assocs[k] = assoc
+			}
+			allAssocs.Merge(assocs)
+		}
+		return err
+	}
+
 	foundAtLeastOneMapping := false
-	if err := filepath.Walk(mappingDir, func(path string, info fs.FileInfo, err error) error {
+	if err := filepath.Walk(o.tmp, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
 		}
-		if filepath.Base(path) != "mapping.txt" {
+		if !isMappingFile(path) {
 			return nil
 		}
 		foundAtLeastOneMapping = true
@@ -416,17 +439,21 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 			return err
 		}
 
-		srcDir := filepath.Join(o.Dir, config.SourceDir)
-		assocs, err := image.AssociateImageLayers(srcDir, imgMappings, images)
-		if err != nil {
+		for _, err := range []error{
+			// NB(estroz): assuming that any related image will not point to
+			// an operator catalog or bundle may not be a valid assumption.
+			// Even if not valid, mirroring bundle and catalog images as normal images
+			// should work as though they were mirrored via the `catalog mirror` API.
+			associateWithType(imgMappings, relatedImages, image.TypeOperatorRelatedImage),
+			associateWithType(imgMappings, bundleImages, image.TypeOperatorBundle),
+			associateWithType(imgMappings, []string{ctlgRef.Ref.Exact()}, image.TypeOperatorCatalog),
+		} {
 			merr := &image.MirrorError{}
 			if !errors.As(err, &merr) {
 				return err
 			}
-			logrus.Warn(err)
+			o.Logger.Warn(err)
 		}
-
-		allAssocs.Merge(assocs)
 		return nil
 	}); err != nil {
 		return err
@@ -439,28 +466,31 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(mappingDir string,
 	return nil
 }
 
-// Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L284-L313
+// Mostly copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L284-L313
 // Hoping this can be temporary, and `oc adm mirror catalog` libs support index.yaml direct mirroring.
 
-func newMirrorerFunc(cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCatalogOptions) (catalog.ImageMirrorerFunc, error) {
-	allmanifestsFilter := imagemanifest.FilterOptions{FilterByOS: ".*"}
-	if err := allmanifestsFilter.Validate(); err != nil {
-		return nil, err
-	}
+type blockedFunc func(imgreference.DockerImageReference) bool
 
+func newMirrorerFunc(opts *catalog.MirrorCatalogOptions, isBlockedFuncs ...blockedFunc) catalog.ImageMirrorerFunc {
 	return func(mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
 
 		mappings := []imgmirror.Mapping{}
 		for from, to := range mapping {
 
-			if bundle.IsBlocked(cfg, from.Ref) {
-				logrus.Debugf("image %s was specified as blocked per config, skipping...", from.Ref.Name)
-				continue
+			blocked := false
+			for _, isBlocked := range isBlockedFuncs {
+				if isBlocked(from.Ref) {
+					logrus.Debugf("image %s was specified as blocked, skipping...", from.Ref.Name)
+					blocked = true
+					break
+				}
 			}
-			mappings = append(mappings, imgmirror.Mapping{
-				Source:      from,
-				Destination: to,
-			})
+			if !blocked {
+				mappings = append(mappings, imgmirror.Mapping{
+					Source:      from,
+					Destination: to,
+				})
+			}
 		}
 
 		a := imgmirror.NewMirrorImageOptions(opts.IOStreams)
@@ -468,12 +498,13 @@ func newMirrorerFunc(cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCat
 		a.ContinueOnError = true
 		a.DryRun = opts.DryRun
 		a.SecurityOptions = opts.SecurityOptions
+		// FileDir is set so images are mirrored under the correct directory.
 		a.FileDir = opts.FileDir
 		// because images in the catalog are statically referenced by digest,
 		// we do not allow filtering for mirroring. this may change if sparse manifestlists are allowed
 		// by registries, or if multi-arch management moves into images that can be rewritten on mirror (i.e. the bundle
 		// images themselves, not the images referenced inside of the bundle images).
-		a.FilterOptions = allmanifestsFilter
+		a.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 		a.ParallelOptions = opts.ParallelOptions
 		a.KeepManifestList = true
 		a.Mappings = mappings
@@ -490,7 +521,7 @@ func newMirrorerFunc(cfg v1alpha1.ImageSetConfiguration, opts *catalog.MirrorCat
 		}
 
 		return nil
-	}, nil
+	}
 }
 
 // Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L449-L503
@@ -539,6 +570,7 @@ func parseRelatedImages(root string) (map[string]struct{}, error) {
 			}
 			relatedImages[blob.Image] = struct{}{}
 			for _, ri := range blob.RelatedImages {
+				// TODO: blocked images.
 				relatedImages[ri.Image] = struct{}{}
 			}
 		}

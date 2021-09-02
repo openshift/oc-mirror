@@ -14,22 +14,24 @@ require (
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
 	github.com/mholt/archiver/v3 v3.5.0
+	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20190823105129-775207bd45b6
 	github.com/openshift/installer v0.16.1
-	github.com/openshift/library-go v0.0.0-20210521084623-7392ea9b02ca
+	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
 	github.com/operator-framework/operator-registry v1.18.1-0.20210819180346-a0bb1e5b6d1a
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.6.0
-	github.com/spf13/cobra v1.1.3
+	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	k8s.io/apimachinery v0.22.0
+	k8s.io/apimachinery v0.22.1
 	k8s.io/cli-runtime v0.22.0
-	k8s.io/client-go v0.22.0
+	k8s.io/client-go v0.22.1
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
+	k8s.io/kubectl v0.22.0
 	rsc.io/letsencrypt v0.0.3 // indirect
 	sigs.k8s.io/yaml v1.2.0
 )

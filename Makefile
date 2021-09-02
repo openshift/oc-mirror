@@ -22,8 +22,5 @@ test-unit:
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e
-test-e2e: test-e2e-operator
-
-.PHONY: test-e2e-operator
-test-e2e-operator: build
+test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-bundle
