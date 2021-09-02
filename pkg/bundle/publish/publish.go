@@ -56,7 +56,10 @@ func (o *Options) Run(ctx context.Context) error {
 	}
 
 	logrus.Debugf("Created temporary directory %s", tmpdir)
-	defer os.RemoveAll(tmpdir)
+
+	if !o.SkipCleanup {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Get file information from the source archives
 	filesInArchive, err := o.readImageSet(a)
@@ -80,7 +83,7 @@ func (o *Options) Run(ctx context.Context) error {
 	}
 
 	// Check for existing metadata. Metadata will be extracted before
-	// the exctraction of the archive so imageset mismatches can
+	// the extraction of the archive so imageset mismatches can
 	// be handled before the longer unarchiving process
 	if _, err := os.Stat(dest); errors.Is(err, os.ErrNotExist) {
 
@@ -173,8 +176,8 @@ func (o *Options) Run(ctx context.Context) error {
 		for _, layerDigest := range assoc.LayerDigests {
 			logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
 			// Construct blob path, which is adjacent to the manifests path.
-			// If a layer exists in the archive (err == nil), nothing needs to be done
-			// since the layer is already in the expected location.
+			// If a layer exists in the archive (err == nil), copy the layer
+			// in the expected location.
 			blobPath := filepath.Join("blobs", layerDigest)
 			if _, err := os.Stat(filepath.Join(tmpdir, blobPath)); err != nil && errors.Is(err, os.ErrNotExist) {
 
@@ -199,10 +202,7 @@ func (o *Options) Run(ctx context.Context) error {
 				logrus.Debugf("Extracting blob %s", blobPath)
 				err := a.Extract(archive, blobPath, filepath.Join(tmpdir, assoc.Path))
 				if err != nil {
-					if !errors.As(err, &os.ErrExist) {
-						return err
-					}
-					logrus.Debugf("Blobs %v exists in target directory %s", layerDigest, assoc.Path)
+					errs = append(errs, fmt.Errorf("error extracting blob %s: %v", layerDigest, err))
 				}
 			}
 		}
@@ -285,7 +285,6 @@ func (o *Options) getImageSet(a archive.Archiver, dest string) error {
 
 	if file.IsDir() {
 
-		logrus.Infoln("Detected multiple incoming archive files")
 		err = filepath.Walk(o.ArchivePath, func(path string, info os.FileInfo, err error) error {
 
 			if err != nil {
@@ -300,7 +299,7 @@ func (o *Options) getImageSet(a archive.Archiver, dest string) error {
 
 			if extension == a.String() {
 				logrus.Debugf("Extracting archive %s", path)
-				if err := a.Unarchive(path, dest); err != nil && !errors.As(err, &os.ErrExist) {
+				if err := a.Unarchive(path, dest); err != nil {
 					return err
 				}
 			}
@@ -310,9 +309,8 @@ func (o *Options) getImageSet(a archive.Archiver, dest string) error {
 
 	} else {
 
-		// Unarchive provided tar archive
 		logrus.Infof("Extracting archive %s", o.ArchivePath)
-		if err := a.Unarchive(o.ArchivePath, dest); err != nil && !errors.As(err, &os.ErrExist) {
+		if err := a.Unarchive(o.ArchivePath, dest); err != nil {
 			return err
 		}
 	}
@@ -334,7 +332,7 @@ func (o *Options) readImageSet(a archive.Archiver) (map[string]string, error) {
 
 		// Walk the directory and load the files from the archives
 		// into the map
-		logrus.Infoln("Detected multiple incoming archive files")
+		logrus.Infoln("Detected multiple archive files")
 		err = filepath.Walk(o.ArchivePath, func(path string, info os.FileInfo, err error) error {
 
 			if err != nil {
