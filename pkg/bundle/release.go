@@ -420,8 +420,11 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[st
 		split := strings.Split(text, " ")
 
 		// Proccess name and add arch to dir name
-		// TODO: investiagte whether this is unique to release
-
+		// FIXME(jpower): we need to access the mapping information
+		// during the actual run because we are not getting image
+		// architecture information when just outputting the mapping
+		// Inferring the image arch information from system runtime
+		// as a workaround
 		var names []string
 		name := opts.TargetFn(split[1]).Exact()
 		nameSplit := strings.Split(name, "-")
@@ -432,7 +435,8 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[st
 			names = []string{nameSplit[1], val}
 			names = append(names, nameSplit[2:]...)
 		} else {
-			names = nameSplit[1:]
+			names = []string{nameSplit[1], runtime.GOARCH}
+			names = append(names, nameSplit[2:]...)
 		}
 
 		name = strings.Join(names, "-")
