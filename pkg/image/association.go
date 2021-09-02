@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -176,6 +177,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 			return nil, &MirrorError{image}
 		}
 
+		// TODO(estroz): maybe just use imgsource.ParseReference() here.
 		dirRef = strings.TrimPrefix(dirRef, "file://")
 
 		tagIdx := strings.LastIndex(dirRef, ":")
@@ -211,13 +213,14 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse fu
 	// TODO(estroz): this file mode checking block is likely only necessary
 	// for the first recursion leaf since image manifest layers always contain id's,
 	// so unroll this component into AssociateImageLayers.
-	info, err := os.Stat(manifestPath)
+	info, err := os.Lstat(manifestPath)
 	if err != nil {
 		return nil, err
 	}
+	// Tags are always symlinks due to how `oc` libraries mirror manifest files.
 	id, tag := tagOrID, tagOrID
 	switch m := info.Mode(); {
-	case m&os.ModeSymlink != 0:
+	case m&fs.ModeSymlink != 0:
 		// Tag is the file name, so follow the symlink to the layer ID-named file.
 		dst, err := os.Readlink(manifestPath)
 		if err != nil {
@@ -225,7 +228,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse fu
 		}
 		id = filepath.Base(dst)
 	case m.IsRegular():
-		// Layer ID is the file name.
+		// Layer ID is the file name, and no tag exists.
 		tag = ""
 	default:
 		return nil, fmt.Errorf("expected symlink or regular file mode, got: %b", m)
