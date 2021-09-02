@@ -35,7 +35,7 @@ type packager struct {
 // NewArchiver creates a new archiver for tar archive manipultation
 func NewArchiver() Archiver {
 	return &archiver.Tar{
-		OverwriteExisting:      false,
+		OverwriteExisting:      true,
 		MkdirAll:               true,
 		ImplicitTopLevelFolder: false,
 		StripComponents:        0,
