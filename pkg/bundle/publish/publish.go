@@ -230,21 +230,21 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		m.Destination = toMirrorRef
 		m.Destination.Ref.Namespace = m.Source.Ref.Namespace
 		m.Destination.Ref.Name = m.Source.Ref.Name
+		m.Destination.Ref.Tag = m.Source.Ref.Tag
+		m.Destination.Ref.ID = m.Source.Ref.ID
 
 		switch assoc.Type {
 		case image.TypeGeneric:
-			m.Destination.Ref.Tag = m.Source.Ref.Tag
-			m.Destination.Ref.ID = m.Source.Ref.ID
 			genericMappings = append(genericMappings, m)
 		case image.TypeOCPRelease:
+			m.Destination.Ref.Tag = ""
+			m.Destination.Ref.ID = ""
 			// Only add top level release images to
 			// release mapping
 			if strings.Contains(assoc.Name, "ocp-release") {
 				releaseMappings = append(releaseMappings, m)
 			}
 		case image.TypeOperatorCatalog:
-			m.Destination.Ref.Tag = m.Source.Ref.Tag
-			m.Destination.Ref.ID = m.Source.Ref.ID
 			catalogMappings = append(catalogMappings, m)
 		case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 			// Let the `catalog mirror` API call mirror all bundle and related images in the catalog.
