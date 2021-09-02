@@ -9,7 +9,6 @@ builds:
   - main: ./cmd/oc-bundle
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
     env:
