@@ -166,6 +166,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		genericMappings []imgmirror.Mapping
 		releaseMappings []imgmirror.Mapping
 		catalogMappings []imgmirror.Mapping
+
 		// Map of remote layer digest to the set of paths they should be fetched to.
 		missingLayers = map[string][]string{}
 	)
@@ -236,7 +237,13 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		case image.TypeGeneric:
 			genericMappings = append(genericMappings, m)
 		case image.TypeOCPRelease:
-			releaseMappings = append(releaseMappings, m)
+			m.Destination.Ref.Tag = ""
+			m.Destination.Ref.ID = ""
+			// Only add top level release images to
+			// release mapping
+			if strings.Contains(assoc.Name, "ocp-release") {
+				releaseMappings = append(releaseMappings, m)
+			}
 		case image.TypeOperatorCatalog:
 			catalogMappings = append(catalogMappings, m)
 		case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
@@ -313,10 +320,13 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	for _, m := range releaseMappings {
-		logrus.Debugf("mirroring release image: %s", m.Source)
+		logrus.Debugf("mirroring release image: %s", m.Source.String())
 		relOpts := release.NewMirrorOptions(o.IOStreams)
 		relOpts.From = m.Source.String()
+		relOpts.FromDir = o.Dir
 		relOpts.To = m.Destination.String()
+		relOpts.SecurityOptions.Insecure = o.SkipTLS
+		relOpts.DryRun = o.DryRun
 		if err := relOpts.Complete(cmd, f, nil); err != nil {
 			return fmt.Errorf("error initializing release mirror options: %v", err)
 		}
@@ -342,6 +352,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			logrus.Error(err)
 		}
 	}()
+
 	for _, m := range catalogMappings {
 		logrus.Debugf("mirroring catalog image: %s", m.Source)
 
