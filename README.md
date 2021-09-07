@@ -18,7 +18,7 @@ make
 
 ### Test
 
-Maunal Unit Tests:
+Manual Unit Tests:
 ```bash
 make test-unit
 ```
@@ -44,34 +44,14 @@ Function test:
 
 Bundle is an OpenShift Client (oc) plugin that manages OpenShift installation, operator, and associated container images.
 
-Bundle managment is a two part process:
+Bundle management is a two part process:
 
 Part 1: Bundle Creation (Internet Connected)
 Part 2: Bundle Publishing (Disconnected)
 
 ## Usage
 
-```
-Command: oc bundle
-
-Sub-commands:
-create
-  Options:
-    full
-    diff
-  Flags:
-    --directory (string | oc bundle managed directory)
-    --bundle-name (string | name of bundle archive | optional)
-    --config (string | path to imageset-config.yaml | defaults to current directory)
-publish
-  Flags:
-    --from-bundle (string | archive name)
-    --install (optional)
-    --no-mirror (optional)
-    --tls-verify (boolean | optional)
-    --to-directory (string | oc bundle managed directory)
-    --to-mirror (string | target registry url)
-```
+See docs for [expanded overview](./docs/overview.md) and [basic usage information](./docs/usage.md)
 
 ## Bundle Spec
 

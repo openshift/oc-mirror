@@ -1,0 +1,26 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.8 << References latest stable release>>
+      - name: stable-4.7 << Version annotation references version, does not pull latest >>
+        versions:
+          - '4.7.18'
+          - '4.6.13'
+    graph: true << Include Cincinnati upgrade graph image in imageset >>
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 << References entire catalog >>
+      headsOnly: true << References latest version of each operator in catalog >>
+      packages:
+        - name: couchbase-operator << Planned, overrides catalog default, respects headsOnly setting >>
+          versions:
+            - '1.4.0' << Planned, overrides catalog default, overrides headsOnly setting >>
+        - name: crunchy-postgresql-operator
+          channels: << Planned >>
+            - name: 'stable'
+  additionalimages: << List of additional images to be included in imageset >>
+    - name: registry.redhat.io/ubi8/ubi:latest
+  blockedimages: << Planned, list of base images to be blocked (best effort) >>
+    - name: alpine
+    - name: redis
