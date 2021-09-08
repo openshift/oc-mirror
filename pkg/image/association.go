@@ -18,12 +18,21 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
-type MirrorError struct {
+type ErrNoMapping struct {
 	image string
 }
 
-func (e *MirrorError) Error() string {
+func (e *ErrNoMapping) Error() string {
 	return fmt.Sprintf("image %q has no mirror mapping", e.image)
+}
+
+type ErrInvalidComponent struct {
+	image string
+	tag   string
+}
+
+func (e *ErrInvalidComponent) Error() string {
+	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
 }
 
 // Associations is a set of image Associations.
@@ -162,8 +171,8 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 	return mappings, scanner.Err()
 }
 
-func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string) (Associations, error) {
-
+func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string) (Associations, utilerrors.Aggregate) {
+	errs := []error{}
 	bundleAssociations := Associations{}
 	skipParse := func(ref string) bool {
 		_, seen := bundleAssociations[ref]
@@ -174,7 +183,8 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	for _, image := range images {
 		dirRef, hasMapping := imgMappings[image]
 		if !hasMapping {
-			return nil, &MirrorError{image}
+			errs = append(errs, &ErrNoMapping{image})
+			continue
 		}
 
 		// TODO(estroz): maybe just use imgsource.ParseReference() here.
@@ -182,7 +192,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
-			return nil, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef)
+			errs = append(errs, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef))
 		}
 		idx := tagIdx
 		if idIdx := strings.LastIndex(dirRef, "@"); idIdx != -1 {
@@ -191,17 +201,25 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		tagOrID := dirRef[idx+1:]
 		dirRef = dirRef[:idx]
 
+		imagePath := filepath.Join(localRoot, dirRef)
+
+		// Verify that the dirRef exists before proceeding
+		if _, err := os.Stat(imagePath); err != nil {
+			errs = append(errs, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err))
+			continue
+		}
+
 		// TODO(estroz): parallelize
 		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, skipParse)
 		if err != nil {
-			return nil, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err)
+			errs = append(errs, err)
 		}
 		for _, association := range associations {
 			bundleAssociations[association.Name] = association
 		}
 	}
 
-	return bundleAssociations, nil
+	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
 func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse func(string) bool) (associations []Association, err error) {
@@ -213,8 +231,14 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse fu
 	// TODO(estroz): this file mode checking block is likely only necessary
 	// for the first recursion leaf since image manifest layers always contain id's,
 	// so unroll this component into AssociateImageLayers.
+
+	// FIXME(jpower): some of the mappings are passing a tag that are
+	// not actually a symlinks on disk. Need to investigate why we
+	// receiving invalid mapping and their meaning.
 	info, err := os.Lstat(manifestPath)
-	if err != nil {
+	if errors.As(err, &os.ErrNotExist) {
+		return nil, &ErrInvalidComponent{image, tagOrID}
+	} else if err != nil {
 		return nil, err
 	}
 	// Tags are always symlinks due to how `oc` libraries mirror manifest files.

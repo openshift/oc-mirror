@@ -166,6 +166,11 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 		return err
 	}
 
+	// Validating user path input
+	if err := o.ValidatePaths(); err != nil {
+		return err
+	}
+
 	logrus.Info("Verifying pull secrets")
 	// Validating pull secrets
 	if err := config.ValidateSecret(cfg); err != nil {

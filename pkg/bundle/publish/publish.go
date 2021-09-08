@@ -39,16 +39,24 @@ type UuidError struct {
 }
 
 func (u *UuidError) Error() string {
-	return fmt.Sprintf("Mismatched UUIDs. Want %v, got %v", u.CurrUuid, u.InUuid)
+	return fmt.Sprintf("mismatched uuids, want %v, got %v", u.CurrUuid, u.InUuid)
 }
 
 type SequenceError struct {
-	inSeq   int
-	CurrSeq int
+	wantSeq int
+	gotSeq  int
 }
 
 func (s *SequenceError) Error() string {
-	return fmt.Sprintf("Bundle Sequence out of order. Current sequence %v, incoming sequence %v", s.CurrSeq, s.inSeq)
+	return fmt.Sprintf("invalid bundle sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
+}
+
+type ErrArchiveFileNotFound struct {
+	filename string
+}
+
+func (e *ErrArchiveFileNotFound) Error() string {
+	return fmt.Sprintf("file %s not found in archive", e.filename)
 }
 
 func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
@@ -59,13 +67,30 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	var incomingMeta v1alpha1.Metadata
 	a := archive.NewArchiver()
 
+	// Validating user path input
+	if err := o.ValidatePaths(); err != nil {
+		return err
+	}
+
 	// Create workspace
 	tmpdir, err := ioutil.TempDir(o.Dir, "imageset")
 	if err != nil {
 		return err
 	}
+
+	// Handle cleanup of disk
+	defer func() {
+		if err := os.RemoveAll(tmpdir); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
+
 	if !o.SkipCleanup {
-		defer os.RemoveAll(tmpdir)
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(o.Dir, "v2")); err != nil {
+				logrus.Fatal(err)
+			}
+		}()
 	}
 
 	logrus.Debugf("Using temporary directory %s to unarchive metadata", tmpdir)
@@ -77,13 +102,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Extract incoming metadata
-	archive, ok := filesInArchive[config.MetadataFile]
-	if !ok {
-		return errors.New("metadata is not in archive")
-	}
-
-	logrus.Debug("Extracting incoming metadta")
-	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
+	if err := unpack(config.MetadataBasePath, tmpdir, filesInArchive); err != nil {
 		return err
 	}
 
@@ -115,6 +134,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			return fmt.Errorf("error reading incoming metadata: %v", err)
 		}
 
+		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
+		if incomingRun.Sequence != 1 {
+			return &SequenceError{1, incomingRun.Sequence}
+		}
+
 	} else {
 
 		// Compare metadata UID and sequence number
@@ -135,7 +159,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
-			return &SequenceError{incomingRun.Sequence, currRun.Sequence}
+			return &SequenceError{(currRun.Sequence + 1), incomingRun.Sequence}
 		}
 	}
 
@@ -145,10 +169,9 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Load image associations to find layers not present locally.
-	assocPath := filepath.Join(o.Dir, config.AssociationsBasePath)
-	assocs, err := readAssociations(assocPath)
+	assocs, err := readAssociations(filepath.Join(o.Dir, config.AssociationsBasePath))
 	if err != nil {
-		return fmt.Errorf("error reading associations from %s: %v", o.Dir, err)
+		return err
 	}
 
 	toMirrorRef, err := imagesource.ParseReference(o.ToMirror)
@@ -169,7 +192,9 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 		// Map of remote layer digest to the set of paths they should be fetched to.
 		missingLayers = map[string][]string{}
+		aerr          = &ErrArchiveFileNotFound{}
 	)
+
 	for imageName, assoc := range assocs {
 
 		assoc := assoc
@@ -188,29 +213,18 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		for _, layerDigest := range assoc.LayerDigests {
 			logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
 			// Construct blob path, which is adjacent to the manifests path.
-			imageBlobPath := filepath.Join(o.Dir, "v2", assoc.Path, "blobs", layerDigest)
-			blobPath := filepath.Join(o.Dir, "blobs", layerDigest)
-			switch _, err := os.Stat(blobPath); {
+			blobPath := filepath.Join("blobs", layerDigest)
+			imagePath := filepath.Join(o.Dir, "v2", assoc.Path)
+			imageBlobPath := filepath.Join(imagePath, blobPath)
+			switch err := unpack(blobPath, imagePath, filesInArchive); {
 			case err == nil:
-				// If a layer exists in the archive, simply copy it to the blob path
-				// adjacent to its parent manifest.
-				if src, err := os.Open(blobPath); err == nil {
-					err = copyBlobFile(src, imageBlobPath)
-					if err := src.Close(); err != nil {
-						logrus.Error(err)
-					}
-				} else {
-					err = fmt.Errorf("error opening existing blob file: %v", err)
-				}
-			case errors.Is(err, os.ErrNotExist):
+				logrus.Debugf("Blob %s found in %s", layerDigest, assoc.Path)
+			case errors.As(err, &os.ErrNotExist) || errors.As(err, &aerr):
 				// Image layer must exist in the mirror registry since it wasn't archived,
 				// so fetch the layer and place it in the blob dir so it can be mirrored by `oc`.
 				missingLayers[layerDigest] = append(missingLayers[layerDigest], imageBlobPath)
 			default:
-				err = fmt.Errorf("accessing image %q blob %q at %s: %v", imageName, layerDigest, blobPath, err)
-			}
-			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("accessing image %q blob %q at %s: %v", imageName, layerDigest, blobPath, err))
 			}
 		}
 
@@ -274,13 +288,13 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			continue
 		}
 		manifestsPath := filepath.Join(o.Dir, "v2", assoc.Path, "manifests")
-		srcPath := filepath.Join(manifestsPath, assoc.ID)
 		dstPath := filepath.Join(manifestsPath, assoc.TagSymlink)
+
 		if _, err := os.Stat(dstPath); err == nil || errors.Is(err, os.ErrExist) {
 			logrus.Debugf("image %s: tag %s symlink for manifest %s already exists", assoc.Name, assoc.TagSymlink, assoc.ID)
 			continue
 		}
-		if err := os.Symlink(srcPath, dstPath); err != nil {
+		if err := os.Symlink(assoc.ID, dstPath); err != nil {
 			errs = append(errs, fmt.Errorf("error symlinking manifest digest %q to tag %q: %v", assoc.ID, assoc.TagSymlink, err))
 		}
 	}
@@ -360,7 +374,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		catOpts.DryRun = o.DryRun
 		catOpts.MaxPathComponents = 2
 		catOpts.SecurityOptions.Insecure = o.SkipTLS
-		catOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
+		//catOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 
 		args := []string{
 			m.Source.String(),
@@ -405,7 +419,7 @@ func readAssociations(assocPath string) (assocs image.Associations, err error) {
 	return assocs, assocs.Decode(f)
 }
 
-// getImage unarchives all provided tar archives
+// unpackImageSet unarchives all provided tar archives
 func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 	file, err := os.Stat(o.ArchivePath)
@@ -443,6 +457,13 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 		if err := a.Unarchive(o.ArchivePath, dest); err != nil {
 			return err
 		}
+	}
+
+	// Workaround to save disk space.
+	// FIXME(jpower): need to create a function to skip directories
+	// during an unarchive
+	if err := os.RemoveAll(filepath.Join(dest, "blobs")); err != nil {
+		return err
 	}
 
 	return err
@@ -504,7 +525,10 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return err
 	}
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+	// Allowing exisitng files to be written to for now since we
+	// some blobs appears to be written multiple time
+	// TODO: investigate this issue
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return fmt.Errorf("error creating blob file: %v", err)
 	}
@@ -597,6 +621,25 @@ func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context
 		if _, err := rc.Seek(0, 0); err != nil {
 			return fmt.Errorf("seek to start of blob: %v", err)
 		}
+	}
+
+	return nil
+}
+
+func unpack(archiveFilePath, dest string, filesInArchive map[string]string) error {
+
+	name := filepath.Base(archiveFilePath)
+	archivePath, found := filesInArchive[name]
+	if !found {
+		return &ErrArchiveFileNotFound{name}
+	}
+
+	if err := archive.NewArchiver().Extract(archivePath, archiveFilePath, dest); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(filepath.Join(dest, archiveFilePath)); err != nil {
+		return err
 	}
 
 	return nil

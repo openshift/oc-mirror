@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	semver "github.com/blang/semver/v4"
@@ -55,6 +54,8 @@ var (
 
 const (
 	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	// Does not currently handle arch selection
+	arch = "x86_64"
 )
 
 func init() {
@@ -100,9 +101,6 @@ func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version) (Update,
 
 	ctx := context.Background()
 
-	// Does not currently handle arch selection
-	arch := "x86_64"
-
 	channel := ch.Name
 
 	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, v)
@@ -128,9 +126,6 @@ func GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, error) {
 	}
 
 	ctx := context.Background()
-
-	// Does not currently handle arch selection
-	arch := "x86_64"
 
 	channel := ch.Name
 
@@ -220,11 +215,10 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (imag
 	opts.From = from
 	opts.ToDir = toDir
 
-	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(secret) != 0 {
-		ctx, err := config.CreateContext(secret, false, o.SkipTLS)
+		ctx, err := config.CreateContext(secret, o.SkipVerification, o.SkipTLS)
 		if err != nil {
 			return image.Associations{}, err
 		}
@@ -232,6 +226,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (imag
 	}
 
 	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
 
 	if err := opts.Run(); err != nil {
@@ -394,10 +389,6 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	return allAssocs, nil
 }
 
-var archMap = map[string]string{
-	"amd64": "x86_64",
-}
-
 // getMapping will run release mirror with ToMirror set to true to get mapping information
 func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[string]string, images []string, err error) {
 
@@ -429,25 +420,12 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[st
 		split := strings.Split(text, " ")
 
 		// Proccess name and add arch to dir name
-		// FIXME(jpower): we need to access the mapping information
-		// during the actual run because we are not getting image
-		// architecture information when just outputting the mapping
-		// Inferring the image arch information from system runtime
-		// as a workaround
+		// TODO: architecture handling
 		var names []string
 		name := opts.TargetFn(split[1]).Exact()
 		nameSplit := strings.Split(name, "-")
-
-		val, ok := archMap[runtime.GOARCH]
-
-		if ok {
-			names = []string{nameSplit[1], val}
-			names = append(names, nameSplit[2:]...)
-		} else {
-			names = []string{nameSplit[1], runtime.GOARCH}
-			names = append(names, nameSplit[2:]...)
-		}
-
+		names = []string{nameSplit[1], arch}
+		names = append(names, nameSplit[2:]...)
 		name = strings.Join(names, "-")
 
 		if _, err := file.WriteString(split[0] + "=" + name + "\n"); err != nil {
