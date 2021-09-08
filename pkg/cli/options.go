@@ -14,11 +14,12 @@ import (
 type RootOptions struct {
 	genericclioptions.IOStreams
 
-	Dir         string
-	LogLevel    string
-	DryRun      bool
-	SkipTLS     bool
-	SkipCleanup bool
+	Dir              string
+	LogLevel         string
+	DryRun           bool
+	SkipTLS          bool
+	SkipVerification bool
+	SkipCleanup      bool
 
 	logfileCleanup func()
 }
@@ -29,6 +30,7 @@ func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DryRun, "dry-run", false, "print actions without mirroring images "+
 		"(experimental: only works for operator catalogs)")
 	fs.BoolVar(&o.SkipTLS, "skip-tls", false, "skip client-side TLS validation")
+	fs.BoolVar(&o.SkipVerification, "skip-verification", false, "skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", false, "skip removal of artifact directories")
 }
 

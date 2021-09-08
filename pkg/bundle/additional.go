@@ -29,6 +29,7 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
 	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
@@ -38,11 +39,10 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	assocMappings := make(map[string]string, len(cfg.Mirror.AdditionalImages))
 	for i, img := range cfg.Mirror.AdditionalImages {
 
-		// FIXME(jpower): need to have the user set skipVerification value
 		// If the pullSecret is not empty create a cached context
 		// else let `oc mirror` use the default docker config location
 		if len(img.PullSecret) != 0 {
-			ctx, err := config.CreateContext([]byte(img.PullSecret), false, o.SkipTLS)
+			ctx, err := config.CreateContext([]byte(img.PullSecret), o.SkipVerification, o.SkipTLS)
 			if err != nil {
 				return nil, err
 			}

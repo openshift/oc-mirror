@@ -370,12 +370,12 @@ func (o *MirrorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImage
 	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
 	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(pullSecret) != 0 {
-		ctx, err := config.CreateContext(pullSecret, false, o.SkipTLS)
+		ctx, err := config.CreateContext(pullSecret, o.SkipVerification, o.SkipTLS)
 		if err != nil {
 			return nil, err
 		}
@@ -413,14 +413,24 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 	associateWithType := func(mappings map[string]string, images []string, typ image.ImageType) error {
 		assocs, err := image.AssociateImageLayers(srcDir, mappings, images)
-		if err == nil {
-			for k, assoc := range assocs {
-				assoc.Type = typ
-				assocs[k] = assoc
+		if err != nil {
+			merr := &image.ErrNoMapping{}
+			cerr := &image.ErrInvalidComponent{}
+			for _, err := range err.Errors() {
+				if !errors.As(err, &merr) && !errors.As(err, &cerr) {
+					return err
+				}
 			}
-			allAssocs.Merge(assocs)
+			o.Logger.Warn(err)
 		}
-		return err
+
+		for k, assoc := range assocs {
+			assoc.Type = typ
+			assocs[k] = assoc
+		}
+		allAssocs.Merge(assocs)
+
+		return nil
 	}
 
 	foundAtLeastOneMapping := false
@@ -448,11 +458,9 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 			associateWithType(imgMappings, bundleImages, image.TypeOperatorBundle),
 			associateWithType(imgMappings, []string{ctlgRef.Ref.Exact()}, image.TypeOperatorCatalog),
 		} {
-			merr := &image.MirrorError{}
-			if !errors.As(err, &merr) {
+			if err != nil {
 				return err
 			}
-			o.Logger.Warn(err)
 		}
 		return nil
 	}); err != nil {
