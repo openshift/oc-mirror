@@ -376,7 +376,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		catOpts.DryRun = o.DryRun
 		catOpts.MaxPathComponents = 2
 		catOpts.SecurityOptions.Insecure = o.SkipTLS
-		catOpts.FilterOptions.FilterByOS = "linux/amd64"
+		catOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: o.FilterByOS}
 		catOpts.MaxICSPSize = 250000
 
 		args := []string{

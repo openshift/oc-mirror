@@ -219,6 +219,8 @@ func includeFile(fpath string) bool {
 
 // Copied from mholt archiver repo. Temporary and can
 // add back to repo
+// Changes include the additional of the excludePath variable and is
+// passed to the untarNext function
 func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
 
 	if !fileExists(destination) {
@@ -287,6 +289,9 @@ func untarNext(a Archiver, destination string, exclude []string) error {
 		return fmt.Errorf("checking path traversal attempt: %v", errPath)
 	}
 
+	// Added change here to check if
+	// current path is in the exclusion
+	// list
 	for _, path := range exclude {
 		if within(path, header.Name) {
 			return nil
