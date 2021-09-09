@@ -253,13 +253,15 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		case image.TypeOCPRelease:
 			m.Destination.Ref.Tag = ""
 			m.Destination.Ref.ID = ""
-			// Only add top level release images to
-			// release mapping
-			if strings.Contains(assoc.Name, "ocp-release") {
+			if assoc.TopLevel {
 				releaseMappings = append(releaseMappings, m)
 			}
 		case image.TypeOperatorCatalog:
-			catalogMappings = append(catalogMappings, m)
+			if assoc.TopLevel {
+				catalogMappings = append(catalogMappings, m)
+			} else {
+				logrus.Infof("skipping %v", assoc)
+			}
 		case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 			// Let the `catalog mirror` API call mirror all bundle and related images in the catalog.
 			// TODO(estroz): this may be incorrect if bundle and related images not in a catalog can be archived,
@@ -374,13 +376,14 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		catOpts.DryRun = o.DryRun
 		catOpts.MaxPathComponents = 2
 		catOpts.SecurityOptions.Insecure = o.SkipTLS
-		//catOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
+		catOpts.FilterOptions.FilterByOS = "linux/amd64"
+		catOpts.MaxICSPSize = 250000
 
 		args := []string{
 			m.Source.String(),
 			o.ToMirror,
 		}
-		if err := catOpts.Complete(&cobra.Command{}, args); err != nil {
+		if err := catOpts.Complete(cmd, args); err != nil {
 			return fmt.Errorf("error constructing catalog options: %v", err)
 		}
 		if err := catOpts.Validate(); err != nil {
@@ -443,7 +446,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 			if extension == a.String() {
 				logrus.Debugf("Extracting archive %s", path)
-				if err := a.Unarchive(path, dest); err != nil {
+				if err := archive.Unarchive(a, path, dest, []string{"blobs"}); err != nil {
 					return err
 				}
 			}
@@ -454,7 +457,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 	} else {
 
 		logrus.Infof("Extracting archive %s", o.ArchivePath)
-		if err := a.Unarchive(o.ArchivePath, dest); err != nil {
+		if err := archive.Unarchive(a, o.ArchivePath, dest, []string{"blobs"}); err != nil {
 			return err
 		}
 	}

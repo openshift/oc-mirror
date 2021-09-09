@@ -245,6 +245,10 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (imag
 		return nil, err
 	}
 	for k, assoc := range assocs {
+		if strings.Contains(assoc.Name, "ocp-release") {
+			assoc.TopLevel = true
+		}
+
 		assoc.Type = image.TypeOCPRelease
 		assocs[k] = assoc
 	}

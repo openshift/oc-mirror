@@ -1,10 +1,13 @@
 package archive
 
 import (
+	"archive/tar"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
@@ -24,6 +27,7 @@ type Archiver interface {
 	Walk(string, archiver.WalkFunc) error
 	Open(io.Reader, int64) error
 	Read() (archiver.File, error)
+	CheckPath(string, string) error
 }
 
 type packager struct {
@@ -211,4 +215,178 @@ func blobInArchive(file string) string {
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
 	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
+}
+
+// Copied from mholt archiver repo. Temporary and can
+// add back to repo
+func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
+
+	if !fileExists(destination) {
+		err := mkdir(destination, 0755)
+		if err != nil {
+			return fmt.Errorf("preparing destination: %v", err)
+		}
+	}
+
+	file, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("opening source archive: %v", err)
+	}
+	defer file.Close()
+
+	err = a.Open(file, 0)
+	if err != nil {
+		return fmt.Errorf("opening tar archive for reading: %v", err)
+	}
+	defer a.Close()
+
+	for {
+		err := untarNext(a, destination, excludePaths)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			if archiver.IsIllegalPathError(err) {
+				log.Printf("[ERROR] Reading file in tar archive: %v", err)
+				continue
+			}
+			return fmt.Errorf("reading file in tar archive: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func fileExists(name string) bool {
+	_, err := os.Stat(name)
+	return !os.IsNotExist(err)
+}
+
+func mkdir(dirPath string, dirMode os.FileMode) error {
+	err := os.MkdirAll(dirPath, dirMode)
+	if err != nil {
+		return fmt.Errorf("%s: making directory: %v", dirPath, err)
+	}
+	return nil
+}
+
+func untarNext(a Archiver, destination string, exclude []string) error {
+	f, err := a.Read()
+	if err != nil {
+		return err // don't wrap error; calling loop must break on io.EOF
+	}
+	defer f.Close()
+
+	header, ok := f.Header.(*tar.Header)
+	if !ok {
+		return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
+	}
+
+	errPath := a.CheckPath(destination, header.Name)
+	if errPath != nil {
+		return fmt.Errorf("checking path traversal attempt: %v", errPath)
+	}
+
+	for _, path := range exclude {
+		if within(path, header.Name) {
+			return nil
+		}
+
+	}
+
+	return untarFile(f, destination, header)
+}
+
+func untarFile(f archiver.File, destination string, hdr *tar.Header) error {
+	to := filepath.Join(destination, hdr.Name)
+
+	switch hdr.Typeflag {
+	case tar.TypeDir:
+		return mkdir(to, f.Mode())
+	case tar.TypeReg, tar.TypeRegA, tar.TypeChar, tar.TypeBlock, tar.TypeFifo, tar.TypeGNUSparse:
+		return writeNewFile(to, f, f.Mode())
+	case tar.TypeSymlink:
+		return writeNewSymbolicLink(to, hdr.Linkname)
+	case tar.TypeLink:
+		return writeNewHardLink(to, filepath.Join(destination, hdr.Linkname))
+	case tar.TypeXGlobalHeader:
+		return nil // ignore the pax global header from git-generated tarballs
+	default:
+		return fmt.Errorf("%s: unknown type flag: %c", hdr.Name, hdr.Typeflag)
+	}
+}
+
+func writeNewFile(fpath string, in io.Reader, fm os.FileMode) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	out, err := os.Create(fpath)
+	if err != nil {
+		return fmt.Errorf("%s: creating new file: %v", fpath, err)
+	}
+	defer out.Close()
+
+	err = out.Chmod(fm)
+	if err != nil && runtime.GOOS != "windows" {
+		return fmt.Errorf("%s: changing file mode: %v", fpath, err)
+	}
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return fmt.Errorf("%s: writing file: %v", fpath, err)
+	}
+	return nil
+}
+
+func writeNewSymbolicLink(fpath string, target string) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	_, err = os.Lstat(fpath)
+	if err == nil {
+		err = os.Remove(fpath)
+		if err != nil {
+			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
+		}
+	}
+
+	err = os.Symlink(target, fpath)
+	if err != nil {
+		return fmt.Errorf("%s: making symbolic link for: %v", fpath, err)
+	}
+	return nil
+}
+
+func writeNewHardLink(fpath string, target string) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	_, err = os.Lstat(fpath)
+	if err == nil {
+		err = os.Remove(fpath)
+		if err != nil {
+			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
+		}
+	}
+
+	err = os.Link(target, fpath)
+	if err != nil {
+		return fmt.Errorf("%s: making hard link for: %v", fpath, err)
+	}
+	return nil
+}
+
+// within returns true if sub is within or equal to parent.
+func within(parent, sub string) bool {
+	rel, err := filepath.Rel(parent, sub)
+	if err != nil {
+		return false
+	}
+	return !strings.Contains(rel, "..")
 }

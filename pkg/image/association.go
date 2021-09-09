@@ -53,6 +53,9 @@ type Association struct {
 	// Type of the image in the context of this tool.
 	// See the ImageType enum for options.
 	Type ImageType `json:"type"`
+	// TopLeveLevel will determine if the association is a parent
+	// or child
+	TopLevel bool `json:"toplevel"`
 	// ManifestDigests of images if the image is a docker manifest list or OCI index.
 	// These manifests refer to image manifests by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
@@ -210,7 +213,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		// TODO(estroz): parallelize
-		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, skipParse)
+		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, true, skipParse)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -222,7 +225,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
-func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, localRoot, dirRef, tagOrID string, toplevel bool, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
@@ -283,7 +286,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, skipParse fu
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, false, skipParse)
 			if err != nil {
 				return nil, err
 			}
