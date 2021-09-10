@@ -425,6 +425,9 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 		}
 
 		for k, assoc := range assocs {
+			if assoc.Name == ctlgRef.Ref.Exact() {
+				assoc.TopLevel = true
+			}
 			assoc.Type = typ
 			assocs[k] = assoc
 		}
