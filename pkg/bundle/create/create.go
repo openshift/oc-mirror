@@ -126,6 +126,7 @@ func (o *Options) RunDiff(ctx context.Context) error {
 
 		if len(cfg.Mirror.Operators) != 0 {
 			opts := operator.NewMirrorOptions(*o.RootOptions)
+			opts.SkipImagePin = o.SkipImagePin
 			assocs, err := opts.Diff(ctx, cfg, lastRun)
 			if err != nil {
 				return meta, run, err
@@ -165,6 +166,13 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	if err != nil {
 		return err
 	}
+
+	// Make sure the `opm` image exists during the publish step
+	// since catalog images need to be rebuilt.
+	// TODO(estroz): vet that this is the correct image, and version correctly.
+	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha1.AdditionalImages{
+		Image: v1alpha1.Image{Name: "quay.io/operator-framework/opm:latest"},
+	})
 
 	// Validating user path input
 	if err := o.ValidatePaths(); err != nil {

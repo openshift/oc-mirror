@@ -2,7 +2,6 @@ package bundle
 
 import (
 	"fmt"
-	"path"
 	"path/filepath"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -57,12 +56,8 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 		}
 
 		// Set destination image information
-		pathRef := "file://" + img.Name
-
-		dstRef, err := imagesource.ParseReference(pathRef)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing destination reference %s: %v", pathRef, err)
-		}
+		dstRef := srcRef
+		dstRef.Type = imagesource.DestinationFile
 		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
 
 		// Check if image is specified as a blocked image
@@ -78,8 +73,10 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 
 		// Add mapping and image for image association.
 		// The registry component is not included in the final path.
-		assocMappings[srcRef.String()] = "file://" + path.Join(dstRef.Ref.Namespace, dstRef.Ref.NameString())
-		images[i] = srcRef.String()
+		srcImage := srcRef.Ref.String()
+		dstRef.Ref.Registry = ""
+		assocMappings[srcImage] = dstRef.String()
+		images[i] = srcImage
 	}
 
 	opts.Mappings = mappings
