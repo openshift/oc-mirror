@@ -35,18 +35,13 @@ func (e *ErrInvalidComponent) Error() string {
 	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
 }
 
-// AssociationSet is a mapped for Association
+// Associations is a map for Association
 // searching
-type AssociationSet map[string]Association
+type Associations map[string]Association
 
-// Associations is a set of image Associations
+// AssociationSet is a set of image Associations
 // mapped to their images
-type Associations map[string]AssociationSet
-
-// NewAssociations instantiates a new multimap.
-func NewAssociations() Associations {
-	return make(map[string]AssociationSet)
-}
+type AssociationSet map[string]Associations
 
 // Association between an image and its children, either image layers or child manifests.
 type Association struct {
@@ -97,7 +92,7 @@ func (it ImageType) String() string {
 }
 
 // Search will return all Associations for the specificed key
-func (as Associations) Search(key string) (values []Association, found bool) {
+func (as AssociationSet) Search(key string) (values []Association, found bool) {
 	asSet, found := as[key]
 	values = make([]Association, len(asSet))
 	count := 0
@@ -108,9 +103,9 @@ func (as Associations) Search(key string) (values []Association, found bool) {
 	return
 }
 
-// UpdateKey will get values for the provided key and update the to the new key.
+// UpdateKey will move values under oldKey to newKey in Assocations.
 // Old entries will be deleted.
-func (as Associations) UpdateKey(oldKey, newKey string) error {
+func (as AssociationSet) UpdateKey(oldKey, newKey string) error {
 
 	// make sure we don't delete the
 	// same key we just set
@@ -130,7 +125,7 @@ func (as Associations) UpdateKey(oldKey, newKey string) error {
 }
 
 // UpdateValue will update the Association values for a given key
-func (as Associations) UpdateValue(key string, value Association) error {
+func (as AssociationSet) UpdateValue(key string, value Association) error {
 
 	set, found := as[key]
 	if !found {
@@ -142,19 +137,19 @@ func (as Associations) UpdateValue(key string, value Association) error {
 }
 
 // Add stores a key-value pair in this multimap.
-func (as Associations) Add(key string, value Association) {
+func (as AssociationSet) Add(key string, value Association) {
 	set, found := as[key]
 	if found {
 		set[value.Name] = value
 	} else {
-		set = make(AssociationSet)
+		set = make(Associations)
 		set[value.Name] = value
 		as[key] = set
 	}
 }
 
 // Keys returns all unique keys contained in map
-func (as Associations) Keys() []string {
+func (as AssociationSet) Keys() []string {
 	keys := make([]string, len(as))
 	count := 0
 	for key := range as {
@@ -165,13 +160,13 @@ func (as Associations) Keys() []string {
 }
 
 // ContainsKey checks if the map contain the specified key
-func (as Associations) ContainsKey(key string) (found bool) {
+func (as AssociationSet) ContainsKey(key string) (found bool) {
 	_, found = as[key]
 	return
 }
 
 // ContainsKey checks if the map contain the specified key
-func (as Associations) SetContainsKey(key, setKey string) (found bool) {
+func (as AssociationSet) SetContainsKey(key, setKey string) (found bool) {
 	asSet, found := as[key]
 	if !found {
 		return false
@@ -181,7 +176,7 @@ func (as Associations) SetContainsKey(key, setKey string) (found bool) {
 }
 
 // Merge Associations into the receiver.
-func (as Associations) Merge(in Associations) {
+func (as AssociationSet) Merge(in AssociationSet) {
 	for _, imageName := range in.Keys() {
 		values, _ := in.Search(imageName)
 		for _, value := range values {
@@ -191,7 +186,7 @@ func (as Associations) Merge(in Associations) {
 }
 
 // Encode Associations in an efficient, opaque format.
-func (as Associations) Encode(w io.Writer) error {
+func (as AssociationSet) Encode(w io.Writer) error {
 	if err := as.validate(); err != nil {
 		return fmt.Errorf("invalid image associations: %v", err)
 	}
@@ -204,7 +199,7 @@ func (as Associations) Encode(w io.Writer) error {
 
 // Decode Associations from an opaque format. Only useable if Associations
 // was encoded with Encode().
-func (as *Associations) Decode(r io.Reader) error {
+func (as *AssociationSet) Decode(r io.Reader) error {
 	dec := gob.NewDecoder(r)
 	if err := dec.Decode(as); err != nil {
 		return fmt.Errorf("error decoding image associations: %v", err)
@@ -220,10 +215,13 @@ func (as *Associations) Decode(r io.Reader) error {
 	return nil
 }
 
-func (as Associations) validate() error {
+func (as AssociationSet) validate() error {
 	var errs []error
 	for _, imageName := range as.Keys() {
-		assocs, _ := as.Search(imageName)
+		assocs, found := as.Search(imageName)
+		if !found {
+			return fmt.Errorf("image %q does not exist in assoication set", imageName)
+		}
 		for _, a := range assocs {
 
 			if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
@@ -275,9 +273,9 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 	return mappings, scanner.Err()
 }
 
-func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string, typ ImageType) (Associations, utilerrors.Aggregate) {
+func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string, typ ImageType) (AssociationSet, utilerrors.Aggregate) {
 	errs := []error{}
-	bundleAssociations := NewAssociations()
+	bundleAssociations := AssociationSet{}
 
 	skipParse := func(ref string) bool {
 		seen := bundleAssociations.ContainsKey(ref)

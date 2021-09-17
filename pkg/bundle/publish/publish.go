@@ -73,7 +73,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Create workspace
-	cleanup, err := o.mktempDir()
+	cleanup, dir, err := o.mktempDir()
+	o.tmp = dir
 	if err != nil {
 		return err
 	}
@@ -195,9 +196,14 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		cleanup, err := o.mktempDir()
+		cleanup, dir, err := o.mktempDir()
+		o.tmp = dir
 		if err != nil {
 			return &image.ErrNoMapping{}
+		}
+		// Schedule temporary directory cleanup
+		if !o.SkipCleanup {
+			defer cleanup()
 		}
 
 		for _, assoc := range values {
@@ -265,6 +271,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			} else {
 				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), o.tmp, filesInArchive); err != nil {
 					errs = append(errs, err)
+					continue
 				}
 				m.Source.Ref.Tag = assoc.TagSymlink
 			}
@@ -365,7 +372,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 }
 
 // readAssociations will process and return data from the image associations file
-func readAssociations(assocPath string) (assocs image.Associations, err error) {
+func readAssociations(assocPath string) (assocs image.AssociationSet, err error) {
 	f, err := os.Open(assocPath)
 	if err != nil {
 		return assocs, fmt.Errorf("error opening image associations file: %v", err)
@@ -592,15 +599,14 @@ func unpack(archiveFilePath, dest string, filesInArchive map[string]string) erro
 	return nil
 }
 
-func (o *Options) mktempDir() (func(), error) {
+func (o *Options) mktempDir() (func(), string, error) {
 	dir, err := ioutil.TempDir(o.Dir, "images")
-	o.tmp = dir
 	return func() {
 		if err := os.RemoveAll(dir); err != nil {
 			logrus.Fatal(err)
 		}
 		logrus.Debugf("Deleted temp directory %s", dir)
-	}, err
+	}, dir, err
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release

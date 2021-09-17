@@ -212,7 +212,7 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (image.Associations, error) {
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (image.AssociationSet, error) {
 	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
@@ -261,9 +261,9 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (imag
 	return assocs, nil
 }
 
-func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
+func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
-	allAssocs := image.NewAssociations()
+	allAssocs := image.AssociationSet{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
@@ -338,9 +338,9 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 	return allAssocs, nil
 }
 
-func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
+func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
-	allAssocs := image.NewAssociations()
+	allAssocs := image.AssociationSet{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 

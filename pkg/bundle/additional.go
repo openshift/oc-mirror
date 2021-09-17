@@ -24,7 +24,7 @@ func NewAdditionalOptions(ro cli.RootOptions) *AdditionalOptions {
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
+func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun

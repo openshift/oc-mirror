@@ -86,7 +86,7 @@ func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
 }
 
 // Full mirrors each catalog image in its entirety to the <Dir>/src directory.
-func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.Associations, error) {
+func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -103,7 +103,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	}
 	defer reg.Destroy()
 
-	allAssocs := image.NewAssociations()
+	allAssocs := image.AssociationSet{}
 	for _, ctlg := range cfg.Mirror.Operators {
 		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
 		if err != nil {
@@ -151,7 +151,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 
 // Diff mirrors only the diff between each old and new catalog image pair
 // to the <Dir>/src directory.
-func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.Associations, error) {
+func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.AssociationSet, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -168,7 +168,7 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	}
 	defer reg.Destroy()
 
-	allAssocs := image.NewAssociations()
+	allAssocs := image.AssociationSet{}
 	for _, ctlg := range cfg.Mirror.Operators {
 		// Generate and mirror a heads-only diff using the catalog as a new ref,
 		// and an old ref found for this catalog in lastRun.
@@ -400,7 +400,7 @@ func isMappingFile(p string) bool {
 	return filepath.Base(p) == mappingFile
 }
 
-func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesource.TypedImageReference, dc *declcfg.DeclarativeConfig, allAssocs image.Associations) error {
+func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesource.TypedImageReference, dc *declcfg.DeclarativeConfig, allAssocs image.AssociationSet) error {
 
 	var bundleImages, relatedImages []string
 	for _, b := range dc.Bundles {
