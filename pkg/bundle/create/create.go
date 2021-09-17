@@ -51,7 +51,7 @@ func (o *Options) RunFull(ctx context.Context) error {
 			Timestamp: int(time.Now().Unix()),
 		}
 
-		allAssocs := image.Associations{}
+		allAssocs := image.AssociationSet{}
 
 		if len(cfg.Mirror.OCP.Channels) != 0 {
 			opts := bundle.NewReleaseOptions(*o.RootOptions)
@@ -113,7 +113,7 @@ func (o *Options) RunDiff(ctx context.Context) error {
 			Timestamp: int(time.Now().Unix()),
 		}
 
-		allAssocs := image.Associations{}
+		allAssocs := image.AssociationSet{}
 
 		if len(cfg.Mirror.OCP.Channels) != 0 {
 			opts := bundle.NewReleaseOptions(*o.RootOptions)
@@ -260,7 +260,7 @@ func (o *Options) prepareArchive(cfg v1alpha1.ImageSetConfiguration, manifests [
 	packager := archive.NewPackager(manifests, blobs)
 
 	// Create tar archive
-	if err := packager.CreateSplitArchive(segSize, output, ".", "bundle"); err != nil {
+	if err := packager.CreateSplitArchive(segSize, output, ".", "bundle", o.SkipCleanup); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
@@ -296,7 +296,7 @@ func (o *Options) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alp
 	return manifests, blobs, nil
 }
 
-func (o *Options) writeAssociations(assocs image.Associations) error {
+func (o *Options) writeAssociations(assocs image.AssociationSet) error {
 	assocPath := filepath.Join(o.Dir, config.SourceDir, config.AssociationsBasePath)
 	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
 		return fmt.Errorf("mkdir image associations file: %v", err)

@@ -13,6 +13,8 @@ type Options struct {
 
 	ArchivePath string
 	ToMirror    string
+
+	tmp string
 }
 
 func (o *Options) BindFlags(fs *pflag.FlagSet) {
