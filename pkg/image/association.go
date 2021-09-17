@@ -35,8 +35,18 @@ func (e *ErrInvalidComponent) Error() string {
 	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
 }
 
-// Associations is a set of image Associations.
-type Associations map[string]Association
+// AssociationSet is a mapped for Association
+// searching
+type AssociationSet map[string]Association
+
+// Associations is a set of image Associations
+// mapped to their images
+type Associations map[string]AssociationSet
+
+// NewAssociations instantiates a new multimap.
+func NewAssociations() Associations {
+	return make(map[string]AssociationSet)
+}
 
 // Association between an image and its children, either image layers or child manifests.
 type Association struct {
@@ -53,9 +63,6 @@ type Association struct {
 	// Type of the image in the context of this tool.
 	// See the ImageType enum for options.
 	Type ImageType `json:"type"`
-	// TopLeveLevel will determine if the association is a parent
-	// or child
-	TopLevel bool `json:"toplevel"`
 	// ManifestDigests of images if the image is a docker manifest list or OCI index.
 	// These manifests refer to image manifests by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
@@ -89,10 +96,97 @@ func (it ImageType) String() string {
 	return imageTypeStrings[it]
 }
 
+// Search will return all Associations for the specificed key
+func (as Associations) Search(key string) (values []Association, found bool) {
+	asSet, found := as[key]
+	values = make([]Association, len(asSet))
+	count := 0
+	for _, value := range asSet {
+		values[count] = value
+		count++
+	}
+	return
+}
+
+// UpdateKey will get values for the provided key and update the to the new key.
+// Old entries will be deleted.
+func (as Associations) UpdateKey(oldKey, newKey string) error {
+
+	// make sure we don't delete the
+	// same key we just set
+	if newKey == oldKey {
+		return nil
+	}
+	values, found := as.Search(oldKey)
+	if !found {
+		return errors.New("key does not exist in map")
+	}
+	for _, value := range values {
+		as.Add(newKey, value)
+	}
+	delete(as, oldKey)
+
+	return nil
+}
+
+// UpdateValue will update the Association values for a given key
+func (as Associations) UpdateValue(key string, value Association) error {
+
+	set, found := as[key]
+	if !found {
+		return errors.New("key does not exist in map")
+	}
+	set[value.Name] = value
+
+	return nil
+}
+
+// Add stores a key-value pair in this multimap.
+func (as Associations) Add(key string, value Association) {
+	set, found := as[key]
+	if found {
+		set[value.Name] = value
+	} else {
+		set = make(AssociationSet)
+		set[value.Name] = value
+		as[key] = set
+	}
+}
+
+// Keys returns all unique keys contained in map
+func (as Associations) Keys() []string {
+	keys := make([]string, len(as))
+	count := 0
+	for key := range as {
+		keys[count] = key
+		count++
+	}
+	return keys
+}
+
+// ContainsKey checks if the map contain the specified key
+func (as Associations) ContainsKey(key string) (found bool) {
+	_, found = as[key]
+	return
+}
+
+// ContainsKey checks if the map contain the specified key
+func (as Associations) SetContainsKey(key, setKey string) (found bool) {
+	asSet, found := as[key]
+	if !found {
+		return false
+	}
+	_, found = asSet[setKey]
+	return
+}
+
 // Merge Associations into the receiver.
 func (as Associations) Merge(in Associations) {
-	for k, v := range in {
-		as[k] = v
+	for _, imageName := range in.Keys() {
+		values, _ := in.Search(imageName)
+		for _, value := range values {
+			as.Add(imageName, value)
+		}
 	}
 }
 
@@ -116,36 +210,43 @@ func (as *Associations) Decode(r io.Reader) error {
 		return fmt.Errorf("error decoding image associations: %v", err)
 	}
 	// Update paths for local usage.
-	for k, assoc := range *as {
-		assoc.Path = filepath.FromSlash(assoc.Path)
-		(*as)[k] = assoc
+	for _, imageName := range as.Keys() {
+		assocs, _ := as.Search(imageName)
+		for _, assoc := range assocs {
+			assoc.Path = filepath.FromSlash(assoc.Path)
+			as.UpdateValue(imageName, assoc)
+		}
 	}
 	return nil
 }
 
 func (as Associations) validate() error {
 	var errs []error
-	for _, a := range as {
-		if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
-			continue
-		}
-		switch a.Type {
-		case TypeInvalid:
-			// TypeInvalid is the default value for the concrete type, which means the field was not set.
-			errs = append(errs, fmt.Errorf("image %q: must set image type", a.Name))
-		default:
-			errs = append(errs, fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type))
-		}
+	for _, imageName := range as.Keys() {
+		assocs, _ := as.Search(imageName)
+		for _, a := range assocs {
 
-		if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
-			errs = append(errs, fmt.Errorf("image %q: child descriptors cannot contain both manifests and image layers", a.Name))
-		}
-		if len(a.ManifestDigests) == 0 && len(a.LayerDigests) == 0 {
-			errs = append(errs, fmt.Errorf("image %q: child descriptors must contain at least one manifest or image layer", a.Name))
-		}
+			if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
+				continue
+			}
+			switch a.Type {
+			case TypeInvalid:
+				// TypeInvalid is the default value for the concrete type, which means the field was not set.
+				errs = append(errs, fmt.Errorf("image %q: must set image type", a.Name))
+			default:
+				errs = append(errs, fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type))
+			}
 
-		if a.ID == "" {
-			errs = append(errs, fmt.Errorf("image %q: tag or ID must be set", a.Name))
+			if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
+				errs = append(errs, fmt.Errorf("image %q: child descriptors cannot contain both manifests and image layers", a.Name))
+			}
+			if len(a.ManifestDigests) == 0 && len(a.LayerDigests) == 0 {
+				errs = append(errs, fmt.Errorf("image %q: child descriptors must contain at least one manifest or image layer", a.Name))
+			}
+
+			if a.ID == "" {
+				errs = append(errs, fmt.Errorf("image %q: tag or ID must be set", a.Name))
+			}
 		}
 	}
 	return utilerrors.NewAggregate(errs)
@@ -159,7 +260,7 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 	}
 	defer f.Close()
 
-	mappings := map[string]string{}
+	mappings := make(map[string]string)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		text := scanner.Text()
@@ -174,11 +275,12 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 	return mappings, scanner.Err()
 }
 
-func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string) (Associations, utilerrors.Aggregate) {
+func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string, typ ImageType) (Associations, utilerrors.Aggregate) {
 	errs := []error{}
-	bundleAssociations := Associations{}
+	bundleAssociations := NewAssociations()
+
 	skipParse := func(ref string) bool {
-		_, seen := bundleAssociations[ref]
+		seen := bundleAssociations.ContainsKey(ref)
 		return seen
 	}
 
@@ -213,19 +315,19 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		// TODO(estroz): parallelize
-		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, true, skipParse)
+		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, typ, skipParse)
 		if err != nil {
 			errs = append(errs, err)
 		}
 		for _, association := range associations {
-			bundleAssociations[association.Name] = association
+			bundleAssociations.Add(image, association)
 		}
 	}
 
 	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
-func associateImageLayers(image, localRoot, dirRef, tagOrID string, toplevel bool, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageType, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
@@ -270,6 +372,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, toplevel boo
 		Path:       dirRef,
 		ID:         id,
 		TagSymlink: tag,
+		Type:       typ,
 	}
 	switch mt := ctrsimgmanifest.GuessMIMEType(manifestBytes); mt {
 	case "":
@@ -286,7 +389,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, toplevel boo
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, false, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, typ, skipParse)
 			if err != nil {
 				return nil, err
 			}

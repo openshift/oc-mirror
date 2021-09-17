@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -70,7 +71,7 @@ func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, prefix string) error {
+func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables
 	splitNum := 0
@@ -141,8 +142,12 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 		if info.Size()+splitSize > maxSplitSize {
 
 			// Close current tar archive
-			p.Close()
-			splitFile.Close()
+			if err := p.Close(); err != nil {
+				return err
+			}
+			if err := splitFile.Close(); err != nil {
+				return err
+			}
 
 			// Increment split number and reset splitSize
 			splitNum += 1
@@ -160,6 +165,14 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 		// Write file to current archive file
 		if err = p.Write(f); err != nil {
 			return fmt.Errorf("%s: writing: %s", fpath, err)
+		}
+
+		// Delete file after written to archive
+		if shouldRemove(fpath, info) && !skipCleanup {
+			if err := os.Remove(fpath); err != nil {
+				return err
+			}
+
 		}
 
 		logrus.Debugf("File %s added to archive", fpath)
@@ -215,6 +228,10 @@ func blobInArchive(file string) string {
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
 	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
+}
+
+func shouldRemove(fpath string, info fs.FileInfo) bool {
+	return !includeFile(fpath) && !info.IsDir()
 }
 
 // Copied from mholt archiver repo. Temporary and can

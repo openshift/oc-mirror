@@ -33,6 +33,7 @@ func Test_SplitArchive(t *testing.T) {
 		maxSplitSize int64
 		blobs        []v1alpha1.Blob
 		manifests    []v1alpha1.Manifest
+		skipCleanup  bool
 		want         string
 	}{
 		{
@@ -40,6 +41,15 @@ func Test_SplitArchive(t *testing.T) {
 			blobs:        []v1alpha1.Blob{{ID: "sha256:123456789"}},
 			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
 			maxSplitSize: 5 * 1024 * 1024,
+			skipCleanup:  false,
+			want:         "testbundle",
+		},
+		{
+			name:         "testing cleanup",
+			blobs:        []v1alpha1.Blob{{ID: "sha256:123456789"}},
+			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
+			maxSplitSize: 5 * 1024 * 1024,
+			skipCleanup:  true,
 			want:         "testbundle",
 		},
 	}
@@ -66,8 +76,19 @@ func Test_SplitArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := packager.CreateSplitArchive(tt.maxSplitSize, cwd, ".", tt.want); err != nil {
+		if err := packager.CreateSplitArchive(tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
 			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
+		}
+
+		_, err = os.Stat(filepath.Join(cwd, "test1"))
+		if !tt.skipCleanup {
+			if err == nil {
+				t.Error("File test1 was found, expected to be cleaned up")
+			}
+		} else {
+			if err != nil {
+				t.Error("File test1 was not found, expected to skip cleanup")
+			}
 		}
 
 		err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {

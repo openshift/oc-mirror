@@ -16,6 +16,7 @@ require (
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20190823105129-775207bd45b6
+	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
 	github.com/openshift/installer v0.16.1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
@@ -26,6 +27,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/apimachinery v0.22.1
 	k8s.io/cli-runtime v0.22.0
 	k8s.io/client-go v0.22.1

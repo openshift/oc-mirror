@@ -103,7 +103,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	}
 	defer reg.Destroy()
 
-	allAssocs := image.Associations{}
+	allAssocs := image.NewAssociations()
 	for _, ctlg := range cfg.Mirror.Operators {
 		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
 		if err != nil {
@@ -168,7 +168,7 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	}
 	defer reg.Destroy()
 
-	allAssocs := image.Associations{}
+	allAssocs := image.NewAssociations()
 	for _, ctlg := range cfg.Mirror.Operators {
 		// Generate and mirror a heads-only diff using the catalog as a new ref,
 		// and an old ref found for this catalog in lastRun.
@@ -411,8 +411,9 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 	}
 
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
+
 	associateWithType := func(mappings map[string]string, images []string, typ image.ImageType) error {
-		assocs, err := image.AssociateImageLayers(srcDir, mappings, images)
+		assocs, err := image.AssociateImageLayers(srcDir, mappings, images, typ)
 		if err != nil {
 			merr := &image.ErrNoMapping{}
 			cerr := &image.ErrInvalidComponent{}
@@ -424,13 +425,6 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 			o.Logger.Warn(err)
 		}
 
-		for k, assoc := range assocs {
-			if assoc.Name == ctlgRef.Ref.Exact() {
-				assoc.TopLevel = true
-			}
-			assoc.Type = typ
-			assocs[k] = assoc
-		}
 		allAssocs.Merge(assocs)
 
 		return nil
