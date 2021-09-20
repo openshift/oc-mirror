@@ -316,8 +316,6 @@ github.com/envoyproxy/go-control-plane v0.9.7/go.mod h1:cwu0lG7PUMfa9snN8LXBig5y
 github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.mod h1:cXg6YxExXjJnVBQHBLXeUAgxn2UodCpnH306RInaBQk=
 github.com/envoyproxy/go-control-plane v0.9.9-0.20210217033140-668b12f5399d/go.mod h1:cXg6YxExXjJnVBQHBLXeUAgxn2UodCpnH306RInaBQk=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
-github.com/estroz/operator-registry v1.3.1-0.20210821032807-3cef8db2bbfe h1:cS7iMe+886zyR32JiG9cfiTZGJdPAIpf1YVynyOHqkM=
-github.com/estroz/operator-registry v1.3.1-0.20210821032807-3cef8db2bbfe/go.mod h1:ogmTxGxbWOvc1lqtZHCQny6sB4Xj3JOPzKJb9GOTQxs=
 github.com/evanphx/json-patch v0.5.2/go.mod h1:ZWS5hhDbVDyob71nXKNL0+PWn6ToqBHMikGIFbs31qQ=
 github.com/evanphx/json-patch v4.2.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
@@ -908,6 +906,8 @@ github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnh
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/operator-framework/api v0.10.5 h1:/WvLKOPo8zZMyEmuW0kLC0PJBt4Xal8HZkFioKIxqTA=
 github.com/operator-framework/api v0.10.5/go.mod h1:tV0BUNvly7szq28ZPBXhjp1Sqg5yHCOeX19ui9K4vjI=
+github.com/operator-framework/operator-registry v1.18.1-0.20210917182743-3880486cea2b h1:3xAXHlZq4J2Xhl6GWKH811o6Li/9uyy8AmHjiNNDKTU=
+github.com/operator-framework/operator-registry v1.18.1-0.20210917182743-3880486cea2b/go.mod h1:ogmTxGxbWOvc1lqtZHCQny6sB4Xj3JOPzKJb9GOTQxs=
 github.com/ostreedev/ostree-go v0.0.0-20190702140239-759a8c1ac913/go.mod h1:J6OG6YJVEWopen4avK3VNQSnALmmjvniMmni/YFYAwc=
 github.com/otiai10/copy v1.2.0 h1:HvG945u96iNadPoG2/Ja2+AUJeW5YuFQMixq9yirC+k=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=

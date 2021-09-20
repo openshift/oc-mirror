@@ -20,7 +20,7 @@ require (
 	github.com/openshift/installer v0.16.1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
-	github.com/operator-framework/operator-registry v1.18.1-0.20210819180346-a0bb1e5b6d1a
+	github.com/operator-framework/operator-registry v1.18.1-0.20210917182743-3880486cea2b
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.2.1
@@ -46,6 +46,3 @@ replace (
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
 	k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
 )
-
-// TODO(estroz): remove this once main operator-registry repo exposes libs needed.
-replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20210821032807-3cef8db2bbfe
