@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -148,11 +149,7 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 		return err
 	}
 	if err := (action.GenerateDockerfile{
-		// TODO(estroz): handle this image as an additional image, and version it.
-		// Is this image fq name correct? It will work without an ICSP because
-		// the mirror == its registry, but will tags be handled correctly by
-		// the container distribution layer?
-		BaseImage: o.ToMirror + "/operator-framework/opm:latest",
+		BaseImage: operator.OPMImage,
 		IndexDir:  ".",
 		Writer:    f,
 	}).Run(); err != nil {

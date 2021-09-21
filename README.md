@@ -17,8 +17,8 @@ Bundle management is a two part process:
 The mirror registry `reg.mirror.com` is used in this example.
 Replace this value with a real registry host, or create a `docker.io/library/registry:2` container locally.
 
-1. Download pull secret and place at ~/.docker/config.json
-    - This should contain auth config for both release/catalog source images _and_ your mirror registry.
+1. Download pull secret and place at `~/.docker/config.json`<sup>1</sup>.
+    - Your mirror registry secret must have both push and pull scopes.
 1. Build:
     ```sh
     make build
@@ -30,6 +30,9 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```
 
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
+
+<sup>1</sup> For this example, the `create` and `publish` steps are run on the same machine. Therefore your `~/.docker/config.json`
+should contain auth config for both release/catalog source images _and_ your mirror registry.
 
 ## Bundle Spec
 
