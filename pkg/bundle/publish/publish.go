@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,11 @@ import (
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
 	"github.com/RedHatGov/bundle/pkg/metadata/storage"
+)
+
+const (
+	icspSizeLimit = 250000
+	icspScope     = "repository"
 )
 
 type UuidError struct {
@@ -73,8 +79,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Create workspace
-	cleanup, dir, err := o.mktempDir()
-	o.tmp = dir
+	cleanup, tmpdir, err := mktempDir(o.Dir)
 	if err != nil {
 		return err
 	}
@@ -84,7 +89,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		defer cleanup()
 	}
 
-	logrus.Debugf("Using temporary directory %s to unarchive metadata", o.tmp)
+	logrus.Debugf("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
 	filesInArchive, err := o.readImageSet(a)
@@ -93,7 +98,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Extract incoming metadata
-	if err := unpack(config.MetadataBasePath, o.tmp, filesInArchive); err != nil {
+	if err := unpack(config.MetadataBasePath, tmpdir, filesInArchive); err != nil {
 		return err
 	}
 
@@ -104,7 +109,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Create a local workspace backend
-	workspace, err := storage.NewLocalBackend(o.tmp)
+	workspace, err := storage.NewLocalBackend(tmpdir)
 	if err != nil {
 		return fmt.Errorf("error opening local backend: %v", err)
 	}
@@ -174,9 +179,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	var (
-		errs []error
-		// Map of remote layer digest to the set of paths they should be fetched to.
-		aerr  = &ErrArchiveFileNotFound{}
+		errs  []error
 		icsps [][]byte
 	)
 
@@ -190,20 +193,16 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
+		// Map of remote layer digest to the set of paths they should be fetched to.
 		missingLayers := map[string][]string{}
 		icspMapping := make(map[imagesource.TypedImageReference]imagesource.TypedImageReference)
 
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		cleanup, dir, err := o.mktempDir()
-		o.tmp = dir
+		_, unpackDir, err := mktempDir(tmpdir)
 		if err != nil {
-			return &image.ErrNoMapping{}
-		}
-		// Schedule temporary directory cleanup
-		if !o.SkipCleanup {
-			defer cleanup()
+			return err
 		}
 
 		for _, assoc := range values {
@@ -221,11 +220,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 						continue
 					}
 					manifestArchivePath := filepath.Join(manifestPath, manifestDigest)
-					switch _, err := os.Stat(manifestPath); {
+					switch _, err := os.Stat(manifestArchivePath); {
 					case err == nil:
 						logrus.Debugf("Manifest found %s found in %s", manifestDigest, assoc.Path)
 					case errors.Is(err, os.ErrNotExist):
-						if err := unpack(manifestArchivePath, o.tmp, filesInArchive); err != nil {
+						if err := unpack(manifestArchivePath, unpackDir, filesInArchive); err != nil {
 							errs = append(errs, err)
 						}
 					default:
@@ -235,7 +234,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			}
 
 			// Unpack association main manifest
-			if err := unpack(filepath.Join(manifestPath, assoc.ID), o.tmp, filesInArchive); err != nil {
+			if err := unpack(filepath.Join(manifestPath, assoc.ID), unpackDir, filesInArchive); err != nil {
 				errs = append(errs, err)
 				continue
 			}
@@ -244,8 +243,9 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
 				// Construct blob path, which is adjacent to the manifests path.
 				blobPath := filepath.Join("blobs", layerDigest)
-				imagePath := filepath.Join(o.tmp, "v2", assoc.Path)
+				imagePath := filepath.Join(unpackDir, "v2", assoc.Path)
 				imageBlobPath := filepath.Join(imagePath, blobPath)
+				aerr := &ErrArchiveFileNotFound{}
 				switch err := unpack(blobPath, imagePath, filesInArchive); {
 				case err == nil:
 					logrus.Debugf("Blob %s found in %s", layerDigest, assoc.Path)
@@ -269,7 +269,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			if assoc.TagSymlink == "" {
 				m.Source.Ref.ID = assoc.ID
 			} else {
-				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), o.tmp, filesInArchive); err != nil {
+				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), unpackDir, filesInArchive); err != nil {
 					errs = append(errs, err)
 					continue
 				}
@@ -298,14 +298,13 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 					releaseMapping = m
 				}
 			case image.TypeOperatorCatalog:
-				genericMappings = append(genericMappings, m)
-
 				// Create a catalog source file for index
-				mapping := make(map[imagesource.TypedImageReference]imagesource.TypedImageReference)
-				mapping[m.Source] = m.Destination
+				mapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{m.Source: m.Destination}
 				if err := o.writeCatalogSource(manifestDir, mapping); err != nil {
-					errs = append(errs, fmt.Errorf("image %q: writing catalog source %v", imageName, err))
+					errs = append(errs, fmt.Errorf("image %q: error writing catalog source: %v", imageName, err))
+					continue
 				}
+				genericMappings = append(genericMappings, m)
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)
 			case image.TypeInvalid:
@@ -322,42 +321,57 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 		// Mirror all generic mappings for this image
 		if len(genericMappings) != 0 {
-			if err := o.mirrorImage(genericMappings); err != nil {
+			if err := o.mirrorImage(genericMappings, unpackDir); err != nil {
 				errs = append(errs, err)
-			}
-
-			if !o.SkipCleanup {
-				cleanup()
 			}
 		}
 
 		// If this is a release image mirror the full release
 		if releaseMapping.Source.String() != "" {
-			if err := o.mirrorRelease(releaseMapping, cmd, f); err != nil {
+			if err := o.mirrorRelease(releaseMapping, cmd, f, unpackDir); err != nil {
 				errs = append(errs, err)
-			}
-
-			if !o.SkipCleanup {
-				cleanup()
 			}
 		}
 
 		// Generate image ICSP data
 		if len(icspMapping) != 0 {
-			icsp, err := GenerateICSP(os.Stdout, imageName, 250000, "repository", icspMapping)
+			icsp, err := GenerateICSP(os.Stdout, imageName, icspSizeLimit, icspScope, icspMapping)
 			if err != nil {
 				errs = append(errs, err)
+			} else {
+				icsps = append(icsps, icsp)
 			}
-			icsps = append(icsps, icsp)
 		}
 	}
 	if len(errs) != 0 {
 		return utilerrors.NewAggregate(errs)
 	}
 
+	logrus.Debug("rebuilding catalog images")
+
+	ctlgRefs, err := o.rebuildCatalogs(ctx, tmpdir, filesInArchive)
+	if err != nil {
+		return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
+	}
+	// Create CatalogSource and ICSP manifests for all catalog refs.
+	// Source and dest refs are treated the same intentionally since
+	// the source image does not exist and destination image was built above.
+	for i, ref := range ctlgRefs {
+		icspMapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{ref: ref}
+		icsp, err := GenerateICSP(os.Stdout, ref.Ref.Name+"-"+strconv.Itoa(i), icspSizeLimit, icspScope, icspMapping)
+		if err != nil {
+			return fmt.Errorf("error generating ICSP for catalog image %q: %v", ref.Ref.Exact(), err)
+		}
+		icsps = append(icsps, icsp)
+
+		if err := writeCatalogSource(o.IOStreams.Out, ref, ref, manifestDir); err != nil {
+			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", ref.Ref.Exact(), err)
+		}
+	}
+
 	// Write an aggregation of ICSPs
 	if err := WriteICSP(os.Stdout, manifestDir, icsps); err != nil {
-		return err
+		return fmt.Errorf("error writing ICSPs: %v", err)
 	}
 
 	// Install catalogsource and icsp
@@ -599,22 +613,21 @@ func unpack(archiveFilePath, dest string, filesInArchive map[string]string) erro
 	return nil
 }
 
-func (o *Options) mktempDir() (func(), string, error) {
-	dir, err := ioutil.TempDir(o.Dir, "images")
+func mktempDir(dir string) (func(), string, error) {
+	dir, err := ioutil.TempDir(dir, "images.*")
 	return func() {
 		if err := os.RemoveAll(dir); err != nil {
 			logrus.Fatal(err)
 		}
-		logrus.Debugf("Deleted temp directory %s", dir)
 	}, dir, err
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
-func (o *Options) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory) error {
+func (o *Options) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
 	relOpts := release.NewMirrorOptions(o.IOStreams)
 	relOpts.From = mapping.Source.String()
-	relOpts.FromDir = o.tmp
+	relOpts.FromDir = fromDir
 	relOpts.To = mapping.Destination.String()
 	relOpts.SecurityOptions.Insecure = o.SkipTLS
 	relOpts.DryRun = o.DryRun
@@ -632,7 +645,7 @@ func (o *Options) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f
 }
 
 // mirrorImages uses the `oc mirror` library to mirror generic images
-func (o *Options) mirrorImage(mappings []imgmirror.Mapping) error {
+func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
 	// Mirror all file sources of each available image type to mirror registry.
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		var srcs []string
@@ -644,7 +657,7 @@ func (o *Options) mirrorImage(mappings []imgmirror.Mapping) error {
 	genOpts := imgmirror.NewMirrorImageOptions(o.IOStreams)
 	genOpts.Mappings = mappings
 	genOpts.DryRun = o.DryRun
-	genOpts.FromFileDir = o.tmp
+	genOpts.FromFileDir = fromDir
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	genOpts.SkipMultipleScopes = true
 	genOpts.KeepManifestList = true
@@ -668,11 +681,13 @@ func (o *Options) writeCatalogSource(manifestDir string, mapping map[imagesource
 		mapping, mapErrs := mappingForImages(images, source, dest, 2)
 		if len(mapErrs) > 0 {
 			errs = append(errs, mapErrs...)
+			continue
 		}
 
 		mappedIndex, err := mount(source, dest, 2)
 		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
 
 		mapping[source] = mappedIndex

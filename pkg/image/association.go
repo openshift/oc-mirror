@@ -14,7 +14,6 @@ import (
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -266,7 +265,6 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 		if len(split) != 2 {
 			return nil, fmt.Errorf("mapping %q expected to have exactly one \"=\"", text)
 		}
-		logrus.Debugf("read mapping: %s=%s", split[0], split[1])
 		mappings[strings.TrimSpace(split[0])] = strings.TrimSpace(split[1])
 	}
 

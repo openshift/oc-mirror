@@ -18,21 +18,31 @@ import (
 )
 
 // Copied from https://github.com/openshift/oc/blob/5d8dfa1c2e8e7469d69d76f21e0a166a0de8663b/pkg/cli/admin/catalog/mirror.go#L549
-// Changes made are breaking ICSP and Catalog Source generation into difference functions
+// Changes made are breaking ICSP and Catalog Source generation into different functions
 func WriteICSP(out io.Writer, dir string, icsps [][]byte) error {
 
 	if err := ioutil.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icsps), os.ModePerm); err != nil {
 		return fmt.Errorf("error writing ImageContentSourcePolicy")
 	}
 
-	fmt.Fprintf(out, "wrote mirroring manifests to %s\n", dir)
+	fmt.Fprintf(out, "wrote ICSP manifests to %s\n", dir)
 
 	return nil
 }
 
 func WriteCatalogSource(out io.Writer, source imagesource.TypedImageReference, dir string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
 
-	catalogSource, err := generateCatalogSource(source, mapping)
+	dest, ok := mapping[source]
+	if !ok {
+		return fmt.Errorf("no mapping found for index image")
+	}
+
+	return writeCatalogSource(out, source, dest, dir)
+}
+
+func writeCatalogSource(out io.Writer, source, dest imagesource.TypedImageReference, dir string) error {
+
+	catalogSource, err := generateCatalogSource(source, dest)
 	if err != nil {
 		return err
 	}
@@ -40,7 +50,7 @@ func WriteCatalogSource(out io.Writer, source imagesource.TypedImageReference, d
 		return fmt.Errorf("error writing CatalogSource")
 	}
 
-	fmt.Fprintf(out, "wrote mirroring manifests to %s\n", dir)
+	fmt.Fprintf(out, "wrote CatalogSource manifests to %s\n", dir)
 
 	return nil
 }
@@ -57,14 +67,11 @@ func GenerateICSP(out io.Writer, name string, byteLimit int, icspScope string, m
 				"operators.openshift.org/catalog": "true",
 			},
 		},
-		Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
-			RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{},
-		},
 	}
 
 	for key := range registryMapping {
 		icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
-			Source:  name,
+			Source:  key,
 			Mirrors: []string{registryMapping[key]},
 		})
 		y, err := yaml.Marshal(icsp)
@@ -122,11 +129,7 @@ func getRegistryMapping(out io.Writer, icspScope string, mapping map[imagesource
 	return registryMapping
 }
 
-func generateCatalogSource(source imagesource.TypedImageReference, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) ([]byte, error) {
-	dest, ok := mapping[source]
-	if !ok {
-		return nil, fmt.Errorf("no mapping found for index image")
-	}
+func generateCatalogSource(source, dest imagesource.TypedImageReference) ([]byte, error) {
 	unstructuredObj := unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "operators.coreos.com/v1alpha1",
