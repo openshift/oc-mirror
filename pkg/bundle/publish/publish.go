@@ -9,13 +9,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/mholt/archiver/v3"
 	"github.com/opencontainers/go-digest"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/library-go/pkg/image/registryclient"
 	"github.com/openshift/oc/pkg/cli/admin/release"
@@ -179,8 +179,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	var (
-		errs  []error
-		icsps [][]byte
+		errs     []error
+		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
 	// Create target dir for manifest directory
@@ -189,13 +189,25 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
+	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
 	for _, imageName := range assocs.Keys() {
 
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
 		// Map of remote layer digest to the set of paths they should be fetched to.
 		missingLayers := map[string][]string{}
-		icspMapping := make(map[imagesource.TypedImageReference]imagesource.TypedImageReference)
+
+		// Save original source and mirror destination mapping to generate ICSP for this image.
+		imageRef, err := reference.Parse(imageName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing image name %q for ICSP generation: %v", imageName, err))
+			continue
+		}
+		dstRef := imageRef
+		dstRef.Registry = toMirrorRef.Ref.Registry
+		namedICSPMappings[imageRef.Name] = map[reference.DockerImageReference]reference.DockerImageReference{
+			imageRef: dstRef,
+		}
 
 		values, _ := assocs.Search(imageName)
 
@@ -312,11 +324,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			default:
 				errs = append(errs, fmt.Errorf("image %q: invalid image type %v", imageName, assoc.Type))
 			}
-
-			// Add source to mapping if not a tag
-			if m.Source.Ref.Tag == "" {
-				icspMapping[m.Source] = m.Destination
-			}
 		}
 
 		// Mirror all generic mappings for this image
@@ -332,16 +339,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				errs = append(errs, err)
 			}
 		}
-
-		// Generate image ICSP data
-		if len(icspMapping) != 0 {
-			icsp, err := GenerateICSP(os.Stdout, imageName, icspSizeLimit, icspScope, icspMapping)
-			if err != nil {
-				errs = append(errs, err)
-			} else {
-				icsps = append(icsps, icsp)
-			}
-		}
 	}
 	if len(errs) != 0 {
 		return utilerrors.NewAggregate(errs)
@@ -353,24 +350,28 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 	}
-	// Create CatalogSource and ICSP manifests for all catalog refs.
+	// Create CatalogSource manifests and save ICSP data for all catalog refs.
 	// Source and dest refs are treated the same intentionally since
 	// the source image does not exist and destination image was built above.
-	for i, ref := range ctlgRefs {
-		icspMapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{ref: ref}
-		icsp, err := GenerateICSP(os.Stdout, ref.Ref.Name+"-"+strconv.Itoa(i), icspSizeLimit, icspScope, icspMapping)
-		if err != nil {
-			return fmt.Errorf("error generating ICSP for catalog image %q: %v", ref.Ref.Exact(), err)
-		}
-		icsps = append(icsps, icsp)
+	for _, ref := range ctlgRefs {
+		namedICSPMappings[ref.Ref.Name] = map[reference.DockerImageReference]reference.DockerImageReference{ref.Ref: ref.Ref}
 
-		if err := writeCatalogSource(o.IOStreams.Out, ref, ref, manifestDir); err != nil {
+		if err := writeCatalogSource(ref, ref, manifestDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", ref.Ref.Exact(), err)
 		}
 	}
 
+	// Generate ICSPs for all images.
+	for imageName, icspMapping := range namedICSPMappings {
+		icsps, err := GenerateICSPs(imageName, icspSizeLimit, icspScope, icspMapping)
+		if err != nil {
+			return fmt.Errorf("error generating ICSP for image name %q: %v", imageName, err)
+		}
+		allICSPs = append(allICSPs, icsps...)
+	}
+
 	// Write an aggregation of ICSPs
-	if err := WriteICSP(os.Stdout, manifestDir, icsps); err != nil {
+	if err := WriteICSPs(manifestDir, allICSPs); err != nil {
 		return fmt.Errorf("error writing ICSPs: %v", err)
 	}
 
@@ -692,7 +693,7 @@ func (o *Options) writeCatalogSource(manifestDir string, mapping map[imagesource
 
 		mapping[source] = mappedIndex
 
-		if err := WriteCatalogSource(os.Stdout, source, manifestDir, mapping); err != nil {
+		if err := WriteCatalogSource(source, manifestDir, mapping); err != nil {
 			errs = append(errs, err)
 		}
 	}

@@ -3,14 +3,17 @@ package publish
 import (
 	"fmt"
 	"hash/fnv"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,89 +22,110 @@ import (
 
 // Copied from https://github.com/openshift/oc/blob/5d8dfa1c2e8e7469d69d76f21e0a166a0de8663b/pkg/cli/admin/catalog/mirror.go#L549
 // Changes made are breaking ICSP and Catalog Source generation into different functions
-func WriteICSP(out io.Writer, dir string, icsps [][]byte) error {
+func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
-	if err := ioutil.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icsps), os.ModePerm); err != nil {
-		return fmt.Errorf("error writing ImageContentSourcePolicy")
+	// Stable ICSP generation.
+	sort.Slice(icsps, func(i, j int) bool {
+		return string(icsps[i].Name) < string(icsps[j].Name)
+	})
+
+	icspBytes := make([][]byte, len(icsps))
+	for i, icsp := range icsps {
+		// Create an unstructured object for removing creationTimestamp
+		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&icsp)
+		if err != nil {
+			return fmt.Errorf("error converting to unstructured: %v", err)
+		}
+		delete(obj["metadata"].(map[string]interface{}), "creationTimestamp")
+
+		if icspBytes[i], err = yaml.Marshal(obj); err != nil {
+			return fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)
+		}
 	}
 
-	fmt.Fprintf(out, "wrote ICSP manifests to %s\n", dir)
+	if err := ioutil.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icspBytes), os.ModePerm); err != nil {
+		return fmt.Errorf("error writing ImageContentSourcePolicy: %v", err)
+	}
+
+	logrus.Infof("Wrote ICSP manifests to %s", dir)
 
 	return nil
 }
 
-func WriteCatalogSource(out io.Writer, source imagesource.TypedImageReference, dir string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
+func WriteCatalogSource(source imagesource.TypedImageReference, dir string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
 
 	dest, ok := mapping[source]
 	if !ok {
 		return fmt.Errorf("no mapping found for index image")
 	}
 
-	return writeCatalogSource(out, source, dest, dir)
+	return writeCatalogSource(source, dest, dir)
 }
 
-func writeCatalogSource(out io.Writer, source, dest imagesource.TypedImageReference, dir string) error {
+func writeCatalogSource(source, dest imagesource.TypedImageReference, dir string) error {
 
 	catalogSource, err := generateCatalogSource(source, dest)
 	if err != nil {
 		return err
 	}
 	if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("catalogSource-%s.yaml", source.Ref.Name)), catalogSource, os.ModePerm); err != nil {
-		return fmt.Errorf("error writing CatalogSource")
+		return fmt.Errorf("error writing CatalogSource: %v", err)
 	}
 
-	fmt.Fprintf(out, "wrote CatalogSource manifests to %s\n", dir)
+	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
 
 	return nil
 }
 
-func GenerateICSP(out io.Writer, name string, byteLimit int, icspScope string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) ([]byte, error) {
-	registryMapping := getRegistryMapping(out, icspScope, mapping)
-	icsp := operatorv1alpha1.ImageContentSourcePolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorv1alpha1.GroupVersion.String(),
-			Kind:       "ImageContentSourcePolicy"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: strings.Join(strings.Split(name, "/"), "-"),
-			Labels: map[string]string{
-				"operators.openshift.org/catalog": "true",
+func GenerateICSPs(imageName string, byteLimit int, icspScope string, mapping map[reference.DockerImageReference]reference.DockerImageReference) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+
+	registryMapping := getRegistryMapping(icspScope, mapping)
+
+	for icspCount := 0; len(registryMapping) != 0; icspCount++ {
+		name := strings.Join(strings.Split(imageName, "/"), "-") + "-" + strconv.Itoa(icspCount)
+		icsp := operatorv1alpha1.ImageContentSourcePolicy{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: operatorv1alpha1.GroupVersion.String(),
+				Kind:       "ImageContentSourcePolicy"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"operators.openshift.org/catalog": "true",
+				},
 			},
-		},
-	}
-
-	for key := range registryMapping {
-		icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
-			Source:  key,
-			Mirrors: []string{registryMapping[key]},
-		})
-		y, err := yaml.Marshal(icsp)
-		if err != nil {
-			return nil, fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)
+			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
+				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{},
+			},
 		}
 
-		if len(y) > byteLimit {
-			if lenMirrors := len(icsp.Spec.RepositoryDigestMirrors); lenMirrors > 0 {
-				icsp.Spec.RepositoryDigestMirrors = icsp.Spec.RepositoryDigestMirrors[:lenMirrors-1]
+		for key := range registryMapping {
+			icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
+				Source:  key,
+				Mirrors: []string{registryMapping[key]},
+			})
+
+			y, err := yaml.Marshal(icsp)
+			if err != nil {
+				return nil, fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)
 			}
-			break
+			if len(y) > byteLimit {
+				if lenMirrors := len(icsp.Spec.RepositoryDigestMirrors); lenMirrors > 0 {
+					if lenMirrors == 1 {
+						return nil, fmt.Errorf("repository digest mirror for %q cannot fit into any ICSP with byte limit %d", key, byteLimit)
+					}
+					icsp.Spec.RepositoryDigestMirrors = icsp.Spec.RepositoryDigestMirrors[:lenMirrors-1]
+				}
+				break
+			}
+			delete(registryMapping, key)
+		}
+
+		if len(icsp.Spec.RepositoryDigestMirrors) != 0 {
+			icsps = append(icsps, icsp)
 		}
 	}
 
-	// Create an unstructured object for removing creationTimestamp
-	unstructuredObj := unstructured.Unstructured{}
-	var err error
-	unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&icsp)
-	if err != nil {
-		return nil, fmt.Errorf("error converting to unstructured: %v", err)
-	}
-	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
-
-	icspExample, err := yaml.Marshal(unstructuredObj.Object)
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)
-	}
-
-	return icspExample, nil
+	return icsps, nil
 }
 
 func aggregateICSPs(icsps [][]byte) []byte {
@@ -113,17 +137,17 @@ func aggregateICSPs(icsps [][]byte) []byte {
 	return aggregation
 }
 
-func getRegistryMapping(out io.Writer, icspScope string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) map[string]string {
+func getRegistryMapping(icspScope string, mapping map[reference.DockerImageReference]reference.DockerImageReference) map[string]string {
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
-		if len(v.Ref.ID) == 0 {
-			fmt.Fprintf(out, "no digest mapping available for %s, skip writing to ImageContentSourcePolicy\n", k)
+		if len(v.ID) == 0 {
+			logrus.Warnf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
 		if icspScope == "registry" {
-			registryMapping[k.Ref.Registry] = v.Ref.Registry
+			registryMapping[k.Registry] = v.Registry
 		} else {
-			registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
+			registryMapping[k.AsRepository().String()] = v.AsRepository().String()
 		}
 	}
 	return registryMapping

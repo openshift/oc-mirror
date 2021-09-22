@@ -32,6 +32,11 @@ import (
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
+var (
+	// Pinned to upstream opm v1.18.0 (k8s 1.21).
+	OPMImage = "quay.io/operator-framework/opm@sha256:038007c1c5d5f0efa50961cbcc097c6e63655a2ab4126547e3c4eb620ad0346e"
+)
+
 // MirrorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
 type MirrorOptions struct {

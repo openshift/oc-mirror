@@ -169,9 +169,8 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 
 	// Make sure the `opm` image exists during the publish step
 	// since catalog images need to be rebuilt.
-	// TODO(estroz): vet that this is the correct image, and version correctly.
 	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha1.AdditionalImages{
-		Image: v1alpha1.Image{Name: "quay.io/operator-framework/opm:latest"},
+		Image: v1alpha1.Image{Name: operator.OPMImage},
 	})
 
 	// Validating user path input
