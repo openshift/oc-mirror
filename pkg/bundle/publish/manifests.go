@@ -16,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -64,11 +63,12 @@ func WriteCatalogSource(source imagesource.TypedImageReference, dir string, mapp
 
 func writeCatalogSource(source, dest imagesource.TypedImageReference, dir string) error {
 
-	catalogSource, err := generateCatalogSource(source, dest)
+	name := source.Ref.Name
+	catalogSource, err := generateCatalogSource(name, dest)
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("catalogSource-%s.yaml", source.Ref.Name)), catalogSource, os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("catalogSource-%s.yaml", name)), catalogSource, os.ModePerm); err != nil {
 		return fmt.Errorf("error writing CatalogSource: %v", err)
 	}
 
@@ -153,27 +153,30 @@ func getRegistryMapping(icspScope string, mapping map[reference.DockerImageRefer
 	return registryMapping
 }
 
-func generateCatalogSource(source, dest imagesource.TypedImageReference) ([]byte, error) {
-	unstructuredObj := unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "operators.coreos.com/v1alpha1",
-			"kind":       "CatalogSource",
-			"metadata": map[string]interface{}{
-				"name":      source.Ref.Name,
-				"namespace": "openshift-marketplace",
-			},
-			"spec": map[string]interface{}{
-				"sourceType": "grpc",
-				"image":      dest.String(),
-			},
+func generateCatalogSource(name string, dest imagesource.TypedImageReference) ([]byte, error) {
+	// Prefer tag over digest for automatic updates.
+	if dest.Ref.Tag != "" {
+		dest.Ref.ID = ""
+	}
+
+	obj := map[string]interface{}{
+		"apiVersion": "operators.coreos.com/v1alpha1",
+		"kind":       "CatalogSource",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": "openshift-marketplace",
+		},
+		"spec": map[string]interface{}{
+			"sourceType": "grpc",
+			"image":      dest.String(),
 		},
 	}
-	csExample, err := yaml.Marshal(unstructuredObj.Object)
+	cs, err := yaml.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal CatalogSource yaml: %v", err)
 	}
 
-	return csExample, nil
+	return cs, nil
 }
 
 // Copied from https://github.com/openshift/oc/blob/183090787d00d5150440dd75d71b00a72739a86c/pkg/cli/admin/catalog/mirrorer.go#L45
