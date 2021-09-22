@@ -23,6 +23,11 @@ import (
 
 func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (refs []imagesource.TypedImageReference, err error) {
 	if err := unpack("catalogs", dstDir, filesInArchive); err != nil {
+		nferr := &ErrArchiveFileNotFound{}
+		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
+			logrus.Debug("No catalogs found in archive, skipping catalog rebuild")
+			return nil, nil
+		}
 		return nil, err
 	}
 
