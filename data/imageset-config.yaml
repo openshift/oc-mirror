@@ -9,10 +9,8 @@ mirror:
           - '4.6.36'
           - '4.6.13'
     graph: true
-    pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
   operators:
     - catalog: redhat-operators:v4.7
-      pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
     - catalog: certified-operators:v4.7
       packages:
         - name: couchbase-operator
@@ -30,7 +28,6 @@ mirror:
     - name: nginx
   additionalimages:
     - name: registry.redhat.io/ubi8/ubi:latest
-      pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
   blockedimages:
     - name: alpine
     - name: redis

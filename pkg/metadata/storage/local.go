@@ -14,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -50,11 +49,11 @@ func (b *localDirBackend) init() error {
 }
 
 // WriteMetadata reads the provided metadata from disk.
-func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadata) error {
+func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadata, path string) error {
 
-	logrus.Debugf("looking for metadata file at %q", config.MetadataBasePath)
+	logrus.Debugf("looking for metadata file at %q", path)
 
-	data, err := afero.ReadFile(b.fs, config.MetadataBasePath)
+	data, err := afero.ReadFile(b.fs, path)
 	if err != nil {
 		// Non-existent metadata is allowed.
 		if errors.Is(err, os.ErrNotExist) {
@@ -89,8 +88,8 @@ func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
 }
 
 // WriteMetadata writes the provided metadata to disk.
-func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata) error {
-	return b.WriteObject(ctx, config.MetadataBasePath, meta)
+func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
+	return b.WriteObject(ctx, path, meta)
 }
 
 // ReadObject reads the provided object from disk.
@@ -102,7 +101,18 @@ func (b *localDirBackend) ReadObject(_ context.Context, fpath string, obj interf
 		return err
 	}
 
-	return json.Unmarshal(data, obj)
+	switch v := obj.(type) {
+	case []byte:
+		if len(v) < len(data) {
+			return io.ErrShortBuffer
+		}
+		copy(v, data)
+	case io.Writer:
+		_, err = v.Write(data)
+	default:
+		err = json.Unmarshal(data, obj)
+	}
+	return err
 }
 
 // WriteObject writes the provided object to disk.
@@ -115,7 +125,17 @@ func (b *localDirBackend) WriteObject(ctx context.Context, fpath string, obj int
 	}
 	defer w.(io.WriteCloser).Close()
 
-	data, err := json.Marshal(obj)
+	var data []byte
+	switch v := obj.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	case io.Reader:
+		data, err = io.ReadAll(v)
+	default:
+		data, err = json.Marshal(obj)
+	}
 	if err != nil {
 		return err
 	}

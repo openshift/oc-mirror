@@ -1,0 +1,46 @@
+project_name: oc-bundle
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod vendor
+
+builds:
+  - main: ./cmd/oc-bundle
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -tags=json1
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+    - Merge pull request
+    - Merge branch
+    - go mod tidy
+
+release:
+
+  prerelease: auto
+
+  header: |
+    ## RedHat4Gov bundle project ({{ .Date }})
+
+    Welcome to this new release!
+
+  footer: |
+    ## Thanks!
+
+    Those were the changes on {{ .Tag }}!
+
+  name_template: "{{.ProjectName}}-v{{.Version}} {{.Env.USER}}"

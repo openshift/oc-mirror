@@ -5,7 +5,7 @@
   "pastMirrors": [
     {
       "timestamp": 1624543862,
-      "sequence": 1,
+      "sequence": 2,
       "mirror": {
         "additionalImages": [
           {
@@ -65,7 +65,7 @@
     },
     {
       "timestamp": 1624543852,
-      "sequence": 2,
+      "sequence": 3,
       "mirror": {
         "additionalImages": [
           {

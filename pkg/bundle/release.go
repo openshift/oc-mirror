@@ -1,24 +1,30 @@
 package bundle
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 // This file is for managing OCP release related tasks
@@ -27,19 +33,16 @@ import (
 //   "github.com/openshift/cluster-version-operator/pkg/cincinnati"
 // )
 
-
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
-	RootDestDir string
-	DryRun      bool
-	Cleanup     bool
-	SkipTLS     bool
+	cli.RootOptions
+	release string
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
-func NewReleaseOptions() *ReleaseOptions {
-	return &ReleaseOptions{}
+func NewReleaseOptions(ro cli.RootOptions) *ReleaseOptions {
+	return &ReleaseOptions{RootOptions: ro}
 }
 
 // Define interface and var for http client to support testing
@@ -53,6 +56,8 @@ var (
 
 const (
 	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	// Does not currently handle arch selection
+	arch = "x86_64"
 )
 
 func init() {
@@ -98,9 +103,6 @@ func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version) (Update,
 
 	ctx := context.Background()
 
-	// Does not currently handle arch selection
-	arch := "x86_64"
-
 	channel := ch.Name
 
 	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, v)
@@ -126,9 +128,6 @@ func GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, error) {
 	}
 
 	ctx := context.Background()
-
-	// Does not currently handle arch selection
-	arch := "x86_64"
 
 	channel := ch.Name
 
@@ -213,43 +212,60 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return new, err
 }
 
-func downloadMirror(secret []byte, rootDir, from string, skipTlS, dryRun bool) error {
-	stream := genericclioptions.IOStreams{
-		In:     os.Stdin,
-		Out:    os.Stdout,
-		ErrOut: os.Stderr,
-	}
-	opts := release.NewMirrorOptions(stream)
-
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (image.AssociationSet, error) {
+	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
-	opts.ToDir = rootDir
+	opts.ToDir = toDir
 
-	// FIXME(jpower): need to have the user set skipVerification value
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(secret) != 0 {
-		ctx, err := config.CreateContext(secret, false, skipTlS)
-
+		ctx, err := config.CreateContext(secret, o.SkipVerification, o.SkipTLS)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
-	opts.SecurityOptions.Insecure = skipTlS
-	opts.DryRun = dryRun
+	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
+	opts.DryRun = o.DryRun
 
 	if err := opts.Run(); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
 
+	// Retrive the mapping information for release
+	mapping, images, err := o.getMapping(*opts)
+
+	if err != nil {
+		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
+	}
+
+	assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if a release image was provided with mapping
+	if o.release == "" {
+		return nil, errors.New("release image not found in mapping")
+	}
+
+	// Update all images associated with a release to the
+	// release images so they form one keyset for publising
+	for _, img := range images {
+		assocs.UpdateKey(img, o.release)
+	}
+
+	return assocs, nil
 }
 
-func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) error {
+func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
+	allAssocs := image.AssociationSet{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
+	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
@@ -258,15 +274,15 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			// If no version was specified from the channel, then get the latest release
 			latest, err := GetLatestVersion(ch)
 			if err != nil {
-				logrus.Errorln(err)
-				return err
+				return nil, err
 			}
 			logrus.Infof("Image to download: %v", latest.Image)
 			// Download the release
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, latest.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image)
 			if err != nil {
-				logrus.Errorln(err)
+				return nil, err
 			}
+			allAssocs.Merge(assocs)
 			logrus.Infof("Channel Latest version %v", latest.Version)
 		}
 
@@ -277,20 +293,21 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 			ver, err := semver.Parse(v)
 
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// This dumps the available upgrades from the last downloaded version
 			requested, _, err := calculateUpgradePath(ch, ver)
 			if err != nil {
-				return fmt.Errorf("failed to get upgrade graph: %v", err)
+				return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			allAssocs.Merge(assocs)
 			logrus.Infof("Channel Latest version %v", requested.Version)
 
 			/* Select the requested version from the available versions
@@ -318,12 +335,14 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 	// Download each referenced version from
 	//downloadRelease(nv)
 
-	return nil
+	return allAssocs, nil
 }
 
-func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) error {
+func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
+	allAssocs := image.AssociationSet{}
 	pullSecret := cfg.Mirror.OCP.PullSecret
+	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 		// Check for specific version declarations for each specific version
@@ -333,20 +352,22 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 			ver, err := semver.Parse(v)
 
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// This dumps the available upgrades from the last downloaded version
 			requested, _, err := calculateUpgradePath(ch, ver)
 			if err != nil {
-				return fmt.Errorf("failed to get upgrade graph: %v", err)
+				return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 			}
 
 			logrus.Infof("requested: %v", requested.Version)
-			err = downloadMirror([]byte(pullSecret), o.RootDestDir, requested.Image, o.SkipTLS, o.DryRun)
+			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			allAssocs.Merge(assocs)
+
 			logrus.Infof("Channel Latest version %v", requested.Version)
 
 			/* Select the requested version from the available versions
@@ -374,5 +395,67 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	// Download each referenced version from
 	//downloadRelease(nv)
 
-	return nil
+	return allAssocs, nil
+}
+
+// getMapping will run release mirror with ToMirror set to true to get mapping information
+// FIXME(jpower): the provided mapping does not provide a digest mapping so ICSP cannot
+// be created
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[string]string, images []string, err error) {
+
+	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
+	file, err := os.Create(mappingPath)
+
+	defer os.Remove(mappingPath)
+
+	if err != nil {
+		return mappings, images, err
+	}
+
+	// Run release mirror with ToMirror set to retrieve mapping information
+	// store in buffer for manipulation before outputting to mapping.txt
+	var buffer bytes.Buffer
+	opts.IOStreams.Out = &buffer
+
+	opts.ToMirror = true
+
+	if err := opts.Run(); err != nil {
+		return mappings, images, err
+	}
+
+	scanner := bufio.NewScanner(&buffer)
+
+	// Scan mapping output and write to file
+	for scanner.Scan() {
+		text := scanner.Text()
+		split := strings.Split(text, " ")
+
+		// Get release image name from mapping
+		if strings.Contains(split[0], "ocp-release") {
+			o.release = split[0]
+		}
+
+		// Proccess name and add arch to dir name
+		// TODO: architecture handling
+		var names []string
+		name := opts.TargetFn(split[1]).Exact()
+		nameSplit := strings.Split(name, "-")
+		names = []string{nameSplit[1], arch}
+		names = append(names, nameSplit[2:]...)
+		name = strings.Join(names, "-")
+
+		if _, err := file.WriteString(split[0] + "=" + name + "\n"); err != nil {
+			return mappings, images, err
+		}
+
+		images = append(images, split[0])
+	}
+
+	mappings, err = image.ReadImageMapping(mappingPath)
+
+	if err != nil {
+		return mappings, images, err
+	}
+
+	return mappings, images, nil
 }

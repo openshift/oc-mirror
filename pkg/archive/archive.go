@@ -1,13 +1,18 @@
 package archive
 
 import (
+	"archive/tar"
 	"fmt"
 	"io"
+	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -15,6 +20,7 @@ import (
 type Archiver interface {
 	String() string
 	Archive([]string, string) error
+	Extract(string, string, string) error
 	Unarchive(string, string) error
 	Write(archiver.File) error
 	Create(io.Writer) error
@@ -22,43 +28,60 @@ type Archiver interface {
 	Walk(string, archiver.WalkFunc) error
 	Open(io.Reader, int64) error
 	Read() (archiver.File, error)
+	CheckPath(string, string) error
 }
 
-// NewArchiver create a new archiver for tar archive manipultation
-func NewArchiver() Archiver {
-	// Create tar specifically with overrite on false
-	return &archiver.TarGz{
+type packager struct {
+	manifest    map[string]struct{}
+	blobs       map[string]struct{}
+	packedBlobs map[string]struct{}
+	Archiver
+}
 
-		Tar: &archiver.Tar{
-			OverwriteExisting:      true,
-			MkdirAll:               true,
-			ImplicitTopLevelFolder: false,
-			StripComponents:        0,
-			ContinueOnError:        false,
-		},
+// NewArchiver creates a new archiver for tar archive manipultation
+func NewArchiver() Archiver {
+	return &archiver.Tar{
+		OverwriteExisting:      true,
+		MkdirAll:               true,
+		ImplicitTopLevelFolder: false,
+		StripComponents:        0,
+		ContinueOnError:        false,
+	}
+}
+
+// NewPackager create a new packager for build ImageSets
+func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager {
+	manifestSetToArchive := make(map[string]struct{}, len(manifests))
+	blobSetToArchive := make(map[string]struct{}, len(blobs))
+
+	for _, manifest := range manifests {
+		manifestSetToArchive[manifest.Name] = struct{}{}
+	}
+
+	for _, blob := range blobs {
+		blobSetToArchive[blob.ID] = struct{}{}
+	}
+
+	return &packager{
+		manifest:    manifestSetToArchive,
+		blobs:       blobSetToArchive,
+		packedBlobs: make(map[string]struct{}, len(blobs)),
+		Archiver:    NewArchiver(),
 	}
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, prefix string, newFiles []string) error {
-
-	logrus.Debugf("Found new files %v", newFiles)
+func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables
 	splitNum := 0
 	splitSize := int64(0)
-	splitPath := fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
+	splitPath := filepath.Join(destDir, fmt.Sprintf("%s_%06d.%s", prefix, splitNum, p.String()))
 
-	splitFile, err := os.Create(splitPath)
+	splitFile, err := p.createArchive(splitPath)
 
 	if err != nil {
-		return fmt.Errorf("creating %s: %v", splitPath, err)
-	}
-
-	// Create a new tar archive for writing
-	logrus.Infof("Creating archive %s", splitPath)
-	if a.Create(splitFile); err != nil {
-		return fmt.Errorf("creating archive %s: %v", splitPath, err)
+		return fmt.Errorf("error creating archive %s: %v", splitPath, err)
 	}
 
 	sourceInfo, err := os.Stat(sourceDir)
@@ -66,13 +89,6 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	if err != nil {
 		return fmt.Errorf("%s: stat: %v", sourceDir, err)
 	}
-
-	foundFiles := make(map[string]struct{}, len(newFiles))
-	for _, fpath := range newFiles {
-		foundFiles[fpath] = struct{}{}
-	}
-	// Ignore the current dir.
-	foundFiles["."] = struct{}{}
 
 	walkErr := filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
 
@@ -83,21 +99,26 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 			return fmt.Errorf("no file info")
 		}
 
-		// Make sure the metadata file is always packed
-		if strings.Contains(fpath, config.MetadataFile) {
-			logrus.Debugf("Packing metadata file %s", fpath)
-			foundFiles[fpath] = struct{}{}
+		// pack the image associations and the metadata
+		if includeFile(fpath) {
+			p.manifest[fpath] = struct{}{}
 		}
 
-		if _, found := foundFiles[fpath]; !found {
-			logrus.Debugf("File %s not found, skipping...", fpath)
+		var nameInArchive string
+
+		switch {
+		case pack(p.manifest, fpath):
+			nameInArchive, err = archiver.NameInArchive(sourceInfo, sourceDir, fpath)
+			if err != nil {
+				return fmt.Errorf("creating %s: %v", nameInArchive, err)
+			}
+		case pack(p.blobs, info.Name()) && !pack(p.packedBlobs, info.Name()):
+			nameInArchive = blobInArchive(info.Name())
+			p.packedBlobs[info.Name()] = struct{}{}
+
+		default:
+			logrus.Debugf("File %s will not be archived, skipping...", fpath)
 			return nil
-		}
-
-		// build the name to be used within the archive
-		nameInArchive, err := archiver.NameInArchive(sourceInfo, sourceDir, fpath)
-		if err != nil {
-			return fmt.Errorf("creating %s: %v", nameInArchive, err)
 		}
 
 		var file io.ReadCloser
@@ -121,33 +142,40 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 		if info.Size()+splitSize > maxSplitSize {
 
 			// Close current tar archive
-			a.Close()
-			splitFile.Close()
+			if err := p.Close(); err != nil {
+				return err
+			}
+			if err := splitFile.Close(); err != nil {
+				return err
+			}
 
 			// Increment split number and reset splitSize
 			splitNum += 1
 			splitSize = int64(0)
-			splitPath = fmt.Sprintf("%s/%s_%06d.%s", destDir, prefix, splitNum, a.String())
+			splitPath = filepath.Join(destDir, fmt.Sprintf("%s_%06d.%s", prefix, splitNum, p.String()))
 
 			// Create a new tar archive for writing
-			logrus.Infof("Creating archive %s", splitPath)
-
-			splitFile, err = os.Create(splitPath)
+			splitFile, err = p.createArchive(splitPath)
 
 			if err != nil {
-				return fmt.Errorf("creating %s: %v", splitPath, err)
+				return fmt.Errorf("error creating archive %s: %v", splitPath, err)
 			}
-
-			if err := a.Create(splitFile); err != nil {
-				return fmt.Errorf("creating archive %s: %v", splitPath, err)
-			}
-
 		}
 
 		// Write file to current archive file
-		if err = a.Write(f); err != nil {
+		if err = p.Write(f); err != nil {
 			return fmt.Errorf("%s: writing: %s", fpath, err)
 		}
+
+		// Delete file after written to archive
+		if shouldRemove(fpath, info) && !skipCleanup {
+			if err := os.Remove(fpath); err != nil {
+				return err
+			}
+
+		}
+
+		logrus.Debugf("File %s added to archive", fpath)
 
 		splitSize += info.Size()
 
@@ -155,7 +183,7 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	})
 
 	// Close final archive
-	if err := a.Close(); err != nil {
+	if err := p.Close(); err != nil {
 		return err
 	}
 
@@ -166,76 +194,221 @@ func CreateSplitArchive(a Archiver, maxSplitSize int64, destDir, sourceDir, pref
 	return walkErr
 }
 
-// ExtractArchive will unpack the archive at the specified directory
-func ExtractArchive(a Archiver, src, dest string) error {
-	return a.Unarchive(src, dest)
-}
+// createArchive is a helper function that prepares a new split archive
+func (p *packager) createArchive(splitPath string) (splitFile *os.File, err error) {
 
-// CombineArchives take a list of archives and combines them into one file
-func CombineArchives(in Archiver, out Archiver, destDir, name string, paths ...string) error {
-
-	outPath := filepath.Join(destDir, name)
-
-	// Open new archive
-	outFile, err := os.Create(outPath)
-
+	// create a new target file
+	splitFile, err = os.Create(splitPath)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("creating %s: %v", splitPath, err)
 	}
 
 	// Create a new tar archive for writing
-	if out.Create(outFile); err != nil {
-		return err
+	logrus.Infof("Creating archive %s", splitPath)
+	if p.Create(splitFile); err != nil {
+		return nil, fmt.Errorf("creating archive %s: %v", splitPath, err)
 	}
 
-	for _, p := range paths {
+	if err != nil {
+		return nil, err
+	}
 
-		// Read in the source tar archive
-		inFile, err := os.Open(p)
+	return splitFile, nil
+}
 
+func pack(search map[string]struct{}, file string) bool {
+	_, archive := search[file]
+	return archive
+}
+
+func blobInArchive(file string) string {
+	return filepath.Join("blobs", file)
+}
+
+func includeFile(fpath string) bool {
+	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
+	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
+}
+
+func shouldRemove(fpath string, info fs.FileInfo) bool {
+	return !includeFile(fpath) && !info.IsDir()
+}
+
+// Copied from mholt archiver repo. Temporary and can
+// add back to repo
+// Changes include the additional of the excludePath variable and is
+// passed to the untarNext function
+func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
+
+	if !fileExists(destination) {
+		err := mkdir(destination, 0755)
 		if err != nil {
-			return fmt.Errorf("could not open current file %s: %v", p, err)
-		}
-
-		// Open the tar archive for reading
-		if err := in.Open(inFile, 0); err != nil {
-			return fmt.Errorf("error opening archive %s: %v", p, err)
-		}
-
-		// Loop through the files in the source tar
-		readErr := func() error {
-			for {
-				// Read current byte and check if we are at the end of the the file
-				f, err := in.Read()
-				header := f.Header
-				switch {
-				case err == io.EOF:
-					return nil
-				case err != nil:
-					return err
-				case header == nil:
-					continue
-				}
-
-				// Write file to current archive
-				if err := out.Write(f); err != nil {
-					return err
-				}
-			}
-		}()
-
-		if readErr != nil {
-			return readErr
-		}
-
-		if err := in.Close(); err != nil {
-			return err
+			return fmt.Errorf("preparing destination: %v", err)
 		}
 	}
 
-	if err := out.Close(); err != nil {
-		return err
+	file, err := os.Open(source)
+	if err != nil {
+		return fmt.Errorf("opening source archive: %v", err)
+	}
+	defer file.Close()
+
+	err = a.Open(file, 0)
+	if err != nil {
+		return fmt.Errorf("opening tar archive for reading: %v", err)
+	}
+	defer a.Close()
+
+	for {
+		err := untarNext(a, destination, excludePaths)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			if archiver.IsIllegalPathError(err) {
+				log.Printf("[ERROR] Reading file in tar archive: %v", err)
+				continue
+			}
+			return fmt.Errorf("reading file in tar archive: %v", err)
+		}
 	}
 
 	return nil
+}
+
+func fileExists(name string) bool {
+	_, err := os.Stat(name)
+	return !os.IsNotExist(err)
+}
+
+func mkdir(dirPath string, dirMode os.FileMode) error {
+	err := os.MkdirAll(dirPath, dirMode)
+	if err != nil {
+		return fmt.Errorf("%s: making directory: %v", dirPath, err)
+	}
+	return nil
+}
+
+func untarNext(a Archiver, destination string, exclude []string) error {
+	f, err := a.Read()
+	if err != nil {
+		return err // don't wrap error; calling loop must break on io.EOF
+	}
+	defer f.Close()
+
+	header, ok := f.Header.(*tar.Header)
+	if !ok {
+		return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
+	}
+
+	errPath := a.CheckPath(destination, header.Name)
+	if errPath != nil {
+		return fmt.Errorf("checking path traversal attempt: %v", errPath)
+	}
+
+	// Added change here to check if
+	// current path is in the exclusion
+	// list
+	for _, path := range exclude {
+		if within(path, header.Name) {
+			return nil
+		}
+
+	}
+
+	return untarFile(f, destination, header)
+}
+
+func untarFile(f archiver.File, destination string, hdr *tar.Header) error {
+	to := filepath.Join(destination, hdr.Name)
+
+	switch hdr.Typeflag {
+	case tar.TypeDir:
+		return mkdir(to, f.Mode())
+	case tar.TypeReg, tar.TypeRegA, tar.TypeChar, tar.TypeBlock, tar.TypeFifo, tar.TypeGNUSparse:
+		return writeNewFile(to, f, f.Mode())
+	case tar.TypeSymlink:
+		return writeNewSymbolicLink(to, hdr.Linkname)
+	case tar.TypeLink:
+		return writeNewHardLink(to, filepath.Join(destination, hdr.Linkname))
+	case tar.TypeXGlobalHeader:
+		return nil // ignore the pax global header from git-generated tarballs
+	default:
+		return fmt.Errorf("%s: unknown type flag: %c", hdr.Name, hdr.Typeflag)
+	}
+}
+
+func writeNewFile(fpath string, in io.Reader, fm os.FileMode) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	out, err := os.Create(fpath)
+	if err != nil {
+		return fmt.Errorf("%s: creating new file: %v", fpath, err)
+	}
+	defer out.Close()
+
+	err = out.Chmod(fm)
+	if err != nil && runtime.GOOS != "windows" {
+		return fmt.Errorf("%s: changing file mode: %v", fpath, err)
+	}
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return fmt.Errorf("%s: writing file: %v", fpath, err)
+	}
+	return nil
+}
+
+func writeNewSymbolicLink(fpath string, target string) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	_, err = os.Lstat(fpath)
+	if err == nil {
+		err = os.Remove(fpath)
+		if err != nil {
+			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
+		}
+	}
+
+	err = os.Symlink(target, fpath)
+	if err != nil {
+		return fmt.Errorf("%s: making symbolic link for: %v", fpath, err)
+	}
+	return nil
+}
+
+func writeNewHardLink(fpath string, target string) error {
+	err := os.MkdirAll(filepath.Dir(fpath), 0755)
+	if err != nil {
+		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
+	}
+
+	_, err = os.Lstat(fpath)
+	if err == nil {
+		err = os.Remove(fpath)
+		if err != nil {
+			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
+		}
+	}
+
+	err = os.Link(target, fpath)
+	if err != nil {
+		return fmt.Errorf("%s: making hard link for: %v", fpath, err)
+	}
+	return nil
+}
+
+// within returns true if sub is within or equal to parent.
+func within(parent, sub string) bool {
+	rel, err := filepath.Rel(parent, sub)
+	if err != nil {
+		return false
+	}
+	return !strings.Contains(rel, "..")
 }

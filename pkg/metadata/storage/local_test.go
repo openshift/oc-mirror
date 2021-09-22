@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
@@ -17,7 +19,7 @@ func Test_LocalBackend(t *testing.T) {
 	underlyingFS := afero.NewMemMapFs()
 	backend := localDirBackend{
 		fs:  underlyingFS,
-		dir: "foo",
+		dir: filepath.Join("foo", config.SourceDir),
 	}
 	require.NoError(t, backend.init())
 
@@ -47,17 +49,17 @@ func Test_LocalBackend(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	require.NoError(t, backend.WriteMetadata(ctx, m))
+	require.NoError(t, backend.WriteMetadata(ctx, m, config.MetadataBasePath))
 
 	info, metadataErr := underlyingFS.Stat("foo/src/publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
-	info, metadataErr = backend.fs.Stat("src/publish/.metadata.json")
+	info, metadataErr = backend.fs.Stat("publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
 
 	readMeta := &v1alpha1.Metadata{}
-	require.NoError(t, backend.ReadMetadata(ctx, readMeta))
+	require.NoError(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath))
 	require.Equal(t, m, readMeta)
 
 	type object struct {
@@ -69,7 +71,7 @@ func Test_LocalBackend(t *testing.T) {
 	}
 	require.NoError(t, backend.WriteObject(ctx, "bar-obj.json", inObj))
 
-	info, objErr := underlyingFS.Stat("foo/bar-obj.json")
+	info, objErr := underlyingFS.Stat("foo/src/bar-obj.json")
 	require.NoError(t, objErr)
 	require.True(t, info.Mode().IsRegular())
 	info, objErr = backend.fs.Stat("bar-obj.json")

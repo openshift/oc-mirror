@@ -31,7 +31,7 @@ func New(secret []byte) (auth.CredentialStore, error) {
 }
 
 // CreateContext a new context for the registryClient of `oc mirror`
-func CreateContext(secret []byte, skipVerification bool, skipTLS bool) (*registryclient.Context, error) {
+func CreateContext(secret []byte, skipVerification, skipTLS bool) (*registryclient.Context, error) {
 	rt, err := rest.TransportFor(&rest.Config{})
 	if err != nil {
 		return nil, err
@@ -40,18 +40,22 @@ func CreateContext(secret []byte, skipVerification bool, skipTLS bool) (*registr
 	if err != nil {
 		return nil, err
 	}
-	creds, err := New(secret)
 
-	if err != nil {
-		return nil, err
+	ctx := registryclient.NewContext(rt, insecureRT).
+		WithRequestModifiers(transport.NewHeaderRequestModifier(
+			http.Header{
+				http.CanonicalHeaderKey("User-Agent"): []string{rest.DefaultKubernetesUserAgent()},
+			},
+		))
+	ctx.DisableDigestVerification = skipVerification
+
+	if len(secret) != 0 {
+		if ctx.Credentials, err = New(secret); err != nil {
+			return nil, err
+		}
 	}
-	context := registryclient.NewContext(rt, insecureRT).WithCredentials(creds).WithRequestModifiers(transport.NewHeaderRequestModifier(
-		http.Header{
-			http.CanonicalHeaderKey("User-Agent"): []string{rest.DefaultKubernetesUserAgent()},
-		},
-	))
-	context.DisableDigestVerification = skipVerification
-	return context, nil
+
+	return ctx, nil
 }
 
 // Copied below from https://github.com/openshift/oc/blob/d922a789a1add3146f69bacadaed8c3fb719f333/pkg/cli/image/manifest/dockercredentials/credentials.go#L49

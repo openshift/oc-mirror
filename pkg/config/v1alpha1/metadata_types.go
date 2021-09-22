@@ -29,14 +29,16 @@ type MetadataSpec struct {
 	PastMirrors PastMirrors `json:"pastMirrors"`
 	// PastFiles is a slice containing information for
 	// all files created for an imageset
-	PastFiles []File `json:"pastFiles"`
+	PastBlobs     []Blob     `json:"pastBlobs"`
+	PastManifests []Manifest `json:"pastManifests"`
 }
 
 type PastMirror struct {
-	Timestamp int    `json:"timestamp"`
-	Sequence  int    `json:"sequence"`
-	Files     []File `json:"files"`
-	Mirror    Mirror `json:"mirror"`
+	Timestamp int        `json:"timestamp"`
+	Sequence  int        `json:"sequence"`
+	Manifests []Manifest `json:"manifests"`
+	Blobs     []Blob     `json:"blobs"`
+	Mirror    Mirror     `json:"mirror"`
 	// Operators are metadata about the set of mirrored operators in a mirror operation.
 	Operators []OperatorMetadata `json:"operators,omitempty"`
 }
@@ -50,8 +52,17 @@ func (pms PastMirrors) Len() int           { return len(pms) }
 func (pms PastMirrors) Swap(i, j int)      { pms[i], pms[j] = pms[j], pms[i] }
 func (pms PastMirrors) Less(i, j int) bool { return pms[i].Sequence < pms[j].Sequence }
 
-type File struct {
-	Name string `json:"name"`
+type Blob struct {
+	ID string `json:"id"`
+	// NamespaceName of image that owns this blob.
+	// Required for blob lookups during the publish step.
+	NamespaceName string `json:"namespaceName"`
+}
+
+type Manifest struct {
+	Name      string `json:"name"`
+	Image     string `json:"image"`
+	Namespace string `json:"namespace"`
 }
 
 // OperatorMetadata holds an Operator's post-mirror metadata.

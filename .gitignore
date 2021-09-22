@@ -2,11 +2,12 @@
 /bin/
 
 # Test artifacts.
-/cmd/oc-bundle/test/
 coverage.out
-bundle*.tar.gz
+**/bundle*.tar
 sha256sum.txt
-/test/operator-test.**
+/test/operator-test.*
+**/publish.tmp.*
+**/test-output
 
 # Logs.
 **/.openshift_bundle.log

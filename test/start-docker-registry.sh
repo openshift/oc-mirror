@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
-echo -e "\nStarting containerized docker registry"
+: ${1:?registry name required}
+: ${2:?port required}
 
-docker run -d -p 5000:5000 --restart always --name registry registry:2
+REGISTRY_NAME=$1
+PORT=$2
+
+echo "Starting containerized docker registry $REGISTRY_NAME listening at localhost:${PORT}"
+
+docker run -d -p $PORT:5000 --restart always --name $REGISTRY_NAME registry:2

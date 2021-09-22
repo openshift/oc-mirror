@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-echo -e "\nCleaning up docker registry"
+: ${1:?registry name required}
 
-docker stop registry || true
-docker rm registry || true
+REGISTRY_NAME=$1
+
+echo "Cleaning up docker registry $REGISTRY_NAME"
+
+docker stop $REGISTRY_NAME >/dev/null 2>&1 || true
+docker rm $REGISTRY_NAME >/dev/null 2>&1 || true

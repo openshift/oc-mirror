@@ -1,28 +1,36 @@
 package main
 
 import (
-	bundle "github.com/RedHatGov/bundle/pkg/bundle/publish"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/RedHatGov/bundle/pkg/bundle/publish"
+	"github.com/RedHatGov/bundle/pkg/cli"
 )
 
-func newPublishCmd() *cobra.Command {
+func newPublishCmd(ro *cli.RootOptions) *cobra.Command {
+	opts := publish.Options{
+		RootOptions: ro,
+	}
+
+	// Configures a REST client getter factory from configs for mirroring releases.
+	kubeConfigFlags := genericclioptions.NewConfigFlags(true).WithDiscoveryBurst(250)
+	matchVersionKubeConfigFlags := kcmdutil.NewMatchVersionFlags(kubeConfigFlags)
+
 	cmd := &cobra.Command{
 		Use:   "publish",
 		Short: "Publish OCP related content to an internet-disconnected environment",
 		Args:  cobra.ExactArgs(0),
-		Run: func(_ *cobra.Command, _ []string) {
-			cleanup := setupFileHook(rootOpts.dir)
-			defer cleanup()
-			logrus.Infoln("Publish Was Called")
-			err := bundle.Publish(rootOpts.dir)
-			if err != nil {
-				logrus.Fatal(err)
-			}
+		Run: func(cmd *cobra.Command, _ []string) {
+			f := kcmdutil.NewFactory(matchVersionKubeConfigFlags)
+			checkErr(opts.Run(cmd.Context(), cmd, f))
 		},
 	}
-	cmd.PersistentFlags().StringVar(&bundle.PublishOpts.FromBundle, "from-bundle", "", "The bundle archive filename.")
-	cmd.PersistentFlags().StringVar(&bundle.PublishOpts.ToMirror, "to-mirror", "", "The URL to the destination mirror registry")
+
+	kubeConfigFlags.AddFlags(cmd.Flags())
+	matchVersionKubeConfigFlags.AddFlags(cmd.Flags())
+	opts.BindFlags(cmd.Flags())
 
 	return cmd
 }
