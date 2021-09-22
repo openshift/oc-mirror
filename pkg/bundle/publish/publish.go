@@ -659,6 +659,8 @@ func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) erro
 	genOpts.Mappings = mappings
 	genOpts.DryRun = o.DryRun
 	genOpts.FromFileDir = fromDir
+	// Filter must be a wildcard for publishing because we
+	// cannot filter images within a catalog
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	genOpts.SkipMultipleScopes = true
 	genOpts.KeepManifestList = true

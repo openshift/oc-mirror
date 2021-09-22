@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 
 	"github.com/RedHatGov/bundle/pkg/archive"
 	"github.com/RedHatGov/bundle/pkg/bundle"
@@ -32,7 +33,7 @@ var (
 )
 
 // RunFull performs all tasks in creating full imagesets
-func (o *Options) RunFull(ctx context.Context) error {
+func (o *Options) RunFull(ctx context.Context, flags *pflag.FlagSet) error {
 	f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend) (meta v1alpha1.Metadata, run v1alpha1.PastMirror, err error) {
 
 		// Read in current metadata
@@ -54,7 +55,7 @@ func (o *Options) RunFull(ctx context.Context) error {
 		allAssocs := image.AssociationSet{}
 
 		if len(cfg.Mirror.OCP.Channels) != 0 {
-			opts := bundle.NewReleaseOptions(*o.RootOptions)
+			opts := bundle.NewReleaseOptions(*o.RootOptions, flags)
 			assocs, err := opts.GetReleasesInitial(cfg)
 			if err != nil {
 				return meta, run, err
@@ -95,7 +96,7 @@ func (o *Options) RunFull(ctx context.Context) error {
 }
 
 // RunDiff performs all tasks in creating differential imagesets
-func (o *Options) RunDiff(ctx context.Context) error {
+func (o *Options) RunDiff(ctx context.Context, flags *pflag.FlagSet) error {
 	f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend) (meta v1alpha1.Metadata, run v1alpha1.PastMirror, err error) {
 
 		// Read in current metadata
@@ -116,7 +117,7 @@ func (o *Options) RunDiff(ctx context.Context) error {
 		allAssocs := image.AssociationSet{}
 
 		if len(cfg.Mirror.OCP.Channels) != 0 {
-			opts := bundle.NewReleaseOptions(*o.RootOptions)
+			opts := bundle.NewReleaseOptions(*o.RootOptions, flags)
 			assocs, err := opts.GetReleasesInitial(cfg)
 			if err != nil {
 				return meta, run, err
@@ -221,7 +222,7 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	}
 
 	// Run archiver
-	if err := o.prepareArchive(cfg, manifests, blobs); err != nil {
+	if err := o.prepareArchive(cfg, thisRun.Sequence, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -235,7 +236,7 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	return nil
 }
 
-func (o *Options) prepareArchive(cfg v1alpha1.ImageSetConfiguration, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
+func (o *Options) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -265,9 +266,10 @@ func (o *Options) prepareArchive(cfg v1alpha1.ImageSetConfiguration, manifests [
 	defer os.Chdir(cwd)
 
 	packager := archive.NewPackager(manifests, blobs)
+	prefix := fmt.Sprintf("bundle_seq%d", seq)
 
 	// Create tar archive
-	if err := packager.CreateSplitArchive(segSize, output, ".", "bundle", o.SkipCleanup); err != nil {
+	if err := packager.CreateSplitArchive(segSize, output, ".", prefix, o.SkipCleanup); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 

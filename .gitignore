@@ -15,3 +15,5 @@ sha256sum.txt
 # Local vendor. Remove when ready to vendor dependencies.
 /vendor/
 
+# Local
+.idea
