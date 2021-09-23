@@ -48,7 +48,7 @@ func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions
 	if opts.IsWildcardFilter() {
 		arch = runtime.GOARCH
 	} else {
-		arch = strings.Split(opts.FilterByOS, "/")[1]
+		arch = strings.Join(strings.Split(opts.FilterByOS, "/")[1:], "/")
 	}
 
 	return &ReleaseOptions{
