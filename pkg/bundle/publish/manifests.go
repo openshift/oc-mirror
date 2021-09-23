@@ -24,6 +24,11 @@ import (
 // Changes made are breaking ICSP and Catalog Source generation into different functions
 func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
+	if len(icsps) == 0 {
+		logrus.Debug("No ICSPs generated to write")
+		return nil
+	}
+
 	// Stable ICSP generation.
 	sort.Slice(icsps, func(i, j int) bool {
 		return string(icsps[i].Name) < string(icsps[j].Name)
