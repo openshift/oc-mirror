@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	semver "github.com/blang/semver/v4"
@@ -27,6 +26,8 @@ import (
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
+var supportedArchs = []string{"amd64", "ppc64le", "s390x"}
+
 // archMap maps Go architecture strings to OpenShift supported values for any that differ.
 var archMap = map[string]string{
 	"amd64": "x86_64",
@@ -37,18 +38,18 @@ var archMap = map[string]string{
 type ReleaseOptions struct {
 	cli.RootOptions
 	release string
-	arch    string
+	arch    []string
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
 func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions {
-	var arch string
+	var arch []string
 	opts := ro.FilterOptions
 	opts.Complete(flags)
 	if opts.IsWildcardFilter() {
-		arch = runtime.GOARCH
+		arch = supportedArchs
 	} else {
-		arch = strings.Join(strings.Split(opts.FilterByOS, "/")[1:], "/")
+		arch = []string{strings.Join(strings.Split(opts.FilterByOS, "/")[1:], "/")}
 	}
 
 	return &ReleaseOptions{
@@ -95,7 +96,7 @@ func newClient() (Client, *url.URL, error) {
 }
 
 // Next calculate the upgrade path from the current version to the channel's latest
-func (o *ReleaseOptions) calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version) (Update, []Update, error) {
+func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, arch string) (Update, []Update, error) {
 
 	client, upstream, err := newClient()
 	if err != nil {
@@ -106,7 +107,7 @@ func (o *ReleaseOptions) calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semv
 
 	channel := ch.Name
 
-	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, o.arch, channel, v)
+	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, v)
 	if err != nil {
 		return Update{}, nil, err
 	}
@@ -114,7 +115,7 @@ func (o *ReleaseOptions) calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semv
 	return upgrade, upgrades, nil
 }
 
-func (o *ReleaseOptions) GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, error) {
+func GetLatestVersion(ch v1alpha1.ReleaseChannel, arch string) (Update, error) {
 
 	client, upstream, err := newClient()
 	if err != nil {
@@ -125,11 +126,11 @@ func (o *ReleaseOptions) GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, e
 
 	channel := ch.Name
 
-	latest, err := client.GetChannelLatest(ctx, upstream, o.arch, channel)
+	latest, err := client.GetChannelLatest(ctx, upstream, arch, channel)
 	if err != nil {
 		return Update{}, err
 	}
-	upgrade, _, err := client.GetUpdates(ctx, upstream, o.arch, channel, latest)
+	upgrade, _, err := client.GetUpdates(ctx, upstream, arch, channel, latest)
 	if err != nil {
 		return Update{}, err
 	}
@@ -137,7 +138,7 @@ func (o *ReleaseOptions) GetLatestVersion(ch v1alpha1.ReleaseChannel) (Update, e
 	return upgrade, err
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (image.AssociationSet, error) {
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string) (image.AssociationSet, error) {
 	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
@@ -161,7 +162,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from string) (imag
 	}
 
 	// Retrive the mapping information for release
-	mapping, images, err := o.getMapping(*opts)
+	mapping, images, err := o.getMapping(*opts, arch)
 
 	if err != nil {
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
@@ -195,65 +196,69 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
 
-		if len(ch.Versions) == 0 {
-			// If no version was specified from the channel, then get the latest release
-			latest, err := o.GetLatestVersion(ch)
-			if err != nil {
-				return nil, err
-			}
-			logrus.Infof("Image to download: %v", latest.Image)
-			// Download the release
-			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image)
-			if err != nil {
-				return nil, err
-			}
-			allAssocs.Merge(assocs)
-			logrus.Infof("Channel Latest version %v", latest.Version)
-		}
+		for _, arch := range o.arch {
 
-		// Check for specific version declarations for each specific version
-		for _, v := range ch.Versions {
+			if len(ch.Versions) == 0 {
 
-			// Convert the string to a semver
-			ver, err := semver.Parse(v)
-
-			if err != nil {
-				return nil, err
-			}
-
-			// This dumps the available upgrades from the last downloaded version
-			requested, _, err := o.calculateUpgradePath(ch, ver)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
-			}
-
-			logrus.Infof("requested: %v", requested.Version)
-			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
-			if err != nil {
-				return nil, err
-			}
-			allAssocs.Merge(assocs)
-			logrus.Infof("Channel Latest version %v", requested.Version)
-
-			/* Select the requested version from the available versions
-			for _, d := range neededVersions {
-				logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
-				if d.Version.Equals(rs) {
-					logrus.Infof("Image to download: %v", d.Image)
-					err := downloadMirror(d.Image)
-					if err != nil {
-						logrus.Errorln(err)
-					}
-					logrus.Infof("Image to download: %v", d.Image)
-					break
+				// If no version was specified from the channel, then get the latest release
+				latest, err := GetLatestVersion(ch, arch)
+				if err != nil {
+					return nil, err
 				}
-			} */
+				logrus.Infof("Image to download: %v", latest.Image)
+				// Download the release
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image, arch)
+				if err != nil {
+					return nil, err
+				}
+				allAssocs.Merge(assocs)
+				logrus.Infof("Channel Latest version %v", latest.Version)
+			}
 
-			// download the selected version
+			// Check for specific version declarations for each specific version
+			for _, v := range ch.Versions {
 
-			logrus.Infof("Current Object: %v", v)
-			//logrus.Infof("Next-Versions: %v", neededVersions.)
-			//nv = append(nv, neededVersions)
+				// Convert the string to a semver
+				ver, err := semver.Parse(v)
+
+				if err != nil {
+					return nil, err
+				}
+
+				// This dumps the available upgrades from the last downloaded version
+				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
+				}
+
+				logrus.Infof("requested: %v", requested.Version)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				if err != nil {
+					return nil, err
+				}
+				allAssocs.Merge(assocs)
+				logrus.Infof("Channel Latest version %v", requested.Version)
+
+				/* Select the requested version from the available versions
+				for _, d := range neededVersions {
+					logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
+					if d.Version.Equals(rs) {
+						logrus.Infof("Image to download: %v", d.Image)
+						err := downloadMirror(d.Image)
+						if err != nil {
+							logrus.Errorln(err)
+						}
+						logrus.Infof("Image to download: %v", d.Image)
+						break
+					}
+				} */
+
+				// download the selected version
+
+				logrus.Infof("Current Object: %v", v)
+				//logrus.Infof("Next-Versions: %v", neededVersions.)
+				//nv = append(nv, neededVersions)
+			}
 		}
 	}
 
@@ -270,50 +275,52 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
-		// Check for specific version declarations for each specific version
-		for _, v := range ch.Versions {
+		for _, arch := range o.arch {
+			// Check for specific version declarations for each specific version
+			for _, v := range ch.Versions {
 
-			// Convert the string to a semver
-			ver, err := semver.Parse(v)
+				// Convert the string to a semver
+				ver, err := semver.Parse(v)
 
-			if err != nil {
-				return nil, err
-			}
-
-			// This dumps the available upgrades from the last downloaded version
-			requested, _, err := o.calculateUpgradePath(ch, ver)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
-			}
-
-			logrus.Infof("requested: %v", requested.Version)
-			assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image)
-			if err != nil {
-				return nil, err
-			}
-			allAssocs.Merge(assocs)
-
-			logrus.Infof("Channel Latest version %v", requested.Version)
-
-			/* Select the requested version from the available versions
-			for _, d := range neededVersions {
-				logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
-				if d.Version.Equals(rs) {
-					logrus.Infof("Image to download: %v", d.Image)
-					err := downloadMirror(d.Image)
-					if err != nil {
-						logrus.Errorln(err)
-					}
-					logrus.Infof("Image to download: %v", d.Image)
-					break
+				if err != nil {
+					return nil, err
 				}
-			} */
 
-			// download the selected version
+				// This dumps the available upgrades from the last downloaded version
+				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
+				}
 
-			logrus.Infof("Current Object: %v", v)
-			//logrus.Infof("Next-Versions: %v", neededVersions.)
-			//nv = append(nv, neededVersions
+				logrus.Infof("requested: %v", requested.Version)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				if err != nil {
+					return nil, err
+				}
+				allAssocs.Merge(assocs)
+
+				logrus.Infof("Channel Latest version %v", requested.Version)
+
+				/* Select the requested version from the available versions
+				for _, d := range neededVersions {
+					logrus.Infof("Available Release Version: %v \n Requested Version: %o", d.Version, rs)
+					if d.Version.Equals(rs) {
+						logrus.Infof("Image to download: %v", d.Image)
+						err := downloadMirror(d.Image)
+						if err != nil {
+							logrus.Errorln(err)
+						}
+						logrus.Infof("Image to download: %v", d.Image)
+						break
+					}
+				} */
+
+				// download the selected version
+
+				logrus.Infof("Current Object: %v", v)
+				//logrus.Infof("Next-Versions: %v", neededVersions.)
+				//nv = append(nv, neededVersions
+			}
 		}
 	}
 
@@ -326,7 +333,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 // getMapping will run release mirror with ToMirror set to true to get mapping information
 // FIXME(jpower): the provided mapping does not provide a digest mapping so ICSP cannot
 // be created
-func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[string]string, images []string, err error) {
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (mappings map[string]string, images []string, err error) {
 
 	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
 	file, err := os.Create(mappingPath)
@@ -348,10 +355,9 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (mappings map[st
 		return mappings, images, err
 	}
 
-	var arch string
-	arch, found := archMap[o.arch]
-	if !found {
-		arch = o.arch
+	newArch, found := archMap[arch]
+	if found {
+		arch = newArch
 	}
 
 	scanner := bufio.NewScanner(&buffer)

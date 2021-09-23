@@ -34,7 +34,7 @@ func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipTLS, "skip-tls", false, "skip client-side TLS validation")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", false, "skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", false, "skip removal of artifact directories")
-	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", ".*", "A regular expression to control which index image is picked when multiple variants are available")
+	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")
 }
 
 func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
