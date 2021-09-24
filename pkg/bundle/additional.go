@@ -30,6 +30,7 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	opts.SecurityOptions.Insecure = o.SkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
+	opts.FilterOptions = o.FilterOptions
 
 	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
 

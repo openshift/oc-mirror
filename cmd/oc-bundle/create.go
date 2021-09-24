@@ -38,7 +38,7 @@ func newCreateFullCmd(o *create.Options) *cobra.Command {
 		Short: "Create a full OCP related container image mirror",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {
-			checkErr(o.RunFull(cmd.Context()))
+			checkErr(o.RunFull(cmd.Context(), cmd.PersistentFlags()))
 		},
 	}
 }
@@ -49,7 +49,7 @@ func newCreateDiffCmd(o *create.Options) *cobra.Command {
 		Short: "Create a differential OCP related container image mirror updates",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {
-			checkErr(o.RunDiff(cmd.Context()))
+			checkErr(o.RunDiff(cmd.Context(), cmd.PersistentFlags()))
 		},
 	}
 }

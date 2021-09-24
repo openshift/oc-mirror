@@ -28,7 +28,7 @@ run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/images
 # Stop the connected registry so we're sure nothing is being pulled from it.
 "${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
 "${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
-run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_seq1_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
 check_bundles localhost:${REGISTRY_DISCONN_PORT}/test-catalogs/test-catalog:latest \
   "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
   localhost:${REGISTRY_DISCONN_PORT}
@@ -42,7 +42,7 @@ mkdir "$DATA_TMP"
 run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config-headsonly.yaml" --output "$DATA_TMP"
 "${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
 "${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
-run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_seq1_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
 check_bundles localhost:${REGISTRY_DISCONN_PORT}/test-catalogs/test-catalog:latest \
   "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
   localhost:${REGISTRY_DISCONN_PORT}
