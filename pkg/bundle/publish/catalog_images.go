@@ -6,13 +6,21 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/containers/buildah"
+	"github.com/containers/storage"
 
 	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containers/buildah/define"
+	"github.com/containers/buildah/imagebuildah"
+	"github.com/containers/image/v5/transports"
+	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/storage/pkg/unshare"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -125,7 +133,7 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 
 		// Build and push a new image with the same namespace, name, and optionally tag
 		// as the original image, but to the mirror.
-		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
+		if err := buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
 			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
 		}
 
@@ -142,7 +150,7 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 	return refs, nil
 }
 
-func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
+func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
 	dockerfile := filepath.Join(dir, "index.Dockerfile")
 	f, err := os.Create(dockerfile)
 	if err != nil {
@@ -158,18 +166,94 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
 
-	args := []string{
-		"buildx", "build",
-		"-t", ref.Exact(),
-		"-f", dockerfile,
-		"--platform", strings.Join(o.CatalogPlatforms, ","),
-		"--push",
-		dir,
-	}
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+	unshare.MaybeReexecUsingUserNamespace(false)
 
-	return cmd.Run()
+	buildStoreOptions, err := storage.DefaultStoreOptions(unshare.IsRootless(), unshare.GetRootlessUID())
+
+	if err != nil {
+		panic(err)
+	}
+
+	buildStore, err := storage.GetStore(buildStoreOptions)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// refSlice is the image tag
+	var refSlice []string
+	refSlice = append(refSlice, ref.Exact())
+
+	// timestamp for image metadata
+	var timestamp *time.Time
+	t := time.Unix(0, 0).UTC()
+	timestamp = &t
+
+	var platforms []struct{ OS, Arch, Variant string }
+
+	options := define.BuildOptions{
+		AdditionalTags:   refSlice,
+		Timestamp:        timestamp,
+		ContextDirectory: dir,
+		Platforms:        platforms,
+	}
+	var containerfiles []string
+	containerfiles = append(containerfiles, dockerfile)
+
+	_, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfiles...)
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+
+	pushopts := buildah.PushOptions{
+		Store: buildStore,
+	}
+
+	iname := cannon.String()
+
+	dest, err := alltransports.ParseImageName(iname)
+	// add the docker:// transport to see if they neglected it.
+	if err != nil {
+		destTransport := strings.Split(iname, ":")[0]
+		if t := transports.Get(destTransport); t != nil {
+			return err
+		}
+
+		if strings.Contains(iname, "://") {
+			return err
+		}
+
+		iname = "docker://" + iname
+		dest2, err2 := alltransports.ParseImageName(iname)
+		if err2 != nil {
+			return err
+		}
+		dest = dest2
+		logrus.Debugf("Assuming docker:// as the transport method for DESTINATION: %s", iname)
+	}
+
+	cannon, digest, err := buildah.Push(ctx, iname, dest, pushopts)
+	if err != nil {
+		logrus.Error(err)
+	}
+	logrus.Info(digest)
+	logrus.Info(cannon)
+	/*
+		args := []string{
+			"buildx", "build",
+			"-t", ref.Exact(),
+			"-f", dockerfile,
+			"--platform", strings.Join(o.CatalogPlatforms, ","),
+			"--push",
+			dir,
+		}
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+
+		return cmd.Run()
+	*/
+	return err
 }
