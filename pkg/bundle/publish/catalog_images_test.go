@@ -24,7 +24,9 @@ func Test_buildCatalogImage(t *testing.T) {
 
 	defer os.RemoveAll(dir)
 
-	err := buildCatalogImage(ctx, ref, dir)
+	digest, can, err := buildCatalogImage(ctx, ref, dir)
 	require.NoError(t, err)
+	t.Log(digest)
+	t.Log(can)
 
 }

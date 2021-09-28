@@ -13,6 +13,9 @@ import (
 
 	"github.com/containers/buildah"
 	"github.com/containers/storage"
+	"github.com/opencontainers/go-digest"
+
+	v5 "github.com/containers/image/v5/docker/reference"
 
 	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containerd/containerd/errdefs"
@@ -133,9 +136,12 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 
 		// Build and push a new image with the same namespace, name, and optionally tag
 		// as the original image, but to the mirror.
-		if err := buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
+		digest, can, err := buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild)
+		if err != nil {
 			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
 		}
+		logrus.Info(digest)
+		logrus.Info(can)
 
 		// Resolve the image's digest for ICSP creation.
 		_, desc, err := resolver.Resolve(ctx, ctlgRef.Ref.Exact())
@@ -150,18 +156,18 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 	return refs, nil
 }
 
-func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
+func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) (digest.Digest, v5.Canonical, error) {
 	dockerfile := filepath.Join(dir, "index.Dockerfile")
 	f, err := os.Create(dockerfile)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 	if err := (action.GenerateDockerfile{
 		BaseImage: operator.OPMImage,
 		IndexDir:  ".",
 		Writer:    f,
 	}).Run(); err != nil {
-		return err
+		return "", nil, err
 	}
 
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
@@ -203,7 +209,7 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	_, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfiles...)
 	if err != nil {
 		logrus.Error(err)
-		return err
+		return "", nil, err
 	}
 
 	pushopts := buildah.PushOptions{
@@ -217,17 +223,17 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	if err != nil {
 		destTransport := strings.Split(iname, ":")[0]
 		if t := transports.Get(destTransport); t != nil {
-			return err
+			return "", nil, err
 		}
 
 		if strings.Contains(iname, "://") {
-			return err
+			return "", nil, err
 		}
 
 		iname = "docker://" + iname
 		dest2, err2 := alltransports.ParseImageName(iname)
 		if err2 != nil {
-			return err
+			return "", nil, err
 		}
 		dest = dest2
 		logrus.Debugf("Assuming docker:// as the transport method for DESTINATION: %s", iname)
@@ -255,5 +261,5 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 
 		return cmd.Run()
 	*/
-	return err
+	return digest, cannon, err
 }
