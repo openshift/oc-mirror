@@ -9,15 +9,15 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containers/buildah"
 	"github.com/containers/storage"
 	"github.com/opencontainers/go-digest"
 
 	v5 "github.com/containers/image/v5/docker/reference"
+	"github.com/containers/image/v5/types"
 
-	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containers/buildah/define"
 	"github.com/containers/buildah/imagebuildah"
@@ -134,14 +134,14 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 			return nil, fmt.Errorf("error resolving existing catalog image %q: %v", refExact, rerr)
 		}
 
+		sctx := types.SystemContext{}
+
 		// Build and push a new image with the same namespace, name, and optionally tag
 		// as the original image, but to the mirror.
-		digest, can, err := buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild)
+		_, err := buildCatalogImage(ctx, ctlgRef.Ref, sctx, dcDirToBuild)
 		if err != nil {
 			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
 		}
-		logrus.Info(digest)
-		logrus.Info(can)
 
 		// Resolve the image's digest for ICSP creation.
 		_, desc, err := resolver.Resolve(ctx, ctlgRef.Ref.Exact())
@@ -156,110 +156,125 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 	return refs, nil
 }
 
-func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) (digest.Digest, v5.Canonical, error) {
-	dockerfile := filepath.Join(dir, "index.Dockerfile")
-	f, err := os.Create(dockerfile)
-	if err != nil {
-		return "", nil, err
-	}
-	if err := (action.GenerateDockerfile{
-		BaseImage: operator.OPMImage,
-		IndexDir:  ".",
-		Writer:    f,
-	}).Run(); err != nil {
-		return "", nil, err
-	}
+func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, sctx types.SystemContext, dir string) (v5.Canonical, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+		}
+	}()
+	containerfile := filepath.Join(dir, "index.Dockerfile")
 
-	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
+	writeContainerfile(".", containerfile)
+
+	if buildah.InitReexec() {
+		return nil, nil
+	}
 
 	unshare.MaybeReexecUsingUserNamespace(false)
 
-	buildStoreOptions, err := storage.DefaultStoreOptions(unshare.IsRootless(), unshare.GetRootlessUID())
-
+	buildStoreOptions, err := storage.DefaultStoreOptionsAutoDetectUID()
 	if err != nil {
-		panic(err)
+		logrus.Errorf("%v", err)
+		os.Exit(1)
 	}
 
 	buildStore, err := storage.GetStore(buildStoreOptions)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// refSlice is the image tag
 	var refSlice []string
 	refSlice = append(refSlice, ref.Exact())
 
-	// timestamp for image metadata
-	var timestamp *time.Time
-	t := time.Unix(0, 0).UTC()
-	timestamp = &t
-
-	var platforms []struct{ OS, Arch, Variant string }
-
 	options := define.BuildOptions{
 		AdditionalTags:   refSlice,
-		Timestamp:        timestamp,
+		CommonBuildOpts:  &define.CommonBuildOptions{},
 		ContextDirectory: dir,
-		Platforms:        platforms,
+		AllPlatforms:     true,
+		SystemContext:    &sctx,
 	}
-	var containerfiles []string
-	containerfiles = append(containerfiles, dockerfile)
 
-	_, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfiles...)
+	id, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfile)
 	if err != nil {
 		logrus.Error(err)
-		return "", nil, err
+		return nil, err
 	}
 
+	image := imageDeets{
+		name: cannon,
+		id:   id,
+	}
+
+	image.pushImage(ctx, buildStore, sctx)
+
+	_, storeErr := buildStore.Shutdown(false)
+	if err != nil {
+		logrus.Errorf("%v", storeErr)
+		os.Exit(1)
+	}
+
+	return cannon, err
+}
+
+func (image imageDeets) pushImage(ctx context.Context, store storage.Store, sctx types.SystemContext) (digest.Digest, v5.Canonical, error) {
 	pushopts := buildah.PushOptions{
-		Store: buildStore,
+		Store:         store,
+		SystemContext: &sctx,
 	}
 
-	iname := cannon.String()
+	name := image.name.Name()
 
-	dest, err := alltransports.ParseImageName(iname)
+	dest, err := alltransports.ParseImageName(name)
 	// add the docker:// transport to see if they neglected it.
 	if err != nil {
-		destTransport := strings.Split(iname, ":")[0]
+		destTransport := strings.Split(name, ":")[0]
 		if t := transports.Get(destTransport); t != nil {
 			return "", nil, err
 		}
 
-		if strings.Contains(iname, "://") {
+		if strings.Contains(name, "://") {
 			return "", nil, err
 		}
 
-		iname = "docker://" + iname
-		dest2, err2 := alltransports.ParseImageName(iname)
-		if err2 != nil {
+		imageId := "docker://" + name
+		dest2, err := alltransports.ParseImageName(imageId)
+		if err != nil {
 			return "", nil, err
 		}
 		dest = dest2
-		logrus.Debugf("Assuming docker:// as the transport method for DESTINATION: %s", iname)
+		logrus.Debugf("Assuming docker:// as the transport method for DESTINATION: %s", imageId)
 	}
 
-	cannon, digest, err := buildah.Push(ctx, iname, dest, pushopts)
+	cannon, digest, err := buildah.Push(ctx, image.id, dest, pushopts)
 	if err != nil {
 		logrus.Error(err)
 	}
-	logrus.Info(digest)
-	logrus.Info(cannon)
-	/*
-		args := []string{
-			"buildx", "build",
-			"-t", ref.Exact(),
-			"-f", dockerfile,
-			"--platform", strings.Join(o.CatalogPlatforms, ","),
-			"--push",
-			dir,
-		}
-		cmd := exec.CommandContext(ctx, "docker", args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+	logrus.Debugf("Image pushed! %s\n", cannon)
 
-		return cmd.Run()
-	*/
 	return digest, cannon, err
+
+}
+
+func writeContainerfile(dir string, cfile string) error {
+
+	f, err := os.Create(cfile)
+	if err != nil {
+		return err
+	}
+	if err := (action.GenerateDockerfile{
+		BaseImage: operator.OPMImage,
+		IndexDir:  ".",
+		Writer:    f,
+	}).Run(); err != nil {
+		return err
+	}
+	logrus.Infoln("Building rendered catalog image")
+	return nil
+}
+
+type imageDeets struct {
+	name v5.Canonical
+	id   string
 }

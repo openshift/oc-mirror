@@ -2,31 +2,33 @@ package publish
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"testing"
 
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_buildCatalogImage(t *testing.T) {
 
-	ctx := context.TODO()
+	ctx := context.Background()
+
+	dctx := types.SystemContext{
+		DockerInsecureSkipTLSVerify: types.NewOptionalBool(true),
+	}
 	ref := reference.DockerImageReference{
-		Registry:  "localhost",
+		Registry:  "localhost:5000",
 		Namespace: "test",
 		Name:      "testname",
-		Tag:       "vtest",
+		Tag:       "vtest2",
 	}
 
-	dir, _ := ioutil.TempDir("dir", "prefix")
+	dir := t.TempDir()
+	//dir := "."
 
-	defer os.RemoveAll(dir)
-
-	digest, can, err := buildCatalogImage(ctx, ref, dir)
+	can, err := buildCatalogImage(ctx, ref, dctx, dir)
 	require.NoError(t, err)
-	t.Log(digest)
+	t.Log(err)
 	t.Log(can)
 
 }
