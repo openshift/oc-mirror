@@ -14,6 +14,7 @@ import (
 	"github.com/containers/buildah"
 	"github.com/containers/buildah/define"
 	"github.com/containers/storage"
+	"github.com/containers/storage/pkg/unshare"
 	"github.com/opencontainers/go-digest"
 
 	v5 "github.com/containers/image/v5/docker/reference"
@@ -23,7 +24,6 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containers/image/v5/transports"
 	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/storage/pkg/unshare"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -161,18 +161,14 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	// MaybeExecUsingUserNamespace ends up calling os.Exit() after the push. This catches the panic.
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in f", r)
+			fmt.Println("Recovered", r)
 		}
 	}()
+	unshare.MaybeReexecUsingUserNamespace(false)
+
 	containerfile := filepath.Join(dir, "index.Dockerfile")
 
 	writeContainerfile(dir, containerfile)
-	// Rootless buildah
-	if buildah.InitReexec() {
-		return nil, nil
-	}
-	// Rootless buildah
-	unshare.MaybeReexecUsingUserNamespace(false)
 
 	buildStoreOptions, err := storage.DefaultStoreOptionsAutoDetectUID()
 	if err != nil {
@@ -224,6 +220,7 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	// we are stuck with amd64 until we get a better build option.
 	// Boilerplate for this here:
 	// https://github.com/containers/buildah/blob/main/docs/tutorials/04-include-in-your-build-tool.md#complete-code
+
 	builder, err := buildah.NewBuilder(ctx, buildStore, opts)
 	if err != nil {
 		logrus.Error(err)
@@ -255,11 +252,11 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	}
 
 	image.pushImage(ctx, buildStore, sctx)
-	_, storeErr := buildStore.Shutdown(false)
+	/*_, storeErr := buildStore.Shutdown(false)
 	if err != nil {
 		logrus.Errorf("%v", storeErr)
 		os.Exit(1)
-	}
+	}*/
 	return cannon, err
 }
 

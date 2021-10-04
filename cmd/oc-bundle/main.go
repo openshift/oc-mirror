@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/containers/buildah"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -16,6 +17,12 @@ import (
 )
 
 func main() {
+
+	// Rootless buildah
+	if buildah.InitReexec() {
+		return
+	}
+
 	// This attempts to configure klog (used by vendored Kubernetes code) not
 	// to log anything.
 	// Handle k8s.io/klog

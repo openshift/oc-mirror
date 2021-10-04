@@ -4,12 +4,18 @@ import (
 	"context"
 	"testing"
 
+	"github.com/containers/buildah"
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_buildCatalogImage(t *testing.T) {
+	// Rootless buildah
+	if buildah.InitReexec() {
+		return
+	}
+	// Rootless buildah
 
 	ctx := context.Background()
 
