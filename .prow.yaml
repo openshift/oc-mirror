@@ -9,3 +9,14 @@ presubmits:
     - image: hashicorp/terraform:latest
       args:
       - -help
+postsubmits:
+- name: pull-test-infra-yamllint
+  always_run: true
+  decorate: true
+  trigger: "(?m)tf test( please)?" # Regexp, see discussion.
+  rerun_command: "tf test"  # String, see discussion.
+  spec:
+    containers:
+    - image: hashicorp/terraform:latest
+      args:
+      - -help
