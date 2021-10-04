@@ -7,6 +7,8 @@ presubmits:
   spec:
     containers:
     - image: hashicorp/terraform:latest
+      command:
+      - terraform
       args:
       - -help
 postsubmits:
@@ -18,5 +20,7 @@ postsubmits:
   spec:
     containers:
     - image: hashicorp/terraform:latest
+      command:
+      - terraform
       args:
       - -help
