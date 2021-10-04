@@ -1,5 +1,5 @@
 presubmits:
-- name: pull-test-infra-yamllint
+- name: presubmit-test-terraform
   always_run: true
   decorate: true
   trigger: "(?m)tf test( please)?" # Regexp, see discussion.
@@ -12,7 +12,7 @@ presubmits:
       args:
       - -help
 postsubmits:
-- name: pull-test-infra-yamllint
+- name: submit-test-terraform
   always_run: true
   decorate: true
   trigger: "(?m)tf test( please)?" # Regexp, see discussion.
