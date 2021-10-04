@@ -12,15 +12,15 @@ import (
 
 	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containers/buildah"
+	"github.com/containers/buildah/define"
 	"github.com/containers/storage"
 	"github.com/opencontainers/go-digest"
 
 	v5 "github.com/containers/image/v5/docker/reference"
+	is "github.com/containers/image/v5/storage"
 	"github.com/containers/image/v5/types"
 
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containers/buildah/define"
-	"github.com/containers/buildah/imagebuildah"
 	"github.com/containers/image/v5/transports"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/storage/pkg/unshare"
@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 )
@@ -157,6 +158,7 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 }
 
 func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, sctx types.SystemContext, dir string) (v5.Canonical, error) {
+	// MaybeExecUsingUserNamespace ends up calling os.Exit() after the push. This catches the panic.
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered in f", r)
@@ -164,12 +166,12 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	}()
 	containerfile := filepath.Join(dir, "index.Dockerfile")
 
-	writeContainerfile(".", containerfile)
-
+	writeContainerfile(dir, containerfile)
+	// Rootless buildah
 	if buildah.InitReexec() {
 		return nil, nil
 	}
-
+	// Rootless buildah
 	unshare.MaybeReexecUsingUserNamespace(false)
 
 	buildStoreOptions, err := storage.DefaultStoreOptionsAutoDetectUID()
@@ -179,42 +181,85 @@ func buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, 
 	}
 
 	buildStore, err := storage.GetStore(buildStoreOptions)
-
 	if err != nil {
 		return nil, err
 	}
+	/*  // This commented section is the failing bud config.
+	    // We are getting an empty error from the imagebuildah package
+		// that tanks the build whenever it processes any command after the
+		// "FROM" command in the containerfile. I am leaving this here
+		// for the intrepid developer that wants to make this work.
+		// refSlice is the image tag
+		var refSlice []string
+		refSlice = append(refSlice, ref.Exact())
 
-	// refSlice is the image tag
-	var refSlice []string
-	refSlice = append(refSlice, ref.Exact())
+		options := define.BuildOptions{
+			AdditionalTags:   refSlice,
+			CommonBuildOpts:  &define.CommonBuildOptions{},
+			ContextDirectory: dir,
+			//AllPlatforms:     true,
+			SystemContext: &sctx,
+		}
 
-	options := define.BuildOptions{
-		AdditionalTags:   refSlice,
+		id, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfile)
+		if err != nil {
+			logrus.Error(err)
+			return nil, err
+		}
+		logrus.Info(id)
+	*/
+	// TODO: get rid of buildah commit for multi-arch builds
+	sctx.ArchitectureChoice = "amd64"
+	sctx.OSChoice = "linux"
+	opts := buildah.BuilderOptions{
+		FromImage:        operator.OPMImage,
+		Isolation:        define.IsolationChroot,
 		CommonBuildOpts:  &define.CommonBuildOptions{},
-		ContextDirectory: dir,
-		AllPlatforms:     true,
-		SystemContext:    &sctx,
+		ConfigureNetwork: define.NetworkDefault,
+		// SystemContext has a lot of tweaks including insecure push.
+		SystemContext: &sctx,
 	}
-
-	id, cannon, err := imagebuildah.BuildDockerfiles(ctx, buildStore, options, containerfile)
+	// Using a builder here because bud is not easily integrated.
+	// This is an issue because we cannot commit multi-arch images. So,
+	// we are stuck with amd64 until we get a better build option.
+	// Boilerplate for this here:
+	// https://github.com/containers/buildah/blob/main/docs/tutorials/04-include-in-your-build-tool.md#complete-code
+	builder, err := buildah.NewBuilder(ctx, buildStore, opts)
 	if err != nil {
 		logrus.Error(err)
-		return nil, err
+		panic(err)
+	}
+	builder.SetEntrypoint([]string{"/bin/opm"})
+	builder.SetCmd([]string{"serve", "/configs"})
+	err = builder.Add("/configs", false, buildah.AddAndCopyOptions{}, ".")
+	if err != nil {
+		logrus.Error(err)
+		panic(err)
+	}
+	builder.SetLabel(containertools.ConfigsLocationLabel, "/configs")
+
+	imageRef, err := is.Transport.ParseStoreReference(buildStore, ref.Exact())
+	if err != nil {
+		logrus.Error(err)
+		panic(err)
+	}
+	imageId, cannon, _, err := builder.Commit(ctx, imageRef, buildah.CommitOptions{})
+	if err != nil {
+		logrus.Error(err)
+		panic(err)
 	}
 
 	image := imageDeets{
 		name: cannon,
-		id:   id,
+		id:   imageId,
 	}
 
 	image.pushImage(ctx, buildStore, sctx)
-
 	_, storeErr := buildStore.Shutdown(false)
 	if err != nil {
 		logrus.Errorf("%v", storeErr)
 		os.Exit(1)
 	}
-
 	return cannon, err
 }
 
@@ -261,6 +306,7 @@ func writeContainerfile(dir string, cfile string) error {
 
 	f, err := os.Create(cfile)
 	if err != nil {
+		logrus.Error(err)
 		return err
 	}
 	if err := (action.GenerateDockerfile{
@@ -268,6 +314,7 @@ func writeContainerfile(dir string, cfile string) error {
 		IndexDir:  ".",
 		Writer:    f,
 	}).Run(); err != nil {
+		logrus.Error(err)
 		return err
 	}
 	logrus.Infoln("Building rendered catalog image")
