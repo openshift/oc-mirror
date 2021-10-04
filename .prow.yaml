@@ -18,6 +18,10 @@ postsubmits:
   trigger: "(?m)tf test( please)?" # Regexp, see discussion.
   rerun_command: "tf test"  # String, see discussion.
   spec:
+    initContainers:
+    - name: init-test
+      image: busybox:1.28
+      command: ['sh', '-c', "echo init-test"]
     containers:
     - image: hashicorp/terraform:latest
       command:
