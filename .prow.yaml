@@ -1,0 +1,11 @@
+presubmits:
+- name: pull-test-infra-yamllint
+  always_run: true
+  decorate: true
+  trigger: "(?m)terraform test( please)?" # Regexp, see discussion.
+  rerun_command: "terraform test"  # String, see discussion.
+  spec:
+    containers:
+    - image: hashicorp/terraform:latest
+      args:
+      - -help
