@@ -15,7 +15,7 @@ presubmits:
         chmod +x bin/oc-bundle &&
         mkdir ~/.docker &&
         echo $PULL_SECRET > ~/.docker/config.json &&
-        apt update -y && apt install unpigz &&
+        apt update -y && apt install pigz &&
         bin/oc-bundle create full --dir=$ARTIFACTS --config=test/prow/imageset.yaml --log-level=debug
 postsubmits:
 - name: submit-test-build
