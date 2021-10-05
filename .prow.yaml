@@ -8,7 +8,9 @@ presubmits:
     containers:
     - image: docker.io/library/golang:1.17
       command:
-      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle
+      - go 
+      args:
+      - build -o bin/oc-bundle ./cmd/oc-bundle
 postsubmits:
 - name: submit-test-terraform
   always_run: true
@@ -19,4 +21,6 @@ postsubmits:
     containers:
     - image: docker.io/library/golang:1.17
       command:
-      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle
+      - go 
+      args:
+      - build -o bin/oc-bundle ./cmd/oc-bundle
