@@ -6,11 +6,6 @@ presubmits:
   rerun_command: "tf test"  # String, see discussion.
   spec:
     containers:
-    - image: hashicorp/terraform:latest
-      command:
-      - terraform
-      args:
-      - -help
     - image: docker.io/library/golang:1.17
       command:
       - go 
@@ -24,11 +19,6 @@ postsubmits:
   rerun_command: "tf test"  # String, see discussion.
   spec:
     containers:
-    - image: hashicorp/terraform:latest
-      command:
-      - terraform
-      args:
-      - -help
     - image: docker.io/library/golang:1.17
       command:
       - go 
