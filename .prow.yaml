@@ -6,14 +6,13 @@ presubmits:
   rerun_command: "tf test"  # String, see discussion.
   spec:
     containers:
-    - image: docker.io/library/golang:1.17
+    - image: docker.io/library/golang:1.17.1-bullseye
       command:
-      - go 
-      - build 
-      - -tags=json1 
-      - -o 
-      - bin/oc-bundle 
-      - ./cmd/oc-bundle
+      - /bin/sh
+      args:
+      - -c
+      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle && 
+        mv ./cmd/oc-bundle $ARTIFACTS
 postsubmits:
 - name: submit-test-terraform
   always_run: true
@@ -22,11 +21,10 @@ postsubmits:
   rerun_command: "tf test"  # String, see discussion.
   spec:
     containers:
-    - image: docker.io/library/golang:1.17
+    - image: docker.io/library/golang:1.17.1-bullseye
       command:
-      - go 
-      - build 
-      - -tags=json1 
-      - -o 
-      - bin/oc-bundle 
-      - ./cmd/oc-bundle
+      - /bin/sh
+      args:
+      - -c
+      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle && 
+        mv ./cmd/oc-bundle $ARTIFACTS
