@@ -327,7 +327,7 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 		if !isImagePinned(b.Image) {
 			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
 				if errors.As(err, &reference.ErrObjectRequired) {
-					logrus.Warnf("skipping image %s: %v", b.Image, err)
+					logrus.Warnf("skipping image \"%s\": %v", b.Image, err)
 					continue
 				}
 				errs = append(errs, err)
@@ -338,7 +338,7 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 			if !isImagePinned(ri.Image) {
 				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
 					if errors.As(err, &reference.ErrObjectRequired) {
-						logrus.Warnf("skipping image %s: %v", ri.Image, err)
+						logrus.Warnf("skipping image \"%s\": %v", ri.Image, err)
 						continue
 					}
 					errs = append(errs, err)
