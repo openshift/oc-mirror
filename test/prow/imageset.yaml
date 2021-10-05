@@ -8,13 +8,6 @@ mirror:
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8
       headsOnly: true
-      packages:
-        - name: couchbase-operator
-          versions:
-            - '1.4.0' 
-        - name: crunchy-postgresql-operator
-          channels: 
-            - name: 'stable'
   additionalimages:
     - name: registry.redhat.io/ubi8/ubi:latest
   blockedimages:
