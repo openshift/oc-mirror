@@ -9,7 +9,6 @@ presubmits:
     - image: docker.io/library/golang:1.17
       command:
       - go 
-      args:
       - build 
       - -tags=json1 
       - -o bin/oc-bundle 
@@ -25,7 +24,6 @@ postsubmits:
     - image: docker.io/library/golang:1.17
       command:
       - go 
-      args:
       - build 
       - -tags=json1 
       - -o bin/oc-bundle 
