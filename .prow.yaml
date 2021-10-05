@@ -10,7 +10,10 @@ presubmits:
       command:
       - go 
       args:
-      - build -o bin/oc-bundle ./cmd/oc-bundle
+      - build 
+      - -tags=json1 
+      - -o bin/oc-bundle 
+      - ./cmd/oc-bundle
 postsubmits:
 - name: submit-test-terraform
   always_run: true
@@ -23,4 +26,7 @@ postsubmits:
       command:
       - go 
       args:
-      - build -o bin/oc-bundle ./cmd/oc-bundle
+      - build 
+      - -tags=json1 
+      - -o bin/oc-bundle 
+      - ./cmd/oc-bundle
