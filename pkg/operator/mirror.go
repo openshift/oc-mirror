@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/containerd/reference"
 	"github.com/joelanford/ignore"
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/admin/catalog"
@@ -325,6 +326,10 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 	for i, b := range dc.Bundles {
 		if !isImagePinned(b.Image) {
 			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
+				if errors.As(err, &reference.ErrObjectRequired) {
+					logrus.Warnf("skipping image %s: %v", b.Image, err)
+					continue
+				}
 				errs = append(errs, err)
 				continue
 			}
@@ -332,6 +337,10 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 		for j, ri := range b.RelatedImages {
 			if !isImagePinned(ri.Image) {
 				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
+					if errors.As(err, &reference.ErrObjectRequired) {
+						logrus.Warnf("skipping image %s: %v", ri.Image, err)
+						continue
+					}
 					errs = append(errs, err)
 					continue
 				}
