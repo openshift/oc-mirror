@@ -15,7 +15,10 @@ presubmits:
         chmod +x bin/oc-bundle &&
         mkdir ~/.docker &&
         echo $PULL_SECRET > ~/.docker/config.json &&
-        bin/oc-bundle create full --dir=$ARTIFACTS --config=test/prow/imageset.yaml --log-level=debug
+        apt update -y && apt install pigz &&
+        mkdir $ARTIFACTS/test-create && mkdir $ARTIFACTS/archives && 
+        bin/oc-bundle create full --dir=$ARTIFACTS/test-create --output=$ARTIFACTS/archives --config=test/prow/imageset.yaml --log-level=debug && 
+#        bin/oc-bundle publish --archive archives --dir test-publish --to-mirror local-reg
 postsubmits:
 - name: submit-test-build
   always_run: true
