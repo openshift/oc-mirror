@@ -65,6 +65,7 @@ func (o *Options) RunFull(ctx context.Context, flags *pflag.FlagSet) error {
 
 		if len(cfg.Mirror.Operators) != 0 {
 			opts := operator.NewMirrorOptions(*o.RootOptions)
+			opts.SkipImagePin = o.SkipImagePin
 			assocs, err := opts.Full(ctx, cfg)
 			if err != nil {
 				return meta, run, err

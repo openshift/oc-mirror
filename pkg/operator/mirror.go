@@ -323,7 +323,13 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 
 	var errs []error
 	for i, b := range dc.Bundles {
+
 		if !isImagePinned(b.Image) {
+
+			if !isImageTagged(b.Image) {
+				logrus.Warnf("bundle %s: bundle image tag not set", b.Name)
+				continue
+			}
 			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
 				errs = append(errs, err)
 				continue
@@ -331,6 +337,12 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 		}
 		for j, ri := range b.RelatedImages {
 			if !isImagePinned(ri.Image) {
+
+				if !isImageTagged(ri.Image) {
+					logrus.Warnf("bundle %s: related image tag not set", b.Name)
+					continue
+				}
+
 				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
 					errs = append(errs, err)
 					continue
@@ -345,6 +357,11 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 // isImagePinned returns true if img looks canonical.
 func isImagePinned(img string) bool {
 	return strings.Contains(img, "@")
+}
+
+// isImageTagged returns true if img has a tag.
+func isImageTagged(img string) bool {
+	return strings.Contains(img, ":")
 }
 
 func (o *MirrorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
