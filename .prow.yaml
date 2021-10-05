@@ -10,8 +10,6 @@ presubmits:
       command:
       - go 
       - build 
-      - -tags=json1 
-      - -o bin/oc-bundle 
       - ./cmd/oc-bundle
 postsubmits:
 - name: submit-test-terraform
@@ -25,6 +23,4 @@ postsubmits:
       command:
       - go 
       - build 
-      - -tags=json1 
-      - -o bin/oc-bundle 
       - ./cmd/oc-bundle
