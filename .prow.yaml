@@ -13,6 +13,8 @@ presubmits:
       - -c
       - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle && 
         chmod +x bin/oc-bundle &&
+        mkdir ~/.docker &&
+        echo $PULL_SECRET > ~/.docker/config.json
         bin/oc-bundle create full --dir=$ARTIFACTS --config=test/prow/imageset.yaml --log-level=debug
 postsubmits:
 - name: submit-test-terraform
@@ -27,4 +29,5 @@ postsubmits:
       - /bin/sh
       args:
       - -c
-      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle 
+      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle && 
+        mv cmd/oc-bundle $ARTIFACTS
