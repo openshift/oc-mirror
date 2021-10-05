@@ -5,9 +5,6 @@ mirror:
     channels:
       - name: stable-4.8 
     graph: true
-  operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8
-      headsOnly: true
   additionalimages:
     - name: registry.redhat.io/ubi8/ubi:latest
   blockedimages:
