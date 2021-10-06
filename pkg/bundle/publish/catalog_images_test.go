@@ -2,16 +2,27 @@ package publish
 
 import (
 	"context"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 
 	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func Test_buildCatalogImage(t *testing.T) {
+
+	s := httptest.NewServer(registry.New())
+	defer s.Close()
+
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	/*
@@ -61,7 +72,7 @@ func Test_buildCatalogImage(t *testing.T) {
 		}
 
 		ref := reference.DockerImageReference{
-			Registry:  "localhost:5000",
+			Registry:  u.Host,
 			Namespace: "test",
 			Name:      "testname",
 			Tag:       "vtest3",
