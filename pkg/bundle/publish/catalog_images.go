@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/operator"
@@ -163,18 +164,32 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
 
-	args := []string{
-		"buildx", "build",
+	bargs := []string{
+		"build",
 		"-t", ref.Exact(),
 		"-f", dockerfile,
-		"--platform", strings.Join(o.CatalogPlatforms, ","),
-		"--push",
+		// TODO: NO MULTIARCH SUPPORT... YET.
+		//"--platform", strings.Join(o.CatalogPlatforms, ","),
 		dir,
 	}
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+	bcmd := exec.CommandContext(ctx, "podman", bargs...)
+	bcmd.Stdout = os.Stdout
+	bcmd.Stderr = os.Stderr
+	err = bcmd.Run()
+	if err != nil {
+		logrus.Error(bcmd.Stderr)
+		return err
+	}
+	logrus.Debugf("command: %s", strings.Join(bcmd.Args, " "))
 
-	return cmd.Run()
+	pargs := []string{
+		"push",
+		ref.Exact(),
+		fmt.Sprintf("--tls-verify=%s", strconv.FormatBool(!o.SkipTLS)),
+	}
+	pcmd := exec.CommandContext(ctx, "podman", pargs...)
+	logrus.Info(pcmd)
+	pcmd.Stdout = os.Stdout
+	pcmd.Stderr = os.Stderr
+	return pcmd.Run()
 }
