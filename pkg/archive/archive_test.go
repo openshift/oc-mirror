@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
@@ -57,8 +56,8 @@ func Test_SplitArchive(t *testing.T) {
 
 		packager := NewPackager(tt.manifests, tt.blobs)
 
-		if err := bundle.MakeCreateDirs(testdir); err != nil {
-			t.Fatal(err)
+		if err := os.MkdirAll(filepath.Join(testdir, config.SourceDir), os.ModePerm); err != nil {
+			t.Fail()
 		}
 
 		cwd, err := os.Getwd()

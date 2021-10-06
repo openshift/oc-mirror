@@ -11,10 +11,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
+
+	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
 
 type Archiver interface {
@@ -227,7 +228,7 @@ func blobInArchive(file string) string {
 
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
+	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs" || split[0] == config.HelmDir
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {

@@ -79,7 +79,16 @@ func (o *Options) RunFull(ctx context.Context, flags *pflag.FlagSet) error {
 
 		if len(cfg.Mirror.AdditionalImages) != 0 {
 			opts := bundle.NewAdditionalOptions(*o.RootOptions)
-			assocs, err := opts.GetAdditional(run, cfg)
+			assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
+			if err != nil {
+				return meta, run, err
+			}
+			allAssocs.Merge(assocs)
+		}
+
+		if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
+			opts := bundle.NewHelmOptions(*o.RootOptions)
+			assocs, err := opts.PullCharts(cfg)
 			if err != nil {
 				return meta, run, err
 			}
@@ -142,7 +151,16 @@ func (o *Options) RunDiff(ctx context.Context, flags *pflag.FlagSet) error {
 
 		if len(cfg.Mirror.AdditionalImages) != 0 {
 			opts := bundle.NewAdditionalOptions(*o.RootOptions)
-			assocs, err := opts.GetAdditional(lastRun, cfg)
+			assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
+			if err != nil {
+				return meta, run, err
+			}
+			allAssocs.Merge(assocs)
+		}
+
+		if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
+			opts := bundle.NewHelmOptions(*o.RootOptions)
+			assocs, err := opts.PullCharts(cfg)
 			if err != nil {
 				return meta, run, err
 			}
