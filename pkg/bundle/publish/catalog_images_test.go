@@ -65,10 +65,6 @@ func Test_buildCatalogImage(t *testing.T) {
 				SkipTLS: true,
 			},
 			ArchivePath: tt.fields.archivePath,
-			CatalogPlatforms: []string{
-				"linux/amd64",
-				"linux/arm64",
-			},
 		}
 
 		ref := reference.DockerImageReference{

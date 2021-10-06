@@ -8,9 +8,14 @@ Bundle management is a two part process:
 1. Bundle Creation (Internet Connected)
 1. Bundle Publishing (Disconnected)
 
-## Requirements
+## Required dependencies
 
-- [`docker buildx`][docker-buildx] (called by `publish`)
+- [`podman`][podman] (only required if not building multi-arch images, see below)
+
+## Multi-arch catalog images
+
+[`docker buildx`][docker-buildx] is required to build multi-arch catalog images;
+`docker buildx build` is invoked by `publish` when `--buildx-platforms` is set.
 
 ## Usage
 
@@ -73,3 +78,4 @@ TODO: link to the following once a release is cut.
 [config-spec]:pkg/config/v1alpha1/config_types.go
 [go]:https://golang.org/dl/
 [docker-buildx]:https://docs.docker.com/buildx/working-with-buildx/
+[podman]:https://podman.io/getting-started/

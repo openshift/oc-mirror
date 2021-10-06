@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/operator"
@@ -164,32 +163,69 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
 
+	if len(o.BuildxPlatforms) == 0 {
+		err = o.buildPodman(ctx, ref, dir, dockerfile)
+	} else {
+		err = o.buildDockerBuildx(ctx, ref, dir, dockerfile)
+	}
+	return err
+}
+
+func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
+	exactRef := ref.Exact()
+
+	args := []string{
+		"build", "buildx",
+		"-t", exactRef,
+		"-f", dockerfile,
+		"--platform", strings.Join(o.BuildxPlatforms, ","),
+		"--push",
+		dir,
+	}
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := runDebug(cmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *Options) buildPodman(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
+	exactRef := ref.Exact()
+
 	bargs := []string{
 		"build",
-		"-t", ref.Exact(),
+		"-t", exactRef,
 		"-f", dockerfile,
-		// TODO: NO MULTIARCH SUPPORT... YET.
-		//"--platform", strings.Join(o.CatalogPlatforms, ","),
 		dir,
 	}
 	bcmd := exec.CommandContext(ctx, "podman", bargs...)
 	bcmd.Stdout = os.Stdout
 	bcmd.Stderr = os.Stderr
-	err = bcmd.Run()
-	if err != nil {
-		logrus.Error(bcmd.Stderr)
+	if err := runDebug(bcmd); err != nil {
 		return err
 	}
-	logrus.Debugf("command: %s", strings.Join(bcmd.Args, " "))
 
 	pargs := []string{
 		"push",
-		ref.Exact(),
-		fmt.Sprintf("--tls-verify=%s", strconv.FormatBool(!o.SkipTLS)),
+		exactRef,
+	}
+	if o.SkipTLS {
+		pargs = append(pargs, "--tls-verify=false")
 	}
 	pcmd := exec.CommandContext(ctx, "podman", pargs...)
-	logrus.Info(pcmd)
 	pcmd.Stdout = os.Stdout
 	pcmd.Stderr = os.Stderr
-	return pcmd.Run()
+	if err := runDebug(pcmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runDebug(cmd *exec.Cmd) error {
+	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+	return cmd.Run()
 }
