@@ -30,6 +30,7 @@ type Mirror struct {
 	OCP              OCP                `json:"ocp,omitempty"`
 	Operators        []Operator         `json:"operators,omitempty"`
 	AdditionalImages []AdditionalImages `json:"additionalImages,omitempty"`
+	Helm             Helm               `json:"helm,omitempty"`
 	BlockedImages    []BlockedImages    `json:"blockedImages,omitempty"`
 	Samples          []SampleImages     `json:"samples,omitempty"`
 }
@@ -74,6 +75,33 @@ type Operator struct {
 	// which experiences degraded performance with file sizes of 100MB.
 	// InlineIndex and WriteIndex cannot both be set.
 	InlineIndex bool `json:"inlineIndex,omitempty"`
+}
+
+type Helm struct {
+	// Repo is the helm repository containing the charts
+	Repos []Repo `json:"repos,omitempty"`
+	// Local is the configuration for locally stored helm charts
+	Local []Chart `json:"local,omitempty"`
+}
+
+// Repo is the configuration for a Helm Repo
+type Repo struct {
+	// URL is the url of the helm repository
+	URL string `json:"url"`
+	// Name is the name of the helm repository
+	Name string `json:"name"`
+	// Charts is a list of charts to pull from the repo
+	Charts []Chart `json:"charts"`
+}
+
+// Chart is the information an individual Helm chart
+type Chart struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	Path    string `json:"path,omitempty"`
+	// ImagePaths are custom JSON paths for images location
+	// in the helm manifest or templates
+	ImagePaths []string `json:"imagepaths,omitempty"`
 }
 
 // Image contains image pull information.

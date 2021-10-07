@@ -5,7 +5,7 @@ go 1.16
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
-	github.com/containerd/containerd v1.5.2
+	github.com/containerd/containerd v1.5.4
 	github.com/containers/image/v5 v5.15.2
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/go-git/go-git/v5 v5.4.2
@@ -28,13 +28,14 @@ require (
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
 	gopkg.in/yaml.v2 v2.4.0
+	helm.sh/helm/v3 v3.7.0
 	k8s.io/apimachinery v0.22.1
-	k8s.io/cli-runtime v0.22.0
+	k8s.io/cli-runtime v0.22.1
 	k8s.io/client-go v0.22.1
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
-	k8s.io/kubectl v0.22.0
-	rsc.io/letsencrypt v0.0.3 // indirect
+	k8s.io/kubectl v0.22.1
+	sigs.k8s.io/kustomize/kyaml v0.11.0
 	sigs.k8s.io/yaml v1.2.0
 )
 

@@ -78,6 +78,15 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
+	// Set target dir for resulting artifacts
+	if o.OutputDir == "" {
+		dir, err := o.createResultsDir()
+		o.OutputDir = dir
+		if err != nil {
+			return err
+		}
+	}
+
 	// Create workspace
 	cleanup, tmpdir, err := mktempDir(o.Dir)
 	if err != nil {
@@ -159,6 +168,12 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		}
 	}
 
+	// Unpack chart to user destination if it exists
+	logrus.Debugf("Unpacking any provided Helm charts to %s", o.OutputDir)
+	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
+		return err
+	}
+
 	if err := o.unpackImageSet(a, o.Dir); err != nil {
 		return err
 	}
@@ -183,12 +198,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
-	// Create target dir for manifest directory
-	manifestDir, err := o.createManifestDir()
-	if err != nil {
-		return err
-	}
-
 	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
 	for _, imageName := range assocs.Keys() {
 
@@ -205,6 +214,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		}
 		dstRef := imageRef
 		dstRef.Registry = toMirrorRef.Ref.Registry
+
 		namedICSPMappings[imageRef.Name] = map[reference.DockerImageReference]reference.DockerImageReference{
 			imageRef: dstRef,
 		}
@@ -212,7 +222,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		_, unpackDir, err := mktempDir(tmpdir)
+		cleanUnpackDir, unpackDir, err := mktempDir(tmpdir)
 		if err != nil {
 			return err
 		}
@@ -222,8 +232,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
-			// TODO: find a way to ensure these will be process on their
-			// No longer stored in the map
 			logrus.Debugf("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
@@ -312,7 +320,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			case image.TypeOperatorCatalog:
 				// Create a catalog source file for index
 				mapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{m.Source: m.Destination}
-				if err := o.writeCatalogSource(manifestDir, mapping); err != nil {
+				if err := o.writeCatalogSource(o.OutputDir, mapping); err != nil {
 					errs = append(errs, fmt.Errorf("image %q: error writing catalog source: %v", imageName, err))
 					continue
 				}
@@ -339,6 +347,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				errs = append(errs, err)
 			}
 		}
+
+		// Cleanup temp image processing workspace as images are processed
+		if !o.SkipCleanup {
+			cleanUnpackDir()
+		}
 	}
 	if len(errs) != 0 {
 		return utilerrors.NewAggregate(errs)
@@ -356,7 +369,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	for _, ref := range ctlgRefs {
 		namedICSPMappings[ref.Ref.Name] = map[reference.DockerImageReference]reference.DockerImageReference{ref.Ref: ref.Ref}
 
-		if err := writeCatalogSource(ref, ref, manifestDir); err != nil {
+		if err := writeCatalogSource(ref, ref, o.OutputDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", ref.Ref.Exact(), err)
 		}
 	}
@@ -371,7 +384,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Write an aggregation of ICSPs
-	if err := WriteICSPs(manifestDir, allICSPs); err != nil {
+	if err := WriteICSPs(o.OutputDir, allICSPs); err != nil {
 		return fmt.Errorf("error writing ICSPs: %v", err)
 	}
 
@@ -421,7 +434,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 			if extension == a.String() {
 				logrus.Debugf("Extracting archive %s", path)
-				if err := archive.Unarchive(a, path, dest, []string{"blobs", "v2"}); err != nil {
+				if err := archive.Unarchive(a, path, dest, []string{"blobs", "v2", config.HelmDir}); err != nil {
 					return err
 				}
 			}
@@ -702,15 +715,15 @@ func (o *Options) writeCatalogSource(manifestDir string, mapping map[imagesource
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *Options) createManifestDir() (manifestDir string, err error) {
-	manifestDir = filepath.Join(
+func (o *Options) createResultsDir() (resultsDir string, err error) {
+	resultsDir = filepath.Join(
 		o.Dir,
-		fmt.Sprintf("manifest-%v", time.Now().Unix()),
+		fmt.Sprintf("results-%v", time.Now().Unix()),
 	)
 
-	if err := os.MkdirAll(manifestDir, os.ModePerm); err != nil {
-		return manifestDir, err
+	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
+		return resultsDir, err
 	}
 
-	return manifestDir, nil
+	return resultsDir, nil
 }

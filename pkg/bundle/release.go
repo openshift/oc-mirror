@@ -348,7 +348,6 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 	// store in buffer for manipulation before outputting to mapping.txt
 	var buffer bytes.Buffer
 	opts.IOStreams.Out = &buffer
-
 	opts.ToMirror = true
 
 	if err := opts.Run(); err != nil {
@@ -366,26 +365,35 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 	for scanner.Scan() {
 		text := scanner.Text()
 		split := strings.Split(text, " ")
+		srcRef := split[0]
 
 		// Get release image name from mapping
-		if strings.Contains(split[0], "ocp-release") {
-			o.release = split[0]
+		// Only the top release need to be resolve because all other image key associated to the
+		// will be updated to this value
+		if strings.Contains(srcRef, "ocp-release") {
+			if !image.IsImagePinned(srcRef) {
+				srcRef, err = pinImages(context.TODO(), srcRef, "", o.SkipTLS)
+			}
+			o.release = srcRef
 		}
 
-		// Proccess name and add arch to dir name
-		// TODO: architecture handling
+		// Generate name of target directory
 		var names []string
-		name := opts.TargetFn(split[1]).Exact()
-		nameSplit := strings.Split(name, "-")
+		dstRef := opts.TargetFn(split[1]).Exact()
+
+		// TODO: arch is not provided when getting mapping from release does not included
+		// the arch in the directory. Need to investigate, but adding it here as a workaround
+		nameSplit := strings.Split(dstRef, "-")
 		names = []string{nameSplit[1], arch}
 		names = append(names, nameSplit[2:]...)
-		name = strings.Join(names, "-")
 
-		if _, err := file.WriteString(split[0] + "=" + name + "\n"); err != nil {
+		dstRef = strings.Join(names, "-")
+
+		if _, err := file.WriteString(srcRef + "=" + dstRef + "\n"); err != nil {
 			return mappings, images, err
 		}
 
-		images = append(images, split[0])
+		images = append(images, srcRef)
 	}
 
 	mappings, err = image.ReadImageMapping(mappingPath)

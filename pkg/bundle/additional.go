@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -23,7 +24,7 @@ func NewAdditionalOptions(ro cli.RootOptions) *AdditionalOptions {
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (image.AssociationSet, error) {
 
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
@@ -32,12 +33,12 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 	opts.FilterOptions = o.FilterOptions
 
-	logrus.Infof("Downloading %d image(s) to %s", len(cfg.Mirror.AdditionalImages), opts.FileDir)
+	logrus.Infof("Downloading %d image(s) to %s", len(imageList), opts.FileDir)
 
 	var mappings []mirror.Mapping
-	images := make([]string, len(cfg.Mirror.AdditionalImages))
-	assocMappings := make(map[string]string, len(cfg.Mirror.AdditionalImages))
-	for i, img := range cfg.Mirror.AdditionalImages {
+	images := make([]string, len(imageList))
+	assocMappings := make(map[string]string, len(imageList))
+	for i, img := range imageList {
 
 		// If the pullSecret is not empty create a cached context
 		// else let `oc mirror` use the default docker config location
@@ -74,7 +75,11 @@ func (o *AdditionalOptions) GetAdditional(_ v1alpha1.PastMirror, cfg v1alpha1.Im
 
 		// Add mapping and image for image association.
 		// The registry component is not included in the final path.
-		srcImage := srcRef.Ref.String()
+		srcImage, err := pinImages(context.TODO(), srcRef.Ref.Exact(), "", o.SkipTLS)
+		if err != nil {
+			return nil, err
+		}
+
 		dstRef.Ref.Registry = ""
 		assocMappings[srcImage] = dstRef.String()
 		images[i] = srcImage

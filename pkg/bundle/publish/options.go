@@ -11,9 +11,9 @@ import (
 type Options struct {
 	*cli.RootOptions
 
-	ArchivePath string
-	ToMirror    string
-
+	ArchivePath     string
+	ToMirror        string
+	OutputDir       string
 	BuildxPlatforms []string
 }
 
@@ -25,6 +25,7 @@ func (o *Options) BindFlags(fs *pflag.FlagSet) {
 			"for the specified platforms, ex. linux/amd64, instead of 'podman build' for the host platform. "+
 			"The 'buildx' plugin and accompanying configuration MUST be installed on the build host. "+
 			"This list does NOT filter operator bundle manifest list platforms within the catalog")
+	fs.StringVar(&o.OutputDir, "output", "", "Output directory for publish result artifacts")
 }
 
 // ValidatePaths validate the existence of paths from user flags
