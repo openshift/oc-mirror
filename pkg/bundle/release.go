@@ -59,7 +59,8 @@ func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions
 }
 
 const (
-	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	UpdateUrl    string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	OkdUpdateURL string = "https://origin-release.ci.openshift.org/graph"
 )
 
 func getTLSConfig() (*tls.Config, error) {
@@ -75,8 +76,9 @@ func getTLSConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-func newClient() (Client, *url.URL, error) {
-	upstream, err := url.Parse(UpdateUrl)
+func newClient(u string) (Client, *url.URL, error) {
+
+	upstream, err := url.Parse(u)
 	if err != nil {
 		return Client{}, nil, err
 	}
@@ -96,9 +98,9 @@ func newClient() (Client, *url.URL, error) {
 }
 
 // Next calculate the upgrade path from the current version to the channel's latest
-func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, arch string) (Update, []Update, error) {
+func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, url, arch string) (Update, []Update, error) {
 
-	client, upstream, err := newClient()
+	client, upstream, err := newClient(url)
 	if err != nil {
 		return Update{}, nil, err
 	}
@@ -115,9 +117,9 @@ func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, arch str
 	return upgrade, upgrades, nil
 }
 
-func GetLatestVersion(ch v1alpha1.ReleaseChannel, arch string) (Update, error) {
+func GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (Update, error) {
 
-	client, upstream, err := newClient()
+	client, upstream, err := newClient(url)
 	if err != nil {
 		return Update{}, err
 	}
@@ -195,13 +197,18 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
-
+		var url string
+		if ch.Name == "okd" {
+			url = OkdUpdateURL
+		} else {
+			url = UpdateUrl
+		}
 		for _, arch := range o.arch {
 
 			if len(ch.Versions) == 0 {
 
 				// If no version was specified from the channel, then get the latest release
-				latest, err := GetLatestVersion(ch, arch)
+				latest, err := GetLatestVersion(ch, url, arch)
 				if err != nil {
 					return nil, err
 				}
@@ -226,7 +233,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
@@ -275,6 +282,12 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
+		var url string
+		if ch.Name == "okd" {
+			url = OkdUpdateURL
+		} else {
+			url = UpdateUrl
+		}
 		for _, arch := range o.arch {
 			// Check for specific version declarations for each specific version
 			for _, v := range ch.Versions {
@@ -287,7 +300,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
