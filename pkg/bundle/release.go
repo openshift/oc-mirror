@@ -158,13 +158,13 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 	opts.SecurityOptions.Insecure = o.SkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
-	logrus.Infoln("Starting release download")
+	logrus.Debugln("Starting release download")
 	if err := opts.Run(); err != nil {
 		return nil, err
 	}
 
 	// Retrive the mapping information for release
-	logrus.Infoln("starting mapping")
+	logrus.Debugln("starting mapping")
 	mapping, images, err := o.getMapping(*opts, arch)
 
 	logrus.Info(mapping)
@@ -173,7 +173,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
 
-	logrus.Infoln("starting image association")
+	logrus.Debugln("starting image association")
 	assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
 	if err != nil {
 		return nil, err
@@ -181,14 +181,12 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 
 	// Check if a release image was provided with mapping
 	if o.release == "" {
-		logrus.Infoln("whats new?")
 		return nil, errors.New("release image not found in mapping")
 	}
 
 	// Update all images associated with a release to the
 	// release images so they form one keyset for publising
 	for _, img := range images {
-		logrus.Infoln("whats a key?")
 		assocs.UpdateKey(img, o.release)
 	}
 
@@ -203,6 +201,8 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
+		// If okd is channel name, then use okd api
+
 		var url string
 		if ch.Name == "okd" {
 			url = OkdUpdateURL
@@ -224,7 +224,6 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				if err != nil {
 					return nil, err
 				}
-				logrus.Infoln("release, before merge")
 				allAssocs.Merge(assocs)
 				logrus.Infof("Channel Latest version %v", latest.Version)
 			}
@@ -289,6 +288,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
+		// If okd is channel name, then use okd api
 		var url string
 		if ch.Name == "okd" {
 			url = OkdUpdateURL
@@ -386,11 +386,12 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 		text := scanner.Text()
 		split := strings.Split(text, " ")
 		srcRef := split[0]
-
 		// Get release image name from mapping
 		// Only the top release need to be resolve because all other image key associated to the
 		// will be updated to this value
-		if strings.Contains(srcRef, "ocp-release") {
+		//
+		// afflom - Select on ocp-release OR origin
+		if strings.Contains(srcRef, "ocp-release") || strings.Contains(srcRef, "origin/release") {
 			if !image.IsImagePinned(srcRef) {
 				srcRef, err = pinImages(context.TODO(), srcRef, "", o.SkipTLS)
 			}

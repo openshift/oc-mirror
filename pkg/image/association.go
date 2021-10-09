@@ -10,10 +10,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -289,7 +291,10 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		// TODO(estroz): maybe just use imgsource.ParseReference() here.
-		dirRef = strings.TrimPrefix(dirRef, "file://")
+		re := regexp.MustCompile(`.*file://`)
+
+		prefix := re.FindString(dirRef)
+		dirRef = strings.TrimPrefix(dirRef, prefix)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
@@ -300,6 +305,32 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 			idx = idIdx
 		}
 		tagOrID := dirRef[idx+1:]
+
+		// afflom - Origin mappings cutoff the arch part of the filename.
+		// this adds it back in as needed.
+		// This regex finds okd images
+		re2 := regexp.MustCompile(`\d\.\d\.\d\-\d\.okd`)
+		// if okd
+		if re2.MatchString(tagOrID) {
+			// This regex finds the release image
+			rel := regexp.MustCompile(`(\d){6}$`)
+			// This regex finds the file prefix
+			re3 := regexp.MustCompile(`(.*)(\d){6}-`)
+			// if release image
+			if rel.MatchString(tagOrID) {
+				// add x86_64 suffix to tagOrID
+				tagOrID = fmt.Sprintf("%s%s", tagOrID, "-x86_64")
+
+			} else {
+				// All other okd files
+				// Get prefix
+				tagpre := re3.FindString(tagOrID)
+				// Get suffix
+				tagsuf := strings.TrimPrefix(tagOrID, tagpre)
+				// insert arch in the middle
+				tagOrID = fmt.Sprintf("%s%s%s", tagpre, "x86_64-", tagsuf)
+			}
+		}
 		dirRef = dirRef[:idx]
 		//logrus.Infof("tagOrID: %s \n dirRef: %s", tagOrID, dirRef)
 
@@ -338,6 +369,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageTyp
 	// not actually a symlinks on disk. Need to investigate why we
 	// receiving invalid mapping and their meaning.
 	info, err := os.Lstat(manifestPath)
+	logrus.Error(err)
 	if errors.As(err, &os.ErrNotExist) {
 		return nil, &ErrInvalidComponent{image, tagOrID}
 	} else if err != nil {
