@@ -301,6 +301,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 		tagOrID := dirRef[idx+1:]
 		dirRef = dirRef[:idx]
+		//logrus.Infof("tagOrID: %s \n dirRef: %s", tagOrID, dirRef)
 
 		imagePath := filepath.Join(localRoot, dirRef)
 

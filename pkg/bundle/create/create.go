@@ -60,7 +60,9 @@ func (o *Options) RunFull(ctx context.Context, flags *pflag.FlagSet) error {
 			if err != nil {
 				return meta, run, err
 			}
+			logrus.Infoln("before merge")
 			allAssocs.Merge(assocs)
+			logrus.Infoln("after merge")
 		}
 
 		if len(cfg.Mirror.Operators) != 0 {

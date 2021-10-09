@@ -158,18 +158,22 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 	opts.SecurityOptions.Insecure = o.SkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
-
+	logrus.Infoln("Starting release download")
 	if err := opts.Run(); err != nil {
 		return nil, err
 	}
 
 	// Retrive the mapping information for release
+	logrus.Infoln("starting mapping")
 	mapping, images, err := o.getMapping(*opts, arch)
+
+	logrus.Info(mapping)
 
 	if err != nil {
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
 
+	logrus.Infoln("starting image association")
 	assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
 	if err != nil {
 		return nil, err
@@ -177,12 +181,14 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 
 	// Check if a release image was provided with mapping
 	if o.release == "" {
+		logrus.Infoln("whats new?")
 		return nil, errors.New("release image not found in mapping")
 	}
 
 	// Update all images associated with a release to the
 	// release images so they form one keyset for publising
 	for _, img := range images {
+		logrus.Infoln("whats a key?")
 		assocs.UpdateKey(img, o.release)
 	}
 
@@ -218,6 +224,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				if err != nil {
 					return nil, err
 				}
+				logrus.Infoln("release, before merge")
 				allAssocs.Merge(assocs)
 				logrus.Infof("Channel Latest version %v", latest.Version)
 			}
