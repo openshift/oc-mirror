@@ -15,7 +15,7 @@ tidy:
 
 .PHONY: clean
 clean:
-	@rm -rf ./bin
+	@rm -rf ./bin/*
 
 .PHONY: test-unit
 test-unit:
