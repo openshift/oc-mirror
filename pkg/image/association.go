@@ -15,7 +15,6 @@ import (
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -369,7 +368,6 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageTyp
 	// not actually a symlinks on disk. Need to investigate why we
 	// receiving invalid mapping and their meaning.
 	info, err := os.Lstat(manifestPath)
-	logrus.Error(err)
 	if errors.As(err, &os.ErrNotExist) {
 		return nil, &ErrInvalidComponent{image, tagOrID}
 	} else if err != nil {
