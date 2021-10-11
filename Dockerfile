@@ -1,5 +1,5 @@
-# docker build -f Dockerfile -t localhost/go-tools .
-# docker run -it --rm --privileged -v ${PWD}:/build:z --workdir=/build --user=root local/golang:latest
+# docker build -f Dockerfile -t local/go-toolset .
+# docker run -it --rm --privileged -v ${PWD}:/build:z local/go-toolset
 #################################################################################
 # Builder Image
 FROM registry.access.redhat.com/ubi8/ubi as builder
