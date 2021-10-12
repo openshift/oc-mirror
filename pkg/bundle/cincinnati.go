@@ -68,9 +68,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	var current Update
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
-	if channel == "okd" {
-
-	} else {
+	if channel != "okd" {
 		queryParams.Add("arch", arch)
 		queryParams.Add("channel", channel)
 		queryParams.Add("id", c.id.String())
@@ -162,9 +160,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string, channel string) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
-	if channel == "okd" {
-
-	} else {
+	if channel != "okd" {
 		queryParams.Add("arch", arch)
 		queryParams.Add("channel", channel)
 		queryParams.Add("id", c.id.String())

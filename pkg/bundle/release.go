@@ -167,8 +167,6 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 	logrus.Debugln("starting mapping")
 	mapping, images, err := o.getMapping(*opts, arch)
 
-	logrus.Info(mapping)
-
 	if err != nil {
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
