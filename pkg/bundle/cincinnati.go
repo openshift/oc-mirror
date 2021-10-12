@@ -72,6 +72,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 		queryParams.Add("arch", arch)
 		queryParams.Add("channel", channel)
 		queryParams.Add("id", c.id.String())
+		queryParams.Add("version", version.String())
 	}
 	uri.RawQuery = queryParams.Encode()
 

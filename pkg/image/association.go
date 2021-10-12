@@ -298,40 +298,17 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
 			errs = append(errs, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef))
+			continue
 		}
+
 		idx := tagIdx
 		if idIdx := strings.LastIndex(dirRef, "@"); idIdx != -1 {
 			idx = idIdx
 		}
+
 		tagOrID := dirRef[idx+1:]
 
-		// afflom - Origin mappings cutoff the arch part of the filename.
-		// this adds it back in as needed.
-		// This regex finds okd images
-		re2 := regexp.MustCompile(`\d\.\d\.\d\-\d\.okd`)
-		// if okd
-		if re2.MatchString(tagOrID) {
-			// This regex finds the release image
-			rel := regexp.MustCompile(`(\d){6}$`)
-			// This regex finds the file prefix
-			re3 := regexp.MustCompile(`(.*)(\d){6}-`)
-			// if release image
-			if rel.MatchString(tagOrID) {
-				// add x86_64 suffix to tagOrID
-				tagOrID = fmt.Sprintf("%s%s", tagOrID, "-x86_64")
-
-			} else {
-				// All other okd files
-				// Get prefix
-				tagpre := re3.FindString(tagOrID)
-				// Get suffix
-				tagsuf := strings.TrimPrefix(tagOrID, tagpre)
-				// insert arch in the middle
-				tagOrID = fmt.Sprintf("%s%s%s", tagpre, "x86_64-", tagsuf)
-			}
-		}
 		dirRef = dirRef[:idx]
-		//logrus.Infof("tagOrID: %s \n dirRef: %s", tagOrID, dirRef)
 
 		imagePath := filepath.Join(localRoot, dirRef)
 
@@ -345,6 +322,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, typ, skipParse)
 		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
 		for _, association := range associations {
 			bundleAssociations.Add(image, association)

@@ -140,7 +140,7 @@ func GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (Update, err
 	return upgrade, err
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string) (image.AssociationSet, error) {
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch, version string) (image.AssociationSet, error) {
 	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
@@ -165,7 +165,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 
 	// Retrive the mapping information for release
 	logrus.Debugln("starting mapping")
-	mapping, images, err := o.getMapping(*opts, arch)
+	mapping, images, err := o.getMapping(*opts, arch, version)
 
 	if err != nil {
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
@@ -218,7 +218,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				}
 				logrus.Infof("Image to download: %v", latest.Image)
 				// Download the release
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image, arch, latest.Version.String())
 				if err != nil {
 					return nil, err
 				}
@@ -243,7 +243,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				}
 
 				logrus.Infof("requested: %v", requested.Version)
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch, v)
 				if err != nil {
 					return nil, err
 				}
@@ -311,7 +311,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 				}
 
 				logrus.Infof("requested: %v", requested.Version)
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch, v)
 				if err != nil {
 					return nil, err
 				}
@@ -349,9 +349,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-// FIXME(jpower): the provided mapping does not provide a digest mapping so ICSP cannot
-// be created
-func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (mappings map[string]string, images []string, err error) {
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version string) (mappings map[string]string, images []string, err error) {
 
 	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
 	file, err := os.Create(mappingPath)
@@ -397,18 +395,20 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 		}
 
 		// Generate name of target directory
-		var names []string
 		dstRef := opts.TargetFn(split[1]).Exact()
 
-		// TODO: arch is not provided when getting mapping from release does not included
-		// the arch in the directory. Need to investigate, but adding it here as a workaround
-		nameSplit := strings.Split(dstRef, "-")
-		names = []string{nameSplit[1], arch}
-		names = append(names, nameSplit[2:]...)
+		nameSplit := strings.Split(dstRef, version)
+		names := []string{version, arch}
+		image := strings.Trim(nameSplit[2], "-")
+
+		if image != "" {
+			names = append(names, image)
+		}
 
 		dstRef = strings.Join(names, "-")
 
-		if _, err := file.WriteString(srcRef + "=" + dstRef + "\n"); err != nil {
+		// Append mapping file
+		if _, err := file.WriteString(srcRef + "=file://openshift/release:" + dstRef + "\n"); err != nil {
 			return mappings, images, err
 		}
 
