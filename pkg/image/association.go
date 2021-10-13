@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
@@ -289,17 +290,24 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		// TODO(estroz): maybe just use imgsource.ParseReference() here.
-		dirRef = strings.TrimPrefix(dirRef, "file://")
+		re := regexp.MustCompile(`.*file://`)
+
+		prefix := re.FindString(dirRef)
+		dirRef = strings.TrimPrefix(dirRef, prefix)
 
 		tagIdx := strings.LastIndex(dirRef, ":")
 		if tagIdx == -1 {
 			errs = append(errs, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef))
+			continue
 		}
+
 		idx := tagIdx
 		if idIdx := strings.LastIndex(dirRef, "@"); idIdx != -1 {
 			idx = idIdx
 		}
+
 		tagOrID := dirRef[idx+1:]
+
 		dirRef = dirRef[:idx]
 
 		imagePath := filepath.Join(localRoot, dirRef)
@@ -314,6 +322,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, typ, skipParse)
 		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
 		for _, association := range associations {
 			bundleAssociations.Add(image, association)
