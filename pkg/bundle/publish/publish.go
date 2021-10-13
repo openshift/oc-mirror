@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -201,10 +200,14 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
 	for _, imageName := range assocs.Keys() {
 
+		newImg, err := reference.Parse(imageName)
+		if err != nil {
+			return err
+		}
+		newImg.Registry = o.ToMirror
+
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
-		// Map of remote layer digest to the set of paths they should be fetched to.
-		missingLayers := map[string][]string{}
 
 		// Save original source and mirror destination mapping to generate ICSP for this image.
 		imageRef, err := reference.Parse(imageName)
@@ -229,6 +232,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 		for _, assoc := range values {
 
+			// Map of remote layer digest to the set of paths they should be fetched to.
+			missingLayers := map[string][]string{}
 			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
@@ -303,7 +308,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
-				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers); err != nil {
+				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers, newImg); err != nil {
 					return err
 				}
 			}
@@ -340,6 +345,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				errs = append(errs, err)
 			}
 		}
+		logrus.Infof("Pushed it %s", imageName)
 
 		// If this is a release image mirror the full release
 		if releaseMapping.Source.String() != "" {
@@ -523,32 +529,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
-	catalogNamespaceNames := []string{}
-	dstRef := mapping.Destination.Ref
-	catalogNamespaceNames = append(catalogNamespaceNames, path.Join(dstRef.Namespace, dstRef.Name))
-
-	blobResources := map[string]string{}
-	for _, blob := range meta.PastBlobs {
-		resource := blob.NamespaceName
-		for _, nsName := range catalogNamespaceNames {
-			if nsName == resource {
-				// Blob is associated with the catalog image itself.
-				blobResources[blob.ID] = nsName
-				continue
-			}
-			suffix := strings.TrimPrefix(resource, nsName+"/")
-			if suffix == resource {
-				// Blob is not a child of the catalog image in nsName.
-				continue
-			}
-			// Blob may belong to multiple images.
-			if _, seenBlob := blobResources[blob.ID]; !seenBlob {
-				blobResources[blob.ID] = suffix
-				continue
-			}
-		}
-	}
+func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
 
 	restctx, err := config.CreateContext(nil, false, o.SkipTLS)
 	if err != nil {
@@ -557,12 +538,7 @@ func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mappin
 
 	var errs []error
 	for layerDigest, dstBlobPaths := range missingLayers {
-		resource, hasResource := blobResources[layerDigest]
-		if !hasResource {
-			errs = append(errs, fmt.Errorf("layer %s: no registry resource path found", layerDigest))
-			continue
-		}
-		if err := o.fetchBlob(ctx, restctx, resource, layerDigest, dstBlobPaths); err != nil {
+		if err := o.fetchBlob(ctx, restctx, img, layerDigest, dstBlobPaths); err != nil {
 			errs = append(errs, fmt.Errorf("layer %s: %v", layerDigest, err))
 			continue
 		}
@@ -573,13 +549,7 @@ func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mappin
 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
-func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context, resource, layerDigest string, dstPaths []string) error {
-
-	refStr := path.Join(o.ToMirror, resource)
-	ref, err := reference.Parse(refStr)
-	if err != nil {
-		return fmt.Errorf("parse ref %s: %v", refStr, err)
-	}
+func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
 

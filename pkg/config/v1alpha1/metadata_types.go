@@ -29,8 +29,7 @@ type MetadataSpec struct {
 	PastMirrors PastMirrors `json:"pastMirrors"`
 	// PastFiles is a slice containing information for
 	// all files created for an imageset
-	PastBlobs     []Blob     `json:"pastBlobs"`
-	PastManifests []Manifest `json:"pastManifests"`
+	PastBlobs []Blob `json:"pastBlobs"`
 }
 
 type PastMirror struct {
@@ -60,9 +59,10 @@ type Blob struct {
 }
 
 type Manifest struct {
-	Name      string `json:"name"`
-	Image     string `json:"image"`
-	Namespace string `json:"namespace"`
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	// NamespaceName of image that owns this manifest.
+	NamespaceName string `json:"namespaceName"`
 }
 
 // OperatorMetadata holds an Operator's post-mirror metadata.
