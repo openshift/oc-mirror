@@ -232,7 +232,6 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	thisRun.Blobs = append(thisRun.Blobs, blobs...)
 	// Add this run and metadata to top level metadata.
 	meta.PastMirrors = append(meta.PastMirrors, thisRun)
-	meta.PastManifests = append(meta.PastManifests, manifests...)
 	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Update the metadata.
@@ -309,7 +308,7 @@ func (o *Options) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alp
 	defer os.Chdir(cwd)
 
 	// Gather manifests we pulled
-	manifests, err := bundle.ReconcileManifests(meta, ".")
+	manifests, err := bundle.ReconcileManifests(".")
 
 	if err != nil {
 		return nil, nil, err
