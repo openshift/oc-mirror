@@ -17,13 +17,13 @@ REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN=disconn_registry
 REGISTRY_DISCONN_PORT=5001
 
-trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry.sh $REGISTRY_DISCONN" EXIT
+#trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry.sh $REGISTRY_DISCONN" EXIT
 
 ## Test `create full`
 
 # Test full catalog mode.
 "${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
-"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-full.yaml"
+"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-full.yaml" "latest"
 run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config-full.yaml" --output "$DATA_TMP"
 # Stop the connected registry so we're sure nothing is being pulled from it.
 "${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
@@ -38,20 +38,23 @@ rm -rf "$DATA_TMP"
 # Test heads-only catalog mode.
 mkdir "$DATA_TMP"
 "${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
-"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-headsonly.yaml"
+"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-headsonly.yaml" "latest"
 run_cmd create full --dir "$CREATE_FULL_DIR" --config "${CREATE_FULL_DIR}/imageset-config-headsonly.yaml" --output "$DATA_TMP"
-"${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
 "${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
 run_cmd publish --dir "$PUBLISH_FULL_DIR" --archive "${DATA_TMP}/bundle_seq1_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT
 check_bundles localhost:${REGISTRY_DISCONN_PORT}/test-catalogs/test-catalog:latest \
   "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
   localhost:${REGISTRY_DISCONN_PORT}
-"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
-rm -rf "$DATA_TMP"
 
-# TODO: test `create diff` with new operator bundles and releases.
+#test `create diff` with new operator bundles and releases.
 # rm "${DATA_TMP}/bundle_000000.tar"
-# mkdir -p "${CREATE_DIFF_DIR}/src/publish"
-# cp "${CREATE_FULL_DIR}/src/publish/.metadata.json" "${CREATE_DIFF_DIR}/src/publish/"
-# run_cmd create diff --dir "$CREATE_DIFF_DIR" --config "${CREATE_DIFF_DIR}/imageset-config.yaml" --output "$DATA_TMP"
-# run_cmd publish --dir "$PUBLISH_DIFF_DIR" --archive "${DATA_TMP}/bundle_000000.tar.gz" --to-mirror localhost:$REGISTRY_DISCONN_PORT
+mkdir -p "${CREATE_DIFF_DIR}/src/publish"
+mkdir -p "${PUBLISH_DIFF_DIR}/publish"
+cp "${CREATE_FULL_DIR}/src/publish/.metadata.json" "${CREATE_DIFF_DIR}/src/publish/"
+cp "${PUBLISH_FULL_DIR}/publish/.metadata.json" "${PUBLISH_DIFF_DIR}/publish/"
+cp "${CREATE_FULL_DIR}/imageset-config-headsonly.yaml" ${CREATE_DIFF_DIR}
+"${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/imageset-config-headsonly.yaml" "diff"
+run_cmd create diff --dir "$CREATE_DIFF_DIR" --config "${CREATE_DIFF_DIR}/imageset-config-headsonly.yaml" --output "$DATA_TMP"
+"${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
+run_cmd publish --dir "$PUBLISH_DIFF_DIR" --archive "${DATA_TMP}/bundle_seq2_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT --log-level=debug
+#"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
