@@ -83,9 +83,6 @@ func newClient(u string) (Client, *url.URL, error) {
 		return Client{}, nil, err
 	}
 
-	// This needs to handle user input at some point.
-	var proxy *url.URL
-
 	tls, err := getTLSConfig()
 	if err != nil {
 		return Client{}, nil, err
@@ -93,7 +90,7 @@ func newClient(u string) (Client, *url.URL, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: tls,
-		Proxy: http.ProxyURL(proxy),
+		Proxy: http.ProxyFromEnvironment,
 
 	}
 	return NewClient(uuid.New(), transport), upstream, nil
