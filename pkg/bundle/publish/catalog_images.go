@@ -130,7 +130,7 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 
 		// Build and push a new image with the same namespace, name, and optionally tag
 		// as the original image, but to the mirror.
-		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
+		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dstDir, dcDirToBuild); err != nil {
 			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
 		}
 
@@ -147,9 +147,9 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 	return refs, nil
 }
 
-func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
+func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dockerfileDir, dcDir string) error {
 
-	dockerfile := filepath.Join(o.Dir, "index.Dockerfile")
+	dockerfile := filepath.Join(dockerfileDir, "index.Dockerfile")
 	defer os.Remove(dockerfile)
 
 	f, err := os.Create(dockerfile)
@@ -167,9 +167,9 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
 
 	if len(o.BuildxPlatforms) == 0 {
-		err = o.buildPodman(ctx, ref, dir, dockerfile)
+		err = o.buildPodman(ctx, ref, dcDir, dockerfile)
 	} else {
-		err = o.buildDockerBuildx(ctx, ref, dir, dockerfile)
+		err = o.buildDockerBuildx(ctx, ref, dcDir, dockerfile)
 	}
 	return err
 }
