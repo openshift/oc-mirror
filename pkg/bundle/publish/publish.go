@@ -345,7 +345,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				errs = append(errs, err)
 			}
 		}
-		logrus.Infof("Pushed it %s", imageName)
 
 		// If this is a release image mirror the full release
 		if releaseMapping.Source.String() != "" {

@@ -6,11 +6,19 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DATA_DIR="${1:?data dir is required}"
 OUTPUT_DIR="${2:?output dir is required}"
 CONFIG_PATH="${3:?config path is required}"
-INDEX_PATH="${4:?config path is required}"
+DIFF="${4:?diff bool is required}"
 REGISTRY="localhost:5000"
 CATALOGNAMESPACE="test-catalogs"
 REGISTRY_CATALOGNAMESPACE="${REGISTRY}/${CATALOGNAMESPACE}"
 BUILDX_BUILDER=test-builder
+
+function set_indexdir() {
+  if $DIFF; then
+    export INDEX_PATH="diff"
+  else 
+    export INDEX_PATH="latest"
+  fi
+}
 
 function create_buildx_builder() {
   # Ensure builder instance uses the host network.
@@ -26,7 +34,7 @@ function create_buildx_builder() {
 
 function setup() {
   echo -e "\nSetting up test directory in $DATA_DIR"
-  cp -r "${DIR}/testdata/bundles/"* "$DATA_DIR"
+  cp -r "$DIR/testdata/bundles/"* "$DATA_DIR"
   mkdir -p "${DATA_DIR}/index"
   cp -r "${DIR}/testdata/indices/${INDEX_PATH}/"* "${DATA_DIR}/index/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_ONLY@'"$REGISTRY"'@g' {} \;
@@ -75,6 +83,7 @@ function build_push_catalog() {
   popd
 }
 
+set_indexdir
 setup
 build_push_related_images
 build_push_bundles
