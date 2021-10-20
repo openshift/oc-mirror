@@ -17,7 +17,7 @@ REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN=disconn_registry
 REGISTRY_DISCONN_PORT=5001
 
-#trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry.sh $REGISTRY_DISCONN" EXIT
+trap "${DIR}/stop-docker-registry.sh $REGISTRY_CONN; ${DIR}/stop-docker-registry.sh $REGISTRY_DISCONN" EXIT
 
 ## Test `create full`
 
@@ -47,7 +47,6 @@ check_bundles localhost:${REGISTRY_DISCONN_PORT}/test-catalogs/test-catalog:late
   localhost:${REGISTRY_DISCONN_PORT}
 
 #test `create diff` with new operator bundles and releases.
-# rm "${DATA_TMP}/bundle_000000.tar"
 mkdir -p "${CREATE_DIFF_DIR}/src/publish"
 mkdir -p "${PUBLISH_DIFF_DIR}/publish"
 cp "${CREATE_FULL_DIR}/src/publish/.metadata.json" "${CREATE_DIFF_DIR}/src/publish/"
@@ -57,4 +56,4 @@ cp "${CREATE_FULL_DIR}/imageset-config-headsonly.yaml" ${CREATE_DIFF_DIR}
 run_cmd create diff --dir "$CREATE_DIFF_DIR" --config "${CREATE_DIFF_DIR}/imageset-config-headsonly.yaml" --output "$DATA_TMP"
 "${DIR}/stop-docker-registry.sh" $REGISTRY_CONN
 run_cmd publish --dir "$PUBLISH_DIFF_DIR" --archive "${DATA_TMP}/bundle_seq2_000000.tar" --to-mirror localhost:$REGISTRY_DISCONN_PORT --log-level=debug
-#"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
+"${DIR}/stop-docker-registry.sh" $REGISTRY_DISCONN
