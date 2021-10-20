@@ -1,9 +1,12 @@
 package publish
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -11,14 +14,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/RedHatGov/bundle/pkg/operator"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
+
+	"github.com/RedHatGov/bundle/pkg/operator"
 )
 
 func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (refs []imagesource.TypedImageReference, err error) {
@@ -119,35 +128,76 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 				return nil, err
 			}
 
+			if len(o.BuildxPlatforms) == 0 {
+				err = buildCatalogLayer("/configs/.wh.index.json", renderedPath, "/configs", ctlgRef.Ref.Exact(), ctlgRef.Ref.Exact())
+			} else {
+				err = o.buildDockerBuildx(ctx, ctlgRef.Ref, dcDirToBuild)
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			// Resolve the image's digest for ICSP creation.
+			_, desc, err := resolver.Resolve(ctx, ctlgRef.Ref.Exact())
+			if err != nil {
+				return nil, fmt.Errorf("error retrieving digest for catalog image %q: %v", ctlgRef.Ref.Exact(), err)
+			}
+			ctlgRef.Ref.ID = desc.Digest.String()
+
+			refs = append(refs, ctlgRef)
+
 		} else if errors.Is(rerr, errdefs.ErrNotFound) {
 
-			logrus.Infof("Catalog image %q not found, using new file-based catalog", refExact)
-			dcDirToBuild = dcDir
+			logrus.Infof("Catalog image %q not found, file will be mirrored from archive", refExact)
 
 		} else {
 			return nil, fmt.Errorf("error resolving existing catalog image %q: %v", refExact, rerr)
 		}
-
-		// Build and push a new image with the same namespace, name, and optionally tag
-		// as the original image, but to the mirror.
-		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
-			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
-		}
-
-		// Resolve the image's digest for ICSP creation.
-		_, desc, err := resolver.Resolve(ctx, ctlgRef.Ref.Exact())
-		if err != nil {
-			return nil, fmt.Errorf("error retrieving digest for catalog image %q: %v", ctlgRef.Ref.Exact(), err)
-		}
-		ctlgRef.Ref.ID = desc.Digest.String()
-
-		refs = append(refs, ctlgRef)
 	}
 
 	return refs, nil
 }
 
-func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
+func buildCatalogLayer(old, new, targetPath, ref, targetRef string) error {
+
+	logrus.Debugf("Pulling image %s for processing", ref)
+
+	img, err := crane.Pull(ref)
+	if err != nil {
+		return err
+	}
+
+	deleteMap := map[string][]byte{}
+	deleteMap[old] = []byte{}
+
+	deleteLayer, err := crane.Layer(deleteMap)
+	if err != nil {
+		return fmt.Errorf("cannot delete layer %s: %v", old, err)
+	}
+
+	addLayer, err := layerFromFile(targetPath, new)
+	if err != nil {
+		return err
+	}
+
+	newImg, err := mutate.AppendLayers(img, deleteLayer, addLayer)
+	if err != nil {
+		return err
+	}
+
+	tag, err := name.NewTag(targetRef)
+	if err != nil {
+		return err
+	}
+
+	if err := crane.Push(newImg, tag.String()); err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir string) error {
 	dockerfile := filepath.Join(dir, "index.Dockerfile")
 	f, err := os.Create(dockerfile)
 	if err != nil {
@@ -161,17 +211,6 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 		return err
 	}
 
-	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
-
-	if len(o.BuildxPlatforms) == 0 {
-		err = o.buildPodman(ctx, ref, dir, dockerfile)
-	} else {
-		err = o.buildDockerBuildx(ctx, ref, dir, dockerfile)
-	}
-	return err
-}
-
-func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
 	exactRef := ref.Exact()
 
 	args := []string{
@@ -192,37 +231,55 @@ func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerIma
 	return nil
 }
 
-func (o *Options) buildPodman(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
-	exactRef := ref.Exact()
+// layerFromDir will write the contents of the path the target
+// directory and build a v1.Layer
+func layerFromFile(targetPath, path string) (v1.Layer, error) {
+	var b bytes.Buffer
+	tw := tar.NewWriter(&b)
 
-	bargs := []string{
-		"build",
-		"-t", exactRef,
-		"-f", dockerfile,
-		dir,
-	}
-	bcmd := exec.CommandContext(ctx, "podman", bargs...)
-	bcmd.Stdout = os.Stdout
-	bcmd.Stderr = os.Stderr
-	if err := runDebug(bcmd); err != nil {
-		return err
-	}
+	logrus.Debugf("Processing file %s", path)
 
-	pargs := []string{
-		"push",
-		exactRef,
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
 	}
-	if o.SkipTLS {
-		pargs = append(pargs, "--tls-verify=false")
-	}
-	pcmd := exec.CommandContext(ctx, "podman", pargs...)
-	pcmd.Stdout = os.Stdout
-	pcmd.Stderr = os.Stderr
-	if err := runDebug(pcmd); err != nil {
-		return err
+	base := filepath.Base(path)
+
+	hdr := &tar.Header{
+		Name: filepath.Join(targetPath, filepath.ToSlash(base)),
+		Mode: int64(info.Mode()),
 	}
 
-	return nil
+	if !info.IsDir() {
+		hdr.Size = info.Size()
+	}
+
+	if info.Mode().IsDir() {
+		hdr.Typeflag = tar.TypeDir
+	} else if info.Mode().IsRegular() {
+		hdr.Typeflag = tar.TypeReg
+	} else {
+		return nil, fmt.Errorf("not implemented archiving file type %s (%s)", info.Mode(), base)
+	}
+
+	if err := tw.WriteHeader(hdr); err != nil {
+		return nil, fmt.Errorf("failed to write tar header: %w", err)
+	}
+	if !info.IsDir() {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			return nil, fmt.Errorf("failed to read file into the tar: %w", err)
+		}
+		f.Close()
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, fmt.Errorf("failed to finish tar: %w", err)
+	}
+	return tarball.LayerFromReader(&b)
 }
 
 func runDebug(cmd *exec.Cmd) error {

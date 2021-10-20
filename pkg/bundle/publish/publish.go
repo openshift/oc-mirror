@@ -323,12 +323,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 					releaseMapping = m
 				}
 			case image.TypeOperatorCatalog:
-				// Create a catalog source file for index
-				mapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{m.Source: m.Destination}
-				if err := o.writeCatalogSource(o.OutputDir, mapping); err != nil {
-					errs = append(errs, fmt.Errorf("image %q: error writing catalog source: %v", imageName, err))
-					continue
-				}
 				genericMappings = append(genericMappings, m)
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)

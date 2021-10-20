@@ -142,7 +142,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 		isBlocked := func(ref imgreference.DockerImageReference) bool {
 			return bundle.IsBlocked(cfg, ref)
 		}
-		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, isBlocked)
+		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, false, isBlocked)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +221,7 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 		isBlocked := func(ref imgreference.DockerImageReference) bool {
 			return bundle.IsBlocked(cfg, ref)
 		}
-		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, isBlocked)
+		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, true, isBlocked)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	return allAssocs, nil
 }
 
-func (o *MirrorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator, isBlocked ...blockedFunc) (map[string]string, error) {
+func (o *MirrorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator, diff bool, isBlocked ...blockedFunc) (map[string]string, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -292,10 +292,16 @@ func (o *MirrorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	// Remove the catalog image from mappings.
-	delete(mappings, ctlgRef.Ref.Exact())
+	if diff {
+		delete(mappings, ctlgRef.Ref.Exact())
+	}
 
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
 	for src, dst := range mappings {
+
+		if src == ctlgRef.Ref.Exact() {
+			continue
+		}
 		dstRef, err := imagesource.ParseReference(dst)
 		if err != nil {
 			return nil, err
@@ -438,6 +444,19 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 	}
 
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
+
+	ctlgAssoc, err := image.AssociateImageLayers(srcDir, mappings, []string{ctlgRef.Ref.Exact()}, image.TypeOperatorCatalog)
+	if err != nil {
+		merr := &image.ErrNoMapping{}
+		cerr := &image.ErrInvalidComponent{}
+		for _, err := range err.Errors() {
+			if !errors.As(err, &merr) && !errors.As(err, &cerr) {
+				return nil, err
+			}
+		}
+		o.Logger.Warn(err)
+	}
+
 	assocs, err := image.AssociateImageLayers(srcDir, mappings, images, image.TypeGeneric)
 	if err != nil {
 		merr := &image.ErrNoMapping{}
@@ -449,6 +468,8 @@ func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesourc
 		}
 		o.Logger.Warn(err)
 	}
+
+	assocs.Merge(ctlgAssoc)
 
 	return assocs, nil
 }
