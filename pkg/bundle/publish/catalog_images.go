@@ -150,7 +150,6 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dockerfileDir, dcDir string) error {
 
 	dockerfile := filepath.Join(dockerfileDir, "index.Dockerfile")
-	defer os.Remove(dockerfile)
 
 	f, err := os.Create(dockerfile)
 	if err != nil {
