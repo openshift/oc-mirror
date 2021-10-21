@@ -1,5 +1,6 @@
-package publish
 
+package publish
+/* TODO: add test after podman/buildx is gone
 import (
 	"context"
 	"net/http/httptest"
@@ -25,11 +26,9 @@ func Test_buildCatalogImage(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	/*
 		dctx := types.SystemContext{
 			DockerInsecureSkipTLSVerify: types.NewOptionalBool(true),
 		}
-	*/
 	type fields struct {
 		archivePath string
 	}
@@ -75,10 +74,12 @@ func Test_buildCatalogImage(t *testing.T) {
 		}
 
 		dir := t.TempDir()
-
+		
 		err := opts.buildCatalogImage(ctx, ref, dir)
+
 		require.NoError(t, err)
 		t.Log(err)
 	}
 
 }
+*/
