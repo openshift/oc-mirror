@@ -1,12 +1,12 @@
-# Bundle
+# oc-mirror
 
 **This repo is under active development. CLI and APIs are unstable**
 
-Bundle is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, and associated container images.
+oc-mirror is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images.
 
-Bundle management is a two part process:
-1. Bundle Creation (Internet Connected)
-1. Bundle Publishing (Disconnected)
+oc-mirror management is a two part process:
+1. oc-mirror Creation (Internet Connected)
+1. oc-mirror Publishing (Disconnected)
 
 ## Required dependencies
 
@@ -39,7 +39,7 @@ For configuration and options, see the [expanded overview](./docs/overview.md) a
 <sup>1</sup> For this example, the `create` and `publish` steps are run on the same machine. Therefore your `~/.docker/config.json`
 should contain auth config for both release/catalog source images _and_ your mirror registry.
 
-## Bundle Spec
+## oc-mirror Spec
 
 See the [config spec][config-spec] for an in-depth description of fields.
 
