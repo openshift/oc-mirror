@@ -105,8 +105,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
-	// Extract incoming metadata
-	if err := unpack(config.MetadataBasePath, tmpdir, filesInArchive); err != nil {
+	// Extract imageset
+	if err := o.unpackImageSet(a, tmpdir); err != nil {
 		return err
 	}
 
@@ -132,6 +132,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		}
 
 		logrus.Infof("No existing metadata found. Setting up new workspace")
+
+		// Create publish dir
+		if err := os.MkdirAll(filepath.Join(o.Dir, config.PublishDir), os.ModePerm); err != nil {
+			return err
+		}
 
 		// Find first file and load metadata from that
 		if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
@@ -163,7 +168,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
-			return &SequenceError{(currRun.Sequence + 1), incomingRun.Sequence}
+			return &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
 		}
 	}
 
@@ -173,12 +178,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
-	if err := o.unpackImageSet(a, o.Dir); err != nil {
-		return err
-	}
-
 	// Load image associations to find layers not present locally.
-	assocs, err := readAssociations(filepath.Join(o.Dir, config.AssociationsBasePath))
+	assocs, err := readAssociations(filepath.Join(tmpdir, config.AssociationsBasePath))
 	if err != nil {
 		return err
 	}
@@ -419,6 +420,9 @@ func readAssociations(assocPath string) (assocs image.AssociationSet, err error)
 // unpackImageSet unarchives all provided tar archives
 func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
+	// archive that we do not want to unpack
+	exclude := []string{"blobs", "v2", config.HelmDir}
+
 	file, err := os.Stat(o.ArchivePath)
 	if err != nil {
 		return err
@@ -440,7 +444,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 			if extension == a.String() {
 				logrus.Debugf("Extracting archive %s", path)
-				if err := archive.Unarchive(a, path, dest, []string{"blobs", "v2", config.HelmDir}); err != nil {
+				if err := archive.Unarchive(a, path, dest, exclude); err != nil {
 					return err
 				}
 			}
@@ -451,7 +455,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 	} else {
 
 		logrus.Infof("Extracting archive %s", o.ArchivePath)
-		if err := archive.Unarchive(a, o.ArchivePath, dest, []string{"blobs"}); err != nil {
+		if err := archive.Unarchive(a, o.ArchivePath, dest, exclude); err != nil {
 			return err
 		}
 	}
@@ -531,7 +535,12 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 
 func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
 
-	restctx, err := config.CreateContext(nil, false, o.SkipTLS)
+	// TODO: create a context based on user provided
+	// pull secret
+	opts := &imagemanifest.SecurityOptions{}
+	opts.Insecure = o.SkipTLS
+
+	restctx, err := opts.Context()
 	if err != nil {
 		return err
 	}
