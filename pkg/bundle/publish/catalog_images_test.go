@@ -1,5 +1,5 @@
-
 package publish
+
 /* TODO: add test after podman/buildx is gone
 import (
 	"context"
@@ -51,7 +51,8 @@ func Test_buildCatalogImage(t *testing.T) {
 	}
 	for _, tt := range tests {
 
-		tmpdir := t.TempDir()
+		dcDir := t.TempDir()
+		dockerfileDir := t.TempDir()
 
 		opts := Options{
 			RootOptions: &cli.RootOptions{
@@ -60,7 +61,7 @@ func Test_buildCatalogImage(t *testing.T) {
 					Out:    os.Stdout,
 					ErrOut: os.Stderr,
 				},
-				Dir:     tmpdir,
+				Dir:     ".",
 				SkipTLS: true,
 			},
 			ArchivePath: tt.fields.archivePath,
@@ -73,10 +74,7 @@ func Test_buildCatalogImage(t *testing.T) {
 			Tag:       "vtest3",
 		}
 
-		dir := t.TempDir()
-		
-		err := opts.buildCatalogImage(ctx, ref, dir)
-
+		err := opts.buildCatalogImage(ctx, ref, dockerfileDir, dcDir)
 		require.NoError(t, err)
 		t.Log(err)
 	}
