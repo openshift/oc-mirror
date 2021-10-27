@@ -5,31 +5,53 @@ presubmits:
   trigger: "(?m)tf test( please)?" # Regexp, see discussion.
   rerun_command: "tf test"  # String, see discussion.
   spec:
+    shareProcessNamespace: true
     containers:
-    - image: docker.io/library/golang:1.17.1-bullseye
+    - name: main
+      image: registry.mcsh.red/library/builder@sha256:d6a838f318b252ddef682fff8bd6a744a96ec129b15931ca6bb20f5a9a33f133
       command:
       - /bin/sh
       args:
       - -c
-      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle && 
-        chmod +x bin/oc-bundle &&
-        mkdir ~/.docker &&
-        echo $PULL_SECRET > ~/.docker/config.json &&
-        apt update -y && apt install pigz &&
-        mkdir $ARTIFACTS/test-create && mkdir $ARTIFACTS/archives && 
-        bin/oc-bundle create full --dir=$ARTIFACTS/test-create --output=$ARTIFACTS/archives --config=test/prow/imageset.yaml --log-level=debug 
+      - make test-e2e
+    - name: connected-registry
+      image: registry:2
+      command:
+      - /bin/registry
+      - serve
+      - /etc/docker/registry/config.yml
+      # https://github.com/docker/distribution-library-image/blob/master/amd64/Dockerfile#L17
+      ports:
+      - containerPort: 5000
+#    - name: disconnected-registry
+#      image: registry:2
+#      ports:
+#      - containerPort: 5001 requires a config file, which ill write later 
+#      ref: https://docs.docker.com/registry/configuration/#http
+    - name: buildkitd
+      image: moby/buildkit:master
+      command:
+      - "/usr/bin/buildkitd"
+      # align with https://github.com/moby/buildkit/blob/master/Dockerfile#L298
+      args:
+      - --addr
+      - tcp://127.0.0.1:1234
+      ports:
+      - containerPort: 1234
+      securityContext:
+        privileged: true
 #        bin/oc-bundle publish --archive archives --dir test-publish --to-mirror local-reg
-postsubmits:
-- name: submit-test-build
-  always_run: true
-  decorate: true
-  trigger: "(?m)tf test( please)?" # Regexp, see discussion.
-  rerun_command: "tf test"  # String, see discussion.
-  spec:
-    containers:
-    - image: docker.io/library/golang:1.17.1-bullseye
-      command:
-      - /bin/sh
-      args:
-      - -c
-      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle 
+#postsubmits:
+#- name: submit-test-build
+#  always_run: true
+#  decorate: true
+#  trigger: "(?m)tf test( please)?" # Regexp, see discussion.
+#  rerun_command: "tf test"  # String, see discussion.
+#  spec:
+#    containers:
+#    - image: docker.io/library/golang:1.17.1-bullseye
+#      command:
+#      - /bin/sh
+#      args:
+#      - -c
+#      - go build -tags=json1 -o bin/oc-bundle ./cmd/oc-bundle 

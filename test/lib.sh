@@ -18,12 +18,12 @@ function check_bundles() {
   local exp_bundles_list="${2:?expected bundles list must be set}"
   local disconn_registry="${3:?disconnected registry host name must be set}"
 
-  docker pull $catalog_image
-  local container=$(docker create $catalog_image)
+  podman pull $catalog_image
+  local container=$(podman create $catalog_image)
   local index_dir="${DATA_TMP}/unpacked"
   mkdir -p "$index_dir"
   local index_path="${index_dir}/index.json"
-  docker cp ${container}:/configs/index.json "$index_path"
+  podman cp ${container}:/configs/index.json "$index_path"
 
   declare -A exp_bundles_set
   for bundle in $exp_bundles_list; do
@@ -42,7 +42,7 @@ function check_bundles() {
   local index_bundle_images=$(cat "$index_path" | jq -sr '.[] | select(.schema == "olm.bundle") | .image')
   for image in $index_bundle_images; do
     image=${disconn_registry}/$(echo $image | cut --complement -d'/' -f1)
-    if ! docker pull $image; then
+    if ! podman pull $image; then
       echo "bundle image $image not pushed to registry"
       return 1
     fi

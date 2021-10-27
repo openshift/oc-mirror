@@ -10,25 +10,13 @@ DIFF="${4:?diff bool is required}"
 REGISTRY="localhost:5000"
 CATALOGNAMESPACE="test-catalogs"
 REGISTRY_CATALOGNAMESPACE="${REGISTRY}/${CATALOGNAMESPACE}"
-BUILDX_BUILDER=test-builder
+BUILDKITD="localhost:1234"
 
 function set_indexdir() {
   if $DIFF; then
     export INDEX_PATH="diff"
   else 
     export INDEX_PATH="latest"
-  fi
-}
-
-function create_buildx_builder() {
-  # Ensure builder instance uses the host network.
-  if ! docker buildx inspect $BUILDX_BUILDER >/dev/null 2>&1; then
-    echo -e "\nCreating new buildx builder $BUILDX_BUILDER"
-    docker buildx create --name $BUILDX_BUILDER \
-      --use \
-      --driver-opt network=host \
-      --buildkitd-flags '--allow-insecure-entitlement security.insecure' \
-      --platform linux/amd64,linux/arm64
   fi
 }
 
@@ -42,7 +30,6 @@ function setup() {
   cp "${DIR}/testdata/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
 
-  create_buildx_builder
 }
 
 function build_push_bundles() {
@@ -50,7 +37,10 @@ function build_push_bundles() {
   for d in `find "${DATA_DIR}" -maxdepth 1 -name *-bundle-*`; do
     local img="${REGISTRY}/$(basename $d | cut -d- -f1)-operator/$(basename $d | cut -d- -f1-2):$(basename $d | cut -d- -f3)"
     pushd $d
-    docker buildx build --push -t $img -f bundle.Dockerfile .
+    mkdir bundleDocker 
+    mv bundle.Dockerfile bundleDocker/Dockerfile
+    buildctl --addr tcp://$BUILDKITD build --frontend dockerfile.v0 --local context=. --local dockerfile=bundleDocker --output type=image,name=$img,push=true,registry.insecure=true
+    #docker buildx build --push -t $img -f bundle.Dockerfile .
     popd
   done
 }
@@ -68,7 +58,8 @@ COPY run.sh /
 ENTRYPOINT ["/run.sh"]
 EOF
     # Use buildx to create manifest lists to test image association stuff.
-    docker buildx build --push --platform linux/amd64,linux/arm64 -t $img -f Dockerfile .
+    #docker buildx build --push --platform linux/amd64,linux/arm64 -t $img -f Dockerfile .
+    buildctl --addr tcp://$BUILDKITD  build --frontend dockerfile.v0 --local context=. --local dockerfile=. --output type=image,name=$img,push=true,registry.insecure=true
     popd
     rm -rf "$tmp"
   done
@@ -79,7 +70,10 @@ function build_push_catalog() {
   echo -e "\nBuilding and pushing catalog image"
   local img="${REGISTRY_CATALOGNAMESPACE}/test-catalog:latest"
   pushd "${DATA_DIR}/index"
-  docker buildx build --push -t $img -f index.Dockerfile .
+  mkdir indexDocker
+  mv index.Dockerfile indexDocker/Dockerfile
+  buildctl --addr tcp://$BUILDKITD  build --frontend dockerfile.v0 --local context=. --local dockerfile=indexDocker --output type=image,name=$img,push=true,registry.insecure=true
+  #docker buildx build --push -t $img -f index.Dockerfile .
   popd
 }
 
