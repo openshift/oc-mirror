@@ -1,16 +1,21 @@
-# Bundle
+# oc-mirror
 
 **This repo is under active development. CLI and APIs are unstable**
 
-Bundle is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, and associated container images.
+oc-mirror is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images.
 
-Bundle management is a two part process:
-1. Bundle Creation (Internet Connected)
-1. Bundle Publishing (Disconnected)
+oc-mirror management is a two part process:
+1. oc-mirror Creation (Internet Connected)
+1. oc-mirror Publishing (Disconnected)
 
-## Requirements
+## Required dependencies
 
-- [`docker buildx`][docker-buildx] (called by `publish`)
+- [`podman`][podman] (only required if not building multi-arch images, see below)
+
+## Multi-arch catalog images
+
+[`docker buildx`][docker-buildx] is required to build multi-arch catalog images;
+`docker buildx build` is invoked by `publish` when `--buildx-platforms` is set.
 
 ## Usage
 
@@ -26,7 +31,7 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
 1. Create then publish to your mirror registry:
     ```sh
     ./bin/oc-bundle create full --config imageset-config.yaml --dir test-create --output archives --log-level debug
-    ./bin/oc-bundle publish --archive archives --dir test-publish --to-mirror reg.mirror.com
+    ./bin/oc-bundle publish --archive archives --dir test-publish --to-mirror reg.mirror.com --output results
     ```
 
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
@@ -34,7 +39,7 @@ For configuration and options, see the [expanded overview](./docs/overview.md) a
 <sup>1</sup> For this example, the `create` and `publish` steps are run on the same machine. Therefore your `~/.docker/config.json`
 should contain auth config for both release/catalog source images _and_ your mirror registry.
 
-## Bundle Spec
+## oc-mirror Spec
 
 See the [config spec][config-spec] for an in-depth description of fields.
 
@@ -73,3 +78,4 @@ TODO: link to the following once a release is cut.
 [config-spec]:pkg/config/v1alpha1/config_types.go
 [go]:https://golang.org/dl/
 [docker-buildx]:https://docs.docker.com/buildx/working-with-buildx/
+[podman]:https://podman.io/getting-started/

@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -78,6 +77,15 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
+	// Set target dir for resulting artifacts
+	if o.OutputDir == "" {
+		dir, err := o.createResultsDir()
+		o.OutputDir = dir
+		if err != nil {
+			return err
+		}
+	}
+
 	// Create workspace
 	cleanup, tmpdir, err := mktempDir(o.Dir)
 	if err != nil {
@@ -97,8 +105,8 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		return err
 	}
 
-	// Extract incoming metadata
-	if err := unpack(config.MetadataBasePath, tmpdir, filesInArchive); err != nil {
+	// Extract imageset
+	if err := o.unpackImageSet(a, tmpdir); err != nil {
 		return err
 	}
 
@@ -124,6 +132,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		}
 
 		logrus.Infof("No existing metadata found. Setting up new workspace")
+
+		// Create publish dir
+		if err := os.MkdirAll(filepath.Join(o.Dir, config.PublishDir), os.ModePerm); err != nil {
+			return err
+		}
 
 		// Find first file and load metadata from that
 		if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
@@ -155,16 +168,18 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
-			return &SequenceError{(currRun.Sequence + 1), incomingRun.Sequence}
+			return &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
 		}
 	}
 
-	if err := o.unpackImageSet(a, o.Dir); err != nil {
+	// Unpack chart to user destination if it exists
+	logrus.Debugf("Unpacking any provided Helm charts to %s", o.OutputDir)
+	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
 		return err
 	}
 
 	// Load image associations to find layers not present locally.
-	assocs, err := readAssociations(filepath.Join(o.Dir, config.AssociationsBasePath))
+	assocs, err := readAssociations(filepath.Join(tmpdir, config.AssociationsBasePath))
 	if err != nil {
 		return err
 	}
@@ -183,19 +198,17 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
-	// Create target dir for manifest directory
-	manifestDir, err := o.createManifestDir()
-	if err != nil {
-		return err
-	}
-
 	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
 	for _, imageName := range assocs.Keys() {
 
+		newImg, err := reference.Parse(imageName)
+		if err != nil {
+			return err
+		}
+		newImg.Registry = o.ToMirror
+
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
-		// Map of remote layer digest to the set of paths they should be fetched to.
-		missingLayers := map[string][]string{}
 
 		// Save original source and mirror destination mapping to generate ICSP for this image.
 		imageRef, err := reference.Parse(imageName)
@@ -205,6 +218,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		}
 		dstRef := imageRef
 		dstRef.Registry = toMirrorRef.Ref.Registry
+
 		namedICSPMappings[imageRef.Name] = map[reference.DockerImageReference]reference.DockerImageReference{
 			imageRef: dstRef,
 		}
@@ -212,18 +226,18 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		_, unpackDir, err := mktempDir(tmpdir)
+		cleanUnpackDir, unpackDir, err := mktempDir(tmpdir)
 		if err != nil {
 			return err
 		}
 
 		for _, assoc := range values {
 
+			// Map of remote layer digest to the set of paths they should be fetched to.
+			missingLayers := map[string][]string{}
 			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
-			// TODO: find a way to ensure these will be process on their
-			// No longer stored in the map
 			logrus.Debugf("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
@@ -295,7 +309,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
-				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers); err != nil {
+				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers, newImg); err != nil {
 					return err
 				}
 			}
@@ -312,7 +326,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 			case image.TypeOperatorCatalog:
 				// Create a catalog source file for index
 				mapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{m.Source: m.Destination}
-				if err := o.writeCatalogSource(manifestDir, mapping); err != nil {
+				if err := o.writeCatalogSource(o.OutputDir, mapping); err != nil {
 					errs = append(errs, fmt.Errorf("image %q: error writing catalog source: %v", imageName, err))
 					continue
 				}
@@ -339,6 +353,11 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 				errs = append(errs, err)
 			}
 		}
+
+		// Cleanup temp image processing workspace as images are processed
+		if !o.SkipCleanup {
+			cleanUnpackDir()
+		}
 	}
 	if len(errs) != 0 {
 		return utilerrors.NewAggregate(errs)
@@ -356,7 +375,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	for _, ref := range ctlgRefs {
 		namedICSPMappings[ref.Ref.Name] = map[reference.DockerImageReference]reference.DockerImageReference{ref.Ref: ref.Ref}
 
-		if err := writeCatalogSource(ref, ref, manifestDir); err != nil {
+		if err := writeCatalogSource(ref, ref, o.OutputDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", ref.Ref.Exact(), err)
 		}
 	}
@@ -371,7 +390,7 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 	}
 
 	// Write an aggregation of ICSPs
-	if err := WriteICSPs(manifestDir, allICSPs); err != nil {
+	if err := WriteICSPs(o.OutputDir, allICSPs); err != nil {
 		return fmt.Errorf("error writing ICSPs: %v", err)
 	}
 
@@ -400,6 +419,9 @@ func readAssociations(assocPath string) (assocs image.AssociationSet, err error)
 // unpackImageSet unarchives all provided tar archives
 func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
+	// archive that we do not want to unpack
+	exclude := []string{"blobs", "v2", config.HelmDir}
+
 	file, err := os.Stat(o.ArchivePath)
 	if err != nil {
 		return err
@@ -421,7 +443,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 			if extension == a.String() {
 				logrus.Debugf("Extracting archive %s", path)
-				if err := archive.Unarchive(a, path, dest, []string{"blobs", "v2"}); err != nil {
+				if err := archive.Unarchive(a, path, dest, exclude); err != nil {
 					return err
 				}
 			}
@@ -432,7 +454,7 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 	} else {
 
 		logrus.Infof("Extracting archive %s", o.ArchivePath)
-		if err := archive.Unarchive(a, o.ArchivePath, dest, []string{"blobs"}); err != nil {
+		if err := archive.Unarchive(a, o.ArchivePath, dest, exclude); err != nil {
 			return err
 		}
 	}
@@ -510,46 +532,21 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
-	catalogNamespaceNames := []string{}
-	dstRef := mapping.Destination.Ref
-	catalogNamespaceNames = append(catalogNamespaceNames, path.Join(dstRef.Namespace, dstRef.Name))
+func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
 
-	blobResources := map[string]string{}
-	for _, blob := range meta.PastBlobs {
-		resource := blob.NamespaceName
-		for _, nsName := range catalogNamespaceNames {
-			if nsName == resource {
-				// Blob is associated with the catalog image itself.
-				blobResources[blob.ID] = nsName
-				continue
-			}
-			suffix := strings.TrimPrefix(resource, nsName+"/")
-			if suffix == resource {
-				// Blob is not a child of the catalog image in nsName.
-				continue
-			}
-			// Blob may belong to multiple images.
-			if _, seenBlob := blobResources[blob.ID]; !seenBlob {
-				blobResources[blob.ID] = suffix
-				continue
-			}
-		}
-	}
+	// TODO: create a context based on user provided
+	// pull secret
+	opts := &imagemanifest.SecurityOptions{}
+	opts.Insecure = o.SkipTLS
 
-	restctx, err := config.CreateContext(nil, false, o.SkipTLS)
+	restctx, err := opts.Context()
 	if err != nil {
 		return err
 	}
 
 	var errs []error
 	for layerDigest, dstBlobPaths := range missingLayers {
-		resource, hasResource := blobResources[layerDigest]
-		if !hasResource {
-			errs = append(errs, fmt.Errorf("layer %s: no registry resource path found", layerDigest))
-			continue
-		}
-		if err := o.fetchBlob(ctx, restctx, resource, layerDigest, dstBlobPaths); err != nil {
+		if err := o.fetchBlob(ctx, restctx, img, layerDigest, dstBlobPaths); err != nil {
 			errs = append(errs, fmt.Errorf("layer %s: %v", layerDigest, err))
 			continue
 		}
@@ -560,13 +557,7 @@ func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mappin
 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
-func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context, resource, layerDigest string, dstPaths []string) error {
-
-	refStr := path.Join(o.ToMirror, resource)
-	ref, err := reference.Parse(refStr)
-	if err != nil {
-		return fmt.Errorf("parse ref %s: %v", refStr, err)
-	}
+func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
 
@@ -702,15 +693,15 @@ func (o *Options) writeCatalogSource(manifestDir string, mapping map[imagesource
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *Options) createManifestDir() (manifestDir string, err error) {
-	manifestDir = filepath.Join(
+func (o *Options) createResultsDir() (resultsDir string, err error) {
+	resultsDir = filepath.Join(
 		o.Dir,
-		fmt.Sprintf("manifest-%v", time.Now().Unix()),
+		fmt.Sprintf("results-%v", time.Now().Unix()),
 	)
 
-	if err := os.MkdirAll(manifestDir, os.ModePerm); err != nil {
-		return manifestDir, err
+	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
+		return resultsDir, err
 	}
 
-	return manifestDir, nil
+	return resultsDir, nil
 }

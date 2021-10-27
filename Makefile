@@ -1,5 +1,5 @@
 GO := go
-GO_BUILD_FLAGS := -tags=json1
+GO_BUILD_FLAGS := -tags=json1 -mod=readonly
 
 .PHONY: all
 all: clean tidy test-unit build
@@ -15,7 +15,7 @@ tidy:
 
 .PHONY: clean
 clean:
-	@rm -rf ./bin
+	@rm -rf ./bin/*
 
 .PHONY: test-unit
 test-unit:

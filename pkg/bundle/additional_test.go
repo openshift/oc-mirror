@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,7 +17,6 @@ import (
 
 func Test_GetAdditional(t *testing.T) {
 
-	mirror := v1alpha1.PastMirror{}
 	cfg := v1alpha1.ImageSetConfiguration{}
 	cfg.Mirror = v1alpha1.Mirror{
 		BlockedImages: []v1alpha1.BlockedImages{
@@ -39,9 +39,12 @@ func Test_GetAdditional(t *testing.T) {
 	}
 	opts := NewAdditionalOptions(ro)
 
-	assocs, err := opts.GetAdditional(mirror, cfg)
+	assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
+	require.NoError(t, err)
+
+	testerImg, err := pinImages(context.TODO(), "quay.io/estroz/pull-tester-additional:latest", "", false)
 	require.NoError(t, err)
 	if assert.Len(t, assocs, 1) {
-		require.Contains(t, assocs, "quay.io/estroz/pull-tester-additional:latest")
+		require.Contains(t, assocs, testerImg)
 	}
 }

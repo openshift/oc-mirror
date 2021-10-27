@@ -8,6 +8,7 @@ const (
 	SourceDir        = "src"
 	PublishDir       = "publish"
 	InternalDir      = "internal"
+	HelmDir          = "charts"
 	MetadataFile     = ".metadata.json"
 	AssociationsFile = "image-associations.gob"
 )
