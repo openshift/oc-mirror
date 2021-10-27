@@ -24,6 +24,10 @@ type ImageSetConfigurationSpec struct {
 	Mirror Mirror `json:"mirror"`
 	// ArchiveSize is the size of the segmented archive in GB
 	ArchiveSize int64 `json:"archiveSize,omitempty"`
+	// Backend is the URI or intended URI where metadata will
+	// be stored and retrieved
+	// example URI prefixes: "git://" "file://" "s3://"
+	Backend string `json:"backend"`
 }
 
 type Mirror struct {

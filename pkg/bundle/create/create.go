@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -208,10 +209,19 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 		return err
 	}
 
-	// TODO: make backend configurable.
-	backend, err := storage.NewLocalBackend(filepath.Join(o.Dir, config.SourceDir))
+	var backend storage.Backend
+	b := cfg.Backend
+	switch {
+	case strings.Contains(b, "file://"):
+		backend, err = storage.NewLocalBackend(b)
+	case strings.Contains(b, "git://") || (strings.Contains(b, "https://") && strings.Contains(b, ".git")):
+		logrus.Errorln("Git backend is not Implimented yet")
+	case strings.Contains(b, "s3://"):
+		logrus.Errorln("S3 backend is not Implimented yet")
+	}
+
 	if err != nil {
-		return fmt.Errorf("error opening local backend: %v", err)
+		return fmt.Errorf("error opening backend: %v", err)
 	}
 
 	// Run full or diff mirror.

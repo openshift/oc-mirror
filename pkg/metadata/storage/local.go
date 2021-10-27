@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -25,6 +26,7 @@ type localDirBackend struct {
 }
 
 func NewLocalBackend(dir string) (Backend, error) {
+	dir = strings.TrimPrefix(dir, "file://")
 	b := localDirBackend{
 		dir: dir,
 	}
