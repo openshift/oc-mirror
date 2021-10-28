@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
@@ -32,4 +33,18 @@ type Committer interface {
 	// Commit the set of writes to the Backend for persistence.
 	// Commit is NOT guaranteed to be threadsafe, see implementer comments for details.
 	Commit(context.Context) error
+}
+
+// CallBackend calls a new backend by string prefix
+func CallBackend(b string) (Backend, error) {
+	switch {
+	case strings.Contains(b, "file://"):
+		return NewLocalBackend(b)
+	case strings.Contains(b, "git@") || (strings.Contains(b, "https://") && strings.Contains(b, ".git")):
+		return nil, errors.New("git backend is not implemented yet")
+	case strings.Contains(b, "s3://"):
+		return nil, errors.New("s3 backend is not implemented yet")
+	default:
+		return nil, errors.New("unknown backend syntax")
+	}
 }

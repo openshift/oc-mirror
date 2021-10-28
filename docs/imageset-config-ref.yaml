@@ -24,3 +24,4 @@ mirror:
   blockedimages: << Planned, list of base images to be blocked (best effort) >>
     - name: alpine
     - name: redis
+backend: file://opt/demo << URI of backend. file:// currently supported. git and s3 are planned. >>
