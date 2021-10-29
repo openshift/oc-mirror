@@ -29,17 +29,22 @@ presubmits:
 #      - containerPort: 5001 requires a config file, which ill write later 
 #      ref: https://docs.docker.com/registry/configuration/#http
     - name: buildkitd
-      image: moby/buildkit:master
+      image: moby/buildkit:master-rootless
       command:
-      - "/usr/bin/buildkitd"
+      - "/usr/bin/rootlesskit"
       # align with https://github.com/moby/buildkit/blob/master/Dockerfile#L298
       args:
+      - buildkitd
       - --addr
       - tcp://127.0.0.1:1234
+      - --oci-worker-no-process-sandbox
       ports:
       - containerPort: 1234
       securityContext:
-        privileged: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seLinuxOptions:
+          type: 'spc_t'
 #        bin/oc-bundle publish --archive archives --dir test-publish --to-mirror local-reg
 #postsubmits:
 #- name: submit-test-build
