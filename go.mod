@@ -20,7 +20,7 @@ require (
 	github.com/openshift/installer v0.16.1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
-	github.com/operator-framework/operator-registry v1.18.1-0.20210917182743-3880486cea2b
+	github.com/operator-framework/operator-registry v1.19.2-0.20211105235100-29cd8e3f02f9
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.2.1
