@@ -18,7 +18,7 @@ import (
 
 // UpdateMetadata runs some reconciliation functions on Metadata to ensure its state is consistent
 // then uses the Backend to update the metadata's storage medium.
-func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, rootDir string, insecure bool) error {
+func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, insecure bool) error {
 
 	var operatorErrs []error
 	for mi, mirror := range meta.PastMirrors {

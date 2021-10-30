@@ -11,8 +11,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
 
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 )
@@ -78,13 +76,6 @@ func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadat
 	}
 
 	return nil
-}
-
-func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
-	if err := yaml.Unmarshal(data, &typeMeta); err != nil {
-		return typeMeta, fmt.Errorf("get type meta: %v", err)
-	}
-	return typeMeta, nil
 }
 
 // WriteMetadata writes the provided metadata to disk.
@@ -159,4 +150,11 @@ func (b *localDirBackend) GetWriter(_ context.Context, fpath string) (io.Writer,
 	}
 
 	return w, nil
+}
+
+func (b *localDirBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
+	if storage.Registry != nil {
+		return fmt.Errorf("not local backend")
+	}
+	return nil
 }
