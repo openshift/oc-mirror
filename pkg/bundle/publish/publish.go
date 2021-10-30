@@ -324,12 +324,6 @@ func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factor
 					releaseMapping = m
 				}
 			case image.TypeOperatorCatalog:
-				// Create a catalog source file for index
-				mapping := map[imagesource.TypedImageReference]imagesource.TypedImageReference{m.Source: m.Destination}
-				if err := o.writeCatalogSource(o.OutputDir, mapping); err != nil {
-					errs = append(errs, fmt.Errorf("image %q: error writing catalog source: %v", imageName, err))
-					continue
-				}
 				genericMappings = append(genericMappings, m)
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)
@@ -664,33 +658,6 @@ func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) erro
 	}
 
 	return nil
-}
-
-// writeCatalogSource will write a CatalogSource for catalog index
-func (o *Options) writeCatalogSource(manifestDir string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
-	errs := []error{}
-	for source, dest := range mapping {
-		images := make(map[string]struct{})
-		images[dest.String()] = struct{}{}
-		mapping, mapErrs := mappingForImages(images, source, dest, 2)
-		if len(mapErrs) > 0 {
-			errs = append(errs, mapErrs...)
-			continue
-		}
-
-		mappedIndex, err := mount(source, dest, 2)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		mapping[source] = mappedIndex
-
-		if err := WriteCatalogSource(source, manifestDir, mapping); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return utilerrors.NewAggregate(errs)
 }
 
 func (o *Options) createResultsDir() (resultsDir string, err error) {

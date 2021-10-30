@@ -1,24 +1,25 @@
 GO := go
-GO_BUILD_FLAGS := -tags=json1 -mod=readonly
+GO_BUILD_FLAGS := -tags=json1
 
 .PHONY: all
 all: clean tidy test-unit build
 
 .PHONY: build
-build: clean
+build: clean tidy
 	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-bundle ./cmd/oc-bundle
 
 .PHONY: tidy
 tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
+	$(GO) mod vendor
 
 .PHONY: clean
 clean:
 	@rm -rf ./bin/*
 
 .PHONY: test-unit
-test-unit:
+test-unit: tidy
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e

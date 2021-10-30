@@ -8,8 +8,8 @@ require (
 	github.com/containerd/containerd v1.5.4
 	github.com/containers/image/v5 v5.15.2
 	github.com/docker/distribution v2.7.1+incompatible
-	github.com/docker/docker v20.10.7+incompatible // indirect
-	github.com/go-git/go-git/v5 v5.4.2
+	github.com/go-git/go-git/v5 v5.4.2 // indirect
+	github.com/google/go-containerregistry v0.6.0
 	github.com/google/uuid v1.2.0
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
@@ -27,8 +27,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/net v0.0.0-20210525063256-abc453219eb5 // indirect
-	golang.org/x/oauth2 v0.0.0-20210514164344-f6687ab2804c // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.7.0
 	k8s.io/apimachinery v0.22.1
