@@ -6,7 +6,7 @@ ADD https://github.com/mikefarah/yq/releases/download/v4.13.5/yq_linux_amd64 /us
 RUN chmod +x /usr/bin/yq
 #This will be refined with a prow job pod mutation or similar (though may not be neccessary with the openshift internal registry...but that's only 1 registry)
 #Also needs to be added to buildkitd daemon.
-COPY registry-cert.crt /usr/local/share/ca-certificates/registry-cert.crt
+#COPY registry-cert.crt /usr/local/share/ca-certificates/registry-cert.crt
 RUN chmod 644 /usr/local/share/ca-certificates/registry-cert.crt && update-ca-certificates
 RUN apt-get install podman -y
 
