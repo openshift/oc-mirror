@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -215,7 +216,11 @@ func (r *registryBackend) tagExists() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	tags, err := remote.List(repo)
+
+	// TODO: Get default auth will need to update if user
+	// can specifiy custom locations
+	opts := remote.WithAuthFromKeychain(authn.DefaultKeychain)
+	tags, err := remote.List(repo, opts)
 	if err != nil {
 		return false, err
 	}
@@ -241,7 +246,11 @@ func (r *registryBackend) repoExists(ctx context.Context) (bool, error) {
 	if idIdx := strings.LastIndex(image, ":"); idIdx != -1 {
 		idx = idIdx
 	}
-	repos, err := remote.Catalog(ctx, reg)
+
+	// TODO: Get default auth will need to update if user
+	// can specifiy custom locations
+	opts := remote.WithAuthFromKeychain(authn.DefaultKeychain)
+	repos, err := remote.Catalog(ctx, reg, opts)
 	if err != nil {
 		return false, err
 	}
