@@ -2,6 +2,7 @@ package image
 
 import (
 	"context"
+	"strings"
 
 	"github.com/containerd/containerd/remotes"
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
@@ -25,4 +26,14 @@ func ResolveToPin(ctx context.Context, resolver remotes.Resolver, unresolvedImag
 	ref.ID = desc.Digest.String()
 
 	return ref.String(), nil
+}
+
+// IsImagePinned returns true if img looks canonical.
+func IsImagePinned(img string) bool {
+	return strings.Contains(img, "@")
+}
+
+// isImageTagged returns true if img has a tag.
+func IsImageTagged(img string) bool {
+	return strings.Contains(img, ":")
 }

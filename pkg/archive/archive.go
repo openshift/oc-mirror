@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"github.com/mholt/archiver/v3"
+	"github.com/sirupsen/logrus"
 
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/mholt/archiver/v3"
-	"github.com/sirupsen/logrus"
 )
 
 type Archiver interface {
@@ -227,180 +226,40 @@ func blobInArchive(file string) string {
 
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs"
+	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs" || split[0] == config.HelmDir
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {
 	return !includeFile(fpath) && !info.IsDir()
 }
 
-// Copied from mholt archiver repo. Temporary and can
-// add back to repo
-// Changes include the additional of the excludePath variable and is
-// passed to the untarNext function
+// Unarchive will extract files unless excluded to destination directory
 func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
+	// Reconcile files to be unarchived
+	var files []string
+	err := a.Walk(source, func(f archiver.File) error {
+		header, ok := f.Header.(*tar.Header)
+		if !ok {
+			return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
+		}
+		// Only extract files that are not in the exclude paths
+		if !shouldExclude(excludePaths, header.Name) && !f.IsDir() {
+			files = append(files, header.Name)
+		}
+		return nil
+	})
 
-	if !fileExists(destination) {
-		err := mkdir(destination, 0755)
-		if err != nil {
-			return fmt.Errorf("preparing destination: %v", err)
+	if err != nil {
+		return err
+	}
+
+	// Extract files that have not been excluded
+	for _, f := range files {
+		if err := a.Extract(source, f, destination); err != nil {
+			return err
 		}
 	}
 
-	file, err := os.Open(source)
-	if err != nil {
-		return fmt.Errorf("opening source archive: %v", err)
-	}
-	defer file.Close()
-
-	err = a.Open(file, 0)
-	if err != nil {
-		return fmt.Errorf("opening tar archive for reading: %v", err)
-	}
-	defer a.Close()
-
-	for {
-		err := untarNext(a, destination, excludePaths)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			if archiver.IsIllegalPathError(err) {
-				log.Printf("[ERROR] Reading file in tar archive: %v", err)
-				continue
-			}
-			return fmt.Errorf("reading file in tar archive: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func fileExists(name string) bool {
-	_, err := os.Stat(name)
-	return !os.IsNotExist(err)
-}
-
-func mkdir(dirPath string, dirMode os.FileMode) error {
-	err := os.MkdirAll(dirPath, dirMode)
-	if err != nil {
-		return fmt.Errorf("%s: making directory: %v", dirPath, err)
-	}
-	return nil
-}
-
-func untarNext(a Archiver, destination string, exclude []string) error {
-	f, err := a.Read()
-	if err != nil {
-		return err // don't wrap error; calling loop must break on io.EOF
-	}
-	defer f.Close()
-
-	header, ok := f.Header.(*tar.Header)
-	if !ok {
-		return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
-	}
-
-	errPath := a.CheckPath(destination, header.Name)
-	if errPath != nil {
-		return fmt.Errorf("checking path traversal attempt: %v", errPath)
-	}
-
-	// Added change here to check if
-	// current path is in the exclusion
-	// list
-	for _, path := range exclude {
-		if within(path, header.Name) {
-			return nil
-		}
-
-	}
-
-	return untarFile(f, destination, header)
-}
-
-func untarFile(f archiver.File, destination string, hdr *tar.Header) error {
-	to := filepath.Join(destination, hdr.Name)
-
-	switch hdr.Typeflag {
-	case tar.TypeDir:
-		return mkdir(to, f.Mode())
-	case tar.TypeReg, tar.TypeRegA, tar.TypeChar, tar.TypeBlock, tar.TypeFifo, tar.TypeGNUSparse:
-		return writeNewFile(to, f, f.Mode())
-	case tar.TypeSymlink:
-		return writeNewSymbolicLink(to, hdr.Linkname)
-	case tar.TypeLink:
-		return writeNewHardLink(to, filepath.Join(destination, hdr.Linkname))
-	case tar.TypeXGlobalHeader:
-		return nil // ignore the pax global header from git-generated tarballs
-	default:
-		return fmt.Errorf("%s: unknown type flag: %c", hdr.Name, hdr.Typeflag)
-	}
-}
-
-func writeNewFile(fpath string, in io.Reader, fm os.FileMode) error {
-	err := os.MkdirAll(filepath.Dir(fpath), 0755)
-	if err != nil {
-		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
-	}
-
-	out, err := os.Create(fpath)
-	if err != nil {
-		return fmt.Errorf("%s: creating new file: %v", fpath, err)
-	}
-	defer out.Close()
-
-	err = out.Chmod(fm)
-	if err != nil && runtime.GOOS != "windows" {
-		return fmt.Errorf("%s: changing file mode: %v", fpath, err)
-	}
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return fmt.Errorf("%s: writing file: %v", fpath, err)
-	}
-	return nil
-}
-
-func writeNewSymbolicLink(fpath string, target string) error {
-	err := os.MkdirAll(filepath.Dir(fpath), 0755)
-	if err != nil {
-		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
-	}
-
-	_, err = os.Lstat(fpath)
-	if err == nil {
-		err = os.Remove(fpath)
-		if err != nil {
-			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
-		}
-	}
-
-	err = os.Symlink(target, fpath)
-	if err != nil {
-		return fmt.Errorf("%s: making symbolic link for: %v", fpath, err)
-	}
-	return nil
-}
-
-func writeNewHardLink(fpath string, target string) error {
-	err := os.MkdirAll(filepath.Dir(fpath), 0755)
-	if err != nil {
-		return fmt.Errorf("%s: making directory for file: %v", fpath, err)
-	}
-
-	_, err = os.Lstat(fpath)
-	if err == nil {
-		err = os.Remove(fpath)
-		if err != nil {
-			return fmt.Errorf("%s: failed to unlink: %+v", fpath, err)
-		}
-	}
-
-	err = os.Link(target, fpath)
-	if err != nil {
-		return fmt.Errorf("%s: making hard link for: %v", fpath, err)
-	}
 	return nil
 }
 
@@ -411,4 +270,15 @@ func within(parent, sub string) bool {
 		return false
 	}
 	return !strings.Contains(rel, "..")
+}
+
+// shouldExclude will check whether the files should
+// be excluded from the extracting processing
+func shouldExclude(exclude []string, file string) bool {
+	for _, path := range exclude {
+		if within(path, file) {
+			return true
+		}
+	}
+	return false
 }

@@ -31,6 +31,16 @@ mirror:
     - name: nginx
   additionalimages:
     - name: registry.redhat.io/ubi8/ubi:latest
+  helm:
+    local:
+      - name: podinfo
+        path: /test/podinfo-5.0.0.tar.gz
+    repos: 
+      - name: podinfo
+        url: https://stefanprodan.github.io/podinfo
+        charts: 
+          - name: podinfo
+            version: 5.0.0
   blockedimages:
     - name: alpine
     - name: redis

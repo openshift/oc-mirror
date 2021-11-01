@@ -130,7 +130,7 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 
 		// Build and push a new image with the same namespace, name, and optionally tag
 		// as the original image, but to the mirror.
-		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dcDirToBuild); err != nil {
+		if err := o.buildCatalogImage(ctx, ctlgRef.Ref, dstDir, dcDirToBuild); err != nil {
 			return nil, fmt.Errorf("error building catalog image %q: %v", ctlgRef.Ref.Exact(), err)
 		}
 
@@ -147,8 +147,10 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 	return refs, nil
 }
 
-func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dir string) error {
-	dockerfile := filepath.Join(dir, "index.Dockerfile")
+func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerImageReference, dockerfileDir, dcDir string) error {
+
+	dockerfile := filepath.Join(dockerfileDir, "index.Dockerfile")
+
 	f, err := os.Create(dockerfile)
 	if err != nil {
 		return err
@@ -163,18 +165,69 @@ func (o *Options) buildCatalogImage(ctx context.Context, ref reference.DockerIma
 
 	logrus.Infof("Building rendered catalog image: %s", ref.Exact())
 
+	if len(o.BuildxPlatforms) == 0 {
+		err = o.buildPodman(ctx, ref, dcDir, dockerfile)
+	} else {
+		err = o.buildDockerBuildx(ctx, ref, dcDir, dockerfile)
+	}
+	return err
+}
+
+func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
+	exactRef := ref.Exact()
+
 	args := []string{
-		"buildx", "build",
-		"-t", ref.Exact(),
+		"build", "buildx",
+		"-t", exactRef,
 		"-f", dockerfile,
-		"--platform", strings.Join(o.CatalogPlatforms, ","),
+		"--platform", strings.Join(o.BuildxPlatforms, ","),
 		"--push",
 		dir,
 	}
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
+	if err := runDebug(cmd); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func (o *Options) buildPodman(ctx context.Context, ref reference.DockerImageReference, dir, dockerfile string) error {
+	exactRef := ref.Exact()
+
+	bargs := []string{
+		"build",
+		"-t", exactRef,
+		"-f", dockerfile,
+		dir,
+	}
+	bcmd := exec.CommandContext(ctx, "podman", bargs...)
+	bcmd.Stdout = os.Stdout
+	bcmd.Stderr = os.Stderr
+	if err := runDebug(bcmd); err != nil {
+		return err
+	}
+
+	pargs := []string{
+		"push",
+		exactRef,
+	}
+	if o.SkipTLS {
+		pargs = append(pargs, "--tls-verify=false")
+	}
+	pcmd := exec.CommandContext(ctx, "podman", pargs...)
+	pcmd.Stdout = os.Stdout
+	pcmd.Stderr = os.Stderr
+	if err := runDebug(pcmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runDebug(cmd *exec.Cmd) error {
+	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
 	return cmd.Run()
 }

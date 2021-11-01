@@ -117,19 +117,18 @@ func Test_ReconcilingManifest(t *testing.T) {
 					{Name: "v2"},
 					{Name: "v2/manifests"},
 					{Name: "v2/manifests/test1"},
+					{Name: "v2/manifests/test2"},
 				},
 			},
 			want: []v1alpha1.Manifest{
+				{Name: "v2"},
+				{Name: "v2/manifests"},
+				{Name: "v2/manifests/test1"},
 				{Name: "v2/manifests/test2"},
 			},
 		},
 	}
 	for _, tt := range tests {
-		meta := v1alpha1.Metadata{
-			MetadataSpec: v1alpha1.MetadataSpec{
-				PastManifests: tt.fields.files,
-			},
-		}
 
 		tmpdir := t.TempDir()
 
@@ -164,7 +163,7 @@ func Test_ReconcilingManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actual, err := ReconcileManifests(meta, ".")
+		actual, err := ReconcileManifests(".")
 
 		if err != nil {
 			t.Fatal(err)

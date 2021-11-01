@@ -59,7 +59,8 @@ func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions
 }
 
 const (
-	UpdateUrl string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	UpdateUrl    string = "https://api.openshift.com/api/upgrades_info/v1/graph"
+	OkdUpdateURL string = "https://origin-release.ci.openshift.org/graph"
 )
 
 func getTLSConfig() (*tls.Config, error) {
@@ -75,14 +76,12 @@ func getTLSConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-func newClient() (Client, *url.URL, error) {
-	upstream, err := url.Parse(UpdateUrl)
+func newClient(u string) (Client, *url.URL, error) {
+
+	upstream, err := url.Parse(u)
 	if err != nil {
 		return Client{}, nil, err
 	}
-
-	// This needs to handle user input at some point.
-	//var proxy *url.URL
 
 	tls, err := getTLSConfig()
 	if err != nil {
@@ -91,14 +90,16 @@ func newClient() (Client, *url.URL, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: tls,
+		Proxy: http.ProxyFromEnvironment,
+
 	}
 	return NewClient(uuid.New(), transport), upstream, nil
 }
 
 // Next calculate the upgrade path from the current version to the channel's latest
-func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, arch string) (Update, []Update, error) {
+func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, url, arch string) (Update, []Update, error) {
 
-	client, upstream, err := newClient()
+	client, upstream, err := newClient(url)
 	if err != nil {
 		return Update{}, nil, err
 	}
@@ -115,9 +116,9 @@ func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, arch str
 	return upgrade, upgrades, nil
 }
 
-func GetLatestVersion(ch v1alpha1.ReleaseChannel, arch string) (Update, error) {
+func GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (Update, error) {
 
-	client, upstream, err := newClient()
+	client, upstream, err := newClient(url)
 	if err != nil {
 		return Update{}, err
 	}
@@ -138,7 +139,7 @@ func GetLatestVersion(ch v1alpha1.ReleaseChannel, arch string) (Update, error) {
 	return upgrade, err
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string) (image.AssociationSet, error) {
+func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch, version string) (image.AssociationSet, error) {
 	opts := release.NewMirrorOptions(o.IOStreams)
 	opts.From = from
 	opts.ToDir = toDir
@@ -156,18 +157,20 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch string)
 	opts.SecurityOptions.Insecure = o.SkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
-
+	logrus.Debugln("Starting release download")
 	if err := opts.Run(); err != nil {
 		return nil, err
 	}
 
 	// Retrive the mapping information for release
-	mapping, images, err := o.getMapping(*opts, arch)
+	logrus.Debugln("starting mapping")
+	mapping, images, err := o.getMapping(*opts, arch, version)
 
 	if err != nil {
 		return nil, fmt.Errorf("error could retrieve mapping information: %v", err)
 	}
 
+	logrus.Debugln("starting image association")
 	assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
 	if err != nil {
 		return nil, err
@@ -195,19 +198,26 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 
 	// For each channel in the config file
 	for _, ch := range cfg.Mirror.OCP.Channels {
+		// If okd is channel name, then use okd api
 
+		var url string
+		if ch.Name == "okd" {
+			url = OkdUpdateURL
+		} else {
+			url = UpdateUrl
+		}
 		for _, arch := range o.arch {
 
 			if len(ch.Versions) == 0 {
 
 				// If no version was specified from the channel, then get the latest release
-				latest, err := GetLatestVersion(ch, arch)
+				latest, err := GetLatestVersion(ch, url, arch)
 				if err != nil {
 					return nil, err
 				}
 				logrus.Infof("Image to download: %v", latest.Image)
 				// Download the release
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, latest.Image, arch, latest.Version.String())
 				if err != nil {
 					return nil, err
 				}
@@ -226,13 +236,13 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
 
 				logrus.Infof("requested: %v", requested.Version)
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch, v)
 				if err != nil {
 					return nil, err
 				}
@@ -275,6 +285,13 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
+		// If okd is channel name, then use okd api
+		var url string
+		if ch.Name == "okd" {
+			url = OkdUpdateURL
+		} else {
+			url = UpdateUrl
+		}
 		for _, arch := range o.arch {
 			// Check for specific version declarations for each specific version
 			for _, v := range ch.Versions {
@@ -287,13 +304,13 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, arch)
+				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
 
 				logrus.Infof("requested: %v", requested.Version)
-				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch)
+				assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, requested.Image, arch, v)
 				if err != nil {
 					return nil, err
 				}
@@ -331,9 +348,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-// FIXME(jpower): the provided mapping does not provide a digest mapping so ICSP cannot
-// be created
-func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (mappings map[string]string, images []string, err error) {
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version string) (mappings map[string]string, images []string, err error) {
 
 	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
 	file, err := os.Create(mappingPath)
@@ -348,7 +363,6 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 	// store in buffer for manipulation before outputting to mapping.txt
 	var buffer bytes.Buffer
 	opts.IOStreams.Out = &buffer
-
 	opts.ToMirror = true
 
 	if err := opts.Run(); err != nil {
@@ -366,26 +380,38 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch string) (ma
 	for scanner.Scan() {
 		text := scanner.Text()
 		split := strings.Split(text, " ")
-
+		srcRef := split[0]
 		// Get release image name from mapping
-		if strings.Contains(split[0], "ocp-release") {
-			o.release = split[0]
+		// Only the top release need to be resolve because all other image key associated to the
+		// will be updated to this value
+		//
+		// afflom - Select on ocp-release OR origin
+		if strings.Contains(srcRef, "ocp-release") || strings.Contains(srcRef, "origin/release") {
+			if !image.IsImagePinned(srcRef) {
+				srcRef, err = pinImages(context.TODO(), srcRef, "", o.SkipTLS)
+			}
+			o.release = srcRef
 		}
 
-		// Proccess name and add arch to dir name
-		// TODO: architecture handling
-		var names []string
-		name := opts.TargetFn(split[1]).Exact()
-		nameSplit := strings.Split(name, "-")
-		names = []string{nameSplit[1], arch}
-		names = append(names, nameSplit[2:]...)
-		name = strings.Join(names, "-")
+		// Generate name of target directory
+		dstRef := opts.TargetFn(split[1]).Exact()
 
-		if _, err := file.WriteString(split[0] + "=" + name + "\n"); err != nil {
+		nameSplit := strings.Split(dstRef, version)
+		names := []string{version, arch}
+		image := strings.Trim(nameSplit[2], "-")
+
+		if image != "" {
+			names = append(names, image)
+		}
+
+		dstRef = strings.Join(names, "-")
+
+		// Append mapping file
+		if _, err := file.WriteString(srcRef + "=file://openshift/release:" + dstRef + "\n"); err != nil {
 			return mappings, images, err
 		}
 
-		images = append(images, split[0])
+		images = append(images, srcRef)
 	}
 
 	mappings, err = image.ReadImageMapping(mappingPath)
