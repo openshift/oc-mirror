@@ -105,60 +105,42 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		return err
 	}
 
-	// Create backend for o.Dir
-	backend, err := storage.NewLocalBackend(o.Dir)
-	if err != nil {
-		return fmt.Errorf("error opening local backend: %v", err)
-	}
-
-	// Create a local workspace backend
+	// Create a local workspace backend for incoming data
 	workspace, err := storage.NewLocalBackend(tmpdir)
 	if err != nil {
 		return fmt.Errorf("error opening local backend: %v", err)
 	}
+	// Load incoming metadta
+	if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
+		return fmt.Errorf("error reading incoming metadata: %v", err)
+	}
 
-	// Check for existing metadata. Metadata will be extracted before
-	// the extraction of the archive so imageset mismatches can
-	// be handled before the longer unarchiving process
-	existingMeta := filepath.Join(o.Dir, config.MetadataBasePath)
-	if _, err := os.Stat(existingMeta); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
+	// Get current metadata info
+	backendImage := fmt.Sprintf("%s/%s:latest", o.ToMirror, incomingMeta.Uid)
+	backend, err := o.configureBackendForConfig(ctx, backendImage)
+	if err != nil {
+		return err
+	}
 
+	logrus.Debugf("Searching for metadata at %s", backendImage)
+
+	// Read in current metadata, if present
+	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {
+	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
+		return err
+	case (err != nil && errors.Is(err, storage.ErrMetadataNotExist)):
 		logrus.Infof("No existing metadata found. Setting up new workspace")
-
-		// Create publish dir
-		if err := os.MkdirAll(filepath.Join(o.Dir, config.PublishDir), os.ModePerm); err != nil {
-			return err
-		}
-
-		// Find first file and load metadata from that
-		if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-			return fmt.Errorf("error reading incoming metadata: %v", err)
-		}
-
+		// Check that this is the first imageset
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != 1 {
 			return &SequenceError{1, incomingRun.Sequence}
 		}
+	default:
+		// UUID check removed because the image is stored as
+		// UUID name. A mismatch will now be seen as a new workspace.
+		// TODO: Add a way show the user what UUID images existing in the registry?
 
-	} else {
-
-		// Compare metadata UID and sequence number
-		if err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); err != nil {
-			return fmt.Errorf("error reading current metadata: %v", err)
-		}
-
-		if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-			return fmt.Errorf("error reading incoming metadata: %v", err)
-		}
-
-		logrus.Debug("Checking metadata UID")
-		if incomingMeta.MetadataSpec.Uid != currentMeta.MetadataSpec.Uid {
-			return &UuidError{currentMeta.MetadataSpec.Uid, incomingMeta.MetadataSpec.Uid}
-		}
-
+		// Complete metadata checks
 		logrus.Debug("Check metadata sequence number")
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
@@ -650,5 +632,20 @@ func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 	return resultsDir, nil
 }
 
-// FIXME(jpower): should we just mirror release one by one
-// The namespace is not the same as the image name
+// configureBackendForConfig returns a registry backend for publishing
+func (o *MirrorOptions) configureBackendForConfig(ctx context.Context, image string) (storage.Backend, error) {
+	cfg := v1alpha1.StorageConfig{
+		Registry: &v1alpha1.RegistryConfig{
+			ImageURL: image,
+			SkipTLS:  o.DestSkipTLS,
+		},
+	}
+
+	iface, err := storage.ByConfig(ctx, o.Dir, cfg)
+
+	b, ok := iface.(storage.Backend)
+	if !ok {
+		return nil, fmt.Errorf("error creating backend with provided config")
+	}
+	return b, err
+}

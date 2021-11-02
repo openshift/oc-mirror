@@ -2,13 +2,19 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/metadata/storage"
+	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -28,10 +34,6 @@ func Test_MetadataError(t *testing.T) {
 
 	// Set up expected UUIDs
 	gotUUID, err := uuid.Parse("360a43c2-8a14-4b5d-906b-07491459f25f")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantUUID, err := uuid.Parse("68a65604-fac7-4acf-98e1-eebaf59ddcb0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,17 +66,14 @@ func Test_MetadataError(t *testing.T) {
 			want:    &SequenceError{2, 3},
 			wantErr: true,
 		},
-		{
-			name:     "testing uid mismatch",
-			metadata: "../../../test/publish/testdata/configs/diff-uid.json",
-			fields: fields{
-				archivePath: "../../../test/publish/testdata/archives/testbundle_seq3.tar",
-			},
-			want:    &UuidError{wantUUID, gotUUID},
-			wantErr: true,
-		},
 	}
 	for _, tt := range tests {
+
+		server := httptest.NewServer(registry.New())
+		u, err := url.Parse(server.URL)
+		if err != nil {
+			t.Error(err)
+		}
 
 		tmpdir := t.TempDir()
 
@@ -85,9 +84,11 @@ func Test_MetadataError(t *testing.T) {
 					Out:    os.Stdout,
 					ErrOut: os.Stderr,
 				},
-				Dir: tmpdir,
+				Dir:         tmpdir,
+				DestSkipTLS: true,
 			},
-			From: tt.fields.archivePath,
+			From:     tt.fields.archivePath,
+			ToMirror: u.Host,
 		}
 
 		// Copy metadata in place for tests with existing
@@ -101,13 +102,16 @@ func Test_MetadataError(t *testing.T) {
 			if err := os.Mkdir(filepath.Join(tmpdir, config.PublishDir), os.ModePerm); err != nil {
 				t.Fatal(err)
 			}
-			err = ioutil.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644)
-			if err != nil {
+			if err := ioutil.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := prepMetadata(ctx, u.Host, tmpdir, gotUUID.String()); err != nil {
 				t.Fatal(err)
 			}
 		}
 
-		err := opts.Publish(ctx, cmd, f)
+		err = opts.Publish(ctx, cmd, f)
 
 		if !tt.wantErr {
 			if err != nil {
@@ -119,4 +123,33 @@ func Test_MetadataError(t *testing.T) {
 			}
 		}
 	}
+}
+
+// prepareMetadata will ensure metdata is in the registry for testing
+func prepMetadata(ctx context.Context, host, dir, uuid string) error {
+	var meta v1alpha1.Metadata
+
+	opts := &MirrorOptions{
+		RootOptions: &cli.RootOptions{
+			Dir:         dir,
+			DestSkipTLS: true,
+		},
+	}
+
+	image := fmt.Sprintf("%s/%s:latest", host, uuid)
+
+	registry, err := opts.configureBackendForConfig(ctx, image)
+	if err != nil {
+		return err
+	}
+	local, err := storage.NewLocalBackend(dir)
+	if err != nil {
+		return err
+	}
+
+	if err := local.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+		return err
+	}
+
+	return registry.WriteMetadata(ctx, &meta, dir)
 }
