@@ -138,9 +138,7 @@ func (r *registryBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
 func (r *registryBackend) pushImage(data []byte, fpath string) error {
 	var options []crane.Option
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: r.insecure}
-	var rt http.RoundTripper = transport
+	rt := r.createRT()
 	options = append(options, crane.WithTransport(rt))
 	options = append(options, crane.WithContext(r.ctx))
 
@@ -216,11 +214,8 @@ func (r *registryBackend) tagExists() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
-	// TODO: Get default auth will need to update if user
-	// can specifiy custom locations
-	opts := remote.WithAuthFromKeychain(authn.DefaultKeychain)
-	tags, err := remote.List(repo, opts)
+	opts := r.getRemoteOpts()
+	tags, err := remote.List(repo, opts...)
 	if err != nil {
 		return false, err
 	}
@@ -246,11 +241,8 @@ func (r *registryBackend) repoExists(ctx context.Context) (bool, error) {
 	if idIdx := strings.LastIndex(image, ":"); idIdx != -1 {
 		idx = idIdx
 	}
-
-	// TODO: Get default auth will need to update if user
-	// can specifiy custom locations
-	opts := remote.WithAuthFromKeychain(authn.DefaultKeychain)
-	repos, err := remote.Catalog(ctx, reg, opts)
+	opts := r.getRemoteOpts()
+	repos, err := remote.Catalog(ctx, reg, opts...)
 	if err != nil {
 		return false, err
 	}
@@ -260,4 +252,22 @@ func (r *registryBackend) repoExists(ctx context.Context) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (r *registryBackend) createRT() http.RoundTripper {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: r.insecure}
+	var rt http.RoundTripper = transport
+	return rt
+}
+
+// TODO: Get default auth will need to update if user
+// can specifiy custom locations
+func (r *registryBackend) getRemoteOpts() (options []remote.Option) {
+	return append(
+		options,
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(r.ctx),
+		remote.WithTransport(r.createRT()),
+	)
 }
