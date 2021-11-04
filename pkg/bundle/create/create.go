@@ -258,6 +258,9 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 func (o *Options) newBackendForConfig(ctx context.Context, cfg v1alpha1.StorageConfig) (storage.Backend, error) {
 	dir := filepath.Join(o.Dir, config.SourceDir)
 	iface, err := storage.ByConfig(ctx, dir, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	b, ok := iface.(storage.Backend)
 	if !ok {
