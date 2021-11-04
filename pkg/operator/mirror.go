@@ -84,7 +84,7 @@ func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
 
 	return containerdregistry.NewRegistry(
 		containerdregistry.WithCacheDir(cacheDir),
-		containerdregistry.SkipTLS(o.SkipTLS),
+		containerdregistry.SkipTLS(o.SourceSkipTLS),
 		// The containerd registry impl is somewhat verbose, even on the happy path,
 		// so discard all logger logs. Any important failures will be returned from
 		// registry methods and eventually logged as fatal errors.
@@ -246,7 +246,7 @@ func (o *MirrorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	if !o.SkipImagePin {
-		if err := pinImages(ctx, dc, "", o.SkipTLS); err != nil {
+		if err := pinImages(ctx, dc, "", o.SourceSkipTLS); err != nil {
 			return nil, fmt.Errorf("error pinning images in catalog %s: %v", ctlgRef, err)
 		}
 	}
@@ -404,13 +404,13 @@ func (o *MirrorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImage
 	}
 	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
-	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.Insecure = o.SourceSkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(pullSecret) != 0 {
-		ctx, err := config.CreateContext(pullSecret, o.SkipVerification, o.SkipTLS)
+		ctx, err := config.CreateContext(pullSecret, o.SkipVerification, o.SourceSkipTLS)
 		if err != nil {
 			return nil, err
 		}

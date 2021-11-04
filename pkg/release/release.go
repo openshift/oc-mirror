@@ -1,4 +1,4 @@
-package bundle
+package release
 
 import (
 	"bufio"
@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
+	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
@@ -90,8 +91,7 @@ func newClient(u string) (Client, *url.URL, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: tls,
-		Proxy: http.ProxyFromEnvironment,
-
+		Proxy:           http.ProxyFromEnvironment,
 	}
 	return NewClient(uuid.New(), transport), upstream, nil
 }
@@ -147,14 +147,14 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch, versio
 	// If the pullSecret is not empty create a cached context
 	// else let `oc mirror` use the default docker config location
 	if len(secret) != 0 {
-		ctx, err := config.CreateContext(secret, o.SkipVerification, o.SkipTLS)
+		ctx, err := config.CreateContext(secret, o.SkipVerification, o.SourceSkipTLS)
 		if err != nil {
 			return nil, err
 		}
 		opts.SecurityOptions.CachedContext = ctx
 	}
 
-	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.Insecure = o.SourceSkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
 	logrus.Debugln("Starting release download")
@@ -388,7 +388,7 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version st
 		// afflom - Select on ocp-release OR origin
 		if strings.Contains(srcRef, "ocp-release") || strings.Contains(srcRef, "origin/release") {
 			if !image.IsImagePinned(srcRef) {
-				srcRef, err = pinImages(context.TODO(), srcRef, "", o.SkipTLS)
+				srcRef, err = bundle.PinImages(context.TODO(), srcRef, "", o.SourceSkipTLS)
 			}
 			o.release = srcRef
 		}

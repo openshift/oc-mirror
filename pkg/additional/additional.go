@@ -1,9 +1,11 @@
-package bundle
+package additional
 
 import (
 	"context"
 	"fmt"
 	"path/filepath"
+
+	"github.com/RedHatGov/bundle/pkg/bundle"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
@@ -28,7 +30,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
-	opts.SecurityOptions.Insecure = o.SkipTLS
+	opts.SecurityOptions.Insecure = o.SourceSkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 	opts.FilterOptions = o.FilterOptions
@@ -43,7 +45,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 		// If the pullSecret is not empty create a cached context
 		// else let `oc mirror` use the default docker config location
 		if len(img.PullSecret) != 0 {
-			ctx, err := config.CreateContext([]byte(img.PullSecret), o.SkipVerification, o.SkipTLS)
+			ctx, err := config.CreateContext([]byte(img.PullSecret), o.SkipVerification, o.SourceSkipTLS)
 			if err != nil {
 				return nil, err
 			}
@@ -63,7 +65,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
 
 		// Check if image is specified as a blocked image
-		if IsBlocked(cfg, srcRef.Ref) {
+		if bundle.IsBlocked(cfg, srcRef.Ref) {
 			return nil, fmt.Errorf("additional image %s also specified as blocked, remove the image one config field or the other", img.Name)
 		}
 		// Create mapping from source and destination images
@@ -75,7 +77,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 		// Add mapping and image for image association.
 		// The registry component is not included in the final path.
-		srcImage, err := pinImages(context.TODO(), srcRef.Ref.Exact(), "", o.SkipTLS)
+		srcImage, err := bundle.PinImages(context.TODO(), srcRef.Ref.Exact(), "", o.SourceSkipTLS)
 		if err != nil {
 			return nil, err
 		}

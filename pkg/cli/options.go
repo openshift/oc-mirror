@@ -18,7 +18,8 @@ type RootOptions struct {
 	Dir              string
 	LogLevel         string
 	DryRun           bool
-	SkipTLS          bool
+	SourceSkipTLS    bool
+	DestSkipTLS      bool
 	SkipVerification bool
 	SkipCleanup      bool
 	FilterOptions    imagemanifest.FilterOptions
@@ -31,7 +32,8 @@ func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.LogLevel, "log-level", "info", "log level (e.g. \"debug | info | warn | error\")")
 	fs.BoolVar(&o.DryRun, "dry-run", false, "print actions without mirroring images "+
 		"(experimental: only works for operator catalogs)")
-	fs.BoolVar(&o.SkipTLS, "skip-tls", false, "skip client-side TLS validation")
+	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", false, "skip client-side TLS validation for source")
+	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", false, "skip client-side TLS validation for destination")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", false, "skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", false, "skip removal of artifact directories")
 	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")

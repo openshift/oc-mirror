@@ -1,4 +1,4 @@
-package bundle
+package additional
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func (h *HelmOptions) PullCharts(cfg v1alpha1.ImageSetConfiguration) (image.Asso
 		Verify:  downloader.VerifyNever,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
-			getter.WithInsecureSkipVerifyTLS(h.SkipTLS),
+			getter.WithInsecureSkipVerifyTLS(h.SourceSkipTLS),
 		},
 		RepositoryConfig: h.settings.RepositoryConfig,
 		RepositoryCache:  h.settings.RepositoryCache,
