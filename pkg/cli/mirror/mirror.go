@@ -101,10 +101,6 @@ func (o *MirrorOptions) Validate(cmd *cobra.Command, f kcmdutil.Factory) error {
 		logrus.Debug("Registry auth check not implemented")
 	}
 
-	if _, err := os.Stat(o.Dir); err != nil {
-		return err
-	}
-
 	if len(o.OutputDir) > 0 {
 		if _, err := os.Stat(o.OutputDir); err != nil {
 			return err

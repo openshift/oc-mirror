@@ -41,14 +41,14 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return err
 	}
 
-	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
-		return err
-	}
-
 	// Configure the metadata backend.
 	backend, err := o.newBackendForConfig(ctx, cfg.StorageConfig)
 	if err != nil {
 		return fmt.Errorf("error opening backend: %v", err)
+	}
+
+	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		return err
 	}
 
 	// Run full or diff mirror.

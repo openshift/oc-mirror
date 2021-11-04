@@ -21,7 +21,7 @@ type RootOptions struct {
 }
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.Dir, "dir", "d", ".", "Assets directory")
+	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
 	fs.StringVar(&o.LogLevel, "log-level", "info", "Log level (e.g. \"debug | info | warn | error\")")
 }
 
