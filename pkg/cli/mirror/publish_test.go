@@ -1,4 +1,4 @@
-package publish
+package mirror
 
 import (
 	"context"
@@ -78,7 +78,7 @@ func Test_MetadataError(t *testing.T) {
 
 		tmpdir := t.TempDir()
 
-		opts := Options{
+		opts := &MirrorOptions{
 			RootOptions: &cli.RootOptions{
 				IOStreams: genericclioptions.IOStreams{
 					In:     os.Stdin,
@@ -87,7 +87,7 @@ func Test_MetadataError(t *testing.T) {
 				},
 				Dir: tmpdir,
 			},
-			ArchivePath: tt.fields.archivePath,
+			From: tt.fields.archivePath,
 		}
 
 		// Copy metadata in place for tests with existing
@@ -107,7 +107,7 @@ func Test_MetadataError(t *testing.T) {
 			}
 		}
 
-		err := opts.Run(ctx, cmd, f)
+		err := opts.Publish(ctx, cmd, f)
 
 		if !tt.wantErr {
 			if err != nil {

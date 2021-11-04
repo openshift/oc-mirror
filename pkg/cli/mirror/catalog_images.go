@@ -1,4 +1,4 @@
-package publish
+package mirror
 
 import (
 	"archive/tar"
@@ -31,7 +31,7 @@ import (
 	"github.com/RedHatGov/bundle/pkg/operator"
 )
 
-func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (refs []imagesource.TypedImageReference, err error) {
+func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (refs []imagesource.TypedImageReference, err error) {
 	if err := unpack("catalogs", dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
@@ -81,12 +81,12 @@ func (o *Options) rebuildCatalogs(ctx context.Context, dstDir string, filesInArc
 		return nil, err
 	}
 
-	resolver, err := containerdregistry.NewResolver("", o.SkipTLS, nil)
+	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating image resolver: %v", err)
 	}
 	reg, err := containerdregistry.NewRegistry(
-		containerdregistry.SkipTLS(o.SkipTLS),
+		containerdregistry.SkipTLS(o.DestSkipTLS),
 		containerdregistry.WithCacheDir(filepath.Join(dstDir, "cache")),
 	)
 	if err != nil {
@@ -231,7 +231,7 @@ func buildCatalogLayer(ref, targetRef string, layer ...v1.Layer) error {
 	return err
 }
 
-func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir string) error {
+func (o *MirrorOptions) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir string) error {
 	dockerfile := filepath.Join(dir, "index.Dockerfile")
 	f, err := os.Create(dockerfile)
 	if err != nil {

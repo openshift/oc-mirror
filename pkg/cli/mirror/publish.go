@@ -1,4 +1,4 @@
-package publish
+package mirror
 
 import (
 	"context"
@@ -64,18 +64,13 @@ func (e *ErrArchiveFileNotFound) Error() string {
 	return fmt.Sprintf("file %s not found in archive", e.filename)
 }
 
-func (o *Options) Run(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
+func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
 
-	logrus.Infof("Publishing image set from archive %q to registry %q", o.ArchivePath, o.ToMirror)
+	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
 	var currentMeta v1alpha1.Metadata
 	var incomingMeta v1alpha1.Metadata
 	a := archive.NewArchiver()
-
-	// Validating user path input
-	if err := o.ValidatePaths(); err != nil {
-		return err
-	}
 
 	// Set target dir for resulting artifacts
 	if o.OutputDir == "" {
@@ -410,20 +405,20 @@ func readAssociations(assocPath string) (assocs image.AssociationSet, err error)
 	return assocs, assocs.Decode(f)
 }
 
-// unpackImageSet unarchives all provided tar archives
-func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
+// unpackImageSet unarchives all provided tar archives	if err != nil {
+func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 
 	// archive that we do not want to unpack
 	exclude := []string{"blobs", "v2", config.HelmDir}
 
-	file, err := os.Stat(o.ArchivePath)
+	file, err := os.Stat(o.From)
 	if err != nil {
 		return err
 	}
 
 	if file.IsDir() {
 
-		err = filepath.Walk(o.ArchivePath, func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(o.From, func(path string, info os.FileInfo, err error) error {
 
 			if err != nil {
 				return fmt.Errorf("traversing %s: %v", path, err)
@@ -447,8 +442,8 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 
 	} else {
 
-		logrus.Infof("Extracting archive %s", o.ArchivePath)
-		if err := archive.Unarchive(a, o.ArchivePath, dest, exclude); err != nil {
+		logrus.Infof("Extracting archive %s", o.From)
+		if err := archive.Unarchive(a, o.From, dest, exclude); err != nil {
 			return err
 		}
 	}
@@ -457,11 +452,11 @@ func (o *Options) unpackImageSet(a archive.Archiver, dest string) error {
 }
 
 // readImage set will create a map with all the files located in the archives
-func (o *Options) readImageSet(a archive.Archiver) (map[string]string, error) {
+func (o *MirrorOptions) readImageSet(a archive.Archiver) (map[string]string, error) {
 
 	filesinArchive := make(map[string]string)
 
-	file, err := os.Stat(o.ArchivePath)
+	file, err := os.Stat(o.From)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +466,7 @@ func (o *Options) readImageSet(a archive.Archiver) (map[string]string, error) {
 		// Walk the directory and load the files from the archives
 		// into the map
 		logrus.Infoln("Detected multiple archive files")
-		err = filepath.Walk(o.ArchivePath, func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(o.From, func(path string, info os.FileInfo, err error) error {
 
 			if err != nil {
 				return fmt.Errorf("traversing %s: %v", path, err)
@@ -496,8 +491,8 @@ func (o *Options) readImageSet(a archive.Archiver) (map[string]string, error) {
 
 	} else {
 		// Walk the archive and load the file names into the map
-		err = a.Walk(o.ArchivePath, func(f archiver.File) error {
-			filesinArchive[f.Name()] = o.ArchivePath
+		err = a.Walk(o.From, func(f archiver.File) error {
+			filesinArchive[f.Name()] = o.From
 			return nil
 		})
 	}
@@ -526,12 +521,12 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
+func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
 
 	// TODO: create a context based on user provided
 	// pull secret
 	opts := &imagemanifest.SecurityOptions{}
-	opts.Insecure = o.SkipTLS
+	opts.Insecure = o.DestSkipTLS
 
 	restctx, err := opts.Context()
 	if err != nil {
@@ -551,11 +546,11 @@ func (o *Options) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mappin
 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
-func (o *Options) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
+func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
 
-	repo, err := restctx.RepositoryForRef(ctx, ref, o.SkipTLS)
+	repo, err := restctx.RepositoryForRef(ctx, ref, o.DestSkipTLS)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
 	}
@@ -609,13 +604,13 @@ func mktempDir(dir string) (func(), string, error) {
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
-func (o *Options) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
+func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
 	relOpts := release.NewMirrorOptions(o.IOStreams)
 	relOpts.From = mapping.Source.String()
 	relOpts.FromDir = fromDir
 	relOpts.To = mapping.Destination.String()
-	relOpts.SecurityOptions.Insecure = o.SkipTLS
+	relOpts.SecurityOptions.Insecure = o.DestSkipTLS
 	relOpts.DryRun = o.DryRun
 	if err := relOpts.Complete(cmd, f, nil); err != nil {
 		return fmt.Errorf("error initializing release mirror options: %v", err)
@@ -631,7 +626,7 @@ func (o *Options) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f
 }
 
 // mirrorImages uses the `oc mirror` library to mirror generic images
-func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
+func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
 	// Mirror all file sources of each available image type to mirror registry.
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		var srcs []string
@@ -649,7 +644,7 @@ func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) erro
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	genOpts.SkipMultipleScopes = true
 	genOpts.KeepManifestList = true
-	genOpts.SecurityOptions.Insecure = o.SkipTLS
+	genOpts.SecurityOptions.Insecure = o.DestSkipTLS
 	if err := genOpts.Validate(); err != nil {
 		return fmt.Errorf("invalid image mirror options: %v", err)
 	}
@@ -660,7 +655,7 @@ func (o *Options) mirrorImage(mappings []imgmirror.Mapping, fromDir string) erro
 	return nil
 }
 
-func (o *Options) createResultsDir() (resultsDir string, err error) {
+func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 	resultsDir = filepath.Join(
 		o.Dir,
 		fmt.Sprintf("results-%v", time.Now().Unix()),
