@@ -265,7 +265,7 @@ func (o *Options) buildDockerBuildx(ctx context.Context, ref reference.DockerIma
 	return nil
 }
 
-// layerFromDir will write the contents of the path the target
+// layerFromFile will write the contents of the path the target
 // directory and build a v1.Layer
 func layerFromFile(targetPath, path string) (v1.Layer, error) {
 	var b bytes.Buffer
