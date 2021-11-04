@@ -12,7 +12,7 @@ import (
 
 // ReconcileManifest gather all manifests that were collected during a run
 // and checks against the current list
-func ReconcileManifests(sourceDir string) (manifests []v1alpha1.Manifest, err error) {
+func ReconcileManifests() (manifests []v1alpha1.Manifest, err error) {
 
 	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
 
@@ -42,7 +42,7 @@ func ReconcileManifests(sourceDir string) (manifests []v1alpha1.Manifest, err er
 
 // ReconcileBlobs gather all blobs that were collected during a run
 // and checks against the current list
-func ReconcileBlobs(meta v1alpha1.Metadata, sourceDir string) (newBlobs []v1alpha1.Blob, err error) {
+func ReconcileBlobs(meta v1alpha1.Metadata) (newBlobs []v1alpha1.Blob, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
 	for _, pf := range meta.PastBlobs {

@@ -5,8 +5,8 @@ GO_BUILD_FLAGS := -tags=json1
 all: clean tidy test-unit build
 
 .PHONY: build
-build: clean tidy
-	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-bundle ./cmd/oc-bundle
+build: clean
+	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-mirror ./cmd/oc-mirror
 
 .PHONY: tidy
 tidy:
@@ -24,4 +24,4 @@ test-unit: tidy
 
 .PHONY: test-e2e
 test-e2e: build
-	./test/e2e-simple.sh ./bin/oc-bundle
+	./test/e2e-simple.sh ./bin/oc-mirror

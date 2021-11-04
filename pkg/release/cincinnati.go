@@ -1,4 +1,4 @@
-package bundle
+package release
 
 import (
 	"context"

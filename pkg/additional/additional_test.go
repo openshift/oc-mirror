@@ -1,7 +1,8 @@
-package bundle
+package additional
 
 import (
 	"context"
+	"github.com/RedHatGov/bundle/pkg/bundle"
 	"os"
 	"testing"
 
@@ -42,7 +43,7 @@ func Test_GetAdditional(t *testing.T) {
 	assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 	require.NoError(t, err)
 
-	testerImg, err := pinImages(context.TODO(), "quay.io/estroz/pull-tester-additional:latest", "", false)
+	testerImg, err := bundle.PinImages(context.TODO(), "quay.io/estroz/pull-tester-additional:latest", "", false)
 	require.NoError(t, err)
 	if assert.Len(t, assocs, 1) {
 		require.Contains(t, assocs, testerImg)

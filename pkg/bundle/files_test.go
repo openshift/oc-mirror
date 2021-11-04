@@ -81,7 +81,7 @@ func Test_ReconcilingBlobs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actual, err := ReconcileBlobs(meta, ".")
+		actual, err := ReconcileBlobs(meta)
 
 		if err != nil {
 			t.Fatal(err)
@@ -163,7 +163,7 @@ func Test_ReconcilingManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actual, err := ReconcileManifests(".")
+		actual, err := ReconcileManifests()
 
 		if err != nil {
 			t.Fatal(err)

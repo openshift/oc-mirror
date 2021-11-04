@@ -30,8 +30,8 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```
 1. Create then publish to your mirror registry:
     ```sh
-    ./bin/oc-bundle create full --config imageset-config.yaml --dir test-create --output archives --log-level debug
-    ./bin/oc-bundle publish --archive archives --dir test-publish --to-mirror reg.mirror.com --output results
+    ./bin/oc-mirror create full --config imageset-config.yaml --dir test-create --output archives --log-level debug
+    ./bin/oc-mirror publish --archive archives --dir test-publish --to-mirror reg.mirror.com --output results
     ```
 
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
@@ -56,7 +56,7 @@ See the [config spec][config-spec] for an in-depth description of fields.
 
 ```sh
 make
-./bin/oc-bundle -h
+./bin/oc-mirror -h
 ```
 
 ### Test

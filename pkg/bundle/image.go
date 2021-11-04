@@ -27,7 +27,7 @@ func IsBlocked(cfg v1alpha1.ImageSetConfiguration, imgRef reference.DockerImageR
 	return false
 }
 
-func pinImages(ctx context.Context, ref, resolverConfigPath string, insecure bool) (string, error) {
+func PinImages(ctx context.Context, ref, resolverConfigPath string, insecure bool) (string, error) {
 	resolver, err := containerdregistry.NewResolver(resolverConfigPath, insecure, nil)
 	if err != nil {
 		return "", fmt.Errorf("error creating image resolver: %v", err)

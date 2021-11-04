@@ -4,7 +4,7 @@
 # needed to run against a local test registry and provide informative
 # debug data in case of test errors.
 function run_cmd() {
-  local test_flags="--log-level debug --skip-tls --skip-cleanup"
+  local test_flags="--log-level debug --source-skip-tls --dest-skip-tls --skip-cleanup"
 
   echo "$CMD" $@ $test_flags
   echo
