@@ -208,10 +208,10 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 		return err
 	}
 
-	// TODO: make backend configurable.
-	backend, err := storage.NewLocalBackend(filepath.Join(o.Dir, config.SourceDir))
+	// Configure the metadata backend.
+	backend, err := o.newBackendForConfig(ctx, cfg.StorageConfig)
 	if err != nil {
-		return fmt.Errorf("error opening local backend: %v", err)
+		return fmt.Errorf("error opening backend: %v", err)
 	}
 
 	// Run full or diff mirror.
@@ -235,7 +235,7 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, o.Dir, o.SkipTLS); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, o.SkipTLS); err != nil {
 		return err
 	}
 
@@ -252,6 +252,21 @@ func (o *Options) create(ctx context.Context, f createFunc) error {
 	}
 
 	return nil
+}
+
+// newBackendForConfig returns a Backend specified by config
+func (o *Options) newBackendForConfig(ctx context.Context, cfg v1alpha1.StorageConfig) (storage.Backend, error) {
+	dir := filepath.Join(o.Dir, config.SourceDir)
+	iface, err := storage.ByConfig(ctx, dir, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	b, ok := iface.(storage.Backend)
+	if !ok {
+		return nil, fmt.Errorf("error creating backend with provided config")
+	}
+	return b, err
 }
 
 func (o *Options) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {

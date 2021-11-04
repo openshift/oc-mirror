@@ -1,83 +1,60 @@
 package publish
 
-/* TODO: add test after podman/buildx is gone
 import (
-	"context"
+	"fmt"
+	"io/ioutil"
 	"net/http/httptest"
 	"net/url"
-	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/openshift/library-go/pkg/image/reference"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/stretchr/testify/require"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-func Test_buildCatalogImage(t *testing.T) {
+// TODO: check config for image
+func Test_BuildCatalogLayer(t *testing.T) {
 
-	s := httptest.NewServer(registry.New())
-	defer s.Close()
+	server := httptest.NewServer(registry.New())
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Error(err)
+	}
+	c := map[string][]byte{
+		"/binary": []byte("binary contents"),
+	}
+	targetRef := fmt.Sprintf("%s/nginx:foo", u.Host)
+	tag, err := name.NewTag(targetRef)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	i, _ := crane.Image(c)
+	err = crane.Push(i, tag.String())
+	if err != nil {
+		require.NoError(t, err)
+	}
 
-	u, err := url.Parse(s.URL)
+	old := "/.wh.binary"
+	tmpdir := t.TempDir()
+	d1 := []byte("hello\ngo\n")
+	if err := ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644); err != nil {
+		require.NoError(t, err)
+	}
+
+	add, err := addLayer(filepath.Join(tmpdir, "test"), "binary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete, err := deleteLayer(old)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
-		dctx := types.SystemContext{
-			DockerInsecureSkipTLSVerify: types.NewOptionalBool(true),
-		}
-	type fields struct {
-		archivePath string
+	err = buildCatalogLayer(targetRef, targetRef, []v1.Layer{add, delete}...)
+	if err != nil {
+		t.Error(err)
 	}
-	tests := []struct {
-		name     string
-		metadata string
-		fields   fields
-		want     error
-		wantErr  bool
-	}{
-		{
-			name:     "testing first metadata error",
-			metadata: "",
-			fields: fields{
-				archivePath: "../../../test/publish/testdata/archives/testbundle_seq2.tar",
-			},
-			want:    &SequenceError{1, 2},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-
-		dcDir := t.TempDir()
-		dockerfileDir := t.TempDir()
-
-		opts := Options{
-			RootOptions: &cli.RootOptions{
-				IOStreams: genericclioptions.IOStreams{
-					In:     os.Stdin,
-					Out:    os.Stdout,
-					ErrOut: os.Stderr,
-				},
-				Dir:     ".",
-				SkipTLS: true,
-			},
-			ArchivePath: tt.fields.archivePath,
-		}
-
-		ref := reference.DockerImageReference{
-			Registry:  u.Host,
-			Namespace: "test",
-			Name:      "testname",
-			Tag:       "vtest3",
-		}
-
-		err := opts.buildCatalogImage(ctx, ref, dockerfileDir, dcDir)
-		require.NoError(t, err)
-		t.Log(err)
-	}
-
 }
-*/
