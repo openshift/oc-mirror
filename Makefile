@@ -25,3 +25,7 @@ test-unit: tidy
 .PHONY: test-e2e
 test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-mirror
+
+.PHONY: test-prow
+test-prow: build
+	./test/e2e-prow.sh ./bin/oc-mirror
