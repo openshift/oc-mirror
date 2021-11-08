@@ -27,8 +27,6 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
-
-	"github.com/RedHatGov/bundle/pkg/operator"
 )
 
 func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (refs []imagesource.TypedImageReference, err error) {
@@ -154,7 +152,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			}
 			layers = append(layers, add)
 
-			srcImage = operator.OPMImage
+			srcImage = OPMImage
 
 		} else {
 			return nil, fmt.Errorf("error resolving existing catalog image %q: %v", refExact, rerr)
@@ -238,7 +236,7 @@ func (o *MirrorOptions) buildDockerBuildx(ctx context.Context, ref reference.Doc
 		return err
 	}
 	if err := (action.GenerateDockerfile{
-		BaseImage: operator.OPMImage,
+		BaseImage: OPMImage,
 		IndexDir:  ".",
 		Writer:    f,
 	}).Run(); err != nil {

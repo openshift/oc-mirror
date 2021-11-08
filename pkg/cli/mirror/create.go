@@ -8,9 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/RedHatGov/bundle/pkg/additional"
-	"github.com/RedHatGov/bundle/pkg/release"
-
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
@@ -22,7 +19,6 @@ import (
 	"github.com/RedHatGov/bundle/pkg/image"
 	"github.com/RedHatGov/bundle/pkg/metadata"
 	"github.com/RedHatGov/bundle/pkg/metadata/storage"
-	"github.com/RedHatGov/bundle/pkg/operator"
 )
 
 func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
@@ -36,7 +32,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	// Make sure the `opm` image exists during the publish step
 	// since catalog images need to be rebuilt.
 	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha1.AdditionalImages{
-		Image: v1alpha1.Image{Name: operator.OPMImage},
+		Image: v1alpha1.Image{Name: OPMImage},
 	})
 
 	logrus.Info("Verifying pull secrets")
@@ -119,7 +115,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := release.NewReleaseOptions(*o.RootOptions, flags)
+		opts := NewReleaseOptions(*o, flags)
 		assocs, err := opts.GetReleasesInitial(cfg)
 		if err != nil {
 			return run, err
@@ -128,7 +124,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := operator.NewMirrorOptions(*o.RootOptions)
+		opts := NewOperatorOptions(*o)
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Full(ctx, cfg)
 		if err != nil {
@@ -142,7 +138,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-		opts := additional.NewAdditionalOptions(*o.RootOptions)
+		opts := NewAdditionalOptions(*o)
 		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return run, err
@@ -151,7 +147,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
-		opts := additional.NewHelmOptions(*o.RootOptions)
+		opts := NewHelmOptions(*o)
 		assocs, err := opts.PullCharts(cfg)
 		if err != nil {
 			return run, err
@@ -178,7 +174,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := release.NewReleaseOptions(*o.RootOptions, flags)
+		opts := NewReleaseOptions(*o, flags)
 		assocs, err := opts.GetReleasesInitial(cfg)
 		if err != nil {
 			return run, err
@@ -187,7 +183,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := operator.NewMirrorOptions(*o.RootOptions)
+		opts := NewOperatorOptions(*o)
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Diff(ctx, cfg, lastRun)
 		if err != nil {
@@ -201,7 +197,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-		opts := additional.NewAdditionalOptions(*o.RootOptions)
+		opts := NewAdditionalOptions(*o)
 		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return run, err
@@ -210,7 +206,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
-		opts := additional.NewHelmOptions(*o.RootOptions)
+		opts := NewHelmOptions(*o)
 		assocs, err := opts.PullCharts(cfg)
 		if err != nil {
 			return run, err

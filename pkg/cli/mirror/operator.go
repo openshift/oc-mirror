@@ -1,4 +1,4 @@
-package operator
+package mirror
 
 import (
 	"context"
@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/RedHatGov/bundle/pkg/bundle"
-	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -37,10 +36,10 @@ var (
 	OPMImage = "quay.io/operator-framework/opm@sha256:038007c1c5d5f0efa50961cbcc097c6e63655a2ab4126547e3c4eb620ad0346e"
 )
 
-// MirrorOptions configures either a Full or Diff mirror operation
+// OperatorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
-type MirrorOptions struct {
-	cli.RootOptions
+type OperatorOptions struct {
+	MirrorOptions
 
 	SkipImagePin bool
 	Logger       *logrus.Entry
@@ -48,12 +47,12 @@ type MirrorOptions struct {
 	tmp string
 }
 
-func NewMirrorOptions(ro cli.RootOptions) *MirrorOptions {
-	return &MirrorOptions{RootOptions: ro}
+func NewOperatorOptions(mo MirrorOptions) *OperatorOptions {
+	return &OperatorOptions{MirrorOptions: mo}
 }
 
-// complete defaults MirrorOptions.
-func (o *MirrorOptions) complete() {
+// complete defaults OperatorOptions.
+func (o *OperatorOptions) complete() {
 	if o.Dir == "" {
 		o.Dir = "create"
 	}
@@ -63,7 +62,7 @@ func (o *MirrorOptions) complete() {
 	}
 }
 
-func (o *MirrorOptions) mktempDir() (func(), error) {
+func (o *OperatorOptions) mktempDir() (func(), error) {
 	o.tmp = filepath.Join(o.Dir, fmt.Sprintf("operators.%d", time.Now().Unix()))
 	return func() {
 		if err := os.RemoveAll(o.tmp); err != nil {
@@ -72,7 +71,7 @@ func (o *MirrorOptions) mktempDir() (func(), error) {
 	}, os.MkdirAll(o.tmp, os.ModePerm)
 }
 
-func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
+func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error) {
 	cacheDir, err := os.MkdirTemp("", "imageset-catalog-registry-")
 	if err != nil {
 		return nil, err
@@ -93,7 +92,7 @@ func (o *MirrorOptions) createRegistry() (*containerdregistry.Registry, error) {
 }
 
 // Full mirrors each catalog image in its entirety to the <Dir>/src directory.
-func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -159,7 +158,7 @@ func (o *MirrorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 
 // Diff mirrors only the diff between each old and new catalog image pair
 // to the <Dir>/src directory.
-func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.AssociationSet, error) {
+func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.AssociationSet, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -236,7 +235,7 @@ func (o *MirrorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigura
 	return allAssocs, nil
 }
 
-func (o *MirrorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator, isBlocked ...blockedFunc) (map[string]string, error) {
+func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator, isBlocked ...blockedFunc) (map[string]string, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -354,7 +353,7 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *MirrorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
+func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
@@ -389,7 +388,7 @@ func (o *MirrorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefere
 	return indexDir, nil
 }
 
-func (o *MirrorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string, pullSecret []byte) (*catalog.MirrorCatalogOptions, error) {
+func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string, pullSecret []byte) (*catalog.MirrorCatalogOptions, error) {
 	opts := catalog.NewMirrorCatalogOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
 	opts.FileDir = fileDir
@@ -427,7 +426,7 @@ func isMappingFile(p string) bool {
 	return filepath.Base(p) == mappingFile
 }
 
-func (o *MirrorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesource.TypedImageReference, dc *declcfg.DeclarativeConfig, mappings map[string]string) (image.AssociationSet, error) {
+func (o *OperatorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesource.TypedImageReference, dc *declcfg.DeclarativeConfig, mappings map[string]string) (image.AssociationSet, error) {
 
 	var images []string
 	for _, b := range dc.Bundles {

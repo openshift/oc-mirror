@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"os"
 
-	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -15,28 +14,15 @@ import (
 type RootOptions struct {
 	genericclioptions.IOStreams
 
-	Dir              string
-	LogLevel         string
-	DryRun           bool
-	SourceSkipTLS    bool
-	DestSkipTLS      bool
-	SkipVerification bool
-	SkipCleanup      bool
-	FilterOptions    imagemanifest.FilterOptions
+	Dir      string
+	LogLevel string
 
 	logfileCleanup func()
 }
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.Dir, "dir", "d", ".", "assets directory")
-	fs.StringVar(&o.LogLevel, "log-level", "info", "log level (e.g. \"debug | info | warn | error\")")
-	fs.BoolVar(&o.DryRun, "dry-run", false, "print actions without mirroring images "+
-		"(experimental: only works for operator catalogs)")
-	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", false, "skip client-side TLS validation for source")
-	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", false, "skip client-side TLS validation for destination")
-	fs.BoolVar(&o.SkipVerification, "skip-verification", false, "skip digest verification")
-	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", false, "skip removal of artifact directories")
-	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")
+	fs.StringVarP(&o.Dir, "dir", "d", ".", "Assets directory")
+	fs.StringVar(&o.LogLevel, "log-level", "info", "Log level (e.g. \"debug | info | warn | error\")")
 }
 
 func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {

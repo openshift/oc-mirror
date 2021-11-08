@@ -19,17 +19,6 @@ import (
 	"github.com/RedHatGov/bundle/pkg/cli/mirror/version"
 )
 
-type MirrorOptions struct {
-	*cli.RootOptions
-	OutputDir       string
-	ConfigPath      string
-	SkipImagePin    bool
-	ManifestsOnly   bool
-	From            string
-	ToMirror        string
-	BuildxPlatforms []string
-}
-
 func NewMirrorCmd() *cobra.Command {
 	o := MirrorOptions{}
 	o.RootOptions = &cli.RootOptions{
@@ -74,18 +63,8 @@ func NewMirrorCmd() *cobra.Command {
 		},
 	}
 
-	fs := cmd.Flags()
-	fs.StringVarP(&o.ConfigPath, "config", "c", o.ConfigPath, "Path to imageset configuration file")
-	fs.BoolVar(&o.SkipImagePin, "skip-image-pin", o.SkipImagePin, "Do not replace image tags with digest pins in operator catalogs")
-	fs.StringVar(&o.From, "from", o.From, "The archive file path.")
-	fs.BoolVar(&o.ManifestsOnly, "manifests-only", o.ManifestsOnly, "Generate manifests and do not mirror")
-	fs.StringSliceVar(&o.BuildxPlatforms, "buildx-platforms", o.BuildxPlatforms,
-		"If set, the command will invoke 'docker buildx build' to build a catalog manifest list "+
-			"for the specified platforms, ex. linux/amd64, instead of 'podman build' for the host platform. "+
-			"The 'buildx' plugin and accompanying configuration MUST be installed on the build host. "+
-			"This list does NOT filter operator bundle manifest list platforms within the catalog")
-
-	o.BindFlags(cmd.PersistentFlags())
+	o.BindFlags(cmd.Flags())
+	o.RootOptions.BindFlags(cmd.PersistentFlags())
 
 	cmd.AddCommand(version.NewVersionCommand(f, o.RootOptions))
 	cmd.AddCommand(list.NewListCommand(f, o.RootOptions))
