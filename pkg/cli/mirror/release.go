@@ -1,4 +1,4 @@
-package release
+package mirror
 
 import (
 	"bufio"
@@ -21,7 +21,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/RedHatGov/bundle/pkg/bundle"
-	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -37,15 +36,15 @@ var archMap = map[string]string{
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
-	cli.RootOptions
+	MirrorOptions
 	release string
 	arch    []string
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
-func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions {
+func NewReleaseOptions(mo MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
 	var arch []string
-	opts := ro.FilterOptions
+	opts := mo.FilterOptions
 	opts.Complete(flags)
 	if opts.IsWildcardFilter() {
 		arch = supportedArchs
@@ -54,8 +53,8 @@ func NewReleaseOptions(ro cli.RootOptions, flags *pflag.FlagSet) *ReleaseOptions
 	}
 
 	return &ReleaseOptions{
-		RootOptions: ro,
-		arch:        arch,
+		MirrorOptions: mo,
+		arch:          arch,
 	}
 }
 

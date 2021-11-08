@@ -196,12 +196,6 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
 	for _, imageName := range assocs.Keys() {
 
-		newImg, err := reference.Parse(imageName)
-		if err != nil {
-			return err
-		}
-		newImg.Registry = o.ToMirror
-
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
 
@@ -302,13 +296,6 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			m.Destination.Ref.Tag = m.Source.Ref.Tag
 			m.Destination.Ref.ID = m.Source.Ref.ID
 
-			if len(missingLayers) != 0 {
-				// Fetch all layers and mount them at the specified paths.
-				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers, newImg); err != nil {
-					return err
-				}
-			}
-
 			switch assoc.Type {
 			case image.TypeGeneric:
 				genericMappings = append(genericMappings, m)
@@ -326,6 +313,13 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 				errs = append(errs, fmt.Errorf("image %q: image type is not set", imageName))
 			default:
 				errs = append(errs, fmt.Errorf("image %q: invalid image type %v", imageName, assoc.Type))
+			}
+
+			if len(missingLayers) != 0 {
+				// Fetch all layers and mount them at the specified paths.
+				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers, m.Destination.Ref); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -523,12 +517,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 
 func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
 
-	// TODO: create a context based on user provided
-	// pull secret
-	opts := &imagemanifest.SecurityOptions{}
-	opts.Insecure = o.DestSkipTLS
-
-	restctx, err := opts.Context()
+	restctx, err := config.CreateDefaultContext(o.DestSkipTLS)
 	if err != nil {
 		return err
 	}
@@ -549,7 +538,6 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, 
 func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
-
 	repo, err := restctx.RepositoryForRef(ctx, ref, o.DestSkipTLS)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
@@ -565,7 +553,7 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.C
 	defer rc.Close()
 	for _, dstPath := range dstPaths {
 		if err := copyBlobFile(rc, dstPath); err != nil {
-			return fmt.Errorf("copy blob: %v", err)
+			return fmt.Errorf("copy blob for %s: %v", ref, err)
 		}
 		if _, err := rc.Seek(0, 0); err != nil {
 			return fmt.Errorf("seek to start of blob: %v", err)
@@ -576,21 +564,17 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.C
 }
 
 func unpack(archiveFilePath, dest string, filesInArchive map[string]string) error {
-
 	name := filepath.Base(archiveFilePath)
 	archivePath, found := filesInArchive[name]
 	if !found {
 		return &ErrArchiveFileNotFound{name}
 	}
-
 	if err := archive.NewArchiver().Extract(archivePath, archiveFilePath, dest); err != nil {
 		return err
 	}
-
 	if _, err := os.Stat(filepath.Join(dest, archiveFilePath)); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -660,10 +644,11 @@ func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 		o.Dir,
 		fmt.Sprintf("results-%v", time.Now().Unix()),
 	)
-
 	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
 		return resultsDir, err
 	}
-
 	return resultsDir, nil
 }
+
+// FIXME(jpower): should we just mirror release one by one
+// The namespace is not the same as the image name

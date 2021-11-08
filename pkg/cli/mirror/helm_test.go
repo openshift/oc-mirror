@@ -1,4 +1,4 @@
-package additional
+package mirror
 
 import (
 	"io/ioutil"
@@ -52,7 +52,7 @@ func Test_Search(t *testing.T) {
 	}{
 		{
 			name:   "test podinfo",
-			path:   "../../test/helm/testdata/podinfo.yaml",
+			path:   "../../../test/helm/testdata/podinfo.yaml",
 			ipaths: getImagesPath(),
 			want: []v1alpha1.AdditionalImages{
 				{Image: v1alpha1.Image{
@@ -128,7 +128,7 @@ func Test_Render(t *testing.T) {
 	}{
 		{
 			name:    "test podinfo",
-			path:    "../../test/helm/testdata/podinfo-6.0.0.tgz",
+			path:    "../../../test/helm/testdata/podinfo-6.0.0.tgz",
 			wantErr: false,
 		},
 	}
@@ -149,7 +149,7 @@ func Test_Render(t *testing.T) {
 func Test_FindImages(t *testing.T) {
 
 	ipaths := []string{}
-	path := "../../test/helm/testdata/podinfo-6.0.0.tgz"
+	path := "../../../test/helm/testdata/podinfo-6.0.0.tgz"
 	want := []v1alpha1.AdditionalImages{
 		{Image: v1alpha1.Image{
 			Name: "ghcr.io/stefanprodan/podinfo:6.0.0"}},

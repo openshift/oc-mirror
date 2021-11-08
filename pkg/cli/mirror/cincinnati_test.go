@@ -1,4 +1,4 @@
-package release
+package mirror
 
 import (
 	"context"

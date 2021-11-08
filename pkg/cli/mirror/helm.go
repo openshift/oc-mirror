@@ -1,4 +1,4 @@
-package additional
+package mirror
 
 import (
 	"bytes"
@@ -19,22 +19,21 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
 
-	cli "github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 type HelmOptions struct {
-	cli.RootOptions
+	MirrorOptions
 	settings *helmcli.EnvSettings
 }
 
-func NewHelmOptions(ro cli.RootOptions) *HelmOptions {
+func NewHelmOptions(mo MirrorOptions) *HelmOptions {
 	settings := helmcli.New()
 	return &HelmOptions{
-		RootOptions: ro,
-		settings:    settings,
+		MirrorOptions: mo,
+		settings:      settings,
 	}
 }
 
@@ -104,7 +103,7 @@ func (h *HelmOptions) PullCharts(cfg v1alpha1.ImageSetConfiguration) (image.Asso
 	}
 
 	// Image download
-	opts := NewAdditionalOptions(h.RootOptions)
+	opts := NewAdditionalOptions(h.MirrorOptions)
 	return opts.GetAdditional(cfg, images)
 }
 

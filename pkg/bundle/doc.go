@@ -1,2 +1,2 @@
-// Package bundle contains tools for managing container images for internet-disconnected systems.\.
+// Package bundle contains tools for preparing imagesets for archiving.
 package bundle
