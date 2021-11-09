@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -15,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO: check config for image
+// TODO: Pull image for manifest and index checks
 func Test_BuildCatalogLayer(t *testing.T) {
 
 	server := httptest.NewServer(registry.New())
@@ -53,7 +54,11 @@ func Test_BuildCatalogLayer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = buildCatalogLayer(targetRef, targetRef, []v1.Layer{add, delete}...)
+	o := &MirrorOptions{
+		DestSkipTLS: true,
+	}
+
+	err = o.buildCatalogLayer(context.Background(), targetRef, targetRef, t.TempDir(), []v1.Layer{add, delete}...)
 	if err != nil {
 		t.Error(err)
 	}
