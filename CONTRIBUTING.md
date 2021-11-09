@@ -16,7 +16,7 @@ Welcome to our contributing guide! We are eager to receive contributions of all 
 
 ## What should I know before I get started?
 
-[`oc-mirror` design](docs/design/overview)
+[`oc-mirror` design](docs/design/overview.md)
 
 ## How can I contribute?
 ### Reporting Bugs
