@@ -1,4 +1,4 @@
-package additional
+package mirror
 
 import (
 	"context"
@@ -11,18 +11,17 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
 )
 
 type AdditionalOptions struct {
-	cli.RootOptions
+	MirrorOptions
 }
 
-func NewAdditionalOptions(ro cli.RootOptions) *AdditionalOptions {
-	return &AdditionalOptions{RootOptions: ro}
+func NewAdditionalOptions(mo MirrorOptions) *AdditionalOptions {
+	return &AdditionalOptions{MirrorOptions: mo}
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages

@@ -1,10 +1,11 @@
-package additional
+package mirror
 
 import (
 	"context"
-	"github.com/RedHatGov/bundle/pkg/bundle"
 	"os"
 	"testing"
+
+	"github.com/RedHatGov/bundle/pkg/bundle"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,15 +31,17 @@ func Test_GetAdditional(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	ro := cli.RootOptions{
-		Dir: tmpdir,
-		IOStreams: genericclioptions.IOStreams{
-			In:     os.Stdin,
-			Out:    os.Stdout,
-			ErrOut: os.Stderr,
+	mo := MirrorOptions{
+		RootOptions: &cli.RootOptions{
+			Dir: tmpdir,
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
+			},
 		},
 	}
-	opts := NewAdditionalOptions(ro)
+	opts := NewAdditionalOptions(mo)
 
 	assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 	require.NoError(t, err)

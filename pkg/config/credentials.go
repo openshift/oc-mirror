@@ -10,6 +10,7 @@ import (
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/openshift/library-go/pkg/image/registryclient"
+	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/openshift/oc/pkg/helpers/image/credentialprovider"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog"
@@ -56,6 +57,16 @@ func CreateContext(secret []byte, skipVerification, skipTLS bool) (*registryclie
 	}
 
 	return ctx, nil
+}
+
+// CreateDefault a default context for the registryClient of `oc mirror`
+func CreateDefaultContext(skipTLS bool) (*registryclient.Context, error) {
+	// TODO: create a context based on user provided
+	// pull secret
+	opts := &imagemanifest.SecurityOptions{}
+	opts.Insecure = skipTLS
+
+	return opts.Context()
 }
 
 // Copied below from https://github.com/openshift/oc/blob/d922a789a1add3146f69bacadaed8c3fb719f333/pkg/cli/image/manifest/dockercredentials/credentials.go#L49
