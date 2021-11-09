@@ -8,15 +8,6 @@ oc-mirror management is a two part process:
 1. oc-mirror Creation (Internet Connected)
 1. oc-mirror Publishing (Disconnected)
 
-## Required dependencies
-
-- [`podman`][podman] (only required if not building multi-arch images, see below)
-
-## Multi-arch catalog images
-
-[`docker buildx`][docker-buildx] is required to build multi-arch catalog images;
-`docker buildx build` is invoked by `publish` when `--buildx-platforms` is set.
-
 ## Usage
 
 The mirror registry `reg.mirror.com` is used in this example.
@@ -30,8 +21,8 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```
 1. Create then publish to your mirror registry:
     ```sh
-    ./bin/oc-mirror create full --config imageset-config.yaml --dir test-create --output archives --log-level debug
-    ./bin/oc-mirror publish --archive archives --dir test-publish --to-mirror reg.mirror.com --output results
+    ./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives
+    ./bin/oc-mirror --from archives --dir test-publish docker://reg.mirror.com
     ```
 
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
