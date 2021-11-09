@@ -254,15 +254,14 @@ func (r *registryBackend) repoExists(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (r *registryBackend) createRT() http.RoundTripper {
+func (r *registryBackend) createRT() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: r.insecure}
-	var rt http.RoundTripper = transport
-	return rt
+	return transport
 }
 
 // TODO: Get default auth will need to update if user
-// can specifiy custom locations
+// can specify custom locations
 func (r *registryBackend) getRemoteOpts() (options []remote.Option) {
 	return append(
 		options,

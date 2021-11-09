@@ -4,21 +4,26 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -152,18 +157,20 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			}
 			layers = append(layers, add)
 
-			srcImage = OPMImage
+			opmImage, err := reference.Parse(OPMImage)
+			if err != nil {
+				return refs, fmt.Errorf("error parsing image %q: %v", OPMImage, err)
+			}
+			// Update registry so the existing OPM image can be pulled.
+			// QUESTION(jpower): is assuming an image is present in a repo with the same name valid?
+			opmImage.Registry = mirrorRef.Ref.Registry
+			srcImage = opmImage.Exact()
 
 		} else {
 			return nil, fmt.Errorf("error resolving existing catalog image %q: %v", refExact, rerr)
 		}
 
-		if len(o.BuildxPlatforms) == 0 {
-			err = buildCatalogLayer(srcImage, ctlgRef.Ref.Exact(), layers...)
-		} else {
-			err = o.buildDockerBuildx(ctx, ctlgRef.Ref, dcDirToBuild)
-		}
-		if err != nil {
+		if err = o.buildCatalogLayer(ctx, srcImage, ctlgRef.Ref.Exact(), dstDir, layers...); err != nil {
 			return nil, err
 		}
 
@@ -190,77 +197,92 @@ func addLayer(new, targetPath string) (v1.Layer, error) {
 	return layerFromFile(targetPath, new)
 }
 
-func buildCatalogLayer(ref, targetRef string, layer ...v1.Layer) error {
-	logrus.Debugf("Pulling image %s for processing", ref)
-	img, err := crane.Pull(ref)
+func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef, dir string, layers ...v1.Layer) error {
+
+	archs := []string{"amd64", "arm64", "ppc64le", "s390x"}
+
+	// Create an empty layout
+	layoutPath := filepath.Join(dir, "layout")
+	if err := os.MkdirAll(layoutPath, os.ModePerm); err != nil {
+		return err
+	}
+	p, err := layout.Write(layoutPath, empty.Index)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Pulling image %s for processing", srcRef)
+	// Pull source reference image
+	ref, err := name.ParseReference(srcRef)
+	if err != nil {
+		return err
+	}
+	options := o.getRemoteOpts(ctx)
+	img, err := remote.Image(ref, options...)
 	if err != nil {
 		return err
 	}
 
 	// Add new layers to image
-	newImg, err := mutate.AppendLayers(img, layer...)
+	img, err = mutate.AppendLayers(img, layers...)
 	if err != nil {
 		return err
 	}
 
 	// Update image config
-	cfg, err := newImg.ConfigFile()
+	cfg, err := img.ConfigFile()
 	if err != nil {
 		return err
 	}
-
 	labels := map[string]string{
 		containertools.ConfigsLocationLabel: "/configs",
 	}
 	cfg.Config.Labels = labels
 	cfg.Config.Cmd = []string{"serve", "configs"}
 	cfg.Config.Entrypoint = []string{"/bin/opm"}
-	newerImg, err := mutate.Config(newImg, cfg.Config)
+	img, err = mutate.Config(img, cfg.Config)
 	if err != nil {
 		return err
 	}
+
+	// Append image to layout for each platform
+	for _, arch := range archs {
+		platform := v1.Platform{
+			Architecture: arch,
+			OS:           "linux",
+		}
+		layoutOpts := layout.WithPlatform(platform)
+		if err := p.AppendImage(img, layoutOpts); err != nil {
+			return err
+		}
+	}
+
 	tag, err := name.NewTag(targetRef)
 	if err != nil {
 		return err
 	}
-	if err := crane.Push(newerImg, tag.String()); err != nil {
-		return err
-	}
-	return err
-}
 
-func (o *MirrorOptions) buildDockerBuildx(ctx context.Context, ref reference.DockerImageReference, dir string) error {
-	dockerfile := filepath.Join(dir, "index.Dockerfile")
-	f, err := os.Create(dockerfile)
+	// Parse index to retrieve images
+	// into layout for processing
+	idx, err := p.ImageIndex()
 	if err != nil {
 		return err
 	}
-	if err := (action.GenerateDockerfile{
-		BaseImage: OPMImage,
-		IndexDir:  ".",
-		Writer:    f,
-	}).Run(); err != nil {
+	idxManifest, err := idx.IndexManifest()
+	if err != nil {
 		return err
 	}
-
-	exactRef := ref.Exact()
-
-	args := []string{
-		"build", "buildx",
-		"-t", exactRef,
-		"-f", dockerfile,
-		"--platform", strings.Join(o.BuildxPlatforms, ","),
-		"--push",
-		dir,
-	}
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := runDebug(cmd); err != nil {
-		return err
+	for _, manifest := range idxManifest.Manifests {
+		img, err := p.Image(manifest.Digest)
+		if err != nil {
+			return err
+		}
+		if err := remote.Write(tag, img, options...); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return remote.WriteIndex(tag, idx, options...)
 }
 
 // layerFromFile will write the contents of the path the target
@@ -314,7 +336,17 @@ func layerFromFile(targetPath, path string) (v1.Layer, error) {
 	return tarball.LayerFromReader(&b)
 }
 
-func runDebug(cmd *exec.Cmd) error {
-	logrus.Debugf("command: %s", strings.Join(cmd.Args, " "))
-	return cmd.Run()
+func (o *MirrorOptions) getRemoteOpts(ctx context.Context) (options []remote.Option) {
+	return append(
+		options,
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithContext(ctx),
+		remote.WithTransport(o.createRT()),
+	)
+}
+
+func (o *MirrorOptions) createRT() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: o.DestSkipTLS}
+	return transport
 }
