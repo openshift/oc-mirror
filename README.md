@@ -62,11 +62,5 @@ E2E:
 make test-e2e
 ```
 
-<!--
-TODO: link to the following once a release is cut.
 [config-spec]:https://pkg.go.dev/github.com/redhatgov/bundle/pkg/config/v1alpha1#ImageSetConfiguration
--->
-[config-spec]:pkg/config/v1alpha1/config_types.go
 [go]:https://golang.org/dl/
-[docker-buildx]:https://docs.docker.com/buildx/working-with-buildx/
-[podman]:https://podman.io/getting-started/
