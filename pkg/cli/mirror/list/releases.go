@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/RedHatGov/bundle/pkg/cincinnati"
 	"github.com/RedHatGov/bundle/pkg/cli"
@@ -36,7 +37,7 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 			oc-mirror list releases --channels --version=4.8
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete(cmd, f, args))
+			kcmdutil.CheckErr(o.Complete())
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
@@ -52,19 +53,18 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	return cmd
 }
 
-func (o *ReleasesOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []string) error {
+func (o *ReleasesOptions) Complete() error {
+	if len(o.Channel) == 0 {
+		o.Channel = fmt.Sprintf("stable-%s", o.Version)
+	}
 	return nil
 }
 
 func (o *ReleasesOptions) Validate() error {
-	if len(o.Channel) > 0 && o.Channels {
-		return errors.New("must specify either --channels for channel listing or --channel=<channel-name> for version listing")
+	if o.Channels && len(o.Version) == 0 {
+		return errors.New("must specify --version")
 	}
-
-	if len(o.Channel) == 0 && len(o.Version) == 0 {
-		if o.Channels {
-			return errors.New("must specify --version")
-		}
+	if o.Channel == "stable-" {
 		return errors.New("must specify --version or --channel")
 	}
 	return nil
@@ -73,21 +73,6 @@ func (o *ReleasesOptions) Validate() error {
 func (o *ReleasesOptions) Run(ctx context.Context) error {
 
 	w := o.IOStreams.Out
-
-	if len(o.Channel) == 0 {
-		o.Channel = fmt.Sprintf("stable-%s", o.Version)
-		if !o.Channels {
-			if _, err := fmt.Fprintln(w, "Listing stable channels. Use --channel=<channel-name> to filter."); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintln(w, "User oc-mirror list release --channels to discover other channels."); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintln(w, ""); err != nil {
-				return err
-			}
-		}
-	}
 
 	c, url, err := cincinnati.NewClient(cincinnati.UpdateUrl, uuid.New())
 	if err != nil {
@@ -109,6 +94,19 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 			}
 		}
 		return nil
+	}
+
+	// By default, the stable channel versions will be listed
+	if strings.HasPrefix(o.Channel, "stable") {
+		if _, err := fmt.Fprintln(w, "Listing stable channels. Use --channel=<channel-name> to filter."); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w, "User oc-mirror list release --channels to discover other channels."); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w, ""); err != nil {
+			return err
+		}
 	}
 
 	vers, err := c.GetVersions(ctx, url, o.Channel)
