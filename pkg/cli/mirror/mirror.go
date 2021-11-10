@@ -57,8 +57,8 @@ func NewMirrorCmd() *cobra.Command {
 		SilenceErrors:     false,
 		SilenceUsage:      false,
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete(cmd, f, args))
-			kcmdutil.CheckErr(o.Validate(cmd, f))
+			kcmdutil.CheckErr(o.Complete(args))
+			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd, f))
 		},
 	}
@@ -73,7 +73,7 @@ func NewMirrorCmd() *cobra.Command {
 	return cmd
 }
 
-func (o *MirrorOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []string) error {
+func (o *MirrorOptions) Complete(args []string) error {
 
 	destination := args[0]
 	switch {
@@ -86,7 +86,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []
 	return nil
 }
 
-func (o *MirrorOptions) Validate(cmd *cobra.Command, f kcmdutil.Factory) error {
+func (o *MirrorOptions) Validate() error {
 	switch {
 	case len(o.From) > 0 && len(o.ToMirror) == 0:
 		return fmt.Errorf("must specifiy a registry destination")

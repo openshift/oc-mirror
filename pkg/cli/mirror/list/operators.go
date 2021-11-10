@@ -41,7 +41,7 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 			oc-mirror list operators --catalog=catalog-name --package=operator-name --channel=channel-name
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete(cmd, f, args))
+			kcmdutil.CheckErr(o.Complete())
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd))
 		},
@@ -59,7 +59,7 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 	return cmd
 }
 
-func (o *OperatorsOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []string) error {
+func (o *OperatorsOptions) Complete() error {
 	if len(o.Version) > 0 {
 		o.Catalogs = true
 	}
