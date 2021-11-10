@@ -1,4 +1,4 @@
-package mirror
+package cincinnati
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestGetUpdates(t *testing.T) {
-	clientID := uuid.Must(uuid.Parse("01234567-0123-0123-0123-0123456789ab"))
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -120,9 +120,7 @@ func TestGetUpdates(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			defer ts.Close()
 
-			c := NewClient(clientID, nil)
-
-			uri, err := url.Parse(ts.URL)
+			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -166,7 +164,7 @@ func TestGetUpdates(t *testing.T) {
 }
 
 func TestGetLatest(t *testing.T) {
-	clientID := uuid.Must(uuid.Parse("01234567-0123-0123-0123-0123456789ab"))
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -245,9 +243,10 @@ func TestGetLatest(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			defer ts.Close()
 
-			c := NewClient(clientID, nil)
-
-			uri, err := url.Parse(ts.URL)
+			c, uri, err := NewClient(ts.URL, clientID)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
