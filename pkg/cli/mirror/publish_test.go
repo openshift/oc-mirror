@@ -84,11 +84,11 @@ func Test_MetadataError(t *testing.T) {
 					Out:    os.Stdout,
 					ErrOut: os.Stderr,
 				},
-				Dir:         tmpdir,
-				DestSkipTLS: true,
+				Dir: tmpdir,
 			},
-			From:     tt.fields.archivePath,
-			ToMirror: u.Host,
+			DestSkipTLS: true,
+			From:        tt.fields.archivePath,
+			ToMirror:    u.Host,
 		}
 
 		// Copy metadata in place for tests with existing
@@ -131,9 +131,9 @@ func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 
 	opts := &MirrorOptions{
 		RootOptions: &cli.RootOptions{
-			Dir:         dir,
-			DestSkipTLS: true,
+			Dir: dir,
 		},
+		DestSkipTLS: true,
 	}
 
 	image := fmt.Sprintf("%s/%s:latest", host, uuid)
