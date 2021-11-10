@@ -1,7 +1,19 @@
 package describe
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"os"
+
+	"github.com/RedHatGov/bundle/pkg/archive"
+	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -10,6 +22,7 @@ import (
 
 type DescribeOptions struct {
 	*cli.RootOptions
+	From string
 }
 
 func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
@@ -22,11 +35,11 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 		Example: templates.Examples(`
 			oc-mirror describe mirror_seq1_00000.tar
 		`),
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(cmd, f, args))
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run())
+			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
 	}
 
@@ -36,6 +49,7 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 }
 
 func (o *DescribeOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []string) error {
+	o.From = args[0]
 	return nil
 }
 
@@ -43,7 +57,51 @@ func (o *DescribeOptions) Validate() error {
 	return nil
 }
 
-func (o *DescribeOptions) Run() error {
-	logrus.Info("Not implemented")
+func (o *DescribeOptions) Run(ctx context.Context) error {
+
+	a := archive.NewArchiver()
+	var meta v1alpha1.Metadata
+
+	// Get archive with metadata
+	filesInArchive, err := bundle.ReadImageSet(a, o.From)
+
+	if err != nil {
+		return err
+	}
+
+	// Create workspace to work from
+	tmpdir, err := ioutil.TempDir(".", "metadata")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpdir)
+
+	archive, ok := filesInArchive[config.MetadataFile]
+	if !ok {
+		return errors.New("metadata is not in archive")
+	}
+
+	logrus.Debug("Extracting incoming metadata")
+	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
+		return err
+	}
+
+	workspace, err := storage.NewLocalBackend(tmpdir)
+
+	if err != nil {
+		return err
+	}
+
+	if err := workspace.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+		return err
+	}
+
+	// Process metadata for output
+	data, err := json.MarshalIndent(&meta, "", " ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(o.IOStreams.Out, string(data))
+
 	return nil
 }

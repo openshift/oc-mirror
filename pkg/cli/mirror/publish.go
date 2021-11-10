@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mholt/archiver/v3"
 	"github.com/opencontainers/go-digest"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -27,6 +26,7 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/RedHatGov/bundle/pkg/archive"
+	"github.com/RedHatGov/bundle/pkg/bundle"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -95,7 +95,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	logrus.Debugf("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
-	filesInArchive, err := o.readImageSet(a)
+	filesInArchive, err := bundle.ReadImageSet(a, o.From)
 	if err != nil {
 		return err
 	}
@@ -427,55 +427,6 @@ func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 	return err
 }
 
-// readImage set will create a map with all the files located in the archives
-func (o *MirrorOptions) readImageSet(a archive.Archiver) (map[string]string, error) {
-
-	filesinArchive := make(map[string]string)
-
-	file, err := os.Stat(o.From)
-	if err != nil {
-		return nil, err
-	}
-
-	if file.IsDir() {
-
-		// Walk the directory and load the files from the archives
-		// into the map
-		logrus.Infoln("Detected multiple archive files")
-		err = filepath.Walk(o.From, func(path string, info os.FileInfo, err error) error {
-
-			if err != nil {
-				return fmt.Errorf("traversing %s: %v", path, err)
-			}
-			if info == nil {
-				return fmt.Errorf("no file info")
-			}
-
-			extension := filepath.Ext(path)
-			extension = strings.TrimPrefix(extension, ".")
-
-			if extension == a.String() {
-				logrus.Debugf("Found archive %s", path)
-				return a.Walk(path, func(f archiver.File) error {
-					filesinArchive[f.Name()] = path
-					return nil
-				})
-			}
-
-			return nil
-		})
-
-	} else {
-		// Walk the archive and load the file names into the map
-		err = a.Walk(o.From, func(f archiver.File) error {
-			filesinArchive[f.Name()] = o.From
-			return nil
-		})
-	}
-
-	return filesinArchive, err
-}
-
 // TODO(estroz): symlink blobs instead of copying them to avoid data duplication.
 // `oc` mirror libs should be able to follow these symlinks.
 func copyBlobFile(src io.Reader, dstPath string) error {
@@ -570,6 +521,8 @@ func mktempDir(dir string) (func(), string, error) {
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
+// FIXME(jpower): should we just mirror release one by one
+// The namespace is not the same as the image name
 func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
 	relOpts := release.NewMirrorOptions(o.IOStreams)

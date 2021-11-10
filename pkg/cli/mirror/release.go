@@ -4,12 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +17,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/RedHatGov/bundle/pkg/bundle"
+	"github.com/RedHatGov/bundle/pkg/cincinnati"
 	"github.com/RedHatGov/bundle/pkg/config"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/RedHatGov/bundle/pkg/image"
@@ -39,6 +36,7 @@ type ReleaseOptions struct {
 	MirrorOptions
 	release string
 	arch    []string
+	uuid    uuid.UUID
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
@@ -55,52 +53,16 @@ func NewReleaseOptions(mo MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
 	return &ReleaseOptions{
 		MirrorOptions: mo,
 		arch:          arch,
+		uuid:          uuid.New(),
 	}
-}
-
-const (
-	UpdateUrl    string = "https://api.openshift.com/api/upgrades_info/v1/graph"
-	OkdUpdateURL string = "https://origin-release.ci.openshift.org/graph"
-)
-
-func getTLSConfig() (*tls.Config, error) {
-	certPool, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-
-	config := &tls.Config{
-		RootCAs: certPool,
-	}
-
-	return config, nil
-}
-
-func newClient(u string) (Client, *url.URL, error) {
-
-	upstream, err := url.Parse(u)
-	if err != nil {
-		return Client{}, nil, err
-	}
-
-	tls, err := getTLSConfig()
-	if err != nil {
-		return Client{}, nil, err
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tls,
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	return NewClient(uuid.New(), transport), upstream, nil
 }
 
 // Next calculate the upgrade path from the current version to the channel's latest
-func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, url, arch string) (Update, []Update, error) {
+func (o *ReleaseOptions) calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, url, arch string) (cincinnati.Update, []cincinnati.Update, error) {
 
-	client, upstream, err := newClient(url)
+	client, upstream, err := cincinnati.NewClient(url, o.uuid)
 	if err != nil {
-		return Update{}, nil, err
+		return cincinnati.Update{}, nil, err
 	}
 
 	ctx := context.Background()
@@ -109,17 +71,17 @@ func calculateUpgradePath(ch v1alpha1.ReleaseChannel, v semver.Version, url, arc
 
 	upgrade, upgrades, err := client.GetUpdates(ctx, upstream, arch, channel, v)
 	if err != nil {
-		return Update{}, nil, err
+		return cincinnati.Update{}, nil, err
 	}
 
 	return upgrade, upgrades, nil
 }
 
-func GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (Update, error) {
+func (o *ReleaseOptions) GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (cincinnati.Update, error) {
 
-	client, upstream, err := newClient(url)
+	client, upstream, err := cincinnati.NewClient(url, o.uuid)
 	if err != nil {
-		return Update{}, err
+		return cincinnati.Update{}, err
 	}
 
 	ctx := context.Background()
@@ -128,11 +90,11 @@ func GetLatestVersion(ch v1alpha1.ReleaseChannel, url, arch string) (Update, err
 
 	latest, err := client.GetChannelLatest(ctx, upstream, arch, channel)
 	if err != nil {
-		return Update{}, err
+		return cincinnati.Update{}, err
 	}
 	upgrade, _, err := client.GetUpdates(ctx, upstream, arch, channel, latest)
 	if err != nil {
-		return Update{}, err
+		return cincinnati.Update{}, err
 	}
 
 	return upgrade, err
@@ -201,16 +163,16 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 
 		var url string
 		if ch.Name == "okd" {
-			url = OkdUpdateURL
+			url = cincinnati.OkdUpdateURL
 		} else {
-			url = UpdateUrl
+			url = cincinnati.UpdateUrl
 		}
 		for _, arch := range o.arch {
 
 			if len(ch.Versions) == 0 {
 
 				// If no version was specified from the channel, then get the latest release
-				latest, err := GetLatestVersion(ch, url, arch)
+				latest, err := o.GetLatestVersion(ch, url, arch)
 				if err != nil {
 					return nil, err
 				}
@@ -235,7 +197,7 @@ func (o *ReleaseOptions) GetReleasesInitial(cfg v1alpha1.ImageSetConfiguration) 
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
+				requested, _, err := o.calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
@@ -287,9 +249,9 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 		// If okd is channel name, then use okd api
 		var url string
 		if ch.Name == "okd" {
-			url = OkdUpdateURL
+			url = cincinnati.OkdUpdateURL
 		} else {
-			url = UpdateUrl
+			url = cincinnati.UpdateUrl
 		}
 		for _, arch := range o.arch {
 			// Check for specific version declarations for each specific version
@@ -303,7 +265,7 @@ func (o *ReleaseOptions) GetReleasesDiff(_ v1alpha1.PastMirror, cfg v1alpha1.Ima
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				requested, _, err := calculateUpgradePath(ch, ver, url, arch)
+				requested, _, err := o.calculateUpgradePath(ch, ver, url, arch)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
