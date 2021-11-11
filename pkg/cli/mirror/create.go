@@ -41,14 +41,14 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return err
 	}
 
-	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
-		return err
-	}
-
 	// Configure the metadata backend.
 	backend, err := o.newBackendForConfig(ctx, cfg.StorageConfig)
 	if err != nil {
 		return fmt.Errorf("error opening backend: %v", err)
+	}
+
+	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		return err
 	}
 
 	// Run full or diff mirror.
@@ -58,10 +58,11 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return err
 	case err != nil && errors.Is(err, storage.ErrMetadataNotExist):
-		thisRun, err = o.createFull(ctx, flags, cfg, meta)
+		thisRun, err = o.createFull(ctx, flags, cfg)
 		if err != nil {
 			return err
 		}
+		meta.Uid = uuid.New()
 	case err == nil && len(meta.PastMirrors) != 0:
 		thisRun, err = o.createDiff(ctx, flags, cfg, meta)
 		if err != nil {
@@ -104,9 +105,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (run v1alpha1.PastMirror, err error) {
-
-	meta.Uid = uuid.New()
+func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration) (run v1alpha1.PastMirror, err error) {
 	run = v1alpha1.PastMirror{
 		Sequence:  1,
 		Timestamp: int(time.Now().Unix()),
