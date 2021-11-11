@@ -116,7 +116,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	}
 
 	// Get current metadata info
-	backendImage := fmt.Sprintf("%s/%s:latest", o.ToMirror, incomingMeta.Uid)
+	backendImage := fmt.Sprintf("%s/oc-mirror:%s", o.ToMirror, incomingMeta.Uid)
 	backend, err := o.configureBackendForConfig(ctx, backendImage)
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return err
-	case (err != nil && errors.Is(err, storage.ErrMetadataNotExist)):
+	case err != nil:
 		logrus.Infof("No existing metadata found. Setting up new workspace")
 		// Check that this is the first imageset
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
