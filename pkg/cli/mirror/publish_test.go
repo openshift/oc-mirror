@@ -136,7 +136,7 @@ func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 		DestSkipTLS: true,
 	}
 
-	image := fmt.Sprintf("%s/%s:latest", host, uuid)
+	image := fmt.Sprintf("%s/oc-mirror:%s", host, uuid)
 
 	registry, err := opts.configureBackendForConfig(ctx, image)
 	if err != nil {
