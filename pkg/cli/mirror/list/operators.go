@@ -35,7 +35,7 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 			oc-mirror list operators --catalogs --version=4.8
 			# List all operators packages in a catalog
 			oc-mirror list operators --catalog=catalog-name
-			# List all operators channels in an operator package
+			# List all channels in an operator package
 			oc-mirror list operators --catalog=catalog-name --package=package-name
 			# List all available versions for a specified operator in a channel
 			oc-mirror list operators --catalog=catalog-name --package=operator-name --channel=channel-name
