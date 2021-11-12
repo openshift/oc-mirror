@@ -109,52 +109,9 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	}
 	uri.RawQuery = queryParams.Encode()
 
-	// Download the update graph.
-	req, err := http.NewRequest("GET", uri.String(), nil)
+	graph, err := c.getGraphData(ctx, uri)
 	if err != nil {
-		return current, nil, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
-	}
-	req.Header.Add("Accept", GraphMediaType)
-	if c.transport != nil && c.transport.TLSClientConfig != nil {
-		if c.transport.TLSClientConfig.ClientCAs == nil {
-			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
-		} else {
-			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(c.transport.TLSClientConfig.RootCAs.Subjects()), uri)
-		}
-	}
-
-	if c.transport != nil && c.transport.Proxy != nil {
-		proxy, err := c.transport.Proxy(req)
-		if err == nil && proxy != nil {
-			klog.V(5).Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
-		}
-	}
-
-	client := http.Client{}
-	if c.transport != nil {
-		client.Transport = c.transport
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
-	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
-	if err != nil {
-		return current, nil, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return current, nil, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
-	}
-
-	// Parse the graph.
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return current, nil, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
-	}
-
-	var graph graph
-	if err = json.Unmarshal(body, &graph); err != nil {
-		return current, nil, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+		return Update{}, nil, fmt.Errorf("error getting graph data for version %s in channel %s", version.String(), channel)
 	}
 
 	// Find the current version within the graph.
@@ -201,52 +158,9 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	}
 	uri.RawQuery = queryParams.Encode()
 
-	// Download the update graph.
-	req, err := http.NewRequest("GET", uri.String(), nil)
+	graph, err := c.getGraphData(ctx, uri)
 	if err != nil {
-		return semver.Version{}, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
-	}
-	req.Header.Add("Accept", GraphMediaType)
-	if c.transport != nil && c.transport.TLSClientConfig != nil {
-		if c.transport.TLSClientConfig.ClientCAs == nil {
-			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
-		} else {
-			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(c.transport.TLSClientConfig.RootCAs.Subjects()), uri)
-		}
-	}
-
-	if c.transport != nil && c.transport.Proxy != nil {
-		proxy, err := c.transport.Proxy(req)
-		if err == nil && proxy != nil {
-			klog.V(5).Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
-		}
-	}
-
-	client := http.Client{}
-	if c.transport != nil {
-		client.Transport = c.transport
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
-	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
-	if err != nil {
-		return semver.Version{}, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return semver.Version{}, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
-	}
-
-	// Parse the graph.
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return semver.Version{}, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
-	}
-
-	var graph graph
-	if err = json.Unmarshal(body, &graph); err != nil {
-		return semver.Version{}, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+		return semver.Version{}, fmt.Errorf("error getting graph data for channel %s", channel)
 	}
 
 	// Find the all versions within the graph.
@@ -278,52 +192,9 @@ func (c Client) GetChannels(ctx context.Context, uri *url.URL, channel string) (
 	}
 	uri.RawQuery = queryParams.Encode()
 
-	// Download the update graph.
-	req, err := http.NewRequest("GET", uri.String(), nil)
+	graph, err := c.getGraphData(ctx, uri)
 	if err != nil {
-		return nil, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
-	}
-	req.Header.Add("Accept", GraphMediaType)
-	if c.transport != nil && c.transport.TLSClientConfig != nil {
-		if c.transport.TLSClientConfig.ClientCAs == nil {
-			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
-		} else {
-			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(c.transport.TLSClientConfig.RootCAs.Subjects()), uri)
-		}
-	}
-
-	if c.transport != nil && c.transport.Proxy != nil {
-		proxy, err := c.transport.Proxy(req)
-		if err == nil && proxy != nil {
-			klog.V(5).Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
-		}
-	}
-
-	client := http.Client{}
-	if c.transport != nil {
-		client.Transport = c.transport
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
-	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
-	if err != nil {
-		return nil, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
-	}
-
-	// Parse the graph.
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
-	}
-
-	var graph graph
-	if err = json.Unmarshal(body, &graph); err != nil {
-		return nil, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
 	}
 
 	channels := make(map[string]struct{})
@@ -348,10 +219,35 @@ func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) (
 	}
 	uri.RawQuery = queryParams.Encode()
 
+	graph, err := c.getGraphData(ctx, uri)
+	if err != nil {
+		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
+	}
+	// Find the all versions within the graph.
+	Vers := []semver.Version{}
+	for _, node := range graph.Nodes {
+
+		Vers = append(Vers, node.Version)
+
+	}
+
+	semver.Sort(Vers)
+
+	if len(Vers) == 0 {
+		return nil, &Error{
+			Reason:  "NoVersionsFound",
+			Message: fmt.Sprintf("no cluster versions found in the %q channel", channel),
+		}
+	}
+
+	return Vers, nil
+}
+
+func (c Client) getGraphData(ctx context.Context, uri *url.URL) (graph graph, err error) {
 	// Download the update graph.
 	req, err := http.NewRequest("GET", uri.String(), nil)
 	if err != nil {
-		return nil, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
+		return graph, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
 	}
 	req.Header.Add("Accept", GraphMediaType)
 	if c.transport != nil && c.transport.TLSClientConfig != nil {
@@ -377,43 +273,25 @@ func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) (
 	defer cancel()
 	resp, err := client.Do(req.WithContext(timeoutCtx))
 	if err != nil {
-		return nil, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
+		return graph, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
+		return graph, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
 	}
 
 	// Parse the graph.
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
+		return graph, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
 	}
 
-	var graph graph
 	if err = json.Unmarshal(body, &graph); err != nil {
-		return nil, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+		return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
 	}
 
-	// Find the all versions within the graph.
-	Vers := []semver.Version{}
-	for _, node := range graph.Nodes {
-
-		Vers = append(Vers, node.Version)
-
-	}
-
-	semver.Sort(Vers)
-
-	if len(Vers) == 0 {
-		return nil, &Error{
-			Reason:  "NoVersionsFound",
-			Message: fmt.Sprintf("no cluster versions found in the %q channel", channel),
-		}
-	}
-
-	return Vers, nil
+	return graph, nil
 }
 
 type graph struct {
