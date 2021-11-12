@@ -58,12 +58,13 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
 ### Mirroring
 
 #### Fully Disconnected
-1. Create then publish to your mirror registry:
+- Create then publish to your mirror registry:
     ```sh
     ./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives
     ./bin/oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
     ```
-2. Partially Disconnected (mirror to mirror)
+#### Partially Disconnected
+- Publish mirror to mirror
      ```sh
     ./bin/oc-mirror --config imageset-config.yaml --dir test docker://localhost:5000
     ```
