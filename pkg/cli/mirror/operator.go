@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/remotes"
 	"github.com/joelanford/ignore"
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/admin/catalog"
@@ -245,7 +247,11 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 	}
 
 	if !o.SkipImagePin {
-		if err := pinImages(ctx, dc, "", o.SourceSkipTLS); err != nil {
+		resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, nil)
+		if err != nil {
+			return nil, fmt.Errorf("error creating image resolver: %v", err)
+		}
+		if err := o.pinImages(ctx, dc, resolver); err != nil {
 			return nil, fmt.Errorf("error pinning images in catalog %s: %v", ctlgRef, err)
 		}
 	}
@@ -310,14 +316,15 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 		mappings[src] = dstRef.String()
 	}
 
-	return mappings, mirrorMappings(opts, mappings, isBlocked...)
+	return mappings, o.mirrorMappings(opts, mappings, isBlocked...)
 }
 
 // pinImages resolves every image in dc to it's canonical name (includes digest).
-func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfigPath string, insecure bool) error {
-	resolver, err := containerdregistry.NewResolver(resolverConfigPath, insecure, nil)
-	if err != nil {
-		return fmt.Errorf("error creating image resolver: %v", err)
+func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolver remotes.Resolver) (err error) {
+
+	// Instead of returning an error, just log it.
+	isSkipErr := func(err error) bool {
+		return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
 	}
 
 	var errs []error
@@ -330,8 +337,11 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 				continue
 			}
 			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
-				errs = append(errs, err)
-				continue
+				if isSkipErr(err) {
+					logrus.Warnf("skipping bundle %s image %s resolve error: %v", b.Name, b.Image, err)
+				} else {
+					errs = append(errs, err)
+				}
 			}
 		}
 		for j, ri := range b.RelatedImages {
@@ -343,8 +353,11 @@ func pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolverConfi
 				}
 
 				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
-					errs = append(errs, err)
-					continue
+					if isSkipErr(err) {
+						logrus.Warnf("skipping bundle %s related image %s=%s resolve error: %v", b.Name, ri.Name, ri.Image, err)
+					} else {
+						errs = append(errs, err)
+					}
 				}
 			}
 		}
@@ -454,7 +467,7 @@ func (o *OperatorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesou
 
 type blockedFunc func(imgreference.DockerImageReference) bool
 
-func mirrorMappings(opts *catalog.MirrorCatalogOptions, mappings map[string]string, isBlockedFuncs ...blockedFunc) (err error) {
+func (o *OperatorOptions) mirrorMappings(opts *catalog.MirrorCatalogOptions, mappings map[string]string, isBlockedFuncs ...blockedFunc) (err error) {
 	mmappings := []imgmirror.Mapping{}
 	for fromStr, toStr := range mappings {
 
@@ -479,8 +492,8 @@ func mirrorMappings(opts *catalog.MirrorCatalogOptions, mappings map[string]stri
 	}
 
 	a := imgmirror.NewMirrorImageOptions(opts.IOStreams)
-	a.SkipMissing = true
-	a.ContinueOnError = true
+	a.SkipMissing = o.SkipMissing
+	a.ContinueOnError = o.ContinueOnError
 	a.DryRun = opts.DryRun
 	a.SecurityOptions = opts.SecurityOptions
 	// FileDir is set so images are mirrored under the correct directory.

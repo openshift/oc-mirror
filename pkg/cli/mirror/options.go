@@ -19,6 +19,8 @@ type MirrorOptions struct {
 	DestSkipTLS      bool
 	SkipVerification bool
 	SkipCleanup      bool
+	SkipMissing      bool
+	ContinueOnError  bool
 	FilterOptions    imagemanifest.FilterOptions
 
 	BuildxPlatforms []string
@@ -41,4 +43,9 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 			"for the specified platforms, ex. linux/amd64, instead of 'podman build' for the host platform. "+
 			"The 'buildx' plugin and accompanying configuration MUST be installed on the build host. "+
 			"This list does NOT filter operator bundle manifest list platforms within the catalog")
+	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
+		"and attempt to mirror as much as possible")
+	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
+		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
+		"will not be skipped")
 }
