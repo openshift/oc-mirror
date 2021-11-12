@@ -1,4 +1,4 @@
-package mirror
+package cincinnati
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestGetUpdates(t *testing.T) {
-	clientID := uuid.Must(uuid.Parse("01234567-0123-0123-0123-0123456789ab"))
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -60,69 +60,12 @@ func TestGetUpdates(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				select {
-				case requestQuery <- r.URL.RawQuery:
-				default:
-					t.Fatalf("received multiple requests at upstream URL")
-				}
-
-				if r.Method != http.MethodGet && r.Method != http.MethodHead {
-					w.WriteHeader(http.StatusMethodNotAllowed)
-					return
-				}
-
-				mtype := r.Header.Get("Accept")
-				if mtype != GraphMediaType {
-					w.WriteHeader(http.StatusUnsupportedMediaType)
-					return
-				}
-
-				_, err := w.Write([]byte(`{
-					"nodes": [
-					  {
-						"version": "4.0.0-4",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-4"
-					  },
-					  {
-						"version": "4.0.0-5",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-5"
-					  },
-					  {
-						"version": "4.0.0-6",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6"
-					  },
-					  {
-						"version": "4.0.0-6+2",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"
-					  },
-					  {
-						"version": "4.0.0-0.okd-0",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
-					  },
-					  {
-						"version": "4.0.0-0.2",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
-					  },
-					  {
-						"version": "4.0.0-0.3",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
-					  }
-					],
-					"edges": [[0,1],[1,2],[1,3],[5,6]]
-				  }`))
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
+			handler := getHandler(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			defer ts.Close()
 
-			c := NewClient(clientID, nil)
-
-			uri, err := url.Parse(ts.URL)
+			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -166,7 +109,7 @@ func TestGetUpdates(t *testing.T) {
 }
 
 func TestGetLatest(t *testing.T) {
-	clientID := uuid.Must(uuid.Parse("01234567-0123-0123-0123-0123456789ab"))
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -185,69 +128,15 @@ func TestGetLatest(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				select {
-				case requestQuery <- r.URL.RawQuery:
-				default:
-					t.Fatalf("received multiple requests at upstream URL")
-				}
-
-				if r.Method != http.MethodGet && r.Method != http.MethodHead {
-					w.WriteHeader(http.StatusMethodNotAllowed)
-					return
-				}
-
-				mtype := r.Header.Get("Accept")
-				if mtype != GraphMediaType {
-					w.WriteHeader(http.StatusUnsupportedMediaType)
-					return
-				}
-
-				_, err := w.Write([]byte(`{
-					"nodes": [
-					  {
-						"version": "4.0.0-4",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-4"
-					  },
-					  {
-						"version": "4.0.0-5",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-5"
-					  },
-					  {
-						"version": "4.0.0-6",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6"
-					  },
-					  {
-						"version": "4.0.0-6+2",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"
-					  },
-					  {
-						"version": "4.0.0-0.okd-0",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
-					  },
-					  {
-						"version": "4.0.0-0.2",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
-					  },
-					  {
-						"version": "4.0.0-0.3",
-						"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
-					  }
-					],
-					"edges": [[0,1],[1,2],[1,3],[5,6]]
-				  }`))
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
+			handler := getHandler(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			defer ts.Close()
 
-			c := NewClient(clientID, nil)
-
-			uri, err := url.Parse(ts.URL)
+			c, uri, err := NewClient(ts.URL, clientID)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -259,6 +148,73 @@ func TestGetLatest(t *testing.T) {
 				}
 				if !reflect.DeepEqual(latest, test.latest) {
 					t.Fatalf("expected version %v, got: %v", test.latest, latest)
+				}
+			} else {
+				if err == nil || err.Error() != test.err {
+					t.Fatalf("expected err to be %s, got: %v", test.err, err)
+				}
+			}
+
+			actualQuery := ""
+			select {
+			case actualQuery = <-requestQuery:
+			default:
+				t.Fatal("no request received at upstream URL")
+			}
+			expectedQueryValues, err := url.ParseQuery(test.expectedQuery)
+			if err != nil {
+				t.Fatalf("could not parse expected query: %v", err)
+			}
+			actualQueryValues, err := url.ParseQuery(actualQuery)
+			if err != nil {
+				t.Fatalf("could not parse acutal query: %v", err)
+			}
+			if e, a := expectedQueryValues, actualQueryValues; !reflect.DeepEqual(e, a) {
+				t.Errorf("expected query to be %q, got: %q", e, a)
+			}
+		})
+	}
+}
+
+func TestGetVersions(t *testing.T) {
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
+	channelName := "test-channel"
+	tests := []struct {
+		name string
+
+		expectedQuery string
+		versions      []semver.Version
+		err           string
+	}{{
+		name:          "one update available",
+		expectedQuery: "channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
+		versions:      getSemVer([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requestQuery := make(chan string, 1)
+			defer close(requestQuery)
+
+			handler := getHandler(t, requestQuery)
+
+			ts := httptest.NewServer(http.HandlerFunc(handler))
+			defer ts.Close()
+
+			c, uri, err := NewClient(ts.URL, clientID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			versions, err := c.GetVersions(context.Background(), uri, channelName)
+			if test.err == "" {
+				if err != nil {
+					t.Fatalf("expected nil error, got: %v", err)
+				}
+				if !reflect.DeepEqual(versions, test.versions) {
+					t.Fatalf("expected version %v, got: %v", test.versions, versions)
 				}
 			} else {
 				if err == nil || err.Error() != test.err {
@@ -359,5 +315,71 @@ func Test_nodeUnmarshalJSON(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func getSemVer(stringVers []string) (vers []semver.Version) {
+	for _, stringVer := range stringVers {
+		vers = append(vers, semver.MustParse(stringVer))
+	}
+	return vers
+}
+
+func getHandler(t *testing.T, requestQuery chan<- string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case requestQuery <- r.URL.RawQuery:
+		default:
+			t.Fatalf("received multiple requests at upstream URL")
+		}
+
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		mtype := r.Header.Get("Accept")
+		if mtype != GraphMediaType {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+
+		_, err := w.Write([]byte(`{
+			"nodes": [
+			  {
+				"version": "4.0.0-4",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-4"
+			  },
+			  {
+				"version": "4.0.0-5",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-5"
+			  },
+			  {
+				"version": "4.0.0-6",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6"
+			  },
+			  {
+				"version": "4.0.0-6+2",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"
+			  },
+			  {
+				"version": "4.0.0-0.okd-0",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
+			  },
+			  {
+				"version": "4.0.0-0.2",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+			  },
+			  {
+				"version": "4.0.0-0.3",
+				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+			  }
+			],
+			"edges": [[0,1],[1,2],[1,3],[5,6]]
+		  }`))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }

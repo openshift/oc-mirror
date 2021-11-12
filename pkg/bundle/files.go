@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RedHatGov/bundle/pkg/archive"
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -88,4 +90,53 @@ func ReconcileBlobs(meta v1alpha1.Metadata) (newBlobs []v1alpha1.Blob, err error
 	})
 
 	return newBlobs, err
+}
+
+// ReadImageSet set will create a map with all the files located in the archives
+func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
+
+	filesinArchive := make(map[string]string)
+
+	file, err := os.Stat(from)
+	if err != nil {
+		return nil, err
+	}
+
+	if file.IsDir() {
+
+		// Walk the directory and load the files from the archives
+		// into the map
+		logrus.Infoln("Detected multiple archive files")
+		err = filepath.Walk(from, func(path string, info os.FileInfo, err error) error {
+
+			if err != nil {
+				return fmt.Errorf("traversing %s: %v", path, err)
+			}
+			if info == nil {
+				return fmt.Errorf("no file info")
+			}
+
+			extension := filepath.Ext(path)
+			extension = strings.TrimPrefix(extension, ".")
+
+			if extension == a.String() {
+				logrus.Debugf("Found archive %s", path)
+				return a.Walk(path, func(f archiver.File) error {
+					filesinArchive[f.Name()] = path
+					return nil
+				})
+			}
+
+			return nil
+		})
+
+	} else {
+		// Walk the archive and load the file names into the map
+		err = a.Walk(from, func(f archiver.File) error {
+			filesinArchive[f.Name()] = from
+			return nil
+		})
+	}
+
+	return filesinArchive, err
 }
