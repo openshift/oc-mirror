@@ -6,7 +6,7 @@ oc-mirror is an OpenShift Client (oc) plugin that manages OpenShift release, ope
 
 oc-mirror management is a two part process:
 1. oc-mirror Creation (Internet Connected)
-1. oc-mirror Publishing (Disconnected)
+2. oc-mirror Publishing (Disconnected)
 
 ## Usage
 
@@ -15,15 +15,22 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
 
 1. Download pull secret and place at `~/.docker/config.json`<sup>1</sup>.
     - Your mirror registry secret must have both push and pull scopes.
-1. Build:
+2. Build:
     ```sh
     make build
     ```
-1. Create then publish to your mirror registry:
+3. Use the discovery features to build you imageset-config.yaml
+   ```sh
+   /bin/oc-mirror list releases --version=4.9
+   /bin/oc-mirror list operators --version=4.9
+4. Create then publish to your mirror registry:
     ```sh
     ./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives
-    ./bin/oc-mirror --from archives --dir test-publish docker://reg.mirror.com
+    ./bin/oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
     ```
+5. If needed, get information on your imageset using `describe`
+    ```sh
+    ./bin/oc-mirror describe /path/to/archives
 
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
