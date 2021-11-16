@@ -143,6 +143,7 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 	return filesinArchive, err
 }
 
+// ErrCorruptFile is used to queue retries
 var ErrCorruptFile = fmt.Errorf("incomplete download found")
 
 // HasCorrupt identifies corrupt files from the download
@@ -161,10 +162,12 @@ func HasCorrupt(d string) error {
 	return err
 }
 
+// RetryDownloads ties all of the mirroring option types together
 type RetryDownloads interface {
 	Run() error
 }
 
+// Download downloads images and retries if any were corrupted
 func Download(r RetryDownloads, d string) error {
 	if err := retry.OnError(
 		retry.DefaultRetry,
