@@ -513,7 +513,7 @@ func (o *OperatorOptions) mirrorMappings(opts *catalog.MirrorCatalogOptions, map
 		return nil
 	}
 
-	if err := a.Run(); err != nil {
+	if err := bundle.Download(opts, opts.FileDir); err != nil {
 		fmt.Fprintf(opts.IOStreams.ErrOut, "error mirroring image: %v\n", err)
 		return nil
 	}

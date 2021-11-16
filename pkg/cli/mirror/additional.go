@@ -88,7 +88,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 	opts.Mappings = mappings
 
-	if err := opts.Run(); err != nil {
+	if err := bundle.Download(opts, opts.FileDir); err != nil {
 		return nil, err
 	}
 

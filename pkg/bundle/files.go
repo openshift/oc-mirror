@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/util/retry"
 )
 
 // ReconcileManifest gather all manifests that were collected during a run
@@ -157,4 +159,28 @@ func HasCorrupt(d string) error {
 		return nil
 	})
 	return err
+}
+
+type RetryDownloads interface {
+	Run() error
+}
+
+func Download(r RetryDownloads, d string) error {
+	if err := retry.OnError(
+		retry.DefaultRetry,
+		func(err error) bool {
+			if err != nil {
+				return false
+			}
+			err = HasCorrupt(d)
+			return errors.Is(err, ErrCorruptFile)
+		},
+		func() error {
+			return r.Run()
+		},
+	); err != nil {
+		logrus.Error(err)
+		return err
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -218,32 +219,67 @@ func Test_HasCorrupt(t *testing.T) {
 	if err != nil {
 		logrus.Error(err)
 	}
-	/*
-		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				logrus.Error(err)
-				return err
-			}
-			if info.IsDir() && info.Name() == "manifests" {
-				return filepath.SkipDir
-			}
-			file := filepath.Join(path + info.Name())
-			if !info.IsDir() {
-				os.Rename(file, file+".download")
-			}
-			return nil
-		})
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			t.Fatal(err)
+			logrus.Error(err)
+			return err
 		}
-	*/
+		if info.IsDir() && info.Name() == "manifests" {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() {
+			os.Rename(path, path+".download")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = HasCorrupt(dir)
+	if !errors.Is(err, ErrCorruptFile) {
+		t.Fatal(err)
+	}
+
 	t.Log(err)
-	/*
-		if !errors.Is(err, ErrCorruptFile) {
-			t.Fatal(err)
-		} else
-			t.Log(err)
-		}*/
+
+}
+
+func Test_Download(t *testing.T) {
+	// Create tempdir
+	dir := t.TempDir()
+
+	opts := mirror.NewMirrorImageOptions(genericclioptions.IOStreams{
+		In:     os.Stdin,
+		Out:    os.Stdout,
+		ErrOut: os.Stderr,
+	})
+	opts.SecurityOptions.Insecure = true
+	opts.SecurityOptions.SkipVerification = true
+	opts.FileDir = filepath.Join(dir, config.SourceDir)
+	var mappings []mirror.Mapping
+
+	// Get source image information
+	srcRef, err := imagesource.ParseReference("docker.io/library/alpine:latest")
+	if err != nil {
+		logrus.Errorf("error parsing source image %s: %v", srcRef.Ref.Name, err)
+	}
+
+	// Set destination image information
+	dstRef := srcRef
+	dstRef.Type = imagesource.DestinationFile
+	dstRef.Ref = dstRef.Ref.DockerClientDefaults()
+
+	// Create mapping from source and destination images
+	mappings = append(mappings, mirror.Mapping{
+		Source:      srcRef,
+		Destination: dstRef,
+		Name:        srcRef.Ref.Name,
+	})
+	opts.Mappings = mappings
+
+	err = Download(opts, opts.FileDir)
+	if err != nil {
+		logrus.Error(err)
+	}
 
 }

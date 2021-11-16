@@ -119,7 +119,7 @@ func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch, versio
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.DryRun = o.DryRun
 	logrus.Debugln("Starting release download")
-	if err := opts.Run(); err != nil {
+	if err := bundle.Download(opts, opts.ToDir); err != nil {
 		return nil, err
 	}
 
