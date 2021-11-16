@@ -1,0 +1,5 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  additionalImages:
+  - name: registry.fedoraproject.org/fedora:latest

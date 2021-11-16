@@ -29,12 +29,6 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return err
 	}
 
-	// Make sure the `opm` image exists during the publish step
-	// since catalog images need to be rebuilt.
-	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha1.AdditionalImages{
-		Image: v1alpha1.Image{Name: OPMImage},
-	})
-
 	logrus.Info("Verifying pull secrets")
 	// Validating pull secrets
 	if err := config.ValidateSecret(cfg); err != nil {
@@ -53,19 +47,35 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 
 	// Run full or diff mirror.
 	var meta v1alpha1.Metadata
-	var thisRun v1alpha1.PastMirror
-	switch err := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath); {
-	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
-		return err
-	case err != nil && errors.Is(err, storage.ErrMetadataNotExist):
-		thisRun, err = o.createFull(ctx, flags, cfg)
-		if err != nil {
+	merr := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath)
+	if merr != nil && !errors.Is(merr, storage.ErrMetadataNotExist) {
+		return merr
+	}
+
+	// Ensure meta has the latest OPM image, and if not add it to cfg for mirroring.
+	addOPMImage(&cfg, meta)
+
+	// Store the config in the current run for reproducibility.
+	thisRun := v1alpha1.PastMirror{
+		Mirror:    cfg.Mirror,
+		Timestamp: int(time.Now().Unix()),
+	}
+	// New metadata files get a full mirror, with complete/heads-only catalogs, release images,
+	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
+	switch {
+	case merr != nil || len(meta.PastMirrors) == 0:
+		meta.Uid = uuid.New()
+		thisRun.Sequence = 1
+
+		if err := o.createFull(ctx, flags, cfg); err != nil {
 			return err
 		}
-		meta.Uid = uuid.New()
-	case err == nil && len(meta.PastMirrors) != 0:
-		thisRun, err = o.createDiff(ctx, flags, cfg, meta)
-		if err != nil {
+
+	default:
+		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
+		thisRun.Sequence = lastRun.Sequence + 1
+
+		if err := o.createDiff(ctx, flags, cfg, lastRun); err != nil {
 			return err
 		}
 	}
@@ -75,8 +85,6 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	if err != nil {
 		return err
 	}
-	// Store the config in the current run for reproducibility.
-	thisRun.Mirror = cfg.Mirror
 	// Add only the new manifests and blobs created to the current run.
 	thisRun.Manifests = append(thisRun.Manifests, manifests...)
 	thisRun.Blobs = append(thisRun.Blobs, blobs...)
@@ -105,11 +113,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration) (run v1alpha1.PastMirror, err error) {
-	run = v1alpha1.PastMirror{
-		Sequence:  1,
-		Timestamp: int(time.Now().Unix()),
-	}
+func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration) error {
 
 	allAssocs := image.AssociationSet{}
 
@@ -117,7 +121,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewReleaseOptions(*o, flags)
 		assocs, err := opts.GetReleasesInitial(cfg)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -127,7 +131,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Full(ctx, cfg)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -140,7 +144,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewAdditionalOptions(*o)
 		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -149,26 +153,20 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewHelmOptions(*o)
 		assocs, err := opts.PullCharts(cfg)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
 
 	if err := o.writeAssociations(allAssocs); err != nil {
-		return run, fmt.Errorf("error writing association file: %v", err)
+		return fmt.Errorf("error writing association file: %v", err)
 	}
 
-	return run, nil
+	return nil
 }
 
 // createDiff performs all tasks in creating differential imagesets
-func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (run v1alpha1.PastMirror, err error) {
-
-	lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
-	run = v1alpha1.PastMirror{
-		Sequence:  lastRun.Sequence + 1,
-		Timestamp: int(time.Now().Unix()),
-	}
+func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) error {
 
 	allAssocs := image.AssociationSet{}
 
@@ -176,7 +174,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewReleaseOptions(*o, flags)
 		assocs, err := opts.GetReleasesInitial(cfg)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -186,7 +184,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Diff(ctx, cfg, lastRun)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -199,7 +197,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewAdditionalOptions(*o)
 		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -208,16 +206,16 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 		opts := NewHelmOptions(*o)
 		assocs, err := opts.PullCharts(cfg)
 		if err != nil {
-			return run, err
+			return err
 		}
 		allAssocs.Merge(assocs)
 	}
 
 	if err := o.writeAssociations(allAssocs); err != nil {
-		return run, fmt.Errorf("error writing association file: %v", err)
+		return fmt.Errorf("error writing association file: %v", err)
 	}
 
-	return run, nil
+	return nil
 }
 
 // newBackendForConfig returns a Backend specified by config
@@ -315,4 +313,21 @@ func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
 	}
 	defer f.Close()
 	return assocs.Encode(f)
+}
+
+// Make sure the latest `opm` image exists during the publish step
+// in case it does not exist in a past mirror.
+func addOPMImage(cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) {
+	for _, pm := range meta.PastMirrors {
+		for _, img := range pm.Mirror.AdditionalImages {
+			if img.Image.Name == OPMImage {
+				return
+			}
+		}
+	}
+
+	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha1.AdditionalImages{
+		Image: v1alpha1.Image{Name: OPMImage},
+	})
+	return
 }
