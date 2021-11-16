@@ -140,3 +140,21 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 
 	return filesinArchive, err
 }
+
+var ErrCorruptFile = fmt.Errorf("incomplete download found")
+
+// HasCorrupt identifies corrupt files from the download
+func HasCorrupt(d string) error {
+	regdir := filepath.Join(d, "src", "v2")
+	err := filepath.Walk(regdir, func(bpath string, binfo os.FileInfo, err error) error {
+		if err != nil {
+			logrus.Error(err)
+			return err
+		}
+		if strings.HasSuffix(binfo.Name(), ".download") {
+			return ErrCorruptFile
+		}
+		return nil
+	})
+	return err
+}
