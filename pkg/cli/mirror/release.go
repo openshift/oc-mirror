@@ -218,12 +218,11 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version st
 
 	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
 	file, err := os.Create(mappingPath)
-
 	defer os.Remove(mappingPath)
-
 	if err != nil {
 		return mappings, images, err
 	}
+	defer file.Close()
 
 	// Run release mirror with ToMirror set to retrieve mapping information
 	// store in buffer for manipulation before outputting to mapping.txt
