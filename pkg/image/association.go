@@ -346,7 +346,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageTyp
 	// not actually a symlinks on disk. Need to investigate why we
 	// receiving invalid mapping and their meaning.
 	info, err := os.Lstat(manifestPath)
-	if errors.As(err, &os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, &ErrInvalidComponent{image, tagOrID}
 	} else if err != nil {
 		return nil, err
