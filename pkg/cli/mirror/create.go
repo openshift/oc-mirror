@@ -21,7 +21,7 @@ import (
 	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 )
 
-func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
+func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(o.ConfigPath)
@@ -36,7 +36,8 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	}
 
 	// Configure the metadata backend.
-	backend, err := o.newBackendForConfig(ctx, cfg.StorageConfig)
+	path := filepath.Join(o.Dir, config.SourceDir)
+	backend, err := storage.ByConfig(ctx, path, cfg.StorageConfig)
 	if err != nil {
 		return fmt.Errorf("error opening backend: %v", err)
 	}
@@ -55,9 +56,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	// Ensure meta has the latest OPM image, and if not add it to cfg for mirroring.
 	addOPMImage(&cfg, meta)
 
-	// Store the config in the current run for reproducibility.
 	thisRun := v1alpha1.PastMirror{
-		Mirror:    cfg.Mirror,
 		Timestamp: int(time.Now().Unix()),
 	}
 	// New metadata files get a full mirror, with complete/heads-only catalogs, release images,
@@ -67,7 +66,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 
-		if err := o.createFull(ctx, flags, cfg); err != nil {
+		if err := o.createFull(ctx, flags, &cfg, meta); err != nil {
 			return err
 		}
 
@@ -75,10 +74,13 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
 		thisRun.Sequence = lastRun.Sequence + 1
 
-		if err := o.createDiff(ctx, flags, cfg, lastRun); err != nil {
+		if err := o.createDiff(ctx, flags, &cfg, lastRun, meta); err != nil {
 			return err
 		}
 	}
+
+	// Store mirror in the run
+	thisRun.Mirror = cfg.Mirror
 
 	// Update metadata files and get newly created filepaths.
 	manifests, blobs, err := o.getFiles(meta)
@@ -113,13 +115,13 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration) error {
+func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) error {
 
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := NewReleaseOptions(*o, flags)
-		assocs, err := opts.GetReleasesInitial(cfg)
+		opts := NewReleaseOptions(o, flags)
+		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
 			return err
 		}
@@ -127,9 +129,9 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := NewOperatorOptions(*o)
+		opts := NewOperatorOptions(o)
 		opts.SkipImagePin = o.SkipImagePin
-		assocs, err := opts.Full(ctx, cfg)
+		assocs, err := opts.Full(ctx, *cfg)
 		if err != nil {
 			return err
 		}
@@ -141,8 +143,8 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-		opts := NewAdditionalOptions(*o)
-		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
+		opts := NewAdditionalOptions(o)
+		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return err
 		}
@@ -150,8 +152,8 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
-		opts := NewHelmOptions(*o)
-		assocs, err := opts.PullCharts(cfg)
+		opts := NewHelmOptions(o)
+		assocs, err := opts.PullCharts(*cfg)
 		if err != nil {
 			return err
 		}
@@ -166,13 +168,13 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 }
 
 // createDiff performs all tasks in creating differential imagesets
-func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) error {
+func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) error {
 
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := NewReleaseOptions(*o, flags)
-		assocs, err := opts.GetReleasesInitial(cfg)
+		opts := NewReleaseOptions(o, flags)
+		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
 			return err
 		}
@@ -180,9 +182,9 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Operators) != 0 {
-		opts := NewOperatorOptions(*o)
+		opts := NewOperatorOptions(o)
 		opts.SkipImagePin = o.SkipImagePin
-		assocs, err := opts.Diff(ctx, cfg, lastRun)
+		assocs, err := opts.Diff(ctx, *cfg, lastRun)
 		if err != nil {
 			return err
 		}
@@ -194,8 +196,8 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-		opts := NewAdditionalOptions(*o)
-		assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
+		opts := NewAdditionalOptions(o)
+		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return err
 		}
@@ -203,8 +205,8 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	}
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
-		opts := NewHelmOptions(*o)
-		assocs, err := opts.PullCharts(cfg)
+		opts := NewHelmOptions(o)
+		assocs, err := opts.PullCharts(*cfg)
 		if err != nil {
 			return err
 		}
@@ -218,22 +220,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cf
 	return nil
 }
 
-// newBackendForConfig returns a Backend specified by config
-func (o *MirrorOptions) newBackendForConfig(ctx context.Context, cfg v1alpha1.StorageConfig) (storage.Backend, error) {
-	dir := filepath.Join(o.Dir, config.SourceDir)
-	iface, err := storage.ByConfig(ctx, dir, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	b, ok := iface.(storage.Backend)
-	if !ok {
-		return nil, fmt.Errorf("error creating backend with provided config")
-	}
-	return b, err
-}
-
-func (o *MirrorOptions) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
+func (o MirrorOptions) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -274,7 +261,7 @@ func (o *MirrorOptions) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq i
 
 }
 
-func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
+func (o MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, nil, err
@@ -302,7 +289,7 @@ func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, [
 	return manifests, blobs, nil
 }
 
-func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
+func (o MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
 	assocPath := filepath.Join(o.Dir, config.SourceDir, config.AssociationsBasePath)
 	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
 		return fmt.Errorf("mkdir image associations file: %v", err)

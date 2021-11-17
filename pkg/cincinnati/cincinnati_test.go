@@ -22,6 +22,7 @@ func TestGetUpdates(t *testing.T) {
 	tests := []struct {
 		name    string
 		version string
+		reqVer  string
 
 		expectedQuery string
 		current       Update
@@ -30,6 +31,7 @@ func TestGetUpdates(t *testing.T) {
 	}{{
 		name:          "one update available",
 		version:       "4.0.0-4",
+		reqVer:        "4.0.0-5",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 		available: []Update{
@@ -38,20 +40,22 @@ func TestGetUpdates(t *testing.T) {
 	}, {
 		name:          "two updates available",
 		version:       "4.0.0-5",
+		reqVer:        "4.0.0-6",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
 		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		available: []Update{
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-			{Version: semver.MustParse("4.0.0-6+2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"},
 		},
 	}, {
 		name:          "no updates available",
 		version:       "4.0.0-0.okd-0",
+		reqVer:        "4.0.0-0.okd-0",
 		current:       Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-0.okd-0",
 	}, {
 		name:          "unknown version",
 		version:       "4.0.0-3",
+		reqVer:        "0.0.0",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-3",
 		err:           "VersionNotFound: currently reconciling cluster version 4.0.0-3 not found in the \"test-channel\" channel",
 	}}
@@ -70,7 +74,7 @@ func TestGetUpdates(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			current, updates, err := c.GetUpdates(context.Background(), uri, arch, channelName, semver.MustParse(test.version))
+			current, _, updates, err := c.GetUpdates(context.Background(), uri, arch, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
 				if err != nil {
 					t.Fatalf("expected nil error, got: %v", err)
@@ -188,7 +192,7 @@ func TestGetVersions(t *testing.T) {
 	}{{
 		name:          "one update available",
 		expectedQuery: "channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		versions:      getSemVer([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
+		versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -318,7 +322,7 @@ func Test_nodeUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func getSemVer(stringVers []string) (vers []semver.Version) {
+func getSemVers(stringVers []string) (vers []semver.Version) {
 	for _, stringVer := range stringVers {
 		vers = append(vers, semver.MustParse(stringVer))
 	}
