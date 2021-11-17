@@ -195,16 +195,11 @@ func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 				continue
 			}
 
-			switch {
-			case operator.RelIndexPath != "":
-				// TODO(estroz)
-			case len(operator.Index) != 0:
-				// TODO(estroz)
-			case operator.ImagePin != "":
-				a.OldRefs = []string{operator.ImagePin}
-			default:
-				return nil, fmt.Errorf("metadata sequence %d catalog %q: at least one of RelIndexPath, Index, or ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
+			if operator.ImagePin == "" {
+				return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
 			}
+
+			a.OldRefs = []string{operator.ImagePin}
 			break
 		}
 
