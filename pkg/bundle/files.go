@@ -106,7 +106,7 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 
 		// Walk the directory and load the files from the archives
 		// into the map
-		logrus.Infoln("Detected multiple archive files")
+		var match int
 		err = filepath.Walk(from, func(path string, info os.FileInfo, err error) error {
 
 			if err != nil {
@@ -118,17 +118,22 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 
 			extension := filepath.Ext(path)
 			extension = strings.TrimPrefix(extension, ".")
-
 			if extension == a.String() {
 				logrus.Debugf("Found archive %s", path)
 				return a.Walk(path, func(f archiver.File) error {
 					filesinArchive[f.Name()] = path
+					match++
 					return nil
 				})
 			}
 
 			return nil
 		})
+
+		// Make sure the directory is not empty
+		if match == 0 {
+			return nil, fmt.Errorf("no archives found in directory %s", from)
+		}
 
 	} else {
 		// Walk the archive and load the file names into the map

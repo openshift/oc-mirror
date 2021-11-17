@@ -44,7 +44,7 @@ var backends = []Backend{
 }
 
 // ByConfig returns backend interface based on provided config
-func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (interface{}, error) {
+func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (Backend, error) {
 	var b interface{}
 	for _, bk := range backends {
 		if err := bk.CheckConfig(storage); err == nil {

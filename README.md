@@ -6,6 +6,7 @@
   - [Usage](#usage)
     - [Environment Prep](#environment-prep)
     - [Content Discovery](#content-discovery)
+      - [Updates](#updates)
       - [Releases](#releases)
       - [Operators](#operators)
     - [Test](#test)
@@ -25,6 +26,12 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```
 ### Content Discovery
 
+#### Updates
+
+- List updates since the last `oc-mirror` run
+  ```sh
+  ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
+  ```
 #### Releases
 1. List all available release payloads for a version of OpenShift (defaults to stable)
    ```sh
@@ -73,7 +80,6 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```sh
     ./bin/oc-mirror describe /path/to/archives
     ```
-
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
 <sup>1</sup> For this example, the `create` and `publish` steps are run on the same machine. Therefore your `~/.docker/config.json`
