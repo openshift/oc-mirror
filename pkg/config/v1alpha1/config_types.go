@@ -65,7 +65,7 @@ type Operator struct {
 	// Channels specified in DiffIncludeConfig will override this setting;
 	// heads will still be included, but prior versions may also be included.
 	HeadsOnly bool `json:"headsOnly,omitempty"`
-	// InlineIndex directs the mirrorer to store the catalog's declarative config
+	// WriteIndex directs the mirrorer to store the catalog's declarative config
 	// index representation as a file.
 	// Only set this option if not using git as a backend, which experiences
 	// degraded performance with file sizes of 100MB.

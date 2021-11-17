@@ -129,16 +129,13 @@ func Test_MetadataError(t *testing.T) {
 func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 	var meta v1alpha1.Metadata
 
-	opts := &MirrorOptions{
-		RootOptions: &cli.RootOptions{
-			Dir: dir,
+	cfg := v1alpha1.StorageConfig{
+		Registry: &v1alpha1.RegistryConfig{
+			ImageURL: fmt.Sprintf("%s/oc-mirror:%s", host, uuid),
+			SkipTLS:  true,
 		},
-		DestSkipTLS: true,
 	}
-
-	image := fmt.Sprintf("%s/oc-mirror:%s", host, uuid)
-
-	registry, err := opts.configureBackendForConfig(ctx, image)
+	registry, err := storage.ByConfig(ctx, dir, cfg)
 	if err != nil {
 		return err
 	}
