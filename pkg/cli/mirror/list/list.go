@@ -1,10 +1,11 @@
 package list
 
 import (
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func NewListCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {

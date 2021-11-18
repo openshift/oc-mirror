@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"github.com/mholt/archiver/v3"
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
-	"github.com/sirupsen/logrus"
 )
 
 // ReconcileManifest gather all manifests that were collected during a run

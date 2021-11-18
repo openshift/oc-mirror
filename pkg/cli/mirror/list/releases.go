@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/openshift/oc-mirror/pkg/cincinnati"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type ReleasesOptions struct {

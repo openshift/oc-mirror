@@ -6,6 +6,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 

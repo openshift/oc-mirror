@@ -4,8 +4,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/oc-mirror/pkg/config"
 )
 
 func MakeCreateDirs(rootDir string) error {

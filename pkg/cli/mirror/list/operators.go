@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type OperatorsOptions struct {

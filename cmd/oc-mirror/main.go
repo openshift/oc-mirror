@@ -4,10 +4,11 @@ import (
 	"flag"
 	"io/ioutil"
 
-	"github.com/openshift/oc-mirror/pkg/cli/mirror"
 	"github.com/sirupsen/logrus"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
+
+	"github.com/openshift/oc-mirror/pkg/cli/mirror"
 )
 
 func main() {
