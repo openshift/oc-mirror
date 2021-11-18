@@ -4,9 +4,9 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")

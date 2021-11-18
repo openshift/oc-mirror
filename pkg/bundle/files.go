@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/RedHatGov/bundle/pkg/archive"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/mholt/archiver/v3"
+	"github.com/openshift/oc-mirror/pkg/archive"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 

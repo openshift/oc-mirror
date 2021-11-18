@@ -1,7 +1,7 @@
 package list
 
 import (
-	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"

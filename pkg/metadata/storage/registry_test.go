@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )

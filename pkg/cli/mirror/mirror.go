@@ -13,10 +13,10 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	"github.com/RedHatGov/bundle/pkg/cli"
-	"github.com/RedHatGov/bundle/pkg/cli/mirror/describe"
-	"github.com/RedHatGov/bundle/pkg/cli/mirror/list"
-	"github.com/RedHatGov/bundle/pkg/cli/mirror/version"
+	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
 )
 
 func NewMirrorCmd() *cobra.Command {

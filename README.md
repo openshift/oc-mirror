@@ -117,5 +117,5 @@ E2E:
 make test-e2e
 ```
 
-[config-spec]:https://pkg.go.dev/github.com/redhatgov/bundle/pkg/config/v1alpha1#ImageSetConfiguration
+[config-spec]:https://pkg.go.dev/github.com/openshift/oc-mirror/pkg/config/v1alpha1#ImageSetConfiguration
 [go]:https://golang.org/dl/

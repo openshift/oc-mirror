@@ -1,7 +1,7 @@
 package mirror
 
 import (
-	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/spf13/pflag"
 )

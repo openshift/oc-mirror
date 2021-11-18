@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RedHatGov/bundle/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/sirupsen/logrus"
 )
 

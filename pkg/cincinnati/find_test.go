@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/require"
 )
 

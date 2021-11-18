@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/RedHatGov/bundle/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/sirupsen/logrus"
