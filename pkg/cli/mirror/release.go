@@ -150,8 +150,9 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 				lastCh, lastVer, err := cincinnati.FindLastRelease(meta, ch.Name, url, o.uuid)
 				logrus.Infof("Downloading requested release %s", requested.String())
 				switch {
-				case err != nil && errors.As(err, &cincinnati.ErrNoPreviousRelease):
+				case err != nil && errors.Is(err, cincinnati.ErrNoPreviousRelease):
 					lastVer = requested
+					lastCh = ch.Name
 				case err != nil:
 					return nil, err
 				case requested.LT(lastVer):
