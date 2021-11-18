@@ -5,12 +5,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/bundle"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )

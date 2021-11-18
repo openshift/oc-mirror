@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/openshift/oc-mirror/pkg/bundle"
-
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
