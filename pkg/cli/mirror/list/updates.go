@@ -19,11 +19,11 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	"github.com/RedHatGov/bundle/pkg/cincinnati"
-	"github.com/RedHatGov/bundle/pkg/cli"
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/metadata/storage"
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
+	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 type UpdatesOptions struct {

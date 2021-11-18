@@ -20,7 +20,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 var _ Backend = &registryBackend{}

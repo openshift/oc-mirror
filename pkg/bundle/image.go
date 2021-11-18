@@ -8,8 +8,8 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 // IsBlocked will return a boolean value on whether an image

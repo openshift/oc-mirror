@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RedHatGov/bundle/pkg/cincinnati"
-	"github.com/RedHatGov/bundle/pkg/cli"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type ReleasesOptions struct {

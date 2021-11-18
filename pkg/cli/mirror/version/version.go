@@ -1,8 +1,9 @@
 package version
 
 import (
-	"github.com/RedHatGov/bundle/pkg/cli"
-	"github.com/sirupsen/logrus"
+	"fmt"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -35,6 +36,6 @@ func (o *VersionOptions) Validate() error {
 }
 
 func (o *VersionOptions) Run() error {
-	logrus.Info("Not implemented")
+	fmt.Println("v0.1.0-alpha.3")
 	return nil
 }

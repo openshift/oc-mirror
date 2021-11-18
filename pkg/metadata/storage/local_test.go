@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 func Test_LocalBackend(t *testing.T) {

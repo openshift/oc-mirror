@@ -1,4 +1,4 @@
-module github.com/RedHatGov/bundle
+module github.com/openshift/oc-mirror
 
 go 1.16
 

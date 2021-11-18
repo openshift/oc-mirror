@@ -1,5 +1,9 @@
 apiVersion: tmp-redhatgov.com/v1alpha1
 kind: ImageSetConfiguration
+storageConfig:
+  registry:
+    imageURL: localhost:5000/test:latest << Stores metadata in an image  >>
+    skipTLS: true
 mirror:
   ocp:
     channels:
@@ -8,7 +12,7 @@ mirror:
         versions:
           - '4.7.18'
           - '4.6.13'
-    graph: true << Include Cincinnati upgrade graph image in imageset >>
+    graph: true << Planned, include Cincinnati upgrade graph image in imageset >>
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 << References entire catalog >>
       headsOnly: true << References latest version of each operator in catalog >>
@@ -24,3 +28,13 @@ mirror:
   blockedimages: << Planned, list of base images to be blocked (best effort) >>
     - name: alpine
     - name: redis
+  helm:
+    local:
+      - name: podinfo
+        path: /test/podinfo-5.0.0.tar.gz
+    repos: 
+      - name: podinfo
+        url: https://stefanprodan.github.io/podinfo
+        charts: 
+          - name: podinfo
+            version: 5.0.0

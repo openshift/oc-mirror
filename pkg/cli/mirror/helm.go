@@ -19,9 +19,9 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 type HelmOptions struct {

@@ -12,8 +12,8 @@ import (
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 type Archiver interface {

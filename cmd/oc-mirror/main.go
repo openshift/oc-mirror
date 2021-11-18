@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
-	"github.com/RedHatGov/bundle/pkg/cli/mirror"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
+
+	"github.com/sirupsen/logrus"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
+
+	"github.com/openshift/oc-mirror/pkg/cli/mirror"
 )
 
 func main() {

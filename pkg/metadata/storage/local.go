@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 var _ Backend = &localDirBackend{}

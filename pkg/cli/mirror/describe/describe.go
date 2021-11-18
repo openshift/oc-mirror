@@ -8,16 +8,17 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/RedHatGov/bundle/pkg/archive"
-	"github.com/RedHatGov/bundle/pkg/bundle"
-	"github.com/RedHatGov/bundle/pkg/cli"
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/metadata/storage"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/openshift/oc-mirror/pkg/archive"
+	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 type DescribeOptions struct {
