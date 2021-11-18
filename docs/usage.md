@@ -14,8 +14,8 @@
       - [Partially Disconnected](#partially-disconnected)
   - [Additional Features](#additional-features)
   - [Mirror to Disk](#mirror-to-disk)
-    - [Running Mirror For First Time](#running-mirror-for-first-time)
-    - [Running Mirror For Differential Updates](#running-mirror-for-differential-updates)
+    - [Running `oc-mirror` For First Time](#running-oc-mirror-for-first-time)
+    - [Running `oc-mirror` For Differential Updates](#running-oc-mirror-for-differential-updates)
 
 ## Overview
 
@@ -34,7 +34,7 @@ oc-mirror currently references the host system for certificate trust information
 ### Content Discovery
 
 oc-mirror provides a way to discover release and operator content to allow users to successfully create
-an imageset config with the data they need. The list update `list updates` command will differentiate
+an imageset config with the data they need. The `list updates` command will differentiate
 between past runs and the provided configuration to show what new versions exists.
 #### Updates
 
@@ -42,7 +42,7 @@ between past runs and the provided configuration to show what new versions exist
   ```sh
   ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
   ```
-** Note: ** You must have existing metadata in your workspace or registry (if using)to use `list updates`
+**Note:** You must have existing metadata in your workspace or registry (if using)to use `list updates`
 #### Releases
 1. List all available release payloads for a version of OpenShift (defaults to stable)
    ```sh
@@ -95,7 +95,7 @@ between past runs and the provided configuration to show what new versions exist
 ## Mirror to Disk 
 During the create phase, a declarative configuration is referenced to download container images. Depending on the state of the workspace, the behavior of `create` will either package all downloaded images into an imageset or only the missing artifacts needed in the target environment will be packaged into an imageset. 
 
-### Running Mirror For First Time
+### Running `oc-mirror` For First Time
 To create a new full imageset, use the following command with the target directory being a new, empty location and the configuration file authored referencing the config spec for the version of oc-mirror:
 
 `./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives`
@@ -106,7 +106,7 @@ To create a new full imageset, use the following command with the target directo
 
 `./bin/oc-mirror --from archives --dir test-publish docker://localhost:5000`
 
-### Running Mirror For Differential Updates
+### Running `oc-mirror` For Differential Updates
 
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:
 

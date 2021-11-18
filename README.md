@@ -9,6 +9,10 @@
       - [Updates](#updates)
       - [Releases](#releases)
       - [Operators](#operators)
+  - [oc-mirror Spec](#oc-mirror-spec)
+  - [Development](#development)
+    - [Requirements](#requirements)
+    - [Build](#build)
     - [Test](#test)
 
 `oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images.
