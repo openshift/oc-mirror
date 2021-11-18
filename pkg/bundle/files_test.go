@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 func Test_ReconcilingBlobs(t *testing.T) {

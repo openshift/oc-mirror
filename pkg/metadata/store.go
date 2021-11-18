@@ -7,10 +7,10 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/image"
-	"github.com/RedHatGov/bundle/pkg/metadata/storage"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 // UpdateMetadata runs some reconciliation functions on Metadata to ensure its state is consistent

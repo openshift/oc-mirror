@@ -3,7 +3,7 @@ package bundle
 import (
 	"testing"
 
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 

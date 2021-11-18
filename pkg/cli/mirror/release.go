@@ -16,11 +16,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/RedHatGov/bundle/pkg/bundle"
-	"github.com/RedHatGov/bundle/pkg/cincinnati"
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 var supportedArchs = []string{"amd64", "ppc64le", "s390x"}

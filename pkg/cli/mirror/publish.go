@@ -25,12 +25,12 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	"github.com/RedHatGov/bundle/pkg/archive"
-	"github.com/RedHatGov/bundle/pkg/bundle"
-	"github.com/RedHatGov/bundle/pkg/config"
-	"github.com/RedHatGov/bundle/pkg/config/v1alpha1"
-	"github.com/RedHatGov/bundle/pkg/image"
-	"github.com/RedHatGov/bundle/pkg/metadata/storage"
+	"github.com/openshift/oc-mirror/pkg/archive"
+	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 const (
