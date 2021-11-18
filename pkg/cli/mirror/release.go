@@ -148,6 +148,8 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 				// If no release has been downloaded for the
 				// channel, download the requested version
 				lastCh, lastVer, err := cincinnati.FindLastRelease(meta, ch.Name, url, o.uuid)
+				currCh := ch.Name
+				reverse := false
 				logrus.Infof("Downloading requested release %s", requested.String())
 				switch {
 				case err != nil && errors.Is(err, cincinnati.ErrNoPreviousRelease):
@@ -156,28 +158,39 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 				case err != nil:
 					return nil, err
 				case requested.LT(lastVer):
-					// If the requested version is a earlier release than previous
+					logrus.Debugf("Found current release %s", lastVer.String())
+					// If the requested version is an earlier release than previous
 					// downloads switch the values to get updates between the
 					// later and earlier version
-					lastVer = requested
+					currCh = lastCh
+					lastCh = ch.Name
 					requested = lastVer
+					lastVer = semver.MustParse(v)
+
+					// download the current image since this will not be in the updates
+					// FIXME(jpower): This makes sure that the current download
+					// happens for the user requested version, but the
+					// later download version is downloaded again
+					reverse = true
 				default:
 					logrus.Debugf("Found current release %s", lastVer.String())
 				}
 
 				// This dumps the available upgrades from the last downloaded version
-				current, new, updates, err := client.CalculateUpgrades(ctx, upstream, arch, lastCh, ch.Name, lastVer, requested)
+				current, new, updates, err := client.CalculateUpgrades(ctx, upstream, arch, lastCh, currCh, lastVer, requested)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 				}
 
-				if requested.EQ(lastVer) {
+				if requested.EQ(lastVer) || reverse {
 					assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, current.Image, arch, v)
 					if err != nil {
 						return nil, err
 					}
 					allAssocs.Merge(assocs)
-					continue
+					if !reverse {
+						continue
+					}
 				}
 
 				// Download needed version between the current version and
