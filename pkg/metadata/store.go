@@ -3,11 +3,8 @@ package metadata
 import (
 	"context"
 	"fmt"
-	"io"
-	"path/filepath"
 
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/RedHatGov/bundle/pkg/config"
@@ -54,37 +51,6 @@ func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, ba
 	operatorMeta.ImagePin, err = image.ResolveToPin(ctx, resolver, operator.Catalog)
 	if err != nil {
 		return v1alpha1.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", operator.Catalog, err)
-	}
-
-	switch {
-	case operator.WriteIndex && operator.InlineIndex:
-		return v1alpha1.OperatorMetadata{}, fmt.Errorf("both WriteIndex and InlineIndex cannot be set")
-	case operator.WriteIndex || operator.InlineIndex:
-		logrus.Info("WriteIndex and InlineIndex are not implemented yet")
-
-		var w io.Writer
-		if operator.WriteIndex {
-			operatorMeta.RelIndexPath = filepath.Join("publish", "operator-catalogs", operatorMeta.Catalog)
-
-			w, err = backend.GetWriter(ctx, operatorMeta.RelIndexPath)
-			if err != nil {
-				return v1alpha1.OperatorMetadata{}, fmt.Errorf("getting catalog writer for %q: %v", operatorMeta.RelIndexPath, err)
-			}
-			if wc, isWC := w.(io.WriteCloser); isWC {
-				defer wc.Close()
-			}
-
-		} else {
-
-			w = &operatorMeta.Index
-		}
-
-		// TODO(estroz): extract catalog.
-		var declarativeConfigBytes []byte
-
-		if _, err := w.Write(declarativeConfigBytes); err != nil {
-			return v1alpha1.OperatorMetadata{}, fmt.Errorf("error writing catalog index: %v", err)
-		}
 	}
 
 	return operatorMeta, nil

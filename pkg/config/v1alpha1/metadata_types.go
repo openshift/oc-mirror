@@ -70,18 +70,9 @@ type OperatorMetadata struct {
 	// Catalog references a catalog name from the mirror spec.
 	Catalog string `json:"catalog"`
 	// ImagePin is the resolved sha256 image name of Catalog.
-	// This image will be pulled if RelIndexPath and Index are unset
-	// using the pull secret in the metadata's Mirror config for this catalog.
+	// This image will be pulled using the pull secret
+	// in the metadata's Mirror config for this catalog.
 	ImagePin string `json:"imagePin"`
-	// RelIndexPath is the path to the catalog's declarative config index
-	// relative to the metadata file.
-	// This path will be used to load the prior catalog's state if set.
-	RelIndexPath string `json:"relIndexPath,omitempty"`
-	// Index is the catalog's inlined declarative config index.
-	// Only set this field if the index is relatively small.
-	// This data will be used to load the prior catalog's state if set
-	// and RelIndexPath is unset.
-	Index InlinedIndex `json:"index,omitempty"`
 }
 
 var _ io.Writer = &InlinedIndex{}
