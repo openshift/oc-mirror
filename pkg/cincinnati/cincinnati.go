@@ -128,7 +128,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	if !found {
 		return current, requested, nil, &Error{
 			Reason:  "VersionNotFound",
-			Message: fmt.Sprintf("currently reconciling cluster version %s not found in the %q channel", version, channel),
+			Message: fmt.Sprintf("current version %s not found in the %q channel", version, channel),
 		}
 	}
 
@@ -145,7 +145,7 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	if !found {
 		return current, requested, nil, &Error{
 			Reason:  "VersionNotFound",
-			Message: fmt.Sprintf("currently reconciling cluster version %s not found in the %q channel", version, channel),
+			Message: fmt.Sprintf("requested version %s not found in the %q channel", reqVer, channel),
 		}
 	}
 
@@ -187,11 +187,11 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	target := semver.MustParse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
 	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
 	if err != nil {
-		return Update{}, Update{}, nil, err
+		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
 	}
 	current, _, upgrades, err := c.GetUpdates(ctx, uri, arch, sourceChannel, version, latest)
 	if err != nil {
-		return Update{}, Update{}, nil, err
+		return Update{}, Update{}, nil, fmt.Errorf("cannot get current: %v", err)
 	}
 
 	for {
