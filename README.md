@@ -81,6 +81,10 @@ Replace this value with a real registry host, or create a `docker.io/library/reg
     ```sh
     ./bin/oc-mirror describe /path/to/archives
     ```
+- List updates since last run for releases and operators
+  ```sh
+  ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
+  ```
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
 <sup>1</sup> For this example, the `create` and `publish` steps are run on the same machine. Therefore your `~/.docker/config.json`
