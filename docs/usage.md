@@ -33,45 +33,46 @@ oc-mirror currently references the host system for certificate trust information
 
 ### Content Discovery
 
-oc-mirror provides a way to discover release and operator content to allow users to successfully create
-an imageset config with the data they need. The `list updates` command will differentiate
-between past runs and the provided configuration to show what new versions exists.
+oc-mirror provides a way to discover OpenShift release and operator content,
+then use that information to craft mirror payloads. The `list updates` command traverses update graphs
+between the last `oc mirror` run and provided configuration to show what new versions are available.
+
 #### Updates
 
 - List updates since the last `oc-mirror` run
   ```sh
-  ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
+  oc-mirror list updates --config imageset-config.yaml --dir test-create
   ```
-**Note:** You must have existing metadata in your workspace or registry (if using)to use `list updates`
+**Note:** You must have existing metadata in your workspace (or remote storage, if using) to use `list updates`
 #### Releases
-1. List all available release payloads for a version of OpenShift (defaults to stable)
+1. List all available release payloads for a version of OpenShift in the stable channel (the default channel)
    ```sh
    ./bin/oc-mirror list releases --version=4.9
    ```
-2. List all available channels to query for a version of OpenShift
+2. List all available release channels to query for a version of OpenShift
    ```sh
    ./bin/oc-mirror list releases --channels --version=4.8
    ```
-3. List all available release payloads for a version of OpenShift in a specified channel
+3. List all available release payloads for a version of OpenShift in a specific channel
    ```sh
    ./bin/oc-mirror list releases --channel=fast-4.9
    ```
 #### Operators
-1. List all available catalogs for a version of OpenShift
+1. List all available Operator catalogs for a version of OpenShift
    ```sh
    ./bin/oc-mirror list operators --catalogs --version=4.9
    ```
 2. List all available packages in a catalog
    ```sh
-   ./bin/oc-mirror list operators --catalog=catalog-name
+   ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
    ````
-3. List all available channels in a package
+3. List all available Operator channels in a package
     ```sh
-    ./bin/oc-mirror list operators --catalog=catalog-name --package=package-name
+    ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali
     ```
-4. List all available versions in a channel
+4. List all available Operator versions in a channel
       ```sh
-    ./bin/oc-mirror list operators --catalog=catalog-name --package=package-name --channel=channel-name
+    ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali --channel=stable
     ```
 ### Mirroring
 
