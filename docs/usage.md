@@ -22,7 +22,7 @@
 **Notice:** These commands are early alpha and may change significantly between application versions. 
 
 ## Prerequisites
-
+> **WARNING**: Depending on the configuration file used and the periodicity between running `oc-mirror`, this process may download multiple-hundreds of gigabytes of data, though differential updates should usually result in a significantly smaller imagesets.
 ### Authentication: 
 oc-mirror currently retrieves registry credentials from `~/.docker/config.json`. Make sure that your [Red Hat OpenShift Pull Secret](https://console.redhat.com/openshift/install/pull-secret) and any other needed registry credentials are populated in `~/.docker/config.json`
 
@@ -47,40 +47,40 @@ between the last `oc mirror` run and provided configuration to show what new ver
 #### Releases
 1. List all available release payloads for a version of OpenShift in the stable channel (the default channel)
    ```sh
-   ./bin/oc-mirror list releases --version=4.9
+   oc-mirror list releases --version=4.9
    ```
 2. List all available release channels to query for a version of OpenShift
    ```sh
-   ./bin/oc-mirror list releases --channels --version=4.8
+   oc-mirror list releases --channels --version=4.8
    ```
 3. List all available release payloads for a version of OpenShift in a specific channel
    ```sh
-   ./bin/oc-mirror list releases --channel=fast-4.9
+   oc-mirror list releases --channel=fast-4.9
    ```
 #### Operators
 1. List all available Operator catalogs for a version of OpenShift
    ```sh
-   ./bin/oc-mirror list operators --catalogs --version=4.9
+   oc-mirror list operators --catalogs --version=4.9
    ```
 2. List all available packages in a catalog
    ```sh
-   ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
+   oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
    ````
 3. List all available Operator channels in a package
     ```sh
-    ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali
+    oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali
     ```
 4. List all available Operator versions in a channel
       ```sh
-    ./bin/oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali --channel=stable
+    oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali --channel=stable
     ```
 ### Mirroring
 
 #### Fully Disconnected
 - Create then publish to your mirror registry:
     ```sh
-    ./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives
-    ./bin/oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
+    oc-mirror --config imageset-config.yaml --dir test-create file://archives
+    oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
     ```
 #### Partially Disconnected
 - Publish mirror to mirror
@@ -90,7 +90,7 @@ between the last `oc mirror` run and provided configuration to show what new ver
 ## Additional Features
 - Get information on your imageset using `describe`
     ```sh
-    ./bin/oc-mirror describe /path/to/archives
+    oc-mirror describe /path/to/archives
     ```
 
 ## Mirror to Disk 
@@ -99,23 +99,22 @@ During the create phase, a declarative configuration is referenced to download c
 ### Running `oc-mirror` For First Time
 To create a new full imageset, use the following command with the target directory being a new, empty location and the configuration file authored referencing the config spec for the version of oc-mirror:
 
-`./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives`
+`oc-mirror --config imageset-config.yaml --dir test-create file://archives`
 
-**Note 1:** Depending on the configuration file used, this process may download multiple-hundreds of gigabytes of data. This may take quite a while. Use the optional `log-level=debug` command line flag for more verbose output to track command execution. 
 
-**Note 2:** After `oc-mirror` has finished, an imageset named mirror_seq1_000000.tar will have been created and available in your specified directory. Use this file with `oc-mirror` to mirror the imageset to a disconnected registry:
+> **WARNING**: Depending on the configuration file used, this process may download multiple-hundreds of gigabytes of data. This may take quite a while. Use the optional `log-level=debug` command line flag for more verbose output to track command execution.
 
-`./bin/oc-mirror --from archives --dir test-publish docker://localhost:5000`
+**Note:** After `oc-mirror` has finished, an imageset named mirror_seq1_000000.tar will have been created and available in your specified directory. Use this file with `oc-mirror` to mirror the imageset to a disconnected registry:
+
+`oc-mirror --from archives --dir test-publish docker://localhost:5000`
 
 ### Running `oc-mirror` For Differential Updates
 
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:
 
-`./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives`
+`oc-mirror --config imageset-config.yaml --dir test-create file://archives`
 
-**Note 1:** Depending on the configuration file used and the periodicity between running `oc-mirror`, this process may download multiple-hundreds of gigabytes of data, though differential updates should usually result in a significantly smaller imagesets.  
-
-**Note 2:** The `--dir` value must be the same for all create runs if you use a local backend (the default option) to detect the metadata.
+**Note:** The `--dir` value must be the same for all create runs if you use a local backend (the default option) to detect the metadata.
 
 
 
