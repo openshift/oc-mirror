@@ -13,6 +13,7 @@
 
 `oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images.
 ## Usage
+[![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
 
 The mirror registry `reg.mirror.com` is used in this example.
 Replace this value with a real registry host, or create a `docker.io/library/registry:2` container locally.
