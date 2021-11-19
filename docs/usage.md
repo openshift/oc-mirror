@@ -62,7 +62,7 @@ between the last `oc mirror` run and provided configuration to show what new ver
    ```sh
    oc-mirror list operators --catalogs --version=4.9
    ```
-2. List all available packages in a catalog
+2. List all available Operator packages in a catalog
    ```sh
    oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
    ````
