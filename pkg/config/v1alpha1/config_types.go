@@ -52,6 +52,9 @@ type ReleaseChannel struct {
 
 // Operator configures operator catalog mirroring.
 type Operator struct {
+	// Mirror specific operator packages, channels, and versions, and their dependencies.
+	// If HeadsOnly is true, these objects are mirrored on top of heads of all channels.
+	// Otherwise, only these specific objects are mirrored.
 	action.DiffIncludeConfig `json:",inline"`
 
 	// Catalog image to mirror. This image must be pullable and available for subsequent

@@ -53,6 +53,20 @@ func NewOperatorOptions(mo MirrorOptions) *OperatorOptions {
 	return &OperatorOptions{MirrorOptions: mo}
 }
 
+// Full mirrors each catalog image in its entirety to the <Dir>/src directory.
+func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+	return o.run(ctx, cfg, o.renderDCFull)
+}
+
+// Diff mirrors only the diff between each old and new catalog image pair
+// to the <Dir>/src directory.
+func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.AssociationSet, error) {
+	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (*declcfg.DeclarativeConfig, error) {
+		return o.renderDCDiff(ctx, reg, ctlg, lastRun)
+	}
+	return o.run(ctx, cfg, f)
+}
+
 // complete defaults OperatorOptions.
 func (o *OperatorOptions) complete() {
 	if o.Dir == "" {
@@ -62,6 +76,60 @@ func (o *OperatorOptions) complete() {
 	if o.Logger == nil {
 		o.Logger = logrus.NewEntry(logrus.New())
 	}
+}
+
+type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha1.Operator) (*declcfg.DeclarativeConfig, error)
+
+// Diff mirrors only the diff between each old and new catalog image pair
+// to the <Dir>/src directory.
+func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, renderDC renderDCFunc) (image.AssociationSet, error) {
+	o.complete()
+
+	cleanup, err := o.mktempDir()
+	if err != nil {
+		return nil, err
+	}
+	if !o.SkipCleanup {
+		defer cleanup()
+	}
+
+	reg, err := o.createRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("error creating container registry: %v", err)
+	}
+	defer reg.Destroy()
+
+	allAssocs := image.AssociationSet{}
+	for _, ctlg := range cfg.Mirror.Operators {
+
+		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing catalog: %v", err)
+		}
+		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
+
+		// Render the catalog to mirror into a declarative config.
+		dc, err := renderDC(ctx, reg, ctlg)
+		if err != nil {
+			return nil, err
+		}
+
+		isBlocked := func(ref imgreference.DockerImageReference) bool {
+			return bundle.IsBlocked(cfg, ref)
+		}
+		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, isBlocked)
+		if err != nil {
+			return nil, err
+		}
+
+		assocs, err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, mappings)
+		if err != nil {
+			return nil, err
+		}
+		allAssocs.Merge(assocs)
+	}
+
+	return allAssocs, nil
 }
 
 func (o *OperatorOptions) mktempDir() (func(), error) {
@@ -93,143 +161,68 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 	)
 }
 
-// Full mirrors each catalog image in its entirety to the <Dir>/src directory.
-func (o *OperatorOptions) Full(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
-	o.complete()
+// renderDCFull renders data in ctlg into a declarative config for o.Full().
+func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (dc *declcfg.DeclarativeConfig, err error) {
 
-	cleanup, err := o.mktempDir()
-	if err != nil {
-		return nil, err
-	}
-	if !o.SkipCleanup {
-		defer cleanup()
-	}
+	hasInclude := len(ctlg.DiffIncludeConfig.Packages) != 0
+	// Only add on top of channel heads if both HeadsOnly and IncludeConfig are specified.
+	includeAdditively := ctlg.HeadsOnly && hasInclude
+	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified (the default).
+	full := !ctlg.HeadsOnly && !hasInclude
 
-	reg, err := o.createRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("error creating container registry: %v", err)
-	}
-	defer reg.Destroy()
-
-	allAssocs := image.AssociationSet{}
-	for _, ctlg := range cfg.Mirror.Operators {
-		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
-		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
-
-		catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
-		var dc *declcfg.DeclarativeConfig
-		if ctlg.HeadsOnly {
-			// Generate and mirror a heads-only diff using only the catalog as a new ref.
-			dc, err = action.Diff{
-				Registry:      reg,
-				NewRefs:       []string{ctlg.Catalog},
-				Logger:        catLogger,
-				IncludeConfig: ctlg.DiffIncludeConfig,
-			}.Run(ctx)
-		} else {
-			// Mirror the entire catalog.
-			dc, err = action.Render{
-				Registry: reg,
-				Refs:     []string{ctlg.Catalog},
-			}.Run(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		isBlocked := func(ref imgreference.DockerImageReference) bool {
-			return bundle.IsBlocked(cfg, ref)
-		}
-		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, isBlocked)
-		if err != nil {
-			return nil, err
-		}
-
-		assocs, err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, mappings)
-		if err != nil {
-			return nil, err
-		}
-		allAssocs.Merge(assocs)
+	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+	if full {
+		// Mirror the entire catalog.
+		dc, err = action.Render{
+			Registry: reg,
+			Refs:     []string{ctlg.Catalog},
+		}.Run(ctx)
+	} else {
+		// Generate and mirror a heads-only diff using only the catalog as a new ref.
+		dc, err = action.Diff{
+			Registry:          reg,
+			NewRefs:           []string{ctlg.Catalog},
+			Logger:            catLogger,
+			IncludeConfig:     ctlg.DiffIncludeConfig,
+			IncludeAdditively: includeAdditively,
+		}.Run(ctx)
 	}
 
-	return allAssocs, nil
+	return dc, err
 }
 
-// Diff mirrors only the diff between each old and new catalog image pair
-// to the <Dir>/src directory.
-func (o *OperatorOptions) Diff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.AssociationSet, error) {
-	o.complete()
+// renderDCDiff renders data in ctlg into a declarative config for o.Diff().
+func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator, lastRun v1alpha1.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
 
-	cleanup, err := o.mktempDir()
-	if err != nil {
-		return nil, err
-	}
-	if !o.SkipCleanup {
-		defer cleanup()
-	}
-
-	reg, err := o.createRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("error creating container registry: %v", err)
-	}
-	defer reg.Destroy()
-
-	allAssocs := image.AssociationSet{}
-	for _, ctlg := range cfg.Mirror.Operators {
-		// Generate and mirror a heads-only diff using the catalog as a new ref,
-		// and an old ref found for this catalog in lastRun.
-		catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
-		a := action.Diff{
-			Registry:      reg,
-			NewRefs:       []string{ctlg.Catalog},
-			Logger:        catLogger,
-			IncludeConfig: ctlg.DiffIncludeConfig,
-		}
-
-		// An old ref is always required to generate a latest diff.
-		for _, operator := range lastRun.Operators {
-			if operator.Catalog != ctlg.Catalog {
-				continue
-			}
-
-			if operator.ImagePin == "" {
-				return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
-			}
-
-			a.OldRefs = []string{operator.ImagePin}
-			break
-		}
-
-		dc, err := a.Run(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
-		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
-
-		isBlocked := func(ref imgreference.DockerImageReference) bool {
-			return bundle.IsBlocked(cfg, ref)
-		}
-		mappings, err := o.mirror(ctx, dc, ctlgRef, ctlg, isBlocked)
-		if err != nil {
-			return nil, err
-		}
-
-		assocs, err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, mappings)
-		if err != nil {
-			return nil, err
-		}
-		allAssocs.Merge(assocs)
+	// Generate and mirror a heads-only diff using the catalog as a new ref,
+	// and an old ref found for this catalog in lastRun.
+	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+	a := action.Diff{
+		Registry:      reg,
+		NewRefs:       []string{ctlg.Catalog},
+		Logger:        catLogger,
+		IncludeConfig: ctlg.DiffIncludeConfig,
+		// This is hard-coded to false because a diff post-metadata creation must always include
+		// newly published catalog data to join graphs. Any included objects previously included
+		// will be added as a diff as part of the latest diff mode.
+		IncludeAdditively: false,
 	}
 
-	return allAssocs, nil
+	// An old ref is always required to generate a latest diff.
+	for _, operator := range lastRun.Operators {
+		if operator.Catalog != ctlg.Catalog {
+			continue
+		}
+
+		if operator.ImagePin == "" {
+			return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
+		}
+
+		a.OldRefs = []string{operator.ImagePin}
+		break
+	}
+
+	return a.Run(ctx)
 }
 
 func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator, isBlocked ...blockedFunc) (map[string]string, error) {
