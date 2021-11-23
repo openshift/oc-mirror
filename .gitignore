@@ -8,6 +8,7 @@ sha256sum.txt
 /test/operator-test.*
 **/publish.tmp.*
 **/test-output
+**/.metadata.json
 
 # Logs.
 **/.openshift_bundle.log
