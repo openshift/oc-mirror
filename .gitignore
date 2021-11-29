@@ -18,3 +18,6 @@ sha256sum.txt
 
 # Local
 .idea
+
+# Local imageset-config.yaml
+imageset-config.yaml
