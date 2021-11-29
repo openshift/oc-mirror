@@ -40,12 +40,12 @@ function setup() {
   cp -r "$DIR/testdata/bundles/"* "$DATA_DIR"
   mkdir -p "${DATA_DIR}/index"
   cp -r "${DIR}/testdata/indices/${INDEX_PATH}/"* "${DATA_DIR}/index/"
-  find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_ONLY@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i '' 's@REGISTRY_ONLY@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/testdata/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
-  find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
-  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
-  find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i '' 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i '' 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i '' 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
 }
 
 function build_push_bundles() {

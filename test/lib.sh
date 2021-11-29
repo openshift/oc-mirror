@@ -54,8 +54,13 @@ function check_bundles() {
     NS="$ns/"
   fi
   for image in $index_bundle_images; do
+<<<<<<< HEAD
     image=${disconn_registry}/${NS}$(echo $image | cut --complement -d'/' -f1)
     if ! crane digest $image; then
+=======
+    image=${disconn_registry}/$(echo $image | cut -d'/' -f2-)
+    if ! docker pull $image; then
+>>>>>>> 3e52451 (Update to support e2e testing on mac)
       echo "bundle image $image not pushed to registry"
       return 1
     fi

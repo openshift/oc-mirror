@@ -7,6 +7,11 @@ Let's get started!
 1. Make sure your go is up to date!
 2. Make sure that you have `gcc` and `make` installed.
 3. To run the local end-to-end test you will need `podman` or `docker`
+4. jq and yq installed for JSON and YAML processing
+
+## OSX Dependencies
+Testing on OSX requires installation of several additional packages to be installed
+1. Bash 5.1 or later
 
 ## Building
 
@@ -18,8 +23,8 @@ We are currently running automated unit tests with CI and are working on an auto
 
 ## Local Testing
 
-We have developed local end-to-end test scripts to verfiy `oc-mirror` functionality with various imageset configurations.
-When added a new feature or changing a current feature ensure the functionaliy is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
+We have developed local end-to-end test scripts to verify `oc-mirror` functionality with various imageset configurations.
+When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
 
 
 
