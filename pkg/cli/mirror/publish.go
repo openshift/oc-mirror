@@ -115,10 +115,17 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 		return fmt.Errorf("error reading incoming metadata: %v", err)
 	}
 
+	var metaImage string
+	if len(o.UserNamespace) != 0 {
+		metaImage = fmt.Sprintf("%s/%s/oc-mirror:%s", o.ToMirror, o.UserNamespace, incomingMeta.Uid)
+	} else {
+		metaImage = fmt.Sprintf("%s/oc-mirror:%s", o.ToMirror, incomingMeta.Uid)
+	}
+
 	// Get current metadata info
 	cfg := v1alpha1.StorageConfig{
 		Registry: &v1alpha1.RegistryConfig{
-			ImageURL: fmt.Sprintf("%s/oc-mirror:%s", o.ToMirror, incomingMeta.Uid),
+			ImageURL: metaImage,
 			SkipTLS:  o.DestSkipTLS,
 		},
 	}
@@ -278,10 +285,15 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 				m.Source.Ref.Tag = assoc.TagSymlink
 			}
 			m.Destination = toMirrorRef
-			m.Destination.Ref.Namespace = m.Source.Ref.Namespace
 			m.Destination.Ref.Name = m.Source.Ref.Name
 			m.Destination.Ref.Tag = m.Source.Ref.Tag
 			m.Destination.Ref.ID = m.Source.Ref.ID
+			m.Destination.Ref.Namespace = m.Source.Ref.Namespace
+
+			// Add a top-level namespace, if defined
+			if len(o.UserNamespace) != 0 {
+				m.Destination.Ref.Namespace = strings.Join([]string{o.UserNamespace, m.Destination.Ref.Namespace}, "/")
+			}
 
 			switch assoc.Type {
 			case image.TypeGeneric:
