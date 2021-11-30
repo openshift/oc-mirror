@@ -14,6 +14,7 @@ type MirrorOptions struct {
 	ManifestsOnly    bool
 	From             string
 	ToMirror         string
+	UserNamespace    string
 	DryRun           bool
 	SourceSkipTLS    bool
 	DestSkipTLS      bool
