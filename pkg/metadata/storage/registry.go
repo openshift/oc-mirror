@@ -4,18 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/operator-framework/operator-registry/pkg/image"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
@@ -58,16 +57,12 @@ func NewRegistryBackend(ctx context.Context, cfg *v1alpha1.RegistryConfig, dir s
 func (r *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
 	logrus.Debugf("Checking for existing metadata image at %s", r.src)
 	// Check if image exists
-	exists, err := r.exists(ctx)
-	if err != nil {
+	if err := r.exists(); err != nil {
 		return err
-	}
-	if !exists {
-		return ErrMetadataNotExist
 	}
 
 	// Get metadata from image
-	err = r.unpack(r.localDirBackend.dir)
+	err := r.unpack(r.localDirBackend.dir)
 	if err != nil {
 		return fmt.Errorf("error pulling image %q with metadata: %v", r.src, err)
 	}
@@ -187,71 +182,17 @@ func (r *registryBackend) unpack(path string) error {
 }
 
 // exists checks if the image exists
-func (r *registryBackend) exists(ctx context.Context) (bool, error) {
-	repo, err := r.repoExists(ctx)
-	if err != nil {
-		return false, err
+func (r *registryBackend) exists() error {
+	_, err := crane.Manifest(r.src, r.getOpts()...)
+	var terr *transport.Error
+	switch {
+	case err == nil:
+		return nil
+	case err != nil && errors.As(err, &terr):
+		return ErrMetadataNotExist
+	default:
+		return err
 	}
-	if repo {
-		tag, err := r.tagExists()
-		if err != nil {
-			return false, err
-		}
-		if tag {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// tagExists checks if the image tag exists in the repository
-func (r *registryBackend) tagExists() (bool, error) {
-	idx := strings.LastIndex(r.src, ":")
-	if idx == -1 {
-		return false, fmt.Errorf("image %q has no tag or digest component", r.src)
-	}
-	repo, err := name.NewRepository(r.src[:idx])
-	if err != nil {
-		return false, err
-	}
-	opts := r.getRemoteOpts()
-	tags, err := remote.List(repo, opts...)
-	if err != nil {
-		return false, err
-	}
-	for _, tag := range tags {
-		if tag == r.src[idx+1:] {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// repoExists checks if the image repo exists in the registry
-func (r *registryBackend) repoExists(ctx context.Context) (bool, error) {
-	idx := strings.Index(r.src, "/")
-	if idx == -1 {
-		return false, fmt.Errorf("image %q has image name componenet", r.src)
-	}
-	reg, err := name.NewRegistry(r.src[:idx])
-	if err != nil {
-		return false, err
-	}
-	image := r.src[idx+1:]
-	if idIdx := strings.LastIndex(image, ":"); idIdx != -1 {
-		idx = idIdx
-	}
-	opts := r.getRemoteOpts()
-	repos, err := remote.Catalog(ctx, reg, opts...)
-	if err != nil {
-		return false, err
-	}
-	for _, repo := range repos {
-		if repo == image[:idx] {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (r *registryBackend) createRT() *http.Transport {
@@ -262,11 +203,11 @@ func (r *registryBackend) createRT() *http.Transport {
 
 // TODO: Get default auth will need to update if user
 // can specify custom locations
-func (r *registryBackend) getRemoteOpts() (options []remote.Option) {
+func (r *registryBackend) getOpts() (options []crane.Option) {
 	return append(
 		options,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(r.ctx),
-		remote.WithTransport(r.createRT()),
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithContext(r.ctx),
+		crane.WithTransport(r.createRT()),
 	)
 }
