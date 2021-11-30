@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
 func NewMirrorCmd() *cobra.Command {
@@ -48,6 +49,8 @@ func NewMirrorCmd() *cobra.Command {
 			oc-mirror --config mirror-config.yaml docker://localhost:5000
 			# Publish a previously created mirror archive
 			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
+			# Publish to a registry and add a a top-level namespace
+			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
 			# Replay a previous mirror
 			oc-mirror --config mirror-config.yaml --replay=5 file://mirror
 		`),
@@ -80,7 +83,13 @@ func (o *MirrorOptions) Complete(args []string) error {
 	case strings.Contains(destination, "file://"):
 		o.OutputDir = strings.TrimPrefix(destination, "file://")
 	case strings.Contains(destination, "docker://"):
-		o.ToMirror = strings.TrimPrefix(destination, "docker://")
+		ref := strings.TrimPrefix(destination, "docker://")
+		mirror, err := imagesource.ParseReference(ref)
+		if err != nil {
+			return err
+		}
+		o.ToMirror = mirror.Ref.Registry
+		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
 	}
 
 	return nil
