@@ -24,6 +24,8 @@ type Metadata struct {
 type MetadataSpec struct {
 	// Uid uniquely identifies this metadata object.
 	Uid uuid.UUID `json:"uid"`
+	// SingleUse will ignore the past runs if set to true
+	SingleUse bool `json:"singleUse"`
 	// Past is a slice containing information for
 	// all mirrors created for an imageset
 	PastMirrors PastMirrors `json:"pastMirrors"`

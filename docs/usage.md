@@ -44,7 +44,7 @@ between the last `oc mirror` run and provided configuration to show what new ver
 
 - List updates since the last `oc-mirror` run
   ```sh
-  oc-mirror list updates --config imageset-config.yaml --dir test-create
+  oc-mirror list updates --config imageset-config.yaml
   ```
 **Note:** You must have existing metadata in your workspace (or remote storage, if using) to use `list updates`
 #### Releases
@@ -81,13 +81,13 @@ between the last `oc mirror` run and provided configuration to show what new ver
 #### Fully Disconnected
 - Create then publish to your mirror registry:
     ```sh
-    oc-mirror --config imageset-config.yaml --dir test-create file://archives
-    oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
+    oc-mirror --config imageset-config.yaml file://archives
+    oc-mirror --from /path/to/archives docker://reg.mirror.com
     ```
 #### Partially Disconnected
 - Publish mirror to mirror
      ```sh
-    oc-mirror --config imageset-config.yaml --dir test docker://localhost:5000
+    oc-mirror --config imageset-config.yaml docker://localhost:5000
     ```
 ### Additional Features
 - Get information on your imageset using `describe`
@@ -104,23 +104,20 @@ During the create phase, a declarative configuration is referenced to download c
 ### Running `oc-mirror` For First Time
 To create a new full imageset, use the following command with the target directory being a new, empty location and the configuration file authored referencing the config spec for the version of oc-mirror:
 
-`oc-mirror --config imageset-config.yaml --dir test-create file://archives`
+`oc-mirror --config imageset-config.yaml file://archives`
 
 
 > **WARNING**: Depending on the configuration file used, this process may download multiple hundreds of gigabytes of data. This may take quite a while. Use the optional `log-level=debug` command line flag for more verbose output to track command execution.
 
 **Note:** After `oc-mirror` has finished, an imageset named mirror_seq1_000000.tar will have been created and available in your specified directory. Use this file with `oc-mirror` to mirror the imageset to a disconnected registry:
 
-`oc-mirror --from archives --dir test-publish docker://localhost:5000`
+`oc-mirror --from archives docker://localhost:5000`
 
 ### Running `oc-mirror` For Differential Updates
 
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:
 
-`oc-mirror --config imageset-config.yaml --dir test-create file://archives`
-
-**Note:** The `--dir` value must be the same for all create runs if you use a local backend (the default option) to detect the metadata.
-
+`oc-mirror --config imageset-config.yaml file://archives`
 ## Glossary
 
 `imageset` - Refers to the artifact or collection of artifacts produced by `oc-mirror`. 

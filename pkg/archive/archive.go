@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 type Archiver interface {
@@ -34,6 +36,7 @@ type packager struct {
 	manifest    map[string]struct{}
 	blobs       map[string]struct{}
 	packedBlobs map[string]struct{}
+	ctx         context.Context
 	Archiver
 }
 
@@ -65,12 +68,13 @@ func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager
 		manifest:    manifestSetToArchive,
 		blobs:       blobSetToArchive,
 		packedBlobs: make(map[string]struct{}, len(blobs)),
+		ctx:         context.Background(),
 		Archiver:    NewArchiver(),
 	}
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
+func (p *packager) CreateSplitArchive(backend storage.Backend, maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables
 	splitNum := 0
@@ -87,6 +91,11 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 
 	if err != nil {
 		return fmt.Errorf("%s: stat: %v", sourceDir, err)
+	}
+
+	// write metadata to first archive
+	if err := packMetadata(p.ctx, p, backend); err != nil {
+		return fmt.Errorf("writing metadata to archive %s failed: %v", splitPath, err)
 	}
 
 	walkErr := filepath.Walk(sourceDir, func(fpath string, info os.FileInfo, err error) error {
@@ -171,7 +180,6 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 			if err := os.Remove(fpath); err != nil {
 				return err
 			}
-
 		}
 
 		logrus.Debugf("File %s added to archive", fpath)
@@ -191,6 +199,36 @@ func (p *packager) CreateSplitArchive(maxSplitSize int64, destDir, sourceDir, pr
 	}
 
 	return walkErr
+}
+
+// Unarchive will extract files unless excluded to destination directory
+func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
+	// Reconcile files to be unarchived
+	var files []string
+	err := a.Walk(source, func(f archiver.File) error {
+		header, ok := f.Header.(*tar.Header)
+		if !ok {
+			return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
+		}
+		// Only extract files that are not in the exclude paths
+		if !shouldExclude(excludePaths, header.Name) && !f.IsDir() {
+			files = append(files, header.Name)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Extract files that have not been excluded
+	for _, f := range files {
+		if err := a.Extract(source, f, destination); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // createArchive is a helper function that prepares a new split archive
@@ -226,41 +264,11 @@ func blobInArchive(file string) string {
 
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == config.PublishDir || split[0] == "catalogs" || split[0] == config.HelmDir
+	return split[0] == config.InternalDir || split[0] == "catalogs" || split[0] == config.HelmDir
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {
 	return !includeFile(fpath) && !info.IsDir()
-}
-
-// Unarchive will extract files unless excluded to destination directory
-func Unarchive(a Archiver, source, destination string, excludePaths []string) error {
-	// Reconcile files to be unarchived
-	var files []string
-	err := a.Walk(source, func(f archiver.File) error {
-		header, ok := f.Header.(*tar.Header)
-		if !ok {
-			return fmt.Errorf("expected header to be *tar.Header but was %T", f.Header)
-		}
-		// Only extract files that are not in the exclude paths
-		if !shouldExclude(excludePaths, header.Name) && !f.IsDir() {
-			files = append(files, header.Name)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Extract files that have not been excluded
-	for _, f := range files {
-		if err := a.Extract(source, f, destination); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // within returns true if sub is within or equal to parent.
@@ -281,4 +289,24 @@ func shouldExclude(exclude []string, file string) bool {
 		}
 	}
 	return false
+}
+
+func packMetadata(ctx context.Context, arc Archiver, backend storage.Backend) error {
+
+	info, err := backend.Stat(ctx, config.MetadataBasePath)
+	if err != nil {
+		return err
+	}
+	file, err := backend.Open(config.MetadataBasePath)
+	if err != nil {
+		return err
+	}
+	f := archiver.File{
+		FileInfo: archiver.FileInfo{
+			FileInfo:   info,
+			CustomName: config.MetadataBasePath,
+		},
+		ReadCloser: file,
+	}
+	return arc.Write(f)
 }

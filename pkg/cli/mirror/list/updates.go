@@ -69,7 +69,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	}
 
 	path := filepath.Join(o.Dir, config.SourceDir)
-	backend, err := storage.ByConfig(ctx, path, cfg.StorageConfig)
+	backend, err := storage.ByConfig(path, cfg.StorageConfig)
 	if err != nil {
 		return fmt.Errorf("error opening backend: %v", err)
 	}

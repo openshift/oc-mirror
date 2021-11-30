@@ -6,6 +6,8 @@
   - [Usage](#usage)
     - [Configuration Examples](#configuration-examples)
     - [Environment Prep](#environment-prep)
+    - [Building the ImageSet Config](#building-the-imageset-config)
+      - [Backends](#backends)
     - [Content Discovery](#content-discovery)
       - [Updates](#updates)
       - [Releases](#releases)
@@ -35,13 +37,32 @@ Example configurations can be found in the docs [here](docs/examples)
     ```sh
     make build
     ```
+### Building the ImageSet Config
+#### Backends
+> **IMPORTANT**: Backends must be configured to utilize the lifecycle management features of `oc-mirror`. Examples are below.
+```sh
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+archiveSize: 1
+storageConfig:
+  local:
+    path: /home/user/workspace
+```
+```sh
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+  registry:
+    imageURL: localhost:5000/metadata:latest
+    skipTLS: true
+```
 ### Content Discovery
 
 #### Updates
 
 - List updates since the last `oc-mirror` run
   ```sh
-  ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
+  ./bin/oc-mirror list updates --config imageset-config.yaml
   ```
 #### Releases
 1. List all available release payloads for a version of OpenShift (defaults to stable)
@@ -78,13 +99,13 @@ Example configurations can be found in the docs [here](docs/examples)
 #### Fully Disconnected
 - Create then publish to your mirror registry:
     ```sh
-    ./bin/oc-mirror --config imageset-config.yaml --dir test-create file://archives
-    ./bin/oc-mirror --from /path/to/archives --dir test-publish docker://reg.mirror.com
+    ./bin/oc-mirror --config imageset-config.yaml file://archives
+    ./bin/oc-mirror --from /path/to/archives docker://reg.mirror.com
     ```
 #### Partially Disconnected
 - Publish mirror to mirror
      ```sh
-    ./bin/oc-mirror --config imageset-config.yaml --dir test docker://localhost:5000
+    ./bin/oc-mirror --config imageset-config.yaml docker://localhost:5000
     ```
 ## Additional Features
 - Get information on your imageset using `describe`
@@ -93,7 +114,7 @@ Example configurations can be found in the docs [here](docs/examples)
     ```
 - List updates since last run for releases and operators
   ```sh
-  ./bin/oc-mirror list updates --config imageset-config.yaml --dir test-create
+  ./bin/oc-mirror list updates --config imageset-config.yaml
   ```
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
