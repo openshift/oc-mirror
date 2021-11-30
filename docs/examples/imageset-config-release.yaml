@@ -1,0 +1,10 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.8
+      - name: stable-4.7
+        versions:
+          - 4.7.36
+    graph: true
