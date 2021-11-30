@@ -1,0 +1,10 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  ocp:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8
+      packages:
+        - name: elasticsearch-operator
+          versions: 
+            - '5.2.3-31'

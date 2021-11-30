@@ -1,0 +1,11 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+  registry:
+    imageURL: localhost:5000/test:latest
+    skipTLS: true
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.8
+    graph: true

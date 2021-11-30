@@ -1,0 +1,9 @@
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  ocp:
+    channels:
+      - name: okd
+        versions:
+        - '4.8.0-0.okd-2021-10-10-030117'
+    graph: true
