@@ -4,6 +4,7 @@
 
 - [oc-mirror](#oc-mirror)
   - [Usage](#usage)
+    - [Configuration Examples](#configuration-examples)
     - [Environment Prep](#environment-prep)
     - [Content Discovery](#content-discovery)
       - [Updates](#updates)
@@ -20,8 +21,13 @@
 [![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
 
 The mirror registry `reg.mirror.com` is used in this example.
-Replace this value with a real registry host, or create a `docker.io/library/registry:2` container locally.
+Replace this value with a real registry host, or create a `docker.io/library/registry:2` container locally.\
 
+> DISCLAIMER: `oc-mirror` is currently not compatible with Quay. This is will be addressed in a future release.
+
+### Configuration Examples
+
+Example configurations can be found in the docs [here](docs/examples)
 ### Environment Prep
 1. Download pull secret and place at `~/.docker/config.json`<sup>1</sup>.
     - Your mirror registry secret must have both push and pull scopes.
