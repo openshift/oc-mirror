@@ -135,7 +135,7 @@ func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 			SkipTLS:  true,
 		},
 	}
-	registry, err := storage.ByConfig(ctx, dir, cfg)
+	registry, err := storage.ByConfig(dir, cfg)
 	if err != nil {
 		return err
 	}

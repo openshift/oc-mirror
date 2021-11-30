@@ -123,18 +123,27 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	}
 
 	// Get current metadata info
-	cfg := v1alpha1.StorageConfig{
-		Registry: &v1alpha1.RegistryConfig{
-			ImageURL: metaImage,
-			SkipTLS:  o.DestSkipTLS,
-		},
+	var cfg v1alpha1.StorageConfig
+	if !incomingMeta.SingleUse {
+		cfg = v1alpha1.StorageConfig{
+			Registry: &v1alpha1.RegistryConfig{
+				ImageURL: metaImage,
+				SkipTLS:  o.DestSkipTLS,
+			},
+		}
 	}
-	backend, err := storage.ByConfig(ctx, o.Dir, cfg)
-	if err != nil {
-		return err
+	backend, berr := storage.ByConfig(o.Dir, cfg)
+	if berr != nil {
+		if !errors.Is(berr, storage.ErrBackendNotConfigured) {
+			return fmt.Errorf("error opening backend: %v", err)
+		}
+		logrus.Warn("metadata has single-use label, using stateless mode")
+		defer func() {
+			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
+				logrus.Error(err)
+			}
+		}()
 	}
-
-	logrus.Debugf("Searching for metadata at %s", cfg.Registry.ImageURL)
 
 	// Read in current metadata, if present
 	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {

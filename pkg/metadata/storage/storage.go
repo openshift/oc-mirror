@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -14,7 +16,8 @@ import (
 var (
 	// ErrMetadataNotExist should be returned by ReadMetadata() when no metadata is found.
 	// Callers should check for this error, since in certain conditions no metadata is desired.
-	ErrMetadataNotExist = errors.New("metadata does not exist")
+	ErrMetadataNotExist     = errors.New("metadata does not exist")
+	ErrBackendNotConfigured = errors.New("no backend specified in config")
 )
 
 // TODO: consider consolidating {Read,Write}Metadata() into the
@@ -27,6 +30,9 @@ type Backend interface {
 	WriteObject(context.Context, string, interface{}) error
 	GetWriter(context.Context, string) (io.Writer, error)
 	CheckConfig(v1alpha1.StorageConfig) error
+	Open(string) (io.ReadCloser, error)
+	Stat(context.Context, string) (os.FileInfo, error)
+	Cleanup(context.Context, string) error
 }
 
 // Committer is a Backend that collects a set of write operations into a transaction
@@ -44,7 +50,7 @@ var backends = []Backend{
 }
 
 // ByConfig returns backend interface based on provided config
-func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (Backend, error) {
+func ByConfig(dir string, storage v1alpha1.StorageConfig) (Backend, error) {
 	var b interface{}
 	for _, bk := range backends {
 		if err := bk.CheckConfig(storage); err == nil {
@@ -54,11 +60,19 @@ func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (
 	}
 	switch b.(type) {
 	case *localDirBackend:
-		return NewLocalBackend(dir)
+		return NewLocalBackend(storage.Local.Path)
 	case *registryBackend:
-		return NewRegistryBackend(ctx, storage.Registry, dir)
+		logrus.Infof("Using registry backend at location %s", storage.Registry.ImageURL)
+		return NewRegistryBackend(storage.Registry, dir)
+	default:
+		// If no local or registry backend is
+		// configured, send back the default option with an error
+		be, err := NewLocalBackend(dir)
+		if err != nil {
+			return nil, err
+		}
+		return be, ErrBackendNotConfigured
 	}
-	return nil, fmt.Errorf("unsupported backend type")
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {

@@ -23,8 +23,6 @@ type MirrorOptions struct {
 	SkipMissing      bool
 	ContinueOnError  bool
 	FilterOptions    imagemanifest.FilterOptions
-
-	BuildxPlatforms []string
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
@@ -39,11 +37,6 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
 	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")
-	fs.StringSliceVar(&o.BuildxPlatforms, "buildx-platforms", o.BuildxPlatforms,
-		"If set, the command will invoke 'docker buildx build' to build a catalog manifest list "+
-			"for the specified platforms, ex. linux/amd64, instead of 'podman build' for the host platform. "+
-			"The 'buildx' plugin and accompanying configuration MUST be installed on the build host. "+
-			"This list does NOT filter operator bundle manifest list platforms within the catalog")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
 		"and attempt to mirror as much as possible")
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+

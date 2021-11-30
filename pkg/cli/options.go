@@ -23,6 +23,8 @@ type RootOptions struct {
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
 	fs.StringVar(&o.LogLevel, "log-level", "info", "Log level (e.g. \"debug | info | warn | error\")")
+	// Mark dir as a hidden flag
+	fs.MarkHidden("dir")
 }
 
 func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
@@ -46,7 +48,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 		DisableQuote:           true,
 	}))
 
-	o.logfileCleanup = setupFileHook(o.Dir)
+	o.logfileCleanup = setupFileHook(".")
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {
