@@ -159,7 +159,7 @@ func (b *localDirBackend) GetWriter(_ context.Context, fpath string) (io.Writer,
 }
 
 // Open reads the provided object from a local source and provides an io.ReadCloser
-func (b *localDirBackend) Open(fpath string) (io.ReadCloser, error) {
+func (b *localDirBackend) Open(_ context.Context, fpath string) (io.ReadCloser, error) {
 	return b.fs.Open(fpath)
 }
 

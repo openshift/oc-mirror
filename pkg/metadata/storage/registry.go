@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
@@ -48,8 +47,6 @@ func NewRegistryBackend(cfg *v1alpha1.RegistryConfig, dir string) (Backend, erro
 	}
 	b.src = ref
 
-	logrus.Info(ref)
-
 	if b.localDirBackend == nil {
 		// Create the local dir backend for local r/w.
 		lb, err := NewLocalBackend(dir)
@@ -71,14 +68,11 @@ func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha1.Metad
 	}
 
 	// Get metadata from image
-	err := b.unpack(ctx, b.localDirBackend.dir)
-	if err != nil {
+	if err := b.unpack(ctx, b.localDirBackend.dir); err != nil {
 		return fmt.Errorf("error pulling image %q with metadata: %v", b.src, err)
 	}
 	// adjust perms, unpack leaves the file user-writable only
-	fpath := filepath.Join(b.localDirBackend.dir, path)
-	err = os.Chmod(fpath, 0600)
-	if err != nil {
+	if err := b.localDirBackend.fs.Chmod(path, 0600); err != nil {
 		return err
 	}
 	return b.localDirBackend.ReadMetadata(ctx, meta, path)
@@ -128,10 +122,20 @@ func (b *registryBackend) GetWriter(ctx context.Context, fpath string) (io.Write
 }
 
 // Open reads the provided object from a registry source and provides an io.ReadCloser
-func (b *registryBackend) Open(fpath string) (io.ReadCloser, error) {
-	// Assumes this is in place on disk
-	// QUESTION(jpower): can we make this assumption here?
-	return b.localDirBackend.Open(fpath)
+func (b *registryBackend) Open(ctx context.Context, fpath string) (io.ReadCloser, error) {
+	if _, err := b.Stat(ctx, fpath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		if err := b.unpack(ctx, b.localDirBackend.dir); err != nil {
+			return nil, err
+		}
+		// adjust perms, unpack leaves the file user-writable only
+		if err := b.localDirBackend.fs.Chmod(fpath, 0600); err != nil {
+			return nil, err
+		}
+	}
+	return b.localDirBackend.Open(ctx, fpath)
 }
 
 // Stat checks the existence of the metadata from a registry source
@@ -141,8 +145,6 @@ func (b *registryBackend) Stat(ctx context.Context, fpath string) (os.FileInfo, 
 	if err := b.exists(ctx); err != nil {
 		return nil, err
 	}
-	// Assumes this is in place on disk
-	// QUESTION(jpower): can we make this assumption here?
 	return b.localDirBackend.Stat(ctx, fpath)
 }
 

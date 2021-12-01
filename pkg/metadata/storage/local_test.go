@@ -60,7 +60,7 @@ func Test_LocalBackend(t *testing.T) {
 	info, metadataErr = backend.Stat(ctx, "publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
-	_, metadataErr = backend.Open("publish/.metadata.json")
+	_, metadataErr = backend.Open(ctx, "publish/.metadata.json")
 	require.NoError(t, metadataErr)
 
 	readMeta := &v1alpha1.Metadata{}

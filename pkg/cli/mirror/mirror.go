@@ -139,7 +139,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
 
 		// create temp workspace
-		dir, err := ioutil.TempDir(o.Dir, "mirrortmp")
+		dir, err := ioutil.TempDir(".", "mirrortmp")
 		if err != nil {
 			return err
 		}

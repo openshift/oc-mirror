@@ -16,8 +16,7 @@ import (
 var (
 	// ErrMetadataNotExist should be returned by ReadMetadata() when no metadata is found.
 	// Callers should check for this error, since in certain conditions no metadata is desired.
-	ErrMetadataNotExist     = errors.New("metadata does not exist")
-	ErrBackendNotConfigured = errors.New("no backend specified in config")
+	ErrMetadataNotExist = errors.New("metadata does not exist")
 )
 
 // TODO: consider consolidating {Read,Write}Metadata() into the
@@ -30,7 +29,7 @@ type Backend interface {
 	WriteObject(context.Context, string, interface{}) error
 	GetWriter(context.Context, string) (io.Writer, error)
 	CheckConfig(v1alpha1.StorageConfig) error
-	Open(string) (io.ReadCloser, error)
+	Open(context.Context, string) (io.ReadCloser, error)
 	Stat(context.Context, string) (os.FileInfo, error)
 	Cleanup(context.Context, string) error
 }
@@ -60,18 +59,13 @@ func ByConfig(dir string, storage v1alpha1.StorageConfig) (Backend, error) {
 	}
 	switch b.(type) {
 	case *localDirBackend:
+		logrus.Debugf("Using local backend at location %s", storage.Local.Path)
 		return NewLocalBackend(storage.Local.Path)
 	case *registryBackend:
-		logrus.Infof("Using registry backend at location %s", storage.Registry.ImageURL)
+		logrus.Debugf("Using registry backend at location %s", storage.Registry.ImageURL)
 		return NewRegistryBackend(storage.Registry, dir)
 	default:
-		// If no local or registry backend is
-		// configured, send back the default option with an error
-		be, err := NewLocalBackend(dir)
-		if err != nil {
-			return nil, err
-		}
-		return be, ErrBackendNotConfigured
+		return nil, errors.New("unsupported backend configuration")
 	}
 }
 

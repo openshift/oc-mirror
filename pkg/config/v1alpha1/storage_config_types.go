@@ -14,7 +14,6 @@ type RegistryConfig struct {
 }
 
 // LocalConfig configure a local directory storage
-
 type LocalConfig struct {
 	Path string `json:"path"`
 }
