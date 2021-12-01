@@ -23,8 +23,14 @@ type localDirBackend struct {
 }
 
 func NewLocalBackend(dir string) (Backend, error) {
+
+	// Get absolute path for provided dir
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
 	b := localDirBackend{
-		dir: dir,
+		dir: absDir,
 	}
 	return &b, b.init()
 }
@@ -152,8 +158,32 @@ func (b *localDirBackend) GetWriter(_ context.Context, fpath string) (io.Writer,
 	return w, nil
 }
 
+// Open reads the provided object from a local source and provides an io.ReadCloser
+func (b *localDirBackend) Open(_ context.Context, fpath string) (io.ReadCloser, error) {
+	return b.fs.Open(fpath)
+}
+
+// Stat checks the existence of the metadata from a local source
+func (b *localDirBackend) Stat(_ context.Context, fpath string) (os.FileInfo, error) {
+	info, err := b.fs.Stat(fpath)
+	switch {
+	case err != nil && errors.Is(err, os.ErrNotExist):
+		logrus.Info(b.fs.Name())
+		return nil, ErrMetadataNotExist
+	case err != nil:
+		return nil, err
+	default:
+		return info, nil
+	}
+}
+
+// Cleanup removes remove metadata from existing metadata from backend location
+func (b *localDirBackend) Cleanup(_ context.Context, fpath string) error {
+	return b.fs.RemoveAll(fpath)
+}
+
 func (b *localDirBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
-	if storage.Registry != nil {
+	if storage.Local == nil {
 		return fmt.Errorf("not local backend")
 	}
 	return nil

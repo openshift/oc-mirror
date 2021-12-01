@@ -29,28 +29,46 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 		return err
 	}
 
-	logrus.Info("Verifying pull secrets")
 	// Validating pull secrets
 	if err := config.ValidateSecret(cfg); err != nil {
 		return err
 	}
 
-	// Configure the metadata backend.
+	// Determine stateless or stateful mode.
+	// Empty storage configuration will trigger a metadata cleanup
+	// action and labels metadata as single use
+	var backend storage.Backend
+	var meta v1alpha1.Metadata
 	path := filepath.Join(o.Dir, config.SourceDir)
-	backend, err := storage.ByConfig(ctx, path, cfg.StorageConfig)
-	if err != nil {
-		return fmt.Errorf("error opening backend: %v", err)
+	if (v1alpha1.StorageConfig{} == cfg.StorageConfig) {
+		meta.SingleUse = true
+		logrus.Warnf("backend is not configured in %s, using stateless mode", o.ConfigPath)
+		cfg.StorageConfig.Local = &v1alpha1.LocalConfig{Path: path}
+		backend, err = storage.ByConfig(path, cfg.StorageConfig)
+		if err != nil {
+			return fmt.Errorf("error opening backend: %v", err)
+		}
+		defer func() {
+			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
+				logrus.Error(err)
+			}
+		}()
+	} else {
+		meta.SingleUse = false
+		backend, err = storage.ByConfig(path, cfg.StorageConfig)
+		if err != nil {
+			return fmt.Errorf("error opening backend: %v", err)
+		}
+	}
+
+	// Run full or diff mirror.
+	merr := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath)
+	if merr != nil && !errors.Is(merr, storage.ErrMetadataNotExist) {
+		return merr
 	}
 
 	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
 		return err
-	}
-
-	// Run full or diff mirror.
-	var meta v1alpha1.Metadata
-	merr := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath)
-	if merr != nil && !errors.Is(merr, storage.ErrMetadataNotExist) {
-		return merr
 	}
 
 	// Ensure meta has the latest OPM image, and if not add it to cfg for mirroring.
@@ -100,7 +118,7 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 	}
 
 	// Run archiver
-	if err := o.prepareArchive(cfg, thisRun.Sequence, manifests, blobs); err != nil {
+	if err := o.prepareArchive(ctx, cfg, backend, thisRun.Sequence, manifests, blobs); err != nil {
 		return err
 	}
 
@@ -220,7 +238,7 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 	return nil
 }
 
-func (o MirrorOptions) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
+func (o MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -253,7 +271,7 @@ func (o MirrorOptions) prepareArchive(cfg v1alpha1.ImageSetConfiguration, seq in
 	prefix := fmt.Sprintf("mirror_seq%d", seq)
 
 	// Create tar archive
-	if err := packager.CreateSplitArchive(segSize, output, ".", prefix, o.SkipCleanup); err != nil {
+	if err := packager.CreateSplitArchive(ctx, backend, segSize, output, ".", prefix, o.SkipCleanup); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
@@ -275,13 +293,11 @@ func (o MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []
 
 	// Gather manifests we pulled
 	manifests, err := bundle.ReconcileManifests()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	blobs, err := bundle.ReconcileBlobs(meta)
-
 	if err != nil {
 		return nil, nil, err
 	}

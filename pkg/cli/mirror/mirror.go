@@ -82,6 +82,9 @@ func (o *MirrorOptions) Complete(args []string) error {
 	switch {
 	case strings.Contains(destination, "file://"):
 		o.OutputDir = strings.TrimPrefix(destination, "file://")
+		// If the destination is on disk, made the output dir the
+		// parent dir for the workspace
+		o.Dir = filepath.Join(o.OutputDir, o.Dir)
 	case strings.Contains(destination, "docker://"):
 		ref := strings.TrimPrefix(destination, "docker://")
 		mirror, err := imagesource.ParseReference(ref)
@@ -136,13 +139,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
 
 		// create temp workspace
-		dir, err := ioutil.TempDir(o.Dir, "mirrortmp")
+		dir, err := ioutil.TempDir(".", "mirrortmp")
 		if err != nil {
 			return err
-		}
-
-		if !o.SkipCleanup {
-			defer os.RemoveAll(dir)
 		}
 
 		o.OutputDir = dir
@@ -155,7 +154,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
 		o.OutputDir = ""
 
 		if err := o.Publish(cmd.Context(), cmd, f); err != nil {
-			return err
+			fmt.Fprintf(o.IOStreams.ErrOut, "Image Publish:\nERROR: publishing operation failed: %v\nTo retry this operation run \"oc-mirror --from %s docker://%s\"\n", err, o.From, o.ToMirror)
+			return kcmdutil.ErrExit
+		}
+
+		// Remove tmp directory
+		if !o.SkipCleanup {
+			os.RemoveAll(dir)
 		}
 	}
 

@@ -3,12 +3,13 @@
 
 # Test artifacts.
 coverage.out
-**/bundle*.tar
+**/mirror*.tar
 sha256sum.txt
 /test/operator-test.*
 **/publish.tmp.*
 **/test-output
 **/.metadata.json
+oc-mirror-workspace/
 
 # Logs.
 **/.openshift_bundle.log

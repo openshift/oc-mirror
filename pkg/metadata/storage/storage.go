@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -27,6 +29,9 @@ type Backend interface {
 	WriteObject(context.Context, string, interface{}) error
 	GetWriter(context.Context, string) (io.Writer, error)
 	CheckConfig(v1alpha1.StorageConfig) error
+	Open(context.Context, string) (io.ReadCloser, error)
+	Stat(context.Context, string) (os.FileInfo, error)
+	Cleanup(context.Context, string) error
 }
 
 // Committer is a Backend that collects a set of write operations into a transaction
@@ -44,7 +49,7 @@ var backends = []Backend{
 }
 
 // ByConfig returns backend interface based on provided config
-func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (Backend, error) {
+func ByConfig(dir string, storage v1alpha1.StorageConfig) (Backend, error) {
 	var b interface{}
 	for _, bk := range backends {
 		if err := bk.CheckConfig(storage); err == nil {
@@ -54,11 +59,14 @@ func ByConfig(ctx context.Context, dir string, storage v1alpha1.StorageConfig) (
 	}
 	switch b.(type) {
 	case *localDirBackend:
-		return NewLocalBackend(dir)
+		logrus.Debugf("Using local backend at location %s", storage.Local.Path)
+		return NewLocalBackend(storage.Local.Path)
 	case *registryBackend:
-		return NewRegistryBackend(ctx, storage.Registry, dir)
+		logrus.Debugf("Using registry backend at location %s", storage.Registry.ImageURL)
+		return NewRegistryBackend(storage.Registry, dir)
+	default:
+		return nil, errors.New("unsupported backend configuration")
 	}
-	return nil, fmt.Errorf("unsupported backend type")
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {

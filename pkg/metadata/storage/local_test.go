@@ -57,10 +57,19 @@ func Test_LocalBackend(t *testing.T) {
 	info, metadataErr = backend.fs.Stat("publish/.metadata.json")
 	require.NoError(t, metadataErr)
 	require.True(t, info.Mode().IsRegular())
+	info, metadataErr = backend.Stat(ctx, "publish/.metadata.json")
+	require.NoError(t, metadataErr)
+	require.True(t, info.Mode().IsRegular())
+	_, metadataErr = backend.Open(ctx, "publish/.metadata.json")
+	require.NoError(t, metadataErr)
 
 	readMeta := &v1alpha1.Metadata{}
 	require.NoError(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath))
 	require.Equal(t, m, readMeta)
+
+	metadataErr = backend.Cleanup(ctx, config.MetadataBasePath)
+	require.NoError(t, metadataErr)
+	require.ErrorIs(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath), ErrMetadataNotExist)
 
 	type object struct {
 		SomeData string

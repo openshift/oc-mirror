@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 /* FIXME(jpower): known issue with many small files
@@ -75,7 +77,17 @@ func Test_SplitArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := packager.CreateSplitArchive(tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
+		backend, err := storage.NewLocalBackend(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		meta := v1alpha1.Metadata{}
+		if err := backend.WriteMetadata(context.Background(), &meta, config.MetadataBasePath); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := packager.CreateSplitArchive(context.Background(), backend, tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
 			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
 		}
 

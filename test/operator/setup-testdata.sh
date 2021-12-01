@@ -41,6 +41,7 @@ function setup() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/testdata/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@REGISTRY_CATALOGNAMESPACE@'"$REGISTRY_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
 
   create_buildx_builder
 }
