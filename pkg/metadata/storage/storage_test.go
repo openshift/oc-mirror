@@ -32,16 +32,7 @@ func Test_ByConfig(t *testing.T) {
 		cfg         v1alpha1.StorageConfig
 		expected    Backend
 		expectedDir string
-		err         error
-		wantErr     bool
 	}{{
-		name:        "default-backend",
-		cfg:         v1alpha1.StorageConfig{},
-		expected:    &localDirBackend{},
-		expectedDir: dir,
-		err:         ErrBackendNotConfigured,
-		wantErr:     true,
-	}, {
 		name: "local-backend",
 		cfg: v1alpha1.StorageConfig{
 			Local: &v1alpha1.LocalConfig{
@@ -50,7 +41,6 @@ func Test_ByConfig(t *testing.T) {
 		},
 		expected:    &localDirBackend{},
 		expectedDir: customDir,
-		wantErr:     false,
 	}, {
 		name: "registry-backend",
 		cfg: v1alpha1.StorageConfig{
@@ -61,17 +51,12 @@ func Test_ByConfig(t *testing.T) {
 		},
 		expected:    &registryBackend{},
 		expectedDir: dir,
-		wantErr:     false,
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
 			backend, err := ByConfig(filepath.Join(dir, test.name), test.cfg)
-			if test.wantErr {
-				require.ErrorIs(t, err, test.err)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 
 			switch v := backend.(type) {
 			case *localDirBackend:

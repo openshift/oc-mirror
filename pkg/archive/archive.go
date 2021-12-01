@@ -36,7 +36,6 @@ type packager struct {
 	manifest    map[string]struct{}
 	blobs       map[string]struct{}
 	packedBlobs map[string]struct{}
-	ctx         context.Context
 	Archiver
 }
 
@@ -68,13 +67,12 @@ func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager
 		manifest:    manifestSetToArchive,
 		blobs:       blobSetToArchive,
 		packedBlobs: make(map[string]struct{}, len(blobs)),
-		ctx:         context.Background(),
 		Archiver:    NewArchiver(),
 	}
 }
 
 // CreateSplitAchrive will create multiple tar archives from source directory
-func (p *packager) CreateSplitArchive(backend storage.Backend, maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
+func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backend, maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables
 	splitNum := 0
@@ -94,7 +92,7 @@ func (p *packager) CreateSplitArchive(backend storage.Backend, maxSplitSize int6
 	}
 
 	// write metadata to first archive
-	if err := packMetadata(p.ctx, p, backend); err != nil {
+	if err := packMetadata(ctx, p, backend); err != nil {
 		return fmt.Errorf("writing metadata to archive %s failed: %v", splitPath, err)
 	}
 
@@ -297,10 +295,11 @@ func packMetadata(ctx context.Context, arc Archiver, backend storage.Backend) er
 	if err != nil {
 		return err
 	}
-	file, err := backend.Open(config.MetadataBasePath)
+	file, err := backend.Open(ctx, config.MetadataBasePath)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	f := archiver.File{
 		FileInfo: archiver.FileInfo{
 			FileInfo:   info,

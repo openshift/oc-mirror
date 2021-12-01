@@ -87,7 +87,7 @@ func Test_SplitArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := packager.CreateSplitArchive(backend, tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
+		if err := packager.CreateSplitArchive(context.Background(), backend, tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
 			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
 		}
 

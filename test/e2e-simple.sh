@@ -51,7 +51,6 @@ function run_diff() {
 
 function mirror2mirror() {
   local config="${1:?config required}"
-  mkdir $PUBLISH_FULL_DIR
   "${DIR}/start-docker-registry.sh" $REGISTRY_CONN $REGISTRY_CONN_PORT
   "${DIR}/start-docker-registry.sh" $REGISTRY_DISCONN $REGISTRY_DISCONN_PORT
   "${DIR}/operator/setup-testdata.sh" "$DATA_TMP" "$CREATE_FULL_DIR" "latest/$config" false

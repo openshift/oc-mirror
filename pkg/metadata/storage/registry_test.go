@@ -87,7 +87,7 @@ func Test_RegistryBackend(t *testing.T) {
 			info, metadataErr = backend.Stat(ctx, config.MetadataBasePath)
 			require.NoError(t, metadataErr)
 			require.True(t, info.Mode().IsRegular())
-			_, metadataErr = backend.Open(config.MetadataBasePath)
+			_, metadataErr = backend.Open(ctx, config.MetadataBasePath)
 			require.NoError(t, metadataErr)
 
 			readMeta := &v1alpha1.Metadata{}
