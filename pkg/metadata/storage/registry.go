@@ -115,7 +115,7 @@ func (b *registryBackend) WriteObject(ctx context.Context, fpath string, obj int
 	return b.pushImage(ctx, data, fpath)
 }
 
-// GetWriter returns an os.File as a writeb.
+// GetWriter returns an os.File as a writer.
 // In this implementation, key is a file path.
 func (b *registryBackend) GetWriter(ctx context.Context, fpath string) (io.Writer, error) {
 	return b.localDirBackend.GetWriter(ctx, fpath)
