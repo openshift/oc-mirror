@@ -1,0 +1,6 @@
+---
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+mirror:
+  operators:
+  - catalog: localhost:5001/test-catalogs/test-catalog:latest
