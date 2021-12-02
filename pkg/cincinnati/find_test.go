@@ -1,19 +1,14 @@
 package cincinnati
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_FindLastestRelease(t *testing.T) {
-
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	channelName := "test-channel"
 
 	tests := []struct {
@@ -54,13 +49,6 @@ func Test_FindLastestRelease(t *testing.T) {
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			requestQuery := make(chan string, 1)
-			defer close(requestQuery)
-
-			handler := getHandler(t, requestQuery)
-
-			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
 
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
@@ -77,7 +65,7 @@ func Test_FindLastestRelease(t *testing.T) {
 				},
 			}
 
-			ch, ver, err := FindLastRelease(meta, channelName, ts.URL, clientID)
+			ch, ver, err := FindLastRelease(meta, channelName)
 
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)

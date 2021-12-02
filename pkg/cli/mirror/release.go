@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,63 +58,15 @@ func NewReleaseOptions(mo MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
 	}
 }
 
-func (o *ReleaseOptions) downloadMirror(secret []byte, toDir, from, arch, version string) (image.AssociationSet, error) {
-	opts := release.NewMirrorOptions(o.IOStreams)
-	opts.From = from
-	opts.ToDir = toDir
-
-	// If the pullSecret is not empty create a cached context
-	// else let `oc mirror` use the default docker config location
-	if len(secret) != 0 {
-		ctx, err := config.CreateContext(secret, o.SkipVerification, o.SourceSkipTLS)
-		if err != nil {
-			return nil, err
-		}
-		opts.SecurityOptions.CachedContext = ctx
-	}
-
-	opts.SecurityOptions.Insecure = o.SourceSkipTLS
-	opts.SecurityOptions.SkipVerification = o.SkipVerification
-	opts.DryRun = o.DryRun
-	logrus.Debugf("Starting release download for version %s", version)
-	if err := opts.Run(); err != nil {
-		return nil, err
-	}
-
-	// Retrive the mapping information for release
-	mapping, images, err := o.getMapping(*opts, arch, version)
-
-	if err != nil {
-		return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
-	}
-
-	logrus.Debugln("starting image association")
-	assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if a release image was provided with mapping
-	if o.release == "" {
-		return nil, errors.New("release image not found in mapping")
-	}
-
-	// Update all images associated with a release to the
-	// release images so they form one keyset for publising
-	for _, img := range images {
-		assocs.UpdateKey(img, o.release)
-	}
-
-	return assocs, nil
-}
-
 // GetReleases will pill release payloads based on user configuration
 func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata, cfg *v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
-	allAssocs := image.AssociationSet{}
-	pullSecret := cfg.Mirror.OCP.PullSecret
-	srcDir := filepath.Join(o.Dir, config.SourceDir)
-	channelVersion := make(map[string]string, len(cfg.Mirror.OCP.Channels))
+	var (
+		pullSecret       = cfg.Mirror.OCP.PullSecret
+		srcDir           = filepath.Join(o.Dir, config.SourceDir)
+		channelVersion   = make(map[string]string, len(cfg.Mirror.OCP.Channels))
+		releaseDownloads = downloads{}
+	)
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 
@@ -140,89 +93,152 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 			// Check for specific version declarations for each specific version
 			for _, v := range ch.Versions {
 
-				requested, err := semver.Parse(v)
+				downloads, err := o.getDownloads(ctx, client, meta, v, ch.Name, arch, upstream)
 				if err != nil {
 					return nil, err
 				}
-
-				// If no release has been downloaded for the
-				// channel, download the requested version
-				lastCh, lastVer, err := cincinnati.FindLastRelease(meta, ch.Name, url, o.uuid)
-				currCh := ch.Name
-				reverse := false
-				logrus.Infof("Downloading requested release %s", requested.String())
-				switch {
-				case err != nil && errors.Is(err, cincinnati.ErrNoPreviousRelease):
-					lastVer = requested
-					lastCh = ch.Name
-				case err != nil:
-					return nil, err
-				case requested.LT(lastVer):
-					logrus.Debugf("Found current release %s", lastVer.String())
-					// If the requested version is an earlier release than previous
-					// downloads switch the values to get updates between the
-					// later and earlier version
-					currCh = lastCh
-					lastCh = ch.Name
-					requested = lastVer
-					lastVer = semver.MustParse(v)
-
-					// download the current image since this will not be in the updates
-					// FIXME(jpower): This makes sure that the current download
-					// happens for the user requested version, but the
-					// later download version is downloaded again
-					reverse = true
-				default:
-					logrus.Debugf("Found current release %s", lastVer.String())
-				}
-
-				// This dumps the available upgrades from the last downloaded version
-				current, new, updates, err := client.CalculateUpgrades(ctx, upstream, arch, lastCh, currCh, lastVer, requested)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
-				}
-
-				if requested.EQ(lastVer) || reverse {
-					assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, current.Image, arch, v)
-					if err != nil {
-						return nil, err
-					}
-					allAssocs.Merge(assocs)
-					if !reverse {
-						continue
-					}
-				}
-
-				// Download needed version between the current version and
-				// the requested version.
-				var updateCount int
-				for _, update := range updates {
-					logrus.Debugf("Image to download for: %v", update.Image)
-					if update.Version.LE(requested) {
-						assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, update.Image, arch, update.Version.String())
-						if err != nil {
-							return nil, err
-						}
-						allAssocs.Merge(assocs)
-						updateCount++
-					}
-				}
-				// Downloaded requested release if not in upgrade
-				// graph
-				if updateCount == 0 {
-					assocs, err := o.downloadMirror([]byte(pullSecret), srcDir, new.Image, arch, new.Version.String())
-					if err != nil {
-						return nil, err
-					}
-					allAssocs.Merge(assocs)
-				}
+				releaseDownloads.Merge(downloads)
 			}
 		}
+	}
+
+	assocs, err := o.mirror([]byte(pullSecret), srcDir, releaseDownloads)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update cfg release channels with latest versions
 	// if applicable
 	cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, channelVersion)
+
+	return assocs, nil
+}
+
+// getDownloads will prepare the downloads map for mirroring
+func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Client, meta v1alpha1.Metadata, version, channel, arch string, url *url.URL) (downloads, error) {
+	downloads := map[string]download{}
+
+	requested, err := semver.Parse(version)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no release has been downloaded for the
+	// channel, download the requested version
+	lastCh, lastVer, err := cincinnati.FindLastRelease(meta, channel)
+	currCh := channel
+	reverse := false
+	logrus.Infof("Downloading requested release %s", requested.String())
+	switch {
+	case err != nil && errors.Is(err, cincinnati.ErrNoPreviousRelease):
+		lastVer = requested
+		lastCh = channel
+	case err != nil:
+		return nil, err
+	case requested.LT(lastVer):
+		logrus.Debugf("Found current release %s", lastVer.String())
+		// If the requested version is an earlier release than previous
+		// downloads switch the values to get updates between the
+		// later and earlier version
+		currCh = lastCh
+		lastCh = channel
+		requested = lastVer
+		lastVer = semver.MustParse(version)
+		// Download the current image since this will not be in the updates
+		reverse = true
+	default:
+		logrus.Debugf("Found current release %s", lastVer.String())
+	}
+
+	// This dumps the available upgrades from the last downloaded version
+	current, new, updates, err := client.CalculateUpgrades(ctx, url, arch, lastCh, currCh, lastVer, requested)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
+	}
+
+	for _, update := range updates {
+		download := download{
+			Update: update,
+			arch:   arch,
+		}
+		downloads[update.Image] = download
+	}
+
+	// If reverse graph download the current version
+	// else add new to downloads
+	if reverse {
+		download := download{
+			Update: current,
+			arch:   arch,
+		}
+		downloads[current.Image] = download
+		// Remove new from updates as it has already
+		// been downloaded
+		delete(downloads, new.Image)
+	} else {
+		download := download{
+			Update: new,
+			arch:   arch,
+		}
+		downloads[new.Image] = download
+	}
+
+	return downloads, nil
+}
+
+// mirror will take the prepare download information and mirror to disk location
+func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[string]download) (image.AssociationSet, error) {
+	allAssocs := image.AssociationSet{}
+
+	for img, download := range downloads {
+		logrus.Debugf("Starting release download for version %s", download.Version.String())
+		opts := release.NewMirrorOptions(o.IOStreams)
+		opts.ToDir = toDir
+
+		// If the pullSecret is not empty create a cached context
+		// else let `oc mirror` use the default docker config location
+		if len(secret) != 0 {
+			ctx, err := config.CreateContext(secret, o.SkipVerification, o.SourceSkipTLS)
+			if err != nil {
+				return nil, err
+			}
+			opts.SecurityOptions.CachedContext = ctx
+		}
+
+		opts.SecurityOptions.Insecure = o.SourceSkipTLS
+		opts.SecurityOptions.SkipVerification = o.SkipVerification
+		opts.DryRun = o.DryRun
+		opts.From = img
+		if err := opts.Run(); err != nil {
+			return nil, err
+		}
+
+		// Retrive the mapping information for release
+		mapping, images, err := o.getMapping(*opts, download.arch, download.Version.String())
+
+		if err != nil {
+			return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
+		}
+
+		logrus.Debugln("starting image association")
+		assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if a release image was provided with mapping
+		if o.release == "" {
+			return nil, errors.New("release image not found in mapping")
+		}
+
+		// Update all images associated with a release to the
+		// release images so they form one keyset for publising
+		for _, img := range images {
+			assocs.UpdateKey(img, o.release)
+		}
+
+		allAssocs.Merge(assocs)
+	}
 
 	return allAssocs, nil
 }
@@ -316,4 +332,17 @@ func updateReleaseChannel(releaseChannels []v1alpha1.ReleaseChannel, channelVers
 		}
 	}
 	return releaseChannels
+}
+
+// Define download types
+type downloads map[string]download
+type download struct {
+	cincinnati.Update
+	arch string
+}
+
+func (d downloads) Merge(in downloads) {
+	for k, v := range in {
+		d[k] = v
+	}
 }
