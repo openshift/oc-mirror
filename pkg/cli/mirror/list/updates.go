@@ -116,7 +116,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSe
 		// have been made in the target channel list
 		// all versions
 		var vers []semver.Version
-		lastCh, ver, err := cincinnati.FindLastRelease(meta, ch.Name, url, uuid)
+		lastCh, ver, err := cincinnati.FindLastRelease(meta, ch.Name)
 		switch {
 		case err != nil && !errors.Is(err, cincinnati.ErrNoPreviousRelease):
 			return err
