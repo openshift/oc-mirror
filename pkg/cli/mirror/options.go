@@ -32,8 +32,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.ManifestsOnly, "manifests-only", o.ManifestsOnly, "Generate manifests and do not mirror")
 	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images "+
 		"(experimental: only works for operator catalogs)")
-	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Skip client-side TLS validation for source")
-	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Skip client-side TLS validation for destination")
+	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Use plain HTTP for source registry")
+	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
 	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")

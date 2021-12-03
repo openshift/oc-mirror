@@ -2,21 +2,20 @@ package storage
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
-	"github.com/operator-framework/operator-registry/pkg/image"
-	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
+	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/rest"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -66,13 +65,7 @@ func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha1.Metad
 	if err := b.exists(ctx); err != nil {
 		return err
 	}
-
-	// Get metadata from image
-	if err := b.unpack(ctx, b.localDirBackend.dir); err != nil {
-		return fmt.Errorf("error pulling image %q with metadata: %v", b.src, err)
-	}
-	// adjust perms, unpack leaves the file user-writable only
-	if err := b.localDirBackend.fs.Chmod(path, 0600); err != nil {
+	if err := b.unpack(ctx, path); err != nil {
 		return err
 	}
 	return b.localDirBackend.ReadMetadata(ctx, meta, path)
@@ -127,15 +120,43 @@ func (b *registryBackend) Open(ctx context.Context, fpath string) (io.ReadCloser
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
-		if err := b.unpack(ctx, b.localDirBackend.dir); err != nil {
-			return nil, err
-		}
-		// adjust perms, unpack leaves the file user-writable only
-		if err := b.localDirBackend.fs.Chmod(fpath, 0600); err != nil {
+		if err := b.unpack(ctx, fpath); err != nil {
 			return nil, err
 		}
 	}
 	return b.localDirBackend.Open(ctx, fpath)
+}
+
+func (b *registryBackend) unpack(ctx context.Context, fpath string) error {
+	tempTar := fmt.Sprintf("%s.tar", b.src.Ref.Name)
+	opts, err := b.getOpts(ctx)
+	if err != nil {
+		return err
+	}
+	img, err := crane.Pull(b.src.Ref.Exact(), opts...)
+	if err != nil {
+		return err
+	}
+	w, err := b.GetWriter(ctx, tempTar)
+	if err != nil {
+		return err
+	}
+	defer b.localDirBackend.fs.Remove(tempTar)
+
+	if err := crane.Export(img, w); err != nil {
+		return err
+	}
+	arc := archiver.Tar{
+		OverwriteExisting:      true,
+		MkdirAll:               true,
+		ImplicitTopLevelFolder: false,
+		StripComponents:        0,
+		ContinueOnError:        false,
+	}
+	if err := arc.Unarchive(filepath.Join(b.localDirBackend.dir, tempTar), b.localDirBackend.dir); err != nil {
+		return err
+	} // adjust perms, unpack leaves the file user-writable only
+	return b.localDirBackend.fs.Chmod(fpath, 0600)
 }
 
 // Stat checks the existence of the metadata from a registry source
@@ -150,8 +171,11 @@ func (b *registryBackend) Stat(ctx context.Context, fpath string) (os.FileInfo, 
 
 // Cleanup removes metadata from existing metadata from backend location
 func (b *registryBackend) Cleanup(ctx context.Context, fpath string) error {
-	options := b.getOpts(ctx)
-	if err := crane.Delete(b.src.Ref.Exact(), options...); err != nil {
+	opts, err := b.getOpts(ctx)
+	if err != nil {
+		return err
+	}
+	if err := crane.Delete(b.src.Ref.Exact(), opts...); err != nil {
 		return err
 	}
 	return b.localDirBackend.Cleanup(ctx, fpath)
@@ -168,7 +192,10 @@ func (b *registryBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
 
 // pushImage will push a v1.Image with provided contents
 func (b *registryBackend) pushImage(ctx context.Context, data []byte, fpath string) error {
-	options := b.getOpts(ctx)
+	options, err := b.getOpts(ctx)
+	if err != nil {
+		return err
+	}
 	contents := map[string][]byte{
 		fpath: data,
 	}
@@ -176,70 +203,50 @@ func (b *registryBackend) pushImage(ctx context.Context, data []byte, fpath stri
 	return crane.Push(i, b.src.Ref.Exact(), options...)
 }
 
-func (b *registryBackend) createRegistry() (*containerdregistry.Registry, error) {
-	cacheDir, err := os.MkdirTemp("", "imageset-catalog-registry-")
-	if err != nil {
-		return nil, err
-	}
-
-	logger := logrus.New()
-	logger.SetOutput(ioutil.Discard)
-	nullLogger := logrus.NewEntry(logger)
-
-	return containerdregistry.NewRegistry(
-		containerdregistry.WithCacheDir(cacheDir),
-		containerdregistry.SkipTLS(b.insecure),
-		// The containerd registry impl is somewhat verbose, even on the happy path,
-		// so discard all logger logs}. Any important failures will be returned from
-		// registry methods and eventually logged as fatal errors.
-		containerdregistry.WithLog(nullLogger),
-	)
-}
-
-func (b *registryBackend) unpack(ctx context.Context, path string) error {
-	reg, err := b.createRegistry()
-	if err != nil {
-		return fmt.Errorf("error creating container registry: %v", err)
-	}
-	defer reg.Destroy()
-	ref := image.SimpleReference(b.src.Ref.String())
-	if err := reg.Pull(ctx, ref); err != nil {
-		return err
-	}
-	_, err = reg.Labels(ctx, ref)
-	if err != nil {
-		return err
-	}
-	return reg.Unpack(ctx, ref, path)
-}
-
 // exists checks if the image exists
 func (b *registryBackend) exists(ctx context.Context) error {
-	_, err := crane.Manifest(b.src.Ref.Exact(), b.getOpts(ctx)...)
+	opts, err := b.getOpts(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = crane.Manifest(b.src.Ref.Exact(), opts...)
+	if err == nil {
+		return nil
+	}
 	var terr *transport.Error
 	switch {
-	case err == nil:
-		return nil
-	case err != nil && errors.As(err, &terr):
+	case err != nil && errors.As(err, &terr) && terr.StatusCode == 404:
 		return ErrMetadataNotExist
 	default:
 		return err
 	}
 }
 
-func (b *registryBackend) createRT() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: b.insecure}
-	return transport
+func (b *registryBackend) createRT() (http.RoundTripper, error) {
+	cfg := rest.Config{
+		Proxy: http.ProxyFromEnvironment,
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: b.insecure,
+		},
+	}
+	rt, err := rest.TransportFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+	return rt, nil
 }
 
 // TODO: Get default auth will need to update if user
 // can specify custom locations
-func (b *registryBackend) getOpts(ctx context.Context) (options []crane.Option) {
+func (b *registryBackend) getOpts(ctx context.Context) (options []crane.Option, err error) {
+	rt, err := b.createRT()
+	if err != nil {
+		return nil, err
+	}
 	return append(
 		options,
 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
 		crane.WithContext(ctx),
-		crane.WithTransport(b.createRT()),
-	)
+		crane.WithTransport(rt),
+	), nil
 }
