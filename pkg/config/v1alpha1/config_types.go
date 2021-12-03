@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/operator-framework/operator-registry/alpha/action"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -55,10 +54,10 @@ type Operator struct {
 	// Mirror specific operator packages, channels, and versions, and their dependencies.
 	// If HeadsOnly is true, these objects are mirrored on top of heads of all channels.
 	// Otherwise, only these specific objects are mirrored.
-	action.DiffIncludeConfig `json:",inline"`
+	IncludeConfig `json:",inline"`
 
 	// Catalog image to mirror. This image must be pullable and available for subsequent
-	// pulls on later mirrors unless WriteIndex or InlineIndex are set.
+	// pulls on later mirrors.
 	// This image should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Catalog string `json:"catalog"`
@@ -67,19 +66,15 @@ type Operator struct {
 	// HeadsOnly mode mirrors only channel heads of all packages in the catalog.
 	// Channels specified in DiffIncludeConfig will override this setting;
 	// heads will still be included, but prior versions may also be included.
-	HeadsOnly bool `json:"headsOnly,omitempty"`
-	// WriteIndex directs the mirrorer to store the catalog's declarative config
-	// index representation as a file.
-	// Only set this option if not using git as a backend, which experiences
-	// degraded performance with file sizes of 100MB.
-	// InlineIndex and WriteIndex cannot both be set.
-	WriteIndex bool `json:"writeIndex,omitempty"`
-	// InlineIndex directs the mirrorer to store the catalog's declarative config
-	// index representation within the metadata file itself.
-	// Only set this option if the index is small or not using git as a backend,
-	// which experiences degraded performance with file sizes of 100MB.
-	// InlineIndex and WriteIndex cannot both be set.
-	InlineIndex bool `json:"inlineIndex,omitempty"`
+	// The default is true.
+	HeadsOnly *bool `json:"headsOnly,omitempty"`
+}
+
+func (o Operator) IsHeadsOnly() bool {
+	if o.HeadsOnly == nil {
+		return true
+	}
+	return *o.HeadsOnly
 }
 
 type Helm struct {

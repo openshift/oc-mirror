@@ -178,11 +178,15 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageS
 	}
 	for _, ctlg := range cfg.Mirror.Operators {
 		catLogger := logrus.WithField("catalog", ctlg.Catalog)
+		dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+		if err != nil {
+			return err
+		}
 		diff := action.Diff{
 			Registry:      reg,
 			NewRefs:       []string{ctlg.Catalog},
 			Logger:        catLogger,
-			IncludeConfig: ctlg.DiffIncludeConfig,
+			IncludeConfig: dic,
 		}
 		if len(pin) != 0 {
 			diff.OldRefs = []string{pin}

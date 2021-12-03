@@ -3,6 +3,7 @@ module github.com/openshift/oc-mirror
 go 1.16
 
 require (
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
 	github.com/containerd/containerd v1.5.4

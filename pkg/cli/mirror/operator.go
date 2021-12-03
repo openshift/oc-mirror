@@ -164,11 +164,11 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 // renderDCFull renders data in ctlg into a declarative config for o.Full().
 func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (dc *declcfg.DeclarativeConfig, err error) {
 
-	hasInclude := len(ctlg.DiffIncludeConfig.Packages) != 0
+	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Only add on top of channel heads if both HeadsOnly and IncludeConfig are specified.
-	includeAdditively := ctlg.HeadsOnly && hasInclude
+	includeAdditively := ctlg.IsHeadsOnly() && hasInclude
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified (the default).
-	full := !ctlg.HeadsOnly && !hasInclude
+	full := !ctlg.IsHeadsOnly() && !hasInclude
 
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 	if full {
@@ -179,11 +179,15 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		}.Run(ctx)
 	} else {
 		// Generate and mirror a heads-only diff using only the catalog as a new ref.
+		dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+		if err != nil {
+			return nil, err
+		}
 		dc, err = action.Diff{
 			Registry:          reg,
 			NewRefs:           []string{ctlg.Catalog},
 			Logger:            catLogger,
-			IncludeConfig:     ctlg.DiffIncludeConfig,
+			IncludeConfig:     dic,
 			IncludeAdditively: includeAdditively,
 		}.Run(ctx)
 	}
@@ -197,11 +201,15 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+	dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+	if err != nil {
+		return nil, err
+	}
 	a := action.Diff{
 		Registry:      reg,
 		NewRefs:       []string{ctlg.Catalog},
 		Logger:        catLogger,
-		IncludeConfig: ctlg.DiffIncludeConfig,
+		IncludeConfig: dic,
 		// This is hard-coded to false because a diff post-metadata creation must always include
 		// newly published catalog data to join graphs. Any included objects previously included
 		// will be added as a diff as part of the latest diff mode.
