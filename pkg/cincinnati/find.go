@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/blang/semver/v4"
-	"github.com/google/uuid"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
@@ -13,8 +12,8 @@ import (
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
 // FindLastRelease will find the latest release that has been recorded in the metadata
-func FindLastRelease(meta v1alpha1.Metadata, channel, url string, uuid uuid.UUID) (string, semver.Version, error) {
-	vers, err := findLastReleases(meta, url, uuid)
+func FindLastRelease(meta v1alpha1.Metadata, channel string) (string, semver.Version, error) {
+	vers, err := findLastReleases(meta)
 	if err != nil {
 		return "", semver.Version{}, err
 	}
@@ -30,7 +29,7 @@ func FindLastRelease(meta v1alpha1.Metadata, channel, url string, uuid uuid.UUID
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
 }
 
-func findLastReleases(meta v1alpha1.Metadata, url string, uuid uuid.UUID) (map[string]semver.Version, error) {
+func findLastReleases(meta v1alpha1.Metadata) (map[string]semver.Version, error) {
 	vers := make(map[string]semver.Version)
 	for _, mirror := range meta.PastMirrors {
 		for _, ch := range mirror.Mirror.OCP.Channels {

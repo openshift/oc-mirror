@@ -165,14 +165,15 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 	return current, requested, updates, nil
 }
 
-func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
-	var requested Update
+// CalculateUpgrades fetches and calculates all the update payloads from the specified
+// upstream Cincinnati stack given the current and target version and channel
+func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, version, reqVer semver.Version) (current, requested Update, upgrades []Update, err error) {
 	// If the we are staying in the same channel
 	if sourceChannel == targetChannel {
 		return c.GetUpdates(ctx, uri, arch, targetChannel, version, reqVer)
 	}
 
-	// Get upgrades for the current channel to the target channel
+	// Get semver representation of source and target channel versions
 	sourceIdx := strings.LastIndex(sourceChannel, "-")
 	if sourceIdx == -1 {
 		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", sourceChannel)
@@ -181,17 +182,17 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	if targetIdx == -1 {
 		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", targetChannel)
 	}
-
-	// Get semver representation of source and target channel versions
 	source := semver.MustParse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
 	target := semver.MustParse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
+
+	// Get latest version from sourceChannel
 	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
+		return current, requested, upgrades, fmt.Errorf("cannot get latest: %v", err)
 	}
-	current, _, upgrades, err := c.GetUpdates(ctx, uri, arch, sourceChannel, version, latest)
+	current, _, upgrades, err = c.GetUpdates(ctx, uri, arch, sourceChannel, version, latest)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf("cannot get current: %v", err)
+		return current, requested, upgrades, fmt.Errorf("cannot get current: %v", err)
 	}
 
 	for {
@@ -199,43 +200,57 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 		source.Minor++
 		currChannel := fmt.Sprintf("%s-%v.%v", targetChannel[:targetIdx], source.Major, source.Minor)
 		logrus.Debugf("Processing channel %s", currChannel)
+
+		// Get versions in channel
 		versions, err := c.GetVersions(ctx, uri, currChannel)
 		if err != nil {
-			return Update{}, Update{}, nil, err
+			return current, requested, upgrades, err
 		}
-		// Get the latest from this channel
-		newLatest, err := c.GetChannelLatest(ctx, uri, arch, currChannel)
-		if err != nil {
-			return Update{}, Update{}, nil, err
+		foundVersions := make(map[string]struct{})
+		for _, v := range versions {
+			foundVersions[v.String()] = struct{}{}
 		}
+
+		var newLatest semver.Version
 		if currChannel == targetChannel {
 			// If this is the target channel get
 			// requested version
 			newLatest = reqVer
+		} else {
+			// Get the latest from current channel
+			newLatest, err = c.GetChannelLatest(ctx, uri, arch, currChannel)
+			if err != nil {
+				return current, requested, upgrades, err
+			}
 		}
 
 		// If the previous latest version exists in this channel then get updates
 		logrus.Debugf("Getting updates for latest %s in channel %s", latest.String(), currChannel)
-		for _, v := range versions {
-			if v.EQ(latest) {
-				_, req, currUpgrades, err := c.GetUpdates(ctx, uri, arch, currChannel, latest, newLatest)
-				if err != nil {
-					return Update{}, Update{}, nil, err
-				}
-				upgrades = append(upgrades, currUpgrades...)
-				requested = req
-			}
+
+		if _, found := foundVersions[latest.String()]; !found {
+			_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, reqVer, reqVer)
+			// return nil instead of upgrades
+			// so we don't process an incomplete upgrade path
+			return current, requested, nil, err
 		}
+		_, req, currUpgrades, err := c.GetUpdates(ctx, uri, arch, currChannel, latest, newLatest)
+		if err != nil {
+			return current, requested, upgrades, err
+		}
+		upgrades = append(upgrades, currUpgrades...)
+		requested = req
+
 		latest = newLatest
 		if source.EQ(target) {
 			break
 		}
 	}
 
-	return current, requested, upgrades, nil
-
+	return current, requested, upgrades, err
 }
 
+// GetChannelLatest fetches the latest version from the specified
+// upstream Cincinnati stack given architecture and channel
 func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string, channel string) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
@@ -271,6 +286,8 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 	return Vers[len(Vers)-1], nil
 }
 
+// GetChannels fetches the channels containing update payloads from the specified
+// upstream Cincinnati stack
 func (c Client) GetChannels(ctx context.Context, uri *url.URL, channel string) (map[string]struct{}, error) {
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
@@ -298,6 +315,8 @@ func (c Client) GetChannels(ctx context.Context, uri *url.URL, channel string) (
 	return channels, nil
 }
 
+// GetVersion will return all OCP/OKD versions in a specified channel fetches the current and requested (if applicable) update payload from the specified
+// upstream Cincinnati stack given the current version and channel
 func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	queryParams := uri.Query()
@@ -331,6 +350,7 @@ func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) (
 	return Vers, nil
 }
 
+// getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel
 func (c Client) getGraphData(ctx context.Context, uri *url.URL) (graph graph, err error) {
 	// Download the update graph.
 	req, err := http.NewRequest("GET", uri.String(), nil)

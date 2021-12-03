@@ -265,9 +265,7 @@ func TestCalculateUpgrades(t *testing.T) {
 	arch := "test-arch"
 
 	tests := []struct {
-		name string
-
-		expectedQuery string
+		name          string
 		sourceChannel string
 		targetChannel string
 		last          semver.Version
@@ -278,7 +276,6 @@ func TestCalculateUpgrades(t *testing.T) {
 		err           string
 	}{{
 		name:          "jump one channel",
-		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
 		sourceChannel: "stable-4.0",
 		targetChannel: "stable-4.1",
 		last:          semver.MustParse("4.0.0-5"),
@@ -291,7 +288,6 @@ func TestCalculateUpgrades(t *testing.T) {
 		},
 	}, {
 		name:          "jump two channel",
-		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
 		sourceChannel: "stable-4.0",
 		targetChannel: "stable-4.2",
 		last:          semver.MustParse("4.0.0-5"),
@@ -303,6 +299,24 @@ func TestCalculateUpgrades(t *testing.T) {
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		},
+	}, {
+		name:          "no upgrade path",
+		sourceChannel: "stable-4.1",
+		targetChannel: "stable-4.2",
+		last:          semver.MustParse("4.1.0-6"),
+		req:           semver.MustParse("4.2.0-2"),
+		current:       Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		requested:     Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
+		needed:        nil,
+	}, {
+		name:          "no upgrade path and no version in channel",
+		sourceChannel: "stable-4.2",
+		targetChannel: "stable-4.3",
+		last:          semver.MustParse("4.2.0-3"),
+		req:           semver.MustParse("4.3.0"),
+		current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+		requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		needed:        nil,
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -514,7 +528,8 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 
 		ch := keys[len(keys)-1]
 
-		if ch == "stable-4.0" {
+		switch {
+		case ch == "stable-4.0":
 			_, err := w.Write([]byte(`{
 				"nodes": [
 				  {
@@ -549,9 +564,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-		}
-
-		if ch == "stable-4.1" {
+		case ch == "stable-4.1":
 			_, err := w.Write([]byte(`{
 				"nodes": [
 				  {
@@ -590,14 +603,16 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-		}
-
-		if ch == "stable-4.2" {
+		case ch == "stable-4.2":
 			_, err := w.Write([]byte(`{
 				"nodes": [
 				{
 					"version": "4.1.0-6",
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.1.0-6"
+				},
+				{
+					"version": "4.2.0-2",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-2"
 				},
 				{
 					"version": "4.2.0-3",
@@ -608,13 +623,34 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-5"
 				}
 				],
-				"edges": [[0,1],[1,2]]
+				"edges": [[0,2],[1,2],[2,3]]
 			}`))
 			if err != nil {
 				t.Fatal(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+		case ch == "stable-4.3":
+			_, err := w.Write([]byte(`{
+				"nodes": [
+				{
+					"version": "4.3.0",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.0"
+				},
+				{
+					"version": "4.3.1",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.1"
+				}
+				],
+				"edges": [[0,1]]
+			}`))
+			if err != nil {
+				t.Fatal(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		default:
+			t.Fail()
 		}
 	}
 }
