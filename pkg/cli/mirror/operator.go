@@ -26,8 +26,10 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -83,6 +85,20 @@ type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha1.O
 // Diff mirrors only the diff between each old and new catalog image pair
 // to the <Dir>/src directory.
 func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, renderDC renderDCFunc) (image.AssociationSet, error) {
+
+	logrus.Infoln("Performing operator processing")
+
+	logfile, err := cli.GetLogWriter(".")
+	if err != nil {
+		logrus.Fatalf("failed to create logfile: %v", err)
+	}
+
+	o.MirrorOptions.RootOptions.IOStreams = genericclioptions.IOStreams{
+		In:     os.Stdin,
+		Out:    logfile,
+		ErrOut: logfile,
+	}
+
 	o.complete()
 
 	cleanup, err := o.mktempDir()

@@ -16,9 +16,11 @@ import (
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -123,6 +125,7 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 		return nil, err
 	}
 
+	logrus.Infoln("Starting platform release processing")
 	// If no release has been downloaded for the
 	// channel, download the requested version
 	lastCh, lastVer, err := cincinnati.FindLastRelease(meta, channel)
@@ -209,6 +212,18 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 		opts.SecurityOptions.SkipVerification = o.SkipVerification
 		opts.DryRun = o.DryRun
 		opts.From = img
+
+		logfile, err := cli.GetLogWriter(".")
+		if err != nil {
+			logrus.Fatalf("failed to create logfile: %v", err)
+		}
+
+		opts.IOStreams = genericclioptions.IOStreams{
+			In:     os.Stdin,
+			Out:    logfile,
+			ErrOut: logfile,
+		}
+
 		if err := opts.Run(); err != nil {
 			return nil, err
 		}

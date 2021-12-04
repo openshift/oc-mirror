@@ -77,9 +77,9 @@ func setupFileHook(baseDir string) func() {
 		}
 	}
 
-	logfile, err := os.OpenFile(filepath.Join(baseDir, ".openshift_bundle.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	logfile, err := GetLogWriter(baseDir)
 	if err != nil {
-		logrus.Fatalf("failed to open log file: %v", err)
+		logrus.Fatalf("failed to create logfile: %v", err)
 	}
 
 	originalHooks := logrus.LevelHooks{}
@@ -97,4 +97,10 @@ func setupFileHook(baseDir string) func() {
 		logfile.Close()
 		logrus.StandardLogger().ReplaceHooks(originalHooks)
 	}
+}
+
+func GetLogWriter(baseDir string) (*os.File, error) {
+
+	return os.OpenFile(filepath.Join(baseDir, ".openshift_mirror.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+
 }
