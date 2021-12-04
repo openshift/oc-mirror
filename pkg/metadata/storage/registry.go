@@ -210,9 +210,6 @@ func (b *registryBackend) exists(ctx context.Context) error {
 		return err
 	}
 	_, err = crane.Manifest(b.src.Ref.Exact(), opts...)
-	if err == nil {
-		return nil
-	}
 	var terr *transport.Error
 	switch {
 	case err != nil && errors.As(err, &terr) && terr.StatusCode == 404:
