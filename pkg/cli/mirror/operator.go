@@ -29,7 +29,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -88,15 +87,10 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfigur
 
 	logrus.Infoln("Performing operator processing")
 
-	logfile, err := cli.GetLogWriter(".")
-	if err != nil {
-		logrus.Fatalf("failed to create logfile: %v", err)
-	}
-
 	o.MirrorOptions.RootOptions.IOStreams = genericclioptions.IOStreams{
 		In:     os.Stdin,
-		Out:    logfile,
-		ErrOut: logfile,
+		Out:    o.MirrorOptions.Logref,
+		ErrOut: o.MirrorOptions.Logref,
 	}
 
 	o.complete()

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -70,17 +71,7 @@ func (h *fileHook) Fire(entry *logrus.Entry) error {
 	return nil
 }
 
-func setupFileHook(baseDir string) func() {
-	if baseDir != "" && baseDir != "." {
-		if err := os.MkdirAll(baseDir, 0755); err != nil {
-			logrus.Fatalf("failed to create base directory for logs: %v", err)
-		}
-	}
-
-	logfile, err := GetLogWriter(baseDir)
-	if err != nil {
-		logrus.Fatalf("failed to create logfile: %v", err)
-	}
+func setupFileHook(logfile *os.File) func() {
 
 	originalHooks := logrus.LevelHooks{}
 	for k, v := range logrus.StandardLogger().Hooks {
@@ -99,7 +90,14 @@ func setupFileHook(baseDir string) func() {
 	}
 }
 
-func GetLogWriter(baseDir string) (*os.File, error) {
+// CreateLogFile returns a new logfile
+func CreateLogFile(baseDir string) (*os.File, error) {
+
+	if baseDir != "" && baseDir != "." {
+		if err := os.MkdirAll(baseDir, 0755); err != nil {
+			fmt.Errorf("failed to create base directory for logs: %v", err)
+		}
+	}
 
 	return os.OpenFile(filepath.Join(baseDir, ".openshift_mirror.log"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 

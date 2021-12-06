@@ -20,7 +20,6 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -213,15 +212,10 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 		opts.DryRun = o.DryRun
 		opts.From = img
 
-		logfile, err := cli.GetLogWriter(".")
-		if err != nil {
-			logrus.Fatalf("failed to create logfile: %v", err)
-		}
-
 		opts.IOStreams = genericclioptions.IOStreams{
 			In:     os.Stdin,
-			Out:    logfile,
-			ErrOut: logfile,
+			Out:    o.MirrorOptions.Logref,
+			ErrOut: o.MirrorOptions.Logref,
 		}
 
 		if err := opts.Run(); err != nil {

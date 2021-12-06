@@ -17,6 +17,7 @@ type RootOptions struct {
 	Dir      string
 	LogLevel string
 
+	Logref         *os.File
 	logfileCleanup func()
 }
 
@@ -48,7 +49,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 		DisableQuote:           true,
 	}))
 
-	o.logfileCleanup = setupFileHook(".")
+	o.logfileCleanup = setupFileHook(o.Logref)
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {
