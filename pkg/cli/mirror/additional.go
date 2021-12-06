@@ -23,6 +23,14 @@ func NewAdditionalOptions(mo MirrorOptions) *AdditionalOptions {
 	return &AdditionalOptions{MirrorOptions: mo}
 }
 
+type ErrBlocked struct {
+	image string
+}
+
+func (e ErrBlocked) Error() string {
+	return fmt.Sprintf("additional image %s also specified as blocked, remove the image one config field or the other", e.image)
+}
+
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
 func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (image.AssociationSet, error) {
 
@@ -52,9 +60,12 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)
-
 		if err != nil {
 			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
+		}
+
+		if setLatest(srcRef) {
+			srcRef.Ref.Tag = "latest"
 		}
 
 		// Set destination image information
@@ -64,7 +75,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 		// Check if image is specified as a blocked image
 		if bundle.IsBlocked(cfg, srcRef.Ref) {
-			return nil, fmt.Errorf("additional image %s also specified as blocked, remove the image one config field or the other", img.Name)
+			return nil, ErrBlocked{img.Name}
 		}
 		// Create mapping from source and destination images
 		mappings = append(mappings, mirror.Mapping{
@@ -97,4 +108,8 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 	}
 
 	return assocs, nil
+}
+
+func setLatest(img imagesource.TypedImageReference) bool {
+	return len(img.Ref.ID) == 0 && len(img.Ref.Tag) == 0
 }

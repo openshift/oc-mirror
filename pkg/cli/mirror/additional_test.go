@@ -17,19 +17,7 @@ import (
 // TODO: use some oc lib to mock image mirroring, or mirror from files.
 
 func Test_GetAdditional(t *testing.T) {
-
-	cfg := v1alpha1.ImageSetConfiguration{}
-	cfg.Mirror = v1alpha1.Mirror{
-		BlockedImages: []v1alpha1.BlockedImages{
-			{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-blocked"}},
-		},
-		AdditionalImages: []v1alpha1.AdditionalImages{
-			{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional:latest"}},
-		},
-	}
-
 	tmpdir := t.TempDir()
-
 	mo := MirrorOptions{
 		RootOptions: &cli.RootOptions{
 			Dir: tmpdir,
@@ -42,12 +30,82 @@ func Test_GetAdditional(t *testing.T) {
 	}
 	opts := NewAdditionalOptions(mo)
 
-	assocs, err := opts.GetAdditional(cfg, cfg.Mirror.AdditionalImages)
-	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		cfg     v1alpha1.ImageSetConfiguration
+		want    error
+		wantErr bool
+		imgPin  bool
+	}{
+		{
+			name: "testing with no block",
+			cfg: v1alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
+					Mirror: v1alpha1.Mirror{
+						BlockedImages: []v1alpha1.BlockedImages{
+							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
+						},
+						AdditionalImages: []v1alpha1.AdditionalImages{
+							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional:latest"}},
+						},
+					},
+				},
+			},
+			imgPin: true,
+		},
+		{
+			name: "testing with no tag",
+			cfg: v1alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
+					Mirror: v1alpha1.Mirror{
+						BlockedImages: []v1alpha1.BlockedImages{
+							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
+						},
+						AdditionalImages: []v1alpha1.AdditionalImages{
+							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "testing with block",
+			cfg: v1alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
+					Mirror: v1alpha1.Mirror{
+						BlockedImages: []v1alpha1.BlockedImages{
+							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
+						},
+						AdditionalImages: []v1alpha1.AdditionalImages{
+							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-blocked"}},
+						},
+					},
+				},
+			},
+			want:    ErrBlocked{},
+			wantErr: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 
-	testerImg, err := bundle.PinImages(context.TODO(), "quay.io/estroz/pull-tester-additional:latest", "", false)
-	require.NoError(t, err)
-	if assert.Len(t, assocs, 1) {
-		require.Contains(t, assocs, testerImg)
+			assocs, err := opts.GetAdditional(test.cfg, test.cfg.Mirror.AdditionalImages)
+			t.Log(err)
+			if test.wantErr {
+				t.Log(err)
+				testErr := test.want
+				require.ErrorAs(t, err, &testErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if test.imgPin {
+				testerImg, err := bundle.PinImages(context.TODO(), test.cfg.Mirror.AdditionalImages[0].Name, "", false)
+				require.NoError(t, err)
+				if assert.Len(t, assocs, 1) {
+					require.Contains(t, assocs, testerImg)
+				}
+			}
+		})
 	}
 }
