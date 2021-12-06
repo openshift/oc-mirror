@@ -79,20 +79,34 @@ func NewMirrorCmd() *cobra.Command {
 func (o *MirrorOptions) Complete(args []string) error {
 
 	destination := args[0]
-	switch {
-	case strings.Contains(destination, "file://"):
-		o.OutputDir = strings.TrimPrefix(destination, "file://")
+	splitIdx := strings.Index(destination, "://")
+	if splitIdx == -1 {
+		return fmt.Errorf("no scheme delimiter in destination argument")
+	}
+	typStr, ref := destination[:splitIdx], destination[splitIdx+3:]
+
+	switch typStr {
+	case "file":
+		ref = filepath.Clean(ref)
+		if ref == "" {
+			ref = "."
+		}
+		o.OutputDir = ref
 		// If the destination is on disk, made the output dir the
 		// parent dir for the workspace
 		o.Dir = filepath.Join(o.OutputDir, o.Dir)
-	case strings.Contains(destination, "docker://"):
-		ref := strings.TrimPrefix(destination, "docker://")
+	case "docker":
 		mirror, err := imagesource.ParseReference(ref)
 		if err != nil {
 			return err
 		}
 		o.ToMirror = mirror.Ref.Registry
 		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
+		if mirror.Ref.ID != "" || mirror.Ref.Tag != "" {
+			return fmt.Errorf("destination registry must consist of registry host and namespace(s) only")
+		}
+	default:
+		return fmt.Errorf("unknown destination scheme %q", typStr)
 	}
 
 	return nil
@@ -113,12 +127,6 @@ func (o *MirrorOptions) Validate() error {
 		logrus.Debug("Registry auth check not implemented")
 	}
 
-	if len(o.OutputDir) > 0 {
-		if _, err := os.Stat(o.OutputDir); err != nil {
-			return err
-		}
-	}
-
 	if len(o.From) > 0 {
 		if _, err := os.Stat(o.From); err != nil {
 			return err
@@ -128,21 +136,31 @@ func (o *MirrorOptions) Validate() error {
 	return nil
 }
 
-func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
+func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) {
+	if o.OutputDir != "" {
+		if err := os.MkdirAll(o.OutputDir, 0755); err != nil {
+			return err
+		}
+	}
+
 	switch {
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
-	case len(o.OutputDir) > 0:
+	case len(o.OutputDir) > 0 && o.From == "":
 		return o.Create(cmd.Context(), cmd.PersistentFlags())
 	case len(o.ToMirror) > 0 && len(o.From) > 0:
 		return o.Publish(cmd.Context(), cmd, f)
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
 
-		// create temp workspace
-		dir, err := ioutil.TempDir(".", "mirrortmp")
-		if err != nil {
-			return err
+		dir := o.OutputDir
+		if dir == "" {
+			// create temp workspace
+			if dir, err = ioutil.TempDir(".", "mirrortmp"); err != nil {
+				return err
+			}
 		}
+
+		fmt.Fprintf(o.IOStreams.Out, "workspace: %s\n", dir)
 
 		o.OutputDir = dir
 		if err := o.Create(cmd.Context(), cmd.PersistentFlags()); err != nil {
@@ -160,6 +178,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
 
 		// Remove tmp directory
 		if !o.SkipCleanup {
+			fmt.Fprintln(o.IOStreams.Out, "cleaning up workspace")
 			os.RemoveAll(dir)
 		}
 	}
