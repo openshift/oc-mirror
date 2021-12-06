@@ -4,12 +4,10 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -343,10 +341,4 @@ func (o *MirrorOptions) getRemoteOpts(ctx context.Context) (options []remote.Opt
 		remote.WithContext(ctx),
 		remote.WithTransport(o.createRT()),
 	)
-}
-
-func (o *MirrorOptions) createRT() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: o.DestSkipTLS}
-	return transport
 }

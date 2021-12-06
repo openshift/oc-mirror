@@ -70,9 +70,11 @@ func Test_MetadataError(t *testing.T) {
 	for _, tt := range tests {
 
 		server := httptest.NewServer(registry.New())
+		t.Cleanup(server.Close)
 		u, err := url.Parse(server.URL)
 		if err != nil {
 			t.Error(err)
+			continue
 		}
 
 		tmpdir := t.TempDir()

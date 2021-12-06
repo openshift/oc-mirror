@@ -1,12 +1,17 @@
 package mirror
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -109,8 +114,18 @@ func (o *MirrorOptions) Validate() error {
 	}
 
 	// Attempt to login to registry
+	// FIXME(jpower): CheckPushPermissions is slated for deprecation
+	// must replace with its replacement
+	logrus.Infof("Checking push permissions for %s", o.ToMirror)
+	stringRef := fmt.Sprintf("%s/oc-mirror", o.ToMirror)
 	if len(o.ToMirror) > 0 {
-		logrus.Debug("Registry auth check not implemented")
+		ref, err := name.ParseReference(stringRef)
+		if err != nil {
+			return err
+		}
+		if err := remote.CheckPushPermission(ref, authn.DefaultKeychain, o.createRT()); err != nil {
+			return fmt.Errorf("error checking push permissions for %s: %v", o.ToMirror, err)
+		}
 	}
 
 	if len(o.OutputDir) > 0 {
@@ -165,4 +180,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) error {
 	}
 
 	return nil
+}
+
+func (o *MirrorOptions) createRT() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: o.DestSkipTLS}
+	return transport
 }
