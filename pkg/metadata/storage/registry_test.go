@@ -44,6 +44,7 @@ func Test_RegistryBackend(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			server := httptest.NewServer(registry.New())
+			t.Cleanup(server.Close)
 			u, err := url.Parse(server.URL)
 			if err != nil {
 				t.Error(err)

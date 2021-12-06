@@ -22,6 +22,7 @@ func Test_ByConfig(t *testing.T) {
 	customDir := t.TempDir()
 
 	server := httptest.NewServer(registry.New())
+	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
 	if err != nil {
 		t.Error(err)

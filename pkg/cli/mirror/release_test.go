@@ -98,12 +98,9 @@ func Test_getDownloads(t *testing.T) {
 			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
+			t.Cleanup(ts.Close)
 
 			c, uri, err := cincinnati.NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
 			if err != nil {
 				t.Fatal(err)
 			}

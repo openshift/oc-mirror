@@ -77,7 +77,7 @@ func TestGetUpdates(t *testing.T) {
 			handler := getHandler(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
+			t.Cleanup(ts.Close)
 
 			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
@@ -148,7 +148,7 @@ func TestGetLatest(t *testing.T) {
 			handler := getHandler(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
+			t.Cleanup(ts.Close)
 
 			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
@@ -215,7 +215,7 @@ func TestGetVersions(t *testing.T) {
 			handler := getHandler(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
+			t.Cleanup(ts.Close)
 
 			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
@@ -326,7 +326,7 @@ func TestCalculateUpgrades(t *testing.T) {
 			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
-			defer ts.Close()
+			t.Cleanup(ts.Close)
 
 			c, uri, err := NewClient(ts.URL, clientID)
 			if err != nil {
