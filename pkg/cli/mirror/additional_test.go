@@ -90,9 +90,7 @@ func Test_GetAdditional(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			assocs, err := opts.GetAdditional(test.cfg, test.cfg.Mirror.AdditionalImages)
-			t.Log(err)
 			if test.wantErr {
-				t.Log(err)
 				testErr := test.want
 				require.ErrorAs(t, err, &testErr)
 			} else {
