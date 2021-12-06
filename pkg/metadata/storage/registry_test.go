@@ -20,9 +20,9 @@ import (
 func Test_RegistryBackend(t *testing.T) {
 
 	tests := []struct {
-		name  string
-		image string
-		err   string
+		name        string
+		image       string
+		closeServer bool
 	}{{
 		name:  "top level image with a tag",
 		image: "metadata:latest",
@@ -35,6 +35,10 @@ func Test_RegistryBackend(t *testing.T) {
 	}, {
 		name:  "no tag",
 		image: "metadata",
+	}, {
+		name:        "force error",
+		image:       "metadata",
+		closeServer: true,
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -97,6 +101,13 @@ func Test_RegistryBackend(t *testing.T) {
 			metadataErr = backend.Cleanup(ctx, config.MetadataBasePath)
 			require.NoError(t, metadataErr)
 			require.ErrorIs(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath), ErrMetadataNotExist)
+
+			// Ensure when the server is close the metadata error is not thrown
+			if test.closeServer {
+				server.Close()
+				require.Error(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath))
+				require.NotErrorIs(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath), ErrMetadataNotExist)
+			}
 		})
 	}
 }

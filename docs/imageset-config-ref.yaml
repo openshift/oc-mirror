@@ -3,7 +3,7 @@ kind: ImageSetConfiguration
 storageConfig:
   registry:
     imageURL: localhost:5000/test:latest # Stores metadata in an image
-    skipTLS: true
+    skipTLS: true # Disable TLS certificate checking or use plain HTTP 
 mirror:
   ocp:
     channels:
