@@ -22,12 +22,21 @@ import (
 
 func NewMirrorCmd() *cobra.Command {
 	o := MirrorOptions{}
+
+	// Default to stdout/stderr
 	o.RootOptions = &cli.RootOptions{
 		IOStreams: genericclioptions.IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
 			ErrOut: os.Stderr,
 		},
+	}
+
+	// Get the os.File of the logfile for reuse
+	var err error
+	o.Logref, err = cli.CreateLogFile(".")
+	if err != nil {
+		fmt.Errorf("unable to open logfile: %s", err)
 	}
 
 	// Configures a REST client getter factory from configs for mirroring releases.
@@ -40,7 +49,7 @@ func NewMirrorCmd() *cobra.Command {
 		Short: "Manages mirrors per user configuration",
 		Long: templates.LongDesc(`
 			oc-mirror will create and publish user configured mirrors with
-            a declarative configation input
+            a declarative configuration input
 		`),
 		Example: templates.Examples(`
 			# Mirror to a directory
