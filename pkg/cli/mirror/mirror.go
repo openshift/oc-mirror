@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -120,9 +121,9 @@ func (o *MirrorOptions) Complete(args []string) error {
 func (o *MirrorOptions) Validate() error {
 	switch {
 	case len(o.From) > 0 && len(o.ToMirror) == 0:
-		return fmt.Errorf("must specifiy a registry destination")
+		return fmt.Errorf("must specify a registry destination")
 	case len(o.OutputDir) > 0 && len(o.ConfigPath) == 0:
-		return fmt.Errorf("must specifiy a configuration file with --config")
+		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
 	}
@@ -130,14 +131,15 @@ func (o *MirrorOptions) Validate() error {
 	// Attempt to login to registry
 	// FIXME(jpower): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
-	logrus.Infof("Checking push permissions for %s", o.ToMirror)
-	stringRef := fmt.Sprintf("%s/oc-mirror", o.ToMirror)
 	if len(o.ToMirror) > 0 {
-		ref, err := name.ParseReference(stringRef)
+		logrus.Infof("Checking push permissions for %s", o.ToMirror)
+		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
+		logrus.Debugf("Using image %s to check permissions", ref)
+		imgRef, err := name.ParseReference(ref)
 		if err != nil {
 			return err
 		}
-		if err := remote.CheckPushPermission(ref, authn.DefaultKeychain, o.createRT()); err != nil {
+		if err := remote.CheckPushPermission(imgRef, authn.DefaultKeychain, o.createRT()); err != nil {
 			return fmt.Errorf("error checking push permissions for %s: %v", o.ToMirror, err)
 		}
 	}
