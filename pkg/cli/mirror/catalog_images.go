@@ -72,8 +72,10 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
 			}
 			// Update registry so the existing catalog image can be pulled.
-			// QUESTION(estroz): is assuming an image is present in a repo with the same name valid?
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
+			if len(o.UserNamespace) != 0 {
+				ctlgRef.Ref.Namespace = strings.Join([]string{o.UserNamespace, ctlgRef.Ref.Namespace}, "/")
+			}
 			catalogsByImage[ctlgRef] = filepath.Dir(fpath)
 		}
 
@@ -159,9 +161,11 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			if err != nil {
 				return refs, fmt.Errorf("error parsing image %q: %v", OPMImage, err)
 			}
-			// Update registry so the existing OPM image can be pulled.
-			// QUESTION(jpower): is assuming an image is present in a repo with the same name valid?
+
 			opmImage.Registry = mirrorRef.Ref.Registry
+			if len(o.UserNamespace) != 0 {
+				opmImage.Namespace = strings.Join([]string{o.UserNamespace, opmImage.Namespace}, "/")
+			}
 			srcImage = opmImage.Exact()
 
 		} else {
