@@ -74,7 +74,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			// Update registry so the existing catalog image can be pulled.
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
 			if len(o.UserNamespace) != 0 {
-				ctlgRef.Ref.Namespace = strings.Join([]string{o.UserNamespace, ctlgRef.Ref.Namespace}, "/")
+				ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
 			}
 			catalogsByImage[ctlgRef] = filepath.Dir(fpath)
 		}
