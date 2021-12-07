@@ -8,4 +8,3 @@ storageConfig:
 mirror:
   operators:
   - catalog: REGISTRY_CATALOGNAMESPACE/test-catalog:latest
-    headsOnly: true

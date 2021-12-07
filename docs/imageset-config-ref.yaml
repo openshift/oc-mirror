@@ -15,11 +15,10 @@ mirror:
     graph: true # Planned, include Cincinnati upgrade graph image in imageset
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
-      headsOnly: true # References latest version of each operator in catalog
+      headsOnly: true # References latest version of each operator in catalog (true is the default value and can be omitted)
       packages:
         - name: couchbase-operator # Planned, overrides catalog default, respects headsOnly setting
-          versions:
-            - '1.4.0' # Planned, overrides catalog default, overrides headsOnly setting
+          startingVersion: '1.4.0' # Planned, overrides catalog default, overrides headsOnly setting
         - name: crunchy-postgresql-operator
           channels: # Planned
             - name: 'stable'
@@ -32,9 +31,9 @@ mirror:
     local:
       - name: podinfo
         path: /test/podinfo-5.0.0.tar.gz
-    repos: 
+    repos:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
-        charts: 
+        charts:
           - name: podinfo
             version: 5.0.0

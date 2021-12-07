@@ -4,3 +4,4 @@ kind: ImageSetConfiguration
 mirror:
   operators:
   - catalog: REGISTRY_CATALOGNAMESPACE/test-catalog:latest
+    headsOnly: false

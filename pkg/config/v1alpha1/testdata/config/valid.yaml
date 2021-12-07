@@ -13,18 +13,18 @@ mirror:
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
+      headsOnly: false
     - catalog: certified-operators:v4.7
+      headsOnly: false
       pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
       packages:
         - name: couchbase-operator
         - name: mongodb-operator
-          versions:
-            - '1.4.0'
+          startingVersion: '1.4.0'
         - name: crunchy-postgresql-operator
           channels:
             - name: 'stable'
     - catalog: community-operators:v4.7
-      headsOnly: true
   samples:
     - name: ruby
     - name: python
@@ -35,10 +35,10 @@ mirror:
     local:
       - name: podinfo
         path: /test/podinfo-5.0.0.tar.gz
-    repos: 
+    repos:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
-        charts: 
+        charts:
           - name: podinfo
             version: 5.0.0
   blockedimages:

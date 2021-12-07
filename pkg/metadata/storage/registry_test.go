@@ -72,7 +72,7 @@ func Test_RegistryBackend(t *testing.T) {
 							},
 						},
 						Operators: []v1alpha1.Operator{
-							{Catalog: "registry.redhat.io/openshift/redhat-operators:v4.7", HeadsOnly: true},
+							{Catalog: "registry.redhat.io/openshift/redhat-operators:v4.7"},
 						},
 					},
 					Operators: []v1alpha1.OperatorMetadata{
