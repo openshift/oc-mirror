@@ -66,7 +66,7 @@ func NewMirrorCmd() *cobra.Command {
 		SilenceUsage:      false,
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(args))
-			kcmdutil.CheckErr(o.Validate())
+			kcmdutil.CheckErr(o.Validate(args))
 			kcmdutil.CheckErr(o.Run(cmd, f))
 		},
 	}
@@ -117,7 +117,7 @@ func (o *MirrorOptions) Complete(args []string) error {
 	return nil
 }
 
-func (o *MirrorOptions) Validate() error {
+func (o *MirrorOptions) Validate(args []string) error {
 	switch {
 	case len(o.From) > 0 && len(o.ToMirror) == 0:
 		return fmt.Errorf("must specifiy a registry destination")
@@ -130,14 +130,16 @@ func (o *MirrorOptions) Validate() error {
 	// Attempt to login to registry
 	// FIXME(jpower): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
-	logrus.Infof("Checking push permissions for %s", o.ToMirror)
-	stringRef := fmt.Sprintf("%s/oc-mirror", o.ToMirror)
+	destination := args[0]
 	if len(o.ToMirror) > 0 {
-		ref, err := name.ParseReference(stringRef)
+		logrus.Infof("Checking push permissions for %s", o.ToMirror)
+		ref := strings.TrimPrefix(destination, "docker://")
+		ref = fmt.Sprintf("%s/oc-mirror", ref)
+		imgRef, err := name.ParseReference(ref)
 		if err != nil {
 			return err
 		}
-		if err := remote.CheckPushPermission(ref, authn.DefaultKeychain, o.createRT()); err != nil {
+		if err := remote.CheckPushPermission(imgRef, authn.DefaultKeychain, o.createRT()); err != nil {
 			return fmt.Errorf("error checking push permissions for %s: %v", o.ToMirror, err)
 		}
 	}
