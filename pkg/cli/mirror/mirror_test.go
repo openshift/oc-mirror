@@ -1,8 +1,11 @@
 package mirror
 
 import (
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/stretchr/testify/require"
 )
@@ -113,6 +116,81 @@ func TestMirrorComplete(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, c.expOpts, c.opts)
+			}
+		})
+	}
+}
+
+func TestOperatorsValidate(t *testing.T) {
+
+	server := httptest.NewServer(registry.New())
+	t.Cleanup(server.Close)
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Error(err)
+	}
+
+	type spec struct {
+		name     string
+		opts     *MirrorOptions
+		expError string
+	}
+
+	cases := []spec{
+		{
+			name: "Invalid/NoDest",
+			opts: &MirrorOptions{
+				From: "dir",
+			},
+			expError: "must specify a registry destination",
+		},
+		{
+			name: "Invalid/NoSource",
+			opts: &MirrorOptions{
+				ToMirror: u.Host,
+			},
+			expError: `must specify --config or --from with registry destination`,
+		},
+		{
+			name: "Invalid/NoConfig",
+			opts: &MirrorOptions{
+				OutputDir: "dir",
+			},
+			expError: `must specify a configuration file with --config`,
+		},
+		{
+			name: "Valid/MirrortoDisk",
+			opts: &MirrorOptions{
+				ConfigPath: "foo",
+				ToMirror:   u.Host,
+			},
+			expError: "",
+		},
+		{
+			name: "Valid/DisktoMirror",
+			opts: &MirrorOptions{
+				From:     t.TempDir(),
+				ToMirror: u.Host,
+			},
+			expError: "",
+		},
+		{
+			name: "Valid/MirrorToMirror",
+			opts: &MirrorOptions{
+				ConfigPath: "foo",
+				ToMirror:   u.Host,
+			},
+			expError: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.opts.Validate()
+			if c.expError != "" {
+				require.EqualError(t, err, c.expError)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}

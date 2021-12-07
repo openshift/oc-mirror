@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -66,7 +67,7 @@ func NewMirrorCmd() *cobra.Command {
 		SilenceUsage:      false,
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(args))
-			kcmdutil.CheckErr(o.Validate(args))
+			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd, f))
 		},
 	}
@@ -117,12 +118,12 @@ func (o *MirrorOptions) Complete(args []string) error {
 	return nil
 }
 
-func (o *MirrorOptions) Validate(args []string) error {
+func (o *MirrorOptions) Validate() error {
 	switch {
 	case len(o.From) > 0 && len(o.ToMirror) == 0:
-		return fmt.Errorf("must specifiy a registry destination")
+		return fmt.Errorf("must specify a registry destination")
 	case len(o.OutputDir) > 0 && len(o.ConfigPath) == 0:
-		return fmt.Errorf("must specifiy a configuration file with --config")
+		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
 	}
@@ -130,11 +131,10 @@ func (o *MirrorOptions) Validate(args []string) error {
 	// Attempt to login to registry
 	// FIXME(jpower): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
-	destination := args[0]
 	if len(o.ToMirror) > 0 {
 		logrus.Infof("Checking push permissions for %s", o.ToMirror)
-		ref := strings.TrimPrefix(destination, "docker://")
-		ref = fmt.Sprintf("%s/oc-mirror", ref)
+		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
+		logrus.Debugf("Using image %s to check permissions", ref)
 		imgRef, err := name.ParseReference(ref)
 		if err != nil {
 			return err
