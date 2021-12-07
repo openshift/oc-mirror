@@ -189,6 +189,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			Logger:            catLogger,
 			IncludeConfig:     dic,
 			IncludeAdditively: includeAdditively,
+			SkipDependencies:  ctlg.SkipDependencies,
 		}.Run(ctx)
 	}
 
