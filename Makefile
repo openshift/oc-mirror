@@ -28,4 +28,4 @@ test-e2e: build
 
 .PHONY: test-prow
 test-prow: build
-	./test/e2e-prow.sh ./bin/oc-mirror
+	./test/e2e-prow.sh

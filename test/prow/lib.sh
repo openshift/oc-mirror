@@ -4,4 +4,5 @@ function check_bundles() {
   #TODO
   #Possible alternatives...
   #sudo skopeo inspect docker://localhost:5000/test-catalogs/test-catalog:latest --tls-verify=false
+  echo "Bundle check marked as TODO."
 }
