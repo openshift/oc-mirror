@@ -1,4 +1,5 @@
 #Simple additional image test 
+set -e
 mkdir -p /tmp/test-simple-image/archives
 
 ./bin/oc-mirror --source-skip-tls --dest-skip-tls --skip-cleanup --config test/prow/configs/imageset-image.yaml --dir /tmp/test-simple-image file:///tmp/test-simple-image/archives

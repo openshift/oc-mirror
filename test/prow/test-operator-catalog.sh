@@ -1,4 +1,5 @@
-source lib.sh
+set -e
+source test/prow/lib.sh
 mkdir /tmp/test-operator-catalog
 mkdir /tmp/test-operator-catalog/archives
 ./bin/oc-mirror --log-level debug --source-skip-tls --dest-skip-tls --skip-cleanup --dir /tmp/test-operator-catalog --config test/prow/configs/imageset-operator.yaml "file:///tmp/test-operator-catalog/archives"
