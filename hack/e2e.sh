@@ -13,23 +13,23 @@ run_log () {
   fi
 }
 
-build_builder_image () {
+build_e2e_image () {
   run_log 0 "Starting builder container image build"
   ${run_cmd} build -f Dockerfile -t ${image_name} .
 }
 
-build_binary () {
+run_e2e () {
   run_log 0 "Starting binary build"
-  ${run_cmd} run -it --rm --privileged -v ${src_dir}:/build:z ${image_name}
+  ${run_cmd} run -it -v ${src_dir}:/build:z ${image_name} "test-e2e"
 }
 
 run () {
-  build_builder_image \
-    && run_log 0 "Successfully built builder image" \
-    || run_log 1 "Failed to build builder image"
-  build_binary \
-    && run_log 0 "Successfully built binary" \
-    || run_log 1 "Failed to build binary"
+  build_e2e_image \
+    && run_log 0 "Successfully built e2e image" \
+    || run_log 1 "Failed to build e2e image"
+  run_e2e \
+    && run_log 0 "Successfully ran e2e" \
+    || run_log 1 "Failed e2e"
 }
 
 run

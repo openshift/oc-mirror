@@ -64,21 +64,27 @@ function check_bundles() {
   done
 }
 
+# cleanup will kill any running registry processes
 function cleanup() {
     echo "Cleaning $PID_CONN"
     [[ -n $PID_DISCONN ]] && kill $PID_DISCONN
     [[ -n $PID_CONN ]] && kill $PID_CONN
 }
 
+# install_deps will install crane and registry2 in go bin dir
 function install_deps() {
   go install github.com/google/go-containerregistry/cmd/crane@latest
   crane export registry:2 registry2.tar
-  tar xvf registry2.tar bin/registry -C $GOBIN
+  tar xvf registry2.tar bin/registry
+  mv bin/registry $GOBIN
   rm -f registry2.tar
 }
 
+# setup_reg will configure and start registry2 processes
+# for connected and disconnected environments
 function setup_reg() {
   # Setup connected registry
+  echo -e "Setting up registries"
   cp ./test/e2e-config.yaml ${DATA_TMP}/conn.yaml
   find "${DATA_TMP}" -type f -exec sed -i -E 's@TMP@'"${REGISTRY_CONN_DIR}{"'@g' {} \;
   find "${DATA_TMP}" -type f -exec sed -i -E 's@PORT@'"${REGISTRY_CONN_PORT}"'@g' {} \;
@@ -94,8 +100,13 @@ function setup_reg() {
   find "${DATA_TMP}" -type f -exec sed -i -E 's@DEBUG@'"${DPORT}"'@g' {} \;
   registry serve ${DATA_TMP}/disconn.yaml &> ${DATA_TMP}/doutput.log &
   PID_DISCONN=$!
+
+  echo $PID_DISCONN
+  echo $PID_CONN
 }
 
+# prep_registry will copy the needed catalog image
+# to the connected registry
 function prep_registry() {
   local diff="${1:?diff required}"
   # Copy target catalog to connected registry
@@ -108,6 +119,8 @@ function prep_registry() {
   fi
 }
 
+# run_full will simulate an initial oc-mirror run
+# to disk then publish to registry
 function run_full() {
   local config="${1:?config required}"
   local diff="${2:?diff required}"
@@ -125,6 +138,8 @@ function run_full() {
   popd
 }
 
+# run_diff will simulate a differential oc-mirror run
+# to disk and then publish to registry
 function run_diff() {
   local config="${1:?config required}"
   local ns="${2:-""}"
@@ -141,6 +156,8 @@ function run_diff() {
   popd
 }
 
+# mirror2mirror will simulate oc-mirror
+# mirror to mirror operations
 function mirror2mirror() {
   local config="${1:?config required}"
   local ns="${2:-""}"
