@@ -114,8 +114,8 @@ function run_full() {
   local ns="${3:-""}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
-  prep_registry false
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
+   prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}"
   pushd $PUBLISH_FULL_DIR
   if [[ ! -z $ns ]]; then
@@ -130,8 +130,8 @@ function run_diff() {
   local ns="${2:-""}"
   mkdir $PUBLISH_DIFF_DIR
   # Copy the catalog to the connected registry so they can have the same tag
-  prep_registry true
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_DIFF_DIR" "latest/$config" true
+  prep_registry true
   run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}"
   pushd ${PUBLISH_DIFF_DIR}
   if [[ ! -z $ns ]]; then
@@ -145,8 +145,8 @@ function mirror2mirror() {
   local config="${1:?config required}"
   local ns="${2:-""}"
   # Copy the catalog to the connected registry so they can have the same tag
-  prep_registry false
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "${CREATE_FULL_DIR}" "latest/$config" false
+  prep_registry false
   pushd ${CREATE_FULL_DIR}
   if [[ ! -z $ns ]]; then
     NS="/$ns"

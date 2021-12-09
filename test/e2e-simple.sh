@@ -16,7 +16,7 @@ PUBLISH_DIFF_DIR="${DATA_TMP}/publish_diff"
 REGISTRY_CONN_DIR="${DATA_TMP}/conn"
 REGISTRY_DISCONN_DIR="${DATA_TMP}/disconn"
 WORKSPACE="oc-mirror-workspace"
-CATALOGNAMESPACE="jpower_personal/mirror"
+CATALOGNAMESPACE="redhatgov/oc-mirror-dev"
 REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN_PORT=5001
 NS=""
@@ -28,6 +28,7 @@ PATH=$PATH:$GOBIN
 
 trap cleanup EXIT
 
+# Install crane and registry2
 install_deps
 
 # Test full catalog mode.
@@ -39,7 +40,7 @@ run_full imageset-config-full.yaml false
 rm -rf "$DATA_TMP"
 cleanup
 
-# Test registry backend
+# Test heads-only mode
 mkdir "$DATA_TMP"
 setup_reg
 run_full imageset-config-headsonly.yaml true
@@ -47,7 +48,7 @@ run_full imageset-config-headsonly.yaml true
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
 #localhost:${REGISTRY_DISCONN_PORT}
 
-# Test `create diff` with new operator bundles and releases.
+# Test headsonly diff
 run_diff imageset-config-headsonly.yaml
 #check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
@@ -63,7 +64,7 @@ run_full imageset-config-headsonly-backend-registry.yaml true
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
 #localhost:${REGISTRY_DISCONN_PORT}
 
-# Test `create diff` with new operator bundles and releases.
+# Test regsitry backend diff
 run_diff imageset-config-headsonly-backend-registry.yaml
 #check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
@@ -99,7 +100,7 @@ run_full imageset-config-headsonly-backend-registry.yaml true "custom"
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
 #localhost:${REGISTRY_DISCONN_PORT}
 
-# Test `create diff` with new operator bundles and releases.
+# Test registry backend with custom namespace diff
 run_diff imageset-config-headsonly-backend-registry.yaml "custom"
 #check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
 #"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \

@@ -10,18 +10,17 @@ DIFF="${4:?diff bool is required}"
 BUILD=false
 REGISTRY="quay.io"
 METADATA_REGISTRY="localhost:5000"
-CATALOGNAMESPACE="jpower_personal/mirror"
+CATALOGNAMESPACE="redhatgov/oc-mirror-dev"
 METADATA_CATALOGNAMESPACE="${METADATA_REGISTRY}/${CATALOGNAMESPACE}"
 REGISTRY_CATALOGNAMESPACE="${REGISTRY}/${CATALOGNAMESPACE}"
 BUILDX_BUILDER=test-builder
 
 function set_indexdir() {
   if $DIFF; then
-    export INDEX_PATH="diff"
+    INDEX_PATH="diff"
   else 
-    export INDEX_PATH="latest"
+    INDEX_PATH="latest"
   fi
-  echo $INDEX_PATH
 }
 
 function create_buildx_builder() {
@@ -93,7 +92,7 @@ function build_push_catalog() {
 
 set_indexdir
 setup
-if $BUILD; then
+if ${BUILD}; then
   create_buildx_builder
   build_push_bundles
   build_push_catalog
