@@ -22,7 +22,7 @@ schema: olm.channel
 entries:
   - name: bar.v1.0.0
 ---
-image: REGISTRY_ONLY/bar-operator/bar-bundle:v0.1.0
+image: REGISTRY_ONLY:bar-bundle-v0.1.0
 name: bar.v0.1.0
 package: bar
 properties:
@@ -42,11 +42,11 @@ properties:
     packageName: bar
     version: 0.1.0
 relatedImages:
-- image: REGISTRY_ONLY/bar-operator/bar:v0.1.0
+- image: REGISTRY_ONLY:bar-v0.1.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/bar-operator/bar-bundle:v0.2.0
+image: REGISTRY_ONLY:bar-bundle-v0.2.0
 name: bar.v0.2.0
 package: bar
 properties:
@@ -66,11 +66,11 @@ properties:
     packageName: bar
     version: 0.2.0
 relatedImages:
-- image: REGISTRY_ONLY/bar-operator/bar:v0.2.0
+- image: REGISTRY_ONLY:bar-v0.2.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/bar-operator/bar-bundle:v1.0.0
+image: REGISTRY_ONLY:bar-bundle-v1.0.0
 name: bar.v1.0.0
 package: bar
 properties:
@@ -95,7 +95,7 @@ properties:
     packageName: bar
     version: 1.0.0
 relatedImages:
-- image: REGISTRY_ONLY/bar-operator/bar:v1.0.0
+- image: REGISTRY_ONLY:bar-v1.0.0
   name: operator
 schema: olm.bundle
 ---
@@ -119,7 +119,7 @@ entries:
     skips:
       - baz.v1.0.1
 ---
-image: REGISTRY_ONLY/baz-operator/baz-bundle:v1.0.0
+image: REGISTRY_ONLY:baz-bundle-v1.0.0
 name: baz.v1.0.0
 package: baz
 properties:
@@ -139,11 +139,11 @@ properties:
     packageName: baz
     version: 1.0.0
 relatedImages:
-- image: REGISTRY_ONLY/baz-operator/baz:v1.0.0
+- image: REGISTRY_ONLY:baz-v1.0.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/baz-operator/baz-bundle:v1.0.1
+image: REGISTRY_ONLY:baz-bundle-v1.0.1
 name: baz.v1.0.1
 package: baz
 properties:
@@ -163,11 +163,11 @@ properties:
     packageName: baz
     version: 1.0.1
 relatedImages:
-- image: REGISTRY_ONLY/baz-operator/baz:v1.0.1
+- image: REGISTRY_ONLY:baz-v1.0.1
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/baz-operator/baz-bundle:v1.1.0
+image: REGISTRY_ONLY:baz-bundle-v1.1.0
 name: baz.v1.1.0
 package: baz
 properties:
@@ -187,7 +187,7 @@ properties:
     packageName: baz
     version: 1.1.0
 relatedImages:
-- image: REGISTRY_ONLY/baz-operator/baz:v1.1.0
+- image: REGISTRY_ONLY:baz-v1.1.0
   name: operator
 schema: olm.bundle
 ---
@@ -219,7 +219,7 @@ entries:
       - foo.v0.3.0
       - foo.v0.3.1
 ---
-image: REGISTRY_ONLY/foo-operator/foo-bundle:v0.1.0
+image: REGISTRY_ONLY:foo-bundle-v0.1.0
 name: foo.v0.1.0
 package: foo
 properties:
@@ -248,11 +248,11 @@ properties:
     packageName: bar
     versionRange: <0.1.0
 relatedImages:
-- image: REGISTRY_ONLY/foo-operator/foo:v0.1.0
+- image: REGISTRY_ONLY:foo-v0.1.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/foo-operator/foo-bundle:v0.2.0
+image: REGISTRY_ONLY:foo-bundle-v0.2.0
 name: foo.v0.2.0
 package: foo
 properties:
@@ -281,11 +281,11 @@ properties:
     packageName: bar
     versionRange: <0.1.0
 relatedImages:
-- image: REGISTRY_ONLY/foo-operator/foo:v0.2.0
+- image: REGISTRY_ONLY:foo-v0.2.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/foo-operator/foo-bundle:v0.3.0
+image: REGISTRY_ONLY:foo-bundle-v0.3.0
 name: foo.v0.3.0
 package: foo
 properties:
@@ -319,11 +319,11 @@ properties:
     packageName: bar
     versionRange: <0.2.0
 relatedImages:
-- image: REGISTRY_ONLY/foo-operator/foo:v0.3.0
+- image: REGISTRY_ONLY:foo-v0.3.0
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/foo-operator/foo-bundle:v0.3.1
+image: REGISTRY_ONLY:foo-bundle-v0.3.1
 name: foo.v0.3.1
 package: foo
 properties:
@@ -357,11 +357,11 @@ properties:
     packageName: bar
     versionRange: <0.2.0
 relatedImages:
-- image: REGISTRY_ONLY/foo-operator/foo:v0.3.1
+- image: REGISTRY_ONLY:foo-v0.3.1
   name: operator
 schema: olm.bundle
 ---
-image: REGISTRY_ONLY/foo-operator/foo-bundle:v0.3.2
+image: REGISTRY_ONLY:foo-bundle-v0.3.2
 name: foo.v0.3.2
 package: foo
 properties:
@@ -395,6 +395,6 @@ properties:
     packageName: bar
     versionRange: <0.2.0
 relatedImages:
-- image: REGISTRY_ONLY/foo-operator/foo:v0.3.2
+- image: REGISTRY_ONLY:foo-v0.3.2
   name: operator
 schema: olm.bundle

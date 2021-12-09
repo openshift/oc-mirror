@@ -3,8 +3,8 @@ apiVersion: tmp-redhatgov.com/v1alpha1
 kind: ImageSetConfiguration
 storageConfig:
   registry:
-    imageURL: REGISTRY_CATALOGNAMESPACE/metadata
+    imageURL: METADATA_CATALOGNAMESPACE/metadata
     skipTLS: true
 mirror:
   operators:
-  - catalog: REGISTRY_CATALOGNAMESPACE/test-catalog:latest
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
