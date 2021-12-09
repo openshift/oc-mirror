@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -309,7 +310,7 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 
 			// Add a top-level namespace, if defined
 			if len(o.UserNamespace) != 0 {
-				m.Destination.Ref.Namespace = strings.Join([]string{o.UserNamespace, m.Destination.Ref.Namespace}, "/")
+				m.Destination.Ref.Namespace = path.Join(o.UserNamespace, m.Destination.Ref.Namespace)
 			}
 
 			switch assoc.Type {
@@ -371,11 +372,11 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	// Create CatalogSource manifests and save ICSP data for all catalog refs.
 	// Source and dest refs are treated the same intentionally since
 	// the source image does not exist and destination image was built above.
-	for _, ref := range ctlgRefs {
-		namedICSPMappings[ref.Ref.Name] = map[reference.DockerImageReference]reference.DockerImageReference{ref.Ref: ref.Ref}
+	for sourceRef, destRef := range ctlgRefs {
+		namedICSPMappings[sourceRef.Exact()] = map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef}
 
-		if err := writeCatalogSource(ref, ref, o.OutputDir); err != nil {
-			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", ref.Ref.Exact(), err)
+		if err := writeCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
+			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", destRef.Exact(), err)
 		}
 	}
 

@@ -113,6 +113,9 @@ To create a new full imageset, use the following command with the target directo
 
 `oc-mirror --from archives docker://localhost:5000`
 
+- With a defined top-level namespace:  
+`oc-mirror --from archives docker://localhost:5000/mynamespace`
+
 ### Running `oc-mirror` For Differential Updates
 
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:

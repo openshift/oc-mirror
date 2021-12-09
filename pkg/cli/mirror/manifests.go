@@ -11,7 +11,6 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,19 +54,9 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 	return nil
 }
 
-func WriteCatalogSource(source imagesource.TypedImageReference, dir string, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
+func writeCatalogSource(source, dest reference.DockerImageReference, dir string) error {
 
-	dest, ok := mapping[source]
-	if !ok {
-		return fmt.Errorf("no mapping found for index image")
-	}
-
-	return writeCatalogSource(source, dest, dir)
-}
-
-func writeCatalogSource(source, dest imagesource.TypedImageReference, dir string) error {
-
-	name := source.Ref.Name
+	name := source.Name
 	catalogSource, err := generateCatalogSource(name, dest)
 	if err != nil {
 		return err
@@ -157,10 +146,10 @@ func getRegistryMapping(icspScope string, mapping map[reference.DockerImageRefer
 	return registryMapping
 }
 
-func generateCatalogSource(name string, dest imagesource.TypedImageReference) ([]byte, error) {
+func generateCatalogSource(name string, dest reference.DockerImageReference) ([]byte, error) {
 	// Prefer tag over digest for automatic updates.
-	if dest.Ref.Tag != "" {
-		dest.Ref.ID = ""
+	if dest.Tag != "" {
+		dest.ID = ""
 	}
 
 	obj := map[string]interface{}{
