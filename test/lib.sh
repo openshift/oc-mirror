@@ -78,7 +78,7 @@ function cleanup() {
 
 # install_deps will install crane and registry2 in go bin dir
 function install_deps() {
-  go install github.com/google/go-containerregistry/cmd/crane@latest
+  go install -mod=mod github.com/google/go-containerregistry/cmd/crane@latest
   crane export registry:2 registry2.tar
   tar xvf registry2.tar bin/registry
   mv bin/registry $GOBIN
