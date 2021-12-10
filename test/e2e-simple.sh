@@ -21,8 +21,6 @@ REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN_PORT=5001
 NS=""
 
-mkdir ${REGISTRY_CONN_DIR} ${REGISTRY_DISCONN_DIR}
-
 GOBIN=$HOME/go/bin
 PATH=$PATH:$GOBIN
 
@@ -34,9 +32,9 @@ install_deps
 # Test full catalog mode.
 setup_reg
 run_full imageset-config-full.yaml false
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup
 
@@ -44,15 +42,15 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 run_full imageset-config-headsonly.yaml true
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 
 # Test headsonly diff
 run_diff imageset-config-headsonly.yaml
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup
 
@@ -60,15 +58,15 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 run_full imageset-config-headsonly-backend-registry.yaml true
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 
 # Test regsitry backend diff
 run_diff imageset-config-headsonly-backend-registry.yaml
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup
 
@@ -76,9 +74,9 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 mirror2mirror imageset-config-headsonly.yaml
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup
 
@@ -86,9 +84,9 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 mirror2mirror imageset-config-full.yaml
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup
 
@@ -96,14 +94,14 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 run_full imageset-config-headsonly-backend-registry.yaml true "custom"
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT}
 
 # Test registry backend with custom namespace diff
 run_diff imageset-config-headsonly-backend-registry.yaml "custom"
-#check_bundles localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-#"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
-#localhost:${REGISTRY_DISCONN_PORT}
+check_bundles localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest \
+"bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+localhost:${REGISTRY_DISCONN_PORT}
 rm -rf "$DATA_TMP"
 cleanup

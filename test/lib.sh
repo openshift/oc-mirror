@@ -18,24 +18,26 @@ function check_bundles() {
   local exp_bundles_list="${2:?expected bundles list must be set}"
   local disconn_registry="${3:?disconnected registry host name must be set}"
 
-  docker pull $catalog_image
-  local container=$(docker create $catalog_image)
+  crane export $catalog_image temp.tar
   local index_dir="${DATA_TMP}/unpacked"
   mkdir -p "$index_dir"
   local index_path="${index_dir}/index.json"
-  docker cp ${container}:/configs/index.json "$index_path"
+  tar xvf temp.tar /configs/index.json --strip-components=1 
+  mv index.json $index_dir
+  rm -f temp.tar
 
   declare -A exp_bundles_set
   for bundle in $exp_bundles_list; do
     exp_bundles_set[$bundle]=bundle
   done
 
-  local manifest=$(docker manifest inspect --insecure $catalog_image | jq .manifests | jq '.[].platform.architecture')
-  local num_manifest=$(echo $manifest | wc -w)
-  if (( $num_manifest != 4 )); then 
-    echo "number of manifests in catalog $num_manifest does not match expected number 4"
-    return 1
-  fi
+# TODO: Use crane manifest to replace docker
+ # local manifest=$(docker manifest inspect --insecure $catalog_image | jq .manifests | jq '.[].platform.architecture')
+ # local num_manifest=$(echo $manifest | wc -w)
+ # if (( $num_manifest != 4 )); then 
+ #   echo "number of manifests in catalog $num_manifest does not match expected number 4"
+ #   return 1
+ # fi
 
   # Ensure the number of bundles matches.
   local index_bundle_names=$(cat "$index_path" | jq -sr '.[] | select(.schema == "olm.bundle") | .name')
@@ -49,7 +51,7 @@ function check_bundles() {
   local index_bundle_images=$(cat "$index_path" | jq -sr '.[] | select(.schema == "olm.bundle") | .image')
   for image in $index_bundle_images; do
     image=${disconn_registry}/$(echo $image | cut --complement -d'/' -f1)
-    if ! docker pull $image; then
+    if ! crane digest $image; then
       echo "bundle image $image not pushed to registry"
       return 1
     fi
@@ -66,7 +68,6 @@ function check_bundles() {
 
 # cleanup will kill any running registry processes
 function cleanup() {
-    echo "Cleaning $PID_CONN"
     [[ -n $PID_DISCONN ]] && kill $PID_DISCONN
     [[ -n $PID_CONN ]] && kill $PID_CONN
 }
@@ -101,8 +102,8 @@ function setup_reg() {
   registry serve ${DATA_TMP}/disconn.yaml &> ${DATA_TMP}/doutput.log &
   PID_DISCONN=$!
 
-  echo $PID_DISCONN
-  echo $PID_CONN
+  echo -e "disconnected registry PID: $PID_DISCONN"
+  echo -e "connected registry PID: $PID_CONN"
 }
 
 # prep_registry will copy the needed catalog image
