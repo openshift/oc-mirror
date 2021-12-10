@@ -23,7 +23,7 @@ test-unit: tidy
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e
-test-e2e: build
+test-e2e: tidy build
 	./test/e2e-simple.sh ./bin/oc-mirror
 
 .PHONY: test-prow
