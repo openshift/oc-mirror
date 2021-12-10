@@ -17,6 +17,7 @@ function check_bundles() {
   local catalog_image="${1:?catalog image required}"
   local exp_bundles_list="${2:?expected bundles list must be set}"
   local disconn_registry="${3:?disconnected registry host name must be set}"
+  local ns="${4:-""}"
 
   crane export $catalog_image temp.tar
   local index_dir="${DATA_TMP}/unpacked"
@@ -49,8 +50,11 @@ function check_bundles() {
 
   # Ensure all bundle images are pullable.
   local index_bundle_images=$(cat "$index_path" | jq -sr '.[] | select(.schema == "olm.bundle") | .image')
+   if [[ ! -z $ns ]]; then
+    NS="$ns/"
+  fi
   for image in $index_bundle_images; do
-    image=${disconn_registry}/$(echo $image | cut --complement -d'/' -f1)
+    image=${disconn_registry}/${NS}$(echo $image | cut --complement -d'/' -f1)
     if ! crane digest $image; then
       echo "bundle image $image not pushed to registry"
       return 1

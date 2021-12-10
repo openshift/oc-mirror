@@ -94,14 +94,14 @@ cleanup
 mkdir "$DATA_TMP"
 setup_reg
 run_full imageset-config-headsonly-backend-registry.yaml true "custom"
-check_bundles localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest \
+check_bundles "localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
 "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
-localhost:${REGISTRY_DISCONN_PORT}
+localhost:${REGISTRY_DISCONN_PORT} "custom"
 
 # Test registry backend with custom namespace diff
 run_diff imageset-config-headsonly-backend-registry.yaml "custom"
-check_bundles localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest \
+check_bundles "localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
 "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
-localhost:${REGISTRY_DISCONN_PORT}
+localhost:${REGISTRY_DISCONN_PORT} "custom"
 rm -rf "$DATA_TMP"
 cleanup
