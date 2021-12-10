@@ -2,14 +2,13 @@ apiVersion: tmp-redhatgov.com/v1alpha1
 kind: ImageSetConfiguration
 mirror:
   helm:
-    repos: 
+    repos:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
-        charts: 
+        charts:
           - name: podinfo
             version: 5.0.0
     local:
-      charts: 
-        - name: podinfo-local
-          path: /home/user/podinfo-6.0.0.tgz 
+      - name: podinfo-local
+        path: /home/user/podinfo-6.0.0.tgz
         
