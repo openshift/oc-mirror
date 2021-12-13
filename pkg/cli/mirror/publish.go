@@ -201,11 +201,11 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	}
 
 	var (
-		errs          []error
-		allICSPs      []operatorv1alpha1.ImageContentSourcePolicy
-		namedICSPData []ICSPGenerator
+		errs     []error
+		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
+	namedICSPData := map[string]ICSPGenerator{}
 	for _, imageName := range assocs.Keys() {
 
 		genericMappings := []imgmirror.Mapping{}
@@ -346,7 +346,7 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 		}
 
 		// Add mapping for ISCP generation
-		namedICSPData = append(namedICSPData, icspData)
+		namedICSPData[imageRef.Name] = icspData
 
 		// Mirror all generic mappings for this image
 		if len(genericMappings) != 0 {
@@ -383,10 +383,10 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	for sourceRef, destRef := range ctlgRefs {
 		icspData := ICSPGenerator{
 			ICSPMapping:      map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef},
-			ImageName:        sourceRef.Exact(),
+			ImageName:        sourceRef.Name,
 			AddOperatorLabel: true,
 		}
-		namedICSPData = append(namedICSPData, icspData)
+		namedICSPData[sourceRef.Name] = icspData
 
 		if err := WriteCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", destRef.Exact(), err)
@@ -394,10 +394,11 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	}
 
 	// Generate ICSPs for all images.
-	for _, data := range namedICSPData {
+	for name, data := range namedICSPData {
+		logrus.Debugf("Generating ICSP for image %q", name)
 		icsps, err := data.Run(icspScope, icspSizeLimit)
 		if err != nil {
-			return fmt.Errorf("error generating ICSP for image name %q: %v", data.ImageName, err)
+			return fmt.Errorf("error generating ICSP for image name %q: %v", name, err)
 		}
 		allICSPs = append(allICSPs, icsps...)
 	}
