@@ -205,7 +205,7 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
-	namedICSPMappings := map[string]map[reference.DockerImageReference]reference.DockerImageReference{}
+	namedICSPData := map[string]ICSPGenerator{}
 	for _, imageName := range assocs.Keys() {
 
 		genericMappings := []imgmirror.Mapping{}
@@ -220,8 +220,11 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 		dstRef := imageRef
 		dstRef.Registry = toMirrorRef.Ref.Registry
 
-		namedICSPMappings[imageRef.Name] = map[reference.DockerImageReference]reference.DockerImageReference{
-			imageRef: dstRef,
+		icspData := ICSPGenerator{
+			ICSPMapping: map[reference.DockerImageReference]reference.DockerImageReference{
+				imageRef: dstRef,
+			},
+			ImageName: imageRef.Name,
 		}
 
 		values, _ := assocs.Search(imageName)
@@ -324,8 +327,10 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 				}
 			case image.TypeOperatorCatalog:
 				genericMappings = append(genericMappings, m)
+				icspData.AddOperatorLabel = true
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)
+				icspData.AddOperatorLabel = true
 			case image.TypeInvalid:
 				errs = append(errs, fmt.Errorf("image %q: image type is not set", imageName))
 			default:
@@ -339,6 +344,9 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 				}
 			}
 		}
+
+		// Add mapping for ISCP generation
+		namedICSPData[imageRef.Name] = icspData
 
 		// Mirror all generic mappings for this image
 		if len(genericMappings) != 0 {
@@ -373,18 +381,24 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 	// Source and dest refs are treated the same intentionally since
 	// the source image does not exist and destination image was built above.
 	for sourceRef, destRef := range ctlgRefs {
-		namedICSPMappings[sourceRef.Exact()] = map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef}
+		icspData := ICSPGenerator{
+			ICSPMapping:      map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef},
+			ImageName:        sourceRef.Name,
+			AddOperatorLabel: true,
+		}
+		namedICSPData[sourceRef.Name] = icspData
 
-		if err := writeCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
+		if err := WriteCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", destRef.Exact(), err)
 		}
 	}
 
 	// Generate ICSPs for all images.
-	for imageName, icspMapping := range namedICSPMappings {
-		icsps, err := GenerateICSPs(imageName, icspSizeLimit, icspScope, icspMapping)
+	for name, data := range namedICSPData {
+		logrus.Debugf("Generating ICSP for image %q", name)
+		icsps, err := data.Run(icspScope, icspSizeLimit)
 		if err != nil {
-			return fmt.Errorf("error generating ICSP for image name %q: %v", imageName, err)
+			return fmt.Errorf("error generating ICSP for image name %q: %v", name, err)
 		}
 		allICSPs = append(allICSPs, icsps...)
 	}
