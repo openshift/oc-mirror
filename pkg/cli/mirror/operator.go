@@ -34,8 +34,8 @@ import (
 )
 
 var (
-	// Pinned to upstream opm v1.18.0 (k8s 1.21).
-	OPMImage = "quay.io/operator-framework/opm@sha256:038007c1c5d5f0efa50961cbcc097c6e63655a2ab4126547e3c4eb620ad0346e"
+	// Pinned to upstream opm v1.19.0 (k8s 1.21).
+	OPMImage = "quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
