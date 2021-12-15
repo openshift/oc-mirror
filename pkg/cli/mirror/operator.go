@@ -215,6 +215,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		// newly published catalog data to join graphs. Any included objects previously included
 		// will be added as a diff as part of the latest diff mode.
 		IncludeAdditively: false,
+		SkipDependencies:  ctlg.SkipDependencies,
 	}
 
 	// An old ref is always required to generate a latest diff.
