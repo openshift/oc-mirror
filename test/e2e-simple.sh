@@ -105,3 +105,11 @@ check_bundles "localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:tes
 localhost:${REGISTRY_DISCONN_PORT} "custom"
 rm -rf "$DATA_TMP"
 cleanup
+
+# Test heads only while skipping deps
+mkdir "$DATA_TMP"
+setup_reg
+run_full imageset-config-skip-deps.yaml true "custom"
+check_bundles "localhost:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
+"bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+localhost:${REGISTRY_DISCONN_PORT} "custom"
