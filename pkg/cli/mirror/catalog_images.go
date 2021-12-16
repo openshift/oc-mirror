@@ -129,6 +129,10 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			if err != nil {
 				return nil, err
 			}
+			// Remove any duplicate objects
+			if err := action.TwoWay.MergeDC(dc); err != nil {
+				return nil, err
+			}
 			dcDirToBuild = filepath.Join(dcDir, "rendered")
 			if err := os.MkdirAll(dcDirToBuild, os.ModePerm); err != nil {
 				return nil, err
