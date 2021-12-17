@@ -27,6 +27,8 @@ function check_bundles() {
   mv index.json $index_dir
   rm -f temp.tar
 
+  opm validate $index_dir
+
   declare -A exp_bundles_set
   for bundle in $exp_bundles_list; do
     exp_bundles_set[$bundle]=bundle
@@ -84,7 +86,10 @@ function install_deps() {
   crane export registry:2 registry2.tar
   tar xvf registry2.tar bin/registry
   mv bin/registry $GOBIN
-  rm -f registry2.tar
+  crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
+  tar xvf opm.tar bin/opm
+  mv bin/opm $GOBIN
+  rm -f registry2.tar opm.tar
 }
 
 # setup_reg will configure and start registry2 processes

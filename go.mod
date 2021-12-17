@@ -3,7 +3,6 @@ module github.com/openshift/oc-mirror
 go 1.16
 
 require (
-	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
 	github.com/containerd/containerd v1.5.4
@@ -21,7 +20,7 @@ require (
 	github.com/openshift/installer v0.16.1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
-	github.com/operator-framework/operator-registry v1.19.2-0.20211105235100-29cd8e3f02f9
+	github.com/operator-framework/operator-registry v1.19.6-0.20211214163458-6b066493052b
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.2.1
@@ -43,6 +42,7 @@ require (
 replace (
 	//github.com/Microsoft/hcsshim => github.com/Microsoft/hcsshim v0.8.7
 	github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
+	github.com/operator-framework/operator-registry => github.com/jpower432/operator-registry v1.19.6-0.20211216224407-864e0251bc66
 	k8s.io/apimachinery => github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9
 	k8s.io/cli-runtime => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
