@@ -68,6 +68,9 @@ type Operator struct {
 	// heads will still be included, but prior versions may also be included.
 	// The default is true.
 	HeadsOnly *bool `json:"headsOnly,omitempty"`
+	// SkipDependencies will not include dependencies
+	// of bundles included in the diff if true.
+	SkipDependencies bool `json:"skipDeps,omitempty"`
 }
 
 func (o Operator) IsHeadsOnly() bool {
