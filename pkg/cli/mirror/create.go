@@ -70,6 +70,13 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 	if err := bundle.MakeCreateDirs(o.Dir); err != nil {
 		return err
 	}
+	if !o.SkipCleanup {
+		defer func() {
+			if err := os.RemoveAll(filepath.Join(o.Dir, config.SourceDir)); err != nil {
+				logrus.Error(err)
+			}
+		}()
+	}
 
 	// Ensure meta has the latest OPM image, and if not add it to cfg for mirroring.
 	addOPMImage(&cfg, meta)

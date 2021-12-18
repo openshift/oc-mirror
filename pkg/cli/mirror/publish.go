@@ -339,7 +339,7 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
-				if err := o.fetchBlobs(ctx, incomingMeta, m, missingLayers, m.Destination.Ref); err != nil {
+				if err := o.fetchBlobs(ctx, currentMeta, m, missingLayers); err != nil {
 					return err
 				}
 			}
@@ -497,7 +497,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string, img reference.DockerImageReference) error {
+func (o MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
 
 	restctx, err := config.CreateDefaultContext(o.DestSkipTLS)
 	if err != nil {
@@ -506,7 +506,11 @@ func (o MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, m
 
 	var errs []error
 	for layerDigest, dstBlobPaths := range missingLayers {
-		if err := o.fetchBlob(ctx, restctx, img, layerDigest, dstBlobPaths); err != nil {
+		imgRef, err := o.findBlobRepo(meta, layerDigest)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
+		}
+		if err := o.fetchBlob(ctx, restctx, imgRef.Ref, layerDigest, dstBlobPaths); err != nil {
 			errs = append(errs, fmt.Errorf("layer %s: %v", layerDigest, err))
 			continue
 		}
@@ -632,4 +636,23 @@ func (o MirrorOptions) createResultsDir() (resultsDir string, err error) {
 		return resultsDir, err
 	}
 	return resultsDir, nil
+}
+
+func (o MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
+	var namespacename string
+	var ref string
+	for _, mirror := range meta.PastMirrors {
+		for _, blob := range mirror.Blobs {
+			if blob.ID == layerDigest {
+				namespacename = blob.NamespaceName
+				break
+			}
+		}
+	}
+	if len(o.UserNamespace) != 0 {
+		ref = fmt.Sprintf("%s/%s/%s", o.ToMirror, o.UserNamespace, namespacename)
+	} else {
+		ref = fmt.Sprintf("%s/%s", o.ToMirror, namespacename)
+	}
+	return imagesource.ParseReference(ref)
 }

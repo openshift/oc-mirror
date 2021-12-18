@@ -13,8 +13,8 @@ import (
 func Test_ReconcilingBlobs(t *testing.T) {
 
 	paths := []string{
-		filepath.Join("v2", "blobs"),
-		filepath.Join("v2", "manifests"),
+		filepath.Join("v2", "test", "blobs"),
+		filepath.Join("v2", "test", "manifests"),
 		"blobs",
 		"internal",
 	}
@@ -35,7 +35,7 @@ func Test_ReconcilingBlobs(t *testing.T) {
 				},
 			},
 			want: []v1alpha1.Blob{
-				{ID: "test3", NamespaceName: "test3"},
+				{ID: "test3", NamespaceName: "test"},
 			},
 		},
 	}
@@ -68,16 +68,16 @@ func Test_ReconcilingBlobs(t *testing.T) {
 
 		// Write files
 		d1 := []byte("hello\ngo\n")
-		if err := ioutil.WriteFile("v2/test1", d1, 0644); err != nil {
+		if err := ioutil.WriteFile("v2/test/blobs/test1", d1, 0644); err != nil {
 			t.Fatal(err)
 		}
 		if err := ioutil.WriteFile("internal/test2", d1, 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile("v2/test3", d1, 0644); err != nil {
+		if err := ioutil.WriteFile("v2/test/blobs/test3", d1, 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile("v2/manifests/test4", d1, 0644); err != nil {
+		if err := ioutil.WriteFile("v2/test/manifests/test4", d1, 0644); err != nil {
 			t.Fatal(err)
 		}
 
