@@ -1,0 +1,14 @@
+---
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: DATA_TMP
+mirror:
+  operators:
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
+    headsOnly: false
+    packages:
+      - name: foo
+      - name: baz
+        startingVersion: 1.0.1

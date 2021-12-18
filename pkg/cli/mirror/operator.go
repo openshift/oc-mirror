@@ -198,7 +198,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 
 // renderDCDiff renders data in ctlg into a declarative config for o.Diff().
 func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator, lastRun v1alpha1.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
-
+	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
@@ -219,17 +219,20 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	}
 
 	// An old ref is always required to generate a latest diff.
-	for _, operator := range lastRun.Operators {
-		if operator.Catalog != ctlg.Catalog {
-			continue
-		}
+	// To make sure we always download the full include config
+	// don't set the old ref when that is specified
+	if !hasInclude {
+		for _, operator := range lastRun.Operators {
+			if operator.Catalog != ctlg.Catalog {
+				continue
+			}
 
-		if operator.ImagePin == "" {
-			return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
+			if operator.ImagePin == "" {
+				return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
+			}
+			a.OldRefs = []string{operator.ImagePin}
+			break
 		}
-
-		a.OldRefs = []string{operator.ImagePin}
-		break
 	}
 
 	return a.Run(ctx)

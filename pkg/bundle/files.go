@@ -69,11 +69,14 @@ func ReconcileBlobs(meta v1alpha1.Metadata) (newBlobs []v1alpha1.Blob, err error
 		}
 
 		if info.Mode().IsRegular() {
+			namespacename := strings.TrimPrefix(fpath, "v2"+string(filepath.Separator))
+			idx := strings.LastIndex(namespacename, "blobs")
+			if idx == -1 {
+				return fmt.Errorf("path %q does not contain blobs directory", fpath)
+			}
 			file := v1alpha1.Blob{
-				ID: info.Name(),
-				// QUESTION(estroz): if the image name only had one component,
-				// will the publish lookup fail?
-				NamespaceName: strings.TrimPrefix(fpath, "v2"+string(filepath.Separator)),
+				ID:            info.Name(),
+				NamespaceName: namespacename[:idx-1],
 			}
 
 			if _, found := foundFiles[info.Name()]; !found {
