@@ -76,12 +76,12 @@ function custom_namespace {
 function package_filtering {
     run_full imageset-config-filter.yaml true
     check_bundles "localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v.0.2.0 foo.v0.3.0 foo.v0.3.1" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost:${REGISTRY_DISCONN_PORT}
 
     run_diff imageset-config-filter-multi.yaml
     check_bundles "localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v.0.2.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2 baz.v1.0.1 baz.v1.1.0" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost:${REGISTRY_DISCONN_PORT}
 }
 
