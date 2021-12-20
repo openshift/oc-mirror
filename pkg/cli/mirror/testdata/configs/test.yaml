@@ -6,4 +6,4 @@ storageConfig:
     path: testdata
 mirror:
   additionalimages:
-    - name: quay.io/estroz/pull-tester-additional:latest 
+    - name: quay.io/estroz/pull-tester-additional:latest

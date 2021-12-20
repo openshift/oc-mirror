@@ -102,3 +102,34 @@ func Test_CreateWithDryRun(t *testing.T) {
 	_, err = os.Stat(filepath.Join(path, "mirror_seq1_00000.tar"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
+
+func Test_CreateWithCancel(t *testing.T) {
+	path := t.TempDir()
+	ctx := context.Background()
+
+	cancelCh := make(chan struct{})
+	// closing the channel will cause the
+	// command to exit if using a cancellable context
+	close(cancelCh)
+
+	opts := MirrorOptions{
+		RootOptions: &cli.RootOptions{
+			Dir:      path,
+			LogLevel: "info",
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
+			},
+		},
+		ConfigPath:  "testdata/configs/test.yaml",
+		OutputDir:   path,
+		cancelCh:    cancelCh,
+		SkipCleanup: true,
+	}
+	flags := NewMirrorCmd().Flags()
+	err := opts.Create(ctx, flags)
+	require.NoError(t, err)
+
+	require.Equal(t, true, opts.interrupted)
+}

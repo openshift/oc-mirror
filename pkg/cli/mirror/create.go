@@ -21,7 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
+func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(o.ConfigPath)
@@ -86,6 +86,13 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 	}
 	// New metadata files get a full mirror, with complete/heads-only catalogs, release images,
 	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
+
+	var backupMeta v1alpha1.Metadata
+	rollbackMeta := func() error {
+		logrus.Error("operation cancelled, initiating metadata rollback")
+		return metadata.UpdateMetadata(ctx, backend, &backupMeta, o.SourceSkipTLS)
+	}
+
 	var assocs image.AssociationSet
 	switch {
 	case merr != nil || len(meta.PastMirrors) == 0:
@@ -98,6 +105,7 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 		}
 
 	default:
+		backupMeta = meta
 		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
 		thisRun.Sequence = lastRun.Sequence + 1
 
@@ -136,17 +144,30 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 		return err
 	}
 
-	// Run archiver
+	// Allow for for user interrupts
+	ctx, done := o.CancelContext(ctx)
+	defer done()
+
+	// If any errors occur after the metadata is written
+	// initiate metadata rollback
 	if err := o.prepareArchive(ctx, cfg, backend, thisRun.Sequence, manifests, blobs); err != nil {
+		if err := rollbackMeta(); err != nil {
+			return fmt.Errorf("error occurred during metadata rollback")
+		}
 		return err
 	}
 
-	// Handle Committer backends.
+	if ctx.Err() == context.Canceled {
+		o.interrupted = true
+		return rollbackMeta()
+	}
+
+	/* Commenting out temporarily because not concrete types implement this
 	if committer, isCommitter := backend.(storage.Committer); isCommitter {
 		if err := committer.Commit(ctx); err != nil {
 			return err
 		}
-	}
+	}*/
 
 	return nil
 }
