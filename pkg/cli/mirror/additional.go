@@ -32,7 +32,7 @@ func (e ErrBlocked) Error() string {
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (image.AssociationSet, error) {
+func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (assocs image.AssociationSet, err error) {
 
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
@@ -102,9 +102,12 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 		return nil, err
 	}
 
-	assocs, err := image.AssociateImageLayers(opts.FileDir, assocMappings, images, image.TypeGeneric)
-	if err != nil {
-		return nil, err
+	// Do not build associations on dry runs because there are no manifests
+	if !o.DryRun {
+		assocs, err = image.AssociateImageLayers(opts.FileDir, assocMappings, images, image.TypeGeneric)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return assocs, nil

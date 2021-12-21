@@ -86,12 +86,14 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 	}
 	// New metadata files get a full mirror, with complete/heads-only catalogs, release images,
 	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
+	var assocs image.AssociationSet
 	switch {
 	case merr != nil || len(meta.PastMirrors) == 0:
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 
-		if err := o.createFull(ctx, flags, &cfg, meta); err != nil {
+		assocs, err = o.createFull(ctx, flags, &cfg, meta)
+		if err != nil {
 			return err
 		}
 
@@ -99,9 +101,19 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
 		thisRun.Sequence = lastRun.Sequence + 1
 
-		if err := o.createDiff(ctx, flags, &cfg, lastRun, meta); err != nil {
+		assocs, err = o.createDiff(ctx, flags, &cfg, lastRun, meta)
+		if err != nil {
 			return err
 		}
+	}
+
+	// Stop the process if DryRun
+	if o.DryRun {
+		return nil
+	}
+
+	if err := o.writeAssociations(assocs); err != nil {
+		return fmt.Errorf("error writing association file: %v", err)
 	}
 
 	// Store mirror in the run
@@ -140,7 +152,7 @@ func (o MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) error {
+func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
@@ -148,7 +160,7 @@ func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewReleaseOptions(o, flags)
 		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -158,7 +170,7 @@ func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Full(ctx, *cfg)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -171,7 +183,7 @@ func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewAdditionalOptions(o)
 		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -180,20 +192,16 @@ func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewHelmOptions(o)
 		assocs, err := opts.PullCharts(*cfg)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
 
-	if err := o.writeAssociations(allAssocs); err != nil {
-		return fmt.Errorf("error writing association file: %v", err)
-	}
-
-	return nil
+	return allAssocs, nil
 }
 
 // createDiff performs all tasks in creating differential imagesets
-func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) error {
+func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
@@ -201,7 +209,7 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewReleaseOptions(o, flags)
 		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -211,7 +219,7 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts.SkipImagePin = o.SkipImagePin
 		assocs, err := opts.Diff(ctx, *cfg, lastRun)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -224,7 +232,7 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewAdditionalOptions(o)
 		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
@@ -233,16 +241,12 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 		opts := NewHelmOptions(o)
 		assocs, err := opts.PullCharts(*cfg)
 		if err != nil {
-			return err
+			return allAssocs, err
 		}
 		allAssocs.Merge(assocs)
 	}
 
-	if err := o.writeAssociations(allAssocs); err != nil {
-		return fmt.Errorf("error writing association file: %v", err)
-	}
-
-	return nil
+	return allAssocs, nil
 }
 
 func (o MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {

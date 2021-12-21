@@ -213,31 +213,34 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 			return nil, err
 		}
 
-		// Retrive the mapping information for release
-		mapping, images, err := o.getMapping(*opts, download.arch, download.Version.String())
+		// Do not build associations on dry runs because there are no manifests
+		if !o.DryRun {
+			// Retrive the mapping information for release
+			mapping, images, err := o.getMapping(*opts, download.arch, download.Version.String())
 
-		if err != nil {
-			return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
+			if err != nil {
+				return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
+			}
+
+			logrus.Debugln("starting image association")
+			assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check if a release image was provided with mapping
+			if o.release == "" {
+				return nil, errors.New("release image not found in mapping")
+			}
+
+			// Update all images associated with a release to the
+			// release images so they form one keyset for publising
+			for _, img := range images {
+				assocs.UpdateKey(img, o.release)
+			}
+
+			allAssocs.Merge(assocs)
 		}
-
-		logrus.Debugln("starting image association")
-		assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if a release image was provided with mapping
-		if o.release == "" {
-			return nil, errors.New("release image not found in mapping")
-		}
-
-		// Update all images associated with a release to the
-		// release images so they form one keyset for publising
-		for _, img := range images {
-			assocs.UpdateKey(img, o.release)
-		}
-
-		allAssocs.Merge(assocs)
 	}
 
 	return allAssocs, nil

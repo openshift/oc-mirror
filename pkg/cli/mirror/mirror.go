@@ -124,6 +124,8 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
+	case len(o.ToMirror) > 0 && o.DryRun:
+		return fmt.Errorf("--dry-run is not supported for mirror publishing operations")
 	}
 
 	// Attempt to login to registry
