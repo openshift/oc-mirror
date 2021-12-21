@@ -31,7 +31,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.From, "from", o.From, "The path to an input file (e.g. archived imageset)")
 	fs.BoolVar(&o.ManifestsOnly, "manifests-only", o.ManifestsOnly, "Generate manifests and do not mirror")
 	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images "+
-		"(experimental: only works for operator catalogs)")
+		"(experimental: only works for mirror to disk)")
 	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Use plain HTTP for source registry")
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")

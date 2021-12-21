@@ -122,11 +122,14 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfigur
 			return nil, err
 		}
 
-		assocs, err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, mappings)
-		if err != nil {
-			return nil, err
+		// Do not build associations on dry runs because there are no manifests
+		if !o.DryRun {
+			assocs, err := o.associateDeclarativeConfigImageLayers(ctlgRef, dc, mappings)
+			if err != nil {
+				return nil, err
+			}
+			allAssocs.Merge(assocs)
 		}
-		allAssocs.Merge(assocs)
 	}
 
 	return allAssocs, nil

@@ -1,11 +1,16 @@
 package mirror
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestAddOPMImage(t *testing.T) {
@@ -47,4 +52,53 @@ func TestAddOPMImage(t *testing.T) {
 
 	addOPMImage(&cfg, meta)
 	require.Len(t, cfg.Mirror.AdditionalImages, 0)
+}
+
+func Test_Create(t *testing.T) {
+	path := t.TempDir()
+	ctx := context.Background()
+
+	opts := MirrorOptions{
+		RootOptions: &cli.RootOptions{
+			Dir:      path,
+			LogLevel: "info",
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
+			},
+		},
+		ConfigPath: "testdata/configs/test.yaml",
+		OutputDir:  path,
+	}
+	flags := NewMirrorCmd().Flags()
+	err := opts.Create(ctx, flags)
+	require.NoError(t, err)
+}
+
+func Test_CreateWithDryRun(t *testing.T) {
+	path := t.TempDir()
+	ctx := context.Background()
+
+	opts := MirrorOptions{
+		RootOptions: &cli.RootOptions{
+			Dir:      path,
+			LogLevel: "info",
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
+			},
+		},
+		ConfigPath: "testdata/configs/test.yaml",
+		DryRun:     true,
+		OutputDir:  path,
+	}
+	flags := NewMirrorCmd().Flags()
+	err := opts.Create(ctx, flags)
+	require.NoError(t, err)
+
+	// should not produce an archive
+	_, err = os.Stat(filepath.Join(path, "mirror_seq1_00000.tar"))
+	require.ErrorIs(t, err, os.ErrNotExist)
 }

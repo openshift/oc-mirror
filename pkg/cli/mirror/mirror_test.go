@@ -121,7 +121,7 @@ func TestMirrorComplete(t *testing.T) {
 	}
 }
 
-func TestOperatorsValidate(t *testing.T) {
+func TestMirrorValidate(t *testing.T) {
 
 	server := httptest.NewServer(registry.New())
 	t.Cleanup(server.Close)
@@ -157,6 +157,15 @@ func TestOperatorsValidate(t *testing.T) {
 				OutputDir: "dir",
 			},
 			expError: `must specify a configuration file with --config`,
+		},
+		{
+			name: "Invalid/DryRunWithMirror",
+			opts: &MirrorOptions{
+				ConfigPath: "foo",
+				ToMirror:   u.Host,
+				DryRun:     true,
+			},
+			expError: "--dry-run is not supported for mirror publishing operations",
 		},
 		{
 			name: "Valid/MirrortoDisk",
