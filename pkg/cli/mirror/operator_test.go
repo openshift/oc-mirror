@@ -81,6 +81,18 @@ func TestPinImages(t *testing.T) {
 			expErrorStr: "not found",
 		},
 		{
+			desc: "Error/NilConfig",
+			opts: &OperatorOptions{
+				MirrorOptions: MirrorOptions{
+					ContinueOnError: false,
+					SkipMissing:     false,
+				},
+			},
+			dc:          nil,
+			resolver:    mockResolver{digestMapping: map[string]string{}},
+			expErrorStr: "bug: nil declarative config",
+		},
+		{
 			desc: "Success/ContinueOnError",
 			opts: &OperatorOptions{
 				MirrorOptions: MirrorOptions{

@@ -179,9 +179,9 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		}.Run(ctx)
 	} else {
 		// Generate and mirror a heads-only diff using only the catalog as a new ref.
-		dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
-		if err != nil {
-			return nil, err
+		dic, derr := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+		if derr != nil {
+			return nil, derr
 		}
 		dc, err = action.Diff{
 			Registry:          reg,
@@ -323,6 +323,11 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 // pinImages resolves every image in dc to it's canonical name (includes digest).
 func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolver remotes.Resolver) (err error) {
 
+	// Check that declarative config is not nil
+	// to avoid panics
+	if err := validate(dc); err != nil {
+		return err
+	}
 	// Instead of returning an error, just log it.
 	isSkipErr := func(err error) bool {
 		return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
@@ -577,4 +582,11 @@ func parseRelatedImages(root string) (map[string]struct{}, error) {
 	}
 	delete(relatedImages, "")
 	return relatedImages, nil
+}
+
+func validate(dc *declcfg.DeclarativeConfig) error {
+	if dc == nil {
+		return errors.New("bug: nil declarative config")
+	}
+	return nil
 }

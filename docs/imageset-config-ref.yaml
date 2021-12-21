@@ -17,11 +17,10 @@ mirror:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
       headsOnly: true # References latest version of each operator in catalog (true is the default value and can be omitted)
       packages:
-        - name: couchbase-operator # Planned, overrides catalog default, respects headsOnly setting
-          startingVersion: '1.4.0' # Planned, overrides catalog default, overrides headsOnly setting
-        - name: crunchy-postgresql-operator
-          channels: # Planned
-            - name: 'stable'
+        - name: rhacs-operator
+          startingVersion: '3.67.0'
+          channels:
+            - name: 'latest'
   additionalimages: # List of additional images to be included in imageset
     - name: registry.redhat.io/ubi8/ubi:latest
   blockedimages: # Planned, list of base images to be blocked (best effort)
