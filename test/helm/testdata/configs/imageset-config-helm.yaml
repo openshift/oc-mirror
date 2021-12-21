@@ -1,0 +1,11 @@
+---
+apiVersion: tmp-redhatgov.com/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: DATA_TMP
+mirror:
+  helm:
+    local:
+      - name: podinfo
+        path: DATA_TMP/podinfo-6.0.0.tgz
