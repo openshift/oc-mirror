@@ -152,7 +152,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 	// initiate metadata rollback
 	if err := o.prepareArchive(ctx, cfg, backend, thisRun.Sequence, manifests, blobs); err != nil {
 		if err := rollbackMeta(); err != nil {
-			return fmt.Errorf("error occurred during metadata rollback")
+			return fmt.Errorf("error occurred during metadata rollback: %v", err)
 		}
 		return err
 	}
@@ -162,7 +162,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return rollbackMeta()
 	}
 
-	/* Commenting out temporarily because not concrete types implement this
+	/* Commenting out temporarily because no concrete types implement this
 	if committer, isCommitter := backend.(storage.Committer); isCommitter {
 		if err := committer.Commit(ctx); err != nil {
 			return err

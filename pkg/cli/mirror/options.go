@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
@@ -31,10 +32,10 @@ type MirrorOptions struct {
 	// cancelCh is a channel listening for command cancellations
 	cancelCh    <-chan struct{}
 	interrupted bool
+	once        sync.Once
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
-	o.init()
 	fs.StringVarP(&o.ConfigPath, "config", "c", o.ConfigPath, "Path to imageset configuration file")
 	fs.BoolVar(&o.SkipImagePin, "skip-image-pin", o.SkipImagePin, "Do not replace image tags with digest pins in operator catalogs")
 	fs.StringVar(&o.From, "from", o.From, "The path to an input file (e.g. archived imageset)")
@@ -60,11 +61,7 @@ func (o *MirrorOptions) init() {
 // CancelContext will return a cancellable context and listen for
 // cancellation signals
 func (o *MirrorOptions) CancelContext(parent context.Context) (context.Context, context.CancelFunc) {
-	if o.cancelCh == nil {
-		// return unchanged parent when cancel channel is
-		// not initialized
-		return parent, func() {}
-	}
+	o.once.Do(o.init)
 	ctx, cancel := context.WithCancel(parent)
 	go func() {
 		select {

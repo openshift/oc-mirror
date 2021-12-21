@@ -107,11 +107,6 @@ func Test_CreateWithCancel(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
-	cancelCh := make(chan struct{})
-	// closing the channel will cause the
-	// command to exit if using a cancellable context
-	close(cancelCh)
-
 	opts := MirrorOptions{
 		RootOptions: &cli.RootOptions{
 			Dir:      path,
@@ -124,9 +119,17 @@ func Test_CreateWithCancel(t *testing.T) {
 		},
 		ConfigPath:  "testdata/configs/test.yaml",
 		OutputDir:   path,
-		cancelCh:    cancelCh,
 		SkipCleanup: true,
 	}
+	// initialize cancelCh so it
+	// does not get reinitialized during the function call
+	opts.once.Do(opts.init)
+	cancelCh := make(chan struct{})
+	opts.cancelCh = cancelCh
+	// closing the channel will cause the
+	// command to exit if using a cancellable context
+	close(cancelCh)
+
 	flags := NewMirrorCmd().Flags()
 	err := opts.Create(ctx, flags)
 	require.NoError(t, err)
