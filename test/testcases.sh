@@ -7,6 +7,7 @@ TESTCASES[5]="mirror_to_mirror_nostorage"
 TESTCASES[6]="custom_namespace"
 TESTCASES[7]="package_filtering"
 TESTCASES[8]="skip_deps"
+TESTCASES[9]="helm_local"
 
 # Test full catalog mode.
 function full_catalog () {
@@ -76,12 +77,12 @@ function custom_namespace {
 function package_filtering {
     run_full imageset-config-filter.yaml true
     check_bundles "localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v.0.2.0 foo.v0.3.0 foo.v0.3.1" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost:${REGISTRY_DISCONN_PORT}
 
     run_diff imageset-config-filter-multi.yaml
     check_bundles "localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v.0.2.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2 baz.v1.0.1 baz.v1.1.0" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost:${REGISTRY_DISCONN_PORT}
 }
 
@@ -91,4 +92,11 @@ function skip_deps {
     check_bundles "localhost:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost:${REGISTRY_DISCONN_PORT}
+}
+
+
+# Test local helm chart
+function helm_local {
+    run_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
+    check_helm "localhost:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }

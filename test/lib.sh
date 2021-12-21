@@ -4,11 +4,21 @@
 # needed to run against a local test registry and provide informative
 # debug data in case of test errors.
 function run_cmd() {
-  local test_flags="--log-level debug --source-skip-tls --dest-skip-tls --skip-cleanup"
+  local test_flags="--log-level debug --dest-skip-tls --skip-cleanup"
 
   echo "$CMD" $@ $test_flags
   echo
   "$CMD" $@ $test_flags
+}
+
+# check_helm ensures the image(s) found in the chart is correct and
+# images are pullable.
+function check_helm() {
+  local expected_image="${1:?expected image required}"
+   if ! crane digest $expected_image; then
+      echo "helm image $expected_image not pushed to registry"
+      return 1
+    fi
 }
 
 # check_bundles ensures the number and names of bundles in catalog_image's index.json
@@ -34,13 +44,12 @@ function check_bundles() {
     exp_bundles_set[$bundle]=bundle
   done
 
-# TODO: Use crane manifest to replace docker
- # local manifest=$(docker manifest inspect --insecure $catalog_image | jq .manifests | jq '.[].platform.architecture')
- # local num_manifest=$(echo $manifest | wc -w)
- # if (( $num_manifest != 4 )); then 
- #   echo "number of manifests in catalog $num_manifest does not match expected number 4"
- #   return 1
- # fi
+  local manifest=$(crane manifest --insecure --platform all $catalog_image | jq .manifests | jq '.[].platform.architecture')
+  local num_manifest=$(echo $manifest | wc -w)
+  if (( $num_manifest != 4 )); then 
+    echo "number of manifests in catalog $num_manifest does not match expected number 4"
+    return 1
+  fi
 
   # Ensure the number of bundles matches.
   local index_bundle_names=$(cat "$index_path" | jq -sr '.[] | select(.schema == "olm.bundle") | .name')
@@ -64,13 +73,12 @@ function check_bundles() {
   done
 
   # Ensure each bundle is an expected bundle.
-  # TODO: Uncomment and debug
-  # for bundle in $index_bundle_names; do
-  # if [[ "${exp_bundles_set[$bundle]}" != "bundle" ]]; then
-  #    echo "bundle $bundle not in expected bundle set"
-  #    return 1
-  #  fi
-  #done
+  for bundle in $index_bundle_names; do
+    if [[ "${exp_bundles_set[$bundle]}" != "bundle" ]]; then
+      echo "bundle $bundle not in expected bundle set"
+      return 1
+    fi
+  done
 }
 
 # cleanup will kill any running registry processes
@@ -99,7 +107,7 @@ function setup_reg() {
   # Setup connected registry
   echo -e "Setting up registries"
   cp ./test/e2e-config.yaml ${DATA_TMP}/conn.yaml
-  find "${DATA_TMP}" -type f -exec sed -i -E 's@TMP@'"${REGISTRY_CONN_DIR}{"'@g' {} \;
+  find "${DATA_TMP}" -type f -exec sed -i -E 's@TMP@'"${REGISTRY_CONN_DIR}"'@g' {} \;
   find "${DATA_TMP}" -type f -exec sed -i -E 's@PORT@'"${REGISTRY_CONN_PORT}"'@g' {} \;
   DPORT=$(expr ${REGISTRY_CONN_PORT} + 10)
   find "${DATA_TMP}" -type f -exec sed -i -E 's@DEBUG@'"$DPORT"'@g' {} \;
@@ -142,7 +150,7 @@ function run_full() {
   # Copy the catalog to the connected registry so they can have the same tag
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
    prep_registry false
-  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}"
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-skip-tls 
   pushd $PUBLISH_FULL_DIR
   if [[ ! -z $ns ]]; then
     NS="/$ns"
@@ -162,7 +170,7 @@ function run_diff() {
   # Copy the catalog to the connected registry so they can have the same tag
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_DIFF_DIR" "latest/$config" true
   prep_registry true
-  run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}"
+  run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" --source-skip-tls 
   pushd ${PUBLISH_DIFF_DIR}
   if [[ ! -z $ns ]]; then
     NS="/$ns"
@@ -187,6 +195,28 @@ function mirror2mirror() {
   else
    NS=""
   fi
-  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}"
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}" --source-skip-tls 
+  popd
+}
+
+# run_helm will run a helm mirror with helm setup
+# TODO: add a way to do dynamic environment setup to
+# remove this extra function
+function run_helm() {
+  local config="${1:?config required}"
+  local chart="${2:?chart required}"
+  local ns="${3:-""}"
+  mkdir $PUBLISH_FULL_DIR
+  # Copy the catalog to the connected registry so they can have the same tag
+  "${DIR}/helm/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" "$chart"
+   prep_registry false
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}"
+  pushd $PUBLISH_FULL_DIR
+  if [[ ! -z $ns ]]; then
+    NS="/$ns"
+  else
+    NS=""
+  fi
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}"
   popd
 }
