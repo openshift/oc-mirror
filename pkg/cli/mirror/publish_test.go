@@ -21,7 +21,7 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func Test_MetadataError(t *testing.T) {
+func TestMetadataError(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	ctx := context.Background()

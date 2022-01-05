@@ -7,7 +7,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
-func Test_ImageBlocking(t *testing.T) {
+func TestImageBlocking(t *testing.T) {
 	type fields struct {
 		blockedImages []v1alpha1.BlockedImages
 	}

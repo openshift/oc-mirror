@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_getDownloads(t *testing.T) {
+func TestGetDownloads(t *testing.T) {
 	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 
 	opts := ReleaseOptions{

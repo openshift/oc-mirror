@@ -17,7 +17,7 @@ import (
 )
 
 // TODO: Pull image for manifest and index checks
-func Test_BuildCatalogLayer(t *testing.T) {
+func TestBuildCatalogLayer(t *testing.T) {
 	server := httptest.NewServer(registry.New())
 	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
@@ -47,7 +47,7 @@ func Test_BuildCatalogLayer(t *testing.T) {
 	require.NoError(t, o.buildCatalogLayer(context.Background(), targetRef, targetRef, t.TempDir(), []v1.Layer{add, delete}...))
 }
 
-func Test_BuildCatalogLayerCustomNS(t *testing.T) {
+func TestBuildCatalogLayerCustomNS(t *testing.T) {
 
 	server := httptest.NewServer(registry.New())
 	t.Cleanup(server.Close)

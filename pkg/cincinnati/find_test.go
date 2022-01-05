@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_FindLastestRelease(t *testing.T) {
+func TestFindLastestRelease(t *testing.T) {
 	channelName := "test-channel"
 
 	tests := []struct {

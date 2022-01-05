@@ -10,7 +10,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
-func Test_ReconcilingBlobs(t *testing.T) {
+func TestReconcilingBlobs(t *testing.T) {
 
 	paths := []string{
 		filepath.Join("v2", "test", "blobs"),
@@ -94,7 +94,7 @@ func Test_ReconcilingBlobs(t *testing.T) {
 	}
 }
 
-func Test_ReconcilingManifest(t *testing.T) {
+func TestReconcilingManifest(t *testing.T) {
 
 	paths := []string{
 		filepath.Join("v2", "blobs"),

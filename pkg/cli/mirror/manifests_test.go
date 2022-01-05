@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func Test_ICSPGeneration(t *testing.T) {
+func TestICSPGeneration(t *testing.T) {
 	tests := []struct {
 		name        string
 		sourceImage reference.DockerImageReference
