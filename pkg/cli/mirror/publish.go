@@ -245,7 +245,7 @@ func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdut
 			logrus.Debugf("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
-					if hasManifest := assocs.SetContainsKey(imageName, manifestDigest); !hasManifest {
+					if hasManifest := assocs.ContainsKey(imageName, manifestDigest); !hasManifest {
 						errs = append(errs, fmt.Errorf("image %q: expected associations to have manifest %s but was not found", imageName, manifestDigest))
 						continue
 					}

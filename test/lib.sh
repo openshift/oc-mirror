@@ -152,7 +152,7 @@ function run_full() {
    prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-skip-tls 
   pushd $PUBLISH_FULL_DIR
-  if [[ ! -z $ns ]]; then
+  if [[ -n $ns ]]; then
     NS="/$ns"
   else
     NS=""
@@ -172,7 +172,7 @@ function run_diff() {
   prep_registry true
   run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" --source-skip-tls 
   pushd ${PUBLISH_DIFF_DIR}
-  if [[ ! -z $ns ]]; then
+  if [[ -n $ns ]]; then
     NS="/$ns"
   else
     NS=""
@@ -190,7 +190,7 @@ function mirror2mirror() {
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "${CREATE_FULL_DIR}" "latest/$config" false
   prep_registry false
   pushd ${CREATE_FULL_DIR}
-  if [[ ! -z $ns ]]; then
+  if [[ -n $ns ]]; then
     NS="/$ns"
   else
    NS=""
@@ -212,7 +212,7 @@ function run_helm() {
    prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}"
   pushd $PUBLISH_FULL_DIR
-  if [[ ! -z $ns ]]; then
+  if [[ -n $ns ]]; then
     NS="/$ns"
   else
     NS=""

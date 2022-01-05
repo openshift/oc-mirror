@@ -93,10 +93,10 @@ func (it ImageType) String() string {
 
 // Search will return all Associations for the specificed key
 func (as AssociationSet) Search(key string) (values []Association, found bool) {
-	asSet, found := as[key]
-	values = make([]Association, len(asSet))
+	assocs, found := as[key]
+	values = make([]Association, len(assocs))
 	count := 0
-	for _, value := range asSet {
+	for _, value := range assocs {
 		values[count] = value
 		count++
 	}
@@ -127,24 +127,24 @@ func (as AssociationSet) UpdateKey(oldKey, newKey string) error {
 // UpdateValue will update the Association values for a given key
 func (as AssociationSet) UpdateValue(key string, value Association) error {
 
-	set, found := as[key]
+	assocs, found := as[key]
 	if !found {
 		return errors.New("key does not exist in map")
 	}
-	set[value.Name] = value
+	assocs[value.Name] = value
 
 	return nil
 }
 
 // Add stores a key-value pair in this multimap.
 func (as AssociationSet) Add(key string, value Association) {
-	set, found := as[key]
+	assocs, found := as[key]
 	if found {
-		set[value.Name] = value
+		assocs[value.Name] = value
 	} else {
-		set = make(Associations)
-		set[value.Name] = value
-		as[key] = set
+		assocs = make(Associations)
+		assocs[value.Name] = value
+		as[key] = assocs
 	}
 }
 
@@ -159,19 +159,19 @@ func (as AssociationSet) Keys() []string {
 	return keys
 }
 
-// ContainsKey checks if the map contain the specified key
-func (as AssociationSet) ContainsKey(key string) (found bool) {
+// SetContainsKey checks if the AssociationSet map contains a key
+func (as AssociationSet) SetContainsKey(key string) (found bool) {
 	_, found = as[key]
 	return
 }
 
-// ContainsKey checks if the map contain the specified key
-func (as AssociationSet) SetContainsKey(key, setKey string) (found bool) {
-	asSet, found := as[key]
+// ContainsKey checks if the Associations map contains the specified key
+func (as AssociationSet) ContainsKey(setKey, key string) (found bool) {
+	asSet, found := as[setKey]
 	if !found {
 		return false
 	}
-	_, found = asSet[setKey]
+	_, found = asSet[key]
 	return
 }
 
@@ -220,7 +220,7 @@ func (as AssociationSet) validate() error {
 	for _, imageName := range as.Keys() {
 		assocs, found := as.Search(imageName)
 		if !found {
-			return fmt.Errorf("image %q does not exist in assoication set", imageName)
+			return fmt.Errorf("image %q does not exist in association set", imageName)
 		}
 		for _, a := range assocs {
 
@@ -277,7 +277,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	bundleAssociations := AssociationSet{}
 
 	skipParse := func(ref string) bool {
-		seen := bundleAssociations.ContainsKey(ref)
+		seen := bundleAssociations.SetContainsKey(ref)
 		return seen
 	}
 
