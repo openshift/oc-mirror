@@ -52,16 +52,16 @@ func Test_MetadataError(t *testing.T) {
 			name:     "testing first metadata error",
 			metadata: "",
 			fields: fields{
-				archivePath: "../../../test/publish/testdata/archives/testbundle_seq2.tar",
+				archivePath: "testdata/artifacts/testbundle_seq2.tar",
 			},
 			want:    &SequenceError{1, 2},
 			wantErr: true,
 		},
 		{
 			name:     "testing sequence out of order",
-			metadata: "../../../test/publish/testdata/configs/one.json",
+			metadata: "testdata/configs/one.json",
 			fields: fields{
-				archivePath: "../../../test/publish/testdata/archives/testbundle_seq3.tar",
+				archivePath: "testdata/artifacts/testbundle_seq3.tar",
 			},
 			want:    &SequenceError{2, 3},
 			wantErr: true,

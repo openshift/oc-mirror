@@ -1,6 +1,12 @@
 package mirror
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+
 	"github.com/openshift/oc-mirror/pkg/cli"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/spf13/pflag"
@@ -23,6 +29,10 @@ type MirrorOptions struct {
 	SkipMissing      bool
 	ContinueOnError  bool
 	FilterOptions    imagemanifest.FilterOptions
+	// cancelCh is a channel listening for command cancellations
+	cancelCh    <-chan struct{}
+	interrupted bool
+	once        sync.Once
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
@@ -42,4 +52,38 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
+}
+
+func (o *MirrorOptions) init() {
+	o.cancelCh = makeCancelCh(syscall.SIGINT, syscall.SIGTERM)
+}
+
+// CancelContext will return a cancellable context and listen for
+// cancellation signals
+func (o *MirrorOptions) CancelContext(parent context.Context) (context.Context, context.CancelFunc) {
+	o.once.Do(o.init)
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		select {
+		case <-o.cancelCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+// makeCancelCh creates an interrupt listener for os signals
+// and will send a message on a returned channel
+func makeCancelCh(signals ...os.Signal) <-chan struct{} {
+	resultCh := make(chan struct{})
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, signals...)
+	go func() {
+		for {
+			<-signalCh
+			resultCh <- struct{}{}
+		}
+	}()
+	return resultCh
 }
