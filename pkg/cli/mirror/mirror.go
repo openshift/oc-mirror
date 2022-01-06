@@ -46,18 +46,21 @@ func NewMirrorCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   filepath.Base(os.Args[0]),
-		Short: "Manages mirrors per user configuration",
+		Short: "Manage mirrors per user configuration",
 		Long: templates.LongDesc(`
-			oc-mirror will create and publish user configured mirrors with
-            a declarative configuration input
+			Create and publish user-configured mirrors with
+            a declarative configuration input.
 		`),
 		Example: templates.Examples(`
 			# Mirror to a directory
 			oc-mirror --config mirror-config.yaml file://mirror
+
 			# Mirror to mirror publish
 			oc-mirror --config mirror-config.yaml docker://localhost:5000
+
 			# Publish a previously created mirror archive
 			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
+
 			# Publish to a registry and add a top-level namespace
 			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
 		`),

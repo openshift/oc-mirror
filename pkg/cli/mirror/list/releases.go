@@ -31,9 +31,11 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 		Short: "List available platform content and their version",
 		Example: templates.Examples(`
 			# Output all OCP release channels list for a release
-            oc-mirror list releases --version=4.8
+			oc-mirror list releases --version=4.8
+
 			# List all OCP versions in a specified channel
 			oc-mirror list releases --channel=stable-4.8
+
 			# List all OCP channels for a specific version
 			oc-mirror list releases --channels --version=4.8
 		`),
@@ -45,9 +47,9 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	}
 
 	fs := cmd.Flags()
-	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for specified channel")
+	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.BoolVar(&o.Channels, "channels", o.Channels, "List all channel information")
-	fs.StringVar(&o.Version, "version", o.Version, "Specify OpenShift release version")
+	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
 
 	o.BindFlags(cmd.PersistentFlags())
 

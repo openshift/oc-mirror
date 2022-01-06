@@ -34,6 +34,7 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 		Use:   "describe",
 		Short: "Pretty print the contents of mirror metadata",
 		Example: templates.Examples(`
+			# Output the contents of 'mirror_seq1_00000.tar'
 			oc-mirror describe mirror_seq1_00000.tar
 		`),
 		Args: cobra.ExactArgs(1),
