@@ -1,14 +1,17 @@
 package mirror
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -135,7 +138,7 @@ func (o *MirrorOptions) Validate() error {
 		logrus.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
 		logrus.Debugf("Using image %s to check permissions", ref)
-		imgRef, err := name.ParseReference(ref)
+		imgRef, err := name.ParseReference(ref, o.getNameOpts()...)
 		if err != nil {
 			return err
 		}
@@ -203,8 +206,38 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	return nil
 }
 
-func (o *MirrorOptions) createRT() *http.Transport {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: o.DestSkipTLS}
-	return transport
+func (o *MirrorOptions) getRemoteOpts(ctx context.Context) []remote.Option {
+	return []remote.Option{
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithTransport(o.createRT()),
+		remote.WithContext(ctx),
+	}
+}
+
+func (o *MirrorOptions) getNameOpts() (options []name.Option) {
+	if o.DestSkipTLS {
+		options = append(options, name.Insecure)
+	}
+	return options
+}
+
+func (o *MirrorOptions) createRT() http.RoundTripper {
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			// By default we wrap the transport in retries, so reduce the
+			// default dial timeout to 5s to avoid 5x 30s of connection
+			// timeouts when doing the "ping" on certain http registries.
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: o.DestSkipTLS,
+		},
+	}
 }

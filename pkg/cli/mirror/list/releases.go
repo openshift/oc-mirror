@@ -102,7 +102,7 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 		if _, err := fmt.Fprintln(w, "Listing stable channels. Use --channel=<channel-name> to filter."); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(w, "User oc-mirror list release --channels to discover other channels."); err != nil {
+		if _, err := fmt.Fprintln(w, "Use oc-mirror list release --channels to discover other channels."); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintln(w, ""); err != nil {

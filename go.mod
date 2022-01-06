@@ -17,7 +17,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20190823105129-775207bd45b6
 	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
-	github.com/openshift/installer v0.16.1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
 	github.com/operator-framework/operator-registry v1.19.6-0.20211214163458-6b066493052b

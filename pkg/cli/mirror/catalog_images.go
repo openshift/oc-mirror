@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -216,6 +215,7 @@ func addLayer(new, targetPath string) (v1.Layer, error) {
 func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef, dir string, layers ...v1.Layer) error {
 
 	archs := []string{"amd64", "arm64", "ppc64le", "s390x"}
+	options := o.getRemoteOpts(ctx)
 
 	// Create an empty layout
 	layoutPath := filepath.Join(dir, "layout")
@@ -229,11 +229,10 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 
 	logrus.Debugf("Pulling image %s for processing", srcRef)
 	// Pull source reference image
-	ref, err := name.ParseReference(srcRef)
+	ref, err := name.ParseReference(srcRef, o.getNameOpts()...)
 	if err != nil {
 		return err
 	}
-	options := o.getRemoteOpts(ctx)
 	img, err := remote.Image(ref, options...)
 	if err != nil {
 		return err
@@ -288,6 +287,7 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 	if err != nil {
 		return err
 	}
+
 	for _, manifest := range idxManifest.Manifests {
 		img, err := p.Image(manifest.Digest)
 		if err != nil {
@@ -350,13 +350,4 @@ func layerFromFile(targetPath, path string) (v1.Layer, error) {
 		return nil, fmt.Errorf("failed to finish tar: %w", err)
 	}
 	return tarball.LayerFromReader(&b)
-}
-
-func (o *MirrorOptions) getRemoteOpts(ctx context.Context) (options []remote.Option) {
-	return append(
-		options,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-		remote.WithTransport(o.createRT()),
-	)
 }
