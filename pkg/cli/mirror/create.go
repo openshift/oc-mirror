@@ -29,11 +29,6 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return err
 	}
 
-	// Validating pull secrets
-	if err := config.ValidateSecret(cfg); err != nil {
-		return err
-	}
-
 	// Determine stateless or stateful mode.
 	// Empty storage configuration will trigger a metadata cleanup
 	// action and labels metadata as single use

@@ -1132,8 +1132,6 @@ github.com/openshift/client-go v0.0.0-20210521082421-73d9475a9142/go.mod h1:fjS8
 github.com/openshift/client-go v0.0.0-20210831095141-e19a065e79f7 h1:iKVU5Tga76kiCWpq9giPi0TfI/gZcFoYb7/x+1SkgwM=
 github.com/openshift/client-go v0.0.0-20210831095141-e19a065e79f7/go.mod h1:D6P8RkJzwdkBExQdYUnkWcePMLBiTeCCr8eQIQ7y8Dk=
 github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b/go.mod h1:tNrEB5k8SI+g5kOlsCmL2ELASfpqEofI0+FLBgBdN08=
-github.com/openshift/installer v0.16.1 h1:PmjALN9x1NVNVi3SCqfz0ZwVCgOkQLQWo2nHYXREq/A=
-github.com/openshift/installer v0.16.1/go.mod h1:VWGgpJgF8DGCKQjbccnigglhZnHtRLCZ6cxqkXN4Ck0=
 github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9 h1:q7EuOxP1m/dh7zbr5rUWD4N9M9FP87X8CWcIwkcucYc=
 github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
 github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3 h1:GNwUoCvGpmMbLgDXOT2WM34mluWoXrpHZ9FlaELGXC4=

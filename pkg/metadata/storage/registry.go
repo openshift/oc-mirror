@@ -2,20 +2,22 @@ package storage
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/rest"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -219,31 +221,40 @@ func (b *registryBackend) exists(ctx context.Context) error {
 	}
 }
 
-func (b *registryBackend) createRT() (http.RoundTripper, error) {
-	cfg := rest.Config{
+func (b *registryBackend) createRT() http.RoundTripper {
+	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: b.insecure,
+		DialContext: (&net.Dialer{
+			// By default we wrap the transport in retries, so reduce the
+			// default dial timeout to 5s to avoid 5x 30s of connection
+			// timeouts when doing the "ping" on certain http registries.
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: b.insecure,
 		},
 	}
-	rt, err := rest.TransportFor(&cfg)
-	if err != nil {
-		return nil, err
-	}
-	return rt, nil
 }
 
 // TODO: Get default auth will need to update if user
 // can specify custom locations
 func (b *registryBackend) getOpts(ctx context.Context) (options []crane.Option, err error) {
-	rt, err := b.createRT()
-	if err != nil {
-		return nil, err
-	}
-	return append(
+	options = append(
 		options,
 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
 		crane.WithContext(ctx),
-		crane.WithTransport(rt),
-	), nil
+		crane.WithTransport(b.createRT()),
+	)
+
+	if b.insecure {
+		options = append(options, crane.Insecure)
+	}
+
+	return options, err
 }
