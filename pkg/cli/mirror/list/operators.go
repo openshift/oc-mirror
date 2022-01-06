@@ -34,10 +34,13 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 		Example: templates.Examples(`
 			# Output default operator catalogs for OpenShift release 4.8
 			oc-mirror list operators --catalogs --version=4.8
-			# List all operators packages in a catalog
+
+			# List all operator packages in a catalog
 			oc-mirror list operators --catalog=catalog-name
+
 			# List all channels in an operator package
 			oc-mirror list operators --catalog=catalog-name --package=package-name
+
 			# List all available versions for a specified operator in a channel
 			oc-mirror list operators --catalog=catalog-name --package=operator-name --channel=channel-name
 		`),
@@ -50,9 +53,9 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 
 	fs := cmd.Flags()
 	fs.BoolVar(&o.Catalogs, "catalogs", o.Catalogs, "List available catalogs for an OpenShift release version")
-	fs.StringVar(&o.Catalog, "catalog", o.Catalog, "List information for specified package")
-	fs.StringVar(&o.Package, "package", o.Package, "List information for specified package")
-	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for specified channel")
+	fs.StringVar(&o.Catalog, "catalog", o.Catalog, "List information for a specified catalog")
+	fs.StringVar(&o.Package, "package", o.Package, "List information for a specified package")
+	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
 
 	o.BindFlags(cmd.PersistentFlags())
