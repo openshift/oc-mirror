@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_ByConfig(t *testing.T) {
+func TestByConfig(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	customDir := t.TempDir()

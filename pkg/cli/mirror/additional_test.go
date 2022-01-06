@@ -16,7 +16,7 @@ import (
 
 // TODO: use some oc lib to mock image mirroring, or mirror from files.
 
-func Test_GetAdditional(t *testing.T) {
+func TestGetAdditional(t *testing.T) {
 	tmpdir := t.TempDir()
 	mo := MirrorOptions{
 		RootOptions: &cli.RootOptions{

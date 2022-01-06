@@ -11,7 +11,7 @@ const (
 	setTestKeyName = "setTestKey"
 )
 
-func Test_AssociateImageLayers(t *testing.T) {
+func TestAssociateImageLayers(t *testing.T) {
 	tests := []struct {
 		name       string
 		imgTyp     ImageType
@@ -196,7 +196,7 @@ func Test_AssociateImageLayers(t *testing.T) {
 
 }
 
-func Test_UpdateKey(t *testing.T) {
+func TestUpdateKey(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	testAssocs, ok := asSet[setTestKeyName]
 	if !ok {
@@ -210,7 +210,7 @@ func Test_UpdateKey(t *testing.T) {
 	require.Equal(t, testAssocs, updateAssocs)
 }
 
-func Test_UpdateValue(t *testing.T) {
+func TestUpdateValue(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	newAssoc := Association{
 		Name:       testKeyName,
@@ -227,7 +227,7 @@ func Test_UpdateValue(t *testing.T) {
 	require.Equal(t, newAssoc, assoc)
 }
 
-func Test_Merge(t *testing.T) {
+func TestMerge(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	newASSet := AssociationSet{}
 	newAssocs := Associations{}
@@ -243,20 +243,20 @@ func Test_Merge(t *testing.T) {
 	asSet.Merge(newASSet)
 }
 
-func Test_ContainsKey(t *testing.T) {
+func TestContainsKey(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	require.Equal(t, true, asSet.ContainsKey(setTestKeyName, testKeyName))
 }
-func Test_SetContainsKey(t *testing.T) {
+func TestSetContainsKey(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	require.Equal(t, true, asSet.SetContainsKey(setTestKeyName))
 }
-func Test_Keys(t *testing.T) {
+func TestKeys(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	require.Equal(t, []string{setTestKeyName}, asSet.Keys())
 }
 
-func Test_Search(t *testing.T) {
+func TestSearch(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	assocs, ok := asSet.Search(setTestKeyName)
 	if !ok {
@@ -265,7 +265,7 @@ func Test_Search(t *testing.T) {
 	require.Len(t, assocs, 1)
 }
 
-func Test_Add(t *testing.T) {
+func TestAdd(t *testing.T) {
 	asSet := AssociationSet{}
 	newAssoc := Association{
 		Name:       testKeyName,

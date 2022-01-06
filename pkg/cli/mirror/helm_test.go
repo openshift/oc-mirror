@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-func Test_GetCustomPaths(t *testing.T) {
+func TestGetCustomPaths(t *testing.T) {
 	tests := []struct {
 		name  string
 		paths []string
@@ -42,7 +42,7 @@ func Test_GetCustomPaths(t *testing.T) {
 
 }
 
-func Test_Search(t *testing.T) {
+func TestSearch(t *testing.T) {
 	tests := []struct {
 		name    string
 		path    string
@@ -77,7 +77,7 @@ func Test_Search(t *testing.T) {
 	}
 }
 
-func Test_ParseJSON(t *testing.T) {
+func TestParseJSON(t *testing.T) {
 
 	types := map[string]interface{}{
 		"images": "test",
@@ -119,7 +119,7 @@ func Test_ParseJSON(t *testing.T) {
 	}
 }
 
-func Test_Render(t *testing.T) {
+func TestRender(t *testing.T) {
 	tests := []struct {
 		name    string
 		path    string
@@ -146,7 +146,7 @@ func Test_Render(t *testing.T) {
 	}
 }
 
-func Test_FindImages(t *testing.T) {
+func TestFindImages(t *testing.T) {
 
 	ipaths := []string{}
 	path := "testdata/artifacts/podinfo-6.0.0.tgz"

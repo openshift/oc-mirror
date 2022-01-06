@@ -18,7 +18,7 @@ import (
 the tar size will end up larger than specified by the
  user because of the tar header being written*/
 
-func Test_SplitArchive(t *testing.T) {
+func TestSplitArchive(t *testing.T) {
 
 	testdir, err := os.MkdirTemp("", "test")
 

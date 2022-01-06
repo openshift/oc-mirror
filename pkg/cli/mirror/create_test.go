@@ -54,7 +54,7 @@ func TestAddOPMImage(t *testing.T) {
 	require.Len(t, cfg.Mirror.AdditionalImages, 0)
 }
 
-func Test_Create(t *testing.T) {
+func TestCreate(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
@@ -76,7 +76,7 @@ func Test_Create(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_CreateWithDryRun(t *testing.T) {
+func TestCreateWithDryRun(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
@@ -103,7 +103,7 @@ func Test_CreateWithDryRun(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
-func Test_CreateWithCancel(t *testing.T) {
+func TestCreateWithCancel(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 

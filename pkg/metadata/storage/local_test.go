@@ -14,7 +14,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
-func Test_LocalBackend(t *testing.T) {
+func TestLocalBackend(t *testing.T) {
 
 	underlyingFS := afero.NewMemMapFs()
 	backend := localDirBackend{

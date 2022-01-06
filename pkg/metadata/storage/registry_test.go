@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_RegistryBackend(t *testing.T) {
+func TestRegistryBackend(t *testing.T) {
 
 	tests := []struct {
 		name        string
