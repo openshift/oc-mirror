@@ -18,8 +18,8 @@ We are currently running automated unit tests with CI and are working on an auto
 
 ## Local Testing
 
-We have developed local end-to-end test scripts to verfiy `oc-mirror` functionality with various imageset configurations.
-When added a new feature or changing a current feature ensure the functionaliy is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
+We have developed local end-to-end test scripts to verify `oc-mirror` functionality with various imageset configurations.
+When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
 
 
 

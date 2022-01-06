@@ -360,7 +360,7 @@ func TestCalculateUpgrades(t *testing.T) {
 	}
 }
 
-func TestnodeUnmarshalJSON(t *testing.T) {
+func TestNodeUnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		raw []byte
 

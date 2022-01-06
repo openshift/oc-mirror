@@ -139,7 +139,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		return err
 	}
 
-	// Allow for for user interrupts
+	// Allow for user interrupts
 	ctx, done := o.CancelContext(ctx)
 	defer done()
 

@@ -46,7 +46,7 @@ type PastMirror struct {
 
 var _ sort.Interface = PastMirrors{}
 
-// PastMirrors is a sortable slice of PastMirro's.
+// PastMirrors is a sortable slice of PastMirrors.
 type PastMirrors []PastMirror
 
 func (pms PastMirrors) Len() int           { return len(pms) }

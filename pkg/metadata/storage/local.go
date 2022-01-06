@@ -145,7 +145,7 @@ func (b *localDirBackend) WriteObject(ctx context.Context, fpath string, obj int
 // In this implementation, key is a file path.
 func (b *localDirBackend) GetWriter(_ context.Context, fpath string) (io.Writer, error) {
 
-	// Create an child dirs necessary.
+	// Create a child dirs necessary.
 	if err := b.fs.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 		return nil, fmt.Errorf("error creating object child path: %v", err)
 	}

@@ -219,7 +219,7 @@ func (h *HelmOptions) repoAdd(chartRepo v1alpha1.Repo) error {
 	return nil
 }
 
-// parseJSONPath will parse data and filter for a provide jsonpath template
+// parseJSONPath will parse data and filter for a provided jsonpath template
 func parseJSONPath(input interface{}, parser *jsonpath.JSONPath, template string) ([]string, error) {
 	buf := new(bytes.Buffer)
 	if err := parser.Parse(template); err != nil {

@@ -209,7 +209,9 @@ func (as *AssociationSet) Decode(r io.Reader) error {
 		assocs, _ := as.Search(imageName)
 		for _, assoc := range assocs {
 			assoc.Path = filepath.FromSlash(assoc.Path)
-			as.UpdateValue(imageName, assoc)
+			if err := as.UpdateValue(imageName, assoc); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
