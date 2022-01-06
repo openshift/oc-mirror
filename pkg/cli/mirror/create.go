@@ -168,7 +168,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (image.AssociationSet, error) {
+func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
@@ -217,7 +217,7 @@ func (o MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg
 }
 
 // createDiff performs all tasks in creating differential imagesets
-func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) (image.AssociationSet, error) {
+func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
@@ -265,7 +265,7 @@ func (o MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg
 	return allAssocs, nil
 }
 
-func (o MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
+func (o *MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, backend storage.Backend, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
 	// Default to a 500GiB archive size.
 	var segSize int64 = 500
@@ -306,7 +306,7 @@ func (o MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSet
 
 }
 
-func (o MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
+func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, nil, err
@@ -332,7 +332,7 @@ func (o MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []
 	return manifests, blobs, nil
 }
 
-func (o MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
+func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
 	assocPath := filepath.Join(o.Dir, config.SourceDir, config.AssociationsBasePath)
 	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
 		return fmt.Errorf("mkdir image associations file: %v", err)

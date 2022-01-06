@@ -25,11 +25,11 @@ import (
 )
 
 type HelmOptions struct {
-	MirrorOptions
+	*MirrorOptions
 	settings *helmcli.EnvSettings
 }
 
-func NewHelmOptions(mo MirrorOptions) *HelmOptions {
+func NewHelmOptions(mo *MirrorOptions) *HelmOptions {
 	settings := helmcli.New()
 	return &HelmOptions{
 		MirrorOptions: mo,

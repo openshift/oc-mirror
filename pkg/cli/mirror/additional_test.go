@@ -28,7 +28,7 @@ func TestGetAdditional(t *testing.T) {
 			},
 		},
 	}
-	opts := NewAdditionalOptions(mo)
+	opts := NewAdditionalOptions(&mo)
 
 	tests := []struct {
 		name    string

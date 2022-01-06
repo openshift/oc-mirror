@@ -34,14 +34,14 @@ var archMap = map[string]string{
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
-	MirrorOptions
+	*MirrorOptions
 	release string
 	arch    []string
 	uuid    uuid.UUID
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
-func NewReleaseOptions(mo MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
+func NewReleaseOptions(mo *MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
 	var arch []string
 	opts := mo.FilterOptions
 	opts.Complete(flags)

@@ -41,7 +41,7 @@ var (
 // OperatorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
 type OperatorOptions struct {
-	MirrorOptions
+	*MirrorOptions
 
 	SkipImagePin bool
 	Logger       *logrus.Entry
@@ -49,7 +49,7 @@ type OperatorOptions struct {
 	tmp string
 }
 
-func NewOperatorOptions(mo MirrorOptions) *OperatorOptions {
+func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
 	return &OperatorOptions{MirrorOptions: mo}
 }
 
