@@ -186,7 +186,7 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 	return downloads, nil
 }
 
-// mirror will take the prepare download information and mirror to disk location
+// mirror will take the prepared download information and mirror to disk location
 func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[string]download) (image.AssociationSet, error) {
 	allAssocs := image.AssociationSet{}
 
@@ -215,7 +215,7 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 
 		// Do not build associations on dry runs because there are no manifests
 		if !o.DryRun {
-			// Retrive the mapping information for release
+			// Retrieve the mapping information for release
 			mapping, images, err := o.getMapping(*opts, download.arch, download.Version.String())
 
 			if err != nil {
@@ -234,9 +234,11 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 			}
 
 			// Update all images associated with a release to the
-			// release images so they form one keyset for publising
+			// release images so they form one key set for publishing
 			for _, img := range images {
-				assocs.UpdateKey(img, o.release)
+				if err := assocs.UpdateKey(img, o.release); err != nil {
+					return nil, err
+				}
 			}
 
 			allAssocs.Merge(assocs)

@@ -127,7 +127,7 @@ func TestMetadataError(t *testing.T) {
 	}
 }
 
-// prepareMetadata will ensure metdata is in the registry for testing
+// prepareMetadata will ensure metadata is in the registry for testing
 func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 	var meta v1alpha1.Metadata
 

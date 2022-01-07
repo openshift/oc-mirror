@@ -144,14 +144,14 @@ func TestReconcilingManifest(t *testing.T) {
 
 		defer os.Chdir(cwd)
 
-		// Write out blobs directroy to ensure these files are skipped
+		// Write out blobs directory to ensure these files are skipped
 		for _, path := range paths {
 			if err := os.MkdirAll(path, os.ModePerm); err != nil {
 				t.Fatal(err)
 			}
 		}
 
-		// Wtie files
+		// Write files
 		d1 := []byte("hello\ngo\n")
 		if err := ioutil.WriteFile("v2/manifests/test1", d1, 0644); err != nil {
 			t.Fatal(err)
