@@ -1,9 +1,10 @@
 reviewers:
   - jpower432
-  - estroz
   - afflom
+  - dinhxuanvu
 approvers:
   - jpower432
-  - estroz
   - afflom
+  - soltysh
+  - dinhxuanvu
 component: "oc-mirror"
