@@ -65,7 +65,7 @@ func (e *ErrArchiveFileNotFound) Error() string {
 	return fmt.Sprintf("file %s not found in archive", e.filename)
 }
 
-func (o MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
+func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
 
 	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
@@ -431,7 +431,7 @@ func readAssociations(assocPath string) (assocs image.AssociationSet, err error)
 }
 
 // unpackImageSet unarchives all provided tar archives	if err != nil {
-func (o MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
+func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 
 	// archive that we do not want to unpack
 	exclude := []string{"blobs", "v2", config.HelmDir}
@@ -497,7 +497,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
+func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
 
 	restctx, err := config.CreateDefaultContext(o.DestSkipTLS)
 	if err != nil {
@@ -521,7 +521,7 @@ func (o MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, m
 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
-func (o MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
+func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
 	repo, err := restctx.RepositoryForRef(ctx, ref, o.DestSkipTLS)
@@ -576,7 +576,7 @@ func mktempDir(dir string) (func(), string, error) {
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
 // QUESTION(jpower): should we just mirror release one by one
 // The namespace is not the same as the image name
-func (o MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
+func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
 	relOpts := release.NewMirrorOptions(o.IOStreams)
 	relOpts.From = mapping.Source.String()
@@ -598,7 +598,7 @@ func (o MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Comma
 }
 
 // mirrorImages uses the `oc mirror` library to mirror generic images
-func (o MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
+func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
 	// Mirror all file sources of each available image type to mirror registry.
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		var srcs []string
@@ -627,7 +627,7 @@ func (o MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string)
 	return nil
 }
 
-func (o MirrorOptions) createResultsDir() (resultsDir string, err error) {
+func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 	resultsDir = filepath.Join(
 		o.Dir,
 		fmt.Sprintf("results-%v", time.Now().Unix()),
@@ -638,7 +638,7 @@ func (o MirrorOptions) createResultsDir() (resultsDir string, err error) {
 	return resultsDir, nil
 }
 
-func (o MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
+func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
 	var ref string
 	for _, mirror := range meta.PastMirrors {

@@ -28,7 +28,7 @@ func TestPinImages(t *testing.T) {
 		{
 			desc: "Success/Resolved",
 			opts: &OperatorOptions{
-				MirrorOptions: MirrorOptions{
+				MirrorOptions: &MirrorOptions{
 					ContinueOnError: false,
 					SkipMissing:     false,
 				},
@@ -61,7 +61,7 @@ func TestPinImages(t *testing.T) {
 		{
 			desc: "Error/NotFound",
 			opts: &OperatorOptions{
-				MirrorOptions: MirrorOptions{
+				MirrorOptions: &MirrorOptions{
 					ContinueOnError: false,
 					SkipMissing:     false,
 				},
@@ -83,7 +83,7 @@ func TestPinImages(t *testing.T) {
 		{
 			desc: "Error/NilConfig",
 			opts: &OperatorOptions{
-				MirrorOptions: MirrorOptions{
+				MirrorOptions: &MirrorOptions{
 					ContinueOnError: false,
 					SkipMissing:     false,
 				},
@@ -95,7 +95,7 @@ func TestPinImages(t *testing.T) {
 		{
 			desc: "Success/ContinueOnError",
 			opts: &OperatorOptions{
-				MirrorOptions: MirrorOptions{
+				MirrorOptions: &MirrorOptions{
 					ContinueOnError: true,
 					SkipMissing:     false,
 				},
@@ -116,7 +116,7 @@ func TestPinImages(t *testing.T) {
 		{
 			desc: "Success/SkipMissing",
 			opts: &OperatorOptions{
-				MirrorOptions: MirrorOptions{
+				MirrorOptions: &MirrorOptions{
 					ContinueOnError: false,
 					SkipMissing:     true,
 				},

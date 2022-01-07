@@ -16,10 +16,10 @@ import (
 )
 
 type AdditionalOptions struct {
-	MirrorOptions
+	*MirrorOptions
 }
 
-func NewAdditionalOptions(mo MirrorOptions) *AdditionalOptions {
+func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 	return &AdditionalOptions{MirrorOptions: mo}
 }
 
