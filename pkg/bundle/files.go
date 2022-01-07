@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,87 +14,79 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
-// ReconcileManifest gather all manifests that were collected during a run
-// and checks against the current list
-func ReconcileManifests() (manifests []v1alpha1.Manifest, err error) {
-
-	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
-
-		if err != nil {
-			return fmt.Errorf("traversing %s: %v", fpath, err)
-		}
-		if info == nil {
-			return fmt.Errorf("no file info")
-		}
-
-		if info.IsDir() && info.Name() == "blobs" {
-			return filepath.SkipDir
-		}
-
-		// TODO: figure a robust way to get the namespace from the path
-		file := v1alpha1.Manifest{
-			Name: fpath,
-		}
-
-		manifests = append(manifests, file)
-
-		return nil
-	})
-
-	return manifests, err
-}
-
-// ReconcileBlobs gather all blobs that were collected during a run
-// and checks against the current list
-func ReconcileBlobs(meta v1alpha1.Metadata) (newBlobs []v1alpha1.Blob, err error) {
+// ReconcileV2Dir gathers all manifests and blobs that were collected during a run
+// and checks against the current list.
+// This function is used to prepare a list of files that need to added to the Imageset.
+func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
 	for _, pf := range meta.PastBlobs {
 		foundFiles[pf.ID] = struct{}{}
 	}
-
 	// Ignore the current dir.
 	foundFiles["."] = struct{}{}
 
-	err = filepath.Walk("v2", func(fpath string, info os.FileInfo, err error) error {
+	for rootOnDisk, rootInArchive := range filenames {
 
-		if err != nil {
-			return fmt.Errorf("traversing %s: %v", fpath, err)
-		}
-		if info == nil {
-			return fmt.Errorf("no file info")
+		if rootInArchive == "" {
+			rootInArchive = filepath.Base(rootInArchive)
 		}
 
-		if info.IsDir() && info.Name() == "manifests" {
-			return filepath.SkipDir
+		if filepath.Base(rootOnDisk) != "v2" {
+			return manifests, blobs, fmt.Errorf("path %q is not a v2 directory", rootOnDisk)
 		}
 
-		if info.Mode().IsRegular() {
-			namespacename := strings.TrimPrefix(fpath, "v2"+string(filepath.Separator))
-			idx := strings.LastIndex(namespacename, "blobs")
-			if idx == -1 {
-				return fmt.Errorf("path %q does not contain blobs directory", fpath)
-			}
-			file := v1alpha1.Blob{
-				ID:            info.Name(),
-				NamespaceName: namespacename[:idx-1],
+		err = filepath.WalkDir(rootOnDisk, func(filename string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
 			}
 
-			if _, found := foundFiles[info.Name()]; !found {
-				newBlobs = append(newBlobs, file)
-				foundFiles[info.Name()] = struct{}{}
-
-				logrus.Debugf("Adding blob %s", info.Name())
-
-			} else {
-				logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
+			info, err := d.Info()
+			if err != nil {
+				return err
 			}
-		}
 
-		return nil
-	})
+			// Rename manifests to ensure the match the files processed
+			// during archiving
+			nameInArchive := filepath.Join(rootInArchive, strings.TrimPrefix(filename, rootOnDisk))
 
-	return newBlobs, err
+			dir := filepath.Dir(filename)
+			switch filepath.Base(dir) {
+			case "blobs":
+				if info.Mode().IsRegular() {
+					if _, found := foundFiles[info.Name()]; found {
+						logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
+						return nil
+					}
+					namespacename, err := getBetween(filename, "v2"+string(filepath.Separator), string(filepath.Separator)+"blobs")
+					if err != nil {
+						return err
+					}
+					file := v1alpha1.Blob{
+						ID:            info.Name(),
+						NamespaceName: namespacename,
+					}
+					blobs = append(blobs, file)
+					foundFiles[info.Name()] = struct{}{}
+					logrus.Debugf("Adding blob %s", info.Name())
+				}
+			default:
+				// Skips the blob dir which
+				// does not come up as its own base dir
+				if info.Name() == "blobs" {
+					return nil
+				}
+				file := v1alpha1.Manifest{
+					Name: nameInArchive,
+				}
+				manifests = append(manifests, file)
+			}
+
+			return nil
+		})
+	}
+
+	return manifests, blobs, err
 }
 
 // ReadImageSet set will create a map with all the files located in the archives
@@ -148,4 +141,21 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 	}
 
 	return filesinArchive, err
+}
+
+func getBetween(path string, first string, last string) (string, error) {
+	// Get substring between two strings.
+	posFirst := strings.LastIndex(path, first)
+	if posFirst == -1 {
+		return "", fmt.Errorf("path %q does not contain %s", path, first)
+	}
+	posLast := strings.LastIndex(path, last)
+	if posLast == -1 {
+		return "", fmt.Errorf("path %q does not contain %s", path, last)
+	}
+	posFirstAdjusted := posFirst + len(first)
+	if posFirstAdjusted >= posLast {
+		return "", fmt.Errorf("path %q does not contain string data between values", path)
+	}
+	return path[posFirstAdjusted:posLast], nil
 }

@@ -1,177 +1,144 @@
 package bundle
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/stretchr/testify/require"
 )
 
-func TestReconcilingBlobs(t *testing.T) {
-
-	paths := []string{
-		filepath.Join("v2", "test", "blobs"),
-		filepath.Join("v2", "test", "manifests"),
-		"blobs",
-		"internal",
-	}
-
+func TestReconcileV2Dir(t *testing.T) {
 	type fields struct {
-		files []v1alpha1.Blob
+		files     []v1alpha1.Blob
+		dirPaths  []string
+		filePaths []string
+		path      string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		want   []v1alpha1.Blob
+		name          string
+		fields        fields
+		wantBlobs     []v1alpha1.Blob
+		wantManifests []v1alpha1.Manifest
+		wantErr       func(string) string
 	}{
 		{
-			name: "testing pulling new blobs",
+			name: "Valid/FirstRun",
+			fields: fields{
+				files: []v1alpha1.Blob{},
+				dirPaths: []string{
+					filepath.Join("v2", "test", "blobs"),
+					filepath.Join("v2", "test", "manifests"),
+					"internal",
+				},
+				filePaths: []string{
+					filepath.Join("v2", "test", "blobs", "test1"),
+					filepath.Join("internal", "test2"),
+					filepath.Join("v2", "test", "blobs", "test3"),
+					filepath.Join("v2", "test", "manifests", "test4"),
+				},
+				path: "v2",
+			},
+			wantBlobs: []v1alpha1.Blob{
+				{ID: "test1", NamespaceName: "test"},
+				{ID: "test3", NamespaceName: "test"},
+			},
+			wantManifests: []v1alpha1.Manifest{
+				{Name: "v2"},
+				{Name: filepath.Join("v2", "test")},
+				{Name: filepath.Join("v2", "test", "manifests")},
+				{Name: filepath.Join("v2", "test", "manifests", "test4")},
+			},
+		},
+		{
+			name: "Valid/DifferentialRun",
 			fields: fields{
 				files: []v1alpha1.Blob{
-					{ID: "test1", NamespaceName: "foo/bar"},
+					{ID: "test1", NamespaceName: "test"},
 				},
+				dirPaths: []string{
+					filepath.Join("v2", "test", "blobs"),
+					filepath.Join("v2", "test", "manifests"),
+					"internal",
+				},
+				filePaths: []string{
+					filepath.Join("v2", "test", "blobs", "test1"),
+					filepath.Join("internal", "test2"),
+					filepath.Join("v2", "test", "blobs", "test3"),
+					filepath.Join("v2", "test", "manifests", "test4"),
+				},
+				path: "v2",
 			},
-			want: []v1alpha1.Blob{
+			wantBlobs: []v1alpha1.Blob{
 				{ID: "test3", NamespaceName: "test"},
+			},
+			wantManifests: []v1alpha1.Manifest{
+				{Name: "v2"},
+				{Name: filepath.Join("v2", "test")},
+				{Name: filepath.Join("v2", "test", "manifests")},
+				{Name: filepath.Join("v2", "test", "manifests", "test4")},
+			},
+		},
+		{
+			name: "Invalid/PathNameNotV2",
+			fields: fields{
+				files: []v1alpha1.Blob{},
+				dirPaths: []string{
+					filepath.Join("v2", "test", "blobs"),
+					filepath.Join("v2", "test", "manifests"),
+					"internal",
+				},
+				filePaths: []string{
+					filepath.Join("v2", "test", "blobs", "test1"),
+					filepath.Join("internal", "test2"),
+					filepath.Join("v2", "test", "blobs", "test3"),
+					filepath.Join("v2", "test", "manifests", "test4"),
+				},
+				path: "",
+			},
+			wantBlobs:     []v1alpha1.Blob{},
+			wantManifests: []v1alpha1.Manifest{},
+			wantErr: func(s string) string {
+				return fmt.Sprintf("path %q is not a v2 directory", s)
 			},
 		},
 	}
-	for _, tt := range tests {
-		meta := v1alpha1.Metadata{
-			MetadataSpec: v1alpha1.MetadataSpec{
-				PastBlobs: tt.fields.files,
-			},
-		}
-
-		tmpdir := t.TempDir()
-
-		cwd, err := os.Getwd()
-
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.Chdir(tmpdir); err != nil {
-			t.Fatal(err)
-		}
-
-		defer os.Chdir(cwd)
-
-		for _, path := range paths {
-			if err := os.MkdirAll(path, os.ModePerm); err != nil {
-				t.Fatal(err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			meta := v1alpha1.Metadata{
+				MetadataSpec: v1alpha1.MetadataSpec{
+					PastBlobs: test.fields.files,
+				},
 			}
-		}
-
-		// Write files
-		d1 := []byte("hello\ngo\n")
-		if err := ioutil.WriteFile("v2/test/blobs/test1", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := ioutil.WriteFile("internal/test2", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := ioutil.WriteFile("v2/test/blobs/test3", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := ioutil.WriteFile("v2/test/manifests/test4", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		actual, err := ReconcileBlobs(meta)
-
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !reflect.DeepEqual(actual, tt.want) {
-			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)
-		}
-
+			tmpdir := t.TempDir()
+			require.NoError(t, prepFiles(tmpdir, test.fields.dirPaths, test.fields.filePaths))
+			filenames := map[string]string{filepath.Join(tmpdir, test.fields.path): "v2"}
+			actualManifests, actualBlobs, err := ReconcileV2Dir(meta, filenames)
+			if test.wantErr != nil {
+				require.EqualError(t, err, test.wantErr(tmpdir))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantBlobs, actualBlobs)
+				require.Equal(t, test.wantManifests, actualManifests)
+			}
+		})
 	}
 }
 
-func TestReconcilingManifest(t *testing.T) {
-
-	paths := []string{
-		filepath.Join("v2", "blobs"),
-		filepath.Join("v2", "manifests"),
-		"manifests",
+func prepFiles(root string, paths []string, files []string) error {
+	for _, path := range paths {
+		if err := os.MkdirAll(filepath.Join(root, path), os.ModePerm); err != nil {
+			return err
+		}
 	}
-
-	type fields struct {
-		files []v1alpha1.Manifest
+	d1 := []byte("hello\ngo\n")
+	for _, file := range files {
+		if err := ioutil.WriteFile(filepath.Join(root, file), d1, 0644); err != nil {
+			return err
+		}
 	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   []v1alpha1.Manifest
-	}{
-		{
-			name: "testing new manifests",
-			fields: fields{
-				files: []v1alpha1.Manifest{
-					{Name: "v2"},
-					{Name: "v2/manifests"},
-					{Name: "v2/manifests/test1"},
-					{Name: "v2/manifests/test2"},
-				},
-			},
-			want: []v1alpha1.Manifest{
-				{Name: "v2"},
-				{Name: "v2/manifests"},
-				{Name: "v2/manifests/test1"},
-				{Name: "v2/manifests/test2"},
-			},
-		},
-	}
-	for _, tt := range tests {
-
-		tmpdir := t.TempDir()
-
-		cwd, err := os.Getwd()
-
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.Chdir(tmpdir); err != nil {
-			t.Fatal(err)
-		}
-
-		defer os.Chdir(cwd)
-
-		// Write out blobs directory to ensure these files are skipped
-		for _, path := range paths {
-			if err := os.MkdirAll(path, os.ModePerm); err != nil {
-				t.Fatal(err)
-			}
-		}
-
-		// Write files
-		d1 := []byte("hello\ngo\n")
-		if err := ioutil.WriteFile("v2/manifests/test1", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := ioutil.WriteFile("v2/manifests/test2", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := ioutil.WriteFile("v2/blobs/test3", d1, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		actual, err := ReconcileManifests()
-
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !reflect.DeepEqual(actual, tt.want) {
-			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)
-		}
-
-	}
+	return nil
 }
