@@ -26,7 +26,7 @@ func TestLoadMetadata(t *testing.T) {
 		{
 			name: "Invalid/BadStructure",
 			inline: `---
-apiVersion: tmp-redhatgov.com/v1alpha1
+apiVersion: ocmirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 foo: bar
 `,
