@@ -215,7 +215,8 @@ func addLayer(new, targetPath string) (v1.Layer, error) {
 func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef, dir string, layers ...v1.Layer) error {
 
 	archs := []string{"amd64", "arm64", "ppc64le", "s390x"}
-	options := o.getRemoteOpts(ctx)
+	remoteOptions := o.getRemoteOpts(ctx)
+	nameOptions := o.getNameOpts()
 
 	// Create an empty layout
 	layoutPath := filepath.Join(dir, "layout")
@@ -229,11 +230,11 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 
 	logrus.Debugf("Pulling image %s for processing", srcRef)
 	// Pull source reference image
-	ref, err := name.ParseReference(srcRef, o.getNameOpts()...)
+	ref, err := name.ParseReference(srcRef, nameOptions...)
 	if err != nil {
 		return err
 	}
-	img, err := remote.Image(ref, options...)
+	img, err := remote.Image(ref, remoteOptions...)
 	if err != nil {
 		return err
 	}
@@ -272,7 +273,7 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 		}
 	}
 
-	tag, err := name.NewTag(targetRef)
+	tag, err := name.NewTag(targetRef, nameOptions...)
 	if err != nil {
 		return err
 	}
@@ -293,12 +294,12 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 		if err != nil {
 			return err
 		}
-		if err := remote.Write(tag, img, options...); err != nil {
+		if err := remote.Write(tag, img, remoteOptions...); err != nil {
 			return err
 		}
 	}
 
-	return remote.WriteIndex(tag, idx, options...)
+	return remote.WriteIndex(tag, idx, remoteOptions...)
 }
 
 // layerFromFile will write the contents of the path the target
