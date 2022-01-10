@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/archive"
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
@@ -32,7 +33,7 @@ func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manife
 			rootInArchive = filepath.Base(rootInArchive)
 		}
 
-		if filepath.Base(rootOnDisk) != "v2" {
+		if filepath.Base(rootOnDisk) != config.V2Dir {
 			return manifests, blobs, fmt.Errorf("path %q is not a v2 directory", rootOnDisk)
 		}
 
@@ -52,7 +53,7 @@ func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manife
 
 			dir := filepath.Dir(filename)
 			switch filepath.Base(dir) {
-			case "blobs":
+			case config.BlobDir:
 				if info.Mode().IsRegular() {
 					if _, found := foundFiles[info.Name()]; found {
 						logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
@@ -73,7 +74,7 @@ func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manife
 			default:
 				// Skips the blob dir which
 				// does not come up as its own base dir
-				if info.Name() == "blobs" {
+				if info.Name() == config.BlobDir {
 					return nil
 				}
 				file := v1alpha1.Manifest{
