@@ -9,6 +9,8 @@ const (
 	PublishDir       = "publish"
 	InternalDir      = "internal"
 	HelmDir          = "charts"
+	V2Dir            = "v2"
+	BlobDir          = "blobs"
 	MetadataFile     = ".metadata.json"
 	AssociationsFile = "image-associations.gob"
 )

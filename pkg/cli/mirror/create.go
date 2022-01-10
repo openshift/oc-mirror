@@ -275,20 +275,19 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSe
 	}
 	segSize *= 1024 * 1024 * 1024
 
-	cwd, err := os.Getwd()
-
-	if err != nil {
-		return err
-	}
-
 	// Set get absolute path to output dir
+	// to avoid issue with directory change
 	output, err := filepath.Abs(o.OutputDir)
-
 	if err != nil {
 		return err
 	}
 
-	// Change dir before archiving to avoid issues with symlink paths
+	// Change directory before archiving to
+	// avoid broken symlink paths
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	if err := os.Chdir(filepath.Join(o.Dir, config.SourceDir)); err != nil {
 		return err
 	}
@@ -296,40 +295,19 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, cfg v1alpha1.ImageSe
 
 	packager := archive.NewPackager(manifests, blobs)
 	prefix := fmt.Sprintf("mirror_seq%d", seq)
-
-	// Create tar archive
 	if err := packager.CreateSplitArchive(ctx, backend, segSize, output, ".", prefix, o.SkipCleanup); err != nil {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
 	return nil
-
 }
 
 func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Change dir before archiving to avoid issues with symlink paths
-	if err := os.Chdir(filepath.Join(o.Dir, config.SourceDir)); err != nil {
-		return nil, nil, err
-	}
-	defer os.Chdir(cwd)
-
-	// Gather manifests we pulled
-	manifests, err := bundle.ReconcileManifests()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blobs, err := bundle.ReconcileBlobs(meta)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return manifests, blobs, nil
+	diskPath := filepath.Join(o.Dir, config.SourceDir, "v2")
+	// Define a map that associates locations
+	// on disk to location in archive
+	paths := map[string]string{diskPath: "v2"}
+	return bundle.ReconcileV2Dir(meta, paths)
 }
 
 func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
@@ -345,7 +323,7 @@ func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
 	return assocs.Encode(f)
 }
 
-// Make sure the latest `opm` image exists during the publish step
+// Make sure the latest `opm` image exists during the publishing step
 // in case it does not exist in a past mirror.
 func addOPMImage(cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) {
 	for _, pm := range meta.PastMirrors {
