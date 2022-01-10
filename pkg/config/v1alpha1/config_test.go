@@ -105,13 +105,13 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "Invalid/UnknownKey",
 			inline: `
-apiVersion: ocmirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
   foo: bar
 `,
 			assertion: require.Error,
-			expError:  `decode ocmirror.openshift.io/v1alpha1, Kind=ImageSetConfiguration: json: unknown field "foo"`,
+			expError:  `decode mirror.openshift.io/v1alpha1, Kind=ImageSetConfiguration: json: unknown field "foo"`,
 		},
 	}
 
@@ -138,7 +138,7 @@ mirror:
 func TestHeadsOnly(t *testing.T) {
 
 	headsOnlyCfg := `
-apiVersion: ocmirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
   operators:
