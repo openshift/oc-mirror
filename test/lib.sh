@@ -15,7 +15,7 @@ function run_cmd() {
 # images are pullable.
 function check_helm() {
   local expected_image="${1:?expected image required}"
-   if ! crane digest $expected_image; then
+   if ! crane digest --insecure $expected_image; then
       echo "helm image $expected_image not pushed to registry"
       return 1
     fi
@@ -29,7 +29,7 @@ function check_bundles() {
   local disconn_registry="${3:?disconnected registry host name must be set}"
   local ns="${4:-""}"
 
-  crane export $catalog_image temp.tar
+  crane export --insecure $catalog_image temp.tar
   local index_dir="${DATA_TMP}/unpacked"
   mkdir -p "$index_dir"
   local index_path="${index_dir}/index.json"
@@ -66,7 +66,7 @@ function check_bundles() {
   fi
   for image in $index_bundle_images; do
     image=${disconn_registry}/${NS}$(echo $image | cut --complement -d'/' -f1)
-    if ! crane digest $image; then
+    if ! crane digest $image --insecure; then
       echo "bundle image $image not pushed to registry"
       return 1
     fi
@@ -132,11 +132,11 @@ function prep_registry() {
   local diff="${1:?diff required}"
   # Copy target catalog to connected registry
   if [[ $diff == "false" ]]; then
-    crane copy quay.io/${CATALOGNAMESPACE}:test-catalog-latest \
-    localhost:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
+    crane copy --insecure quay.io/${CATALOGNAMESPACE}:test-catalog-latest \
+    localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
   else
-    crane copy quay.io/${CATALOGNAMESPACE}:test-catalog-diff \
-    localhost:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
+    crane copy --insecure quay.io/${CATALOGNAMESPACE}:test-catalog-diff \
+    localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
   fi
 }
 
@@ -157,7 +157,7 @@ function run_full() {
   else
     NS=""
   fi
-  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}"
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}"
   popd
 }
 
@@ -177,7 +177,7 @@ function run_diff() {
   else
     NS=""
   fi
-  run_cmd --from "${CREATE_DIFF_DIR}/mirror_seq2_000000.tar" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}"
+  run_cmd --from "${CREATE_DIFF_DIR}/mirror_seq2_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}"
   popd
 }
 
@@ -195,7 +195,7 @@ function mirror2mirror() {
   else
    NS=""
   fi
-  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}" --source-skip-tls 
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" --source-skip-tls 
   popd
 }
 
@@ -217,6 +217,6 @@ function run_helm() {
   else
     NS=""
   fi
-  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost:${REGISTRY_DISCONN_PORT}${NS}"
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}"
   popd
 }
