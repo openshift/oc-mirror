@@ -41,7 +41,7 @@ Example configurations can be found in the docs [here](docs/examples)
 #### Backends
 > **IMPORTANT**: Backends must be configured to utilize the lifecycle management features of `oc-mirror`. Examples are below.
 ```sh
-apiVersion: tmp-redhatgov.com/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 archiveSize: 1
 storageConfig:
@@ -49,7 +49,7 @@ storageConfig:
     path: /home/user/workspace
 ```
 ```sh
-apiVersion: tmp-redhatgov.com/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 storageConfig:
   registry:

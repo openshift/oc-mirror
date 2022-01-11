@@ -1,5 +1,5 @@
 ---
-apiVersion: tmp-redhatgov.com/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
   operators:
