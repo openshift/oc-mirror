@@ -7,6 +7,11 @@ Let's get started!
 1. Make sure your go is up to date!
 2. Make sure that you have `gcc` and `make` installed.
 3. To run the local end-to-end test you will need `podman` or `docker`
+4. jq and yq installed for JSON and YAML processing
+
+## OSX Dependencies
+Testing on OSX requires installation of several additional packages to be installed
+1. Bash 5.1 or later
 
 ## Building
 
