@@ -39,7 +39,12 @@ run () {
 while [ $# -gt 0 ]; do
     case "$1" in
         --clean)
-            git clean -dxf ;;
+            if git clean -dxf; then
+                run_log 0 "Cleaned working directory"
+            else
+                run_log 1 "Failed to clean the working directory"
+            fi
+            ;;
         *)
             run_log 1 "Unknown argument, $1" ;;
     esac; shift
