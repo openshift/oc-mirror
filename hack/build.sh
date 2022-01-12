@@ -36,4 +36,13 @@ run () {
   fi
 }
 
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --clean)
+            git clean -dxf ;;
+        *)
+            run_log 1 "Unknown argument, $1" ;;
+    esac; shift
+done
+
 run
