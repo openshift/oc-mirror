@@ -194,10 +194,9 @@ func TestMirrorValidate(t *testing.T) {
 			opts: &MirrorOptions{
 				ConfigPath:    "foo",
 				ToMirror:      u.Host,
-				DryRun:        true,
 				FilterOptions: []string{"arm64"},
 			},
-			expError: "architecture arm64 is not a supported release architecture",
+			expError: "architecture \"arm64\" is not a supported release architecture",
 		},
 		{
 			name: "Valid/MirrortoDisk",
