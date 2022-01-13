@@ -15,21 +15,39 @@ run_log () {
 
 build_builder_image () {
   run_log 0 "Starting builder container image build"
-  ${run_cmd} build -f Dockerfile -t ${image_name} .
+  "${run_cmd}" build -f Dockerfile -t "${image_name}" .
 }
 
 build_binary () {
   run_log 0 "Starting binary build"
-  ${run_cmd} run -it --rm --privileged -v ${src_dir}:/build:z ${image_name}
+  "${run_cmd}" run -it --rm --privileged -v "${src_dir}:/build:z" "${image_name}"
 }
 
 run () {
-  build_builder_image \
-    && run_log 0 "Successfully built builder image" \
-    || run_log 1 "Failed to build builder image"
-  build_binary \
-    && run_log 0 "Successfully built binary" \
-    || run_log 1 "Failed to build binary"
+  if build_builder_image; then
+    run_log 0 "Successfully built builder image"
+  else
+    run_log 1 "Failed to build builder image"
+  fi
+  if build_binary; then
+    run_log 0 "Successfully built binary"
+  else
+    run_log 1 "Failed to build binary"
+  fi
 }
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --clean)
+            if git clean -dxf; then
+                run_log 0 "Cleaned working directory"
+            else
+                run_log 1 "Failed to clean the working directory"
+            fi
+            ;;
+        *)
+            run_log 1 "Unknown argument, $1" ;;
+    esac; shift
+done
 
 run

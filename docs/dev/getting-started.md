@@ -10,7 +10,8 @@ Let's get started!
 
 ## Building
 
-Please run `hack/build.sh` to build the `oc-mirror` executable for local testing
+Please run `hack/build.sh` to build the `oc-mirror` executable for local testing. If you do not have uncommitted changes that you are testing, you should run `hack/build.sh --clean` in order to clean the working directory of any artifacts possibly left over from your work or a previous build/test.
+
 ## CI
 
 Our CI is automated using Prow. The configuration is located in the `openshift/release` project.
@@ -20,7 +21,3 @@ We are currently running automated unit tests with CI and are working on an auto
 
 We have developed local end-to-end test scripts to verify `oc-mirror` functionality with various imageset configurations.
 When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
-
-
-
-
