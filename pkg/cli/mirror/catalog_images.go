@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -267,8 +268,8 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 			Architecture: arch,
 			OS:           "linux",
 		}
-		layoutOpts := layout.WithPlatform(platform)
-		if err := p.AppendImage(img, layoutOpts); err != nil {
+		layoutOpts := []layout.Option{layout.WithPlatform(platform)}
+		if err := p.AppendImage(img, layoutOpts...); err != nil {
 			return err
 		}
 	}
@@ -284,6 +285,7 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 	if err != nil {
 		return err
 	}
+	idx = mutate.IndexMediaType(idx, types.DockerManifestList)
 	idxManifest, err := idx.IndexManifest()
 	if err != nil {
 		return err

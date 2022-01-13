@@ -14,6 +14,7 @@ const (
 func TestAssociateImageLayers(t *testing.T) {
 	tests := []struct {
 		name       string
+		tag        string
 		imgTyp     ImageType
 		imgs       []string
 		imgMapping map[string]string
@@ -24,6 +25,7 @@ func TestAssociateImageLayers(t *testing.T) {
 		{
 			name:       "Valid/ManifestWithTag",
 			imgTyp:     TypeGeneric,
+			tag:        "oc-mirror",
 			imgMapping: map[string]string{"imgname:latest": "single_manifest:latest"},
 			imgs:       []string{"imgname:latest"},
 			expResult: AssociationSet{"imgname:latest": map[string]Association{
@@ -47,6 +49,7 @@ func TestAssociateImageLayers(t *testing.T) {
 		},
 		{
 			name:   "Valid/ManifestWithDigest",
+			tag:    "oc-mirror",
 			imgTyp: TypeGeneric,
 			imgMapping: map[string]string{
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": "single_manifest@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19"},
@@ -57,7 +60,7 @@ func TestAssociateImageLayers(t *testing.T) {
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
-					TagSymlink:      "",
+					TagSymlink:      "oc-mirror",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Type:            TypeGeneric,
 					ManifestDigests: nil,
@@ -74,6 +77,7 @@ func TestAssociateImageLayers(t *testing.T) {
 		},
 		{
 			name:   "Valid/IndexManifest",
+			tag:    "oc-mirror",
 			imgTyp: TypeGeneric,
 			imgMapping: map[string]string{
 				"imgname:latest": "index_manifest:latest"},
