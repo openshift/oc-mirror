@@ -33,6 +33,7 @@ func TestMirrorComplete(t *testing.T) {
 				RootOptions: &cli.RootOptions{
 					Dir: "foo/bar",
 				},
+				FilterOptions: []string{"amd64"},
 			},
 		},
 		{
@@ -48,6 +49,7 @@ func TestMirrorComplete(t *testing.T) {
 				RootOptions: &cli.RootOptions{
 					Dir: "foo/bar",
 				},
+				FilterOptions: []string{"amd64"},
 			},
 		},
 		{
@@ -63,6 +65,7 @@ func TestMirrorComplete(t *testing.T) {
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
+				FilterOptions: []string{"amd64"},
 			},
 		},
 		{
@@ -70,7 +73,8 @@ func TestMirrorComplete(t *testing.T) {
 			args: []string{"docker://reg.com"},
 			opts: &MirrorOptions{},
 			expOpts: &MirrorOptions{
-				ToMirror: "reg.com",
+				ToMirror:      "reg.com",
+				FilterOptions: []string{"amd64"},
 			},
 		},
 		{
@@ -80,6 +84,24 @@ func TestMirrorComplete(t *testing.T) {
 			expOpts: &MirrorOptions{
 				ToMirror:      "reg.com",
 				UserNamespace: "foo/bar",
+				FilterOptions: []string{"amd64"},
+			},
+		},
+		{
+			name: "Valid/SetFilterOps",
+			args: []string{"file://foo"},
+			opts: &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+				FilterOptions: []string{"amd64", "ppc64le"},
+			},
+			expOpts: &MirrorOptions{
+				OutputDir: "foo",
+				RootOptions: &cli.RootOptions{
+					Dir: "foo/bar",
+				},
+				FilterOptions: []string{"amd64", "ppc64le"},
 			},
 		},
 		{
@@ -166,6 +188,16 @@ func TestMirrorValidate(t *testing.T) {
 				DryRun:     true,
 			},
 			expError: "--dry-run is not supported for mirror publishing operations",
+		},
+		{
+			name: "Invalid/UnsupportReleaseArch",
+			opts: &MirrorOptions{
+				ConfigPath:    "foo",
+				ToMirror:      u.Host,
+				DryRun:        true,
+				FilterOptions: []string{"arm64"},
+			},
+			expError: "architecture arm64 is not a supported release architecture",
 		},
 		{
 			name: "Valid/MirrortoDisk",

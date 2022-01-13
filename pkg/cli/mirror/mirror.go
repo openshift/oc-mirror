@@ -119,6 +119,10 @@ func (o *MirrorOptions) Complete(args []string) error {
 		return fmt.Errorf("unknown destination scheme %q", typStr)
 	}
 
+	if len(o.FilterOptions) == 0 {
+		o.FilterOptions = []string{"amd64"}
+	}
+
 	return nil
 }
 
@@ -156,6 +160,13 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
+	var supportedArchs = map[string]struct{}{"amd64": {}, "ppc64le": {}, "s390x": {}}
+	for _, arch := range o.FilterOptions {
+		if _, ok := supportedArchs[arch]; !ok {
+			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
+		}
+	}
+
 	return nil
 }
 
@@ -170,7 +181,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
 	case len(o.OutputDir) > 0 && o.From == "":
-		return o.Create(cmd.Context(), cmd.PersistentFlags())
+		return o.Create(cmd.Context())
 	case len(o.ToMirror) > 0 && len(o.From) > 0:
 		return o.Publish(cmd.Context(), cmd, f)
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
@@ -186,7 +197,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		fmt.Fprintf(o.IOStreams.Out, "workspace: %s\n", dir)
 
 		o.OutputDir = dir
-		if err := o.Create(cmd.Context(), cmd.PersistentFlags()); err != nil {
+		if err := o.Create(cmd.Context()); err != nil {
 			return err
 		}
 

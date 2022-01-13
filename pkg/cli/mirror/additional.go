@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
 
@@ -39,7 +40,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 	opts.SecurityOptions.Insecure = o.SourceSkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
-	opts.FilterOptions = o.FilterOptions
+	opts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 
 	logrus.Infof("Downloading %d image(s) to %s", len(imageList), opts.FileDir)
 

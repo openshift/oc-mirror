@@ -71,8 +71,7 @@ func TestCreate(t *testing.T) {
 		ConfigPath: "testdata/configs/test.yaml",
 		OutputDir:  path,
 	}
-	flags := NewMirrorCmd().Flags()
-	err := opts.Create(ctx, flags)
+	err := opts.Create(ctx)
 	require.NoError(t, err)
 }
 
@@ -94,8 +93,7 @@ func TestCreateWithDryRun(t *testing.T) {
 		DryRun:     true,
 		OutputDir:  path,
 	}
-	flags := NewMirrorCmd().Flags()
-	err := opts.Create(ctx, flags)
+	err := opts.Create(ctx)
 	require.NoError(t, err)
 
 	// should not produce an archive
@@ -129,9 +127,7 @@ func TestCreateWithCancel(t *testing.T) {
 	// closing the channel will cause the
 	// command to exit if using a cancellable context
 	close(cancelCh)
-
-	flags := NewMirrorCmd().Flags()
-	err := opts.Create(ctx, flags)
+	err := opts.Create(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, true, opts.interrupted)

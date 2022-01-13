@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/pflag"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
@@ -23,8 +22,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
-
-var supportedArchs = []string{"amd64", "ppc64le", "s390x"}
 
 // archMap maps Go architecture strings to OpenShift supported values for any that differ.
 var archMap = map[string]string{
@@ -41,19 +38,10 @@ type ReleaseOptions struct {
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
-func NewReleaseOptions(mo *MirrorOptions, flags *pflag.FlagSet) *ReleaseOptions {
-	var arch []string
-	opts := mo.FilterOptions
-	opts.Complete(flags)
-	if opts.IsWildcardFilter() {
-		arch = supportedArchs
-	} else {
-		arch = []string{strings.Join(strings.Split(opts.FilterByOS, "/")[1:], "/")}
-	}
-
+func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 	return &ReleaseOptions{
 		MirrorOptions: mo,
-		arch:          arch,
+		arch:          mo.FilterOptions,
 		uuid:          uuid.New(),
 	}
 }
