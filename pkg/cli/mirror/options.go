@@ -9,6 +9,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -52,6 +53,12 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
+
+	// TODO(jpower432): Make this flag visible again once release architecture selection
+	// has been more thouroughly vetted
+	if err := fs.MarkHidden("filter-by-os"); err != nil {
+		logrus.Panic(err.Error())
+	}
 }
 
 func (o *MirrorOptions) init() {
