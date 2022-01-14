@@ -79,9 +79,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			ctlgRef.Ref = sourceRef
 			// Update registry so the existing catalog image can be pulled.
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
-			if len(o.UserNamespace) != 0 {
-				ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
-			}
+			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
 			catalogsByImage[ctlgRef] = filepath.Dir(fpath)
 
 			// Add to mapping for ICSP generation
@@ -176,9 +174,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			}
 
 			opmImage.Registry = mirrorRef.Ref.Registry
-			if len(o.UserNamespace) != 0 {
-				opmImage.Namespace = path.Join(o.UserNamespace, opmImage.Namespace)
-			}
+			opmImage.Namespace = path.Join(o.UserNamespace, opmImage.Namespace)
 			srcImage = opmImage.Exact()
 
 		} else {
