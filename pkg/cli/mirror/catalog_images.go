@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -78,9 +79,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			ctlgRef.Ref = sourceRef
 			// Update registry so the existing catalog image can be pulled.
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
-			if len(o.UserNamespace) != 0 {
-				ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
-			}
+			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
 			catalogsByImage[ctlgRef] = filepath.Dir(fpath)
 
 			// Add to mapping for ICSP generation
@@ -175,9 +174,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 			}
 
 			opmImage.Registry = mirrorRef.Ref.Registry
-			if len(o.UserNamespace) != 0 {
-				opmImage.Namespace = path.Join(o.UserNamespace, opmImage.Namespace)
-			}
+			opmImage.Namespace = path.Join(o.UserNamespace, opmImage.Namespace)
 			srcImage = opmImage.Exact()
 
 		} else {
@@ -267,8 +264,8 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 			Architecture: arch,
 			OS:           "linux",
 		}
-		layoutOpts := layout.WithPlatform(platform)
-		if err := p.AppendImage(img, layoutOpts); err != nil {
+		layoutOpts := []layout.Option{layout.WithPlatform(platform)}
+		if err := p.AppendImage(img, layoutOpts...); err != nil {
 			return err
 		}
 	}
@@ -284,6 +281,7 @@ func (o *MirrorOptions) buildCatalogLayer(ctx context.Context, srcRef, targetRef
 	if err != nil {
 		return err
 	}
+	idx = mutate.IndexMediaType(idx, types.DockerManifestList)
 	idxManifest, err := idx.IndexManifest()
 	if err != nil {
 		return err

@@ -219,6 +219,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		}
 		dstRef := imageRef
 		dstRef.Registry = toMirrorRef.Ref.Registry
+		dstRef.Namespace = path.Join(o.UserNamespace, dstRef.Namespace)
 
 		icspData := ICSPGenerator{
 			ICSPMapping: map[reference.DockerImageReference]reference.DockerImageReference{
@@ -309,12 +310,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			m.Destination.Ref.Name = m.Source.Ref.Name
 			m.Destination.Ref.Tag = m.Source.Ref.Tag
 			m.Destination.Ref.ID = m.Source.Ref.ID
-			m.Destination.Ref.Namespace = m.Source.Ref.Namespace
-
-			// Add a top-level namespace, if defined
-			if len(o.UserNamespace) != 0 {
-				m.Destination.Ref.Namespace = path.Join(o.UserNamespace, m.Destination.Ref.Namespace)
-			}
+			m.Destination.Ref.Namespace = path.Join(o.UserNamespace, m.Source.Ref.Namespace)
 
 			switch assoc.Type {
 			case image.TypeGeneric:
@@ -345,7 +341,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			}
 		}
 
-		// Add mapping for ISCP generation
+		// Add mapping for ICSP generation
 		namedICSPData[imageRef.Name] = icspData
 
 		// Mirror all generic mappings for this image

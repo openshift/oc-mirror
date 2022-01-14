@@ -321,7 +321,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 		}
 
 		// TODO(estroz): parallelize
-		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, typ, skipParse)
+		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, "oc-mirror", typ, skipParse)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -334,7 +334,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
-func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageType, skipParse func(string) bool) (associations []Association, err error) {
+func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, typ ImageType, skipParse func(string) bool) (associations []Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
@@ -365,7 +365,15 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageTyp
 		id = filepath.Base(dst)
 	case m.IsRegular():
 		// Layer ID is the file name, and no tag exists.
-		tag = ""
+		// Add an oc-mirror tag as a default
+		tag = defaultTag
+		if defaultTag != "" {
+			manifestDir := filepath.Dir(manifestPath)
+			symlink := filepath.Join(manifestDir, defaultTag)
+			if err := os.Symlink(info.Name(), symlink); err != nil {
+				return nil, err
+			}
+		}
 	default:
 		return nil, fmt.Errorf("expected symlink or regular file mode, got: %b", m)
 	}
@@ -396,7 +404,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID string, typ ImageTyp
 			association.ManifestDigests = append(association.ManifestDigests, digestStr)
 			// Recurse on child manifests, which should be in the same directory
 			// with the same file name as it's digest.
-			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, typ, skipParse)
+			childAssocs, err := associateImageLayers(digestStr, localRoot, dirRef, digestStr, "", typ, skipParse)
 			if err != nil {
 				return nil, err
 			}
