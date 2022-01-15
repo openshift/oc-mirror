@@ -131,10 +131,7 @@ func (b *registryBackend) Open(ctx context.Context, fpath string) (io.ReadCloser
 
 func (b *registryBackend) unpack(ctx context.Context, fpath string) error {
 	tempTar := fmt.Sprintf("%s.tar", b.src.Ref.Name)
-	opts, err := b.getOpts(ctx)
-	if err != nil {
-		return err
-	}
+	opts := b.getOpts(ctx)
 	img, err := crane.Pull(b.src.Ref.Exact(), opts...)
 	if err != nil {
 		return err
@@ -173,10 +170,7 @@ func (b *registryBackend) Stat(ctx context.Context, fpath string) (os.FileInfo, 
 
 // Cleanup removes metadata from existing metadata from backend location
 func (b *registryBackend) Cleanup(ctx context.Context, fpath string) error {
-	opts, err := b.getOpts(ctx)
-	if err != nil {
-		return err
-	}
+	opts := b.getOpts(ctx)
 	if err := crane.Delete(b.src.Ref.Exact(), opts...); err != nil {
 		return err
 	}
@@ -194,24 +188,18 @@ func (b *registryBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
 
 // pushImage will push a v1.Image with provided contents
 func (b *registryBackend) pushImage(ctx context.Context, data []byte, fpath string) error {
-	options, err := b.getOpts(ctx)
-	if err != nil {
-		return err
-	}
+	opts := b.getOpts(ctx)
 	contents := map[string][]byte{
 		fpath: data,
 	}
 	i, _ := crane.Image(contents)
-	return crane.Push(i, b.src.Ref.Exact(), options...)
+	return crane.Push(i, b.src.Ref.Exact(), opts...)
 }
 
 // exists checks if the image exists
 func (b *registryBackend) exists(ctx context.Context) error {
-	opts, err := b.getOpts(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = crane.Manifest(b.src.Ref.Exact(), opts...)
+	opts := b.getOpts(ctx)
+	_, err := crane.Manifest(b.src.Ref.Exact(), opts...)
 	var terr *transport.Error
 	switch {
 	case err != nil && errors.As(err, &terr) && terr.StatusCode == 404:
@@ -244,17 +232,14 @@ func (b *registryBackend) createRT() http.RoundTripper {
 
 // TODO: Get default auth will need to update if user
 // can specify custom locations
-func (b *registryBackend) getOpts(ctx context.Context) (options []crane.Option, err error) {
-	options = append(
-		options,
+func (b *registryBackend) getOpts(ctx context.Context) []crane.Option {
+	options := []crane.Option{
 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
 		crane.WithContext(ctx),
 		crane.WithTransport(b.createRT()),
-	)
-
+	}
 	if b.insecure {
 		options = append(options, crane.Insecure)
 	}
-
-	return options, err
+	return options
 }
