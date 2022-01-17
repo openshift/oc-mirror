@@ -245,7 +245,7 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
-	opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir), []byte(ctlg.PullSecret))
+	opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir))
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +410,7 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefe
 	return indexDir, nil
 }
 
-func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string, pullSecret []byte) (*catalog.MirrorCatalogOptions, error) {
+func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string) (*catalog.MirrorCatalogOptions, error) {
 	opts := catalog.NewMirrorCatalogOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
 	opts.FileDir = fileDir
@@ -428,15 +428,11 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 	opts.SecurityOptions.Insecure = o.SourceSkipTLS
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	// If the pullSecret is not empty create a cached context
-	// else let `oc mirror` use the default docker config location
-	if len(pullSecret) != 0 {
-		ctx, err := config.CreateContext(pullSecret, o.SkipVerification, o.SourceSkipTLS)
-		if err != nil {
-			return nil, err
-		}
-		opts.SecurityOptions.CachedContext = ctx
+	regctx, err := config.CreateDefaultContext(o.SourceSkipTLS)
+	if err != nil {
+		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}
+	opts.SecurityOptions.CachedContext = regctx
 
 	return opts, nil
 }

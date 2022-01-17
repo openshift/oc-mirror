@@ -49,16 +49,11 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 	assocMappings := make(map[string]string, len(imageList))
 	for i, img := range imageList {
 
-		// If the pullSecret is not empty create a cached context
-		// else let `oc mirror` use the default docker config location
-		if len(img.PullSecret) != 0 {
-			ctx, err := config.CreateContext([]byte(img.PullSecret), o.SkipVerification, o.SourceSkipTLS)
-			if err != nil {
-				return nil, err
-			}
-			opts.SecurityOptions.CachedContext = ctx
+		regctx, err := config.CreateDefaultContext(o.SourceSkipTLS)
+		if err != nil {
+			return nil, fmt.Errorf("error creating registry context: %v", err)
 		}
-
+		opts.SecurityOptions.CachedContext = regctx
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)
 		if err != nil {

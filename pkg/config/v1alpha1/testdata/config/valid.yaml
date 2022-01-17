@@ -9,14 +9,12 @@ mirror:
         versions:
           - '4.6.36'
           - '4.6.13'
-    pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
       headsOnly: false
     - catalog: certified-operators:v4.7
       headsOnly: false
-      pullSecret: '{"auths":{"cloud.openshift.com":..."}}}'
       packages:
         - name: couchbase-operator
         - name: mongodb-operator
