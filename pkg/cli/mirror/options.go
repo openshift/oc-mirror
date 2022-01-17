@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
-	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -28,7 +28,7 @@ type MirrorOptions struct {
 	SkipCleanup      bool
 	SkipMissing      bool
 	ContinueOnError  bool
-	FilterOptions    imagemanifest.FilterOptions
+	FilterOptions    []string
 	// cancelCh is a channel listening for command cancellations
 	cancelCh    <-chan struct{}
 	interrupted bool
@@ -46,12 +46,18 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
-	fs.StringVar(&o.FilterOptions.FilterByOS, "filter-by-os", "", "A regular expression to control which index image is picked when multiple variants are available")
+	fs.StringSliceVar(&o.FilterOptions, "filter-by-os", o.FilterOptions, "A regular expression to control which release image is picked when multiple variants are available")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
 		"and attempt to mirror as much as possible")
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
+
+	// TODO(jpower432): Make this flag visible again once release architecture selection
+	// has been more thouroughly vetted
+	if err := fs.MarkHidden("filter-by-os"); err != nil {
+		logrus.Panic(err.Error())
+	}
 }
 
 func (o *MirrorOptions) init() {

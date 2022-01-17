@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/pflag"
 
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
@@ -21,7 +20,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error {
+func (o *MirrorOptions) Create(ctx context.Context) error {
 
 	// Read the imageset-config.yaml
 	cfg, err := config.LoadConfig(o.ConfigPath)
@@ -94,7 +93,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 
-		assocs, err = o.createFull(ctx, flags, &cfg, meta)
+		assocs, err = o.createFull(ctx, &cfg, meta)
 		if err != nil {
 			return err
 		}
@@ -104,7 +103,7 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
 		thisRun.Sequence = lastRun.Sequence + 1
 
-		assocs, err = o.createDiff(ctx, flags, &cfg, lastRun, meta)
+		assocs, err = o.createDiff(ctx, &cfg, lastRun, meta)
 		if err != nil {
 			return err
 		}
@@ -168,12 +167,12 @@ func (o *MirrorOptions) Create(ctx context.Context, flags *pflag.FlagSet) error 
 }
 
 // createFull performs all tasks in creating full imagesets
-func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (image.AssociationSet, error) {
+func (o *MirrorOptions) createFull(ctx context.Context, cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := NewReleaseOptions(o, flags)
+		opts := NewReleaseOptions(o)
 		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
 			return allAssocs, err
@@ -217,12 +216,12 @@ func (o *MirrorOptions) createFull(ctx context.Context, flags *pflag.FlagSet, cf
 }
 
 // createDiff performs all tasks in creating differential imagesets
-func (o *MirrorOptions) createDiff(ctx context.Context, flags *pflag.FlagSet, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) (image.AssociationSet, error) {
+func (o *MirrorOptions) createDiff(ctx context.Context, cfg *v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror, meta v1alpha1.Metadata) (image.AssociationSet, error) {
 
 	allAssocs := image.AssociationSet{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
-		opts := NewReleaseOptions(o, flags)
+		opts := NewReleaseOptions(o)
 		assocs, err := opts.GetReleases(ctx, meta, cfg)
 		if err != nil {
 			return allAssocs, err
