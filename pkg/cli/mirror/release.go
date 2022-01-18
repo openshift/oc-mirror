@@ -50,7 +50,6 @@ func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata, cfg *v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
 	var (
-		pullSecret       = cfg.Mirror.OCP.PullSecret
 		srcDir           = filepath.Join(o.Dir, config.SourceDir)
 		channelVersion   = make(map[string]string, len(cfg.Mirror.OCP.Channels))
 		releaseDownloads = downloads{}
@@ -90,7 +89,7 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 		}
 	}
 
-	assocs, err := o.mirror([]byte(pullSecret), srcDir, releaseDownloads)
+	assocs, err := o.mirror(srcDir, releaseDownloads)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +174,7 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 }
 
 // mirror will take the prepared download information and mirror to disk location
-func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[string]download) (image.AssociationSet, error) {
+func (o *ReleaseOptions) mirror(toDir string, downloads map[string]download) (image.AssociationSet, error) {
 	allAssocs := image.AssociationSet{}
 
 	for img, download := range downloads {
@@ -183,15 +182,11 @@ func (o *ReleaseOptions) mirror(secret []byte, toDir string, downloads map[strin
 		opts := release.NewMirrorOptions(o.IOStreams)
 		opts.ToDir = toDir
 
-		// If the pullSecret is not empty create a cached context
-		// else let `oc mirror` use the default docker config location
-		if len(secret) != 0 {
-			ctx, err := config.CreateContext(secret, o.SkipVerification, o.SourceSkipTLS)
-			if err != nil {
-				return nil, err
-			}
-			opts.SecurityOptions.CachedContext = ctx
+		regctx, err := config.CreateDefaultContext(o.SourceSkipTLS)
+		if err != nil {
+			return nil, fmt.Errorf("error creating registry context: %v", err)
 		}
+		opts.SecurityOptions.CachedContext = regctx
 
 		opts.SecurityOptions.Insecure = o.SourceSkipTLS
 		opts.SecurityOptions.SkipVerification = o.SkipVerification

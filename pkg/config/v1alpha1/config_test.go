@@ -40,7 +40,6 @@ func TestLoadConfig(t *testing.T) {
 								Versions: []string{"4.6.36", "4.6.13"},
 							},
 						},
-						PullSecret: "{\"auths\":{\"cloud.openshift.com\":...\"}}}",
 					},
 					Operators: []Operator{
 						{
@@ -67,7 +66,6 @@ func TestLoadConfig(t *testing.T) {
 									},
 								},
 							},
-							PullSecret: "{\"auths\":{\"cloud.openshift.com\":...\"}}}",
 						},
 						{
 							Catalog: "community-operators:v4.7",

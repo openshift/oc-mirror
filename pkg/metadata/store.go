@@ -44,7 +44,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1
 func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, backend storage.Backend, insecure bool) (operatorMeta v1alpha1.OperatorMetadata, err error) {
 	operatorMeta.Catalog = operator.Catalog
 
-	resolver, err := containerdregistry.NewResolver(operator.PullSecret, insecure, nil)
+	resolver, err := containerdregistry.NewResolver("", insecure, nil)
 	if err != nil {
 		return v1alpha1.OperatorMetadata{}, fmt.Errorf("error creating image resolver: %v", err)
 	}

@@ -7,12 +7,11 @@ require (
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
 	github.com/containerd/containerd v1.5.8
 	github.com/containers/image/v5 v5.15.2
-	github.com/docker/distribution v2.7.1+incompatible
+	github.com/docker/cli v20.10.12+incompatible
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
 	github.com/google/go-containerregistry v0.8.0
 	github.com/google/uuid v1.2.0
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
-	github.com/mattn/go-sqlite3 v1.14.8 // indirect
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
@@ -41,7 +40,7 @@ require (
 replace (
 	//github.com/Microsoft/hcsshim => github.com/Microsoft/hcsshim v0.8.7
 	github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
-	github.com/operator-framework/operator-registry => github.com/jpower432/operator-registry v1.19.6-0.20211216224407-864e0251bc66
+	github.com/operator-framework/operator-registry => github.com/jpower432/operator-registry v1.19.6-0.20220115001925-b3985d21a611
 	k8s.io/apimachinery => github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9
 	k8s.io/cli-runtime => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68

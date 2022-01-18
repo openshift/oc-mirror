@@ -370,7 +370,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 		if defaultTag != "" {
 			manifestDir := filepath.Dir(manifestPath)
 			symlink := filepath.Join(manifestDir, defaultTag)
-			if err := os.Symlink(info.Name(), symlink); err != nil {
+			if err := os.Symlink(info.Name(), symlink); err != nil && !os.IsExist(err) {
 				return nil, err
 			}
 		}
