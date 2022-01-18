@@ -26,7 +26,7 @@
 ## Prerequisites
 > **WARNING**: Depending on the configuration file used and the periodicity between running `oc-mirror`, this process may download multiple hundreds of gigabytes of data, though differential updates should usually result in significantly smaller Imagesets.
 ### Authentication: 
-oc-mirror currently retrieves registry credentials from `~/.docker/config.json` or `${XDG_RUNTIME_DIR}/containers/auth. json`. Make sure that your [Red Hat OpenShift Pull Secret](https://console.redhat.com/openshift/install/pull-secret) and any other needed registry credentials are populated in the credentials file.
+oc-mirror currently retrieves registry credentials from `~/.docker/config.json` or `${XDG_RUNTIME_DIR}/containers/auth.json`. Make sure that your [Red Hat OpenShift Pull Secret](https://console.redhat.com/openshift/install/pull-secret) and any other needed registry credentials are populated in the credentials file.
 
 ### Certificate Trust
 

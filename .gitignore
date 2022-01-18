@@ -10,6 +10,7 @@ sha256sum.txt
 **/test-output
 **/.metadata.json
 oc-mirror-workspace/
+pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 
 # Logs.
 **/.openshift_bundle.log

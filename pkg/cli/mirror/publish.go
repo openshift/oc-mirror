@@ -642,6 +642,8 @@ func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 
 func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
+	// TODO(jpower432): implement map searching instead for efficiency
+	// would have to ensure the latest run is prefferred
 	for _, mirror := range meta.PastMirrors {
 		for _, blob := range mirror.Blobs {
 			if blob.ID == layerDigest {
