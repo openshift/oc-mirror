@@ -12,11 +12,14 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
+	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -124,6 +127,99 @@ func TestMetadataError(t *testing.T) {
 				t.Errorf("Test %s wrong error type. Want \"%v\", got \"%v\"", tt.name, tt.want, err)
 			}
 		}
+	}
+}
+
+func TestFindBlobRepo(t *testing.T) {
+	tests := []struct {
+		name string
+
+		digest   string
+		meta     v1alpha1.Metadata
+		options  MirrorOptions
+		expected imagesource.TypedImageReference
+		err      string
+	}{{
+		name:   "Valid/NoUsernamespace",
+		digest: "found",
+		options: MirrorOptions{
+			ToMirror: "registry.com",
+		},
+		expected: imagesource.TypedImageReference{
+			Type: "docker",
+			Ref: reference.DockerImageReference{
+				Registry:  "registry.com",
+				Namespace: "test3",
+				Name:      "baz",
+			},
+		},
+	}, {
+		name:   "Valid/UsernamespaceAdded",
+		digest: "found",
+		options: MirrorOptions{
+			ToMirror:      "registry.com",
+			UserNamespace: "foo",
+		},
+		expected: imagesource.TypedImageReference{
+			Type: "docker",
+			Ref: reference.DockerImageReference{
+				Registry:  "registry.com",
+				Namespace: "foo",
+				Name:      "test3/baz",
+			},
+		},
+	}, {
+		name:   "Invalid/NoRefExisting",
+		digest: "notfound",
+		options: MirrorOptions{
+			ToMirror: "registry.com",
+		},
+		err: "layer \"notfound\" is not present in previous metadata",
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			meta := v1alpha1.Metadata{
+				MetadataSpec: v1alpha1.MetadataSpec{
+					PastMirrors: v1alpha1.PastMirrors{
+						{
+							Sequence: 1,
+							Blobs: []v1alpha1.Blob{
+								{
+									ID:            "found",
+									NamespaceName: "test1/baz",
+								},
+							},
+						},
+						{
+							Sequence: 2,
+							Blobs: []v1alpha1.Blob{
+								{
+									ID:            "found",
+									NamespaceName: "test2/baz",
+								},
+							},
+						},
+						{
+							Sequence: 3,
+							Blobs: []v1alpha1.Blob{
+								{
+									ID:            "found",
+									NamespaceName: "test3/baz",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			ref, err := test.options.findBlobRepo(meta, test.digest)
+			if len(test.err) != 0 {
+				require.Equal(t, err.Error(), test.err)
+			} else {
+				require.Equal(t, test.expected, ref)
+			}
+		})
 	}
 }
 

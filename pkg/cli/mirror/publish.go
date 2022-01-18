@@ -636,7 +636,6 @@ func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 
 func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
-	var ref string
 	for _, mirror := range meta.PastMirrors {
 		for _, blob := range mirror.Blobs {
 			if blob.ID == layerDigest {
@@ -645,10 +644,9 @@ func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string)
 			}
 		}
 	}
-	if len(o.UserNamespace) != 0 {
-		ref = fmt.Sprintf("%s/%s/%s", o.ToMirror, o.UserNamespace, namespacename)
-	} else {
-		ref = fmt.Sprintf("%s/%s", o.ToMirror, namespacename)
+	if namespacename == "" {
+		return imagesource.TypedImageReference{}, fmt.Errorf("layer %q is not present in previous metadata", layerDigest)
 	}
+	ref := path.Join(o.ToMirror, o.UserNamespace, namespacename)
 	return imagesource.ParseReference(ref)
 }
