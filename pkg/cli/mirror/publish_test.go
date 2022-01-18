@@ -140,7 +140,7 @@ func TestFindBlobRepo(t *testing.T) {
 		expected imagesource.TypedImageReference
 		err      string
 	}{{
-		name:   "Valid/NoUsernamespace",
+		name:   "Valid/NoUserNamespace",
 		digest: "found",
 		options: MirrorOptions{
 			ToMirror: "registry.com",
@@ -154,7 +154,7 @@ func TestFindBlobRepo(t *testing.T) {
 			},
 		},
 	}, {
-		name:   "Valid/UsernamespaceAdded",
+		name:   "Valid/UserNamespaceAdded",
 		digest: "found",
 		options: MirrorOptions{
 			ToMirror:      "registry.com",
