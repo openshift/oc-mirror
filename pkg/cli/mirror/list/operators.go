@@ -30,7 +30,7 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 
 	cmd := &cobra.Command{
 		Use:   "operators",
-		Short: "List available operator content and their version",
+		Short: "List available operator catalog content and versions",
 		Example: templates.Examples(`
 			# Output default operator catalogs for OpenShift release 4.8
 			oc-mirror list operators --catalogs --version=4.8

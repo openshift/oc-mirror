@@ -37,7 +37,11 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "updates",
-		Short: "List available updates from upstream sources",
+		Short: "List available updates in upgrade graph from upstream sources",
+		Long: templates.LongDesc(`
+		List available updates in the upgrade graph for releases and operators from upstream sources
+		based on current state. A storage configuration must be specified to use this command.
+	`),
 		Example: templates.Examples(`
 			# List updates between remote and current workspace
 			oc-mirror list updates --config mirror-config.yaml
@@ -98,7 +102,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 
 func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) error {
 	uuid := uuid.New()
-	// QUESTION(jpower): Handle multiple arch?
+	// TODO(jpower432): handle multi-arch requests here
 	arch := "amd64"
 	logrus.Info("Getting release update information")
 	for _, ch := range cfg.Mirror.OCP.Channels {
@@ -196,7 +200,7 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageS
 			return err
 		}
 
-		if err := o.writeCatalogColumns(*dc); err != nil {
+		if err := o.writeCatalogColumns(*dc, ctlg.Catalog); err != nil {
 			return err
 		}
 	}
@@ -204,6 +208,12 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageS
 }
 
 func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, channel string) error {
+	if len(upgrades) == 0 {
+		if _, err := fmt.Fprintf(os.Stdout, "No updates found for release channel %s\n", channel); err != nil {
+			return err
+		}
+		return nil
+	}
 	tw := tabwriter.NewWriter(o.IOStreams.Out, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintf(tw, "TARGET CHANNEL:\t%s\n", channel); err != nil {
 		return err
@@ -219,8 +229,17 @@ func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, channel s
 	return tw.Flush()
 }
 
-func (o UpdatesOptions) writeCatalogColumns(dc declcfg.DeclarativeConfig) error {
+func (o UpdatesOptions) writeCatalogColumns(dc declcfg.DeclarativeConfig, catalog string) error {
+	if len(dc.Packages) == 0 {
+		if _, err := fmt.Fprintf(os.Stdout, "No updates found for catalog %s\n", catalog); err != nil {
+			return err
+		}
+		return nil
+	}
 	tw := tabwriter.NewWriter(o.IOStreams.Out, 0, 4, 2, ' ', 0)
+	if _, err := fmt.Fprintf(tw, "Listing update for catalog:\t%s", catalog); err != nil {
+		return err
+	}
 	if _, err := fmt.Fprintln(tw, "PACKAGE\tCHANNEL\tBUNDLE\tREPLACES"); err != nil {
 		return err
 	}
