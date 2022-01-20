@@ -54,7 +54,7 @@ between the last `oc mirror` run and provided configuration to show what new ver
    ```
 2. List all available release channels to query for a version of OpenShift
    ```sh
-   oc-mirror list releases --channels --version=4.8
+   oc-mirror list releases --channels --version=4.9
    ```
 3. List all available release payloads for a version of OpenShift in a specific channel
    ```sh

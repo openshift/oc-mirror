@@ -3,18 +3,18 @@
 # oc-mirror Design Overview
 
 ## Summary 
-oc-mirror assists with lifecycle management of internet-disconnected OpenShift environments by performing differential update operations and synchronization between internet-connected and internet-disconnected environments.   
+oc-mirror assists with lifecycle management of mirror registries that support OpenShift environments by performing differential update operations and synchronizations.   
   
 ## Features
 1. Differential Synchronization of OpenShift Release Images
 2. Differential Synchronization of Operator images
-3. Synchronization of OpenShift cincinnati graph data image
+3. Synchronization of OpenShift cincinnati graph data image (planned)
 4. Synchronization of OpenShift Release images by version or channel latest
-5. Synchronization of Operator Images by full catalog and full catalog at latest operator versions. Also, allows for synchronization of individual operators by version or channel head.
+5. Synchronization of Operator Images by full catalog and full catalog at latest operator versions. Also, allows for synchronization of individual operators by version to channel(s') HEAD.
 6. Synchronization of helm charts
 7. Synchronization of additional images
 8. Remote state backends
-9. Base image filtering
+9. Base image filtering (planned)
 10. (multi) Cluster resource management
 
 ## Design Considerations
@@ -22,7 +22,7 @@ oc-mirror assists with lifecycle management of internet-disconnected OpenShift e
 2. Stateful - Differential operations require tracking downloaded versions and calculating upgrade paths based on previous application runs. State must persist between execution environments.
 3. One-way synchronization - Some internet-disconnected environments are considered confidential and cannot tolerate data spillage from the disconnected environment to any internet connected networks. oc-mirror only synchronizes differential state from internet-connected environments to internet-disconnected environments. oc-mirror assumes that no data can traverse from an internet-disconnected environment to an internet-connected environment at any time. 
 4. User Workloads -  oc-mirror synchronizes helm charts and arbitrary images to streamline the importation of user workloads into their OpenShift deployments. 
-5. Internet Connected Experience - Operator Lifecycle Manager, OpenShift Update Service, Advanced Cluster Management, and oc-mirror; in concert, can facilitate user experience parity with that of internet-connected environments. This ux is achieved by updating cluster resources during the publishing phase of oc-mirror. 
+5. Internet Connected Experience - Operator Lifecycle Manager, OpenShift Update Service, Advanced Cluster Management, and oc-mirror; in concert, can facilitate user experience parity with that of internet-connected environments. This ux is achieved by updating cluster resources during the publishing phase of oc-mirror(planned). 
 6. Artifact Size - oc-mirror attempts to reduce the size of artifacts passed from the internet-connected environment to the internet-disconnected environment. These efficiencies are addressed at two levels: Differential version updates and Differential image layer updates. These artifacts can be further subdivided into user-defined file sizes. During each phase of operation, every effort has been made to reduce duplication of content on disk while contents traverse between image registries and imagesets. Due to image validation requirements, network utilization remains the most inefficient aspect of oc-mirror.
 7. Wide Applicability - oc-mirror provides a means to synchronize container image content for limited connectivity deployments of containerized edge, IoT, and AI/ML offerings. 
 
@@ -82,29 +82,3 @@ During the “publish diff” phase for differential updates:
 5. Output cluster ICSPs / Catalog Source / Cincinnati
 6. Optionally update (multi) cluster ICSPs / Catalog Source / Cincinnati 
 7. Update backend metadata
-
-## Project Milestone Overview
-
-#### Alpha1 - Baseline project structure and behavior
-
-1. Release synchronization (full)
-2. Operator synchronization (full)  
-3. Additional Image synchronization (full)  
-4. Base image filtering (rough)  
-5. GitHub Actions e2e tests automated  
-
-#### Alpha2 - Feature Inclusivity
-1. Operator synchronization (diff)
-2. Helm synchronization
-3. Speed improvements
-4. Archive improvements
-
-#### Alpha3 - UX refinement
-1. Refactor CLI commands
-2. Remote backends
-3. Release synchronization (diff)
-4. Prow tests
-
-#### Tech Preview - Bug Fixes  
-
-#### After - Cluster resource management / cincinnati graph image handling/ publish from s3 / enhanced base image filtering

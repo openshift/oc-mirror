@@ -1,3 +1,7 @@
+# This example demonstrates how to mirror a helm chart
+# and all referenced images within that chart. A version
+# must be specified for the chart.
+---
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
@@ -8,7 +12,4 @@ mirror:
         charts:
           - name: podinfo
             version: 5.0.0
-    local:
-      - name: podinfo-local
-        path: /home/user/podinfo-6.0.0.tgz
         

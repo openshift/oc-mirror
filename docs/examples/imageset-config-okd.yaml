@@ -1,3 +1,7 @@
+# This example demonstrates how to mirror a specific
+# okd release. Optionally, omit the version to mirror
+# the latest release.
+---
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
@@ -5,5 +9,4 @@ mirror:
     channels:
       - name: okd
         versions:
-        - '4.8.0-0.okd-2021-10-10-030117'
-    graph: true
+        - '4.10.0-0.okd-2022-01-20-011141'

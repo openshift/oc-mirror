@@ -7,7 +7,7 @@ storageConfig:
 mirror:
   ocp:
     channels:
-      - name: stable-4.8 # References latest stable release
+      - name: stable-4.9 # References latest stable release
       - name: stable-4.7 # Version annotation references version, does not pull latest
         versions:
           - '4.7.18'

@@ -1,11 +1,20 @@
+# This config demonstrates how to configure a
+# backend storage location to store oc-mirror 
+# metadata. OCI registries or local filesystems
+# can be used. Optionally, replace the registry
+# subkey with "local" and add a path subkey under
+# local to specify a local backend.
+---
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 storageConfig:
   registry:
-    imageURL: localhost:5000/test:latest
-    skipTLS: true
+    imageURL: localhost:5000/namespace/target
+    skipTLS: false
+  #local:
+  #  path: /path/to/dir
 mirror:
   ocp:
     channels:
-      - name: stable-4.8
+      - name: stable-4.9
     graph: true
