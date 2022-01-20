@@ -41,7 +41,7 @@ func TestBuildCatalogLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	o := &MirrorOptions{
-		DestSkipTLS:   true,
+		DestPlainHTTP: true,
 		UserNamespace: "custom",
 	}
 	require.NoError(t, o.buildCatalogLayer(context.Background(), targetRef, targetRef, t.TempDir(), []v1.Layer{add, delete}...))

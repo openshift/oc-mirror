@@ -18,10 +18,17 @@ import (
 
 type AdditionalOptions struct {
 	*MirrorOptions
+	// insecure indicates whether the source
+	// registry is insecure
+	insecure bool
 }
 
 func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
-	return &AdditionalOptions{MirrorOptions: mo}
+	opts := &AdditionalOptions{MirrorOptions: mo}
+	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
+		opts.insecure = true
+	}
+	return opts
 }
 
 type ErrBlocked struct {
@@ -33,11 +40,11 @@ func (e ErrBlocked) Error() string {
 }
 
 // GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (assocs image.AssociationSet, err error) {
+func (o *AdditionalOptions) GetAdditional(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (assocs image.AssociationSet, err error) {
 
 	opts := mirror.NewMirrorImageOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
-	opts.SecurityOptions.Insecure = o.SourceSkipTLS
+	opts.SecurityOptions.Insecure = o.insecure
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
 	opts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
@@ -49,7 +56,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 	assocMappings := make(map[string]string, len(imageList))
 	for i, img := range imageList {
 
-		regctx, err := config.CreateDefaultContext(o.SourceSkipTLS)
+		regctx, err := config.CreateDefaultContext(o.insecure)
 		if err != nil {
 			return nil, fmt.Errorf("error creating registry context: %v", err)
 		}
@@ -82,7 +89,7 @@ func (o *AdditionalOptions) GetAdditional(cfg v1alpha1.ImageSetConfiguration, im
 
 		// Add mapping and image for image association.
 		// The registry component is not included in the final path.
-		srcImage, err := bundle.PinImages(context.TODO(), srcRef.Ref.Exact(), "", o.SourceSkipTLS)
+		srcImage, err := bundle.PinImages(ctx, srcRef.Ref.Exact(), "", o.SourceSkipTLS, o.SourcePlainHTTP)
 		if err != nil {
 			return nil, err
 		}

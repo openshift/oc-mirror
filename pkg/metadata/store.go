@@ -15,12 +15,12 @@ import (
 
 // UpdateMetadata runs some reconciliation functions on Metadata to ensure its state is consistent
 // then uses the Backend to update the metadata storage medium.
-func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, insecure bool) error {
+func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, skipTLSVerify, plainHTTP bool) error {
 
 	var operatorErrs []error
 	for mi, mirror := range meta.PastMirrors {
 		for _, operator := range mirror.Mirror.Operators {
-			operatorMeta, err := resolveOperatorMetadata(ctx, operator, backend, insecure)
+			operatorMeta, err := resolveOperatorMetadata(ctx, operator, backend, skipTLSVerify, plainHTTP)
 			if err != nil {
 				operatorErrs = append(operatorErrs, err)
 				continue
@@ -41,10 +41,10 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1
 	return nil
 }
 
-func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, backend storage.Backend, insecure bool) (operatorMeta v1alpha1.OperatorMetadata, err error) {
+func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, backend storage.Backend, skipTLSVerify, plainHTTP bool) (operatorMeta v1alpha1.OperatorMetadata, err error) {
 	operatorMeta.Catalog = operator.Catalog
 
-	resolver, err := containerdregistry.NewResolver("", insecure, nil)
+	resolver, err := containerdregistry.NewResolver("", skipTLSVerify, plainHTTP, nil)
 	if err != nil {
 		return v1alpha1.OperatorMetadata{}, fmt.Errorf("error creating image resolver: %v", err)
 	}

@@ -35,15 +35,22 @@ type ReleaseOptions struct {
 	release string
 	arch    []string
 	uuid    uuid.UUID
+	// insecure indicates whether the source
+	// registry is insecure
+	insecure bool
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
 func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
-	return &ReleaseOptions{
+	relOpts := &ReleaseOptions{
 		MirrorOptions: mo,
 		arch:          mo.FilterOptions,
 		uuid:          uuid.New(),
 	}
+	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
+		relOpts.insecure = true
+	}
+	return relOpts
 }
 
 // GetReleases will pill release payloads based on user configuration
@@ -89,7 +96,7 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 		}
 	}
 
-	assocs, err := o.mirror(srcDir, releaseDownloads)
+	assocs, err := o.mirror(ctx, srcDir, releaseDownloads)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +181,7 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 }
 
 // mirror will take the prepared download information and mirror to disk location
-func (o *ReleaseOptions) mirror(toDir string, downloads map[string]download) (image.AssociationSet, error) {
+func (o *ReleaseOptions) mirror(ctx context.Context, toDir string, downloads map[string]download) (image.AssociationSet, error) {
 	allAssocs := image.AssociationSet{}
 
 	for img, download := range downloads {
@@ -182,13 +189,13 @@ func (o *ReleaseOptions) mirror(toDir string, downloads map[string]download) (im
 		opts := release.NewMirrorOptions(o.IOStreams)
 		opts.ToDir = toDir
 
-		regctx, err := config.CreateDefaultContext(o.SourceSkipTLS)
+		regctx, err := config.CreateDefaultContext(o.insecure)
 		if err != nil {
 			return nil, fmt.Errorf("error creating registry context: %v", err)
 		}
 		opts.SecurityOptions.CachedContext = regctx
 
-		opts.SecurityOptions.Insecure = o.SourceSkipTLS
+		opts.SecurityOptions.Insecure = o.insecure
 		opts.SecurityOptions.SkipVerification = o.SkipVerification
 		opts.DryRun = o.DryRun
 		opts.From = img
@@ -199,7 +206,7 @@ func (o *ReleaseOptions) mirror(toDir string, downloads map[string]download) (im
 		// Do not build associations on dry runs because there are no manifests
 		if !o.DryRun {
 			// Retrieve the mapping information for release
-			mapping, images, err := o.getMapping(*opts, download.arch, download.Version.String())
+			mapping, images, err := o.getMapping(ctx, *opts, download.arch, download.Version.String())
 
 			if err != nil {
 				return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
@@ -232,7 +239,7 @@ func (o *ReleaseOptions) mirror(toDir string, downloads map[string]download) (im
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version string) (mappings map[string]string, images []string, err error) {
+func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOptions, arch, version string) (mappings map[string]string, images []string, err error) {
 
 	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
 	file, err := os.Create(mappingPath)
@@ -274,7 +281,7 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions, arch, version st
 		// afflom - Select on ocp-release OR origin
 		if strings.Contains(srcRef, "ocp-release") || strings.Contains(srcRef, "origin/release") {
 			if !image.IsImagePinned(srcRef) {
-				srcRef, err = bundle.PinImages(context.TODO(), srcRef, "", o.SourceSkipTLS)
+				srcRef, err = bundle.PinImages(ctx, srcRef, "", o.SourceSkipTLS, o.SourcePlainHTTP)
 			}
 			o.release = srcRef
 		}

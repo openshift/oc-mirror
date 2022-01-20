@@ -229,13 +229,17 @@ func (o *MirrorOptions) getRemoteOpts(ctx context.Context) []remote.Option {
 }
 
 func (o *MirrorOptions) getNameOpts() (options []name.Option) {
-	if o.DestSkipTLS {
+	if o.DestSkipTLS || o.DestPlainHTTP {
 		options = append(options, name.Insecure)
 	}
 	return options
 }
 
 func (o *MirrorOptions) createRT() http.RoundTripper {
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -251,7 +255,7 @@ func (o *MirrorOptions) createRT() http.RoundTripper {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: o.DestSkipTLS,
+			InsecureSkipVerify: insecure,
 		},
 	}
 }

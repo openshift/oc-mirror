@@ -72,6 +72,10 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	var currentMeta v1alpha1.Metadata
 	var incomingMeta v1alpha1.Metadata
 	a := archive.NewArchiver()
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
 
 	// Set target dir for resulting artifacts
 	if o.OutputDir == "" {
@@ -141,7 +145,7 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		cfg := v1alpha1.StorageConfig{
 			Registry: &v1alpha1.RegistryConfig{
 				ImageURL: metaImage,
-				SkipTLS:  o.DestSkipTLS,
+				SkipTLS:  insecure,
 			},
 		}
 		backend, err = storage.ByConfig(o.Dir, cfg)
@@ -490,8 +494,11 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 }
 
 func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
-
-	restctx, err := config.CreateDefaultContext(o.DestSkipTLS)
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
+	restctx, err := config.CreateDefaultContext(insecure)
 	if err != nil {
 		return err
 	}
@@ -514,9 +521,12 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
 func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
-
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
-	repo, err := restctx.RepositoryForRef(ctx, ref, o.DestSkipTLS)
+	repo, err := restctx.RepositoryForRef(ctx, ref, insecure)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
 	}
@@ -569,8 +579,12 @@ func mktempDir(dir string) (func(), string, error) {
 // QUESTION(jpower): should we just mirror release one by one
 // The namespace is not the same as the image name
 func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
 	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
-	regctx, err := config.CreateDefaultContext(o.DestSkipTLS)
+	regctx, err := config.CreateDefaultContext(insecure)
 	if err != nil {
 		return err
 	}
@@ -578,8 +592,8 @@ func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Comm
 	relOpts.From = mapping.Source.String()
 	relOpts.FromDir = fromDir
 	relOpts.To = mapping.Destination.String()
-	relOpts.SecurityOptions.Insecure = o.DestSkipTLS
 	relOpts.SecurityOptions.CachedContext = regctx
+	relOpts.SecurityOptions.Insecure = insecure
 	relOpts.DryRun = o.DryRun
 	if err := relOpts.Complete(cmd, f, nil); err != nil {
 		return fmt.Errorf("error initializing release mirror options: %v", err)
@@ -596,6 +610,10 @@ func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Comm
 
 // mirrorImages uses the `oc mirror` library to mirror generic images
 func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
 	// Mirror all file sources of each available image type to mirror registry.
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		var srcs []string
@@ -604,7 +622,7 @@ func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string
 		}
 		logrus.Debugf("mirroring generic images: %q", srcs)
 	}
-	regctx, err := config.CreateDefaultContext(o.DestSkipTLS)
+	regctx, err := config.CreateDefaultContext(insecure)
 	if err != nil {
 		return err
 	}
@@ -617,8 +635,8 @@ func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	genOpts.SkipMultipleScopes = true
 	genOpts.KeepManifestList = true
-	genOpts.SecurityOptions.Insecure = o.DestSkipTLS
 	genOpts.SecurityOptions.CachedContext = regctx
+	genOpts.SecurityOptions.Insecure = insecure
 	if err := genOpts.Validate(); err != nil {
 		return fmt.Errorf("invalid image mirror options: %v", err)
 	}

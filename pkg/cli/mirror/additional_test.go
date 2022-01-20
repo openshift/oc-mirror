@@ -89,7 +89,9 @@ func TestGetAdditional(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			assocs, err := opts.GetAdditional(test.cfg, test.cfg.Mirror.AdditionalImages)
+			ctx := context.Background()
+
+			assocs, err := opts.GetAdditional(ctx, test.cfg, test.cfg.Mirror.AdditionalImages)
 			if test.wantErr {
 				testErr := test.want
 				require.ErrorAs(t, err, &testErr)
@@ -98,7 +100,7 @@ func TestGetAdditional(t *testing.T) {
 			}
 
 			if test.imgPin {
-				testerImg, err := bundle.PinImages(context.TODO(), test.cfg.Mirror.AdditionalImages[0].Name, "", false)
+				testerImg, err := bundle.PinImages(ctx, test.cfg.Mirror.AdditionalImages[0].Name, "", false, false)
 				require.NoError(t, err)
 				if assert.Len(t, assocs, 1) {
 					require.Contains(t, assocs, testerImg)
