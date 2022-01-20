@@ -171,9 +171,8 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageS
 		}
 	}
 
-	// QUESTION(jpower): TLS must be configurable?
 	reg, err := containerdregistry.NewRegistry(
-		containerdregistry.SkipTLS(false),
+		containerdregistry.SkipTLSVerify(false),
 		containerdregistry.WithCacheDir(filepath.Join(dstDir, "cache")),
 	)
 	defer reg.Destroy()

@@ -84,7 +84,7 @@ func (o *MirrorOptions) Create(ctx context.Context) error {
 	var backupMeta v1alpha1.Metadata
 	rollbackMeta := func() error {
 		logrus.Error("operation cancelled, initiating metadata rollback")
-		return metadata.UpdateMetadata(ctx, backend, &backupMeta, o.SourceSkipTLS)
+		return metadata.UpdateMetadata(ctx, backend, &backupMeta, o.SourceSkipTLS, o.SourcePlainHTTP)
 	}
 
 	var assocs image.AssociationSet
@@ -134,7 +134,7 @@ func (o *MirrorOptions) Create(ctx context.Context) error {
 	meta.PastBlobs = append(meta.PastBlobs, blobs...)
 
 	// Update the metadata.
-	if err = metadata.UpdateMetadata(ctx, backend, &meta, o.SourceSkipTLS); err != nil {
+	if err = metadata.UpdateMetadata(ctx, backend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 		return err
 	}
 
@@ -196,7 +196,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, cfg *v1alpha1.ImageSetCo
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 		opts := NewAdditionalOptions(o)
-		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
+		assocs, err := opts.GetAdditional(ctx, *cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return allAssocs, err
 		}
@@ -205,7 +205,7 @@ func (o *MirrorOptions) createFull(ctx context.Context, cfg *v1alpha1.ImageSetCo
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
 		opts := NewHelmOptions(o)
-		assocs, err := opts.PullCharts(*cfg)
+		assocs, err := opts.PullCharts(ctx, *cfg)
 		if err != nil {
 			return allAssocs, err
 		}
@@ -245,7 +245,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, cfg *v1alpha1.ImageSetCo
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 		opts := NewAdditionalOptions(o)
-		assocs, err := opts.GetAdditional(*cfg, cfg.Mirror.AdditionalImages)
+		assocs, err := opts.GetAdditional(ctx, *cfg, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return allAssocs, err
 		}
@@ -254,7 +254,7 @@ func (o *MirrorOptions) createDiff(ctx context.Context, cfg *v1alpha1.ImageSetCo
 
 	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
 		opts := NewHelmOptions(o)
-		assocs, err := opts.PullCharts(*cfg)
+		assocs, err := opts.PullCharts(ctx, *cfg)
 		if err != nil {
 			return allAssocs, err
 		}

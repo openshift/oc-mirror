@@ -156,7 +156,8 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 
 	return containerdregistry.NewRegistry(
 		containerdregistry.WithCacheDir(cacheDir),
-		containerdregistry.SkipTLS(o.SourceSkipTLS),
+		containerdregistry.SkipTLSVerify(o.SourceSkipTLS),
+		containerdregistry.WithPlainHTTP(o.SourcePlainHTTP),
 		// The containerd registry impl is somewhat verbose, even on the happy path,
 		// so discard all logger logs. Any important failures will be returned from
 		// registry methods and eventually logged as fatal errors.
@@ -251,7 +252,7 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 	}
 
 	if !o.SkipImagePin {
-		resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, nil)
+		resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, o.SourcePlainHTTP, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating image resolver: %v", err)
 		}

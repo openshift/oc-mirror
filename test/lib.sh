@@ -4,7 +4,7 @@
 # needed to run against a local test registry and provide informative
 # debug data in case of test errors.
 function run_cmd() {
-  local test_flags="--log-level debug --dest-skip-tls --skip-cleanup"
+  local test_flags="--log-level debug --dest-use-http --skip-cleanup"
 
   echo "$CMD" $@ $test_flags
   echo
@@ -150,7 +150,7 @@ function run_full() {
   # Copy the catalog to the connected registry so they can have the same tag
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
    prep_registry false
-  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-skip-tls 
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http 
   pushd $PUBLISH_FULL_DIR
   if [[ -n $ns ]]; then
     NS="/$ns"
@@ -170,7 +170,7 @@ function run_diff() {
   # Copy the catalog to the connected registry so they can have the same tag
   "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_DIFF_DIR" "latest/$config" true
   prep_registry true
-  run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" --source-skip-tls 
+  run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" --source-use-http 
   pushd ${PUBLISH_DIFF_DIR}
   if [[ -n $ns ]]; then
     NS="/$ns"
@@ -195,7 +195,7 @@ function mirror2mirror() {
   else
    NS=""
   fi
-  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" --source-skip-tls 
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" --source-use-http 
   popd
 }
 

@@ -91,12 +91,13 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 		return nil, err
 	}
 
-	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, nil)
+	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, o.DestPlainHTTP, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating image resolver: %v", err)
 	}
 	reg, err := containerdregistry.NewRegistry(
-		containerdregistry.SkipTLS(o.DestSkipTLS),
+		containerdregistry.SkipTLSVerify(o.DestSkipTLS),
+		containerdregistry.WithPlainHTTP(o.DestPlainHTTP),
 		containerdregistry.WithCacheDir(filepath.Join(dstDir, "cache")),
 	)
 	if err != nil {

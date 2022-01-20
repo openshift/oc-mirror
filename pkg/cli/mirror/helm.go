@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,17 +28,23 @@ import (
 type HelmOptions struct {
 	*MirrorOptions
 	settings *helmcli.EnvSettings
+	insecure bool
 }
 
 func NewHelmOptions(mo *MirrorOptions) *HelmOptions {
 	settings := helmcli.New()
-	return &HelmOptions{
+	opts := &HelmOptions{
 		MirrorOptions: mo,
 		settings:      settings,
 	}
+	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
+		opts.insecure = true
+	}
+	return opts
+
 }
 
-func (h *HelmOptions) PullCharts(cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
 
 	var images []v1alpha1.AdditionalImages
 
@@ -58,7 +65,7 @@ func (h *HelmOptions) PullCharts(cfg v1alpha1.ImageSetConfiguration) (image.Asso
 		Verify:  downloader.VerifyNever,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
-			getter.WithInsecureSkipVerifyTLS(h.SourceSkipTLS),
+			getter.WithInsecureSkipVerifyTLS(h.insecure),
 		},
 		RepositoryConfig: h.settings.RepositoryConfig,
 		RepositoryCache:  h.settings.RepositoryCache,
@@ -104,7 +111,7 @@ func (h *HelmOptions) PullCharts(cfg v1alpha1.ImageSetConfiguration) (image.Asso
 
 	// Image download
 	opts := NewAdditionalOptions(h.MirrorOptions)
-	return opts.GetAdditional(cfg, images)
+	return opts.GetAdditional(ctx, cfg, images)
 }
 
 // FindImages will download images found in a Helm chart on disk

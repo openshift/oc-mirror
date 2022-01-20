@@ -5,7 +5,7 @@ GO_BUILD_FLAGS := -tags=json1
 all: clean tidy test-unit build
 
 .PHONY: build
-build: clean
+build: clean tidy
 	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-mirror ./cmd/oc-mirror
 
 .PHONY: tidy
