@@ -28,7 +28,7 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 
 	cmd := &cobra.Command{
 		Use:   "releases",
-		Short: "List available platform content and their version",
+		Short: "List available platform content and versions",
 		Example: templates.Examples(`
 			# Output all OCP release channels list for a release
 			oc-mirror list releases --version=4.8
