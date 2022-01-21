@@ -315,18 +315,26 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			switch assoc.Type {
 			case image.TypeGeneric:
 				genericMappings = append(genericMappings, m)
+				icspData.ICSPType = TypeGeneric
 			case image.TypeOCPRelease:
+				// Remove component info in mapping for
+				// release mirroring step
 				m.Destination.Ref.Tag = ""
 				m.Destination.Ref.ID = ""
 				if strings.Contains(assoc.Name, "ocp-release") {
 					releaseMapping = m
+					// Update destination ref ICSP to match the
+					// default mirror location of releases (openshift/release)
+					m.Destination.Ref.ID = assoc.ID
+					icspData.ICSPMapping[imageRef] = m.Destination.Ref
+					icspData.ICSPType = TypeOCPRelease
 				}
 			case image.TypeOperatorCatalog:
 				genericMappings = append(genericMappings, m)
-				icspData.AddOperatorLabel = true
+				icspData.ICSPType = TypeOperator
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)
-				icspData.AddOperatorLabel = true
+				icspData.ICSPType = TypeOperator
 			case image.TypeInvalid:
 				errs = append(errs, fmt.Errorf("image %q: image type is not set", imageName))
 			default:
@@ -378,9 +386,9 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	// the source image does not exist and destination image was built above.
 	for sourceRef, destRef := range ctlgRefs {
 		icspData := ICSPGenerator{
-			ICSPMapping:      map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef},
-			ImageName:        sourceRef.Name,
-			AddOperatorLabel: true,
+			ICSPMapping: map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef},
+			ImageName:   sourceRef.Name,
+			ICSPType:    TypeOperator,
 		}
 		namedICSPData[sourceRef.Name] = icspData
 

@@ -17,12 +17,21 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+type ICSPType int
+
+const (
+	// Generic ICSP is the default type
+	TypeGeneric ICSPType = iota
+	TypeOCPRelease
+	TypeOperator
+)
+
 // Copied from https://github.com/openshift/oc/blob/5d8dfa1c2e8e7469d69d76f21e0a166a0de8663b/pkg/cli/admin/catalog/mirror.go#L549
 // Changes made are breaking ICSP and Catalog Source generation into different functions
 type ICSPGenerator struct {
-	ImageName        string
-	AddOperatorLabel bool
-	ICSPMapping      map[reference.DockerImageReference]reference.DockerImageReference
+	ImageName   string
+	ICSPMapping map[reference.DockerImageReference]reference.DockerImageReference
+	ICSPType    ICSPType
 }
 
 func (g *ICSPGenerator) init() {
@@ -50,7 +59,7 @@ func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1
 			},
 		}
 
-		if g.AddOperatorLabel {
+		if g.ICSPType == TypeOperator {
 			icsp.Labels = map[string]string{
 				"operators.openshift.org/catalog": "true",
 			}
@@ -61,6 +70,15 @@ func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1
 				Source:  key,
 				Mirrors: []string{registryMapping[key]},
 			})
+
+			// FIXME(jpower432): add this as a workaround until
+			// mirroring individual images for release is implemented
+			if g.ICSPType == TypeOCPRelease {
+				icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
+					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+					Mirrors: []string{registryMapping[key]},
+				})
+			}
 
 			y, err := yaml.Marshal(icsp)
 			if err != nil {
