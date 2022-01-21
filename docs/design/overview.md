@@ -10,7 +10,7 @@ oc-mirror assists with lifecycle management of mirror registries that support Op
 2. Differential Synchronization of Operator images
 3. Synchronization of OpenShift cincinnati graph data image (planned)
 4. Synchronization of OpenShift Release images by version or channel latest
-5. Synchronization of Operator Images by full catalog and full catalog at latest operator versions. Also, allows for synchronization of individual operators by version to channel(s') HEAD.
+5. Synchronization of Operator Images by full catalog and full catalog at latest (HEAD) operator versions. Also, allows for synchronization of individual operators by version to each channels' HEAD.
 6. Synchronization of helm charts
 7. Synchronization of additional images
 8. Remote state backends
@@ -22,7 +22,7 @@ oc-mirror assists with lifecycle management of mirror registries that support Op
 2. Stateful - Differential operations require tracking downloaded versions and calculating upgrade paths based on previous application runs. State must persist between execution environments.
 3. One-way synchronization - Some internet-disconnected environments are considered confidential and cannot tolerate data spillage from the disconnected environment to any internet connected networks. oc-mirror only synchronizes differential state from internet-connected environments to internet-disconnected environments. oc-mirror assumes that no data can traverse from an internet-disconnected environment to an internet-connected environment at any time. 
 4. User Workloads -  oc-mirror synchronizes helm charts and arbitrary images to streamline the importation of user workloads into their OpenShift deployments. 
-5. Internet Connected Experience - Operator Lifecycle Manager, OpenShift Update Service, Advanced Cluster Management, and oc-mirror; in concert, can facilitate user experience parity with that of internet-connected environments. This ux is achieved by updating cluster resources during the publishing phase of oc-mirror(planned). 
+5. Internet Connected Experience - Operator Lifecycle Manager, OpenShift Update Service, Advanced Cluster Management, and oc-mirror; in concert, can facilitate user experience parity with that of internet-connected environments. This ux is achieved by updating cluster resources during the publishing phase of oc-mirror (planned). 
 6. Artifact Size - oc-mirror attempts to reduce the size of artifacts passed from the internet-connected environment to the internet-disconnected environment. These efficiencies are addressed at two levels: Differential version updates and Differential image layer updates. These artifacts can be further subdivided into user-defined file sizes. During each phase of operation, every effort has been made to reduce duplication of content on disk while contents traverse between image registries and imagesets. Due to image validation requirements, network utilization remains the most inefficient aspect of oc-mirror.
 7. Wide Applicability - oc-mirror provides a means to synchronize container image content for limited connectivity deployments of containerized edge, IoT, and AI/ML offerings. 
 

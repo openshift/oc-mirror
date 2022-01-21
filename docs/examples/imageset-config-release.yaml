@@ -9,4 +9,4 @@ mirror:
     channels:
       - name: stable-4.9
         versions:
-        - 4.9.13
+          - 4.9.13
