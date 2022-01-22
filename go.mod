@@ -11,6 +11,7 @@ require (
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
 	github.com/google/go-containerregistry v0.8.0
 	github.com/google/uuid v1.2.0
+	github.com/imdario/mergo v0.3.12
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
@@ -18,7 +19,7 @@ require (
 	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
 	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
-	github.com/operator-framework/operator-registry v1.19.6-0.20211214163458-6b066493052b
+	github.com/operator-framework/operator-registry v1.19.6-0.20220120140729-354cd3851678
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.3.0
@@ -40,7 +41,6 @@ require (
 replace (
 	//github.com/Microsoft/hcsshim => github.com/Microsoft/hcsshim v0.8.7
 	github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
-	github.com/operator-framework/operator-registry => github.com/jpower432/operator-registry v1.19.6-0.20220120155051-56dc37d68c9e
 	k8s.io/apimachinery => github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9
 	k8s.io/cli-runtime => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68

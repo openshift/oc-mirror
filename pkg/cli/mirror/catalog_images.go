@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/operator"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -129,7 +130,8 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 				return nil, err
 			}
 			// Remove any duplicate objects
-			if err := action.TwoWay.MergeDC(dc); err != nil {
+			merger := &operator.TwoWayStrategy{}
+			if err := merger.Merge(dc); err != nil {
 				return nil, err
 			}
 			dcDirToBuild = filepath.Join(dcDir, "rendered")
