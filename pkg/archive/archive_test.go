@@ -14,7 +14,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-/* FIXME(jpower): known issue with many small files
+/* FIXME(jpower432): known issue with many small files
 the tar size will end up larger than specified by the
  user because of the tar header being written*/
 

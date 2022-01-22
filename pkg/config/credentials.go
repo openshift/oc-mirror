@@ -10,10 +10,11 @@ import (
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 )
 
+// TODO: create a context based on user provided
+// pull secret
+
 // CreateDefault a default context for the registryClient of `oc mirror`
 func CreateDefaultContext(skipTLS bool) (*registryclient.Context, error) {
-	// TODO: create a context based on user provided
-	// pull secret
 	opts := &imagemanifest.SecurityOptions{}
 	opts.Insecure = skipTLS
 

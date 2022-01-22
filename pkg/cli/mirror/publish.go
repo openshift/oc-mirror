@@ -166,11 +166,8 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			return &SequenceError{1, incomingRun.Sequence}
 		}
 	default:
-		// UUID check removed because the image is stored as
-		// UUID name. A mismatch will now be seen as a new workspace.
-		// TODO: Add a way show the user what UUID images existing in the registry?
-
 		// Complete metadata checks
+		// UUID mismatch will now be seen as a new workspace.
 		logrus.Debug("Check metadata sequence number")
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
@@ -584,8 +581,7 @@ func mktempDir(dir string) (func(), string, error) {
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
-// QUESTION(jpower): should we just mirror release one by one
-// The namespace is not the same as the image name
+// TODO(jpower432): refactor to mirror release images as individual images
 func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {

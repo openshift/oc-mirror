@@ -344,9 +344,6 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 	// for the first recursion leaf since image manifest layers always contain id's,
 	// so unroll this component into AssociateImageLayers.
 
-	// FIXME(jpower): some of the mappings are passing a tag that are
-	// not actually a symlinks on disk. Need to investigate why we
-	// receiving invalid mapping and their meaning.
 	info, err := os.Lstat(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, &ErrInvalidComponent{image, tagOrID}

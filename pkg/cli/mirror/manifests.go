@@ -73,6 +73,7 @@ func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1
 
 			// FIXME(jpower432): add this as a workaround until
 			// mirroring individual images for release is implemented
+			// add OCP component image location to all release ICSPs
 			if g.ICSPType == TypeOCPRelease {
 				icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
 					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
