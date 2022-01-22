@@ -14,7 +14,7 @@ func TestICSPGeneration(t *testing.T) {
 		name        string
 		sourceImage reference.DockerImageReference
 		destImage   reference.DockerImageReference
-		typ         ICSPType
+		typ         icspType
 		expected    []operatorv1alpha1.ImageContentSourcePolicy
 		err         string
 	}{{
@@ -31,7 +31,7 @@ func TestICSPGeneration(t *testing.T) {
 			Name:      "image",
 			ID:        "digest",
 		},
-		typ: TypeOperator,
+		typ: typeOperator,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
@@ -95,7 +95,7 @@ func TestICSPGeneration(t *testing.T) {
 			Name:      "image",
 			ID:        "digest",
 		},
-		typ: TypeOCPRelease,
+		typ: typeOCPRelease,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
@@ -135,12 +135,12 @@ func TestICSPGeneration(t *testing.T) {
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gen := ICSPGenerator{
-				ImageName: test.sourceImage.Exact(),
-				ICSPMapping: map[reference.DockerImageReference]reference.DockerImageReference{
+			gen := icspGenerator{
+				imageName: test.sourceImage.Exact(),
+				icspMapping: map[reference.DockerImageReference]reference.DockerImageReference{
 					test.sourceImage: test.destImage,
 				},
-				ICSPType: test.typ,
+				icspType: test.typ,
 			}
 			icsps, err := gen.Run(icspScope, icspSizeLimit)
 			require.NoError(t, err)
