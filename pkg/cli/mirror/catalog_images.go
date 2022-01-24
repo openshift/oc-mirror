@@ -119,7 +119,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 
 		// Check push permissions before trying to resolve for Quay compatibility
 		var nameOpts []name.Option
-		if o.DestSkipTLS {
+		if o.DestSkipTLS || o.DestPlainHTTP {
 			nameOpts = append(nameOpts, name.Insecure)
 		}
 		ref, err := name.ParseReference(refExact, nameOpts...)
