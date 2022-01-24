@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -29,7 +30,6 @@ const (
 // Copied from https://github.com/openshift/oc/blob/5d8dfa1c2e8e7469d69d76f21e0a166a0de8663b/pkg/cli/admin/catalog/mirror.go#L549
 // Changes made are breaking ICSP and Catalog Source generation into different functions
 type icspGenerator struct {
-	imageName   string
 	icspMapping map[reference.DockerImageReference]reference.DockerImageReference
 	icspType    icspType
 }
@@ -40,13 +40,13 @@ func (g *icspGenerator) init() {
 	}
 }
 
-func (g *icspGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+func (g *icspGenerator) Run(icspName, icspScope string, byteLimit int) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
 	g.init()
 
 	registryMapping := getRegistryMapping(icspScope, g.icspMapping)
 
 	for icspCount := 0; len(registryMapping) != 0; icspCount++ {
-		name := strings.Join(strings.Split(g.imageName, "/"), "-") + "-" + strconv.Itoa(icspCount)
+		name := strings.Join(strings.Split(icspName, "/"), "-") + "-" + strconv.Itoa(icspCount)
 		icsp := operatorv1alpha1.ImageContentSourcePolicy{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
@@ -121,11 +121,20 @@ func getRegistryMapping(icspScope string, mapping map[reference.DockerImageRefer
 			logrus.Warnf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
-		if icspScope == "registry" {
+
+		switch {
+		case icspScope == "registry":
 			registryMapping[k.Registry] = v.Registry
-		} else {
+		case icspScope == "namespace" && k.Namespace == "":
+			fallthrough
+		case icspScope == "repository":
 			registryMapping[k.AsRepository().String()] = v.AsRepository().String()
+		case icspScope == "namespace":
+			source := path.Join(k.Registry, k.Namespace)
+			dest := path.Join(v.Registry, v.Namespace)
+			registryMapping[source] = dest
 		}
+
 	}
 	return registryMapping
 }
