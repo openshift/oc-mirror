@@ -1,10 +1,23 @@
+# This config demonstrates how to mirror a single operator. By
+# specifying a startingVersion, that version and every version to the
+# specified channel's latest (HEAD) version will be mirrored. 
+
+# If a package is specified with no startingVersion or channel, all
+# versions within every channel of the specified package will be mirrored.
+
+# Alternatively, omit the channel and leave the startingVersion and all 
+# higher versions within every channel the startingVersion exists within 
+# the specified package will be mirrored.
+---
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
   ocp:
   operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.9
       headsOnly: false
       packages:
         - name: elasticsearch-operator
-          startingVersion: '5.2.3-31'
+          startingVersion: '5.3.2-20'
+          channels:
+            - name: stable

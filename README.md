@@ -1,7 +1,4 @@
 # oc-mirror
-
-**This repo is under active development. CLI and APIs are unstable**
-
 - [oc-mirror](#oc-mirror)
   - [Usage](#usage)
     - [Configuration Examples](#configuration-examples)
@@ -18,14 +15,14 @@
     - [Build](#build)
     - [Test](#test)
 
-`oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images.
+`oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images for mirror registries that support OpenShift environments.
 ## Usage
 [![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
 
 The mirror registry `reg.mirror.com` is used in this example.
 Replace this value with a real registry host, or create a `docker.io/library/registry:2` container locally.\
 
-> DISCLAIMER: `oc-mirror` is not compatible with Quay under version 3.6.
+> DISCLAIMER: `oc-mirror` is not compatible with Quay below version 3.6.
 
 ### Configuration Examples
 
@@ -71,7 +68,7 @@ storageConfig:
    ```
 2. List all available channels to query for a version of OpenShift
    ```sh
-   ./bin/oc-mirror list releases --channels --version=4.8
+   ./bin/oc-mirror list releases --channels --version=4.9
    ```
 3. List all available release payloads for a version of OpenShift in a specified channel
    ```sh

@@ -1,3 +1,7 @@
+# This config uses the headsOnly feature which will mirror the 
+# latest version of each channel within each package contained 
+# within a specified operator catalog
+---
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 mirror:
