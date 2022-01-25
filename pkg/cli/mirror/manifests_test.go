@@ -117,10 +117,6 @@ func TestICSPGeneration(t *testing.T) {
 						Source:  "some-registry/namespace/image",
 						Mirrors: []string{"disconn-registry/namespace/image"},
 					},
-					{
-						Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
-						Mirrors: []string{"disconn-registry/namespace/image"},
-					},
 				},
 			},
 		},
