@@ -1,40 +1,30 @@
 package mirror
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
-// archMap maps Go architecture strings to OpenShift supported values for any that differ.
-var archMap = map[string]string{
-	"amd64": "x86_64",
-}
-
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
 	*MirrorOptions
-	release string
-	arch    []string
-	uuid    uuid.UUID
+	arch []string
+	uuid uuid.UUID
 	// insecure indicates whether the source
 	// registry is insecure
 	insecure bool
@@ -202,36 +192,26 @@ func (o *ReleaseOptions) mirror(ctx context.Context, toDir string, downloads map
 		if err := opts.Validate(); err != nil {
 			return nil, err
 		}
+
+		// Create release mapping and get images list
+		// before mirroring actions
+		mappings, images, err := o.getMapping(ctx, *opts)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
+		}
+
+		// Complete mirroring actions
 		if err := opts.Run(); err != nil {
 			return nil, err
 		}
 
 		// Do not build associations on dry runs because there are no manifests
 		if !o.DryRun {
-			// Retrieve the mapping information for release
-			mapping, images, err := o.getMapping(ctx, *opts, download.arch, download.Version.String())
-
-			if err != nil {
-				return nil, fmt.Errorf("error could not retrieve mapping information: %v", err)
-			}
 
 			logrus.Debugln("starting image association")
-			assocs, err := image.AssociateImageLayers(toDir, mapping, images, image.TypeOCPRelease)
+			assocs, err := image.AssociateImageLayers(toDir, mappings, images, image.TypeOCPRelease)
 			if err != nil {
 				return nil, err
-			}
-
-			// Check if a release image was provided with mapping
-			if o.release == "" {
-				return nil, errors.New("release image not found in mapping")
-			}
-
-			// Update all images associated with a release to the
-			// release images so they form one key set for publishing
-			for _, img := range images {
-				if err := assocs.UpdateKey(img, o.release); err != nil {
-					return nil, err
-				}
 			}
 
 			allAssocs.Merge(assocs)
@@ -242,82 +222,33 @@ func (o *ReleaseOptions) mirror(ctx context.Context, toDir string, downloads map
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOptions, arch, version string) (mappings map[string]string, images []string, err error) {
+func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOptions) (map[string]string, []string, error) {
 
-	mappingPath := filepath.Join(o.Dir, "release-mapping.txt")
+	mappingPath := filepath.Join(o.Dir, mappingFile)
 	file, err := os.Create(mappingPath)
 	defer os.Remove(mappingPath)
 	if err != nil {
-		return mappings, images, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
-	// Run release mirror with ToMirror set to retrieve mapping information
-	// store in buffer for manipulation before outputting to mapping.txt
-	var buffer bytes.Buffer
-	opts.IOStreams.Out = &buffer
+	opts.IOStreams.Out = file
 	opts.ToMirror = true
 
 	if err := opts.Validate(); err != nil {
-		return mappings, images, err
+		return nil, nil, err
 	}
 	if err := opts.Run(); err != nil {
-		return mappings, images, err
+		return nil, nil, err
 	}
 
-	newArch, found := archMap[arch]
-	if found {
-		arch = newArch
-	}
-
-	scanner := bufio.NewScanner(&buffer)
-
-	// Scan mapping output and write to file
-	for scanner.Scan() {
-		text := scanner.Text()
-		idx := strings.LastIndex(text, " ")
-		if idx == -1 {
-			return nil, nil, fmt.Errorf("invalid mapping information for release %v", version)
-		}
-		srcRef := text[:idx]
-		// Get release image name from mapping
-		// Only the top release need to be resolve because all other image key associated to the
-		// will be updated to this value
-		//
-		// afflom - Select on ocp-release OR origin
-		if strings.Contains(srcRef, "ocp-release") || strings.Contains(srcRef, "origin/release") {
-			if !image.IsImagePinned(srcRef) {
-				srcRef, err = bundle.PinImages(ctx, srcRef, "", o.SourceSkipTLS, o.SourcePlainHTTP)
-			}
-			o.release = srcRef
-		}
-
-		// Generate name of target directory
-		dstRef := opts.TargetFn(text[idx+1:]).Exact()
-		nameIdx := strings.LastIndex(dstRef, version)
-		if nameIdx == -1 {
-			return nil, nil, fmt.Errorf("image missing version %s for image %q", version, srcRef)
-		}
-		image := dstRef[nameIdx+len(version):]
-		image = strings.TrimPrefix(image, "-")
-		names := []string{version, arch}
-		if image != "" {
-			names = append(names, image)
-		}
-		dstRef = strings.Join(names, "-")
-
-		// Append mapping file
-		if _, err := file.WriteString(srcRef + "=file://openshift/release:" + dstRef + "\n"); err != nil {
-			return mappings, images, err
-		}
-
-		images = append(images, srcRef)
-	}
-
-	mappings, err = image.ReadImageMapping(mappingPath)
-
+	mappings, err := image.ReadImageMapping(mappingPath, " ")
 	if err != nil {
-		return mappings, images, err
+		return nil, nil, err
+	}
+	var images []string
+	for img, _ := range mappings {
+		images = append(images, img)
 	}
 
 	return mappings, images, nil

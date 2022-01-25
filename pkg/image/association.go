@@ -253,7 +253,7 @@ func (as AssociationSet) validate() error {
 }
 
 // ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func ReadImageMapping(mappingsPath string) (map[string]string, error) {
+func ReadImageMapping(mappingsPath, seperator string) (map[string]string, error) {
 	f, err := os.Open(mappingsPath)
 	if err != nil {
 		return nil, err
@@ -264,7 +264,7 @@ func ReadImageMapping(mappingsPath string) (map[string]string, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		text := scanner.Text()
-		split := strings.Split(text, "=")
+		split := strings.Split(text, seperator)
 		if len(split) != 2 {
 			return nil, fmt.Errorf("mapping %q expected to have exactly one \"=\"", text)
 		}
