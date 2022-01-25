@@ -36,7 +36,7 @@ import (
 
 const (
 	icspSizeLimit = 250000
-	icspScope     = "repository"
+	icspScope     = "namespace"
 )
 
 type UuidError struct {
@@ -166,11 +166,8 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			return &SequenceError{1, incomingRun.Sequence}
 		}
 	default:
-		// UUID check removed because the image is stored as
-		// UUID name. A mismatch will now be seen as a new workspace.
-		// TODO: Add a way show the user what UUID images existing in the registry?
-
 		// Complete metadata checks
+		// UUID mismatch will now be seen as a new workspace.
 		logrus.Debug("Check metadata sequence number")
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
@@ -205,27 +202,29 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
 	)
 
-	namedICSPData := map[string]ICSPGenerator{}
+	releaseICSP := &icspGenerator{
+		icspType:    typeOCPRelease,
+		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
+	}
+	catalogICSP := &icspGenerator{
+		icspType:    typeOperator,
+		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
+	}
+	genericICSP := &icspGenerator{
+		icspType:    typeGeneric,
+		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
+	}
+
 	for _, imageName := range assocs.Keys() {
 
 		genericMappings := []imgmirror.Mapping{}
 		releaseMapping := imgmirror.Mapping{}
 
-		// Save original source and mirror destination mapping to generate ICSP for this image.
+		// Save original source mapping to generate ICSP for this image.
 		imageRef, err := reference.Parse(imageName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing image name %q for ICSP generation: %v", imageName, err))
 			continue
-		}
-		dstRef := imageRef
-		dstRef.Registry = toMirrorRef.Ref.Registry
-		dstRef.Namespace = path.Join(o.UserNamespace, dstRef.Namespace)
-
-		icspData := ICSPGenerator{
-			ICSPMapping: map[reference.DockerImageReference]reference.DockerImageReference{
-				imageRef: dstRef,
-			},
-			ImageName: imageRef.Name,
 		}
 
 		values, _ := assocs.Search(imageName)
@@ -294,18 +293,16 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 				errs = append(errs, fmt.Errorf("error parsing source ref %q: %v", assoc.Path, err))
 				continue
 			}
-			// The mirrorer is not a fan of accepting an image ID when a tag symlink is available
-			// for some reason.
-			// TODO(estroz): investigate the cause of this behavior.
-			if assoc.TagSymlink == "" {
-				m.Source.Ref.ID = assoc.ID
-			} else {
+
+			if assoc.TagSymlink != "" {
 				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), unpackDir, filesInArchive); err != nil {
 					errs = append(errs, err)
 					continue
 				}
 				m.Source.Ref.Tag = assoc.TagSymlink
 			}
+
+			m.Source.Ref.ID = assoc.ID
 			m.Destination = toMirrorRef
 			m.Destination.Ref.Name = m.Source.Ref.Name
 			m.Destination.Ref.Tag = m.Source.Ref.Tag
@@ -315,18 +312,34 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			switch assoc.Type {
 			case image.TypeGeneric:
 				genericMappings = append(genericMappings, m)
+				// Add top level association to ICSP generator
+				if assoc.Name == imageRef.Exact() {
+					genericICSP.icspMapping[imageRef] = m.Destination.Ref
+				}
 			case image.TypeOCPRelease:
-				m.Destination.Ref.Tag = ""
-				m.Destination.Ref.ID = ""
-				if strings.Contains(assoc.Name, "ocp-release") {
+				if assoc.Name == imageRef.Exact() {
+					// Update destination ref ICSP to match the
+					// default mirror location of releases (openshift/release)
+					releaseICSP.icspMapping[imageRef] = m.Destination.Ref
+
+					// Remove component info in mapping for
+					// release mirroring step
+					m.Destination.Ref.Tag = ""
+					m.Destination.Ref.ID = ""
 					releaseMapping = m
 				}
 			case image.TypeOperatorCatalog:
 				genericMappings = append(genericMappings, m)
-				icspData.AddOperatorLabel = true
+				// Add top level association to ICSP generator
+				if assoc.Name == imageRef.Exact() {
+					catalogICSP.icspMapping[imageRef] = m.Destination.Ref
+				}
 			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
 				genericMappings = append(genericMappings, m)
-				icspData.AddOperatorLabel = true
+				// Add top level association to ICSP generator
+				if assoc.Name == imageRef.Exact() {
+					catalogICSP.icspMapping[imageRef] = m.Destination.Ref
+				}
 			case image.TypeInvalid:
 				errs = append(errs, fmt.Errorf("image %q: image type is not set", imageName))
 			default:
@@ -340,9 +353,6 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 				}
 			}
 		}
-
-		// Add mapping for ICSP generation
-		namedICSPData[imageRef.Name] = icspData
 
 		// Mirror all generic mappings for this image
 		if len(genericMappings) != 0 {
@@ -377,27 +387,30 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	// Source and dest refs are treated the same intentionally since
 	// the source image does not exist and destination image was built above.
 	for sourceRef, destRef := range ctlgRefs {
-		icspData := ICSPGenerator{
-			ICSPMapping:      map[reference.DockerImageReference]reference.DockerImageReference{sourceRef: destRef},
-			ImageName:        sourceRef.Name,
-			AddOperatorLabel: true,
-		}
-		namedICSPData[sourceRef.Name] = icspData
-
+		catalogICSP.icspMapping[sourceRef] = destRef
 		if err := WriteCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
 			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", destRef.Exact(), err)
 		}
 	}
 
 	// Generate ICSPs for all images.
-	for name, data := range namedICSPData {
-		logrus.Debugf("Generating ICSP for image %q", name)
-		icsps, err := data.Run(icspScope, icspSizeLimit)
-		if err != nil {
-			return fmt.Errorf("error generating ICSP for image name %q: %v", name, err)
-		}
-		allICSPs = append(allICSPs, icsps...)
+	catalogICSPS, err := catalogICSP.Run("catalog", icspScope, icspSizeLimit)
+	if err != nil {
+		return fmt.Errorf("error generating ICSP for catalog images: %v", err)
 	}
+	allICSPs = append(allICSPs, catalogICSPS...)
+	// Set release ICSP to repository due to the image name change that
+	// occurs during mirroring
+	releaseICSPS, err := releaseICSP.Run("release", "repository", icspSizeLimit)
+	if err != nil {
+		return fmt.Errorf("error generating ICSP for release images: %v", err)
+	}
+	allICSPs = append(allICSPs, releaseICSPS...)
+	genericICSPS, err := genericICSP.Run("generic", icspScope, icspSizeLimit)
+	if err != nil {
+		return fmt.Errorf("error generating ICSP for generic images: %v", err)
+	}
+	allICSPs = append(allICSPs, genericICSPS...)
 
 	// Write an aggregation of ICSPs
 	if err := WriteICSPs(o.OutputDir, allICSPs); err != nil {
@@ -576,8 +589,7 @@ func mktempDir(dir string) (func(), string, error) {
 }
 
 // mirrorRelease uses the `oc release mirror` library to mirror OCP release
-// QUESTION(jpower): should we just mirror release one by one
-// The namespace is not the same as the image name
+// TODO(jpower432): refactor to mirror release images as individual images
 func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {

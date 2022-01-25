@@ -341,6 +341,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	for i, b := range dc.Bundles {
 
 		if !image.IsImagePinned(b.Image) {
+			logrus.Warnf("bundle %s: pinning bundle image %s to digest", b.Name, b.Image)
 
 			if !image.IsImageTagged(b.Image) {
 				logrus.Warnf("bundle %s: bundle image tag not set", b.Name)
@@ -356,6 +357,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 		}
 		for j, ri := range b.RelatedImages {
 			if !image.IsImagePinned(ri.Image) {
+				logrus.Warnf("bundle %s: pinning related image %s to digest", ri.Name, ri.Image)
 
 				if !image.IsImageTagged(ri.Image) {
 					logrus.Warnf("bundle %s: related image tag not set", b.Name)
@@ -456,7 +458,7 @@ func (o *OperatorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesou
 	}
 
 	srcDir := filepath.Join(o.Dir, config.SourceDir)
-	assocs, err := image.AssociateImageLayers(srcDir, mappings, images, image.TypeGeneric)
+	assocs, err := image.AssociateImageLayers(srcDir, mappings, images, image.TypeOperatorBundle)
 	if err != nil {
 		merr := &image.ErrNoMapping{}
 		cerr := &image.ErrInvalidComponent{}

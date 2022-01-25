@@ -139,7 +139,7 @@ func (o *MirrorOptions) Validate() error {
 	}
 
 	// Attempt to login to registry
-	// FIXME(jpower): CheckPushPermissions is slated for deprecation
+	// FIXME(jpower432): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
 	if len(o.ToMirror) > 0 {
 		logrus.Infof("Checking push permissions for %s", o.ToMirror)

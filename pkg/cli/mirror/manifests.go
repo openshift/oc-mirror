@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -17,27 +18,35 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+type icspType int
+
+const (
+	// Generic ICSP is the default type
+	typeGeneric icspType = iota
+	typeOCPRelease
+	typeOperator
+)
+
 // Copied from https://github.com/openshift/oc/blob/5d8dfa1c2e8e7469d69d76f21e0a166a0de8663b/pkg/cli/admin/catalog/mirror.go#L549
 // Changes made are breaking ICSP and Catalog Source generation into different functions
-type ICSPGenerator struct {
-	ImageName        string
-	AddOperatorLabel bool
-	ICSPMapping      map[reference.DockerImageReference]reference.DockerImageReference
+type icspGenerator struct {
+	icspMapping map[reference.DockerImageReference]reference.DockerImageReference
+	icspType    icspType
 }
 
-func (g *ICSPGenerator) init() {
-	if g.ICSPMapping == nil {
-		g.ICSPMapping = make(map[reference.DockerImageReference]reference.DockerImageReference)
+func (g *icspGenerator) init() {
+	if g.icspMapping == nil {
+		g.icspMapping = make(map[reference.DockerImageReference]reference.DockerImageReference)
 	}
 }
 
-func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+func (g *icspGenerator) Run(icspName, icspScope string, byteLimit int) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
 	g.init()
 
-	registryMapping := getRegistryMapping(icspScope, g.ICSPMapping)
+	registryMapping := getRegistryMapping(icspScope, g.icspMapping)
 
 	for icspCount := 0; len(registryMapping) != 0; icspCount++ {
-		name := strings.Join(strings.Split(g.ImageName, "/"), "-") + "-" + strconv.Itoa(icspCount)
+		name := strings.Join(strings.Split(icspName, "/"), "-") + "-" + strconv.Itoa(icspCount)
 		icsp := operatorv1alpha1.ImageContentSourcePolicy{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
@@ -50,7 +59,7 @@ func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1
 			},
 		}
 
-		if g.AddOperatorLabel {
+		if g.icspType == typeOperator {
 			icsp.Labels = map[string]string{
 				"operators.openshift.org/catalog": "true",
 			}
@@ -61,6 +70,16 @@ func (g *ICSPGenerator) Run(icspScope string, byteLimit int) (icsps []operatorv1
 				Source:  key,
 				Mirrors: []string{registryMapping[key]},
 			})
+
+			// FIXME(jpower432): add this as a workaround until
+			// mirroring individual images for release is implemented
+			// add OCP component image location to all release ICSPs
+			if g.icspType == typeOCPRelease {
+				icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
+					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+					Mirrors: []string{registryMapping[key]},
+				})
+			}
 
 			y, err := yaml.Marshal(icsp)
 			if err != nil {
@@ -102,11 +121,20 @@ func getRegistryMapping(icspScope string, mapping map[reference.DockerImageRefer
 			logrus.Warnf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
-		if icspScope == "registry" {
+
+		switch {
+		case icspScope == "registry":
 			registryMapping[k.Registry] = v.Registry
-		} else {
+		case icspScope == "namespace" && k.Namespace == "":
+			fallthrough
+		case icspScope == "repository":
 			registryMapping[k.AsRepository().String()] = v.AsRepository().String()
+		case icspScope == "namespace":
+			source := path.Join(k.Registry, k.Namespace)
+			dest := path.Join(v.Registry, v.Namespace)
+			registryMapping[source] = dest
 		}
+
 	}
 	return registryMapping
 }

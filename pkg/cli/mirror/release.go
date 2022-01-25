@@ -199,6 +199,9 @@ func (o *ReleaseOptions) mirror(ctx context.Context, toDir string, downloads map
 		opts.SecurityOptions.SkipVerification = o.SkipVerification
 		opts.DryRun = o.DryRun
 		opts.From = img
+		if err := opts.Validate(); err != nil {
+			return nil, err
+		}
 		if err := opts.Run(); err != nil {
 			return nil, err
 		}
@@ -255,6 +258,9 @@ func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOpti
 	opts.IOStreams.Out = &buffer
 	opts.ToMirror = true
 
+	if err := opts.Validate(); err != nil {
+		return mappings, images, err
+	}
 	if err := opts.Run(); err != nil {
 		return mappings, images, err
 	}
