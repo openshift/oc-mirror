@@ -296,7 +296,7 @@ func (o *OperatorOptions) mirror(ctx context.Context, dc *declcfg.DeclarativeCon
 		return nil, fmt.Errorf("error running catalog mirror: %v", err)
 	}
 
-	mappings, err := image.ReadImageMapping(filepath.Join(opts.ManifestDir, mappingFile))
+	mappings, err := image.ReadImageMapping(filepath.Join(opts.ManifestDir, mappingFile), "=")
 	if err != nil {
 		return nil, err
 	}

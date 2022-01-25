@@ -71,16 +71,6 @@ func (g *icspGenerator) Run(icspName, icspScope string, byteLimit int) (icsps []
 				Mirrors: []string{registryMapping[key]},
 			})
 
-			// FIXME(jpower432): add this as a workaround until
-			// mirroring individual images for release is implemented
-			// add OCP component image location to all release ICSPs
-			if g.icspType == typeOCPRelease {
-				icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
-					Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
-					Mirrors: []string{registryMapping[key]},
-				})
-			}
-
 			y, err := yaml.Marshal(icsp)
 			if err != nil {
 				return nil, fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)

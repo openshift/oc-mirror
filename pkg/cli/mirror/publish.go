@@ -17,7 +17,6 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/library-go/pkg/image/registryclient"
-	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	imgmirror "github.com/openshift/oc/pkg/cli/image/mirror"
@@ -218,7 +217,6 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	for _, imageName := range assocs.Keys() {
 
 		genericMappings := []imgmirror.Mapping{}
-		releaseMapping := imgmirror.Mapping{}
 
 		// Save original source mapping to generate ICSP for this image.
 		imageRef, err := reference.Parse(imageName)
@@ -317,16 +315,9 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 					genericICSP.icspMapping[imageRef] = m.Destination.Ref
 				}
 			case image.TypeOCPRelease:
+				genericMappings = append(genericMappings, m)
 				if assoc.Name == imageRef.Exact() {
-					// Update destination ref ICSP to match the
-					// default mirror location of releases (openshift/release)
 					releaseICSP.icspMapping[imageRef] = m.Destination.Ref
-
-					// Remove component info in mapping for
-					// release mirroring step
-					m.Destination.Ref.Tag = ""
-					m.Destination.Ref.ID = ""
-					releaseMapping = m
 				}
 			case image.TypeOperatorCatalog:
 				genericMappings = append(genericMappings, m)
@@ -357,13 +348,6 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		// Mirror all generic mappings for this image
 		if len(genericMappings) != 0 {
 			if err := o.mirrorImage(genericMappings, unpackDir); err != nil {
-				errs = append(errs, err)
-			}
-		}
-
-		// If this is a release image mirror the full release
-		if releaseMapping.Source.String() != "" {
-			if err := o.mirrorRelease(releaseMapping, cmd, f, unpackDir); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -586,38 +570,6 @@ func mktempDir(dir string) (func(), string, error) {
 			logrus.Fatal(err)
 		}
 	}, dir, err
-}
-
-// mirrorRelease uses the `oc release mirror` library to mirror OCP release
-// TODO(jpower432): refactor to mirror release images as individual images
-func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
-	var insecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		insecure = true
-	}
-	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
-	regctx, err := config.CreateDefaultContext(insecure)
-	if err != nil {
-		return err
-	}
-	relOpts := release.NewMirrorOptions(o.IOStreams)
-	relOpts.From = mapping.Source.String()
-	relOpts.FromDir = fromDir
-	relOpts.To = mapping.Destination.String()
-	relOpts.SecurityOptions.CachedContext = regctx
-	relOpts.SecurityOptions.Insecure = insecure
-	relOpts.DryRun = o.DryRun
-	if err := relOpts.Complete(cmd, f, nil); err != nil {
-		return fmt.Errorf("error initializing release mirror options: %v", err)
-	}
-	if err := relOpts.Validate(); err != nil {
-		return fmt.Errorf("invalid release mirror options: %v", err)
-	}
-	if err := relOpts.Run(); err != nil {
-		return fmt.Errorf("error running %q release mirror: %v", mapping, err)
-	}
-
-	return nil
 }
 
 // mirrorImages uses the `oc mirror` library to mirror generic images
