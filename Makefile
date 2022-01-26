@@ -29,3 +29,7 @@ test-e2e: tidy build
 .PHONY: test-prow
 test-prow: build
 	./test/e2e-prow.sh
+
+.PHONY: sanity
+sanity: tidy
+	git diff --exit-code
