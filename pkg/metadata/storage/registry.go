@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
@@ -203,6 +205,22 @@ func (b *registryBackend) exists(ctx context.Context) error {
 	var terr *transport.Error
 	switch {
 	case err != nil && errors.As(err, &terr) && terr.StatusCode == 404:
+		return ErrMetadataNotExist
+	case err != nil && errors.As(err, &terr) && terr.StatusCode == 401:
+		var nameOpts []name.Option
+		if b.insecure {
+			nameOpts = append(nameOpts, name.Insecure)
+		}
+		ref, err := name.ParseReference(b.src.Ref.Exact(), nameOpts...)
+		if err != nil {
+			return err
+		}
+		err = remote.CheckPushPermission(ref, authn.DefaultKeychain, b.createRT())
+		if err != nil {
+			return err
+		}
+		// return metadata does not exist
+		// if push permission does not throw an error
 		return ErrMetadataNotExist
 	default:
 		return err
