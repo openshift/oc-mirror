@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -115,6 +116,21 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 		var srcImage string
 		var layers []v1.Layer
 		refExact := ctlgRef.Ref.Exact()
+
+		// Check push permissions before trying to resolve for Quay compatibility
+		var nameOpts []name.Option
+		if o.DestSkipTLS || o.DestPlainHTTP {
+			nameOpts = append(nameOpts, name.Insecure)
+		}
+		ref, err := name.ParseReference(refExact, nameOpts...)
+		if err != nil {
+			return nil, err
+		}
+		err = remote.CheckPushPermission(ref, authn.DefaultKeychain, o.createRT())
+		if err != nil {
+			return nil, err
+		}
+
 		if _, _, rerr := resolver.Resolve(ctx, refExact); rerr == nil {
 
 			logrus.Infof("Catalog image %q found, rendering with new file-based catalog", refExact)
