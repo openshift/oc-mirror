@@ -8,6 +8,7 @@ TESTCASES[6]="custom_namespace"
 TESTCASES[7]="package_filtering"
 TESTCASES[8]="skip_deps"
 TESTCASES[9]="helm_local"
+TESTCASES[10]="no_updates_exist"
 
 # Test full catalog mode.
 function full_catalog () {
@@ -28,6 +29,8 @@ function headsonly_diff () {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+
+    check_sequence_number 2
 }
 
 # Test registry backend
@@ -99,4 +102,18 @@ function skip_deps {
 function helm_local {
     run_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
     check_helm "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
+}
+
+function no_updates_exist {
+    run_no_updates imageset-config-headsonly.yaml true
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+
+    if [ -f ${CREATE_FULL_DIR}/mirror_seq2_000000.tar ]; then
+        echo "no updates should not have a second sequence"
+        exit 1
+    fi
+
+    check_sequence_number 1
 }
