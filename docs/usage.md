@@ -34,6 +34,15 @@ oc-mirror currently references the host system for certificate trust information
 
 
 ## Basic Usage
+
+### oc-mirror vs oc mirror
+
+There are two ways to use oc-mirror, either standalone or part of the oc plugin eco system. More information can be found https://cloud.redhat.com/blog/augmenting-openshift-cli-with-plugins.
+
+In short:
+- To use `oc-mirror` build this repo and use the binary produced. 
+- To use `oc mirror` build this repo and move the binary into a directory on the PATH.
+
 ### Content Discovery
 
 oc-mirror provides a way to discover OpenShift release and operator content,
