@@ -16,7 +16,7 @@ pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 **/.openshift_bundle.log
 
 # Local vendor. Remove when ready to vendor dependencies.
-/vendor/
+#/vendor/
 
 # Local
 .idea
