@@ -1,11 +1,11 @@
 GO := go
-GO_BUILD_FLAGS := -tags=json1
+GO_BUILD_FLAGS := -tags=json1 -mod=vendor
 
 .PHONY: all
 all: clean tidy test-unit build
 
 .PHONY: build
-build: clean tidy
+build: clean
 	$(GO) build $(GO_BUILD_FLAGS) -o bin/oc-mirror ./cmd/oc-mirror
 
 .PHONY: tidy
@@ -23,7 +23,7 @@ test-unit: tidy
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e
-test-e2e: tidy build
+test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-mirror
 
 .PHONY: test-prow
