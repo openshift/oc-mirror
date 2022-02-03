@@ -10,30 +10,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openshift/oc-mirror/pkg/config"
+
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 func TestMetadataError(t *testing.T) {
 
-	cmd := &cobra.Command{}
 	ctx := context.Background()
-
-	// Configures a REST client getter factory from configs for mirroring releases.
-	kubeConfigFlags := genericclioptions.NewConfigFlags(true).WithDiscoveryBurst(250)
-	matchVersionKubeConfigFlags := kcmdutil.NewMatchVersionFlags(kubeConfigFlags)
-
-	f := kcmdutil.NewFactory(matchVersionKubeConfigFlags)
 
 	// Set up expected UUIDs
 	gotUUID, err := uuid.Parse("360a43c2-8a14-4b5d-906b-07491459f25f")
@@ -52,7 +44,7 @@ func TestMetadataError(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "testing first metadata error",
+			name:     "Invalid/FirstRun",
 			metadata: "",
 			fields: fields{
 				archivePath: "testdata/artifacts/testbundle_seq2.tar",
@@ -61,7 +53,7 @@ func TestMetadataError(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:     "testing sequence out of order",
+			name:     "Invalid/OutOfOrder",
 			metadata: "testdata/configs/one.json",
 			fields: fields{
 				archivePath: "testdata/artifacts/testbundle_seq3.tar",
@@ -71,62 +63,49 @@ func TestMetadataError(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(registry.New())
+			t.Cleanup(server.Close)
+			u, err := url.Parse(server.URL)
+			require.NoError(t, err)
 
-		server := httptest.NewServer(registry.New())
-		t.Cleanup(server.Close)
-		u, err := url.Parse(server.URL)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
+			tmpdir := t.TempDir()
 
-		tmpdir := t.TempDir()
-
-		opts := &MirrorOptions{
-			RootOptions: &cli.RootOptions{
-				IOStreams: genericclioptions.IOStreams{
-					In:     os.Stdin,
-					Out:    os.Stdout,
-					ErrOut: os.Stderr,
+			opts := &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+					Dir: tmpdir,
 				},
-				Dir: tmpdir,
-			},
-			DestSkipTLS: true,
-			From:        tt.fields.archivePath,
-			ToMirror:    u.Host,
-		}
-
-		// Copy metadata in place for tests with existing
-		if tt.metadata != "" {
-			t.Log("Copying metadata")
-			input, err := ioutil.ReadFile(tt.metadata)
-			if err != nil {
-				t.Fatal(err)
+				DestSkipTLS: true,
+				From:        tt.fields.archivePath,
+				ToMirror:    u.Host,
 			}
 
-			if err := os.Mkdir(filepath.Join(tmpdir, config.PublishDir), os.ModePerm); err != nil {
-				t.Fatal(err)
-			}
-			if err := ioutil.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644); err != nil {
-				t.Fatal(err)
+			// Copy metadata in place for tests with existing
+			if tt.metadata != "" {
+				t.Log("Copying metadata")
+				input, err := ioutil.ReadFile(tt.metadata)
+				require.NoError(t, err)
+				err = os.MkdirAll(filepath.Join(tmpdir, config.PublishDir), os.ModePerm)
+				require.NoError(t, err)
+				err = ioutil.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644)
+				require.NoError(t, err)
+				err = prepMetadata(ctx, u.Host, tmpdir, gotUUID.String())
+				require.NoError(t, err)
 			}
 
-			if err := prepMetadata(ctx, u.Host, tmpdir, gotUUID.String()); err != nil {
-				t.Fatal(err)
-			}
-		}
+			_, err = opts.Publish(ctx)
 
-		err = opts.Publish(ctx, cmd, f)
-
-		if !tt.wantErr {
-			if err != nil {
-				t.Errorf("Test %s error received when checking metadata: %v", tt.name, err)
+			if !tt.wantErr {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.want.Error())
 			}
-		} else {
-			if err.Error() != tt.want.Error() {
-				t.Errorf("Test %s wrong error type. Want \"%v\", got \"%v\"", tt.name, tt.want, err)
-			}
-		}
+		})
 	}
 }
 
@@ -136,13 +115,13 @@ func TestFindBlobRepo(t *testing.T) {
 
 		digest   string
 		meta     v1alpha1.Metadata
-		options  MirrorOptions
+		options  *MirrorOptions
 		expected imagesource.TypedImageReference
 		err      string
 	}{{
 		name:   "Valid/NoUserNamespace",
 		digest: "found",
-		options: MirrorOptions{
+		options: &MirrorOptions{
 			ToMirror: "registry.com",
 		},
 		expected: imagesource.TypedImageReference{
@@ -156,7 +135,7 @@ func TestFindBlobRepo(t *testing.T) {
 	}, {
 		name:   "Valid/UserNamespaceAdded",
 		digest: "found",
-		options: MirrorOptions{
+		options: &MirrorOptions{
 			ToMirror:      "registry.com",
 			UserNamespace: "foo",
 		},
@@ -171,7 +150,7 @@ func TestFindBlobRepo(t *testing.T) {
 	}, {
 		name:   "Invalid/NoRefExisting",
 		digest: "notfound",
-		options: MirrorOptions{
+		options: &MirrorOptions{
 			ToMirror: "registry.com",
 		},
 		err: "layer \"notfound\" is not present in previous metadata",
@@ -233,7 +212,8 @@ func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 			SkipTLS:  true,
 		},
 	}
-	registry, err := storage.ByConfig(dir, cfg)
+
+	reg, err := storage.ByConfig(dir, cfg)
 	if err != nil {
 		return err
 	}
@@ -246,5 +226,5 @@ func prepMetadata(ctx context.Context, host, dir, uuid string) error {
 		return err
 	}
 
-	return registry.WriteMetadata(ctx, &meta, dir)
+	return reg.WriteMetadata(ctx, &meta, dir)
 }

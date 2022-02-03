@@ -182,15 +182,6 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
-			name: "Invalid/DryRunWithMirror",
-			opts: &MirrorOptions{
-				ConfigPath: "foo",
-				ToMirror:   u.Host,
-				DryRun:     true,
-			},
-			expError: "--dry-run is not supported for mirror publishing operations",
-		},
-		{
 			name: "Invalid/UnsupportReleaseArch",
 			opts: &MirrorOptions{
 				ConfigPath:    "foo",

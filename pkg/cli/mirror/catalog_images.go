@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -34,18 +35,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, filesInArchive map[string]string) (map[reference.DockerImageReference]reference.DockerImageReference, error) {
-	refs := map[reference.DockerImageReference]reference.DockerImageReference{}
-	var err error
-
+// unpackCatalog will unpack file-based catalogs if they exists
+func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]string) (bool, error) {
+	var found bool
 	if err := unpack("catalogs", dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
 			logrus.Debug("No catalogs found in archive, skipping catalog rebuild")
-			return nil, nil
+			return found, nil
 		}
-		return nil, err
+		return found, err
 	}
+	found = true
+	return found, nil
+}
+
+func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (image.TypedImageMapping, error) {
+	refs := image.TypedImageMapping{}
+	var err error
 
 	mirrorRef := imagesource.TypedImageReference{Type: imagesource.DestinationRegistry}
 	mirrorRef.Ref, err = reference.Parse(o.ToMirror)
@@ -74,18 +81,18 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 				img = fmt.Sprintf("%s:%s", regRepoNs, id)
 			}
 			ctlgRef := imagesource.TypedImageReference{Type: imagesource.DestinationRegistry}
-			sourceRef, err := reference.Parse(img)
+			sourceRef, err := imagesource.ParseReference(img)
 			if err != nil {
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
 			}
-			ctlgRef.Ref = sourceRef
+			ctlgRef.Ref = sourceRef.Ref
 			// Update registry so the existing catalog image can be pulled.
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
 			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
 			catalogsByImage[ctlgRef] = filepath.Dir(fpath)
 
 			// Add to mapping for ICSP generation
-			refs[sourceRef] = ctlgRef.Ref
+			refs.Add(sourceRef, ctlgRef, image.TypeOperatorCatalog)
 		}
 
 		return nil
@@ -164,15 +171,15 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 				return nil, err
 			}
 
-			delete, err := deleteLayer("/configs/.wh.index.json")
+			deleted, err := deleteLayer("/configs/.wh.index.json")
 			if err != nil {
-				return refs, fmt.Errorf("error creating delete layer: %v", err)
+				return refs, fmt.Errorf("error creating deleted layer: %v", err)
 			}
 			add, err := addLayer(renderedPath, "/configs")
 			if err != nil {
 				return refs, fmt.Errorf("error creating add layer: %v", err)
 			}
-			layers = append(layers, delete, add)
+			layers = append(layers, deleted, add)
 
 			srcImage = ctlgRef.Ref.Exact()
 
@@ -207,11 +214,11 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string, file
 
 	// Resolve the image's digest for ICSP creation.
 	for source, dest := range refs {
-		_, desc, err := resolver.Resolve(ctx, dest.Exact())
+		_, desc, err := resolver.Resolve(ctx, dest.Ref.Exact())
 		if err != nil {
-			return nil, fmt.Errorf("error retrieving digest for catalog image %q: %v", dest.Exact(), err)
+			return nil, fmt.Errorf("error retrieving digest for catalog image %q: %v", dest.Ref.Exact(), err)
 		}
-		dest.ID = desc.Digest.String()
+		dest.Ref.ID = desc.Digest.String()
 		refs[source] = dest
 	}
 

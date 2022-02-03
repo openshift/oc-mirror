@@ -43,8 +43,8 @@ func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 	return relOpts
 }
 
-// GetReleases will pill release payloads based on user configuration
-func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata, cfg *v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+// Plan will pill release payloads based on user configuration
+func (o *ReleaseOptions) Plan(ctx context.Context, meta v1alpha1.Metadata, cfg *v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
 
 	var (
 		srcDir           = filepath.Join(o.Dir, config.SourceDir)
@@ -54,6 +54,8 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 
+		// TODO(jpower432): remove this from function to
+		// allow for testing and API mocking
 		url := cincinnati.UpdateUrl
 		if ch.Name == "okd" {
 			url = cincinnati.OkdUpdateURL
@@ -86,21 +88,40 @@ func (o *ReleaseOptions) GetReleases(ctx context.Context, meta v1alpha1.Metadata
 		}
 	}
 
-	assocs, err := o.mirror(ctx, srcDir, releaseDownloads)
+	opts, err := o.newMirrorReleaseOptions(srcDir)
 	if err != nil {
 		return nil, err
+	}
+
+	mmapping := image.TypedImageMapping{}
+
+	for img := range releaseDownloads {
+		logrus.Debugf("Starting release download for version %s", img)
+		opts.From = img
+
+		if err := opts.Validate(); err != nil {
+			return nil, err
+		}
+
+		// Create release mapping and get images list
+		// before mirroring actions
+		mappings, err := o.getMapping(*opts)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
+		}
+		mmapping.Merge(mappings)
 	}
 
 	// Update cfg release channels with latest versions
 	// if applicable
 	cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, channelVersion)
 
-	return assocs, nil
+	return mmapping, nil
 }
 
 // getDownloads will prepare the downloads map for mirroring
 func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Client, meta v1alpha1.Metadata, version, channel, arch string, url *url.URL) (downloads, error) {
-	downloads := map[string]download{}
+	downloads := downloads{}
 
 	requested, err := semver.Parse(version)
 	if err != nil {
@@ -135,100 +156,53 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 	}
 
 	// This dumps the available upgrades from the last downloaded version
-	current, new, updates, err := client.CalculateUpgrades(ctx, url, arch, lastCh, currCh, lastVer, requested)
+	current, newest, updates, err := client.CalculateUpgrades(ctx, url, arch, lastCh, currCh, lastVer, requested)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get upgrade graph: %v", err)
 	}
 
 	for _, update := range updates {
-		download := download{
-			Update: update,
-			arch:   arch,
-		}
-		downloads[update.Image] = download
+		downloads[update.Image] = struct{}{}
 	}
 
 	// If reverse graph download the current version
-	// else add new to downloads
+	// else add newest to downloads
 	if reverse {
-		download := download{
-			Update: current,
-			arch:   arch,
-		}
-		downloads[current.Image] = download
-		// Remove new from updates as it has already
+		downloads[current.Image] = struct{}{}
+		// Remove newest from updates as it has already
 		// been downloaded
-		delete(downloads, new.Image)
+		delete(downloads, newest.Image)
 	} else {
-		download := download{
-			Update: new,
-			arch:   arch,
-		}
-		downloads[new.Image] = download
+		downloads[newest.Image] = struct{}{}
 	}
 
 	return downloads, nil
 }
 
-// mirror will take the prepared download information and mirror to disk location
-func (o *ReleaseOptions) mirror(ctx context.Context, toDir string, downloads map[string]download) (image.AssociationSet, error) {
-	allAssocs := image.AssociationSet{}
+func (o *ReleaseOptions) newMirrorReleaseOptions(fileDir string) (*release.MirrorOptions, error) {
+	opts := release.NewMirrorOptions(o.IOStreams)
+	opts.DryRun = o.DryRun
+	opts.ToDir = fileDir
 
-	for img, download := range downloads {
-		logrus.Debugf("Starting release download for version %s", download.Version.String())
-		opts := release.NewMirrorOptions(o.IOStreams)
-		opts.ToDir = toDir
+	opts.SecurityOptions.Insecure = o.insecure
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-		regctx, err := config.CreateDefaultContext(o.insecure)
-		if err != nil {
-			return nil, fmt.Errorf("error creating registry context: %v", err)
-		}
-		opts.SecurityOptions.CachedContext = regctx
-
-		opts.SecurityOptions.Insecure = o.insecure
-		opts.SecurityOptions.SkipVerification = o.SkipVerification
-		opts.DryRun = o.DryRun
-		opts.From = img
-		if err := opts.Validate(); err != nil {
-			return nil, err
-		}
-
-		// Create release mapping and get images list
-		// before mirroring actions
-		mappings, images, err := o.getMapping(ctx, *opts)
-		if err != nil {
-			return nil, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
-		}
-
-		// Complete mirroring actions
-		if err := opts.Run(); err != nil {
-			return nil, err
-		}
-
-		// Do not build associations on dry runs because there are no manifests
-		if !o.DryRun {
-
-			logrus.Debugln("starting image association")
-			assocs, err := image.AssociateImageLayers(toDir, mappings, images, image.TypeOCPRelease)
-			if err != nil {
-				return nil, err
-			}
-
-			allAssocs.Merge(assocs)
-		}
+	regctx, err := config.CreateDefaultContext(o.insecure)
+	if err != nil {
+		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}
+	opts.SecurityOptions.CachedContext = regctx
 
-	return allAssocs, nil
+	return opts, nil
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOptions) (map[string]string, []string, error) {
-
+func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (image.TypedImageMapping, error) {
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	file, err := os.Create(mappingPath)
 	defer os.Remove(mappingPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -236,22 +210,18 @@ func (o *ReleaseOptions) getMapping(ctx context.Context, opts release.MirrorOpti
 	opts.ToMirror = true
 
 	if err := opts.Validate(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := opts.Run(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	mappings, err := image.ReadImageMapping(mappingPath, " ")
+	mappings, err := image.ReadImageMapping(mappingPath, " ", image.TypeOCPRelease)
 	if err != nil {
-		return nil, nil, err
-	}
-	var images []string
-	for img, _ := range mappings {
-		images = append(images, img)
+		return nil, err
 	}
 
-	return mappings, images, nil
+	return mappings, nil
 }
 
 // updateReleaseChannel will add a version to the ReleaseChannel to record
@@ -267,11 +237,7 @@ func updateReleaseChannel(releaseChannels []v1alpha1.ReleaseChannel, channelVers
 }
 
 // Define download types
-type downloads map[string]download
-type download struct {
-	cincinnati.Update
-	arch string
-}
+type downloads map[string]struct{}
 
 func (d downloads) Merge(in downloads) {
 	for k, v := range in {

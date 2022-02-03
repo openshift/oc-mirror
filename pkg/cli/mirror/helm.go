@@ -44,14 +44,14 @@ func NewHelmOptions(mo *MirrorOptions) *HelmOptions {
 
 }
 
-func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.AssociationSet, error) {
+func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
 
 	var images []v1alpha1.AdditionalImages
 
 	// Create a temp file for to hold repo information
 	cleanup, file, err := mktempFile(h.Dir)
 	if err != nil {
-		return image.AssociationSet{}, err
+		return nil, err
 	}
 	h.settings.RepositoryConfig = file
 	defer cleanup()
@@ -76,7 +76,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfi
 		// find images associations with chart (default values)
 		img, err := findImages(chart.Path, chart.ImagePaths...)
 		if err != nil {
-			return image.AssociationSet{}, err
+			return nil, err
 		}
 
 		images = append(images, img...)
@@ -86,7 +86,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfi
 
 		// Add repo to temp file
 		if err := h.repoAdd(repo); err != nil {
-			return image.AssociationSet{}, err
+			return nil, err
 		}
 
 		for _, chart := range repo.Charts {
@@ -96,22 +96,22 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfi
 			dest := filepath.Join(h.Dir, config.SourceDir, config.HelmDir)
 			path, _, err := c.DownloadTo(ref, chart.Version, dest)
 			if err != nil {
-				return image.AssociationSet{}, fmt.Errorf("error pulling chart %q: %v", ref, err)
+				return nil, fmt.Errorf("error pulling chart %q: %v", ref, err)
 			}
 
 			// find images associations with chart (default values)
 			img, err := findImages(path, chart.ImagePaths...)
 			if err != nil {
-				return image.AssociationSet{}, err
+				return nil, err
 			}
 
 			images = append(images, img...)
 		}
 	}
 
-	// Image download
-	opts := NewAdditionalOptions(h.MirrorOptions)
-	return opts.GetAdditional(ctx, cfg, images)
+	// Image download planning
+	additional := &AdditionalOptions{}
+	return additional.Plan(images)
 }
 
 // FindImages will download images found in a Helm chart on disk

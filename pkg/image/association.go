@@ -1,7 +1,6 @@
 package image
 
 import (
-	"bufio"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -10,21 +9,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
-
-type ErrNoMapping struct {
-	image string
-}
-
-func (e *ErrNoMapping) Error() string {
-	return fmt.Sprintf("image %q has no mirror mapping", e.image)
-}
 
 type ErrInvalidComponent struct {
 	image string
@@ -66,29 +56,6 @@ type Association struct {
 	// or OCI index. These digests refer to image layer blobs by content SHA256 digest.
 	// LayerDigests and Manifests are mutually exclusive.
 	LayerDigests []string `json:"layerDigests,omitempty"`
-}
-
-type ImageType int
-
-const (
-	TypeInvalid ImageType = iota
-	TypeOCPRelease
-	TypeOperatorCatalog
-	TypeOperatorBundle
-	TypeOperatorRelatedImage
-	TypeGeneric
-)
-
-var imageTypeStrings = map[ImageType]string{
-	TypeOCPRelease:           "ocpRelease",
-	TypeOperatorCatalog:      "operatorCatalog",
-	TypeOperatorBundle:       "operatorBundle",
-	TypeOperatorRelatedImage: "operatorRelatedImage",
-	TypeGeneric:              "generic",
-}
-
-func (it ImageType) String() string {
-	return imageTypeStrings[it]
 }
 
 // Search will return all Associations for the specificed key
@@ -252,29 +219,7 @@ func (as AssociationSet) validate() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-// ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func ReadImageMapping(mappingsPath, seperator string) (map[string]string, error) {
-	f, err := os.Open(mappingsPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	mappings := make(map[string]string)
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		text := scanner.Text()
-		split := strings.Split(text, seperator)
-		if len(split) != 2 {
-			return nil, fmt.Errorf("mapping %q expected to have exactly one \"=\"", text)
-		}
-		mappings[strings.TrimSpace(split[0])] = strings.TrimSpace(split[1])
-	}
-
-	return mappings, scanner.Err()
-}
-
-func AssociateImageLayers(rootDir string, imgMappings map[string]string, images []string, typ ImageType) (AssociationSet, utilerrors.Aggregate) {
+func AssociateImageLayers(rootDir string, imgMappings TypedImageMapping) (AssociationSet, utilerrors.Aggregate) {
 	errs := []error{}
 	bundleAssociations := AssociationSet{}
 
@@ -284,34 +229,11 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 	}
 
 	localRoot := filepath.Join(rootDir, "v2")
-	for _, image := range images {
-		dirRef, hasMapping := imgMappings[image]
-		if !hasMapping {
-			errs = append(errs, &ErrNoMapping{image})
-			continue
+	for image, diskLoc := range imgMappings {
+		if diskLoc.Type != imagesource.DestinationFile {
+			errs = append(errs, fmt.Errorf("image destination for %q is not type file", image.Ref.String()))
 		}
-
-		// TODO(estroz): maybe just use imgsource.ParseReference() here.
-		re := regexp.MustCompile(`.*file://`)
-
-		prefix := re.FindString(dirRef)
-		dirRef = strings.TrimPrefix(dirRef, prefix)
-
-		tagIdx := strings.LastIndex(dirRef, ":")
-		if tagIdx == -1 {
-			errs = append(errs, fmt.Errorf("image %q mapping %q has no tag or digest component", image, dirRef))
-			continue
-		}
-
-		idx := tagIdx
-		if idIdx := strings.LastIndex(dirRef, "@"); idIdx != -1 {
-			idx = idIdx
-		}
-
-		tagOrID := dirRef[idx+1:]
-
-		dirRef = dirRef[:idx]
-
+		dirRef := diskLoc.Ref.AsRepository().String()
 		imagePath := filepath.Join(localRoot, dirRef)
 
 		// Verify that the dirRef exists before proceeding
@@ -320,14 +242,21 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 			continue
 		}
 
+		var tagOrID string
+		if image.Ref.Tag != "" {
+			tagOrID = image.Ref.Tag
+		} else {
+			tagOrID = image.Ref.ID
+		}
+
 		// TODO(estroz): parallelize
-		associations, err := associateImageLayers(image, localRoot, dirRef, tagOrID, "oc-mirror", typ, skipParse)
+		associations, err := associateImageLayers(image.Ref.String(), localRoot, dirRef, tagOrID, "oc-mirror", image.Category, skipParse)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		for _, association := range associations {
-			bundleAssociations.Add(image, association)
+			bundleAssociations.Add(image.Ref.String(), association)
 		}
 	}
 
@@ -362,12 +291,15 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 		id = filepath.Base(dst)
 	case m.IsRegular():
 		// Layer ID is the file name, and no tag exists.
-		// Add an oc-mirror tag as a default
 		tag = defaultTag
 		if defaultTag != "" {
+			// If set, add a subset of the digest to randomize the
+			// tag in the event multiple digests are pulled for the same
+			// image
+			tag = defaultTag + id[7:13]
 			manifestDir := filepath.Dir(manifestPath)
-			symlink := filepath.Join(manifestDir, defaultTag)
-			if err := os.Symlink(info.Name(), symlink); err != nil && !os.IsExist(err) {
+			symlink := filepath.Join(manifestDir, tag)
+			if err := os.Symlink(info.Name(), symlink); err != nil {
 				return nil, err
 			}
 		}

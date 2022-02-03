@@ -32,9 +32,8 @@ type MirrorOptions struct {
 	ContinueOnError  bool
 	FilterOptions    []string
 	// cancelCh is a channel listening for command cancellations
-	cancelCh    <-chan struct{}
-	interrupted bool
-	once        sync.Once
+	cancelCh <-chan struct{}
+	once     sync.Once
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {

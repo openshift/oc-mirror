@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
@@ -42,14 +41,8 @@ func TestGetDownloads(t *testing.T) {
 		channel: "stable-4.1",
 		version: "4.1.0-6",
 		expected: downloads{
-			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": download{
-				Update: cincinnati.Update{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-				arch:   "test-arch",
-			},
-			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": download{
-				Update: cincinnati.Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
-				arch:   "test-arch",
-			},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": struct{}{},
 		},
 	}, {
 		name: "reverse",
@@ -63,10 +56,7 @@ func TestGetDownloads(t *testing.T) {
 		channel: "stable-4.0",
 		version: "4.0.0-6",
 		expected: downloads{
-			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": download{
-				Update: cincinnati.Update{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-				arch:   "test-arch",
-			},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
 		},
 	}, {
 		name: "multi-arch",
@@ -80,14 +70,8 @@ func TestGetDownloads(t *testing.T) {
 		channel: "stable-4.0",
 		version: "4.0.0-6",
 		expected: downloads{
-			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": download{
-				Update: cincinnati.Update{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-				arch:   "test-arch",
-			},
-			"quay.io/openshift-release-dev/ocp-release:4.0.0-6-another": download{
-				Update: cincinnati.Update{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6-another"},
-				arch:   "another-arch",
-			},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-6":         struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-6-another": struct{}{},
 		},
 	}}
 	for _, test := range tests {

@@ -2,13 +2,13 @@ package mirror
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"testing"
 	"io/ioutil"
+	"os"
 	"strings"
+	"testing"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,12 +56,15 @@ func TestAddOPMImage(t *testing.T) {
 	require.Len(t, cfg.Mirror.AdditionalImages, 0)
 }
 
+// TODO(jpower432): test mapping output
 func TestCreate(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
-	configPath := path+"/test.yaml"
-	generateConfigPath(path, "testdata/configs/test.yaml", configPath)
+	configPath := path + "/test.yaml"
+	require.NoError(t, generateConfigPath(path, "testdata/configs/test.yaml", configPath))
+	cfg, err := config.LoadConfig(configPath)
+	require.NoError(t, err)
 
 	opts := MirrorOptions{
 		RootOptions: &cli.RootOptions{
@@ -76,123 +79,18 @@ func TestCreate(t *testing.T) {
 		ConfigPath: configPath,
 		OutputDir:  path,
 	}
-	err := opts.Create(ctx)
+	_, _, err = opts.Create(ctx, cfg)
 	require.NoError(t, err)
 }
 
-func TestCreateWithNoChanges(t *testing.T) {
-	path := t.TempDir()
-	ctx := context.Background()
-
-	configPath := path+"/test.yaml"
-	generateConfigPath(path, "testdata/configs/test.yaml", configPath)
-
-	opts := MirrorOptions{
-			RootOptions: &cli.RootOptions{
-					Dir:      path,
-					LogLevel: "info",
-					IOStreams: genericclioptions.IOStreams{
-							In:     os.Stdin,
-							Out:    os.Stdout,
-							ErrOut: os.Stderr,
-					},
-			},
-			ConfigPath: configPath,
-			OutputDir:  path,
-	}
-	// First run will create mirror_seq1_0000.tar
-	err := opts.Create(ctx)
-	require.NoError(t, err)
-
-	// should produce an archive
-	_, err = os.Stat(filepath.Join(path, "mirror_seq1_000000.tar"))
-
-	// Second run should not create mirror_seq2_0000.tar
-	err = opts.Create(ctx)
-	// Second run should throw a error
-	require.ErrorIs(t, err, NoUpdatesExist)
-
-	// should not produce an archive
-	_, err = os.Stat(filepath.Join(path, "mirror_seq2_000000.tar"))
-	require.ErrorIs(t, err, os.ErrNotExist)
-}
-
-func TestCreateWithDryRun(t *testing.T) {
-	path := t.TempDir()
-	ctx := context.Background()
-
-	configPath := path+"/test.yaml"
-	generateConfigPath(path, "testdata/configs/test.yaml", configPath)
-
-	opts := MirrorOptions{
-		RootOptions: &cli.RootOptions{
-			Dir:      path,
-			LogLevel: "info",
-			IOStreams: genericclioptions.IOStreams{
-				In:     os.Stdin,
-				Out:    os.Stdout,
-				ErrOut: os.Stderr,
-			},
-		},
-		ConfigPath: configPath,
-		DryRun:     true,
-		OutputDir:  path,
-	}
-	err := opts.Create(ctx)
-	require.NoError(t, err)
-
-	// should not produce an archive
-	_, err = os.Stat(filepath.Join(path, "mirror_seq1_00000.tar"))
-	require.ErrorIs(t, err, os.ErrNotExist)
-}
-
-func TestCreateWithCancel(t *testing.T) {
-	path := t.TempDir()
-	ctx := context.Background()
-
-	configPath := path+"/test.yaml"
-	generateConfigPath(path, "testdata/configs/test.yaml", configPath)
-
-	opts := MirrorOptions{
-		RootOptions: &cli.RootOptions{
-			Dir:      path,
-			LogLevel: "info",
-			IOStreams: genericclioptions.IOStreams{
-				In:     os.Stdin,
-				Out:    os.Stdout,
-				ErrOut: os.Stderr,
-			},
-		},
-		ConfigPath:  configPath,
-		OutputDir:   path,
-		SkipCleanup: true,
-	}
-	// initialize cancelCh so it
-	// does not get reinitialized during the function call
-	opts.once.Do(opts.init)
-	cancelCh := make(chan struct{})
-	opts.cancelCh = cancelCh
-	// closing the channel will cause the
-	// command to exit if using a cancellable context
-	close(cancelCh)
-	err := opts.Create(ctx)
-	require.NoError(t, err)
-
-	require.Equal(t, true, opts.interrupted)
-}
-
-func generateConfigPath(path string, baseFile string, targetFile string) {
+func generateConfigPath(path string, baseFile string, targetFile string) error {
 
 	read, err := ioutil.ReadFile(baseFile)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	newContents := strings.Replace(string(read), "testdata", path+"/testdata", -1)
 
-	err = ioutil.WriteFile(targetFile, []byte(newContents), 0744)
-	if err != nil {
-		panic(err)
-	}
-
+	return ioutil.WriteFile(targetFile, []byte(newContents), 0744)
 }

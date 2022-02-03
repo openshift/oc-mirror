@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +15,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
+	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -26,6 +32,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
@@ -137,8 +145,6 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
-	case len(o.ToMirror) > 0 && o.DryRun:
-		return fmt.Errorf("--dry-run is not supported for mirror publishing operations")
 	}
 
 	// Attempt to login to registry
@@ -180,54 +186,168 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 	}
 
+	var sourceInsecure bool
+	if o.SourcePlainHTTP || o.SourceSkipTLS {
+		sourceInsecure = true
+	}
+	var destInsecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		destInsecure = true
+	}
+
+	var mapping image.TypedImageMapping
+	var meta v1alpha1.Metadata
 	switch {
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
 	case len(o.OutputDir) > 0 && o.From == "":
-		err := o.Create(cmd.Context())
-		if err != nil && err != NoUpdatesExist {
+		cfg, err := config.LoadConfig(o.ConfigPath)
+		if err != nil {
 			return err
 		}
-		return nil
-	case len(o.ToMirror) > 0 && len(o.From) > 0:
-		return o.Publish(cmd.Context(), cmd, f)
-	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
 
-		dir := o.OutputDir
-		if dir == "" {
-			// create temp workspace
-			if dir, err = ioutil.TempDir(".", "mirrortmp"); err != nil {
+		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+			return err
+		}
+
+		meta, mapping, err = o.Create(cmd.Context(), cfg)
+		if err != nil {
+			return err
+		}
+
+		if o.DryRun {
+			if err := mapping.WriteImageMapping(filepath.Join(o.Dir, mappingFile)); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		// Mirror planned images
+		if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
+			return err
+		}
+
+		// Create assocations
+		assocDir := filepath.Join(o.Dir, config.SourceDir)
+		assocs, errs := image.AssociateImageLayers(assocDir, mapping)
+		if errs != nil {
+			return errs
+		}
+		// Pack the images set
+		tmpBackend, err := o.Pack(cmd.Context(), assocs, meta, cfg.ArchiveSize)
+		if err != nil {
+			return err
+		}
+
+		// Sync metadata from temporary backend to target backend
+		if cfg.StorageConfig.IsSet() {
+			targetBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
+			if err != nil {
+				return err
+			}
+			if err := metadata.SyncMetadata(cmd.Context(), tmpBackend, targetBackend); err != nil {
 				return err
 			}
 		}
-
-		fmt.Fprintf(o.IOStreams.Out, "workspace: %s\n", dir)
-
-		o.OutputDir = dir
-
-		err := o.Create(cmd.Context());
-		if err != nil && err != NoUpdatesExist {
+	case len(o.ToMirror) > 0 && len(o.From) > 0:
+		// Publish from disk to registry
+		// this takes care of syncing the metadata to the
+		// registry backends and generating the CatalogSource
+		mapping, err = o.Publish(cmd.Context())
+		if err != nil {
 			return err
 		}
+		dir, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		if err := o.generateAllICSPs(mapping, dir); err != nil {
+			return err
+		}
+	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
+		cfg, err := config.LoadConfig(o.ConfigPath)
+		if err != nil {
+			return err
+		}
+		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+			return err
+		}
+		meta, mapping, err = o.Create(cmd.Context(), cfg)
+		if err != nil {
+			return err
+		}
+		// Change the destination to registry
+		// TODO(jpower432): Investigate whether oc can produce
+		// registry to registry mapping
+		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
-		if err != NoUpdatesExist {
-			// run publish
-			o.From = dir
-			o.OutputDir = ""
-
-			if err := o.Publish(cmd.Context(), cmd, f); err != nil {
-				fmt.Fprintf(o.IOStreams.ErrOut, "Image Publish:\nERROR: publishing operation failed: %v\nTo retry this operation run \"oc-mirror --from %s docker://%s\"\n", err, o.From, o.ToMirror)
-				return kcmdutil.ErrExit
+		if o.DryRun {
+			if err := mapping.WriteImageMapping(filepath.Join(o.Dir, mappingFile)); err != nil {
+				return err
 			}
+			return nil
 		}
 
-		// Remove tmp directory
-		if !o.SkipCleanup {
-			fmt.Fprintln(o.IOStreams.Out, "cleaning up workspace")
-			os.RemoveAll(dir)
+		// Mirror planned images
+		// TODO(jpower432): Investigate how to mirror to mirror and
+		// specific source and dest TLS configuration
+		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
+			return err
+		}
+		// Process any catalog images
+		dir, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		if len(cfg.Mirror.Operators) > 0 {
+			ctlgRefs, err := o.rebuildCatalogs(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
+			if err != nil {
+				return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
+			}
+			if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
+				return err
+			}
+			mapping.Merge(ctlgRefs)
+		}
+		if err := o.generateAllICSPs(mapping, dir); err != nil {
+			return err
+		}
+		// Sync metadata from disk to source and target backends
+		if cfg.StorageConfig.IsSet() {
+			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
+			if err != nil {
+				return err
+			}
+			metaImage := o.newMetadataImage(meta.Uid.String())
+			targetCfg := v1alpha1.StorageConfig{
+				Registry: &v1alpha1.RegistryConfig{
+					ImageURL: metaImage,
+					SkipTLS:  destInsecure,
+				},
+			}
+
+			targetBackend, err := storage.ByConfig(o.Dir, targetCfg)
+			if err != nil {
+				return err
+			}
+			// Update source metadata
+			err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP)
+			if err != nil {
+				return err
+			}
+			// Sync target metadata
+			err = metadata.SyncMetadata(cmd.Context(), sourceBackend, targetBackend)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
+	if !o.SkipCleanup {
+		if err := os.RemoveAll(filepath.Join(o.Dir, config.SourceDir)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -254,7 +374,7 @@ func (o *MirrorOptions) createRT() http.RoundTripper {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			// By default we wrap the transport in retries, so reduce the
+			// By default, we wrap the transport in retries, so reduce the
 			// default dial timeout to 5s to avoid 5x 30s of connection
 			// timeouts when doing the "ping" on certain http registries.
 			Timeout:   5 * time.Second,
@@ -269,4 +389,101 @@ func (o *MirrorOptions) createRT() http.RoundTripper {
 			InsecureSkipVerify: insecure,
 		},
 	}
+}
+
+// mirrorImage downloads individual images from an image mapping
+func (o *MirrorOptions) mirrorMappings(cfg v1alpha1.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
+
+	opts, err := o.newMirrorImageOptions(insecure)
+	if err != nil {
+		return err
+	}
+
+	// Create mapping from source and destination images
+	var mappings []mirror.Mapping
+	for srcRef, dstRef := range images {
+		if bundle.IsBlocked(cfg, srcRef.Ref) {
+			logrus.Warnf("skipping blocked images %s", srcRef.String())
+			continue
+		}
+		mappings = append(mappings, mirror.Mapping{
+			Source:      srcRef.TypedImageReference,
+			Destination: dstRef.TypedImageReference,
+			Name:        srcRef.Ref.Name,
+		})
+	}
+	opts.Mappings = mappings
+	if err := opts.Validate(); err != nil {
+		return err
+	}
+	if err := opts.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImageOptions, error) {
+	a := mirror.NewMirrorImageOptions(o.IOStreams)
+	a.SkipMissing = o.SkipMissing
+	a.ContinueOnError = o.ContinueOnError
+	a.DryRun = o.DryRun
+	a.FileDir = filepath.Join(o.Dir, config.SourceDir)
+	a.FromFileDir = o.From
+	a.SecurityOptions.Insecure = insecure
+	a.SecurityOptions.SkipVerification = o.SkipVerification
+	a.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
+	a.KeepManifestList = true
+	a.SkipMultipleScopes = true
+	regctx, err := config.CreateDefaultContext(insecure)
+	if err != nil {
+		return a, fmt.Errorf("error creating registry context: %v", err)
+	}
+	a.SecurityOptions.CachedContext = regctx
+
+	return a, nil
+}
+
+func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
+	resultsDir = filepath.Join(
+		o.Dir,
+		fmt.Sprintf("results-%v", time.Now().Unix()),
+	)
+	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
+		return resultsDir, err
+	}
+	return resultsDir, nil
+}
+
+func (o *MirrorOptions) newMetadataImage(uid string) string {
+	repo := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
+	return fmt.Sprintf("%s:%s", repo, uid)
+}
+
+func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir string) error {
+
+	allICSPs := []operatorv1alpha1.ImageContentSourcePolicy{}
+	releases := image.ByCategory(mapping, image.TypeOCPRelease)
+	generic := image.ByCategory(mapping, image.TypeGeneric)
+	operator := image.ByCategory(mapping, image.TypeOperatorBundle, image.TypeOperatorCatalog)
+
+	getICSP := func(mapping image.TypedImageMapping, name string) error {
+		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, &GenericBuilder{})
+		if err != nil {
+			return fmt.Errorf("error generating ICSP manifests")
+		}
+		allICSPs = append(allICSPs, icsps...)
+		return nil
+	}
+
+	if err := getICSP(releases, "release"); err != nil {
+		return err
+	}
+	if err := getICSP(generic, "generic"); err != nil {
+		return err
+	}
+	if err := getICSP(operator, "operator"); err != nil {
+		return err
+	}
+
+	return WriteICSPs(dir, allICSPs)
 }

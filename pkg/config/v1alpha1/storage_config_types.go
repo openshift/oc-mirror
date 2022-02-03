@@ -17,3 +17,10 @@ type RegistryConfig struct {
 type LocalConfig struct {
 	Path string `json:"path"`
 }
+
+func (s StorageConfig) IsSet() bool {
+	if s.Registry != nil || s.Local != nil {
+		return true
+	}
+	return false
+}

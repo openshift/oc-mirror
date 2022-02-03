@@ -13,6 +13,19 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+// SyncMetadata syncs metadata from one backend to another
+func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Backend) error {
+	var meta v1alpha1.Metadata
+	if err := first.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+		return err
+	}
+	// Add mirror as a new PastMirror
+	if err := second.WriteMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+		return fmt.Errorf("error writing metadata: %v", err)
+	}
+	return nil
+}
+
 // UpdateMetadata runs some reconciliation functions on Metadata to ensure its state is consistent
 // then uses the Backend to update the metadata storage medium.
 func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, skipTLSVerify, plainHTTP bool) error {
@@ -20,7 +33,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1
 	var operatorErrs []error
 	for mi, mirror := range meta.PastMirrors {
 		for _, operator := range mirror.Mirror.Operators {
-			operatorMeta, err := resolveOperatorMetadata(ctx, operator, backend, skipTLSVerify, plainHTTP)
+			operatorMeta, err := resolveOperatorMetadata(ctx, operator, skipTLSVerify, plainHTTP)
 			if err != nil {
 				operatorErrs = append(operatorErrs, err)
 				continue
@@ -41,7 +54,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1
 	return nil
 }
 
-func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, backend storage.Backend, skipTLSVerify, plainHTTP bool) (operatorMeta v1alpha1.OperatorMetadata, err error) {
+func resolveOperatorMetadata(ctx context.Context, operator v1alpha1.Operator, skipTLSVerify, plainHTTP bool) (operatorMeta v1alpha1.OperatorMetadata, err error) {
 	operatorMeta.Catalog = operator.Catalog
 
 	resolver, err := containerdregistry.NewResolver("", skipTLSVerify, plainHTTP, nil)
