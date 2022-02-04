@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
@@ -132,7 +133,7 @@ func TestMirrorComplete(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := c.opts.Complete(c.args)
+			err := c.opts.Complete(&cobra.Command{}, c.args)
 			if c.expError != "" {
 				require.EqualError(t, err, c.expError)
 			} else {

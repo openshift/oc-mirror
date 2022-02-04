@@ -70,7 +70,7 @@ func NewMirrorCmd() *cobra.Command {
 		SilenceErrors:     false,
 		SilenceUsage:      false,
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete(args))
+			kcmdutil.CheckErr(o.Complete(cmd, args))
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd, f))
 		},
@@ -86,7 +86,7 @@ func NewMirrorCmd() *cobra.Command {
 	return cmd
 }
 
-func (o *MirrorOptions) Complete(args []string) error {
+func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 
 	destination := args[0]
 	splitIdx := strings.Index(destination, "://")
@@ -97,6 +97,9 @@ func (o *MirrorOptions) Complete(args []string) error {
 
 	switch typStr {
 	case "file":
+		if cmd.Flags().Changed("dir") {
+			return fmt.Errorf("--dir cannot be specified with file destination scheme")
+		}
 		ref = filepath.Clean(ref)
 		if ref == "" {
 			ref = "."
