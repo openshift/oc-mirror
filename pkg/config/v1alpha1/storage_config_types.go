@@ -18,6 +18,8 @@ type LocalConfig struct {
 	Path string `json:"path"`
 }
 
+// IsSet will determine whether StorageConfig
+// is empty or has backends set
 func (s StorageConfig) IsSet() bool {
 	if s.Registry != nil || s.Local != nil {
 		return true

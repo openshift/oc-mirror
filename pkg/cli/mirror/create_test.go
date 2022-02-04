@@ -7,12 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 func TestAddOPMImage(t *testing.T) {

@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGetDownloads(t *testing.T) {

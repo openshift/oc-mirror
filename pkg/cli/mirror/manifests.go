@@ -12,11 +12,12 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 const (
@@ -24,7 +25,13 @@ const (
 	registryICSPScope   = "registry"
 	repositoryICSPScope = "repository"
 	namespaceICSPScope  = "namespace"
+	icspKind            = "ImageContentSourcePolicy"
 )
+
+var icspTypeMeta = metav1.TypeMeta{
+	APIVersion: operatorv1alpha1.GroupVersion.String(),
+	Kind:       icspKind,
+}
 
 // ICSPBuilder defines methods for generating ICSPs
 type ICSPBuilder interface {
@@ -39,9 +46,7 @@ type ReleaseBuilder struct{}
 func (b *ReleaseBuilder) New(icspName string, icspCount int) operatorv1alpha1.ImageContentSourcePolicy {
 	name := strings.Join(strings.Split(icspName, "/"), "-") + "-" + strconv.Itoa(icspCount)
 	return operatorv1alpha1.ImageContentSourcePolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorv1alpha1.GroupVersion.String(),
-			Kind:       "ImageContentSourcePolicy"},
+		TypeMeta: icspTypeMeta,
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -65,9 +70,7 @@ type OperatorBuilder struct{}
 func (b *OperatorBuilder) New(icspName string, icspCount int) operatorv1alpha1.ImageContentSourcePolicy {
 	name := strings.Join(strings.Split(icspName, "/"), "-") + "-" + strconv.Itoa(icspCount)
 	return operatorv1alpha1.ImageContentSourcePolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorv1alpha1.GroupVersion.String(),
-			Kind:       "ImageContentSourcePolicy"},
+		TypeMeta: icspTypeMeta,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
 			Labels: map[string]string{"operators.openshift.org/catalog": "true"},
@@ -89,9 +92,7 @@ type GenericBuilder struct{}
 func (b *GenericBuilder) New(icspName string, icspCount int) operatorv1alpha1.ImageContentSourcePolicy {
 	name := strings.Join(strings.Split(icspName, "/"), "-") + "-" + strconv.Itoa(icspCount)
 	return operatorv1alpha1.ImageContentSourcePolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorv1alpha1.GroupVersion.String(),
-			Kind:       "ImageContentSourcePolicy"},
+		TypeMeta: icspTypeMeta,
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},

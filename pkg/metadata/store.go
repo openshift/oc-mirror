@@ -13,11 +13,11 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-// SyncMetadata syncs metadata from one backend to another
+// SyncMetadata copies Metadata from one Backend to another
 func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Backend) error {
 	var meta v1alpha1.Metadata
 	if err := first.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
-		return err
+		return fmt.Errorf("error reading metadata: %v", err)
 	}
 	// Add mirror as a new PastMirror
 	if err := second.WriteMetadata(ctx, &meta, config.MetadataBasePath); err != nil {

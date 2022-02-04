@@ -133,7 +133,7 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 	lastCh, lastVer, err := cincinnati.FindLastRelease(meta, channel)
 	currCh := channel
 	reverse := false
-	logrus.Infof("Downloading requested release %s", requested.String())
+	logrus.Infof("Planning download for requested release %s", requested.String())
 	switch {
 	case err != nil && errors.Is(err, cincinnati.ErrNoPreviousRelease):
 		lastVer = requested

@@ -7,9 +7,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type MirrorOptions struct {

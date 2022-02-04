@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -14,7 +16,14 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-	"github.com/sirupsen/logrus"
+)
+
+const (
+	// defaultSegSize is the default maximum archive size.
+	defaultSegSize int64 = 500
+	// segMultiplier is the multiplier used to
+	// convert segSize to GiB
+	segMultiplier int64 = 1024 * 1024 * 1024
 )
 
 // Pack will pack the imageset and return a temporary backend storing metadata for final push
@@ -72,13 +81,12 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 
 func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Backend, archiveSize int64, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
 
-	// Default to a 500GiB archive size.
-	var segSize int64 = 500
+	segSize := defaultSegSize
 	if archiveSize != 0 {
 		segSize = archiveSize
-		logrus.Debugf("Using user provider archive size %d GiB", segSize)
+		logrus.Debugf("Using user provided archive size %d GiB", segSize)
 	}
-	segSize *= 1024 * 1024 * 1024
+	segSize *= segMultiplier
 
 	// Set get absolute path to output dir
 	// to avoid issue with directory change

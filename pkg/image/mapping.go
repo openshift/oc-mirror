@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/sirupsen/logrus"
 )
 
 type TypedImage struct {
@@ -88,6 +89,11 @@ func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 // Merge will add new image maps to current map
 func (m TypedImageMapping) Merge(in TypedImageMapping) {
 	for k, v := range in {
+		_, found := m[k]
+		if found {
+			logrus.Debugf("source image %s already exists in mapping", k.String())
+			continue
+		}
 		m[k] = v
 	}
 }

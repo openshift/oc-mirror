@@ -25,14 +25,15 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/openshift/oc-mirror/pkg/operator"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/operator"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
 // unpackCatalog will unpack file-based catalogs if they exists

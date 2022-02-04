@@ -50,13 +50,12 @@ func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
 	return &OperatorOptions{MirrorOptions: mo}
 }
 
-// PlanFull plans a mirror for each catalog image in its entirety to the <Dir>/src directory.
+// PlanFull plans a mirror for each catalog image in its entirety
 func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
 	return o.run(ctx, cfg, o.renderDCFull)
 }
 
 // PlanDiff plans only the diff between each old and new catalog image pair
-// to the <Dir>/src directory.
 func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.TypedImageMapping, error) {
 	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (*declcfg.DeclarativeConfig, error) {
 		return o.renderDCDiff(ctx, reg, ctlg, lastRun)
@@ -77,8 +76,6 @@ func (o *OperatorOptions) complete() {
 
 type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha1.Operator) (*declcfg.DeclarativeConfig, error)
 
-// Diff mirrors only the diff between each old and new catalog image pair
-// to the <Dir>/src directory.
 func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
 	o.complete()
 

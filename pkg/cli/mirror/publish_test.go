@@ -10,17 +10,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config"
-
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
-	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 func TestMetadataError(t *testing.T) {

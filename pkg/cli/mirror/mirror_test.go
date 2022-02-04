@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func TestMirrorComplete(t *testing.T) {

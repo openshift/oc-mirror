@@ -5,10 +5,11 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 func TestICSPGeneration(t *testing.T) {
