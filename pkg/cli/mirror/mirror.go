@@ -16,10 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
-	"github.com/openshift/oc-mirror/pkg/metadata"
-	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
@@ -28,13 +25,16 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
 	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/openshift/oc-mirror/pkg/metadata"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 func NewMirrorCmd() *cobra.Command {
@@ -312,6 +312,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllICSPs(mapping, dir); err != nil {
 			return err
 		}
+		// Move charts into results dir
+		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
+		dstHelmPath := filepath.Join(dir, config.HelmDir)
+		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
+			return err
+		}
+		logrus.Debugf("Moved any downloaded Helm chart to %s", dir)
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
@@ -466,8 +473,8 @@ func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir st
 	generic := image.ByCategory(mapping, image.TypeGeneric)
 	operator := image.ByCategory(mapping, image.TypeOperatorBundle, image.TypeOperatorCatalog)
 
-	getICSP := func(mapping image.TypedImageMapping, name string) error {
-		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, &GenericBuilder{})
+	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
+		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
 		if err != nil {
 			return fmt.Errorf("error generating ICSP manifests")
 		}
@@ -475,13 +482,13 @@ func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir st
 		return nil
 	}
 
-	if err := getICSP(releases, "release"); err != nil {
+	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(generic, "generic"); err != nil {
+	if err := getICSP(generic, "generic", &GenericBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(operator, "operator"); err != nil {
+	if err := getICSP(operator, "operator", &OperatorBuilder{}); err != nil {
 		return err
 	}
 

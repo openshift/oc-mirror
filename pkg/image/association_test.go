@@ -41,6 +41,7 @@ func TestAssociateImageLayers(t *testing.T) {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
+							Tag:  "latest",
 						},
 						Type: imagesource.DestinationFile,
 					},
@@ -78,6 +79,7 @@ func TestAssociateImageLayers(t *testing.T) {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
+							ID:   "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 						},
 						Type: imagesource.DestinationFile,
 					},
@@ -115,6 +117,7 @@ func TestAssociateImageLayers(t *testing.T) {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "index_manifest",
+							Tag:  "latest",
 						},
 						Type: imagesource.DestinationFile,
 					},
@@ -212,13 +215,14 @@ func TestAssociateImageLayers(t *testing.T) {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
-							ID:   "d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 						}},
 					Category: TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
-						}},
+						},
+						Type: imagesource.DestinationFile,
+					},
 					Category: TypeGeneric}},
 			wantErr:  true,
 			expError: &ErrInvalidComponent{},

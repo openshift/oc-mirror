@@ -81,7 +81,6 @@ func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 		dest.Ref.Registry = registry
 		dest.Ref.Namespace = path.Join(namespace, dest.Ref.Namespace)
 		dest.Ref.ID = src.Ref.ID
-		dest.Ref.Tag = src.Ref.Tag
 		m[src] = dest
 	}
 }

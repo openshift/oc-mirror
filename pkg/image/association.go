@@ -231,7 +231,8 @@ func AssociateImageLayers(rootDir string, imgMappings TypedImageMapping) (Associ
 	localRoot := filepath.Join(rootDir, "v2")
 	for image, diskLoc := range imgMappings {
 		if diskLoc.Type != imagesource.DestinationFile {
-			errs = append(errs, fmt.Errorf("image destination for %q is not type file", image.Ref.String()))
+			errs = append(errs, fmt.Errorf("image destination for %q is not type file", image.Ref.Exact()))
+			continue
 		}
 		dirRef := diskLoc.Ref.AsRepository().String()
 		imagePath := filepath.Join(localRoot, dirRef)
@@ -243,10 +244,15 @@ func AssociateImageLayers(rootDir string, imgMappings TypedImageMapping) (Associ
 		}
 
 		var tagOrID string
-		if image.Ref.Tag != "" {
-			tagOrID = image.Ref.Tag
+		if diskLoc.Ref.Tag != "" {
+			tagOrID = diskLoc.Ref.Tag
 		} else {
-			tagOrID = image.Ref.ID
+			tagOrID = diskLoc.Ref.ID
+		}
+
+		if tagOrID == "" {
+			errs = append(errs, &ErrInvalidComponent{image.String(), tagOrID})
+			continue
 		}
 
 		// TODO(estroz): parallelize

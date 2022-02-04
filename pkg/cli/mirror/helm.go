@@ -110,8 +110,8 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfi
 	}
 
 	// Image download planning
-	additional := &AdditionalOptions{}
-	return additional.Plan(images)
+	additional := NewAdditionalOptions(h.MirrorOptions)
+	return additional.Plan(ctx, images)
 }
 
 // FindImages will download images found in a Helm chart on disk

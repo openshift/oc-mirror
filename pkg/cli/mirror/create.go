@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-	"github.com/sirupsen/logrus"
 )
 
 // Create will plan a mirroring operation based on provided configuration
@@ -110,8 +111,8 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha1.ImageSetConfigura
 	mmappings.Merge(mappings)
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
-		additional := &AdditionalOptions{}
-		mappings, err := additional.Plan(cfg.Mirror.AdditionalImages)
+		additional := NewAdditionalOptions(o)
+		mappings, err := additional.Plan(ctx, cfg.Mirror.AdditionalImages)
 		if err != nil {
 			return mmappings, err
 		}
@@ -130,6 +131,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha1.ImageSetConfigura
 	if len(cfg.Mirror.Samples) != 0 {
 		logrus.Debugf("sample images full not implemented")
 	}
+
 	return mmappings, nil
 }
 
