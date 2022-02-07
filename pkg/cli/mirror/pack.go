@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +17,11 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+)
+
+var (
+	// NoUpdatesExist should be returned by Create() when no updates are found
+	ErrNoUpdatesExist = errors.New("no updates detected, process stopping")
 )
 
 const (
@@ -51,6 +57,12 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	if err != nil {
 		return tmpBackend, err
 	}
+
+	// Stop the process if no new blobs
+	if len(blobs) == 0 {
+		return tmpBackend, ErrNoUpdatesExist
+	}
+
 	// Add only the new manifests and blobs created to the current run.
 	currRun.Manifests = append(currRun.Manifests, manifests...)
 	currRun.Blobs = append(currRun.Blobs, blobs...)

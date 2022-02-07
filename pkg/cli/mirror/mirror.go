@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -236,6 +237,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Pack the images set
 		tmpBackend, err := o.Pack(cmd.Context(), assocs, meta, cfg.ArchiveSize)
 		if err != nil {
+			if errors.Is(err, ErrNoUpdatesExist) {
+				logrus.Infof("no updates detected, process stopping")
+				return nil
+			}
 			return err
 		}
 
