@@ -5,43 +5,58 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 func TestICSPGeneration(t *testing.T) {
 	tests := []struct {
 		name          string
-		sourceImage   reference.DockerImageReference
-		destImage     reference.DockerImageReference
-		typ           icspType
+		sourceImage   image.TypedImage
+		destImage     image.TypedImage
+		typ           ICSPBuilder
 		icspScope     string
 		icspSizeLimit int
 		expected      []operatorv1alpha1.ImageContentSourcePolicy
 		err           string
 	}{{
 		name: "Valid/OperatorType",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeOperatorBundle,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeOperatorBundle,
 		},
 		icspScope:     "repository",
 		icspSizeLimit: 250000,
-		typ:           typeOperator,
+		typ:           &OperatorBuilder{},
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "some-registry-namespace-image:digest-0",
+				Name:   "test-0",
 				Labels: map[string]string{"operators.openshift.org/catalog": "true"},
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
@@ -56,26 +71,39 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Valid/GenericType",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
 		icspScope:     "repository",
 		icspSizeLimit: 250000,
+		typ:           &GenericBuilder{},
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-registry-namespace-image:digest-0",
+				Name: "test-0",
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
@@ -89,19 +117,31 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Valid/ReleaseType",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeOCPRelease,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeOCPRelease,
 		},
-		typ:           typeOCPRelease,
+		typ:           &ReleaseBuilder{},
 		icspScope:     "repository",
 		icspSizeLimit: 250000,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
@@ -109,16 +149,12 @@ func TestICSPGeneration(t *testing.T) {
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-registry-namespace-image:digest-0",
+				Name: "test-0",
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
 					{
 						Source:  "some-registry/namespace/image",
-						Mirrors: []string{"disconn-registry/namespace/image"},
-					},
-					{
-						Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
 						Mirrors: []string{"disconn-registry/namespace/image"},
 					},
 				},
@@ -127,19 +163,31 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Valid/NamespaceScope",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		typ:           typeGeneric,
+		typ:           &GenericBuilder{},
 		icspScope:     "namespace",
 		icspSizeLimit: 250000,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
@@ -147,7 +195,7 @@ func TestICSPGeneration(t *testing.T) {
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-registry-namespace-image:digest-0",
+				Name: "test-0",
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
@@ -161,19 +209,31 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Valid/RegistryScope",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		typ:           typeGeneric,
+		typ:           &GenericBuilder{},
 		icspScope:     "registry",
 		icspSizeLimit: 250000,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
@@ -181,7 +241,7 @@ func TestICSPGeneration(t *testing.T) {
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-registry-namespace-image:digest-0",
+				Name: "test-0",
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
@@ -195,19 +255,31 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Valid/NamespaceScopeNoNamespace",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "",
-			Name:      "image",
-			ID:        "digest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconn-registry",
-			Namespace: "",
-			Name:      "image",
-			ID:        "digest",
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		typ:           typeGeneric,
+		typ:           &GenericBuilder{},
 		icspScope:     "namespace",
 		icspSizeLimit: 250000,
 		expected: []operatorv1alpha1.ImageContentSourcePolicy{{
@@ -215,7 +287,7 @@ func TestICSPGeneration(t *testing.T) {
 				APIVersion: operatorv1alpha1.GroupVersion.String(),
 				Kind:       "ImageContentSourcePolicy"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-registry-image:digest-0",
+				Name: "test-0",
 			},
 			Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 				RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
@@ -229,31 +301,77 @@ func TestICSPGeneration(t *testing.T) {
 		},
 	}, {
 		name: "Invalid/NoDigestMapping",
-		sourceImage: reference.DockerImageReference{
-			Registry:  "some-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			Tag:       "latest",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
-		destImage: reference.DockerImageReference{
-			Registry:  "disconnected-registry",
-			Namespace: "namespace",
-			Name:      "image",
-			Tag:       "latest",
+		icspScope:     "namespace",
+		icspSizeLimit: 250000,
+		typ:           &GenericBuilder{},
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
 		},
 		expected: nil,
+	}, {
+		name: "Invalid/InvalidICSPScope",
+		sourceImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "some-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
+		},
+		icspScope:     "invalid",
+		icspSizeLimit: 250000,
+		typ:           &GenericBuilder{},
+		destImage: image.TypedImage{
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "digest",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: image.TypeGeneric,
+		},
+		expected: nil,
+		err:      "invalid ICSP scope invalid",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gen := icspGenerator{
-				icspMapping: map[reference.DockerImageReference]reference.DockerImageReference{
-					test.sourceImage: test.destImage,
-				},
-				icspType: test.typ,
+			mapping := image.TypedImageMapping{}
+			mapping[test.sourceImage] = test.destImage
+			icsps, err := GenerateICSP("test", test.icspScope, test.icspSizeLimit, mapping, test.typ)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.expected, icsps)
 			}
-			icsps, err := gen.Run(test.sourceImage.Exact(), test.icspScope, test.icspSizeLimit)
-			require.NoError(t, err)
-			require.Equal(t, test.expected, icsps)
 		})
 	}
 }

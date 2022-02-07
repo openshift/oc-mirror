@@ -3,117 +3,57 @@ package mirror
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
-	"github.com/openshift/oc/pkg/cli/image/mirror"
-	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 type AdditionalOptions struct {
 	*MirrorOptions
-	// insecure indicates whether the source
-	// registry is insecure
-	insecure bool
 }
 
 func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 	opts := &AdditionalOptions{MirrorOptions: mo}
-	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
-		opts.insecure = true
-	}
 	return opts
 }
 
-type ErrBlocked struct {
-	image string
-}
-
-func (e ErrBlocked) Error() string {
-	return fmt.Sprintf("additional image %s also specified as blocked, remove the image one config field or the other", e.image)
-}
-
-// GetAdditional downloads specified images in the imageset-config.yaml under mirror.additonalImages
-func (o *AdditionalOptions) GetAdditional(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, imageList []v1alpha1.AdditionalImages) (assocs image.AssociationSet, err error) {
-
-	opts := mirror.NewMirrorImageOptions(o.IOStreams)
-	opts.DryRun = o.DryRun
-	opts.SecurityOptions.Insecure = o.insecure
-	opts.SecurityOptions.SkipVerification = o.SkipVerification
-	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
-	opts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
-
-	logrus.Infof("Downloading %d image(s) to %s", len(imageList), opts.FileDir)
-
-	var mappings []mirror.Mapping
-	images := make([]string, len(imageList))
-	assocMappings := make(map[string]string, len(imageList))
-	for i, img := range imageList {
-
-		regctx, err := config.CreateDefaultContext(o.insecure)
-		if err != nil {
-			return nil, fmt.Errorf("error creating registry context: %v", err)
-		}
-		opts.SecurityOptions.CachedContext = regctx
+// Plan provides an image mapping with source and destination for provided AdditionalImages
+func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha1.AdditionalImages) (image.TypedImageMapping, error) {
+	mmappings := make(image.TypedImageMapping, len(imageList))
+	for _, img := range imageList {
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
-
 		if setLatest(srcRef) {
 			srcRef.Ref.Tag = "latest"
 		}
 
-		// Set destination image information
-		dstRef := srcRef
-		dstRef.Type = imagesource.DestinationFile
-		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
-
-		// Check if image is specified as a blocked image
-		if bundle.IsBlocked(cfg, srcRef.Ref) {
-			return nil, ErrBlocked{img.Name}
-		}
-		// Create mapping from source and destination images
-		mappings = append(mappings, mirror.Mapping{
-			Source:      srcRef,
-			Destination: dstRef,
-			Name:        srcRef.Ref.Name,
-		})
-
-		// Add mapping and image for image association.
 		// The registry component is not included in the final path.
 		srcImage, err := bundle.PinImages(ctx, srcRef.Ref.Exact(), "", o.SourceSkipTLS, o.SourcePlainHTTP)
 		if err != nil {
 			return nil, err
 		}
-
-		dstRef.Ref.Registry = ""
-		assocMappings[srcImage] = dstRef.String()
-		images[i] = srcImage
-	}
-
-	opts.Mappings = mappings
-
-	if err := opts.Run(); err != nil {
-		return nil, err
-	}
-
-	// Do not build associations on dry runs because there are no manifests
-	if !o.DryRun {
-		assocs, err = image.AssociateImageLayers(opts.FileDir, assocMappings, images, image.TypeGeneric)
+		pinnedRef, err := imagesource.ParseReference(srcImage)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
+		srcRef.Ref.ID = pinnedRef.Ref.ID
+
+		// Set destination image information as file by default
+		dstRef := srcRef
+		dstRef.Type = imagesource.DestinationFile
+		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
+		dstRef.Ref.Registry = ""
+
+		mmappings.Add(srcRef, dstRef, image.TypeGeneric)
 	}
 
-	return assocs, nil
+	return mmappings, nil
 }
 
 func setLatest(img imagesource.TypedImageReference) bool {

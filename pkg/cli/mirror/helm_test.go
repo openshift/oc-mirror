@@ -5,11 +5,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
+
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
 func TestGetCustomPaths(t *testing.T) {

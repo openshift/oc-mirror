@@ -9,36 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
-	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
+
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
-// TODO: use some oc lib to mock image mirroring, or mirror from files.
-
-func TestGetAdditional(t *testing.T) {
+// TODO(jpower432): replace images being used under estroz org
+func TestPlan_Additional(t *testing.T) {
 	tmpdir := t.TempDir()
-	mo := MirrorOptions{
-		RootOptions: &cli.RootOptions{
-			Dir: tmpdir,
-			IOStreams: genericclioptions.IOStreams{
-				In:     os.Stdin,
-				Out:    os.Stdout,
-				ErrOut: os.Stderr,
-			},
-		},
-	}
-	opts := NewAdditionalOptions(&mo)
 
 	tests := []struct {
-		name    string
-		cfg     v1alpha1.ImageSetConfiguration
-		want    error
-		wantErr bool
-		imgPin  bool
+		name      string
+		cfg       v1alpha1.ImageSetConfiguration
+		want      error
+		wantImage image.TypedImage
+		wantErr   bool
 	}{
 		{
-			name: "testing with no block",
+			name: "Valid/WithTag",
 			cfg: v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
@@ -51,15 +42,27 @@ func TestGetAdditional(t *testing.T) {
 					},
 				},
 			},
-			imgPin: true,
+			wantImage: image.TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Name:      "pull-tester-additional",
+						ID:        "sha256:5e642429d9e8d03267879160121f3001a300cc31cd93455bc27edea309ea9a88",
+						Tag:       "latest",
+						Namespace: "estroz",
+						Registry:  "quay.io",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: image.TypeGeneric,
+			},
 		},
 		{
-			name: "testing with no tag",
+			name: "Valid/NoTag",
 			cfg: v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
 						BlockedImages: []v1alpha1.BlockedImages{
-							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
+							{Image: v1alpha1.Image{Name: "pull-tester-blocked:test"}},
 						},
 						AdditionalImages: []v1alpha1.AdditionalImages{
 							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional"}},
@@ -67,31 +70,36 @@ func TestGetAdditional(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "testing with block",
-			cfg: v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						BlockedImages: []v1alpha1.BlockedImages{
-							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
-						},
-						AdditionalImages: []v1alpha1.AdditionalImages{
-							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-blocked"}},
-						},
+			wantImage: image.TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "quay.io",
+						Name:      "pull-tester-additional",
+						ID:        "sha256:5e642429d9e8d03267879160121f3001a300cc31cd93455bc27edea309ea9a88",
+						Tag:       "latest",
+						Namespace: "estroz",
 					},
+					Type: imagesource.DestinationRegistry,
 				},
+				Category: image.TypeGeneric,
 			},
-			want:    ErrBlocked{},
-			wantErr: true,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			mo := MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					Dir: tmpdir,
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			}
+			opts := NewAdditionalOptions(&mo)
 
-			ctx := context.Background()
-
-			assocs, err := opts.GetAdditional(ctx, test.cfg, test.cfg.Mirror.AdditionalImages)
+			mappings, err := opts.Plan(context.TODO(), test.cfg.Mirror.AdditionalImages)
 			if test.wantErr {
 				testErr := test.want
 				require.ErrorAs(t, err, &testErr)
@@ -99,12 +107,8 @@ func TestGetAdditional(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if test.imgPin {
-				testerImg, err := bundle.PinImages(ctx, test.cfg.Mirror.AdditionalImages[0].Name, "", false, false)
-				require.NoError(t, err)
-				if assert.Len(t, assocs, 1) {
-					require.Contains(t, assocs, testerImg)
-				}
+			if assert.Len(t, mappings, 1) {
+				require.Contains(t, mappings, test.wantImage)
 			}
 		})
 	}
