@@ -7,9 +7,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type MirrorOptions struct {
@@ -32,9 +33,8 @@ type MirrorOptions struct {
 	ContinueOnError  bool
 	FilterOptions    []string
 	// cancelCh is a channel listening for command cancellations
-	cancelCh    <-chan struct{}
-	interrupted bool
-	once        sync.Once
+	cancelCh <-chan struct{}
+	once     sync.Once
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {

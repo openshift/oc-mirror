@@ -10,21 +10,16 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/library-go/pkg/image/registryclient"
-	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	imgmirror "github.com/openshift/oc/pkg/cli/image/mirror"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
@@ -32,11 +27,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-)
-
-const (
-	icspSizeLimit = 250000
-	icspScope     = "namespace"
 )
 
 type UuidError struct {
@@ -65,13 +55,15 @@ func (e *ErrArchiveFileNotFound) Error() string {
 	return fmt.Sprintf("file %s not found in archive", e.filename)
 }
 
-func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdutil.Factory) error {
+// Publish will plan a mirroring operation based on provided imageset on disk
+func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, error) {
 
 	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
 	var currentMeta v1alpha1.Metadata
 	var incomingMeta v1alpha1.Metadata
 	a := archive.NewArchiver()
+	allMappings := image.TypedImageMapping{}
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
@@ -82,14 +74,14 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		dir, err := o.createResultsDir()
 		o.OutputDir = dir
 		if err != nil {
-			return err
+			return allMappings, err
 		}
 	}
 
 	// Create workspace
 	cleanup, tmpdir, err := mktempDir(o.Dir)
 	if err != nil {
-		return err
+		return allMappings, err
 	}
 
 	// Handle cleanup of disk
@@ -102,39 +94,34 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 	// Get file information from the source archives
 	filesInArchive, err := bundle.ReadImageSet(a, o.From)
 	if err != nil {
-		return err
+		return allMappings, err
 	}
 
 	// Extract imageset
 	if err := o.unpackImageSet(a, tmpdir); err != nil {
-		return err
+		return allMappings, err
 	}
 
 	// Create a local workspace backend for incoming data
 	workspace, err := storage.NewLocalBackend(tmpdir)
 	if err != nil {
-		return fmt.Errorf("error opening local backend: %v", err)
+		return allMappings, fmt.Errorf("error opening local backend: %v", err)
 	}
 	// Load incoming metadta
 	if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-		return fmt.Errorf("error reading incoming metadata: %v", err)
+		return allMappings, fmt.Errorf("error reading incoming metadata: %v", err)
 	}
 
-	repo := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
-	metaImage := fmt.Sprintf("%s:%s", repo, incomingMeta.Uid)
-
+	metaImage := o.newMetadataImage(incomingMeta.Uid.String())
 	// Determine stateless or stateful mode
 	var backend storage.Backend
 	if incomingMeta.SingleUse {
 		logrus.Warn("metadata has single-use label, using stateless mode")
 		cfg := v1alpha1.StorageConfig{
-			Local: &v1alpha1.LocalConfig{
-				Path: o.Dir,
-			},
-		}
+			Local: &v1alpha1.LocalConfig{Path: o.Dir}}
 		backend, err = storage.ByConfig(o.Dir, cfg)
 		if err != nil {
-			return err
+			return allMappings, err
 		}
 		defer func() {
 			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
@@ -150,20 +137,20 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		}
 		backend, err = storage.ByConfig(o.Dir, cfg)
 		if err != nil {
-			return err
+			return allMappings, err
 		}
 	}
 
 	// Read in current metadata, if present
 	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
-		return err
+		return allMappings, err
 	case err != nil:
 		logrus.Infof("No existing metadata found. Setting up new workspace")
 		// Check that this is the first imageset
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != 1 {
-			return &SequenceError{1, incomingRun.Sequence}
+			return allMappings, &SequenceError{1, incomingRun.Sequence}
 		}
 	default:
 		// Complete metadata checks
@@ -172,67 +159,43 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
 		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
-			return &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
+			return allMappings, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
 		}
 	}
 
 	// Unpack chart to user destination if it exists
 	logrus.Debugf("Unpacking any provided Helm charts to %s", o.OutputDir)
 	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
-		return err
+		return allMappings, err
 	}
 
 	// Load image associations to find layers not present locally.
 	assocs, err := readAssociations(filepath.Join(tmpdir, config.AssociationsBasePath))
 	if err != nil {
-		return err
+		return allMappings, err
 	}
 
 	toMirrorRef, err := imagesource.ParseReference(o.ToMirror)
 	if err != nil {
-		return fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
+		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
 	}
 	logrus.Debugf("mirror reference: %#v", toMirrorRef)
 	if toMirrorRef.Type != imagesource.DestinationRegistry {
-		return fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
+		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
 
-	var (
-		errs     []error
-		allICSPs []operatorv1alpha1.ImageContentSourcePolicy
-	)
-
-	releaseICSP := &icspGenerator{
-		icspType:    typeOCPRelease,
-		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
-	}
-	catalogICSP := &icspGenerator{
-		icspType:    typeOperator,
-		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
-	}
-	genericICSP := &icspGenerator{
-		icspType:    typeGeneric,
-		icspMapping: make(map[reference.DockerImageReference]reference.DockerImageReference),
-	}
+	var errs []error
 
 	for _, imageName := range assocs.Keys() {
 
-		genericMappings := []imgmirror.Mapping{}
-		releaseMapping := imgmirror.Mapping{}
-
-		// Save original source mapping to generate ICSP for this image.
-		imageRef, err := reference.Parse(imageName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing image name %q for ICSP generation: %v", imageName, err))
-			continue
-		}
+		var mmapping []imgmirror.Mapping
 
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
 		cleanUnpackDir, unpackDir, err := mktempDir(tmpdir)
 		if err != nil {
-			return err
+			return allMappings, err
 		}
 
 		for _, assoc := range values {
@@ -309,61 +272,25 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 			m.Destination.Ref.ID = m.Source.Ref.ID
 			m.Destination.Ref.Namespace = path.Join(o.UserNamespace, m.Source.Ref.Namespace)
 
-			switch assoc.Type {
-			case image.TypeGeneric:
-				genericMappings = append(genericMappings, m)
-				// Add top level association to ICSP generator
-				if assoc.Name == imageRef.Exact() {
-					genericICSP.icspMapping[imageRef] = m.Destination.Ref
-				}
-			case image.TypeOCPRelease:
-				if assoc.Name == imageRef.Exact() {
-					// Update destination ref ICSP to match the
-					// default mirror location of releases (openshift/release)
-					releaseICSP.icspMapping[imageRef] = m.Destination.Ref
+			// Add references for the mirror mapping
+			mmapping = append(mmapping, m)
 
-					// Remove component info in mapping for
-					// release mirroring step
-					m.Destination.Ref.Tag = ""
-					m.Destination.Ref.ID = ""
-					releaseMapping = m
-				}
-			case image.TypeOperatorCatalog:
-				genericMappings = append(genericMappings, m)
-				// Add top level association to ICSP generator
-				if assoc.Name == imageRef.Exact() {
-					catalogICSP.icspMapping[imageRef] = m.Destination.Ref
-				}
-			case image.TypeOperatorBundle, image.TypeOperatorRelatedImage:
-				genericMappings = append(genericMappings, m)
-				// Add top level association to ICSP generator
-				if assoc.Name == imageRef.Exact() {
-					catalogICSP.icspMapping[imageRef] = m.Destination.Ref
-				}
-			case image.TypeInvalid:
-				errs = append(errs, fmt.Errorf("image %q: image type is not set", imageName))
-			default:
-				errs = append(errs, fmt.Errorf("image %q: invalid image type %v", imageName, assoc.Type))
+			// Add top level assocation to the ICSP mapping
+			if assoc.Name == imageName {
+				allMappings.Add(m.Source, m.Destination, assoc.Type)
 			}
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
-				if err := o.fetchBlobs(ctx, currentMeta, m, missingLayers); err != nil {
-					return err
+				if err := o.fetchBlobs(ctx, currentMeta, missingLayers); err != nil {
+					return allMappings, err
 				}
 			}
 		}
 
-		// Mirror all generic mappings for this image
-		if len(genericMappings) != 0 {
-			if err := o.mirrorImage(genericMappings, unpackDir); err != nil {
-				errs = append(errs, err)
-			}
-		}
-
-		// If this is a release image mirror the full release
-		if releaseMapping.Source.String() != "" {
-			if err := o.mirrorRelease(releaseMapping, cmd, f, unpackDir); err != nil {
+		// Mirror all mappings for this image
+		if len(mmapping) != 0 {
+			if err := o.publishImage(mmapping, unpackDir); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -374,58 +301,33 @@ func (o *MirrorOptions) Publish(ctx context.Context, cmd *cobra.Command, f kcmdu
 		}
 	}
 	if len(errs) != 0 {
-		return utilerrors.NewAggregate(errs)
+		return allMappings, utilerrors.NewAggregate(errs)
 	}
 
 	logrus.Debug("rebuilding catalog images")
 
-	ctlgRefs, err := o.rebuildCatalogs(ctx, tmpdir, filesInArchive)
+	found, err := o.unpackCatalog(tmpdir, filesInArchive)
 	if err != nil {
-		return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
+		return allMappings, err
 	}
-	// Create CatalogSource manifests and save ICSP data for all catalog refs.
-	// Source and dest refs are treated the same intentionally since
-	// the source image does not exist and destination image was built above.
-	for sourceRef, destRef := range ctlgRefs {
-		catalogICSP.icspMapping[sourceRef] = destRef
-		if err := WriteCatalogSource(sourceRef, destRef, o.OutputDir); err != nil {
-			return fmt.Errorf("error writing CatalogSource for catalog image %q: %v", destRef.Exact(), err)
+
+	if found {
+		ctlgRefs, err := o.rebuildCatalogs(ctx, tmpdir)
+		if err != nil {
+			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}
+		if err := WriteCatalogSource(ctlgRefs, o.OutputDir); err != nil {
+			return allMappings, err
+		}
+		allMappings.Merge(ctlgRefs)
 	}
-
-	// Generate ICSPs for all images.
-	catalogICSPS, err := catalogICSP.Run("catalog", icspScope, icspSizeLimit)
-	if err != nil {
-		return fmt.Errorf("error generating ICSP for catalog images: %v", err)
-	}
-	allICSPs = append(allICSPs, catalogICSPS...)
-	// Set release ICSP to repository due to the image name change that
-	// occurs during mirroring
-	releaseICSPS, err := releaseICSP.Run("release", "repository", icspSizeLimit)
-	if err != nil {
-		return fmt.Errorf("error generating ICSP for release images: %v", err)
-	}
-	allICSPs = append(allICSPs, releaseICSPS...)
-	genericICSPS, err := genericICSP.Run("generic", icspScope, icspSizeLimit)
-	if err != nil {
-		return fmt.Errorf("error generating ICSP for generic images: %v", err)
-	}
-	allICSPs = append(allICSPs, genericICSPS...)
-
-	// Write an aggregation of ICSPs
-	if err := WriteICSPs(o.OutputDir, allICSPs); err != nil {
-		return fmt.Errorf("error writing ICSPs: %v", err)
-	}
-
-	// Install catalogsource and icsp
-	logrus.Info("CatalogSource and ICSP install not implemented")
 
 	// Replace old metadata with new metadata
 	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-		return err
+		return allMappings, err
 	}
 
-	return nil
+	return allMappings, nil
 }
 
 // readAssociations will process and return data from the image associations file
@@ -506,7 +408,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, mapping imgmirror.Mapping, missingLayers map[string][]string) error {
+func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, missingLayers map[string][]string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
@@ -588,40 +490,8 @@ func mktempDir(dir string) (func(), string, error) {
 	}, dir, err
 }
 
-// mirrorRelease uses the `oc release mirror` library to mirror OCP release
-// TODO(jpower432): refactor to mirror release images as individual images
-func (o *MirrorOptions) mirrorRelease(mapping imgmirror.Mapping, cmd *cobra.Command, f kcmdutil.Factory, fromDir string) error {
-	var insecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		insecure = true
-	}
-	logrus.Debugf("mirroring release image: %s", mapping.Source.String())
-	regctx, err := config.CreateDefaultContext(insecure)
-	if err != nil {
-		return err
-	}
-	relOpts := release.NewMirrorOptions(o.IOStreams)
-	relOpts.From = mapping.Source.String()
-	relOpts.FromDir = fromDir
-	relOpts.To = mapping.Destination.String()
-	relOpts.SecurityOptions.CachedContext = regctx
-	relOpts.SecurityOptions.Insecure = insecure
-	relOpts.DryRun = o.DryRun
-	if err := relOpts.Complete(cmd, f, nil); err != nil {
-		return fmt.Errorf("error initializing release mirror options: %v", err)
-	}
-	if err := relOpts.Validate(); err != nil {
-		return fmt.Errorf("invalid release mirror options: %v", err)
-	}
-	if err := relOpts.Run(); err != nil {
-		return fmt.Errorf("error running %q release mirror: %v", mapping, err)
-	}
-
-	return nil
-}
-
-// mirrorImages uses the `oc mirror` library to mirror generic images
-func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string) error {
+// publishImages uses the `oc mirror` library to mirror generic images
+func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
@@ -659,21 +529,10 @@ func (o *MirrorOptions) mirrorImage(mappings []imgmirror.Mapping, fromDir string
 	return nil
 }
 
-func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
-	resultsDir = filepath.Join(
-		o.Dir,
-		fmt.Sprintf("results-%v", time.Now().Unix()),
-	)
-	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
-		return resultsDir, err
-	}
-	return resultsDir, nil
-}
-
 func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
 	// TODO(jpower432): implement map searching instead for efficiency
-	// would have to ensure the latest run is prefferred
+	// would have to ensure the latest run is preferred
 	for _, mirror := range meta.PastMirrors {
 		for _, blob := range mirror.Blobs {
 			if blob.ID == layerDigest {

@@ -12,6 +12,14 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
+type ErrBlocked struct {
+	image string
+}
+
+func (e ErrBlocked) Error() string {
+	return fmt.Sprintf("image %s blocked", e.image)
+}
+
 // IsBlocked will return a boolean value on whether an image
 // is specified as blocked in the BundleSpec
 func IsBlocked(cfg v1alpha1.ImageSetConfiguration, imgRef reference.DockerImageReference) bool {

@@ -1,8 +1,15 @@
 package image
 
 import (
+	"io/fs"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,20 +21,31 @@ const (
 func TestAssociateImageLayers(t *testing.T) {
 	tests := []struct {
 		name       string
-		tag        string
 		imgTyp     ImageType
-		imgs       []string
-		imgMapping map[string]string
+		imgMapping TypedImageMapping
 		expResult  AssociationSet
 		expError   error
 		wantErr    bool
 	}{
 		{
-			name:       "Valid/ManifestWithTag",
-			imgTyp:     TypeGeneric,
-			tag:        "oc-mirror",
-			imgMapping: map[string]string{"imgname:latest": "single_manifest:latest"},
-			imgs:       []string{"imgname:latest"},
+			name:   "Valid/ManifestWithTag",
+			imgTyp: TypeGeneric,
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+							Tag:  "latest",
+						}},
+					Category: TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "single_manifest",
+							Tag:  "latest",
+						},
+						Type: imagesource.DestinationFile,
+					},
+					Category: TypeGeneric}},
 			expResult: AssociationSet{"imgname:latest": map[string]Association{
 				"imgname:latest": {
 					Name:            "imgname:latest",
@@ -49,18 +67,28 @@ func TestAssociateImageLayers(t *testing.T) {
 		},
 		{
 			name:   "Valid/ManifestWithDigest",
-			tag:    "oc-mirror",
 			imgTyp: TypeGeneric,
-			imgMapping: map[string]string{
-				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": "single_manifest@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19"},
-			imgs: []string{
-				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-			},
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+							ID:   "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						}},
+					Category: TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "single_manifest",
+							ID:   "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						},
+						Type: imagesource.DestinationFile,
+					},
+					Category: TypeGeneric}},
 			expResult: AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": map[string]Association{
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
-					TagSymlink:      "oc-mirror",
+					TagSymlink:      "oc-mirrord31c6e",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Type:            TypeGeneric,
 					ManifestDigests: nil,
@@ -77,13 +105,23 @@ func TestAssociateImageLayers(t *testing.T) {
 		},
 		{
 			name:   "Valid/IndexManifest",
-			tag:    "oc-mirror",
 			imgTyp: TypeGeneric,
-			imgMapping: map[string]string{
-				"imgname:latest": "index_manifest:latest"},
-			imgs: []string{
-				"imgname:latest",
-			},
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+							Tag:  "latest",
+						}},
+					Category: TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "index_manifest",
+							Tag:  "latest",
+						},
+						Type: imagesource.DestinationFile,
+					},
+					Category: TypeGeneric}},
 			expResult: AssociationSet{"imgname:latest": map[string]Association{
 				"imgname:latest": {
 					Name:       "imgname:latest",
@@ -170,25 +208,31 @@ func TestAssociateImageLayers(t *testing.T) {
 			}},
 		},
 		{
-			name:       "Invalid/ImageWithNoMapping",
-			imgTyp:     TypeGeneric,
-			imgMapping: map[string]string{"imgname:notlatest": "single_manifest:latest"},
-			imgs:       []string{"imgname:latest"},
-			wantErr:    true,
-			expError:   &ErrNoMapping{},
-		},
-		{
-			name:       "Invalid/InvalidComponent",
-			imgTyp:     TypeGeneric,
-			imgMapping: map[string]string{"imgname:latest": "single_manifest"},
-			imgs:       []string{"imgname:latest"},
-			wantErr:    true,
-			expError:   &ErrInvalidComponent{},
+			name:   "Invalid/InvalidComponent",
+			imgTyp: TypeGeneric,
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+						}},
+					Category: TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "single_manifest",
+						},
+						Type: imagesource.DestinationFile,
+					},
+					Category: TypeGeneric}},
+			wantErr:  true,
+			expError: &ErrInvalidComponent{},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			asSet, err := AssociateImageLayers("testdata", test.imgMapping, test.imgs, test.imgTyp)
+			tmpdir := t.TempDir()
+			require.NoError(t, copyV2("testdata", tmpdir))
+			asSet, err := AssociateImageLayers(tmpdir, test.imgMapping)
 			if !test.wantErr {
 				require.NoError(t, err)
 				require.Equal(t, test.expResult, asSet)
@@ -197,7 +241,36 @@ func TestAssociateImageLayers(t *testing.T) {
 			}
 		})
 	}
+}
 
+func copyV2(source, destination string) error {
+	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		relPath := strings.Replace(path, source, "", 1)
+		if relPath == "" {
+			return nil
+		}
+		switch m := info.Mode(); {
+		case m&fs.ModeSymlink != 0: // Tag is the file name, so follow the symlink to the layer ID-named file.
+			dst, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			id := filepath.Base(dst)
+			if err := os.Symlink(id, filepath.Join(destination, relPath)); err != nil {
+				return err
+			}
+		case m.IsDir():
+			return os.Mkdir(filepath.Join(destination, relPath), 0755)
+		default:
+			data, err := ioutil.ReadFile(filepath.Join(source, relPath))
+			if err != nil {
+				return err
+			}
+			return ioutil.WriteFile(filepath.Join(destination, relPath), data, 0777)
+		}
+		return nil
+	})
+	return err
 }
 
 func TestUpdateKey(t *testing.T) {

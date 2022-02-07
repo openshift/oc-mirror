@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func TestMirrorComplete(t *testing.T) {
@@ -180,15 +181,6 @@ func TestMirrorValidate(t *testing.T) {
 				OutputDir: "dir",
 			},
 			expError: `must specify a configuration file with --config`,
-		},
-		{
-			name: "Invalid/DryRunWithMirror",
-			opts: &MirrorOptions{
-				ConfigPath: "foo",
-				ToMirror:   u.Host,
-				DryRun:     true,
-			},
-			expError: "--dry-run is not supported for mirror publishing operations",
 		},
 		{
 			name: "Invalid/UnsupportReleaseArch",
