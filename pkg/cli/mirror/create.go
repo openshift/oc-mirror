@@ -20,6 +20,11 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+var (
+	// NoUpdatesExist should be returned by Create() when no updates are found
+	NoUpdatesExist = errors.New("no updates detected, process stopping")
+)
+
 func (o *MirrorOptions) Create(ctx context.Context) error {
 
 	// Read the imageset-config.yaml
@@ -126,6 +131,13 @@ func (o *MirrorOptions) Create(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Stop the process if no new blobs
+	if len(blobs) == 0 {
+		logrus.Infof("no updates detected, process stopping")
+		return NoUpdatesExist
+	}
+
 	// Add only the new manifests and blobs created to the current run.
 	thisRun.Manifests = append(thisRun.Manifests, manifests...)
 	thisRun.Blobs = append(thisRun.Blobs, blobs...)

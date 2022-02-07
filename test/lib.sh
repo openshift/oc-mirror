@@ -181,6 +181,28 @@ function run_diff() {
   popd
 }
 
+# run_no_updates will simulate an initial oc-mirror run
+# to disk then resubmit another oc-mirror which should yield no changes
+function run_no_updates() {
+  local config="${1:?config required}"
+  local diff="${2:?diff required}"
+  local ns="${3:-""}"
+  mkdir $PUBLISH_FULL_DIR
+  # Copy the catalog to the connected registry so they can have the same tag
+  "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
+   prep_registry false
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http
+  run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http
+  pushd $PUBLISH_FULL_DIR
+  if [[ -n $ns ]]; then
+    NS="/$ns"
+  else
+    NS=""
+  fi
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}"
+  popd
+}
+
 # mirror2mirror will simulate oc-mirror
 # mirror to mirror operations
 function mirror2mirror() {
@@ -219,4 +241,14 @@ function run_helm() {
   fi
   run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}"
   popd
+}
+
+# check_sequence_number will inspect the number of pastMirrors / sequence number of the publish .metadata.json file against a user provided number
+function check_sequence_number() {
+  local expected_past_mirrors="${1:?expected past mirrors required}"
+  actual_past_mirrors=$(jq '.pastMirrors | length' "${DATA_TMP}"/publish/.metadata.json)
+  if [[ "$expected_past_mirrors" != "$actual_past_mirrors" ]]; then
+    echo "expected_past_mirrors does not match actual_past_mirrors"
+    return 1
+  fi
 }

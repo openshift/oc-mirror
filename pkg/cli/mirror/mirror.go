@@ -184,7 +184,11 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
 	case len(o.OutputDir) > 0 && o.From == "":
-		return o.Create(cmd.Context())
+		err := o.Create(cmd.Context())
+		if err != nil && err != NoUpdatesExist {
+			return err
+		}
+		return nil
 	case len(o.ToMirror) > 0 && len(o.From) > 0:
 		return o.Publish(cmd.Context(), cmd, f)
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
@@ -200,17 +204,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		fmt.Fprintf(o.IOStreams.Out, "workspace: %s\n", dir)
 
 		o.OutputDir = dir
-		if err := o.Create(cmd.Context()); err != nil {
+
+		err := o.Create(cmd.Context());
+		if err != nil && err != NoUpdatesExist {
 			return err
 		}
 
-		// run publish
-		o.From = dir
-		o.OutputDir = ""
+		if err != NoUpdatesExist {
+			// run publish
+			o.From = dir
+			o.OutputDir = ""
 
-		if err := o.Publish(cmd.Context(), cmd, f); err != nil {
-			fmt.Fprintf(o.IOStreams.ErrOut, "Image Publish:\nERROR: publishing operation failed: %v\nTo retry this operation run \"oc-mirror --from %s docker://%s\"\n", err, o.From, o.ToMirror)
-			return kcmdutil.ErrExit
+			if err := o.Publish(cmd.Context(), cmd, f); err != nil {
+				fmt.Fprintf(o.IOStreams.ErrOut, "Image Publish:\nERROR: publishing operation failed: %v\nTo retry this operation run \"oc-mirror --from %s docker://%s\"\n", err, o.From, o.ToMirror)
+				return kcmdutil.ErrExit
+			}
 		}
 
 		// Remove tmp directory
