@@ -309,12 +309,12 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMapping) error {
 	var errs []error
 	validateFunc := func(img string) error {
-		ref, err := image.ParseTypedImage(img, image.TypeGeneric)
+		ref, err := image.ParseTypedImage(img, image.TypeOperatorBundle)
 		if err != nil {
 			return err
 		}
 		_, ok := mapping[ref]
-		if ok {
+		if !ok {
 			logrus.Warnf("image %s is not included in mapping", img)
 		}
 		return nil

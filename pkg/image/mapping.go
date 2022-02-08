@@ -42,7 +42,7 @@ func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImage
 		text := scanner.Text()
 		split := strings.Split(text, separator)
 		if len(split) != 2 {
-			return nil, fmt.Errorf("mapping %q expected to have exactly one \"=\"", text)
+			return nil, fmt.Errorf("mapping %q expected to have exactly one \"%s\"", separator, text)
 		}
 		srcTypedRef, err := ParseTypedImage(strings.TrimSpace(split[0]), typ)
 		if err != nil {
@@ -59,7 +59,7 @@ func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImage
 }
 
 // WriteImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func (m TypedImageMapping) WriteImageMapping(mappingsPath string) error {
+func (m TypedImageMapping) WriteToFile(mappingsPath string) error {
 	f, err := os.Create(mappingsPath)
 	if err != nil {
 		return err
