@@ -217,8 +217,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			logrus.Infof("Writing image mapping to %s", mappingFile)
-			if err := mapping.WriteToFile(filepath.Join(o.Dir, mappingFile)); err != nil {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
+			logrus.Infof("Writing image mapping to %s", mappingPath)
+			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
 			return nil
@@ -288,8 +289,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
 		if o.DryRun {
-			logrus.Infof("Writing image mapping to %s", mappingFile)
-			if err := mapping.WriteToFile(filepath.Join(o.Dir, mappingFile)); err != nil {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
+			logrus.Infof("Writing image mapping to %s", mappingPath)
+			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
 			return nil
