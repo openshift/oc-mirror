@@ -4,7 +4,7 @@ WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.10
+FROM registry.ci.openshift.org/ocp/4.10:base
 COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
