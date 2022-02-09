@@ -1,6 +1,0 @@
----
-apiVersion: mirror.openshift.io/v1alpha1
-kind: ImageSetConfiguration
-mirror:
-  additionalimages:
-    - name: quay.io/estroz/pull-tester-additional:latest

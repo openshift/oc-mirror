@@ -2,9 +2,7 @@ package mirror
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,7 +10,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
@@ -57,15 +54,18 @@ func TestAddOPMImage(t *testing.T) {
 	require.Len(t, cfg.Mirror.AdditionalImages, 0)
 }
 
-// TODO(jpower432): test mapping output
 func TestCreate(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
-	configPath := path + "/test.yaml"
-	require.NoError(t, generateConfigPath(path, "testdata/configs/test.yaml", configPath))
-	cfg, err := config.LoadConfig(configPath)
-	require.NoError(t, err)
+	img := v1alpha1.AdditionalImages{
+		Image: v1alpha1.Image{
+			Name: "quay.io/redhatgov/oc-mirror-dev:latest",
+		},
+	}
+
+	cfg := v1alpha1.ImageSetConfiguration{}
+	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, img)
 
 	opts := MirrorOptions{
 		RootOptions: &cli.RootOptions{
@@ -77,21 +77,10 @@ func TestCreate(t *testing.T) {
 				ErrOut: os.Stderr,
 			},
 		},
-		ConfigPath: configPath,
-		OutputDir:  path,
+		OutputDir: path,
 	}
-	_, _, err = opts.Create(ctx, cfg)
+	_, mappings, err := opts.Create(ctx, cfg)
 	require.NoError(t, err)
-}
-
-func generateConfigPath(path string, baseFile string, targetFile string) error {
-
-	read, err := ioutil.ReadFile(baseFile)
-	if err != nil {
-		return err
-	}
-
-	newContents := strings.Replace(string(read), "testdata", path+"/testdata", -1)
-
-	return ioutil.WriteFile(targetFile, []byte(newContents), 0744)
+	// One mapping for OPM and one for the requested image
+	require.Len(t, mappings, 2)
 }
