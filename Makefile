@@ -19,7 +19,7 @@ clean:
 	@rm -rf ./bin/*
 
 .PHONY: test-unit
-test-unit: tidy
+test-unit:
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 
 .PHONY: test-e2e

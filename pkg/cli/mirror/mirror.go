@@ -217,7 +217,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			if err := mapping.WriteImageMapping(filepath.Join(o.Dir, mappingFile)); err != nil {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
+			logrus.Infof("Writing image mapping to %s", mappingPath)
+			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
 			return nil
@@ -287,7 +289,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
 		if o.DryRun {
-			if err := mapping.WriteImageMapping(filepath.Join(o.Dir, mappingFile)); err != nil {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
+			logrus.Infof("Writing image mapping to %s", mappingPath)
+			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
 			return nil
@@ -446,6 +450,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	a.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	a.KeepManifestList = true
 	a.SkipMultipleScopes = true
+	a.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: 2}
 	regctx, err := config.CreateDefaultContext(insecure)
 	if err != nil {
 		return a, fmt.Errorf("error creating registry context: %v", err)

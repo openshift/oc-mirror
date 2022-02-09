@@ -17,7 +17,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
-// TODO(jpower432): replace images being used under estroz org
 func TestPlan_Additional(t *testing.T) {
 	tmpdir := t.TempDir()
 
@@ -33,11 +32,8 @@ func TestPlan_Additional(t *testing.T) {
 			cfg: v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
-						BlockedImages: []v1alpha1.BlockedImages{
-							{Image: v1alpha1.Image{Name: "pull-tester-blocked"}},
-						},
 						AdditionalImages: []v1alpha1.AdditionalImages{
-							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional:latest"}},
+							{Image: v1alpha1.Image{Name: "quay.io/redhatgov/oc-mirror-dev:latest"}},
 						},
 					},
 				},
@@ -45,10 +41,10 @@ func TestPlan_Additional(t *testing.T) {
 			wantImage: image.TypedImage{
 				TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
-						Name:      "pull-tester-additional",
-						ID:        "sha256:5e642429d9e8d03267879160121f3001a300cc31cd93455bc27edea309ea9a88",
+						Name:      "oc-mirror-dev",
+						ID:        "sha256:ee09cc8be7dd2b7a163e37f3e4dcdb7dbf474e15bbae557249cf648da0c7559f",
 						Tag:       "latest",
-						Namespace: "estroz",
+						Namespace: "redhatgov",
 						Registry:  "quay.io",
 					},
 					Type: imagesource.DestinationRegistry,
@@ -61,11 +57,8 @@ func TestPlan_Additional(t *testing.T) {
 			cfg: v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
-						BlockedImages: []v1alpha1.BlockedImages{
-							{Image: v1alpha1.Image{Name: "pull-tester-blocked:test"}},
-						},
 						AdditionalImages: []v1alpha1.AdditionalImages{
-							{Image: v1alpha1.Image{Name: "quay.io/estroz/pull-tester-additional"}},
+							{Image: v1alpha1.Image{Name: "quay.io/redhatgov/oc-mirror-dev"}},
 						},
 					},
 				},
@@ -74,10 +67,10 @@ func TestPlan_Additional(t *testing.T) {
 				TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "quay.io",
-						Name:      "pull-tester-additional",
-						ID:        "sha256:5e642429d9e8d03267879160121f3001a300cc31cd93455bc27edea309ea9a88",
+						Name:      "oc-mirror-dev",
+						ID:        "sha256:ee09cc8be7dd2b7a163e37f3e4dcdb7dbf474e15bbae557249cf648da0c7559f",
 						Tag:       "latest",
-						Namespace: "estroz",
+						Namespace: "redhatgov",
 					},
 					Type: imagesource.DestinationRegistry,
 				},

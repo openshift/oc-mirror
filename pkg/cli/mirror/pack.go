@@ -127,10 +127,10 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Back
 }
 
 func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
-	diskPath := filepath.Join(o.Dir, config.SourceDir, "v2")
+	diskPath := filepath.Join(o.Dir, config.SourceDir, config.V2Dir)
 	// Define a map that associates locations
 	// on disk to location in archive
-	paths := map[string]string{diskPath: "v2"}
+	paths := map[string]string{diskPath: config.V2Dir}
 	return bundle.ReconcileV2Dir(meta, paths)
 }
 

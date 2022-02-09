@@ -28,52 +28,6 @@ func ParseTypedImage(image string, typ ImageType) (TypedImage, error) {
 
 type TypedImageMapping map[TypedImage]TypedImage
 
-// ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImageMapping, error) {
-	f, err := os.Open(mappingsPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	mappings := TypedImageMapping{}
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		text := scanner.Text()
-		split := strings.Split(text, separator)
-		if len(split) != 2 {
-			return nil, fmt.Errorf("mapping %q expected to have exactly one \"=\"", text)
-		}
-		srcTypedRef, err := ParseTypedImage(strings.TrimSpace(split[0]), typ)
-		if err != nil {
-			return nil, err
-		}
-		dstTypedRef, err := ParseTypedImage(strings.TrimSpace(split[1]), typ)
-		if err != nil {
-			return nil, err
-		}
-		mappings[srcTypedRef] = dstTypedRef
-	}
-
-	return mappings, scanner.Err()
-}
-
-// WriteImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func (m TypedImageMapping) WriteImageMapping(mappingsPath string) error {
-	f, err := os.Create(mappingsPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	for fromStr, toStr := range m {
-		_, err := f.WriteString(fmt.Sprintf("%s=%s\n", fromStr.Ref.Exact(), toStr.Ref.Exact()))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ToRegistry will convet a mapping to disk to a registry to registry mapping
 func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 	for src, dest := range m {
@@ -134,4 +88,50 @@ func ByCategory(m TypedImageMapping, types ...ImageType) TypedImageMapping {
 		}
 	}
 	return prunedMap
+}
+
+// ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
+func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImageMapping, error) {
+	f, err := os.Open(mappingsPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	mappings := TypedImageMapping{}
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		text := scanner.Text()
+		split := strings.Split(text, separator)
+		if len(split) != 2 {
+			return nil, fmt.Errorf("mapping %q expected to have exactly one \"%s\"", separator, text)
+		}
+		srcTypedRef, err := ParseTypedImage(strings.TrimSpace(split[0]), typ)
+		if err != nil {
+			return nil, err
+		}
+		dstTypedRef, err := ParseTypedImage(strings.TrimSpace(split[1]), typ)
+		if err != nil {
+			return nil, err
+		}
+		mappings[srcTypedRef] = dstTypedRef
+	}
+
+	return mappings, scanner.Err()
+}
+
+// WriteImageMapping writes key map k/v to a mapping.txt file.
+func WriteImageMapping(m TypedImageMapping, mappingsPath string) error {
+	f, err := os.Create(mappingsPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for fromStr, toStr := range m {
+		_, err := f.WriteString(fmt.Sprintf("%s=%s\n", fromStr.Ref.Exact(), toStr.Ref.Exact()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
