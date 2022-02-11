@@ -420,7 +420,7 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, 
 
 	var errs []error
 	for layerDigest, dstBlobPaths := range missingLayers {
-		imgRef, err := o.findBlobRepo(meta.PastMirror, layerDigest)
+		imgRef, err := o.findBlobRepo(meta.PastBlobs, layerDigest)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
 		}
@@ -529,9 +529,9 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	return nil
 }
 
-func (o *MirrorOptions) findBlobRepo(mirror v1alpha1.PastMirror, layerDigest string) (imagesource.TypedImageReference, error) {
+func (o *MirrorOptions) findBlobRepo(blobs v1alpha1.Blobs, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
-	for _, blob := range mirror.Blobs {
+	for _, blob := range blobs {
 		if blob.ID == layerDigest {
 			namespacename = blob.NamespaceName
 			break

@@ -13,10 +13,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-func DiffMetadata(first, second v1alpha1.Metadata) {
-
-}
-
 // SyncMetadata copies Metadata from one Backend to another
 func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Backend) error {
 	var meta v1alpha1.Metadata

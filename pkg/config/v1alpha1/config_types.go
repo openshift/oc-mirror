@@ -42,8 +42,12 @@ type OCP struct {
 }
 
 type ReleaseChannel struct {
-	Name       string `json:"name"`
+	Name string `json:"name"`
+	// MinVersion is minimum version in the
+	// release channel to mirror
 	MinVersion string `json:"minVersion"`
+	// MaxVersion is maximum version in the
+	// release channel to mirror
 	MaxVersion string `json:"maxVersion"`
 }
 

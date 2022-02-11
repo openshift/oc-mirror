@@ -22,8 +22,8 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	// Empty storage configuration will trigger a metadata cleanup
 	// action and labels metadata as single use
 	path := filepath.Join(o.Dir, config.SourceDir)
+	meta := v1alpha1.NewMetadata()
 	var backend storage.Backend
-	var meta v1alpha1.Metadata
 	var err error
 	if !cfg.StorageConfig.IsSet() {
 		meta.SingleUse = true
@@ -57,6 +57,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
 	switch {
 	case merr != nil:
+		logrus.Info("No metadata detected, creating new workspace")
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 		thisRun.Mirror = cfg.Mirror

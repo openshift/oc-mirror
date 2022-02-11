@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -126,7 +127,7 @@ func TestFindBlobRepo(t *testing.T) {
 			Type: "docker",
 			Ref: reference.DockerImageReference{
 				Registry:  "registry.com",
-				Namespace: "test1",
+				Namespace: "test3",
 				Name:      "baz",
 			},
 		},
@@ -142,7 +143,7 @@ func TestFindBlobRepo(t *testing.T) {
 			Ref: reference.DockerImageReference{
 				Registry:  "registry.com",
 				Namespace: "foo",
-				Name:      "test1/baz",
+				Name:      "test3/baz",
 			},
 		},
 	}, {
@@ -158,26 +159,29 @@ func TestFindBlobRepo(t *testing.T) {
 
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirror: v1alpha1.PastMirror{
-						Blobs: []v1alpha1.Blob{
-							{
-								ID:            "found",
-								NamespaceName: "test1/baz",
-							},
-							{
-								ID:            "found",
-								NamespaceName: "test2/baz",
-							},
-							{
-								ID:            "found",
-								NamespaceName: "test3/baz",
-							},
+					PastBlobs: []v1alpha1.Blob{
+						{
+							ID:            "found",
+							NamespaceName: "test1/baz",
+							TimeStamp:     1644586136,
+						},
+						{
+							ID:            "found",
+							NamespaceName: "test2/baz",
+							TimeStamp:     1644586137,
+						},
+						{
+							ID:            "found",
+							NamespaceName: "test3/baz",
+							TimeStamp:     1644586139,
 						},
 					},
 				},
 			}
 
-			ref, err := test.options.findBlobRepo(meta.PastMirror, test.digest)
+			sort.Sort(sort.Reverse(meta.PastBlobs))
+
+			ref, err := test.options.findBlobRepo(meta.PastBlobs, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {

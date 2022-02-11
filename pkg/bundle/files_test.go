@@ -110,9 +110,7 @@ func TestReconcileV2Dir(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirror: v1alpha1.PastMirror{
-						Blobs: test.fields.files,
-					},
+					PastBlobs: test.fields.files,
 				},
 			}
 			tmpdir := t.TempDir()

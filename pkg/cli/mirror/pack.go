@@ -67,6 +67,8 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	meta.PastMirror.Manifests = append(meta.PastMirror.Manifests, manifests...)
 	meta.PastMirror.Blobs = append(meta.PastMirror.Blobs, blobs...)
 
+	meta.PastBlobs = append(meta.PastBlobs, blobs...)
+
 	// Update the metadata.
 	if err := metadata.UpdateMetadata(ctx, tmpBackend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 		return tmpBackend, err

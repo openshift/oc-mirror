@@ -20,8 +20,8 @@ import (
 // This function is used to prepare a list of files that need to added to the Imageset.
 func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob, err error) {
 
-	foundFiles := make(map[string]struct{}, len(meta.PastMirror.Blobs))
-	for _, pf := range meta.PastMirror.Blobs {
+	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
+	for _, pf := range meta.PastBlobs {
 		foundFiles[pf.ID] = struct{}{}
 	}
 	// Ignore the current dir.

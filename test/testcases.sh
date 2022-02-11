@@ -112,4 +112,5 @@ function no_updates_exist {
         echo "no updates should not have a second sequence"
         exit 1
     fi
+    check_sequence_number 1
 }
