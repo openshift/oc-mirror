@@ -167,86 +167,95 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
 // upstream Cincinnati stack given the current and target version and channel
-func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (current, requested Update, upgrades []Update, err error) {
-	// If the we are staying in the same channel
+func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
 	if sourceChannel == targetChannel {
 		return c.GetUpdates(ctx, uri, arch, targetChannel, startVer, reqVer)
 	}
 
+	// Perform initial calculation for the source channel and
+	// recurse through the rest until the target or a blocked
+	// edge is hit
+	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
+	if err != nil {
+		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
+	}
+	current, _, upgrades, err := c.GetUpdates(ctx, uri, arch, sourceChannel, startVer, latest)
+	if err != nil {
+		return Update{}, Update{}, nil, fmt.Errorf("cannot get current: %v", err)
+	}
+
+	requested, newUpgrades, err := c.calculate(ctx, uri, arch, sourceChannel, targetChannel, latest, reqVer)
+	upgrades = append(upgrades, newUpgrades...)
+
+	return current, requested, upgrades, err
+}
+
+func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
 	// Get semver representation of source and target channel versions
 	sourceIdx := strings.LastIndex(sourceChannel, "-")
 	if sourceIdx == -1 {
-		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", sourceChannel)
+		return requested, upgrades, fmt.Errorf("invalid channel name %s", sourceChannel)
 	}
 	targetIdx := strings.LastIndex(targetChannel, "-")
 	if targetIdx == -1 {
-		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", targetChannel)
+		return requested, upgrades, fmt.Errorf("invalid channel name %s", targetChannel)
 	}
 	source := semver.MustParse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
 	target := semver.MustParse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
 
-	// Get latest version from sourceChannel
-	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
-	if err != nil {
-		return current, requested, upgrades, fmt.Errorf("cannot get latest: %v", err)
-	}
-	current, _, upgrades, err = c.GetUpdates(ctx, uri, arch, sourceChannel, startVer, latest)
-	if err != nil {
-		return current, requested, upgrades, fmt.Errorf("cannot get current: %v", err)
-	}
+	// We immediately bump the source channel since current source channel upgrades have
+	// already been calculated
+	source.Minor++
+	currChannel := fmt.Sprintf("%s-%v.%v", sourceChannel[:sourceIdx], source.Major, source.Minor)
 
-	for {
-		// Bump the minor version on the channel
-		source.Minor++
-		currChannel := fmt.Sprintf("%s-%v.%v", targetChannel[:targetIdx], source.Major, source.Minor)
-		logrus.Debugf("Processing channel %s", currChannel)
-
-		// Get versions in channel
-		versions, err := c.GetVersions(ctx, uri, currChannel)
+	var targetVer semver.Version
+	if currChannel == targetChannel {
+		// If this is the target channel get
+		// requested version so we don't exceed the maximun version
+		targetVer = reqVer
+	} else {
+		targetVer, err = c.GetChannelLatest(ctx, uri, arch, currChannel)
 		if err != nil {
-			return current, requested, upgrades, err
-		}
-		foundVersions := make(map[string]struct{})
-		for _, v := range versions {
-			foundVersions[v.String()] = struct{}{}
-		}
-
-		var newLatest semver.Version
-		if currChannel == targetChannel {
-			// If this is the target channel get
-			// requested version
-			newLatest = reqVer
-		} else {
-			// Get the latest from current channel
-			newLatest, err = c.GetChannelLatest(ctx, uri, arch, currChannel)
-			if err != nil {
-				return current, requested, upgrades, err
-			}
-		}
-
-		// If the previous latest version exists in this channel then get updates
-		logrus.Debugf("Getting updates for latest %s in channel %s", latest.String(), currChannel)
-
-		if _, found := foundVersions[latest.String()]; !found {
-			_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, reqVer, reqVer)
-			// return nil instead of upgrades
-			// so we don't process an incomplete upgrade path
-			return current, requested, nil, err
-		}
-		_, req, currUpgrades, err := c.GetUpdates(ctx, uri, arch, currChannel, latest, newLatest)
-		if err != nil {
-			return current, requested, upgrades, err
-		}
-		upgrades = append(upgrades, currUpgrades...)
-		requested = req
-
-		latest = newLatest
-		if source.EQ(target) {
-			break
+			return requested, upgrades, nil
 		}
 	}
 
-	return current, requested, upgrades, err
+	// Handles blocked edges
+	chanVersions, err := c.GetVersions(ctx, uri, currChannel)
+	if err != nil {
+		return requested, upgrades, nil
+	}
+	foundVersions := make(map[string]struct{})
+	for _, v := range chanVersions {
+		foundVersions[v.String()] = struct{}{}
+	}
+
+	if _, found := foundVersions[startVer.String()]; !found {
+		// If blocked path is found, just return the requested version and any accumulated
+		// upgrades to the caller
+		_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, targetVer, targetVer)
+		logrus.Warnf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+		return requested, upgrades, err
+	}
+
+	logrus.Debugf("Getting updates for version %s in channel %s", startVer.String(), currChannel)
+	_, requested, upgrades, err = c.GetUpdates(ctx, uri, arch, currChannel, startVer, targetVer)
+	if err != nil {
+		return requested, upgrades, nil
+	}
+
+	if source.EQ(target) {
+		return requested, upgrades, nil
+	}
+
+	req, up, err := c.calculate(ctx, uri, arch, currChannel, targetChannel, targetVer, reqVer)
+	if err != nil {
+		return requested, upgrades, nil
+	}
+	requested = req
+	upgrades = append(upgrades, up...)
+
+	return requested, upgrades, nil
 }
 
 // GetChannelLatest fetches the latest version from the specified

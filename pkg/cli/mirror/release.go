@@ -31,7 +31,7 @@ type ReleaseOptions struct {
 	url      string
 }
 
-// TODO(jpower432): replace OKD support
+// TODO(jpower432): replace OKD download support
 
 // NewReleaseOptions defaults ReleaseOptions.
 func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
@@ -92,6 +92,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha1.PastMirror, 
 		cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, channelVersion)
 
 		// Get cross-channel updates
+		// TODO(jpower432): Record blocked edges
 		firstCh, first, err := cincinnati.FindRelease(cfg.Mirror, true)
 		if err != nil {
 			errs = append(errs, err)
@@ -157,7 +158,7 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 			if err != nil {
 				return allDownloads, err
 			}
-			current, newest, updates, err := client.GetUpdates(ctx, url, arch, channel.Name, first, last)
+			current, newest, updates, err := client.CalculateUpgrades(ctx, url, arch, channel.Name, channel.Name, first, last)
 			if err != nil {
 				return allDownloads, err
 			}
@@ -175,15 +176,13 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 			if err != nil {
 				return allDownloads, err
 			}
-			current, newest, updates, err := client.GetUpdates(ctx, url, arch, channel.Name, first, last)
+			current, newest, updates, err := client.CalculateUpgrades(ctx, url, arch, channel.Name, channel.Name, first, last)
 			if err != nil {
 				return allDownloads, err
 			}
 			newDownloads := gatherUpdates(current, newest, updates)
 			allDownloads.Merge(newDownloads)
 		}
-
-		// TODO(jpower432): Record blocked edges
 	}
 
 	// Plot between min and max of channel
