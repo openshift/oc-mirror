@@ -25,7 +25,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	var backend storage.Backend
 	var meta v1alpha1.Metadata
 	var err error
-	if (v1alpha1.StorageConfig{} == cfg.StorageConfig) {
+	if !cfg.StorageConfig.IsSet() {
 		meta.SingleUse = true
 		logrus.Warnf("backend is not configured in %s, using stateless mode", o.ConfigPath)
 		cfg.StorageConfig.Local = &v1alpha1.LocalConfig{Path: path}
@@ -56,11 +56,10 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 	// New metadata files get a full mirror, with complete/heads-only catalogs, release images,
 	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
 	switch {
-	case merr != nil || len(meta.PastMirrors) == 0:
+	case merr != nil:
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 		thisRun.Mirror = cfg.Mirror
-		meta.PastMirrors = append(meta.PastMirrors, thisRun)
 		f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
 			if len(cfg.Mirror.Operators) != 0 {
 				operator := NewOperatorOptions(o)
@@ -70,12 +69,12 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 			return image.TypedImageMapping{}, nil
 		}
 		mmapping, err := o.run(ctx, &cfg, meta, f)
+		meta.PastMirror = thisRun
 		return meta, mmapping, err
 	default:
-		lastRun := meta.PastMirrors[len(meta.PastMirrors)-1]
+		lastRun := meta.PastMirror
 		thisRun.Sequence = lastRun.Sequence + 1
 		thisRun.Mirror = cfg.Mirror
-		meta.PastMirrors = append(meta.PastMirrors, thisRun)
 		f := func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
 			if len(cfg.Mirror.Operators) != 0 {
 				operator := NewOperatorOptions(o)
@@ -85,6 +84,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha1.ImageSetConfigu
 			return image.TypedImageMapping{}, nil
 		}
 		mmapping, err := o.run(ctx, &cfg, meta, f)
+		meta.PastMirror = thisRun
 		return meta, mmapping, err
 	}
 }
@@ -97,7 +97,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha1.ImageSetConfigura
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
 		release := NewReleaseOptions(o)
-		mappings, err := release.Plan(ctx, meta, cfg)
+		mappings, err := release.Plan(ctx, meta.PastMirror, cfg)
 		if err != nil {
 			return mmappings, err
 		}
@@ -140,11 +140,10 @@ type operatorFunc func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) 
 // Make sure the latest `opm` image exists during the publishing step
 // in case it does not exist in a past mirror.
 func addOPMImage(cfg *v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) {
-	for _, pm := range meta.PastMirrors {
-		for _, img := range pm.Mirror.AdditionalImages {
-			if img.Image.Name == OPMImage {
-				return
-			}
+
+	for _, img := range meta.PastMirror.Mirror.AdditionalImages {
+		if img.Image.Name == OPMImage {
+			return
 		}
 	}
 

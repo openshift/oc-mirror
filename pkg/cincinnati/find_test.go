@@ -12,38 +12,44 @@ func TestFindLatestRelease(t *testing.T) {
 	channelName := "test-channel"
 
 	tests := []struct {
-		name string
-
+		name         string
+		min          bool
 		expectedVer  semver.Version
 		expectedChan string
 		channels     []v1alpha1.ReleaseChannel
 		err          string
 	}{{
-		name: "two previous releases",
+		name: "Success/MinVersion",
 		channels: []v1alpha1.ReleaseChannel{
 			{
-				Name:     channelName,
-				Versions: []string{"4.0.0-5"},
+				Name:       channelName,
+				MinVersion: "4.0.0-5",
 			},
 			{
-				Name:     "another-channel",
-				Versions: []string{"4.0.0-6"},
+				Name:       "another-channel",
+				MinVersion: "4.0.0-6",
+			},
+		},
+		expectedVer:  semver.MustParse("4.0.0-5"),
+		expectedChan: channelName,
+		min:          true,
+	}, {
+		name: "Success/MaxVersion",
+		channels: []v1alpha1.ReleaseChannel{
+			{
+				Name:       channelName,
+				MaxVersion: "4.0.0-5",
+			},
+			{
+				Name:       "another-channel",
+				MaxVersion: "4.0.0-6",
 			},
 		},
 		expectedVer:  semver.MustParse("4.0.0-6"),
 		expectedChan: "another-channel",
+		min:          false,
 	}, {
-		name: "one previous release in another channel",
-		channels: []v1alpha1.ReleaseChannel{
-			{
-				Name:     "another-channel",
-				Versions: []string{"4.0.0-5"},
-			},
-		},
-		expectedVer:  semver.MustParse("4.0.0-5"),
-		expectedChan: "another-channel",
-	}, {
-		name:     "no previous release",
+		name:     "FailureNoPreviousRelease",
 		channels: []v1alpha1.ReleaseChannel{},
 		err:      ErrNoPreviousRelease.Error(),
 	}}
@@ -52,24 +58,23 @@ func TestFindLatestRelease(t *testing.T) {
 
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: []v1alpha1.PastMirror{
-						{
-							Mirror: v1alpha1.Mirror{
-								OCP: v1alpha1.OCP{
-									Graph:    false,
-									Channels: test.channels,
-								},
+					PastMirror: v1alpha1.PastMirror{
+						Mirror: v1alpha1.Mirror{
+							OCP: v1alpha1.OCP{
+								Graph:    false,
+								Channels: test.channels,
 							},
 						},
 					},
 				},
 			}
 
-			ch, ver, err := FindLastRelease(meta, channelName)
+			ch, ver, err := FindRelease(meta.PastMirror.Mirror, test.min)
 
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {
+				require.NoError(t, err)
 				if !ver.EQ(test.expectedVer) {
 					t.Errorf("Test failed. Expected %s, got %s", test.expectedVer.String(), ver.String())
 				}

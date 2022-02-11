@@ -36,7 +36,7 @@ func LoadConfig(configPath string) (c v1alpha1.ImageSetConfiguration, err error)
 		return c, fmt.Errorf("config GVK not recognized: %s", typeMeta.GroupVersionKind())
 	}
 
-	return c, Validate(c)
+	return c, Validate(&c)
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {

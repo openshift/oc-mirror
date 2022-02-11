@@ -7,11 +7,11 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
-type validationFunc func(cfg v1alpha1.ImageSetConfiguration) error
+type validationFunc func(cfg *v1alpha1.ImageSetConfiguration) error
 
-var validationChecks = []validationFunc{validateOperatorOptions}
+var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseOptions}
 
-func Validate(cfg v1alpha1.ImageSetConfiguration) error {
+func Validate(cfg *v1alpha1.ImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationChecks {
 		if err := check(cfg); err != nil {
@@ -21,11 +21,22 @@ func Validate(cfg v1alpha1.ImageSetConfiguration) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateOperatorOptions(cfg v1alpha1.ImageSetConfiguration) error {
+func validateOperatorOptions(cfg *v1alpha1.ImageSetConfiguration) error {
 	for _, ctlg := range cfg.Mirror.Operators {
 		if len(ctlg.IncludeConfig.Packages) != 0 && ctlg.IsHeadsOnly() {
 			return errors.New(
 				"invalid configuration option: catalog cannot define packages with headsOnly set to true",
+			)
+		}
+	}
+	return nil
+}
+
+func validateReleaseOptions(cfg *v1alpha1.ImageSetConfiguration) error {
+	for _, ch := range cfg.Mirror.OCP.Channels {
+		if ch.MinVersion == "" {
+			return errors.New(
+				"invalid configuration option: release channel must have a minimum version specified",
 			)
 		}
 	}

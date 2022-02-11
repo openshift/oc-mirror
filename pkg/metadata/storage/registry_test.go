@@ -61,25 +61,23 @@ func TestRegistryBackend(t *testing.T) {
 
 			m := &v1alpha1.Metadata{}
 			m.Uid = uuid.New()
-			m.PastMirrors = []v1alpha1.PastMirror{
-				{
-					Timestamp: int(time.Now().Unix()),
-					Sequence:  1,
-					Mirror: v1alpha1.Mirror{
-						OCP: v1alpha1.OCP{
-							Channels: []v1alpha1.ReleaseChannel{
-								{Name: "stable-4.7", Versions: []string{"4.7.13"}},
-							},
-						},
-						Operators: []v1alpha1.Operator{
-							{Catalog: "registry.redhat.io/openshift/redhat-operators:v4.7"},
+			m.PastMirror = v1alpha1.PastMirror{
+				Timestamp: int(time.Now().Unix()),
+				Sequence:  1,
+				Mirror: v1alpha1.Mirror{
+					OCP: v1alpha1.OCP{
+						Channels: []v1alpha1.ReleaseChannel{
+							{Name: "stable-4.7", MinVersion: "4.7.13"},
 						},
 					},
-					Operators: []v1alpha1.OperatorMetadata{
-						{
-							Catalog:  "registry.redhat.io/openshift/redhat-operators:v4.7",
-							ImagePin: "registry.redhat.io/openshift/redhat-operators@sha256:a05ed1726b3cdc16e694b8ba3e26e834428a0fa58bc220bb0e07a30a76a595a6",
-						},
+					Operators: []v1alpha1.Operator{
+						{Catalog: "registry.redhat.io/openshift/redhat-operators:v4.7"},
+					},
+				},
+				Operators: []v1alpha1.OperatorMetadata{
+					{
+						Catalog:  "registry.redhat.io/openshift/redhat-operators:v4.7",
+						ImagePin: "registry.redhat.io/openshift/redhat-operators@sha256:a05ed1726b3cdc16e694b8ba3e26e834428a0fa58bc220bb0e07a30a76a595a6",
 					},
 				},
 			}

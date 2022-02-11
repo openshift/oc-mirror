@@ -167,10 +167,10 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
 // upstream Cincinnati stack given the current and target version and channel
-func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, version, reqVer semver.Version) (current, requested Update, upgrades []Update, err error) {
+func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (current, requested Update, upgrades []Update, err error) {
 	// If the we are staying in the same channel
 	if sourceChannel == targetChannel {
-		return c.GetUpdates(ctx, uri, arch, targetChannel, version, reqVer)
+		return c.GetUpdates(ctx, uri, arch, targetChannel, startVer, reqVer)
 	}
 
 	// Get semver representation of source and target channel versions
@@ -190,7 +190,7 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	if err != nil {
 		return current, requested, upgrades, fmt.Errorf("cannot get latest: %v", err)
 	}
-	current, _, upgrades, err = c.GetUpdates(ctx, uri, arch, sourceChannel, version, latest)
+	current, _, upgrades, err = c.GetUpdates(ctx, uri, arch, sourceChannel, startVer, latest)
 	if err != nil {
 		return current, requested, upgrades, fmt.Errorf("cannot get current: %v", err)
 	}

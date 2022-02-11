@@ -6,9 +6,8 @@ mirror:
     channels:
       - name: stable-4.7
       - name: stable-4.6
-        versions:
-          - '4.6.36'
-          - '4.6.13'
+        minVersion: 4.6.3
+        maxVersion: 4.6.13
     graph: true
   operators:
     - catalog: redhat-operators:v4.7

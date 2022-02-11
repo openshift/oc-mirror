@@ -21,12 +21,10 @@ func TestAddOPMImage(t *testing.T) {
 	// No past OPMImage.
 	cfg = v1alpha1.ImageSetConfiguration{}
 	meta = v1alpha1.Metadata{}
-	meta.MetadataSpec.PastMirrors = []v1alpha1.PastMirror{
-		{
-			Mirror: v1alpha1.Mirror{
-				AdditionalImages: []v1alpha1.AdditionalImages{
-					{Image: v1alpha1.Image{Name: "reg.com/ns/other:latest"}},
-				},
+	meta.MetadataSpec.PastMirror = v1alpha1.PastMirror{
+		Mirror: v1alpha1.Mirror{
+			AdditionalImages: []v1alpha1.AdditionalImages{
+				{Image: v1alpha1.Image{Name: "reg.com/ns/other:latest"}},
 			},
 		},
 	}
@@ -39,13 +37,11 @@ func TestAddOPMImage(t *testing.T) {
 	// Has past OPMImage.
 	cfg = v1alpha1.ImageSetConfiguration{}
 	meta = v1alpha1.Metadata{}
-	meta.MetadataSpec.PastMirrors = []v1alpha1.PastMirror{
-		{
-			Mirror: v1alpha1.Mirror{
-				AdditionalImages: []v1alpha1.AdditionalImages{
-					{Image: v1alpha1.Image{Name: OPMImage}},
-					{Image: v1alpha1.Image{Name: "reg.com/ns/other:latest"}},
-				},
+	meta.MetadataSpec.PastMirror = v1alpha1.PastMirror{
+		Mirror: v1alpha1.Mirror{
+			AdditionalImages: []v1alpha1.AdditionalImages{
+				{Image: v1alpha1.Image{Name: OPMImage}},
+				{Image: v1alpha1.Image{Name: "reg.com/ns/other:latest"}},
 			},
 		},
 	}

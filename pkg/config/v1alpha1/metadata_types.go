@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,12 +25,8 @@ type MetadataSpec struct {
 	Uid uuid.UUID `json:"uid"`
 	// SingleUse will ignore the past runs if set to true
 	SingleUse bool `json:"singleUse"`
-	// Past is a slice containing information for
-	// all mirrors created for an imageset
-	PastMirrors PastMirrors `json:"pastMirrors"`
-	// PastFiles is a slice containing information for
-	// all files created for an imageset
-	PastBlobs []Blob `json:"pastBlobs"`
+	// PastMirror contains the previous mirrored content
+	PastMirror PastMirror `json:"pastMirror"`
 }
 
 type PastMirror struct {
@@ -44,25 +39,17 @@ type PastMirror struct {
 	Operators []OperatorMetadata `json:"operators,omitempty"`
 }
 
-var _ sort.Interface = PastMirrors{}
-
-// PastMirrors is a sortable slice of PastMirrors.
-type PastMirrors []PastMirror
-
-func (pms PastMirrors) Len() int           { return len(pms) }
-func (pms PastMirrors) Swap(i, j int)      { pms[i], pms[j] = pms[j], pms[i] }
-func (pms PastMirrors) Less(i, j int) bool { return pms[i].Sequence < pms[j].Sequence }
-
 type Blob struct {
 	ID string `json:"id"`
 	// NamespaceName of image that owns this blob.
 	// Required for blob lookups during the publish step.
 	NamespaceName string `json:"namespaceName"`
+	TimeStamp     int    `json:"timestamp"`
 }
 
 type Manifest struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+	Name string `json:"name"`
+	Tag  string `json:"tag"`
 	// NamespaceName of image that owns this manifest.
 	NamespaceName string `json:"namespaceName"`
 }
@@ -115,9 +102,6 @@ func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	m.SetGroupVersionKind(gvk)
 
-	// Make sure sequences are sorted in ascending order before returning m.
-	sort.Sort(m.PastMirrors)
-
 	return m, nil
 }
 
@@ -125,9 +109,6 @@ func (m *Metadata) MarshalJSON() ([]byte, error) {
 
 	gvk := GroupVersion.WithKind(MetadataKind)
 	m.SetGroupVersionKind(gvk)
-
-	// Make sure sequences are sorted in ascending order before writing m.
-	sort.Sort(m.PastMirrors)
 
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)

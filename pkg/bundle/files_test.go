@@ -47,10 +47,10 @@ func TestReconcileV2Dir(t *testing.T) {
 				{ID: "test3", NamespaceName: "test"},
 			},
 			wantManifests: []v1alpha1.Manifest{
-				{Name: "v2"},
-				{Name: filepath.Join("v2", "test")},
-				{Name: filepath.Join("v2", "test", "manifests")},
-				{Name: filepath.Join("v2", "test", "manifests", "test4")},
+				{
+					Name:          filepath.Join("v2", "test", "manifests", "test4"),
+					NamespaceName: "test",
+				},
 			},
 		},
 		{
@@ -76,10 +76,10 @@ func TestReconcileV2Dir(t *testing.T) {
 				{ID: "test3", NamespaceName: "test"},
 			},
 			wantManifests: []v1alpha1.Manifest{
-				{Name: "v2"},
-				{Name: filepath.Join("v2", "test")},
-				{Name: filepath.Join("v2", "test", "manifests")},
-				{Name: filepath.Join("v2", "test", "manifests", "test4")},
+				{
+					Name:          filepath.Join("v2", "test", "manifests", "test4"),
+					NamespaceName: "test",
+				},
 			},
 		},
 		{
@@ -110,7 +110,9 @@ func TestReconcileV2Dir(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastBlobs: test.fields.files,
+					PastMirror: v1alpha1.PastMirror{
+						Blobs: test.fields.files,
+					},
 				},
 			}
 			tmpdir := t.TempDir()

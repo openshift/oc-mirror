@@ -51,7 +51,6 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 		return tmpBackend, fmt.Errorf("error writing association file: %v", err)
 	}
 
-	currRun := meta.PastMirrors[len(meta.PastMirrors)-1]
 	// Update metadata files and get newly created filepaths.
 	manifests, blobs, err := o.getFiles(meta)
 	if err != nil {
@@ -64,11 +63,9 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	}
 
 	// Add only the new manifests and blobs created to the current run.
-	currRun.Manifests = append(currRun.Manifests, manifests...)
-	currRun.Blobs = append(currRun.Blobs, blobs...)
-	// Add this run and metadata to top level metadata.
-	meta.PastMirrors[len(meta.PastMirrors)-1] = currRun
-	meta.PastBlobs = append(meta.PastBlobs, blobs...)
+	// TODO(jpower432): This should be a reconciliation instead of just an addition
+	meta.PastMirror.Manifests = append(meta.PastMirror.Manifests, manifests...)
+	meta.PastMirror.Blobs = append(meta.PastMirror.Blobs, blobs...)
 
 	// Update the metadata.
 	if err := metadata.UpdateMetadata(ctx, tmpBackend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
@@ -77,7 +74,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 
 	// If any errors occur after the metadata is written
 	// initiate metadata rollback
-	if err := o.prepareArchive(ctx, tmpBackend, archiveSize, currRun.Sequence, manifests, blobs); err != nil {
+	if err := o.prepareArchive(ctx, tmpBackend, archiveSize, meta.PastMirror.Sequence, manifests, blobs); err != nil {
 		return tmpBackend, err
 	}
 

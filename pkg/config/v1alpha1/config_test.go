@@ -36,8 +36,9 @@ func TestLoadConfig(t *testing.T) {
 								Name: "stable-4.7",
 							},
 							{
-								Name:     "stable-4.6",
-								Versions: []string{"4.6.36", "4.6.13"},
+								Name:       "stable-4.6",
+								MinVersion: "4.6.3",
+								MaxVersion: "4.6.13",
 							},
 						},
 					},

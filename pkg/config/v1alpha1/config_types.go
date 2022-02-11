@@ -42,8 +42,9 @@ type OCP struct {
 }
 
 type ReleaseChannel struct {
-	Name     string   `json:"name"`
-	Versions []string `json:"versions"`
+	Name       string `json:"name"`
+	MinVersion string `json:"minVersion"`
+	MaxVersion string `json:"maxVersion"`
 }
 
 // Operator configures operator catalog mirroring.

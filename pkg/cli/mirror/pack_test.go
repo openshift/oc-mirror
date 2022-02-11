@@ -54,18 +54,11 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastBlobs: []v1alpha1.Blob{
-						{
-							ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
-						},
-					},
-					PastMirrors: v1alpha1.PastMirrors{
-						v1alpha1.PastMirror{
-							Sequence: 1,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
-								},
+					PastMirror: v1alpha1.PastMirror{
+						Sequence: 1,
+						Blobs: []v1alpha1.Blob{
+							{
+								ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
 							},
 						},
 					},
@@ -101,11 +94,9 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: v1alpha1.PastMirrors{
-						v1alpha1.PastMirror{
-							Sequence: 1,
-							Blobs:    []v1alpha1.Blob{},
-						},
+					PastMirror: v1alpha1.PastMirror{
+						Sequence: 1,
+						Blobs:    []v1alpha1.Blob{},
 					},
 				},
 			},

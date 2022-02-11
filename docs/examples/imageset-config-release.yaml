@@ -8,5 +8,5 @@ mirror:
   ocp:
     channels:
       - name: stable-4.9
-        versions:
-          - 4.9.13
+        minVersion: 4.9.13
+        maxVersion: 4.9.26

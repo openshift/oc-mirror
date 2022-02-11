@@ -11,9 +11,9 @@ import (
 
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
-// FindLastRelease will find the latest release that has been recorded in the metadata
-func FindLastRelease(meta v1alpha1.Metadata, channel string) (string, semver.Version, error) {
-	vers, err := findLastReleases(meta)
+// FindRelease will find the latest or first release recorded in a mirror
+func FindRelease(mirror v1alpha1.Mirror, min bool) (string, semver.Version, error) {
+	vers, err := findReleases(mirror, min)
 	if err != nil {
 		return "", semver.Version{}, err
 	}
@@ -22,41 +22,42 @@ func FindLastRelease(meta v1alpha1.Metadata, channel string) (string, semver.Ver
 	for k := range vers {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		return vers[keys[i]].LT(vers[keys[j]])
-	})
+	if min {
+		sort.Slice(keys, func(i, j int) bool {
+			return vers[keys[i]].GT(vers[keys[j]])
+		})
+	} else {
+		sort.Slice(keys, func(i, j int) bool {
+			return vers[keys[i]].LT(vers[keys[j]])
+		})
+	}
 
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
 }
 
-func findLastReleases(meta v1alpha1.Metadata) (map[string]semver.Version, error) {
+func findReleases(mirror v1alpha1.Mirror, min bool) (map[string]semver.Version, error) {
 	vers := make(map[string]semver.Version)
-	for _, mirror := range meta.PastMirrors {
-		for _, ch := range mirror.Mirror.OCP.Channels {
-			// If the there are no versions specified
-			// for this channel continue
-			if len(ch.Versions) == 0 {
-				continue
+	for _, ch := range mirror.OCP.Channels {
+
+		// Get the latest and first semver download in each channel
+		if min {
+			min, err := semver.Parse(ch.MinVersion)
+			if err != nil {
+				return vers, err
 			}
-			// Get the latest semver download in each channel
-			vers[ch.Name] = getLatestSemVer(ch.Versions)
+			vers[ch.Name] = min
+		} else {
+			max, err := semver.Parse(ch.MaxVersion)
+			if err != nil {
+				return vers, err
+			}
+			vers[ch.Name] = max
 		}
 	}
-	// Find the latest download version between the channels
+
 	if len(vers) != 0 {
 		return vers, nil
 	}
-	return nil, ErrNoPreviousRelease
-}
 
-func getLatestSemVer(stringVers []string) semver.Version {
-	vers := []semver.Version{}
-	for _, stringVer := range stringVers {
-		vers = append(vers, semver.MustParse(stringVer))
-	}
-	if len(vers) == 0 {
-		return semver.Version{}
-	}
-	semver.Sort(vers)
-	return vers[len(vers)-1]
+	return nil, ErrNoPreviousRelease
 }

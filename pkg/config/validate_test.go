@@ -14,14 +14,14 @@ func TestValidate(t *testing.T) {
 
 	type spec struct {
 		name     string
-		config   v1alpha1.ImageSetConfiguration
+		config   *v1alpha1.ImageSetConfiguration
 		expError string
 	}
 
 	cases := []spec{
 		{
 			name: "Valid/HeadsOnlyFalse",
-			config: v1alpha1.ImageSetConfiguration{
+			config: &v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
 						Operators: []v1alpha1.Operator{
@@ -39,7 +39,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/NoIncludePackages",
-			config: v1alpha1.ImageSetConfiguration{
+			config: &v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
 						Operators: []v1alpha1.Operator{
@@ -54,7 +54,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/HeadsOnlyFalse",
-			config: v1alpha1.ImageSetConfiguration{
+			config: &v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
 						Operators: []v1alpha1.Operator{
@@ -71,7 +71,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/HeadsOnlyTrue",
-			config: v1alpha1.ImageSetConfiguration{
+			config: &v1alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
 					Mirror: v1alpha1.Mirror{
 						Operators: []v1alpha1.Operator{

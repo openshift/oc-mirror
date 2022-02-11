@@ -86,7 +86,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("no metadata detected")
 	default:
 		if len(cfg.Mirror.OCP.Channels) != 0 {
-			if err := o.releaseUpdates(ctx, cfg, meta); err != nil {
+			if err := o.releaseUpdates(ctx, cfg, meta.PastMirror); err != nil {
 				return err
 			}
 		}
@@ -100,7 +100,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) error {
+func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, last v1alpha1.PastMirror) error {
 	uuid := uuid.New()
 	// TODO(jpower432): handle multi-arch requests here
 	arch := "amd64"
@@ -120,7 +120,14 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSe
 		// have been made in the target channel list
 		// all versions
 		var vers []semver.Version
-		lastCh, ver, err := cincinnati.FindLastRelease(meta, ch.Name)
+		firstCh, first, err := cincinnati.FindRelease(last.Mirror, true)
+		if err != nil {
+			return err
+		}
+		lastCh, last, err := cincinnati.FindRelease(last.Mirror, false)
+		if err != nil {
+			return err
+		}
 		switch {
 		case err != nil && !errors.Is(err, cincinnati.ErrNoPreviousRelease):
 			return err
@@ -130,12 +137,8 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSe
 				return err
 			}
 		default:
-			latest, err := client.GetChannelLatest(ctx, upstream, arch, ch.Name)
-			if err != nil {
-				return err
-			}
-			logrus.Debugf("Finding releases between %s and %s", ver.String(), latest.String())
-			_, _, upgrades, err := client.CalculateUpgrades(ctx, upstream, arch, lastCh, ch.Name, ver, latest)
+			logrus.Debugf("Finding releases between %s and %s", first.String(), last.String())
+			_, _, upgrades, err := client.CalculateUpgrades(ctx, upstream, arch, firstCh, lastCh, first, last)
 			if err != nil {
 				return err
 			}
@@ -162,12 +165,11 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageS
 
 	// Find last operator catalog digest
 	var pin string
-	for _, mirror := range meta.PastMirrors {
-		for _, op := range mirror.Operators {
-			if len(op.ImagePin) != 0 {
-				pin = op.ImagePin
-				break
-			}
+
+	for _, op := range meta.PastMirror.Operators {
+		if len(op.ImagePin) != 0 {
+			pin = op.ImagePin
+			break
 		}
 	}
 

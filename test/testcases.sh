@@ -29,8 +29,6 @@ function headsonly_diff () {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-
-    check_sequence_number 2
 }
 
 # Test registry backend
@@ -114,6 +112,4 @@ function no_updates_exist {
         echo "no updates should not have a second sequence"
         exit 1
     fi
-
-    check_sequence_number 1
 }

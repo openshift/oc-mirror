@@ -148,7 +148,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	case err != nil:
 		logrus.Infof("No existing metadata found. Setting up new workspace")
 		// Check that this is the first imageset
-		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
+		incomingRun := incomingMeta.PastMirror
 		if incomingRun.Sequence != 1 {
 			return allMappings, &SequenceError{1, incomingRun.Sequence}
 		}
@@ -156,8 +156,8 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		// Complete metadata checks
 		// UUID mismatch will now be seen as a new workspace.
 		logrus.Debug("Check metadata sequence number")
-		currRun := currentMeta.PastMirrors[len(currentMeta.PastMirrors)-1]
-		incomingRun := incomingMeta.PastMirrors[len(incomingMeta.PastMirrors)-1]
+		currRun := currentMeta.PastMirror
+		incomingRun := incomingMeta.PastMirror
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
 			return allMappings, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
 		}
@@ -420,7 +420,7 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, 
 
 	var errs []error
 	for layerDigest, dstBlobPaths := range missingLayers {
-		imgRef, err := o.findBlobRepo(meta, layerDigest)
+		imgRef, err := o.findBlobRepo(meta.PastMirror, layerDigest)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
 		}
@@ -529,16 +529,12 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	return nil
 }
 
-func (o *MirrorOptions) findBlobRepo(meta v1alpha1.Metadata, layerDigest string) (imagesource.TypedImageReference, error) {
+func (o *MirrorOptions) findBlobRepo(mirror v1alpha1.PastMirror, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
-	// TODO(jpower432): implement map searching instead for efficiency
-	// would have to ensure the latest run is preferred
-	for _, mirror := range meta.PastMirrors {
-		for _, blob := range mirror.Blobs {
-			if blob.ID == layerDigest {
-				namespacename = blob.NamespaceName
-				break
-			}
+	for _, blob := range mirror.Blobs {
+		if blob.ID == layerDigest {
+			namespacename = blob.NamespaceName
+			break
 		}
 	}
 	if namespacename == "" {

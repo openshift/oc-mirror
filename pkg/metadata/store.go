@@ -13,6 +13,10 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+func DiffMetadata(first, second v1alpha1.Metadata) {
+
+}
+
 // SyncMetadata copies Metadata from one Backend to another
 func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Backend) error {
 	var meta v1alpha1.Metadata
@@ -31,16 +35,16 @@ func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Bac
 func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha1.Metadata, skipTLSVerify, plainHTTP bool) error {
 
 	var operatorErrs []error
-	for mi, mirror := range meta.PastMirrors {
-		for _, operator := range mirror.Mirror.Operators {
-			operatorMeta, err := resolveOperatorMetadata(ctx, operator, skipTLSVerify, plainHTTP)
-			if err != nil {
-				operatorErrs = append(operatorErrs, err)
-				continue
-			}
 
-			meta.PastMirrors[mi].Operators = append(meta.PastMirrors[mi].Operators, operatorMeta)
+	mirror := meta.PastMirror
+	for _, operator := range mirror.Mirror.Operators {
+		operatorMeta, err := resolveOperatorMetadata(ctx, operator, skipTLSVerify, plainHTTP)
+		if err != nil {
+			operatorErrs = append(operatorErrs, err)
+			continue
 		}
+
+		meta.PastMirror.Operators = append(meta.PastMirror.Operators, operatorMeta)
 	}
 	if len(operatorErrs) != 0 {
 		return utilerrors.NewAggregate(operatorErrs)

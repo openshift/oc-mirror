@@ -29,9 +29,7 @@ func TestMetadataError(t *testing.T) {
 
 	// Set up expected UUIDs
 	gotUUID, err := uuid.Parse("360a43c2-8a14-4b5d-906b-07491459f25f")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	type fields struct {
 		archivePath string
@@ -128,7 +126,7 @@ func TestFindBlobRepo(t *testing.T) {
 			Type: "docker",
 			Ref: reference.DockerImageReference{
 				Registry:  "registry.com",
-				Namespace: "test3",
+				Namespace: "test1",
 				Name:      "baz",
 			},
 		},
@@ -144,7 +142,7 @@ func TestFindBlobRepo(t *testing.T) {
 			Ref: reference.DockerImageReference{
 				Registry:  "registry.com",
 				Namespace: "foo",
-				Name:      "test3/baz",
+				Name:      "test1/baz",
 			},
 		},
 	}, {
@@ -160,39 +158,26 @@ func TestFindBlobRepo(t *testing.T) {
 
 			meta := v1alpha1.Metadata{
 				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: v1alpha1.PastMirrors{
-						{
-							Sequence: 1,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test1/baz",
-								},
+					PastMirror: v1alpha1.PastMirror{
+						Blobs: []v1alpha1.Blob{
+							{
+								ID:            "found",
+								NamespaceName: "test1/baz",
 							},
-						},
-						{
-							Sequence: 2,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test2/baz",
-								},
+							{
+								ID:            "found",
+								NamespaceName: "test2/baz",
 							},
-						},
-						{
-							Sequence: 3,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test3/baz",
-								},
+							{
+								ID:            "found",
+								NamespaceName: "test3/baz",
 							},
 						},
 					},
 				},
 			}
 
-			ref, err := test.options.findBlobRepo(meta, test.digest)
+			ref, err := test.options.findBlobRepo(meta.PastMirror, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {

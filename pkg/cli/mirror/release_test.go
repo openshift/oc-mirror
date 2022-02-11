@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,7 +13,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
-func TestGetDownloads(t *testing.T) {
+func TestGetChannelDownloads(t *testing.T) {
 	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 
 	opts := ReleaseOptions{
@@ -26,54 +25,55 @@ func TestGetDownloads(t *testing.T) {
 
 		channels []v1alpha1.ReleaseChannel
 		expected downloads
-		channel  string
 		arch     []string
 		version  string
 		err      string
 	}{{
-		name: "jump one channel and one arch",
+		name: "Success/OneChannelOneArch",
 		arch: []string{"test-arch"},
 		channels: []v1alpha1.ReleaseChannel{
 			{
-				Name:     "stable-4.0",
-				Versions: []string{"4.0.0-5"},
+				Name:       "stable-4.0",
+				MinVersion: "4.0.0-5",
+				MaxVersion: "4.0.0-6",
+			},
+			{
+				Name:       "stable-4.1",
+				MinVersion: "4.1.0-6",
+				MaxVersion: "4.1.0-6",
 			},
 		},
-		channel: "stable-4.1",
-		version: "4.1.0-6",
 		expected: downloads{
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-5": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": struct{}{},
 		},
 	}, {
-		name: "reverse",
+		name: "Success/MultiArch",
 		channels: []v1alpha1.ReleaseChannel{
 			{
-				Name:     "stable-4.1",
-				Versions: []string{"4.1.0-6"},
+				Name:       "stable-4.0",
+				MinVersion: "4.0.0-5",
+				MaxVersion: "4.0.0-6",
 			},
 		},
-		arch:    []string{"test-arch"},
-		channel: "stable-4.0",
-		version: "4.0.0-6",
+		arch: []string{"test-arch", "another-arch"},
 		expected: downloads{
-			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
-		},
-	}, {
-		name: "multi-arch",
-		channels: []v1alpha1.ReleaseChannel{
-			{
-				Name:     "stable-4.0",
-				Versions: []string{"4.0.0-5"},
-			},
-		},
-		arch:    []string{"test-arch", "another-arch"},
-		channel: "stable-4.0",
-		version: "4.0.0-6",
-		expected: downloads{
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-5":         struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-5-another": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6":         struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6-another": struct{}{},
 		},
+	}, {
+		name: "Failure/VersionStringEmpty",
+		channels: []v1alpha1.ReleaseChannel{
+			{
+				Name:       "stable-4.0",
+				MinVersion: "4.0.0-5",
+			},
+		},
+		arch: []string{"test-arch"},
+		err:  "Version string empty",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -86,47 +86,27 @@ func TestGetDownloads(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			c, uri, err := cincinnati.NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			meta := v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: []v1alpha1.PastMirror{
-						{
-							Mirror: v1alpha1.Mirror{
-								OCP: v1alpha1.OCP{
-									Graph:    false,
-									Channels: test.channels,
-								},
-							},
-						},
-					},
-				},
-			}
+			require.NoError(t, err)
 
 			allDownloads := downloads{}
+			var newDownloads downloads
 
 			for _, ar := range test.arch {
+				for _, ch := range test.channels {
 
-				downloads, err := opts.getDownloads(context.Background(), c, meta, test.version, test.channel, ar, uri)
-				if err != nil {
-					require.NoError(t, err)
+					newDownloads, err = opts.getChannelDownloads(context.Background(), c, test.channels, ch, ar, uri)
+					if err != nil {
+						break
+					}
+					allDownloads.Merge(newDownloads)
 				}
-				allDownloads.Merge(downloads)
 			}
 
-			if test.err == "" {
-				if err != nil {
-					require.NoError(t, err)
-				}
-				if !reflect.DeepEqual(allDownloads, test.expected) {
-					t.Fatalf("expected current %v, got: %v", test.expected, allDownloads)
-				}
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
 			} else {
-				if err == nil || err.Error() != test.err {
-					t.Fatalf("expected err to be %s, got: %v", test.err, err)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.expected, allDownloads)
 			}
 		})
 	}
