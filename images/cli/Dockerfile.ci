@@ -6,7 +6,10 @@ RUN make build
 
 FROM registry.ci.openshift.org/ocp/4.10:base
 COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/
+
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
-      io.openshift.tags="openshift,cli,mirror"
+      io.openshift.tags="openshift,cli,mirror" \
+      # We're not really an operator, we're just getting some data into the release image.
+      io.openshift.release.operator=true
 ENTRYPOINT ["/usr/bin/oc-mirror"]
