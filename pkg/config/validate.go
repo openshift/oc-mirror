@@ -34,7 +34,12 @@ func validateOperatorOptions(cfg *v1alpha1.ImageSetConfiguration) error {
 
 func validateReleaseOptions(cfg *v1alpha1.ImageSetConfiguration) error {
 	for _, ch := range cfg.Mirror.OCP.Channels {
-		if ch.MinVersion == "" {
+		if len(ch.MaxVersion) == 0 && len(ch.MinVersion) > 0 {
+			return errors.New(
+				"invalid configuration option: release channel must have a maximum version specified",
+			)
+		}
+		if len(ch.MinVersion) == 0 && len(ch.MaxVersion) > 0 {
 			return errors.New(
 				"invalid configuration option: release channel must have a minimum version specified",
 			)

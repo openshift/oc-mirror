@@ -67,7 +67,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha1.PastMirror, 
 
 		for _, ch := range cfg.Mirror.OCP.Channels {
 
-			if len(ch.MaxVersion) == 0 {
+			if len(ch.MaxVersion) == 0 && len(ch.MinVersion) == 0 {
 				// If no version was specified from the channel, then get the latest release
 				latest, err := client.GetChannelLatest(ctx, upstream, arch, ch.Name)
 				if err != nil {
@@ -76,6 +76,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha1.PastMirror, 
 				}
 				// Update version to release channel
 				ch.MaxVersion = latest.String()
+				ch.MinVersion = latest.String()
 				channelVersion[ch.Name] = latest.String()
 			}
 
@@ -267,6 +268,7 @@ func updateReleaseChannel(releaseChannels []v1alpha1.ReleaseChannel, channelVers
 		v, found := channelVersions[ch.Name]
 		if found {
 			releaseChannels[i].MaxVersion = v
+			releaseChannels[i].MinVersion = v
 		}
 	}
 	return releaseChannels
