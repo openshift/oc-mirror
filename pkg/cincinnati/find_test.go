@@ -56,20 +56,7 @@ func TestFindLatestRelease(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			meta := v1alpha2.Metadata{
-				MetadataSpec: v1alpha2.MetadataSpec{
-					PastMirror: v1alpha2.PastMirror{
-						Mirror: v1alpha2.Mirror{
-							OCP: v1alpha2.OCP{
-								Graph:    false,
-								Channels: test.channels,
-							},
-						},
-					},
-				},
-			}
-
-			ch, ver, err := FindRelease(meta.PastMirror.Mirror, test.min)
+			ch, ver, err := FindRelease(test.channels, test.min)
 
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)

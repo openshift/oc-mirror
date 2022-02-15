@@ -29,7 +29,7 @@ func ParseTypedImage(image string, typ ImageType) (TypedImage, error) {
 
 type TypedImageMapping map[TypedImage]TypedImage
 
-// ToRegistry will convet a mapping to disk to a registry to registry mapping
+// ToRegistry will convert all mapping values to a registry destination
 func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 	for src, dest := range m {
 		dest.Type = imagesource.DestinationRegistry
@@ -74,7 +74,7 @@ func (m TypedImageMapping) Remove(ref imagesource.TypedImageReference, typ Image
 	delete(m, typedRef)
 }
 
-// ByCategory will return a pruned mapping by containing provided types
+// ByCategory will return a pruned mapping containing provided types
 func ByCategory(m TypedImageMapping, types ...ImageType) TypedImageMapping {
 	foundTypes := map[ImageType]struct{}{}
 	for _, typ := range types {

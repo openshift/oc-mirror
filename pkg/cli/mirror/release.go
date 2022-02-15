@@ -3,7 +3,6 @@ package mirror
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -24,11 +23,10 @@ import (
 type ReleaseOptions struct {
 	*MirrorOptions
 	arch []string
-	uuid uuid.UUID
 	// insecure indicates whether the source
 	// registry is insecure
 	insecure bool
-	url      string
+	uuid     uuid.UUID
 }
 
 // TODO(jpower432): replace OKD download support
@@ -39,7 +37,6 @@ func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 		MirrorOptions: mo,
 		arch:          mo.FilterOptions,
 		uuid:          uuid.New(),
-		url:           cincinnati.UpdateUrl,
 	}
 	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
 		relOpts.insecure = true
@@ -57,19 +54,27 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 		errs             = []error{}
 	)
 
-	client, upstream, err := cincinnati.NewClient(o.url, o.uuid)
-	if err != nil {
-		return mmapping, err
-	}
 	for _, arch := range o.arch {
 
 		channelVersion := make(map[string]string, len(cfg.Mirror.OCP.Channels))
 
 		for _, ch := range cfg.Mirror.OCP.Channels {
 
+			var client cincinnati.Client
+			var err error
+			if ch.Name == cincinnati.OkdChannel {
+				client, err = cincinnati.NewOKDClient(o.uuid)
+			} else {
+				client, err = cincinnati.NewOCPClient(o.uuid)
+			}
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+
 			if len(ch.MaxVersion) == 0 && len(ch.MinVersion) == 0 {
 				// If no version was specified from the channel, then get the latest release
-				latest, err := client.GetChannelLatest(ctx, upstream, arch, ch.Name)
+				latest, err := cincinnati.GetChannelLatest(ctx, client, arch, ch.Name)
 				if err != nil {
 					errs = append(errs, err)
 					continue
@@ -80,7 +85,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 				channelVersion[ch.Name] = latest.String()
 			}
 
-			downloads, err := o.getChannelDownloads(ctx, client, lastRun.Mirror.OCP.Channels, ch, arch, upstream)
+			downloads, err := o.getChannelDownloads(ctx, client, lastRun.Mirror.OCP.Channels, ch, arch)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -88,46 +93,31 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 			releaseDownloads.Merge(downloads)
 		}
 
-		// Update cfg release channels with maximum versions
+		// Update cfg release channels with maximum and minimum versions
 		// if applicable
 		cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, channelVersion)
-
-		// Get cross-channel updates
-		// TODO(jpower432): Record blocked edges
-		firstCh, first, err := cincinnati.FindRelease(cfg.Mirror, true)
+		newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.OCP.Channels)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		lastCh, last, err := cincinnati.FindRelease(cfg.Mirror, false)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		current, newest, updates, err := client.CalculateUpgrades(ctx, upstream, arch, firstCh, lastCh, first, last)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get upgrade graph: %v", err))
-			continue
-		}
-		newDownloads := gatherUpdates(current, newest, updates)
 		releaseDownloads.Merge(newDownloads)
 	}
 	if len(errs) != 0 {
 		return mmapping, utilerrors.NewAggregate(errs)
 	}
 
-	opts, err := o.newMirrorReleaseOptions(srcDir)
-	if err != nil {
-		return mmapping, err
-	}
-
 	for img := range releaseDownloads {
 		logrus.Debugf("Starting release download for version %s", img)
+		opts, err := o.newMirrorReleaseOptions(srcDir)
+		if err != nil {
+			return mmapping, err
+		}
 		opts.From = img
 
 		// Create release mapping and get images list
 		// before mirroring actions
-		mappings, err := o.getMapping(*opts)
+		mappings, err := o.getMapping(opts)
 		if err != nil {
 			return mmapping, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
 		}
@@ -138,7 +128,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 }
 
 // getDownloads will prepare the downloads map for mirroring
-func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinnati.Client, lastChannels []v1alpha2.ReleaseChannel, channel v1alpha2.ReleaseChannel, arch string, url *url.URL) (downloads, error) {
+func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.Client, lastChannels []v1alpha2.ReleaseChannel, channel v1alpha2.ReleaseChannel, arch string) (downloads, error) {
 	allDownloads := downloads{}
 
 	var prevChannel v1alpha2.ReleaseChannel
@@ -159,7 +149,7 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 			if err != nil {
 				return allDownloads, err
 			}
-			current, newest, updates, err := client.CalculateUpgrades(ctx, url, arch, channel.Name, channel.Name, first, last)
+			current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
 			if err != nil {
 				return allDownloads, err
 			}
@@ -177,7 +167,7 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 			if err != nil {
 				return allDownloads, err
 			}
-			current, newest, updates, err := client.CalculateUpgrades(ctx, url, arch, channel.Name, channel.Name, first, last)
+			current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
 			if err != nil {
 				return allDownloads, err
 			}
@@ -195,7 +185,7 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 	if err != nil {
 		return allDownloads, err
 	}
-	current, newest, updates, err := client.GetUpdates(ctx, url, arch, channel.Name, first, last)
+	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
 	if err != nil {
 		return allDownloads, err
 	}
@@ -203,6 +193,40 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinn
 	allDownloads.Merge(newDownloads)
 
 	return allDownloads, nil
+}
+
+// getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
+func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch string, channels []v1alpha2.ReleaseChannel) (downloads, error) {
+	// Strip any OKD channels from the list
+	ocpChannels := make([]v1alpha2.ReleaseChannel, len(channels))
+	copy(ocpChannels, channels)
+	for i, ch := range ocpChannels {
+		if ch.Name == cincinnati.OkdChannel {
+			ocpChannels = append(ocpChannels[:i], ocpChannels[i+1:]...)
+		}
+	}
+	// If no other channels exist, return no downloads
+	if len(ocpChannels) == 0 {
+		return downloads{}, nil
+	}
+	client, err := cincinnati.NewOCPClient(o.uuid)
+	if err != nil {
+		return downloads{}, err
+	}
+
+	firstCh, first, err := cincinnati.FindRelease(ocpChannels, true)
+	if err != nil {
+		return downloads{}, fmt.Errorf("failed to find minimum release version: %v", err)
+	}
+	lastCh, last, err := cincinnati.FindRelease(ocpChannels, false)
+	if err != nil {
+		return downloads{}, fmt.Errorf("failed to find maximum release version: %v", err)
+	}
+	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, client, arch, firstCh, lastCh, first, last)
+	if err != nil {
+		return downloads{}, fmt.Errorf("failed to get upgrade graph: %v", err)
+	}
+	return gatherUpdates(current, newest, updates), nil
 }
 
 func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Update) downloads {
@@ -234,7 +258,7 @@ func (o *ReleaseOptions) newMirrorReleaseOptions(fileDir string) (*release.Mirro
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (image.TypedImageMapping, error) {
+func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedImageMapping, error) {
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	file, err := os.Create(mappingPath)
 	defer os.Remove(mappingPath)

@@ -17,7 +17,6 @@ import (
 )
 
 func TestGetUpdates(t *testing.T) {
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -80,12 +79,11 @@ func TestGetUpdates(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
 
-			c, uri, err := NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+			c := &mockClient{url: endpoint}
 
-			current, requested, updates, err := c.GetUpdates(context.Background(), uri, arch, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
+			current, requested, updates, err := GetUpdates(context.Background(), c, arch, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
 				if err != nil {
 					t.Fatalf("expected nil error, got: %v", err)
@@ -127,7 +125,6 @@ func TestGetUpdates(t *testing.T) {
 }
 
 func TestGetLatest(t *testing.T) {
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
@@ -151,15 +148,11 @@ func TestGetLatest(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
 
-			c, uri, err := NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+			c := &mockClient{url: endpoint}
 
-			latest, err := c.GetChannelLatest(context.Background(), uri, arch, channelName)
+			latest, err := GetChannelLatest(context.Background(), c, arch, channelName)
 			if test.err == "" {
 				if err != nil {
 					t.Fatalf("expected nil error, got: %v", err)
@@ -195,7 +188,6 @@ func TestGetLatest(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	channelName := "test-channel"
 	tests := []struct {
 		name string
@@ -218,15 +210,11 @@ func TestGetVersions(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
 
-			c, uri, err := NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+			c := &mockClient{url: endpoint}
 
-			versions, err := c.GetVersions(context.Background(), uri, channelName)
+			versions, err := GetVersions(context.Background(), c, channelName)
 			if test.err == "" {
 				if err != nil {
 					t.Fatalf("expected nil error, got: %v", err)
@@ -262,7 +250,6 @@ func TestGetVersions(t *testing.T) {
 }
 
 func TestCalculateUpgrades(t *testing.T) {
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	arch := "test-arch"
 
 	tests := []struct {
@@ -338,10 +325,10 @@ func TestCalculateUpgrades(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
 
-			c, uri, err := NewClient(ts.URL, clientID)
+			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			cur, req, updates, err := c.CalculateUpgrades(context.Background(), uri, arch, test.sourceChannel, test.targetChannel, test.last, test.req)
+			cur, req, updates, err := CalculateUpgrades(context.Background(), &mockClient{url: endpoint}, arch, test.sourceChannel, test.targetChannel, test.last, test.req)
 
 			if test.err == "" {
 				require.NoError(t, err)
@@ -353,6 +340,38 @@ func TestCalculateUpgrades(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mockClient struct {
+	url *url.URL
+}
+
+func (c mockClient) GetID() uuid.UUID {
+	return uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
+}
+
+func (c mockClient) SetQueryParams(arch, channel, version string) {
+	queryParams := c.url.Query()
+	queryParams.Add("id", c.GetID().String())
+	params := map[string]string{
+		"arch":    arch,
+		"channel": channel,
+		"version": version,
+	}
+	for key, value := range params {
+		if value != "" {
+			queryParams.Add(key, value)
+		}
+	}
+	c.url.RawQuery = queryParams.Encode()
+}
+
+func (c mockClient) GetURL() *url.URL {
+	return c.url
+}
+
+func (c mockClient) GetTransport() *http.Transport {
+	return &http.Transport{}
 }
 
 func TestNodeUnmarshalJSON(t *testing.T) {
