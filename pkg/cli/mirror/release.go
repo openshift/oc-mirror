@@ -15,7 +15,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -48,7 +48,7 @@ func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 }
 
 // Plan will pill release payloads based on user configuration
-func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha1.PastMirror, cfg *v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
+func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, cfg *v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
 
 	var (
 		srcDir           = filepath.Join(o.Dir, config.SourceDir)
@@ -138,10 +138,10 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha1.PastMirror, 
 }
 
 // getDownloads will prepare the downloads map for mirroring
-func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinnati.Client, lastChannels []v1alpha1.ReleaseChannel, channel v1alpha1.ReleaseChannel, arch string, url *url.URL) (downloads, error) {
+func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, client cincinnati.Client, lastChannels []v1alpha2.ReleaseChannel, channel v1alpha2.ReleaseChannel, arch string, url *url.URL) (downloads, error) {
 	allDownloads := downloads{}
 
-	var prevChannel v1alpha1.ReleaseChannel
+	var prevChannel v1alpha2.ReleaseChannel
 	for _, ch := range lastChannels {
 		if ch.Name == channel.Name {
 			prevChannel = ch
@@ -263,7 +263,7 @@ func (o *ReleaseOptions) getMapping(opts release.MirrorOptions) (image.TypedImag
 
 // updateReleaseChannel will add a version to the ReleaseChannel to record
 // for metadata
-func updateReleaseChannel(releaseChannels []v1alpha1.ReleaseChannel, channelVersions map[string]string) []v1alpha1.ReleaseChannel {
+func updateReleaseChannel(releaseChannels []v1alpha2.ReleaseChannel, channelVersions map[string]string) []v1alpha2.ReleaseChannel {
 	for i, ch := range releaseChannels {
 		v, found := channelVersions[ch.Name]
 		if found {

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,11 +16,11 @@ func TestFindLatestRelease(t *testing.T) {
 		min          bool
 		expectedVer  semver.Version
 		expectedChan string
-		channels     []v1alpha1.ReleaseChannel
+		channels     []v1alpha2.ReleaseChannel
 		err          string
 	}{{
 		name: "Success/MinVersion",
-		channels: []v1alpha1.ReleaseChannel{
+		channels: []v1alpha2.ReleaseChannel{
 			{
 				Name:       channelName,
 				MinVersion: "4.0.0-5",
@@ -35,7 +35,7 @@ func TestFindLatestRelease(t *testing.T) {
 		min:          true,
 	}, {
 		name: "Success/MaxVersion",
-		channels: []v1alpha1.ReleaseChannel{
+		channels: []v1alpha2.ReleaseChannel{
 			{
 				Name:       channelName,
 				MaxVersion: "4.0.0-5",
@@ -50,17 +50,17 @@ func TestFindLatestRelease(t *testing.T) {
 		min:          false,
 	}, {
 		name:     "FailureNoPreviousRelease",
-		channels: []v1alpha1.ReleaseChannel{},
+		channels: []v1alpha2.ReleaseChannel{},
 		err:      ErrNoPreviousRelease.Error(),
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			meta := v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirror: v1alpha1.PastMirror{
-						Mirror: v1alpha1.Mirror{
-							OCP: v1alpha1.OCP{
+			meta := v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastMirror: v1alpha2.PastMirror{
+						Mirror: v1alpha2.Mirror{
+							OCP: v1alpha2.OCP{
 								Graph:    false,
 								Channels: test.channels,
 							},

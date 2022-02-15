@@ -13,7 +13,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -34,13 +34,13 @@ const (
 
 // Pack will pack the imageset and return a temporary backend storing metadata for final push
 // The metadata has been updated by the plan stage at this point but not pushed to the backend
-func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, meta v1alpha1.Metadata, archiveSize int64) (storage.Backend, error) {
+func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, meta v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
 	tmpdir, _, err := o.mktempDir()
 	if err != nil {
 		return nil, err
 	}
-	cfg := v1alpha1.StorageConfig{
-		Local: &v1alpha1.LocalConfig{Path: tmpdir},
+	cfg := v1alpha2.StorageConfig{
+		Local: &v1alpha2.LocalConfig{Path: tmpdir},
 	}
 	tmpBackend, err := storage.ByConfig(tmpdir, cfg)
 	if err != nil {
@@ -90,7 +90,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	return tmpBackend, nil
 }
 
-func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Backend, archiveSize int64, seq int, manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) error {
+func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Backend, archiveSize int64, seq int, manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob) error {
 
 	segSize := defaultSegSize
 	if archiveSize != 0 {
@@ -125,7 +125,7 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Back
 	return nil
 }
 
-func (o *MirrorOptions) getFiles(meta v1alpha1.Metadata) ([]v1alpha1.Manifest, []v1alpha1.Blob, error) {
+func (o *MirrorOptions) getFiles(meta v1alpha2.Metadata) ([]v1alpha2.Manifest, []v1alpha2.Blob, error) {
 	diskPath := filepath.Join(o.Dir, config.SourceDir, config.V2Dir)
 	// Define a map that associates locations
 	// on disk to location in archive

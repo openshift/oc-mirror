@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
 
 var _ Backend = &localDirBackend{}
@@ -53,7 +53,7 @@ func (b *localDirBackend) init() error {
 }
 
 // WriteMetadata reads the provided metadata from disk.
-func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadata, path string) error {
+func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha2.Metadata, path string) error {
 
 	logrus.Debugf("looking for metadata file at %q", path)
 
@@ -72,8 +72,8 @@ func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadat
 	}
 
 	switch typeMeta.GroupVersionKind() {
-	case v1alpha1.GroupVersion.WithKind(v1alpha1.MetadataKind):
-		*meta, err = v1alpha1.LoadMetadata(data)
+	case v1alpha2.GroupVersion.WithKind(v1alpha2.MetadataKind):
+		*meta, err = v1alpha2.LoadMetadata(data)
 	default:
 		return fmt.Errorf("config GVK not recognized: %s", typeMeta.GroupVersionKind())
 	}
@@ -85,7 +85,7 @@ func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha1.Metadat
 }
 
 // WriteMetadata writes the provided metadata to disk.
-func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
+func (b *localDirBackend) WriteMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
 	return b.WriteObject(ctx, path, meta)
 }
 
@@ -182,7 +182,7 @@ func (b *localDirBackend) Cleanup(_ context.Context, fpath string) error {
 	return b.fs.RemoveAll(fpath)
 }
 
-func (b *localDirBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
+func (b *localDirBackend) CheckConfig(storage v1alpha2.StorageConfig) error {
 	if storage.Local == nil {
 		return fmt.Errorf("not local backend")
 	}

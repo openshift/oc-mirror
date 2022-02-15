@@ -24,7 +24,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
@@ -60,8 +60,8 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
-	var currentMeta v1alpha1.Metadata
-	var incomingMeta v1alpha1.Metadata
+	var currentMeta v1alpha2.Metadata
+	var incomingMeta v1alpha2.Metadata
 	a := archive.NewArchiver()
 	allMappings := image.TypedImageMapping{}
 	var insecure bool
@@ -117,8 +117,8 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	var backend storage.Backend
 	if incomingMeta.SingleUse {
 		logrus.Warn("metadata has single-use label, using stateless mode")
-		cfg := v1alpha1.StorageConfig{
-			Local: &v1alpha1.LocalConfig{Path: o.Dir}}
+		cfg := v1alpha2.StorageConfig{
+			Local: &v1alpha2.LocalConfig{Path: o.Dir}}
 		backend, err = storage.ByConfig(o.Dir, cfg)
 		if err != nil {
 			return allMappings, err
@@ -129,8 +129,8 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			}
 		}()
 	} else {
-		cfg := v1alpha1.StorageConfig{
-			Registry: &v1alpha1.RegistryConfig{
+		cfg := v1alpha2.StorageConfig{
+			Registry: &v1alpha2.RegistryConfig{
 				ImageURL: metaImage,
 				SkipTLS:  insecure,
 			},
@@ -408,7 +408,7 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 	return nil
 }
 
-func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha1.Metadata, missingLayers map[string][]string) error {
+func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, missingLayers map[string][]string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
@@ -529,7 +529,7 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	return nil
 }
 
-func (o *MirrorOptions) findBlobRepo(blobs v1alpha1.Blobs, layerDigest string) (imagesource.TypedImageReference, error) {
+func (o *MirrorOptions) findBlobRepo(blobs v1alpha2.Blobs, layerDigest string) (imagesource.TypedImageReference, error) {
 	var namespacename string
 	for _, blob := range blobs {
 		if blob.ID == layerDigest {

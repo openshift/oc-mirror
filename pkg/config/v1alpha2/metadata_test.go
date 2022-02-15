@@ -1,4 +1,4 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	"io/ioutil"
@@ -26,7 +26,7 @@ func TestLoadMetadata(t *testing.T) {
 		{
 			name: "Invalid/BadStructure",
 			inline: `---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 foo: bar
 `,

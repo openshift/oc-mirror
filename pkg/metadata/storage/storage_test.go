@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,13 +30,13 @@ func TestByConfig(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		cfg         v1alpha1.StorageConfig
+		cfg         v1alpha2.StorageConfig
 		expected    Backend
 		expectedDir string
 	}{{
 		name: "local-backend",
-		cfg: v1alpha1.StorageConfig{
-			Local: &v1alpha1.LocalConfig{
+		cfg: v1alpha2.StorageConfig{
+			Local: &v1alpha2.LocalConfig{
 				Path: filepath.Join(customDir, "local-backend"),
 			},
 		},
@@ -44,8 +44,8 @@ func TestByConfig(t *testing.T) {
 		expectedDir: customDir,
 	}, {
 		name: "registry-backend",
-		cfg: v1alpha1.StorageConfig{
-			Registry: &v1alpha1.RegistryConfig{
+		cfg: v1alpha2.StorageConfig{
+			Registry: &v1alpha2.RegistryConfig{
 				ImageURL: fmt.Sprintf("%s/test-meta", u.Host),
 				SkipTLS:  true,
 			},
@@ -72,7 +72,7 @@ func TestByConfig(t *testing.T) {
 				t.Fail()
 			}
 
-			meta := v1alpha1.Metadata{}
+			meta := v1alpha2.Metadata{}
 			err = backend.WriteMetadata(ctx, &meta, config.MetadataBasePath)
 			require.NoError(t, err)
 

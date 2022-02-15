@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -32,23 +32,23 @@ func TestSplitArchive(t *testing.T) {
 		name         string
 		source       string
 		maxSplitSize int64
-		blobs        []v1alpha1.Blob
-		manifests    []v1alpha1.Manifest
+		blobs        []v1alpha2.Blob
+		manifests    []v1alpha2.Manifest
 		skipCleanup  bool
 		want         string
 	}{
 		{
 			name:         "testing tar format",
-			blobs:        []v1alpha1.Blob{{ID: "sha256:123456789"}},
-			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
+			blobs:        []v1alpha2.Blob{{ID: "sha256:123456789"}},
+			manifests:    []v1alpha2.Manifest{{Name: "testmanifest"}},
 			maxSplitSize: 5 * 1024 * 1024,
 			skipCleanup:  false,
 			want:         "testbundle",
 		},
 		{
 			name:         "testing cleanup",
-			blobs:        []v1alpha1.Blob{{ID: "sha256:123456789"}},
-			manifests:    []v1alpha1.Manifest{{Name: "testmanifest"}},
+			blobs:        []v1alpha2.Blob{{ID: "sha256:123456789"}},
+			manifests:    []v1alpha2.Manifest{{Name: "testmanifest"}},
 			maxSplitSize: 5 * 1024 * 1024,
 			skipCleanup:  true,
 			want:         "testbundle",
@@ -82,7 +82,7 @@ func TestSplitArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		meta := v1alpha1.Metadata{}
+		meta := v1alpha2.Metadata{}
 		if err := backend.WriteMetadata(context.Background(), &meta, config.MetadataBasePath); err != nil {
 			t.Fatal(err)
 		}

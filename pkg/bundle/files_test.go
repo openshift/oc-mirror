@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReconcileV2Dir(t *testing.T) {
 	type fields struct {
-		files     []v1alpha1.Blob
+		files     []v1alpha2.Blob
 		dirPaths  []string
 		filePaths []string
 		path      string
@@ -21,14 +21,14 @@ func TestReconcileV2Dir(t *testing.T) {
 	tests := []struct {
 		name          string
 		fields        fields
-		wantBlobs     []v1alpha1.Blob
-		wantManifests []v1alpha1.Manifest
+		wantBlobs     []v1alpha2.Blob
+		wantManifests []v1alpha2.Manifest
 		wantErr       func(string) string
 	}{
 		{
 			name: "Valid/FirstRun",
 			fields: fields{
-				files: []v1alpha1.Blob{},
+				files: []v1alpha2.Blob{},
 				dirPaths: []string{
 					filepath.Join("v2", "test", "blobs"),
 					filepath.Join("v2", "test", "manifests"),
@@ -42,11 +42,11 @@ func TestReconcileV2Dir(t *testing.T) {
 				},
 				path: "v2",
 			},
-			wantBlobs: []v1alpha1.Blob{
+			wantBlobs: []v1alpha2.Blob{
 				{ID: "test1", NamespaceName: "test"},
 				{ID: "test3", NamespaceName: "test"},
 			},
-			wantManifests: []v1alpha1.Manifest{
+			wantManifests: []v1alpha2.Manifest{
 				{
 					Name:          filepath.Join("v2", "test", "manifests", "test4"),
 					NamespaceName: "test",
@@ -56,7 +56,7 @@ func TestReconcileV2Dir(t *testing.T) {
 		{
 			name: "Valid/DifferentialRun",
 			fields: fields{
-				files: []v1alpha1.Blob{
+				files: []v1alpha2.Blob{
 					{ID: "test1", NamespaceName: "test"},
 				},
 				dirPaths: []string{
@@ -72,10 +72,10 @@ func TestReconcileV2Dir(t *testing.T) {
 				},
 				path: "v2",
 			},
-			wantBlobs: []v1alpha1.Blob{
+			wantBlobs: []v1alpha2.Blob{
 				{ID: "test3", NamespaceName: "test"},
 			},
-			wantManifests: []v1alpha1.Manifest{
+			wantManifests: []v1alpha2.Manifest{
 				{
 					Name:          filepath.Join("v2", "test", "manifests", "test4"),
 					NamespaceName: "test",
@@ -85,7 +85,7 @@ func TestReconcileV2Dir(t *testing.T) {
 		{
 			name: "Invalid/PathNameNotV2",
 			fields: fields{
-				files: []v1alpha1.Blob{},
+				files: []v1alpha2.Blob{},
 				dirPaths: []string{
 					filepath.Join("v2", "test", "blobs"),
 					filepath.Join("v2", "test", "manifests"),
@@ -99,8 +99,8 @@ func TestReconcileV2Dir(t *testing.T) {
 				},
 				path: "",
 			},
-			wantBlobs:     []v1alpha1.Blob{},
-			wantManifests: []v1alpha1.Manifest{},
+			wantBlobs:     []v1alpha2.Blob{},
+			wantManifests: []v1alpha2.Manifest{},
 			wantErr: func(s string) string {
 				return fmt.Sprintf("path %q is not a v2 directory", s)
 			},
@@ -108,8 +108,8 @@ func TestReconcileV2Dir(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			meta := v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
+			meta := v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
 					PastBlobs: test.fields.files,
 				},
 			}

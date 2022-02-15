@@ -20,7 +20,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -113,7 +113,7 @@ func TestFindBlobRepo(t *testing.T) {
 		name string
 
 		digest   string
-		meta     v1alpha1.Metadata
+		meta     v1alpha2.Metadata
 		options  *MirrorOptions
 		expected imagesource.TypedImageReference
 		err      string
@@ -157,9 +157,9 @@ func TestFindBlobRepo(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			meta := v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastBlobs: []v1alpha1.Blob{
+			meta := v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastBlobs: []v1alpha2.Blob{
 						{
 							ID:            "found",
 							NamespaceName: "test1/baz",
@@ -193,10 +193,10 @@ func TestFindBlobRepo(t *testing.T) {
 
 // prepareMetadata will ensure metadata is in the registry for testing
 func prepMetadata(ctx context.Context, host, dir, uuid string) error {
-	var meta v1alpha1.Metadata
+	var meta v1alpha2.Metadata
 
-	cfg := v1alpha1.StorageConfig{
-		Registry: &v1alpha1.RegistryConfig{
+	cfg := v1alpha2.StorageConfig{
+		Registry: &v1alpha2.RegistryConfig{
 			ImageURL: fmt.Sprintf("%s/oc-mirror:%s", host, uuid),
 			SkipTLS:  true,
 		},

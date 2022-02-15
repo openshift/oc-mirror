@@ -6,13 +6,13 @@ import (
 
 	"github.com/blang/semver/v4"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
 
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
 // FindRelease will find the minimum or maximum release recorded in a mirror
-func FindRelease(mirror v1alpha1.Mirror, min bool) (string, semver.Version, error) {
+func FindRelease(mirror v1alpha2.Mirror, min bool) (string, semver.Version, error) {
 	vers, err := findReleases(mirror, min)
 	if err != nil {
 		return "", semver.Version{}, err
@@ -35,7 +35,7 @@ func FindRelease(mirror v1alpha1.Mirror, min bool) (string, semver.Version, erro
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
 }
 
-func findReleases(mirror v1alpha1.Mirror, min bool) (map[string]semver.Version, error) {
+func findReleases(mirror v1alpha2.Mirror, min bool) (map[string]semver.Version, error) {
 	vers := make(map[string]semver.Version)
 	for _, ch := range mirror.OCP.Channels {
 

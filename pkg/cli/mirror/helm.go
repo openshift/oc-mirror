@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -44,9 +44,9 @@ func NewHelmOptions(mo *MirrorOptions) *HelmOptions {
 
 }
 
-func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
+func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
 
-	var images []v1alpha1.AdditionalImages
+	var images []v1alpha2.AdditionalImages
 
 	// Create a temp file for to hold repo information
 	cleanup, file, err := mktempFile(h.Dir)
@@ -115,7 +115,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha1.ImageSetConfi
 }
 
 // FindImages will download images found in a Helm chart on disk
-func findImages(path string, imagePaths ...string) (images []v1alpha1.AdditionalImages, err error) {
+func findImages(path string, imagePaths ...string) (images []v1alpha2.AdditionalImages, err error) {
 
 	logrus.Debugf("Reading from path %s", path)
 
@@ -183,7 +183,7 @@ func render(chart *helmchart.Chart) (string, error) {
 }
 
 // repoAdd adds a Helm repo with given name and url
-func (h *HelmOptions) repoAdd(chartRepo v1alpha1.Repo) error {
+func (h *HelmOptions) repoAdd(chartRepo v1alpha2.Repo) error {
 
 	entry := helmrepo.Entry{
 		Name: chartRepo.Name,
@@ -242,7 +242,7 @@ func parseJSONPath(input interface{}, parser *jsonpath.JSONPath, template string
 }
 
 // search will return images from parsed object
-func search(yamlData []byte, paths ...string) (images []v1alpha1.AdditionalImages, err error) {
+func search(yamlData []byte, paths ...string) (images []v1alpha2.AdditionalImages, err error) {
 
 	var data interface{}
 	// yaml.Unmarshal will convert YAMl to JSON first
@@ -261,8 +261,8 @@ func search(yamlData []byte, paths ...string) (images []v1alpha1.AdditionalImage
 
 		for _, result := range results {
 			logrus.Debugf("Found image %s", result)
-			img := v1alpha1.AdditionalImages{
-				Image: v1alpha1.Image{
+			img := v1alpha2.AdditionalImages{
+				Image: v1alpha2.Image{
 					Name: result,
 				},
 			}

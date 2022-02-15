@@ -17,7 +17,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -62,7 +62,7 @@ func (o *DescribeOptions) Validate() error {
 func (o *DescribeOptions) Run(ctx context.Context) error {
 
 	a := archive.NewArchiver()
-	var meta v1alpha1.Metadata
+	var meta v1alpha2.Metadata
 
 	// Get archive with metadata
 	filesInArchive, err := bundle.ReadImageSet(a, o.From)

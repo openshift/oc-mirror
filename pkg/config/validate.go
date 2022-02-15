@@ -3,15 +3,15 @@ package config
 import (
 	"errors"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
-type validationFunc func(cfg *v1alpha1.ImageSetConfiguration) error
+type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
 
 var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseOptions}
 
-func Validate(cfg *v1alpha1.ImageSetConfiguration) error {
+func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationChecks {
 		if err := check(cfg); err != nil {
@@ -21,7 +21,7 @@ func Validate(cfg *v1alpha1.ImageSetConfiguration) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateOperatorOptions(cfg *v1alpha1.ImageSetConfiguration) error {
+func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 	for _, ctlg := range cfg.Mirror.Operators {
 		if len(ctlg.IncludeConfig.Packages) != 0 && ctlg.IsHeadsOnly() {
 			return errors.New(
@@ -32,7 +32,7 @@ func validateOperatorOptions(cfg *v1alpha1.ImageSetConfiguration) error {
 	return nil
 }
 
-func validateReleaseOptions(cfg *v1alpha1.ImageSetConfiguration) error {
+func validateReleaseOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 	for _, ch := range cfg.Mirror.OCP.Channels {
 		if len(ch.MaxVersion) == 0 && len(ch.MinVersion) > 0 {
 			return errors.New(

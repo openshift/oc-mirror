@@ -21,7 +21,7 @@ import (
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
@@ -37,7 +37,7 @@ type registryBackend struct {
 	insecure bool
 }
 
-func NewRegistryBackend(cfg *v1alpha1.RegistryConfig, dir string) (Backend, error) {
+func NewRegistryBackend(cfg *v1alpha2.RegistryConfig, dir string) (Backend, error) {
 	b := registryBackend{}
 	b.insecure = cfg.SkipTLS
 
@@ -63,7 +63,7 @@ func NewRegistryBackend(cfg *v1alpha1.RegistryConfig, dir string) (Backend, erro
 }
 
 // ReadMetadata unpacks the metadata image and read it from disk
-func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
+func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
 	logrus.Debugf("Checking for existing metadata image at %s", b.src)
 	// Check if image exists
 	if err := b.exists(ctx); err != nil {
@@ -76,7 +76,7 @@ func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha1.Metad
 }
 
 // WriteMetadata writes the provided metadata to disk anf registry.
-func (b *registryBackend) WriteMetadata(ctx context.Context, meta *v1alpha1.Metadata, path string) error {
+func (b *registryBackend) WriteMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
 	return b.WriteObject(ctx, path, meta)
 }
 
@@ -181,7 +181,7 @@ func (b *registryBackend) Cleanup(ctx context.Context, fpath string) error {
 
 // CheckConfig will return an error if the StorageConfig
 // is not a registry
-func (b *registryBackend) CheckConfig(storage v1alpha1.StorageConfig) error {
+func (b *registryBackend) CheckConfig(storage v1alpha2.StorageConfig) error {
 	if storage.Registry == nil {
 		return fmt.Errorf("not registry backend")
 	}

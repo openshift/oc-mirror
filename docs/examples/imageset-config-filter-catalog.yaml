@@ -9,7 +9,7 @@
 # higher versions within every channel the startingVersion exists within 
 # the specified package will be mirrored.
 ---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
   ocp:

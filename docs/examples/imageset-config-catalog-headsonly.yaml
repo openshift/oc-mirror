@@ -2,7 +2,7 @@
 # latest version of each channel within each package contained 
 # within a specified operator catalog
 ---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
   operators:

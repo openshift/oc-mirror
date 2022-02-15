@@ -13,7 +13,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -22,18 +22,18 @@ func TestPlan_Additional(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		cfg       v1alpha1.ImageSetConfiguration
+		cfg       v1alpha2.ImageSetConfiguration
 		want      error
 		wantImage image.TypedImage
 		wantErr   bool
 	}{
 		{
 			name: "Valid/WithTag",
-			cfg: v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						AdditionalImages: []v1alpha1.AdditionalImages{
-							{Image: v1alpha1.Image{Name: "quay.io/redhatgov/oc-mirror-dev:latest"}},
+			cfg: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						AdditionalImages: []v1alpha2.AdditionalImages{
+							{Image: v1alpha2.Image{Name: "quay.io/redhatgov/oc-mirror-dev:latest"}},
 						},
 					},
 				},
@@ -54,11 +54,11 @@ func TestPlan_Additional(t *testing.T) {
 		},
 		{
 			name: "Valid/NoTag",
-			cfg: v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						AdditionalImages: []v1alpha1.AdditionalImages{
-							{Image: v1alpha1.Image{Name: "quay.io/redhatgov/oc-mirror-dev"}},
+			cfg: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						AdditionalImages: []v1alpha2.AdditionalImages{
+							{Image: v1alpha2.Image{Name: "quay.io/redhatgov/oc-mirror-dev"}},
 						},
 					},
 				},

@@ -22,7 +22,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -78,7 +78,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error opening backend: %v", err)
 	}
 
-	var meta v1alpha1.Metadata
+	var meta v1alpha2.Metadata
 	switch err := backend.ReadMetadata(ctx, &meta, config.MetadataBasePath); {
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return err
@@ -100,7 +100,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, last v1alpha1.PastMirror) error {
+func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, last v1alpha2.PastMirror) error {
 	uuid := uuid.New()
 	// TODO(jpower432): handle multi-arch requests here
 	arch := "amd64"
@@ -155,7 +155,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSe
 	return nil
 }
 
-func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, meta v1alpha1.Metadata) error {
+func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata) error {
 	logrus.Info("Getting operator update information")
 	dstDir, err := os.MkdirTemp(o.Dir, "updatetmp-")
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
@@ -23,12 +23,12 @@ var (
 // generic {Read,Write}Object() methods respectively.
 
 type Backend interface {
-	ReadMetadata(context.Context, *v1alpha1.Metadata, string) error
-	WriteMetadata(context.Context, *v1alpha1.Metadata, string) error
+	ReadMetadata(context.Context, *v1alpha2.Metadata, string) error
+	WriteMetadata(context.Context, *v1alpha2.Metadata, string) error
 	ReadObject(context.Context, string, interface{}) error
 	WriteObject(context.Context, string, interface{}) error
 	GetWriter(context.Context, string) (io.Writer, error)
-	CheckConfig(v1alpha1.StorageConfig) error
+	CheckConfig(v1alpha2.StorageConfig) error
 	Open(context.Context, string) (io.ReadCloser, error)
 	Stat(context.Context, string) (os.FileInfo, error)
 	Cleanup(context.Context, string) error
@@ -49,7 +49,7 @@ var backends = []Backend{
 }
 
 // ByConfig returns backend interface based on provided config
-func ByConfig(dir string, storage v1alpha1.StorageConfig) (Backend, error) {
+func ByConfig(dir string, storage v1alpha2.StorageConfig) (Backend, error) {
 	var b interface{}
 	for _, bk := range backends {
 		if err := bk.CheckConfig(storage); err == nil {

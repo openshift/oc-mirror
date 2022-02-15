@@ -5,7 +5,7 @@
 # subkey with "local" and add a path subkey under
 # local to specify a local backend.
 ---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 storageConfig:
   registry:

@@ -12,13 +12,13 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
 
 // ReconcileV2Dir gathers all manifests and blobs that were collected during a run
 // and checks against the current list.
 // This function is used to prepare a list of files that need to added to the Imageset.
-func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob, err error) {
+func ReconcileV2Dir(meta v1alpha2.Metadata, filenames map[string]string) (manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob, err error) {
 
 	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
 	for _, pf := range meta.PastBlobs {
@@ -63,7 +63,7 @@ func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manife
 					if err != nil {
 						return err
 					}
-					file := v1alpha1.Blob{
+					file := v1alpha2.Blob{
 						ID:            info.Name(),
 						NamespaceName: namespacename,
 						TimeStamp:     meta.PastMirror.Timestamp,
@@ -86,7 +86,7 @@ func ReconcileV2Dir(meta v1alpha1.Metadata, filenames map[string]string) (manife
 					}
 					// TODO(jpower432): Identify and set tag
 					// for pruning
-					file := v1alpha1.Manifest{
+					file := v1alpha2.Manifest{
 						Name:          nameInArchive,
 						NamespaceName: namespacename,
 					}

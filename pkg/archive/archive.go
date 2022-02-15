@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -51,7 +51,7 @@ func NewArchiver() Archiver {
 }
 
 // NewPackager create a new packager for build ImageSets
-func NewPackager(manifests []v1alpha1.Manifest, blobs []v1alpha1.Blob) *packager {
+func NewPackager(manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob) *packager {
 	manifestSetToArchive := make(map[string]struct{}, len(manifests))
 	blobSetToArchive := make(map[string]struct{}, len(blobs))
 

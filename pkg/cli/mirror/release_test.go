@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
 
 func TestGetChannelDownloads(t *testing.T) {
@@ -23,7 +23,7 @@ func TestGetChannelDownloads(t *testing.T) {
 	tests := []struct {
 		name string
 
-		channels []v1alpha1.ReleaseChannel
+		channels []v1alpha2.ReleaseChannel
 		expected downloads
 		arch     []string
 		version  string
@@ -31,7 +31,7 @@ func TestGetChannelDownloads(t *testing.T) {
 	}{{
 		name: "Success/OneChannelOneArch",
 		arch: []string{"test-arch"},
-		channels: []v1alpha1.ReleaseChannel{
+		channels: []v1alpha2.ReleaseChannel{
 			{
 				Name:       "stable-4.0",
 				MinVersion: "4.0.0-5",
@@ -50,7 +50,7 @@ func TestGetChannelDownloads(t *testing.T) {
 		},
 	}, {
 		name: "Success/MultiArch",
-		channels: []v1alpha1.ReleaseChannel{
+		channels: []v1alpha2.ReleaseChannel{
 			{
 				Name:       "stable-4.0",
 				MinVersion: "4.0.0-5",
@@ -66,7 +66,7 @@ func TestGetChannelDownloads(t *testing.T) {
 		},
 	}, {
 		name: "Failure/VersionStringEmpty",
-		channels: []v1alpha1.ReleaseChannel{
+		channels: []v1alpha2.ReleaseChannel{
 			{
 				Name:       "stable-4.0",
 				MinVersion: "4.0.0-5",

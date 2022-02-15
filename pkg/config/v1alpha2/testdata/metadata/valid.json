@@ -1,5 +1,5 @@
 {
-  "apiVersion": "mirror.openshift.io/v1alpha1",
+  "apiVersion": "mirror.openshift.io/v1alpha2",
   "kind": "Metadata",
   "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
   "pastMirror":

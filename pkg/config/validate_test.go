@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,20 +14,20 @@ func TestValidate(t *testing.T) {
 
 	type spec struct {
 		name     string
-		config   *v1alpha1.ImageSetConfiguration
+		config   *v1alpha2.ImageSetConfiguration
 		expError string
 	}
 
 	cases := []spec{
 		{
 			name: "Valid/HeadsOnlyFalse",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						Operators: []v1alpha1.Operator{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
 							{
-								IncludeConfig: v1alpha1.IncludeConfig{
-									Packages: []v1alpha1.IncludePackage{{Name: "foo"}},
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
 								HeadsOnly: &falseValue,
 							},
@@ -39,12 +39,12 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/NoIncludePackages",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						Operators: []v1alpha1.Operator{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
 							{
-								IncludeConfig: v1alpha1.IncludeConfig{},
+								IncludeConfig: v1alpha2.IncludeConfig{},
 								HeadsOnly:     &trueValue,
 							},
 						},
@@ -54,13 +54,13 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/HeadsOnlyFalse",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						Operators: []v1alpha1.Operator{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
 							{
-								IncludeConfig: v1alpha1.IncludeConfig{
-									Packages: []v1alpha1.IncludePackage{{Name: "foo"}},
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
 								HeadsOnly: &falseValue,
 							},
@@ -71,11 +71,11 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/MinandMaxReleaseVersionSet",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						OCP: v1alpha1.OCP{
-							Channels: []v1alpha1.ReleaseChannel{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
 								{
 									MinVersion: "1.2.3",
 									MaxVersion: "1.2.3",
@@ -89,11 +89,11 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/MinandMaxReleaseVersionNotSet",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						OCP: v1alpha1.OCP{
-							Channels: []v1alpha1.ReleaseChannel{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
 								{},
 							},
 						},
@@ -104,13 +104,13 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/HeadsOnlyTrue",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						Operators: []v1alpha1.Operator{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
 							{
-								IncludeConfig: v1alpha1.IncludeConfig{
-									Packages: []v1alpha1.IncludePackage{{Name: "foo"}},
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
 								HeadsOnly: &trueValue,
 							},
@@ -122,11 +122,11 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/NoMinimumReleaseVersion",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						OCP: v1alpha1.OCP{
-							Channels: []v1alpha1.ReleaseChannel{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
 								{
 									MaxVersion: "1.2.3",
 								},
@@ -139,11 +139,11 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/NoMaximunReleaseVersion",
-			config: &v1alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha1.ImageSetConfigurationSpec{
-					Mirror: v1alpha1.Mirror{
-						OCP: v1alpha1.OCP{
-							Channels: []v1alpha1.ReleaseChannel{
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
 								{
 									MinVersion: "1.2.3",
 								},

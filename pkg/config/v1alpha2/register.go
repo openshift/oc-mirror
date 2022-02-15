@@ -1,9 +1,9 @@
-package v1alpha1
+package v1alpha2
 
 import "k8s.io/apimachinery/pkg/runtime/schema"
 
 const (
-	version = "v1alpha1"
+	version = "v1alpha2"
 	group   = "mirror.openshift.io"
 )
 

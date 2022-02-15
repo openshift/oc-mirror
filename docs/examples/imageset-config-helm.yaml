@@ -4,7 +4,7 @@
 # be mirrored from local sources, as seen in the commented
 # portion of this example.
 ---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
   helm:

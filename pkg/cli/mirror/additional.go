@@ -7,7 +7,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -21,7 +21,7 @@ func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 }
 
 // Plan provides an image mapping with source and destination for provided AdditionalImages
-func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha1.AdditionalImages) (image.TypedImageMapping, error) {
+func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.AdditionalImages) (image.TypedImageMapping, error) {
 	mmappings := make(image.TypedImageMapping, len(imageList))
 	for _, img := range imageList {
 		// Get source image information
