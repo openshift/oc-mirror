@@ -11,9 +11,9 @@ import (
 
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
-// FindRelease will find the minimum or maximum release recorded in a mirror
-func FindRelease(mirror v1alpha1.Mirror, min bool) (string, semver.Version, error) {
-	vers, err := findReleases(mirror, min)
+// FindRelease will find the minimum or maximum release for a set of ReleaseChannels
+func FindRelease(channels []v1alpha1.ReleaseChannel, min bool) (string, semver.Version, error) {
+	vers, err := findReleases(channels, min)
 	if err != nil {
 		return "", semver.Version{}, err
 	}
@@ -35,9 +35,9 @@ func FindRelease(mirror v1alpha1.Mirror, min bool) (string, semver.Version, erro
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
 }
 
-func findReleases(mirror v1alpha1.Mirror, min bool) (map[string]semver.Version, error) {
+func findReleases(channels []v1alpha1.ReleaseChannel, min bool) (map[string]semver.Version, error) {
 	vers := make(map[string]semver.Version)
-	for _, ch := range mirror.OCP.Channels {
+	for _, ch := range channels {
 
 		ver := ch.MaxVersion
 		if min {

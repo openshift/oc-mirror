@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/google/uuid"
@@ -13,12 +14,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 )
 
-func TestGetChannelDownloads(t *testing.T) {
-	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
-
-	opts := ReleaseOptions{
-		uuid: clientID,
-	}
+func TestGetDownloads(t *testing.T) {
+	opts := ReleaseOptions{}
 
 	tests := []struct {
 		name string
@@ -85,16 +82,17 @@ func TestGetChannelDownloads(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
 
-			c, uri, err := cincinnati.NewClient(ts.URL, clientID)
-			require.NoError(t, err)
-
 			allDownloads := downloads{}
 			var newDownloads downloads
+
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+			c := &mockClient{url: endpoint}
 
 			for _, ar := range test.arch {
 				for _, ch := range test.channels {
 
-					newDownloads, err = opts.getChannelDownloads(context.Background(), c, test.channels, ch, ar, uri)
+					newDownloads, err = opts.getChannelDownloads(context.Background(), c, test.channels, ch, ar)
 					if err != nil {
 						break
 					}
@@ -110,6 +108,38 @@ func TestGetChannelDownloads(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Create a mock client
+type mockClient struct {
+	url *url.URL
+}
+
+func (c mockClient) GetID() uuid.UUID {
+	return uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
+}
+
+func (c mockClient) SetQueryParams(arch, channel, version string) {
+	queryParams := c.url.Query()
+	params := map[string]string{
+		"arch":    arch,
+		"channel": channel,
+		"version": version,
+	}
+	for key, value := range params {
+		if value != "" {
+			queryParams.Add(key, value)
+		}
+	}
+	c.url.RawQuery = queryParams.Encode()
+}
+
+func (c mockClient) GetURL() *url.URL {
+	return c.url
+}
+
+func (c mockClient) GetTransport() *http.Transport {
+	return &http.Transport{}
 }
 
 // Mock Cincinnati API

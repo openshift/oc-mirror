@@ -77,13 +77,10 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 
 	w := o.IOStreams.Out
 
-	c, url, err := cincinnati.NewClient(cincinnati.UpdateUrl, uuid.New())
-	if err != nil {
-		return err
-	}
+	client, err := cincinnati.NewOCPClient(uuid.New())
 
 	if o.Channels {
-		channels, err := c.GetChannels(ctx, url, o.Channel)
+		channels, err := cincinnati.GetChannels(ctx, client, o.Channel)
 		if err != nil {
 			return err
 		}
@@ -112,7 +109,7 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	vers, err := c.GetVersions(ctx, url, o.Channel)
+	vers, err := cincinnati.GetVersions(ctx, client, o.Channel)
 	if err != nil {
 		return err
 	}

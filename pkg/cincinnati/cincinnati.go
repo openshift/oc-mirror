@@ -2,18 +2,14 @@ package cincinnati
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/blang/semver/v4"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"k8s.io/klog/v2"
 )
@@ -30,44 +26,11 @@ const (
 	// Update urls
 	UpdateUrl    = "https://api.openshift.com/api/upgrades_info/v1/graph"
 	OkdUpdateURL = "https://origin-release.ci.openshift.org/graph"
+	OkdChannel   = "okd"
 )
 
 // Client is a Cincinnati client which can be used to fetch update graphs from
 // an upstream Cincinnati stack.
-type Client struct {
-	id        uuid.UUID
-	transport *http.Transport
-}
-
-// NewClient creates a new Cincinnati client with the given client identifier.
-func NewClient(u string, id uuid.UUID) (Client, *url.URL, error) {
-	upstream, err := url.Parse(u)
-	if err != nil {
-		return Client{}, nil, err
-	}
-
-	tls, err := getTLSConfig()
-	if err != nil {
-		return Client{}, nil, err
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tls,
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	return Client{id: id, transport: transport}, upstream, nil
-}
-
-func getTLSConfig() (*tls.Config, error) {
-	certPool, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-	config := &tls.Config{
-		RootCAs: certPool,
-	}
-	return config, nil
-}
 
 // Error is returned when are unable to get updates.
 type Error struct {
@@ -96,20 +59,13 @@ type Update node
 // finding all of the children. These children are the available updates for
 // the current version and their payloads indicate from where the actual update
 // image can be downloaded.
-func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, channel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
+func GetUpdates(ctx context.Context, c Client, arch string, channel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
 	var current Update
 	var requested Update
 	// Prepare parametrized cincinnati query.
-	queryParams := uri.Query()
-	if channel != "okd" {
-		queryParams.Add("arch", arch)
-		queryParams.Add("channel", channel)
-		queryParams.Add("id", c.id.String())
-		queryParams.Add("version", version.String())
-	}
-	uri.RawQuery = queryParams.Encode()
+	c.SetQueryParams(arch, channel, version.String())
 
-	graph, err := c.getGraphData(ctx, uri)
+	graph, err := getGraphData(ctx, c)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("error getting graph data for version %s in channel %s", version.String(), channel)
 	}
@@ -167,30 +123,30 @@ func (c Client) GetUpdates(ctx context.Context, uri *url.URL, arch string, chann
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
 // upstream Cincinnati stack given the current and target version and channel
-func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
+func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
 	if sourceChannel == targetChannel {
-		return c.GetUpdates(ctx, uri, arch, targetChannel, startVer, reqVer)
+		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)
 	}
 
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
 	// edge is hit
-	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
+	latest, err := GetChannelLatest(ctx, c, arch, sourceChannel)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
 	}
-	current, _, upgrades, err := c.GetUpdates(ctx, uri, arch, sourceChannel, startVer, latest)
+	current, _, upgrades, err := GetUpdates(ctx, c, arch, sourceChannel, startVer, latest)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("cannot get current: %v", err)
 	}
 
-	requested, newUpgrades, err := c.calculate(ctx, uri, arch, sourceChannel, targetChannel, latest, reqVer)
+	requested, newUpgrades, err := calculate(ctx, c, arch, sourceChannel, targetChannel, latest, reqVer)
 	upgrades = append(upgrades, newUpgrades...)
 
 	return current, requested, upgrades, err
 }
 
-func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
+func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
 	// Get semver representation of source and target channel versions
 	sourceIdx := strings.LastIndex(sourceChannel, "-")
 	if sourceIdx == -1 {
@@ -214,14 +170,14 @@ func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel
 		// requested version so we don't exceed the maximun version
 		targetVer = reqVer
 	} else {
-		targetVer, err = c.GetChannelLatest(ctx, uri, arch, currChannel)
+		targetVer, err = GetChannelLatest(ctx, c, arch, currChannel)
 		if err != nil {
 			return requested, upgrades, nil
 		}
 	}
 
 	// Handles blocked edges
-	chanVersions, err := c.GetVersions(ctx, uri, currChannel)
+	chanVersions, err := GetVersions(ctx, c, currChannel)
 	if err != nil {
 		return requested, upgrades, nil
 	}
@@ -233,13 +189,13 @@ func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel
 	if _, found := foundVersions[startVer.String()]; !found {
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
-		_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, targetVer, targetVer)
+		_, requested, _, err = GetUpdates(ctx, c, arch, targetChannel, targetVer, targetVer)
 		logrus.Warnf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
 
 	logrus.Debugf("Getting updates for version %s in channel %s", startVer.String(), currChannel)
-	_, requested, upgrades, err = c.GetUpdates(ctx, uri, arch, currChannel, startVer, targetVer)
+	_, requested, upgrades, err = GetUpdates(ctx, c, arch, currChannel, startVer, targetVer)
 	if err != nil {
 		return requested, upgrades, nil
 	}
@@ -248,7 +204,7 @@ func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel
 		return requested, upgrades, nil
 	}
 
-	req, up, err := c.calculate(ctx, uri, arch, currChannel, targetChannel, targetVer, reqVer)
+	req, up, err := calculate(ctx, c, arch, currChannel, targetChannel, targetVer, reqVer)
 	if err != nil {
 		return requested, upgrades, nil
 	}
@@ -260,17 +216,11 @@ func (c Client) calculate(ctx context.Context, uri *url.URL, arch, sourceChannel
 
 // GetChannelLatest fetches the latest version from the specified
 // upstream Cincinnati stack given architecture and channel
-func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string, channel string) (semver.Version, error) {
+func GetChannelLatest(ctx context.Context, c Client, arch string, channel string) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
-	queryParams := uri.Query()
-	if channel != "okd" {
-		queryParams.Add("arch", arch)
-		queryParams.Add("channel", channel)
-		queryParams.Add("id", c.id.String())
-	}
-	uri.RawQuery = queryParams.Encode()
+	c.SetQueryParams(arch, channel, "")
 
-	graph, err := c.getGraphData(ctx, uri)
+	graph, err := getGraphData(ctx, c)
 	if err != nil {
 		return semver.Version{}, fmt.Errorf("error getting graph data for channel %s", channel)
 	}
@@ -297,16 +247,11 @@ func (c Client) GetChannelLatest(ctx context.Context, uri *url.URL, arch string,
 
 // GetChannels fetches the channels containing update payloads from the specified
 // upstream Cincinnati stack
-func (c Client) GetChannels(ctx context.Context, uri *url.URL, channel string) (map[string]struct{}, error) {
+func GetChannels(ctx context.Context, c Client, channel string) (map[string]struct{}, error) {
 	// Prepare parametrized cincinnati query.
-	queryParams := uri.Query()
-	if channel != "okd" {
-		queryParams.Add("channel", channel)
-		queryParams.Add("id", c.id.String())
-	}
-	uri.RawQuery = queryParams.Encode()
+	c.SetQueryParams("", channel, "")
 
-	graph, err := c.getGraphData(ctx, uri)
+	graph, err := getGraphData(ctx, c)
 	if err != nil {
 		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
 	}
@@ -326,16 +271,11 @@ func (c Client) GetChannels(ctx context.Context, uri *url.URL, channel string) (
 
 // GetVersion will return all OCP/OKD versions in a specified channel fetches the current and requested (if applicable) update payload from the specified
 // upstream Cincinnati stack given the current version and channel
-func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) ([]semver.Version, error) {
+func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.
-	queryParams := uri.Query()
-	if channel != "okd" {
-		queryParams.Add("channel", channel)
-		queryParams.Add("id", c.id.String())
-	}
-	uri.RawQuery = queryParams.Encode()
+	c.SetQueryParams("", channel, "")
 
-	graph, err := c.getGraphData(ctx, uri)
+	graph, err := getGraphData(ctx, c)
 	if err != nil {
 		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
 	}
@@ -360,31 +300,33 @@ func (c Client) GetVersions(ctx context.Context, uri *url.URL, channel string) (
 }
 
 // getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel
-func (c Client) getGraphData(ctx context.Context, uri *url.URL) (graph graph, err error) {
+func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
+	transport := c.GetTransport()
+	uri := c.GetURL()
 	// Download the update graph.
 	req, err := http.NewRequest("GET", uri.String(), nil)
 	if err != nil {
 		return graph, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
 	}
 	req.Header.Add("Accept", GraphMediaType)
-	if c.transport != nil && c.transport.TLSClientConfig != nil {
-		if c.transport.TLSClientConfig.ClientCAs == nil {
+	if transport != nil && transport.TLSClientConfig != nil {
+		if c.GetTransport().TLSClientConfig.ClientCAs == nil {
 			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
 		} else {
-			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(c.transport.TLSClientConfig.RootCAs.Subjects()), uri)
+			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
 		}
 	}
 
-	if c.transport != nil && c.transport.Proxy != nil {
-		proxy, err := c.transport.Proxy(req)
+	if transport != nil && transport.Proxy != nil {
+		proxy, err := transport.Proxy(req)
 		if err == nil && proxy != nil {
 			klog.V(5).Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
 		}
 	}
 
 	client := http.Client{}
-	if c.transport != nil {
-		client.Transport = c.transport
+	if transport != nil {
+		client.Transport = transport
 	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
 	defer cancel()

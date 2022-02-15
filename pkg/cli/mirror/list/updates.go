@@ -86,7 +86,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("no metadata detected")
 	default:
 		if len(cfg.Mirror.OCP.Channels) != 0 {
-			if err := o.releaseUpdates(ctx, cfg, meta.PastMirror); err != nil {
+			if err := o.releaseUpdates(ctx, "amd64", cfg, meta.PastMirror); err != nil {
 				return err
 			}
 		}
@@ -100,57 +100,54 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (o UpdatesOptions) releaseUpdates(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, last v1alpha1.PastMirror) error {
-	uuid := uuid.New()
-	// TODO(jpower432): handle multi-arch requests here
-	arch := "amd64"
+func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1alpha1.ImageSetConfiguration, last v1alpha1.PastMirror) error {
 	logrus.Info("Getting release update information")
+	lastMaxVersion := map[string]semver.Version{}
+	for _, ch := range last.Mirror.OCP.Channels {
+		version, err := semver.Parse(ch.MaxVersion)
+		if err != nil {
+			return err
+		}
+		lastMaxVersion[ch.Name] = version
+	}
+
+	// Find the latest version is each channel being requested and plot upgrade graph between the old
+	// versions if available
+	id := uuid.New()
+
 	for _, ch := range cfg.Mirror.OCP.Channels {
-		url := cincinnati.UpdateUrl
-		if ch.Name == "okd" {
-			url = cincinnati.OkdUpdateURL
-		}
 
-		client, upstream, err := cincinnati.NewClient(url, uuid)
+		var c cincinnati.Client
+		var err error
+		if ch.Name == cincinnati.OkdChannel {
+			c, err = cincinnati.NewOKDClient(id)
+		} else {
+			c, err = cincinnati.NewOCPClient(id)
+		}
+		if err != nil {
+			return err
+		}
+		latest, err := cincinnati.GetChannelLatest(ctx, c, arch, ch.Name)
+		if err != nil {
+			return err
+		}
+		ver, found := lastMaxVersion[ch.Name]
+		if !found {
+			ver = latest
+		}
+		_, _, upgrades, err := cincinnati.GetUpdates(ctx, c, arch, ch.Name, ver, latest)
 		if err != nil {
 			return err
 		}
 
-		// Find the last release downloads if no downloads
-		// have been made in the target channel list
-		// all versions
 		var vers []semver.Version
-		firstCh, first, err := cincinnati.FindRelease(last.Mirror, true)
-		if err != nil {
-			return err
-		}
-		lastCh, last, err := cincinnati.FindRelease(last.Mirror, false)
-		if err != nil {
-			return err
-		}
-		switch {
-		case err != nil && !errors.Is(err, cincinnati.ErrNoPreviousRelease):
-			return err
-		case err != nil:
-			vers, err = client.GetVersions(ctx, upstream, ch.Name)
-			if err != nil {
-				return err
-			}
-		default:
-			logrus.Debugf("Finding releases between %s and %s", first.String(), last.String())
-			_, _, upgrades, err := client.CalculateUpgrades(ctx, upstream, arch, firstCh, lastCh, first, last)
-			if err != nil {
-				return err
-			}
-			for _, upgrade := range upgrades {
-				vers = append(vers, upgrade.Version)
-			}
+		for _, upgrade := range upgrades {
+			vers = append(vers, upgrade.Version)
 		}
 
 		if err := o.writeReleaseColumns(vers, ch.Name); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
