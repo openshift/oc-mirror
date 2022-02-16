@@ -13,7 +13,7 @@ oc-mirror-workspace/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 
 # Logs.
-**/.openshift_bundle.log
+**/.oc-mirror.log
 
 # Local vendor. Remove when ready to vendor dependencies.
 #/vendor/

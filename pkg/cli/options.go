@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 
@@ -49,7 +50,15 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 		DisableQuote:           true,
 	}))
 
-	o.logfileCleanup = setupFileHook(".")
+	cleanup, logfile := setupFileHook(".")
+	o.logfileCleanup = cleanup
+
+	// Add to root IOStream options
+	o.IOStreams = genericclioptions.IOStreams{
+		In:     o.IOStreams.In,
+		Out:    io.MultiWriter(o.IOStreams.Out, logfile),
+		ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logfile),
+	}
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {
