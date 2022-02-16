@@ -21,14 +21,14 @@ GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="0" \
 
 GO_BUILD_FLAGS :=-tags 'json1 -mod=vendor'
 
-all: clean vendor test-unit build
+all: clean tidy test-unit build
 .PHONY: all
 
 build: clean
 	$(GO) build $(GO_BUILD_FLAGS) -ldflags="$(GO_LD_EXTRAFLAGS)" -o bin/oc-mirror ./cmd/oc-mirror
 .PHONY: build
 
-vendor:
+tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
 	$(GO) mod vendor
@@ -46,6 +46,6 @@ test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-mirror
 .PHONY: test-e2e
 
-sanity: vendor
+sanity: tidy
 	git diff --exit-code
 .PHONY: sanity
