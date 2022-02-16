@@ -20,6 +20,8 @@ pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 
 # Local
 .idea
+tags
+*.swp
 
 # Local imageset-config.yaml
 imageset-config.yaml
