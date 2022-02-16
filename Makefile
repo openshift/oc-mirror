@@ -28,6 +28,10 @@ build: clean
 	$(GO) build $(GO_BUILD_FLAGS) -ldflags="$(GO_LD_EXTRAFLAGS)" -o bin/oc-mirror ./cmd/oc-mirror
 .PHONY: build
 
+hack-build: clean
+	./hack/build.sh
+.PHONY: hack-build
+
 tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
@@ -36,6 +40,7 @@ tidy:
 
 clean:
 	@rm -rf ./bin/*
+	@cd test/integration && make clean
 .PHONY: clean
 
 test-unit:
@@ -45,6 +50,12 @@ test-unit:
 test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-mirror
 .PHONY: test-e2e
+
+test-integration: hack-build
+	@mkdir -p test/integration/output/clients
+	@cp bin/oc-mirror test/integration/output/clients/
+	@cd test/integration && make
+.PHONY: test-integration
 
 sanity: tidy
 	git diff --exit-code

@@ -1,0 +1,32 @@
+---
+# This generates a random name (which it saves) for your cluster and subdomain
+cluster_name: '{{ lookup("password", output_dir + "/cluster_name chars=ascii_lowercase length=6") }}'
+
+# This domain is only accessible if you're using an AWS account with access to it!
+cluster_domain: redhat4govaws.io
+
+# This is important for default generation of the ImageSetConfiguration, for OpenShift release versions as well as operator catalog versions
+openshift_version: 4.9
+
+# Basically, there are only a few good choices here (depending on your AWS account configuration). You're best off not changing it unless you know why.
+aws_region: us-west-2
+
+
+# These are selections from the scenarios available at:
+# https://github.com/jharmison-redhat/oc-mirror-e2e/tree/main/collection/playbooks/vars/scenario_stubs
+scenario_stubs:
+  metadata_backend: registry
+  mirror_method: to_registry
+  registry_type: docker_registry
+  operators_to_mirror: compliance_operator
+
+# If you want to override the ImageSetConfiguration generation with a custom change to the API, you might want to use something like this:
+#
+# imageset_config_override: |-
+#   apiVersion: mirror.openshift.io/v1alpha2
+#   kind: ImageSetConfiguration
+#   ocp:
+#     channels:
+#       - name: stable-4.9
+#         minVersion: 4.9.10
+#         maxVersion: 4.9.17
