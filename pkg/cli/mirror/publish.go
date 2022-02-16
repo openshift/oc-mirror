@@ -277,7 +277,12 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			// Add top level assocation to the ICSP mapping
 			if assoc.Name == imageName {
-				allMappings.Add(m.Source, m.Destination, assoc.Type)
+				source, err := imagesource.ParseReference(imageName)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				allMappings.Add(source, m.Destination, assoc.Type)
 			}
 
 			if len(missingLayers) != 0 {
