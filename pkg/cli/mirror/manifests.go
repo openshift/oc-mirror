@@ -9,6 +9,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"regexp"
+	"net/http"
+	"errors"
+	"io"
+	b64 "encoding/base64"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -26,6 +31,8 @@ const (
 	repositoryICSPScope = "repository"
 	namespaceICSPScope  = "namespace"
 	icspKind            = "ImageContentSourcePolicy"
+	digestAlgo          = "sha256"
+	releaseSignatureURL = "https://mirror.openshift.com/pub/openshift-v4/signatures/openshift/release/%s=%s/signature-1"
 )
 
 var icspTypeMeta = metav1.TypeMeta{
@@ -260,4 +267,70 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 	}
 	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
 	return nil
+}
+
+// WriteReleaseSignature will generate a ConfigMap used during upgrading and write it to disk
+func WriteReleaseSignature(image string, version string, dir string) error {
+	releaseConfigMap, err := generateReleaseSignature(image, version)
+	if err != nil {
+		logrus.Errorf("Error from generateReleaseSignature %v", err)
+		return err
+	}
+	if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("release-image-%s-configmap.yaml", version)), releaseConfigMap, os.ModePerm); err != nil {
+		return fmt.Errorf("error writing ReleaseConfigMap: %v", err)
+	}
+
+	return nil
+}
+
+func generateReleaseSignature(image string, version string) ([]byte, error) {
+	name := "release-image-"+version
+
+	replace := regexp.MustCompile(`.*:`)
+	digest := replace.ReplaceAllString(image, "")
+	url := fmt.Sprintf(releaseSignatureURL, digestAlgo, digest)
+
+	response, err := http.Get(url)
+	if err != nil {
+		logrus.Errorf("Error getting signature for %s, error was %v", url, err)
+		return nil, err
+	}
+
+	defer response.Body.Close()
+
+
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New(fmt.Sprintf("Release signature not found for release, tried to get %s and http code was %s", url, strconv.Itoa(response.StatusCode)))
+	}
+
+
+	bodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		logrus.Errorf("Error reading response body, erorr was %v", err)
+		return nil, err
+	}
+
+	digestB64 := b64.StdEncoding.EncodeToString(bodyBytes)
+
+	obj := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": "openshift-config-managed",
+			"labels": map[string]interface{}{
+				"release.openshift.io/verification-signatures": "",
+			},
+		},
+		"binaryData": map[string]interface{}{
+			digestAlgo+"-"+digest: digestB64,
+		},
+	}
+
+	cm, err := yaml.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal ReleaseConfigMap yaml: %v", err)
+	}
+
+	return cm, nil
 }

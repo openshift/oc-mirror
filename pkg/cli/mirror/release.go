@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
@@ -28,6 +29,9 @@ type ReleaseOptions struct {
 	// insecure indicates whether the source
 	// registry is insecure
 	insecure bool
+
+	Logger       *logrus.Entry
+	tmp string
 }
 
 // NewReleaseOptions defaults ReleaseOptions.
@@ -51,6 +55,14 @@ func (o *ReleaseOptions) Plan(ctx context.Context, meta v1alpha1.Metadata, cfg *
 		channelVersion   = make(map[string]string, len(cfg.Mirror.OCP.Channels))
 		releaseDownloads = downloads{}
 	)
+
+	cleanup, err := o.mktempDir()
+	if err != nil {
+		return nil, err
+	}
+	if !o.SkipCleanup {
+		defer cleanup()
+	}
 
 	for _, ch := range cfg.Mirror.OCP.Channels {
 
@@ -86,6 +98,12 @@ func (o *ReleaseOptions) Plan(ctx context.Context, meta v1alpha1.Metadata, cfg *
 				releaseDownloads.Merge(downloads)
 			}
 		}
+	}
+
+	err = o.generateReleaseSignatures(releaseDownloads)
+
+	if err != nil {
+		return nil, err
 	}
 
 	opts, err := o.newMirrorReleaseOptions(srcDir)
@@ -162,18 +180,18 @@ func (o *ReleaseOptions) getDownloads(ctx context.Context, client cincinnati.Cli
 	}
 
 	for _, update := range updates {
-		downloads[update.Image] = struct{}{}
+		downloads[update.Image] = update.Version
 	}
 
 	// If reverse graph download the current version
 	// else add newest to downloads
 	if reverse {
-		downloads[current.Image] = struct{}{}
+		downloads[current.Image] = current.Version
 		// Remove newest from updates as it has already
 		// been downloaded
 		delete(downloads, newest.Image)
 	} else {
-		downloads[newest.Image] = struct{}{}
+		downloads[newest.Image] = newest.Version
 	}
 
 	return downloads, nil
@@ -237,10 +255,29 @@ func updateReleaseChannel(releaseChannels []v1alpha1.ReleaseChannel, channelVers
 }
 
 // Define download types
-type downloads map[string]struct{}
+type downloads map[string]semver.Version
 
 func (d downloads) Merge(in downloads) {
 	for k, v := range in {
 		d[k] = v
 	}
+}
+
+func (o *ReleaseOptions) mktempDir() (func(), error) {
+	o.tmp = filepath.Join(o.Dir, fmt.Sprintf("releases.%d", time.Now().Unix()))
+	return func() {
+		if err := os.RemoveAll(o.tmp); err != nil {
+			o.Logger.Error(err)
+		}
+	}, os.MkdirAll(o.tmp, os.ModePerm)
+}
+
+func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) error {
+	for image, version := range releaseDownloads {
+		err := WriteReleaseSignature(image, version.String(), o.tmp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
