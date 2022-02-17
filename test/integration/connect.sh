@@ -2,6 +2,8 @@
 
 set -e
 
+cd "$(dirname "$(realpath "$0")")"
+
 valid_host_names=(registry proxy bastion)
 validate () {
     for valid_host_name in "${valid_host_names[@]}"; do
@@ -30,8 +32,9 @@ ssh_args=(
 )
 
 if [ "$node" = "bastion" ]; then
+    node=bastion.internal
     ssh_args+=(
-        -o ProxyCommand="ssh -W %h:%p ${ssh_args[@]} ec2-user@proxy.$cluster_name.$cluster_domain"
+        -o ProxyCommand="ssh -W %h:%p ${ssh_args[*]} ec2-user@proxy.$cluster_name.$cluster_domain"
     )
 fi
 
