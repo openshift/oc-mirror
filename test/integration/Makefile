@@ -24,10 +24,10 @@ default-scenario: create test delete
 	$(PYTHON) -m venv .venv
 	.venv/bin/pip install --upgrade pip setuptools wheel
 
-.venv/bin/ansible-galaxy: .venv/bin/pip
+.venv/bin/ansible-galaxy: .venv/bin/pip requirements.txt
 	.venv/bin/pip install -r requirements.txt
 
-collections/ansible_collections/jharmison_redhat/oc_mirror_e2e: .venv/bin/ansible-galaxy
+collections/ansible_collections/jharmison_redhat/oc_mirror_e2e: .venv/bin/ansible-galaxy requirements.yml
 	.venv/bin/ansible-galaxy install -r requirements.yml
 
 collection: collections/ansible_collections/jharmison_redhat/oc_mirror_e2e
