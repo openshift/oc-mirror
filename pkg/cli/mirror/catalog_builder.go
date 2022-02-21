@@ -20,7 +20,7 @@ type catalogBuilder struct {
 	remoteOpts []remote.Option
 }
 
-func (b *catalogBuilder) Build(ctx context.Context, targetRef string, layoutPath layout.Path, layers ...v1.Layer) error {
+func (b *catalogBuilder) Run(ctx context.Context, targetRef string, layoutPath layout.Path, layers ...v1.Layer) error {
 
 	var v2format bool
 	tag, err := name.NewTag(targetRef, b.nameOpts...)

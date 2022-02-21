@@ -238,7 +238,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		} else {
 			return fmt.Errorf("error resolving existing catalog image %q: %v", refExact, rerr)
 		}
-		if err := builder.Build(ctx, refExact, layoutPath, layers...); err != nil {
+		if err := builder.Run(ctx, refExact, layoutPath, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)
 		}
 	}
