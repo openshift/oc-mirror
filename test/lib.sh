@@ -128,6 +128,23 @@ function setup_reg() {
   echo -e "connected registry PID: $PID_CONN"
 }
 
+function setup_operator_testdata() {
+  local DATA_DIR="${1:?DATA_DIR required}"
+  local OUTPUT_DIR="${2:?OUTPUT_DIR required}"
+  local CONFIG_PATH="${3:?CONFIG_PATH required}"
+  local DIFF="${4:?DIFF bool required}"
+  if $DIFF; then
+    INDEX_PATH=diff
+  else
+    INDEX_PATH=latest
+  fi
+  echo -e "\nSetting up test directory in $DATA_DIR"
+  mkdir -p "$OUTPUT_DIR"
+  cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
+  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+}
+
 # prep_registry will copy the needed catalog image
 # to the connected registry
 function prep_registry() {
@@ -150,8 +167,8 @@ function run_full() {
   local ns="${3:-""}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
-  "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
-   prep_registry false
+  setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
+  prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http 
   pushd $PUBLISH_FULL_DIR
   if [[ -n $ns ]]; then
@@ -170,7 +187,7 @@ function run_diff() {
   local ns="${2:-""}"
   mkdir $PUBLISH_DIFF_DIR
   # Copy the catalog to the connected registry so they can have the same tag
-  "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_DIFF_DIR" "latest/$config" true
+  setup_operator_testdata "${DATA_TMP}" "$CREATE_DIFF_DIR" "$config" true
   prep_registry true
   run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" --source-use-http 
   pushd ${PUBLISH_DIFF_DIR}
@@ -191,8 +208,8 @@ function run_no_updates() {
   local ns="${3:-""}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
-  "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "$CREATE_FULL_DIR" "latest/$config" false
-   prep_registry false
+  setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
+  prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" --source-use-http
   pushd $PUBLISH_FULL_DIR
@@ -211,7 +228,7 @@ function mirror2mirror() {
   local config="${1:?config required}"
   local ns="${2:-""}"
   # Copy the catalog to the connected registry so they can have the same tag
-  "${DIR}/operator/setup-testdata.sh" "${DATA_TMP}" "${CREATE_FULL_DIR}" "latest/$config" false
+  setup_operator_testdata "${DATA_TMP}" "${CREATE_FULL_DIR}" "$config" false
   prep_registry false
   pushd ${CREATE_FULL_DIR}
   if [[ -n $ns ]]; then
