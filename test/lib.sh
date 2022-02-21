@@ -44,10 +44,11 @@ function check_bundles() {
     exp_bundles_set[$bundle]=bundle
   done
 
+  # The test catalogs are not mult-architecture. The built images only have a fat manifest if the source images do.
   local manifest=$(crane manifest --insecure --platform all $catalog_image | jq .manifests | jq '.[].platform.architecture')
   local num_manifest=$(echo $manifest | wc -w)
-  if (( $num_manifest != 4 )); then 
-    echo "number of manifests in catalog $num_manifest does not match expected number 4"
+  if (( $num_manifest != 1 )); then 
+    echo "number of manifests in catalog $num_manifest does not match expected number 1"
     return 1
   fi
 

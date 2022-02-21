@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/config"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -92,8 +93,6 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 
 func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata, operatorPlan operatorFunc) (image.TypedImageMapping, error) {
 
-	// Ensure meta has the latest OPM image, and if not add it to cfg for mirroring.
-	addOPMImage(cfg, meta)
 	mmappings := image.TypedImageMapping{}
 
 	if len(cfg.Mirror.OCP.Channels) != 0 {
@@ -136,20 +135,4 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 	return mmappings, nil
 }
 
-type operatorFunc func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error)
-
-// Make sure the latest `opm` image exists during the publishing step
-// in case it does not exist in a past mirror.
-func addOPMImage(cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata) {
-
-	for _, img := range meta.PastMirror.Mirror.AdditionalImages {
-		if img.Image.Name == OPMImage {
-			return
-		}
-	}
-
-	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha2.AdditionalImages{
-		Image: v1alpha2.Image{Name: OPMImage},
-	})
-	return
-}
+type operatorFunc func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error)
