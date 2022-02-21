@@ -1,5 +1,0 @@
-apiVersion: mirror.openshift.io/v1alpha1
-kind: ImageSetConfiguration
-mirror:
-  additionalImages:
-  - name: registry.fedoraproject.org/fedora:latest
