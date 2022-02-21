@@ -20,6 +20,15 @@ type catalogBuilder struct {
 	remoteOpts []remote.Option
 }
 
+func NewCatalogBuilder(name []name.Option, remote []remote.Option) *catalogBuilder {
+	return &catalogBuilder{
+		nameOpts:   name,
+		remoteOpts: remote,
+	}
+}
+
+// Run modifies and pushes the catalog image existing in an OCI layout. The image configuration will be updated
+// with the required labels and any provided layers will be appended.
 func (b *catalogBuilder) Run(ctx context.Context, targetRef string, layoutPath layout.Path, layers ...v1.Layer) error {
 
 	var v2format bool
@@ -91,6 +100,8 @@ func (b *catalogBuilder) Run(ctx context.Context, targetRef string, layoutPath l
 	return remote.WriteIndex(tag, idx, b.remoteOpts...)
 }
 
+// CreateLayout will create an OCI image layout from an image or return
+// a layout path from an existing OCI layout
 func (s *catalogBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	if srcRef == "" {
 		logrus.Debugf("Using existing OCI layout to %s", dir)

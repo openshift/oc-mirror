@@ -63,6 +63,8 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	catalogsByImage := map[imagesource.TypedImageReference]string{}
 	if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
 
+		// Skip the layouts dir because we only need
+		// to process the parent directory one time
 		if filepath.Base(fpath) == LayoutsDir {
 			return filepath.SkipDir
 		}
@@ -71,6 +73,8 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			return err
 		}
 
+		// From the index path determine the artifacts (index and layout) directory.
+		// Using that path determine the corresponding catalog image for processing.
 		slashPath := filepath.ToSlash(fpath)
 		if base := path.Base(slashPath); base == "index.json" {
 			slashPath = path.Dir(slashPath)
@@ -164,10 +168,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		if err != nil {
 			return err
 		}
-		builder := &catalogBuilder{
-			nameOpts:   nameOpts,
-			remoteOpts: remoteOpts,
-		}
+		builder := NewCatalogBuilder(nameOpts, remoteOpts)
 		if _, _, rerr := resolver.Resolve(ctx, refExact); rerr == nil {
 
 			logrus.Infof("Catalog image %q found, rendering with new file-based catalog", refExact)
@@ -222,13 +223,15 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			if err != nil {
 				return fmt.Errorf("error creating add layer: %v", err)
 			}
+
+			// Since we are defining the FBC as index.json, remove
+			// any .yaml files from the initial image to ensure they are not processed instead
 			deleted, err := deleteLayer("/configs/.wh.index.yaml")
 			if err != nil {
 				return fmt.Errorf("error creating deleted layer: %v", err)
 			}
 			layers = append(layers, add, deleted)
 
-			// Get catalog image from layout
 			layoutDir := filepath.Join(artifactDir, LayoutsDir)
 			layoutPath, err = builder.CreateLayout("", layoutDir)
 			if err != nil {

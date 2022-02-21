@@ -44,7 +44,8 @@ function check_bundles() {
     exp_bundles_set[$bundle]=bundle
   done
 
-  # The test catalogs are not mult-architecture. The built images only have a fat manifest if the source images do.
+  # The test catalogs are not mult-architecture. The built images will contain a fat manifest with just the amd64 platform and linux OS
+  # if the source image is not a fat manifest.
   local manifest=$(crane manifest --insecure --platform all $catalog_image | jq .manifests | jq '.[].platform.architecture')
   local num_manifest=$(echo $manifest | wc -w)
   if (( $num_manifest != 1 )); then 
