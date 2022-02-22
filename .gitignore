@@ -20,6 +20,15 @@ pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 
 # Local
 .idea
+tags
+*.swp
 
 # Local imageset-config.yaml
 imageset-config.yaml
+
+# Local integration test files
+test/integration/.venv
+test/integration/collections
+test/integration/bin
+test/integration/output/*
+!test/integration/output/.gitkeep
