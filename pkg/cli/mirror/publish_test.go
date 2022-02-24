@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -19,7 +20,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -29,9 +30,7 @@ func TestMetadataError(t *testing.T) {
 
 	// Set up expected UUIDs
 	gotUUID, err := uuid.Parse("360a43c2-8a14-4b5d-906b-07491459f25f")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	type fields struct {
 		archivePath string
@@ -114,7 +113,7 @@ func TestFindBlobRepo(t *testing.T) {
 		name string
 
 		digest   string
-		meta     v1alpha1.Metadata
+		meta     v1alpha2.Metadata
 		options  *MirrorOptions
 		expected imagesource.TypedImageReference
 		err      string
@@ -158,41 +157,31 @@ func TestFindBlobRepo(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			meta := v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: v1alpha1.PastMirrors{
+			meta := v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastBlobs: []v1alpha2.Blob{
 						{
-							Sequence: 1,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test1/baz",
-								},
-							},
+							ID:            "found",
+							NamespaceName: "test1/baz",
+							TimeStamp:     1644586136,
 						},
 						{
-							Sequence: 2,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test2/baz",
-								},
-							},
+							ID:            "found",
+							NamespaceName: "test2/baz",
+							TimeStamp:     1644586137,
 						},
 						{
-							Sequence: 3,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID:            "found",
-									NamespaceName: "test3/baz",
-								},
-							},
+							ID:            "found",
+							NamespaceName: "test3/baz",
+							TimeStamp:     1644586139,
 						},
 					},
 				},
 			}
 
-			ref, err := test.options.findBlobRepo(meta, test.digest)
+			sort.Sort(sort.Reverse(meta.PastBlobs))
+
+			ref, err := test.options.findBlobRepo(meta.PastBlobs, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {
@@ -204,10 +193,10 @@ func TestFindBlobRepo(t *testing.T) {
 
 // prepareMetadata will ensure metadata is in the registry for testing
 func prepMetadata(ctx context.Context, host, dir, uuid string) error {
-	var meta v1alpha1.Metadata
+	var meta v1alpha2.Metadata
 
-	cfg := v1alpha1.StorageConfig{
-		Registry: &v1alpha1.RegistryConfig{
+	cfg := v1alpha2.StorageConfig{
+		Registry: &v1alpha2.RegistryConfig{
 			ImageURL: fmt.Sprintf("%s/oc-mirror:%s", host, uuid),
 			SkipTLS:  true,
 		},

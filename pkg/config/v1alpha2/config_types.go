@@ -1,4 +1,4 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	"bytes"
@@ -43,8 +43,12 @@ type OCP struct {
 
 type ReleaseChannel struct {
 	Name string `json:"name"`
-	// Deprecated: ReleaseChannel should implement MinVersion and MaxVersion.
-	Versions []string `json:"versions"`
+	// MinVersion is minimum version in the
+	// release channel to mirror
+	MinVersion string `json:"minVersion"`
+	// MaxVersion is maximum version in the
+	// release channel to mirror
+	MaxVersion string `json:"maxVersion"`
 }
 
 // Operator configures operator catalog mirroring.

@@ -1,8 +1,8 @@
 {
-  "apiVersion": "mirror.openshift.io/v1alpha1",
+  "apiVersion": "mirror.openshift.io/v1alpha2",
   "kind": "Metadata",
   "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
-  "pastMirrors": [
+  "pastMirror": 
     {
       "timestamp": 1624543862,
       "sequence": 1,
@@ -28,16 +28,12 @@
           "channels": [
             {
               "name": "stable-4.7",
-              "versions": [
-                "4.7.3",
-                "4.7.10"
-              ]
+              "minVersion": "4.7.3",
+              "maxVersion": "4.7.10"
             },
             {
               "name": "stable-4.6",
-              "versions": [
-                "4.6.13"
-              ]
+              "minVersion": "4.6.12"
             }
           ]
         }
@@ -63,5 +59,4 @@
         }
       ]
     }
-  ]
 }

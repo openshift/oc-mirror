@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func TestPack(t *testing.T) {
 	type spec struct {
 		desc    string
 		opts    *MirrorOptions
-		meta    v1alpha1.Metadata
+		meta    v1alpha2.Metadata
 		assocs  image.AssociationSet
 		updates bool
 	}
@@ -52,21 +52,11 @@ func TestPack(t *testing.T) {
 				},
 			},
 			},
-			meta: v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastBlobs: []v1alpha1.Blob{
+			meta: v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastBlobs: v1alpha2.Blobs{
 						{
 							ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
-						},
-					},
-					PastMirrors: v1alpha1.PastMirrors{
-						v1alpha1.PastMirror{
-							Sequence: 1,
-							Blobs: []v1alpha1.Blob{
-								{
-									ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
-								},
-							},
 						},
 					},
 				},
@@ -99,14 +89,9 @@ func TestPack(t *testing.T) {
 				},
 			},
 			},
-			meta: v1alpha1.Metadata{
-				MetadataSpec: v1alpha1.MetadataSpec{
-					PastMirrors: v1alpha1.PastMirrors{
-						v1alpha1.PastMirror{
-							Sequence: 1,
-							Blobs:    []v1alpha1.Blob{},
-						},
-					},
+			meta: v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastBlobs: v1alpha2.Blobs{},
 				},
 			},
 		},

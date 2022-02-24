@@ -10,7 +10,7 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
 
 func TestGetCustomPaths(t *testing.T) {
@@ -48,15 +48,15 @@ func TestSearch(t *testing.T) {
 		name    string
 		path    string
 		ipaths  []string
-		want    []v1alpha1.AdditionalImages
+		want    []v1alpha2.AdditionalImages
 		wantErr bool
 	}{
 		{
 			name:   "test podinfo",
 			path:   "testdata/artifacts/podinfo.yaml",
 			ipaths: getImagesPath(),
-			want: []v1alpha1.AdditionalImages{
-				{Image: v1alpha1.Image{
+			want: []v1alpha2.AdditionalImages{
+				{Image: v1alpha2.Image{
 					Name: "ghcr.io/stefanprodan/podinfo:6.0.0"}},
 			},
 			wantErr: false,
@@ -151,8 +151,8 @@ func TestFindImages(t *testing.T) {
 
 	ipaths := []string{}
 	path := "testdata/artifacts/podinfo-6.0.0.tgz"
-	want := []v1alpha1.AdditionalImages{
-		{Image: v1alpha1.Image{
+	want := []v1alpha2.AdditionalImages{
+		{Image: v1alpha2.Image{
 			Name: "ghcr.io/stefanprodan/podinfo:6.0.0"}},
 	}
 

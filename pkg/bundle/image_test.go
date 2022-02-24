@@ -3,13 +3,13 @@ package bundle
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
 func TestImageBlocking(t *testing.T) {
 	type fields struct {
-		blockedImages []v1alpha1.BlockedImages
+		blockedImages []v1alpha2.BlockedImages
 	}
 	tests := []struct {
 		name   string
@@ -20,8 +20,8 @@ func TestImageBlocking(t *testing.T) {
 		{
 			name: "testing want to block",
 			fields: fields{
-				blockedImages: []v1alpha1.BlockedImages{
-					{Image: v1alpha1.Image{Name: "alpine"}},
+				blockedImages: []v1alpha2.BlockedImages{
+					{Image: v1alpha2.Image{Name: "alpine"}},
 				},
 			},
 			ref:  "docker.io/library/alpine:latest",
@@ -30,8 +30,8 @@ func TestImageBlocking(t *testing.T) {
 		{
 			name: "testing do not want to block",
 			fields: fields{
-				blockedImages: []v1alpha1.BlockedImages{
-					{Image: v1alpha1.Image{Name: "alpine"}},
+				blockedImages: []v1alpha2.BlockedImages{
+					{Image: v1alpha2.Image{Name: "alpine"}},
 				},
 			},
 			ref:  "registry.redhat.io/ubi8/ubi:latest",
@@ -40,8 +40,8 @@ func TestImageBlocking(t *testing.T) {
 		{
 			name: "testing do not want to block, contains keyword",
 			fields: fields{
-				blockedImages: []v1alpha1.BlockedImages{
-					{Image: v1alpha1.Image{Name: "alpine"}},
+				blockedImages: []v1alpha2.BlockedImages{
+					{Image: v1alpha2.Image{Name: "alpine"}},
 				},
 			},
 			ref:  "docker.io/library/notalpine:latest",
@@ -50,8 +50,8 @@ func TestImageBlocking(t *testing.T) {
 		{
 			name: "testing with image not tag",
 			fields: fields{
-				blockedImages: []v1alpha1.BlockedImages{
-					{Image: v1alpha1.Image{Name: "openshift-migration-velero-restic-restore-helper-rhel8"}},
+				blockedImages: []v1alpha2.BlockedImages{
+					{Image: v1alpha2.Image{Name: "openshift-migration-velero-restic-restore-helper-rhel8"}},
 				},
 			},
 			ref:  "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8",
@@ -59,8 +59,8 @@ func TestImageBlocking(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		cfg := v1alpha1.ImageSetConfiguration{}
-		cfg.Mirror = v1alpha1.Mirror{
+		cfg := v1alpha2.ImageSetConfiguration{}
+		cfg.Mirror = v1alpha2.Mirror{
 			BlockedImages: tt.fields.blockedImages,
 		}
 

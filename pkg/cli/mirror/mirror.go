@@ -32,7 +32,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -197,7 +197,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	}
 
 	var mapping image.TypedImageMapping
-	var meta v1alpha1.Metadata
+	var meta v1alpha2.Metadata
 	switch {
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
@@ -335,8 +335,8 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 			metaImage := o.newMetadataImage(meta.Uid.String())
-			targetCfg := v1alpha1.StorageConfig{
-				Registry: &v1alpha1.RegistryConfig{
+			targetCfg := v1alpha2.StorageConfig{
+				Registry: &v1alpha2.RegistryConfig{
 					ImageURL: metaImage,
 					SkipTLS:  destInsecure,
 				},
@@ -408,7 +408,7 @@ func (o *MirrorOptions) createRT() http.RoundTripper {
 }
 
 // mirrorImage downloads individual images from an image mapping
-func (o *MirrorOptions) mirrorMappings(cfg v1alpha1.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
+func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 
 	opts, err := o.newMirrorImageOptions(insecure)
 	if err != nil {

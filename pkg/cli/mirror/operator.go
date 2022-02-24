@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -51,13 +51,13 @@ func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
 }
 
 // PlanFull plans a mirror for each catalog image in its entirety
-func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
 	return o.run(ctx, cfg, o.renderDCFull)
 }
 
 // PlanDiff plans only the diff between each old and new catalog image pair
-func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, lastRun v1alpha1.PastMirror) (image.TypedImageMapping, error) {
-	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (*declcfg.DeclarativeConfig, error) {
+func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, lastRun v1alpha2.PastMirror) (image.TypedImageMapping, error) {
+	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (*declcfg.DeclarativeConfig, error) {
 		return o.renderDCDiff(ctx, reg, ctlg, lastRun)
 	}
 	return o.run(ctx, cfg, f)
@@ -74,9 +74,9 @@ func (o *OperatorOptions) complete() {
 	}
 }
 
-type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha1.Operator) (*declcfg.DeclarativeConfig, error)
+type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha2.Operator) (*declcfg.DeclarativeConfig, error)
 
-func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha1.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -149,7 +149,7 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 }
 
 // renderDCFull renders data in ctlg into a declarative config for o.Full().
-func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator) (dc *declcfg.DeclarativeConfig, err error) {
+func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, err error) {
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Only add on top of channel heads if both HeadsOnly and IncludeConfig are specified.
@@ -184,7 +184,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 }
 
 // renderDCDiff renders data in ctlg into a declarative config for o.Diff().
-func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha1.Operator, lastRun v1alpha1.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
+func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
@@ -225,7 +225,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	return a.Run(ctx)
 }
 
-func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha1.Operator) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha2.Operator) (image.TypedImageMapping, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 

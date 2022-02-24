@@ -1,4 +1,4 @@
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 storageConfig:
   registry:
@@ -8,10 +8,9 @@ mirror:
   ocp:
     channels:
       - name: stable-4.9 # References latest stable release
-      - name: stable-4.7 # Version annotation references version, does not pull latest
-        versions:
-          - '4.7.18'
-          - '4.6.13'
+      - name: stable-4.7 # Annotation references min and max version. 
+        minVersion: '4.6.13'
+        maxVersion: '4.7.18'
     graph: true # Planned, include Cincinnati upgrade graph image in imageset
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog

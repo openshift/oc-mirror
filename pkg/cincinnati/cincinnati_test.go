@@ -12,6 +12,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
 
@@ -275,7 +276,7 @@ func TestCalculateUpgrades(t *testing.T) {
 		needed        []Update
 		err           string
 	}{{
-		name:          "jump one channel",
+		name:          "Success/OneChannel",
 		sourceChannel: "stable-4.0",
 		targetChannel: "stable-4.1",
 		last:          semver.MustParse("4.0.0-5"),
@@ -287,7 +288,7 @@ func TestCalculateUpgrades(t *testing.T) {
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		},
 	}, {
-		name:          "jump two channel",
+		name:          "Success/TwoChannels",
 		sourceChannel: "stable-4.0",
 		targetChannel: "stable-4.2",
 		last:          semver.MustParse("4.0.0-5"),
@@ -300,7 +301,7 @@ func TestCalculateUpgrades(t *testing.T) {
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		},
 	}, {
-		name:          "no upgrade path",
+		name:          "SuccessWithWarning/NoUpgradePath",
 		sourceChannel: "stable-4.1",
 		targetChannel: "stable-4.2",
 		last:          semver.MustParse("4.1.0-6"),
@@ -309,14 +310,23 @@ func TestCalculateUpgrades(t *testing.T) {
 		requested:     Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
 		needed:        nil,
 	}, {
-		name:          "no upgrade path and no version in channel",
+		name:          "SuccessWithWarning/BlockedEdge",
 		sourceChannel: "stable-4.2",
 		targetChannel: "stable-4.3",
 		last:          semver.MustParse("4.2.0-3"),
 		req:           semver.MustParse("4.3.0"),
 		current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		needed:        nil,
+		needed: []Update{
+			{Version: semver.MustParse("4.2.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-5"},
+		},
+	}, {
+		name:          "Failure/InvalidVersion",
+		sourceChannel: "stable-4.2",
+		targetChannel: "stable-4.3",
+		last:          semver.MustParse("4.2.0-9"),
+		req:           semver.MustParse("4.3.4"),
+		err:           "cannot get current: VersionNotFound: current version 4.2.0-9 not found in the \"stable-4.2\" channel",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -329,32 +339,17 @@ func TestCalculateUpgrades(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			c, uri, err := NewClient(ts.URL, clientID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			cur, req, updates, err := c.CalculateUpgrades(context.Background(), uri, arch, test.sourceChannel, test.targetChannel, test.last, test.req)
 
 			if test.err == "" {
-				if err != nil {
-					t.Fatalf("expected nil error, got: %v", err)
-				}
-				if !reflect.DeepEqual(cur, test.current) {
-					t.Fatalf("expected current %v, got: %v", test.current, cur)
-				}
-				if !reflect.DeepEqual(req, test.requested) {
-					t.Fatalf("expected requested %v, got: %v", test.requested, req)
-				}
-				if !reflect.DeepEqual(updates, test.needed) {
-					t.Fatalf("expected updates %v, got: %v", test.needed, updates)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.current, cur)
+				require.Equal(t, test.requested, req)
+				require.Equal(t, test.needed, updates)
 			} else {
-				if err == nil || err.Error() != test.err {
-					t.Fatalf("expected err to be %s, got: %v", test.err, err)
-				}
+				require.EqualError(t, err, test.err)
 			}
 		})
 	}

@@ -246,7 +246,7 @@ function run_helm() {
 # check_sequence_number will inspect the number of pastMirrors / sequence number of the publish .metadata.json file against a user provided number
 function check_sequence_number() {
   local expected_past_mirrors="${1:?expected past mirrors required}"
-  actual_past_mirrors=$(jq '.pastMirrors | length' "${DATA_TMP}"/publish/.metadata.json)
+  local actual_past_mirrors=$(cat "${DATA_TMP}"/publish/.metadata.json | jq '.pastMirror.sequence')
   if [[ "$expected_past_mirrors" != "$actual_past_mirrors" ]]; then
     echo "expected_past_mirrors does not match actual_past_mirrors"
     return 1

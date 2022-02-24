@@ -2,11 +2,11 @@
 # okd release. Optionally, omit the version to mirror
 # the latest release.
 ---
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
   ocp:
     channels:
       - name: okd
-        versions:
-        - '4.10.0-0.okd-2022-01-20-011141'
+        minVersion: '4.10.0-0.okd-2022-01-20-011141'
+        maxVersion: '4.10.0-0.okd-2022-01-20-011141'

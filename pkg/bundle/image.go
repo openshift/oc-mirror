@@ -8,7 +8,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
+	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -22,7 +22,7 @@ func (e ErrBlocked) Error() string {
 
 // IsBlocked will return a boolean value on whether an image
 // is specified as blocked in the BundleSpec
-func IsBlocked(cfg v1alpha1.ImageSetConfiguration, imgRef reference.DockerImageReference) bool {
+func IsBlocked(cfg v1alpha2.ImageSetConfiguration, imgRef reference.DockerImageReference) bool {
 
 	for _, block := range cfg.Mirror.BlockedImages {
 

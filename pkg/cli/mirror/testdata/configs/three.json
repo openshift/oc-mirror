@@ -1,68 +1,8 @@
 {
-  "apiVersion": "mirror.openshift.io/v1alpha1",
+  "apiVersion": "mirror.openshift.io/v1alpha2",
   "kind": "Metadata",
   "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
-  "pastMirrors": [
-    {
-      "timestamp": 1624543862,
-      "sequence": 2,
-      "mirror": {
-        "additionalImages": [
-          {
-            "name": "redis"
-          },
-          {
-            "name": "postgres"
-          }
-        ],
-        "blockedImages": [
-          {
-            "name": "mongodb"
-          },
-          {
-            "name": "ubuntu"
-          }
-        ],
-        "ocp": {
-          "graph": true,
-          "channels": [
-            {
-              "name": "stable-4.7",
-              "versions": [
-                "4.7.3",
-                "4.7.10"
-              ]
-            },
-            {
-              "name": "stable-4.6",
-              "versions": [
-                "4.6.13"
-              ]
-            }
-          ]
-        }
-      },
-      "blobs": [
-        {
-          "id": "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84"
-        },
-        {
-          "id": "sha256:fc1ca63b4a6ac038808ae33c4498b122f9cf7a43dca278228e985986d3f81091"
-        },
-        {
-          "id": "sha256:fd5414e1f143d91a4009e2013baffe20d8c2d9890f41586b7fe455465547cada"
-        },
-        {
-          "id": "sha256:fdb393d8227cbe9756537d3f215a3098ae797bd4bde422aaa10ebde84a940893"
-        },
-        {
-          "id": "sha256:fe5782e9c947b19bad24f88b6c0e700a8a19c633a3f73fcdb19bfadf313c3f94"
-        },
-        {
-          "id": "sha256:fef3415cb6614c6166628177554bb8b1cc4f92b4dee0af2d9ced0f13ba3532e0"
-        }
-      ]
-    },
+  "pastMirror": 
     {
       "timestamp": 1624543852,
       "sequence": 3,
@@ -88,15 +28,12 @@
           "channels": [
             {
               "name": "stable-4.7",
-              "versions": [
-                "4.7.4"
-              ]
+              "minVersion": "4.7.3",
+              "maxVersion": "4.7.10"
             },
             {
               "name": "stable-4.6",
-              "versions": [
-                "4.6.13"
-              ]
+              "minVersion": "4.6.12"
             }
           ]
         }
@@ -122,5 +59,4 @@
         }
       ]
     }
-  ]
 }
