@@ -18,7 +18,7 @@ type TypedImage struct {
 	Category ImageType
 }
 
-// ParseTypeImage will create a TypedImage from a string and type
+// ParseTypedImage will create a TypedImage from a string and type
 func ParseTypedImage(image string, typ ImageType) (TypedImage, error) {
 	ref, err := imagesource.ParseReference(image)
 	if err != nil {

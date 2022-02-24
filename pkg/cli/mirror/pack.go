@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	// NoUpdatesExist should be returned by Create() when no updates are found
+	// ErrNoUpdatesExist should be returned by Create() when no updates are found
 	ErrNoUpdatesExist = errors.New("no updates detected, process stopping")
 )
 

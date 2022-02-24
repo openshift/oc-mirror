@@ -52,7 +52,7 @@ func (b *localDirBackend) init() error {
 	return nil
 }
 
-// WriteMetadata reads the provided metadata from disk.
+// ReadMetadata reads the provided metadata from disk.
 func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha2.Metadata, path string) error {
 
 	logrus.Debugf("looking for metadata file at %q", path)
