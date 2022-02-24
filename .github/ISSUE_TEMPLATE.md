@@ -20,9 +20,9 @@ $ oc-mirror version
 # What happened?
 
 Enter text here.
-Attach the relevant portions of your `.openshift_bundle.log`.
+Attach the relevant portions of your `.oc-mirror.log`.
 
-# What you expected to happen?
+# What did you expect to happen?
 
 Enter text here.
 
