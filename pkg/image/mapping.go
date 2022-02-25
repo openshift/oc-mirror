@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -92,7 +93,7 @@ func ByCategory(m TypedImageMapping, types ...ImageType) TypedImageMapping {
 
 // ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
 func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImageMapping, error) {
-	f, err := os.Open(mappingsPath)
+	f, err := os.Open(filepath.Clean(mappingsPath))
 	if err != nil {
 		return nil, err
 	}

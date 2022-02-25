@@ -224,9 +224,9 @@ func WriteICSPs(dir string, icsps []operatorv1alpha2.ImageContentSourcePolicy) e
 	})
 
 	icspBytes := make([][]byte, len(icsps))
-	for i, icsp := range icsps {
+	for i := range icsps {
 		// Create an unstructured object for removing creationTimestamp
-		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&icsp)
+		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&icsps[i])
 		if err != nil {
 			return fmt.Errorf("error converting to unstructured: %v", err)
 		}

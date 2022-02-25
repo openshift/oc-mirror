@@ -312,7 +312,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 	default:
 		return nil, fmt.Errorf("expected symlink or regular file mode, got: %b", m)
 	}
-	manifestBytes, err := ioutil.ReadFile(manifestPath)
+	manifestBytes, err := ioutil.ReadFile(filepath.Clean(manifestPath))
 	if err != nil {
 		return nil, fmt.Errorf("error reading image manifest file: %v", err)
 	}

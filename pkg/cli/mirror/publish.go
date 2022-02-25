@@ -337,7 +337,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 // readAssociations will process and return data from the image associations file
 func readAssociations(assocPath string) (assocs image.AssociationSet, err error) {
-	f, err := os.Open(assocPath)
+	f, err := os.Open(filepath.Clean(assocPath))
 	if err != nil {
 		return assocs, fmt.Errorf("error opening image associations file: %v", err)
 	}
