@@ -64,7 +64,8 @@ func getTLSConfig() (*tls.Config, error) {
 		return nil, err
 	}
 	config := &tls.Config{
-		RootCAs: certPool,
+		RootCAs:    certPool,
+		MinVersion: tls.VersionTLS12,
 	}
 	return config, nil
 }

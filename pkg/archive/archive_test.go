@@ -110,7 +110,7 @@ func TestSplitArchive(t *testing.T) {
 					return fmt.Errorf("Test %s: Expected '%v' to be less than '%v'", tt.name, info.Size(), tt.maxSplitSize)
 				}
 
-				os.RemoveAll(path)
+				return os.RemoveAll(path)
 			}
 
 			return nil

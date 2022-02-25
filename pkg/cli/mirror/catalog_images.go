@@ -362,14 +362,17 @@ func layerFromFile(targetPath, path string) (v1.Layer, error) {
 		return nil, fmt.Errorf("failed to write tar header: %w", err)
 	}
 	if !info.IsDir() {
-		f, err := os.Open(path)
+		f, err := os.Open(filepath.Clean(path))
 		if err != nil {
 			return nil, err
 		}
 		if _, err := io.Copy(tw, f); err != nil {
 			return nil, fmt.Errorf("failed to read file into the tar: %w", err)
 		}
-		f.Close()
+		err = f.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tw.Close(); err != nil {

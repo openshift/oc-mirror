@@ -129,7 +129,7 @@ func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backe
 
 		var file io.ReadCloser
 		if info.Mode().IsRegular() {
-			file, err = os.Open(fpath)
+			file, err = os.Open(filepath.Clean(fpath))
 			if err != nil {
 				return fmt.Errorf("%s: opening: %v", fpath, err)
 			}
@@ -240,12 +240,8 @@ func (p *packager) createArchive(splitPath string) (splitFile *os.File, err erro
 
 	// Create a new tar archive for writing
 	logrus.Infof("Creating archive %s", splitPath)
-	if p.Create(splitFile); err != nil {
+	if err = p.Create(splitFile); err != nil {
 		return nil, fmt.Errorf("creating archive %s: %v", splitPath, err)
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	return splitFile, nil
