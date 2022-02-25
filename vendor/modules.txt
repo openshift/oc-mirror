@@ -12,7 +12,7 @@ github.com/Masterminds/goutils
 github.com/Masterminds/semver/v3
 # github.com/Masterminds/sprig/v3 v3.2.2
 github.com/Masterminds/sprig/v3
-# github.com/Masterminds/squirrel v1.5.0
+# github.com/Masterminds/squirrel v1.5.2
 github.com/Masterminds/squirrel
 # github.com/Microsoft/go-winio v0.5.1
 github.com/Microsoft/go-winio
@@ -159,7 +159,7 @@ github.com/containerd/stargz-snapshotter/estargz
 github.com/containerd/stargz-snapshotter/estargz/errorutil
 # github.com/containerd/ttrpc v1.1.0
 github.com/containerd/ttrpc
-# github.com/containers/image/v5 v5.15.2
+# github.com/containers/image/v5 v5.16.0
 ## explicit
 github.com/containers/image/v5/docker/reference
 github.com/containers/image/v5/internal/pkg/platform
@@ -368,7 +368,7 @@ github.com/google/go-containerregistry/pkg/v1/types
 github.com/google/gofuzz
 # github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 github.com/google/shlex
-# github.com/google/uuid v1.2.0
+# github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
 # github.com/googleapis/gnostic v0.5.5
@@ -615,7 +615,7 @@ github.com/shopspring/decimal
 # github.com/sirupsen/logrus v1.8.1
 ## explicit
 github.com/sirupsen/logrus
-# github.com/spf13/afero v1.6.0
+# github.com/spf13/afero v1.7.1
 ## explicit
 github.com/spf13/afero
 github.com/spf13/afero/mem
@@ -720,7 +720,7 @@ go.starlark.net/resolve
 go.starlark.net/starlark
 go.starlark.net/starlarkstruct
 go.starlark.net/syntax
-# golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
+# golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
 ## explicit
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
@@ -883,7 +883,7 @@ gopkg.in/warnings.v0
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 gopkg.in/yaml.v3
-# helm.sh/helm/v3 v3.7.0
+# helm.sh/helm/v3 v3.7.2
 ## explicit
 helm.sh/helm/v3/internal/experimental/registry
 helm.sh/helm/v3/internal/fileutil
@@ -920,7 +920,7 @@ helm.sh/helm/v3/pkg/repo
 helm.sh/helm/v3/pkg/storage
 helm.sh/helm/v3/pkg/storage/driver
 helm.sh/helm/v3/pkg/time
-# k8s.io/api v0.22.1
+# k8s.io/api v0.22.4
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
 k8s.io/api/admissionregistration/v1
@@ -967,7 +967,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apiextensions-apiserver v0.22.1
+# k8s.io/apiextensions-apiserver v0.22.4
 k8s.io/apiextensions-apiserver/pkg/apihelpers
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install
@@ -979,7 +979,7 @@ k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting
 k8s.io/apiextensions-apiserver/pkg/apiserver/schema/objectmeta
 k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning
 k8s.io/apiextensions-apiserver/pkg/apiserver/validation
-# k8s.io/apimachinery v0.22.1 => github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9
+# k8s.io/apimachinery v0.22.4 => github.com/openshift/kubernetes-apimachinery v0.0.0-20210730111815-c26349f8e2c9
 ## explicit
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1035,7 +1035,7 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.22.1
+# k8s.io/apiserver v0.22.4
 k8s.io/apiserver/pkg/apis/apiserver
 k8s.io/apiserver/pkg/apis/apiserver/install
 k8s.io/apiserver/pkg/apis/apiserver/v1
@@ -1051,13 +1051,13 @@ k8s.io/apiserver/pkg/server/egressselector/metrics
 k8s.io/apiserver/pkg/util/feature
 k8s.io/apiserver/pkg/util/webhook
 k8s.io/apiserver/pkg/util/x509metrics
-# k8s.io/cli-runtime v0.22.1 => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
+# k8s.io/cli-runtime v0.22.4 => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
 ## explicit
 k8s.io/cli-runtime/pkg/genericclioptions
 k8s.io/cli-runtime/pkg/genericclioptions/openshiftpatch
 k8s.io/cli-runtime/pkg/printers
 k8s.io/cli-runtime/pkg/resource
-# k8s.io/client-go v0.22.1 => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
+# k8s.io/client-go v0.22.4 => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
 ## explicit
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1beta1
@@ -1191,7 +1191,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.22.1
+# k8s.io/component-base v0.22.4
 ## explicit
 k8s.io/component-base/featuregate
 k8s.io/component-base/metrics
@@ -1204,7 +1204,7 @@ k8s.io/klog
 # k8s.io/klog/v2 v2.9.0
 ## explicit
 k8s.io/klog/v2
-# k8s.io/kube-openapi v0.0.0-20210421082810-95288971da7e
+# k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/util/proto/validation
 k8s.io/kube-openapi/pkg/validation/errors
@@ -1212,7 +1212,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
 k8s.io/kube-openapi/pkg/validation/validate
-# k8s.io/kubectl v0.22.1 => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
+# k8s.io/kubectl v0.22.4 => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
 ## explicit
 k8s.io/kubectl/pkg/cmd/util
 k8s.io/kubectl/pkg/scheme
@@ -1222,7 +1222,7 @@ k8s.io/kubectl/pkg/util/openapi/validation
 k8s.io/kubectl/pkg/util/templates
 k8s.io/kubectl/pkg/util/term
 k8s.io/kubectl/pkg/validation
-# k8s.io/utils v0.0.0-20210802155522-efc7438f0176
+# k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
@@ -1326,7 +1326,7 @@ sigs.k8s.io/structured-merge-diff/v4/fieldpath
 sigs.k8s.io/structured-merge-diff/v4/schema
 sigs.k8s.io/structured-merge-diff/v4/typed
 sigs.k8s.io/structured-merge-diff/v4/value
-# sigs.k8s.io/yaml v1.2.0
+# sigs.k8s.io/yaml v1.3.0
 ## explicit
 sigs.k8s.io/yaml
 # github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
