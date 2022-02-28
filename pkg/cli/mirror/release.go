@@ -56,7 +56,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 	for _, arch := range o.arch {
 
-		channelVersion := make(map[string]string, len(cfg.Mirror.OCP.Channels))
+		versionsByChannel := make(map[string]v1alpha2.ReleaseChannel, len(cfg.Mirror.OCP.Channels))
 
 		for _, ch := range cfg.Mirror.OCP.Channels {
 
@@ -74,15 +74,25 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 			if len(ch.MaxVersion) == 0 && len(ch.MinVersion) == 0 {
 				// If no version was specified from the channel, then get the latest release
-				latest, err := cincinnati.GetChannelLatest(ctx, client, arch, ch.Name)
+				latest, err := cincinnati.GetChannelMinOrMax(ctx, client, arch, ch.Name, false)
 				if err != nil {
 					errs = append(errs, err)
 					continue
 				}
+
 				// Update version to release channel
 				ch.MaxVersion = latest.String()
 				ch.MinVersion = latest.String()
-				channelVersion[ch.Name] = latest.String()
+
+				if !*ch.HeadsOnly {
+					first, err := cincinnati.GetChannelMinOrMax(ctx, client, arch, ch.Name, true)
+					if err != nil {
+						errs = append(errs, err)
+						continue
+					}
+					ch.MinVersion = first.String()
+				}
+				versionsByChannel[ch.Name] = ch
 			}
 
 			downloads, err := o.getChannelDownloads(ctx, client, lastRun.Mirror.OCP.Channels, ch, arch)
@@ -95,13 +105,16 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 		// Update cfg release channels with maximum and minimum versions
 		// if applicable
-		cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, channelVersion)
-		newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.OCP.Channels)
-		if err != nil {
-			errs = append(errs, err)
-			continue
+		cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, versionsByChannel)
+
+		if len(cfg.Mirror.OCP.Channels) > 1 {
+			newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.OCP.Channels)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			releaseDownloads.Merge(newDownloads)
 		}
-		releaseDownloads.Merge(newDownloads)
 	}
 	if len(errs) != 0 {
 		return mmapping, utilerrors.NewAggregate(errs)
@@ -287,12 +300,11 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 
 // updateReleaseChannel will add a version to the ReleaseChannel to record
 // for metadata
-func updateReleaseChannel(releaseChannels []v1alpha2.ReleaseChannel, channelVersions map[string]string) []v1alpha2.ReleaseChannel {
+func updateReleaseChannel(releaseChannels []v1alpha2.ReleaseChannel, versionsByKey map[string]v1alpha2.ReleaseChannel) []v1alpha2.ReleaseChannel {
 	for i, ch := range releaseChannels {
-		v, found := channelVersions[ch.Name]
+		ch, found := versionsByKey[ch.Name]
 		if found {
-			releaseChannels[i].MaxVersion = v
-			releaseChannels[i].MinVersion = v
+			releaseChannels[i] = ch
 		}
 	}
 	return releaseChannels

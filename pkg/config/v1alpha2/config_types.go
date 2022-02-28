@@ -49,6 +49,16 @@ type ReleaseChannel struct {
 	// MaxVersion is maximum version in the
 	// release channel to mirror
 	MaxVersion string `json:"maxVersion"`
+	// HeadsOnly mode mirrors only the channel head.
+	// The default is true.
+	HeadsOnly *bool `json:"headsOnly,omitempty"`
+}
+
+func (r ReleaseChannel) IsHeadsOnly() bool {
+	if r.HeadsOnly == nil {
+		return true
+	}
+	return *r.HeadsOnly
 }
 
 // Operator configures operator catalog mirroring.
