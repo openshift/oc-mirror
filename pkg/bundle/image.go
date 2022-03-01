@@ -21,10 +21,10 @@ func (e ErrBlocked) Error() string {
 }
 
 // IsBlocked will return a boolean value on whether an image
-// is specified as blocked in the BundleSpec
-func IsBlocked(cfg v1alpha2.ImageSetConfiguration, imgRef reference.DockerImageReference) bool {
+// is specified as blocked in the ImageSetConfigSpec
+func IsBlocked(blocked []v1alpha2.BlockedImages, imgRef reference.DockerImageReference) bool {
 
-	for _, block := range cfg.Mirror.BlockedImages {
+	for _, block := range blocked {
 
 		logrus.Debugf("Checking if image %s is blocked", imgRef.Exact())
 

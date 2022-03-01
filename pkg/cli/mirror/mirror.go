@@ -182,7 +182,7 @@ func (o *MirrorOptions) Validate() error {
 
 func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) {
 	if o.OutputDir != "" {
-		if err := os.MkdirAll(o.OutputDir, 0755); err != nil {
+		if err := os.MkdirAll(o.OutputDir, 0750); err != nil {
 			return err
 		}
 	}
@@ -232,7 +232,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		// Create assocations
 		assocDir := filepath.Join(o.Dir, config.SourceDir)
-		assocs, errs := image.AssociateImageLayers(assocDir, mapping)
+		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
 		if errs != nil {
 			return errs
 		}
@@ -303,6 +303,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
 			return err
 		}
+
 		// Process any catalog images
 		dir, err := o.createResultsDir()
 		if err != nil {
@@ -418,7 +419,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 	// Create mapping from source and destination images
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
-		if bundle.IsBlocked(cfg, srcRef.Ref) {
+		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
 			logrus.Warnf("skipping blocked images %s", srcRef.String())
 			continue
 		}
@@ -451,7 +452,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	a.KeepManifestList = true
 	a.SkipMultipleScopes = true
 	a.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: 2}
-	regctx, err := config.CreateDefaultContext(insecure)
+	regctx, err := image.CreateDefaultContext(insecure)
 	if err != nil {
 		return a, fmt.Errorf("error creating registry context: %v", err)
 	}

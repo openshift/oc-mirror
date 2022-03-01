@@ -248,7 +248,7 @@ func (o *ReleaseOptions) newMirrorReleaseOptions(fileDir string) (*release.Mirro
 	opts.SecurityOptions.Insecure = o.insecure
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	regctx, err := config.CreateDefaultContext(o.insecure)
+	regctx, err := image.CreateDefaultContext(o.insecure)
 	if err != nil {
 		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}
