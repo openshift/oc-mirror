@@ -70,39 +70,6 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
-			name: "Valid/MinandMaxReleaseVersionSet",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
-							Channels: []v1alpha2.ReleaseChannel{
-								{
-									MinVersion: "1.2.3",
-									MaxVersion: "1.2.3",
-								},
-							},
-						},
-					},
-				},
-			},
-			expError: "",
-		},
-		{
-			name: "Valid/MinandMaxReleaseVersionNotSet",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
-							Channels: []v1alpha2.ReleaseChannel{
-								{},
-							},
-						},
-					},
-				},
-			},
-			expError: "",
-		},
-		{
 			name: "Invalid/HeadsOnlyTrue",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -119,40 +86,6 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration option: catalog cannot define packages with headsOnly set to true",
-		},
-		{
-			name: "Invalid/NoMinimumReleaseVersion",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
-							Channels: []v1alpha2.ReleaseChannel{
-								{
-									MaxVersion: "1.2.3",
-								},
-							},
-						},
-					},
-				},
-			},
-			expError: "invalid configuration option: release channel must have a minimum version specified",
-		},
-		{
-			name: "Invalid/NoMaximunReleaseVersion",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
-							Channels: []v1alpha2.ReleaseChannel{
-								{
-									MinVersion: "1.2.3",
-								},
-							},
-						},
-					},
-				},
-			},
-			expError: "invalid configuration option: release channel must have a maximum version specified",
 		},
 	}
 
