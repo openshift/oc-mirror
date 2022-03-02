@@ -1,0 +1,10 @@
+# This config demonstrates how to mirror a specified
+# version(s) of openshift. Optionally, omit the version to mirror
+# the latest release.
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.9
