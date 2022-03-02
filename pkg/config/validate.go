@@ -9,7 +9,7 @@ import (
 
 type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
 
-var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseOptions}
+var validationChecks = []validationFunc{validateOperatorOptions}
 
 func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 	var errs []error
@@ -26,22 +26,6 @@ func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 		if len(ctlg.IncludeConfig.Packages) != 0 && ctlg.IsHeadsOnly() {
 			return errors.New(
 				"invalid configuration option: catalog cannot define packages with headsOnly set to true",
-			)
-		}
-	}
-	return nil
-}
-
-func validateReleaseOptions(cfg *v1alpha2.ImageSetConfiguration) error {
-	for _, ch := range cfg.Mirror.OCP.Channels {
-		if len(ch.MaxVersion) == 0 && len(ch.MinVersion) > 0 {
-			return errors.New(
-				"invalid configuration option: release channel must have a maximum version specified",
-			)
-		}
-		if len(ch.MinVersion) == 0 && len(ch.MaxVersion) > 0 {
-			return errors.New(
-				"invalid configuration option: release channel must have a minimum version specified",
 			)
 		}
 	}

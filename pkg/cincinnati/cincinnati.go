@@ -165,7 +165,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
 	// edge is hit
-	latest, err := GetChannelMinorMax(ctx, c, arch, sourceChannel, false)
+	latest, err := GetChannelMinOrMax(ctx, c, arch, sourceChannel, false)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
 	}
@@ -260,7 +260,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 
 // GetChannelLatest fetches the latest version from the specified
 // upstream Cincinnati stack given architecture and channel
-func GetChannelMinOrMax(ctx context.Context, c client, arch string, channel string, min bool) (semver.Version, error) {
+func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel string, min bool) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	c.SetQueryParams(arch, channel, "")
 

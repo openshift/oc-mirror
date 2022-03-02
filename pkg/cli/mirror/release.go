@@ -72,19 +72,26 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 				continue
 			}
 
-			if len(ch.MaxVersion) == 0 && len(ch.MinVersion) == 0 {
-				// If no version was specified from the channel, then get the latest release
-				latest, err := cincinnati.GetChannelMinOrMax(ctx, client, arch, ch.Name, false)
-				if err != nil {
-					errs = append(errs, err)
-					continue
+			if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 {
+
+				// Find channel maximum value and only set the minimum as well if heads-only is true
+				if len(ch.MaxVersion) == 0 {
+					latest, err := cincinnati.GetChannelMinOrMax(ctx, client, arch, ch.Name, false)
+					if err != nil {
+						errs = append(errs, err)
+						continue
+					}
+
+					// Update version to release channel
+					ch.MaxVersion = latest.String()
+					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
+						ch.MinVersion = latest.String()
+					}
 				}
 
-				// Update version to release channel
-				ch.MaxVersion = latest.String()
-				ch.MinVersion = latest.String()
-
-				if !*ch.HeadsOnly {
+				// Find channel minimum if heads-only is false or just the minimum is not set
+				// in the config
+				if len(ch.MinVersion) == 0 {
 					first, err := cincinnati.GetChannelMinOrMax(ctx, client, arch, ch.Name, true)
 					if err != nil {
 						errs = append(errs, err)

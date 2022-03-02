@@ -147,7 +147,7 @@ func TestGetMinorMax(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			latest, err := GetChannelMinOrMax(context.Background(), c, arch, channelName, test.min)
+			version, err := GetChannelMinOrMax(context.Background(), c, arch, channelName, test.min)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.version, version)
