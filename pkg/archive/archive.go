@@ -71,7 +71,7 @@ func NewPackager(manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob) *packager
 	}
 }
 
-// CreateSplitAchrive will create multiple tar archives from source directory
+// CreateSplitArchive will create multiple tar archives from source directory
 func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backend, maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables

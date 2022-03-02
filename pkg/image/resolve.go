@@ -33,7 +33,7 @@ func IsImagePinned(img string) bool {
 	return strings.Contains(img, "@")
 }
 
-// isImageTagged returns true if img has a tag.
+// IsImageTagged returns true if img has a tag.
 func IsImageTagged(img string) bool {
 	return strings.Contains(img, ":")
 }

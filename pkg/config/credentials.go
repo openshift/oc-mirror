@@ -13,7 +13,7 @@ import (
 // TODO: create a context based on user provided
 // pull secret
 
-// CreateDefault a default context for the registryClient of `oc mirror`
+// CreateDefaultContext a default context for the registryClient of `oc mirror`
 func CreateDefaultContext(skipTLS bool) (*registryclient.Context, error) {
 	opts := &imagemanifest.SecurityOptions{}
 	opts.Insecure = skipTLS
