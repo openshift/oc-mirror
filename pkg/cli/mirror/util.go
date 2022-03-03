@@ -48,6 +48,7 @@ func createRT(insecure bool) http.RoundTripper {
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: insecure,
+			MinVersion:         tls.VersionTLS12,
 		},
 	}
 }

@@ -439,6 +439,11 @@ func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir st
 		return nil
 	}
 
+	ctlgRefs := image.ByCategory(mapping, image.TypeOperatorCatalog)
+	if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
+		return err
+	}
+
 	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {
 		return err
 	}

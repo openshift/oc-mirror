@@ -1,4 +1,4 @@
-package mirror
+package builder
 
 import (
 	"context"
@@ -42,19 +42,25 @@ func TestCreateLayout(t *testing.T) {
 
 			targetRef := prepareImage(t, tmpdir)
 
-			builder := &catalogBuilder{
-				nameOpts: []name.Option{name.Insecure},
+			builder := &ImageBuilder{
+				NameOpts: []name.Option{name.Insecure},
 			}
 
 			var err error
+			var lp layout.Path
 			if test.existingImage {
-				_, err = builder.CreateLayout(targetRef, t.TempDir())
+				lp, err = builder.CreateLayout(targetRef, t.TempDir())
 			} else {
-				_, err = builder.CreateLayout("", tmpdir)
+				lp, err = builder.CreateLayout("", tmpdir)
 			}
 
 			if test.err == "" {
 				require.NoError(t, err)
+				ii, err := lp.ImageIndex()
+				require.NoError(t, err)
+				im, err := ii.IndexManifest()
+				require.NoError(t, err)
+				require.Len(t, im.Manifests, 1)
 			} else {
 				require.EqualError(t, err, test.err)
 			}
@@ -85,17 +91,14 @@ func TestRun(t *testing.T) {
 
 			targetRef := prepareImage(t, tmpdir)
 
-			old := "/.wh.binary"
 			d1 := []byte("hello\ngo\n")
 			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
 
-			add, err := layerFromFile("binary", filepath.Join(tmpdir, "test"))
-			require.NoError(t, err)
-			delete, err := deleteLayer(old)
+			add, err := LayerFromPath("/testfile", filepath.Join(tmpdir, "test"))
 			require.NoError(t, err)
 
-			builder := &catalogBuilder{
-				nameOpts: []name.Option{name.Insecure},
+			builder := &ImageBuilder{
+				NameOpts: []name.Option{name.Insecure},
 			}
 
 			var layout layout.Path
@@ -106,10 +109,81 @@ func TestRun(t *testing.T) {
 				layout, err = builder.CreateLayout("", tmpdir)
 				require.NoError(t, err)
 			}
-
-			err = builder.Run(context.Background(), targetRef, layout, []v1.Layer{add, delete}...)
+			err = builder.Run(context.Background(), targetRef, layout, nil, []v1.Layer{add}...)
 			if test.err == "" {
 				require.NoError(t, err)
+
+				// Get new image information
+				ref, err := name.ParseReference(targetRef, name.Insecure)
+				require.NoError(t, err)
+				desc, err := remote.Get(ref)
+				require.NoError(t, err)
+				img, err := desc.Image()
+				require.NoError(t, err)
+				layers, err := img.Layers()
+				require.NoError(t, err)
+
+				// Check that new layer is present
+				expectedDigest, err := add.Digest()
+				require.NoError(t, err)
+				var found bool
+				for _, ly := range layers {
+					dg, err := ly.Digest()
+					require.NoError(t, err)
+					if dg == expectedDigest {
+						found = true
+					}
+				}
+				require.True(t, found)
+
+			} else {
+				require.EqualError(t, err, test.err)
+			}
+		})
+	}
+}
+
+func TestLayoutFromPath(t *testing.T) {
+
+	tests := []struct {
+		name       string
+		dir        bool
+		targetPath string
+		err        string
+	}{
+		{
+			name:       "Valid/DirPath",
+			targetPath: "testdir/",
+			dir:        true,
+		},
+		{
+			name:       "Valid/FilePath",
+			targetPath: "testfile",
+			dir:        false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			tmpdir := t.TempDir()
+
+			// prep directory will files to write into layer
+			d1 := []byte("hello\ngo\n")
+			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
+
+			var sourcePath string
+			if test.dir {
+				sourcePath = tmpdir
+			} else {
+				sourcePath = filepath.Join(tmpdir, "test")
+			}
+
+			layer, err := LayerFromPath(test.targetPath, sourcePath)
+			if test.err == "" {
+				require.NoError(t, err)
+				digest, err := layer.Digest()
+				require.NoError(t, err)
+				require.Contains(t, digest.String(), ":")
 			} else {
 				require.EqualError(t, err, test.err)
 			}
@@ -123,9 +197,9 @@ func prepareImage(t *testing.T, dir string) string {
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
 	c := map[string][]byte{
-		"/binary": []byte("binary contents"),
+		"/testfile": []byte("test contents contents"),
 	}
-	targetRef := fmt.Sprintf("%s/nginx:foo", u.Host)
+	targetRef := fmt.Sprintf("%s/bar:foo", u.Host)
 	tag, err := name.NewTag(targetRef)
 	require.NoError(t, err)
 	i, _ := crane.Image(c)

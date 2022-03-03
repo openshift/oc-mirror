@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha1"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -135,4 +134,4 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 	return mmappings, nil
 }
 
-type operatorFunc func(ctx context.Context, cfg v1alpha1.ImageSetConfiguration) (image.TypedImageMapping, error)
+type operatorFunc func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error)
