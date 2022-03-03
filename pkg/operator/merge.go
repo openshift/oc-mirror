@@ -13,6 +13,14 @@ type Merger interface {
 	Merge(*declcfg.DeclarativeConfig) error
 }
 
+func validate(cfg *declcfg.DeclarativeConfig) error {
+	model, err := declcfg.ConvertToModel(*cfg)
+	if err != nil {
+		return err
+	}
+	return model.Validate()
+}
+
 var _ Merger = &PreferLastStrategy{}
 
 type PreferLastStrategy struct{}
@@ -77,7 +85,7 @@ func mergeDCPreferLast(cfg *declcfg.DeclarativeConfig) error {
 	}
 
 	// There is no way to merge "other" schema since a unique key field is unknown.
-	return nil
+	return validate(cfg)
 }
 
 var _ Merger = &TwoWayStrategy{}
@@ -101,8 +109,9 @@ func mergeDCTwoWay(cfg *declcfg.DeclarativeConfig) error {
 	if cfg.Bundles, err = mergeBundles(cfg.Bundles); err != nil {
 		return err
 	}
+
 	// There is no way to merge "other" schema since a unique key field is unknown.
-	return nil
+	return validate(cfg)
 }
 
 // mergePackage Packages merges all declcfg.Packages with the same name into one declcfg.Package object.
