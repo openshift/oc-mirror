@@ -18,6 +18,10 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
+const (
+	releaseRepo = "release-images"
+)
+
 // ReleaseOptions configures either a Full or Diff mirror operation
 // on a particular release image.
 type ReleaseOptions struct {
@@ -28,8 +32,6 @@ type ReleaseOptions struct {
 	insecure bool
 	uuid     uuid.UUID
 }
-
-// TODO(jpower432): replace OKD download support
 
 // NewReleaseOptions defaults ReleaseOptions.
 func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
@@ -269,7 +271,6 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 
 	opts.IOStreams.Out = file
 	opts.ToMirror = true
-
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
@@ -281,6 +282,17 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 	if err != nil {
 		return nil, err
 	}
+
+	releaseImageRef, err := image.ParseTypedImage(opts.From, image.TypeOCPRelease)
+	if err != nil {
+		return nil, err
+	}
+	dstReleaseRef, ok := mappings[releaseImageRef]
+	if !ok {
+		return nil, fmt.Errorf("release images %s not found in mapping", opts.From)
+	}
+	dstReleaseRef.Ref.Name = releaseRepo
+	mappings[releaseImageRef] = dstReleaseRef
 
 	return mappings, nil
 }
