@@ -127,7 +127,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1a
 		if err != nil {
 			return err
 		}
-		latest, err := cincinnati.GetChannelLatest(ctx, c, arch, ch.Name)
+		latest, err := cincinnati.GetChannelMinOrMax(ctx, c, arch, ch.Name, false)
 		if err != nil {
 			return err
 		}

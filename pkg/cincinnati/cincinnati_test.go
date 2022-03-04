@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
 	"testing"
 
 	"github.com/blang/semver/v4"
@@ -30,40 +29,46 @@ func TestGetUpdates(t *testing.T) {
 		available     []Update
 		err           string
 	}{{
-		name:          "one update available",
+		name:          "Valid/DirectUpdate",
 		version:       "4.0.0-4",
 		reqVer:        "4.0.0-5",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 		requested:     Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		available: []Update{
+			{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		},
 	}, {
-		name:          "two updates available",
-		version:       "4.0.0-5",
-		reqVer:        "4.0.0-6",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
-		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		requested:     Update{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+		name:          "Valid/FullChannel",
+		version:       "4.0.0-4",
+		reqVer:        "4.0.0-0.3",
+		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
+		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
+		requested:     Update{Version: semver.MustParse("4.0.0-0.3"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"},
 		available: []Update{
-			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+			{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
+			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+			{Version: semver.MustParse("4.0.0-6+2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"},
+			{Version: semver.MustParse("4.0.0-0.2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"},
+			{Version: semver.MustParse("4.0.0-0.3"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"},
 		},
 	}, {
-		name:          "no updates available",
-		version:       "4.0.0-0.okd-0",
+		name:          "Valid/NoUpdates",
+		version:       "4.0.0-4",
 		reqVer:        "4.0.0-0.okd-0",
-		current:       Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
+		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 		requested:     Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-0.okd-0",
+		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
+		available:     nil,
 	}, {
-		name:          "unknown version current",
+		name:          "Invalid/UnknownCurrentVersion",
 		version:       "4.0.0-3",
 		reqVer:        "0.0.0",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-3",
 		err:           "VersionNotFound: current version 4.0.0-3 not found in the \"test-channel\" channel",
 	}, {
-		name:          "unknown version requested",
+		name:          "Invalid/UnknownRequestedVersion",
 		version:       "4.0.0-5",
 		reqVer:        "4.0.0-7",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
@@ -85,22 +90,12 @@ func TestGetUpdates(t *testing.T) {
 
 			current, requested, updates, err := GetUpdates(context.Background(), c, arch, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
-				if err != nil {
-					t.Fatalf("expected nil error, got: %v", err)
-				}
-				if !reflect.DeepEqual(current, test.current) {
-					t.Fatalf("expected current %v, got: %v", test.current, current)
-				}
-				if !reflect.DeepEqual(requested, test.requested) {
-					t.Fatalf("expected current %v, got: %v", test.requested, requested)
-				}
-				if !reflect.DeepEqual(updates, test.available) {
-					t.Fatalf("expected updates %v, got: %v", test.available, updates)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.current, current)
+				require.Equal(t, test.requested, requested)
+				require.Equal(t, test.available, updates)
 			} else {
-				if err == nil || err.Error() != test.err {
-					t.Fatalf("expected err to be %s, got: %v", test.err, err)
-				}
+				require.EqualError(t, err, test.err)
 			}
 
 			actualQuery := ""
@@ -110,33 +105,33 @@ func TestGetUpdates(t *testing.T) {
 				t.Fatal("no request received at upstream URL")
 			}
 			expectedQueryValues, err := url.ParseQuery(test.expectedQuery)
-			if err != nil {
-				t.Fatalf("could not parse expected query: %v", err)
-			}
+			require.NoError(t, err)
 			actualQueryValues, err := url.ParseQuery(actualQuery)
-			if err != nil {
-				t.Fatalf("could not parse acutal query: %v", err)
-			}
-			if e, a := expectedQueryValues, actualQueryValues; !reflect.DeepEqual(e, a) {
-				t.Errorf("expected query to be %q, got: %q", e, a)
-			}
+			require.NoError(t, err)
+			require.Equal(t, expectedQueryValues, actualQueryValues)
 		})
 	}
 }
 
-func TestGetLatest(t *testing.T) {
+func TestGetMinorMax(t *testing.T) {
 	arch := "test-arch"
 	channelName := "test-channel"
 	tests := []struct {
 		name string
 
 		expectedQuery string
-		latest        semver.Version
+		version       semver.Version
+		min           bool
 		err           string
 	}{{
-		name:          "one update available",
+		name:          "Valid/MaxChannel",
 		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		latest:        semver.MustParse("4.0.0-6+2"),
+		version:       semver.MustParse("4.0.0-6+2"),
+	}, {
+		name:          "Valid/MinChannel",
+		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
+		version:       semver.MustParse("4.0.0-0.2"),
+		min:           true,
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -152,18 +147,13 @@ func TestGetLatest(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			latest, err := GetChannelLatest(context.Background(), c, arch, channelName)
+			version, err := GetChannelMinOrMax(context.Background(), c, arch, channelName, test.min)
 			if test.err == "" {
-				if err != nil {
-					t.Fatalf("expected nil error, got: %v", err)
-				}
-				if !reflect.DeepEqual(latest, test.latest) {
-					t.Fatalf("expected version %v, got: %v", test.latest, latest)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.version, version)
+
 			} else {
-				if err == nil || err.Error() != test.err {
-					t.Fatalf("expected err to be %s, got: %v", test.err, err)
-				}
+				require.EqualError(t, err, test.err)
 			}
 
 			actualQuery := ""
@@ -173,16 +163,10 @@ func TestGetLatest(t *testing.T) {
 				t.Fatal("no request received at upstream URL")
 			}
 			expectedQueryValues, err := url.ParseQuery(test.expectedQuery)
-			if err != nil {
-				t.Fatalf("could not parse expected query: %v", err)
-			}
+			require.NoError(t, err)
 			actualQueryValues, err := url.ParseQuery(actualQuery)
-			if err != nil {
-				t.Fatalf("could not parse acutal query: %v", err)
-			}
-			if e, a := expectedQueryValues, actualQueryValues; !reflect.DeepEqual(e, a) {
-				t.Errorf("expected query to be %q, got: %q", e, a)
-			}
+			require.NoError(t, err)
+			require.Equal(t, expectedQueryValues, actualQueryValues)
 		})
 	}
 }
@@ -196,7 +180,7 @@ func TestGetVersions(t *testing.T) {
 		versions      []semver.Version
 		err           string
 	}{{
-		name:          "one update available",
+		name:          "Valid/OneChannel",
 		expectedQuery: "channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
 		versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
 	}}
@@ -216,16 +200,11 @@ func TestGetVersions(t *testing.T) {
 
 			versions, err := GetVersions(context.Background(), c, channelName)
 			if test.err == "" {
-				if err != nil {
-					t.Fatalf("expected nil error, got: %v", err)
-				}
-				if !reflect.DeepEqual(versions, test.versions) {
-					t.Fatalf("expected version %v, got: %v", test.versions, versions)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.versions, versions)
+
 			} else {
-				if err == nil || err.Error() != test.err {
-					t.Fatalf("expected err to be %s, got: %v", test.err, err)
-				}
+				require.EqualError(t, err, test.err)
 			}
 
 			actualQuery := ""
@@ -235,16 +214,10 @@ func TestGetVersions(t *testing.T) {
 				t.Fatal("no request received at upstream URL")
 			}
 			expectedQueryValues, err := url.ParseQuery(test.expectedQuery)
-			if err != nil {
-				t.Fatalf("could not parse expected query: %v", err)
-			}
+			require.NoError(t, err)
 			actualQueryValues, err := url.ParseQuery(actualQuery)
-			if err != nil {
-				t.Fatalf("could not parse acutal query: %v", err)
-			}
-			if e, a := expectedQueryValues, actualQueryValues; !reflect.DeepEqual(e, a) {
-				t.Errorf("expected query to be %q, got: %q", e, a)
-			}
+			require.NoError(t, err)
+			require.Equal(t, expectedQueryValues, actualQueryValues)
 		})
 	}
 }
@@ -271,6 +244,7 @@ func TestCalculateUpgrades(t *testing.T) {
 		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		requested:     Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		needed: []Update{
+			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		},
@@ -283,6 +257,7 @@ func TestCalculateUpgrades(t *testing.T) {
 		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		requested:     Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		needed: []Update{
+			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
@@ -295,7 +270,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		req:           semver.MustParse("4.2.0-2"),
 		current:       Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		requested:     Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
-		needed:        nil,
+		needed: []Update{
+			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		},
 	}, {
 		name:          "SuccessWithWarning/BlockedEdge",
 		sourceChannel: "stable-4.2",
@@ -305,6 +282,7 @@ func TestCalculateUpgrades(t *testing.T) {
 		current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
 		needed: []Update{
+			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 			{Version: semver.MustParse("4.2.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-5"},
 		},
 	}, {
@@ -434,16 +412,11 @@ func TestNodeUnmarshalJSON(t *testing.T) {
 			var n node
 			err := json.Unmarshal(test.raw, &n)
 			if test.err == "" {
-				if err != nil {
-					t.Fatalf("expecting nil error, got: %v", err)
-				}
-				if !reflect.DeepEqual(n, test.exp) {
-					t.Fatalf("expecting %v got %v", test.exp, n)
-				}
+				require.NoError(t, err)
+				require.Equal(t, test.exp, n)
+
 			} else {
-				if err.Error() != test.err {
-					t.Fatalf("expecting %s error, got: %v", test.err, err)
-				}
+				require.EqualError(t, err, test.err)
 			}
 		})
 	}
@@ -506,11 +479,11 @@ func getHandler(t *testing.T, requestQuery chan<- string) http.HandlerFunc {
 				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
 			  }
 			],
-			"edges": [[0,1],[1,2],[1,3],[5,6]]
+			"edges": [[0,1],[1,2],[2,3],[1,3],[3,5],[5,6]]
 		  }`))
 		if err != nil {
-			t.Fatal(err)
 			w.WriteHeader(http.StatusInternalServerError)
+			t.Fatal(err)
 			return
 		}
 	}
@@ -640,8 +613,8 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 				"edges": [[0,2],[1,2],[2,3]]
 			}`))
 			if err != nil {
-				t.Fatal(err)
 				w.WriteHeader(http.StatusInternalServerError)
+				t.Fatal(err)
 				return
 			}
 		case ch == "stable-4.3":
@@ -659,8 +632,8 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 				"edges": [[0,1]]
 			}`))
 			if err != nil {
-				t.Fatal(err)
 				w.WriteHeader(http.StatusInternalServerError)
+				t.Fatal(err)
 				return
 			}
 		default:

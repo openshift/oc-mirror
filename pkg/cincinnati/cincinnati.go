@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,13 +106,46 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 		}
 	}
 
-	// Find the children of the current version.
-	var nextIdxs []int
+	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
 	for _, edge := range graph.Edges {
-		if edge.Origin == currentIdx && edge.Destination == destinationIdx {
-			nextIdxs = append(nextIdxs, edge.Destination)
-		}
+		edgesByOrigin[edge.Origin] = append(edgesByOrigin[edge.Origin], edge.Destination)
 	}
+
+	// Sort destination by semver to ensure deterministic result
+	for origin, destinations := range edgesByOrigin {
+		sort.Slice(destinations, func(i, j int) bool {
+			return graph.Nodes[destinations[i]].Version.GT(graph.Nodes[destinations[j]].Version)
+		})
+		edgesByOrigin[origin] = destinations
+	}
+
+	var shortestPath func(map[int][]int, int, int, path) []int
+	shortestPath = func(g map[int][]int, start, end int, path path) []int {
+		path = append(path, start)
+		if start == end {
+			return path
+		}
+		adj := g[start]
+		// If we get through the map and the start never
+		// reaches the end, return nothing
+		if len(adj) == 0 {
+			return []int{}
+		}
+		shortest := make([]int, 0)
+		for _, node := range adj {
+			if !path.has(node) {
+				currPath := shortestPath(g, node, end, path)
+				if len(currPath) > 0 {
+					if len(shortest) == 0 || len(currPath) < len(shortest) {
+						shortest = currPath
+					}
+				}
+			}
+		}
+		return shortest
+	}
+
+	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx, path{})
 
 	var updates []Update
 	for _, i := range nextIdxs {
@@ -131,7 +165,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
 	// edge is hit
-	latest, err := GetChannelLatest(ctx, c, arch, sourceChannel)
+	latest, err := GetChannelMinOrMax(ctx, c, arch, sourceChannel, false)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
 	}
@@ -143,7 +177,16 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 	requested, newUpgrades, err := calculate(ctx, c, arch, sourceChannel, targetChannel, latest, reqVer)
 	upgrades = append(upgrades, newUpgrades...)
 
-	return current, requested, upgrades, err
+	var finalUpgrades []Update
+	seen := make(map[string]struct{}, len(upgrades))
+	for _, upgrade := range upgrades {
+		if _, ok := seen[upgrade.Image]; !ok {
+			finalUpgrades = append(finalUpgrades, upgrade)
+			seen[upgrade.Image] = struct{}{}
+		}
+	}
+
+	return current, requested, finalUpgrades, err
 }
 
 func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
@@ -169,8 +212,9 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		// If this is the target channel get
 		// requested version so we don't exceed the maximun version
 		targetVer = reqVer
+		logrus.Info(targetVer)
 	} else {
-		targetVer, err = GetChannelLatest(ctx, c, arch, currChannel)
+		targetVer, err = GetChannelMinOrMax(ctx, c, arch, currChannel, false)
 		if err != nil {
 			return requested, upgrades, nil
 		}
@@ -216,7 +260,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 
 // GetChannelLatest fetches the latest version from the specified
 // upstream Cincinnati stack given architecture and channel
-func GetChannelLatest(ctx context.Context, c Client, arch string, channel string) (semver.Version, error) {
+func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel string, min bool) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	c.SetQueryParams(arch, channel, "")
 
@@ -240,6 +284,10 @@ func GetChannelLatest(ctx context.Context, c Client, arch string, channel string
 			Reason:  "NoVersionsFound",
 			Message: fmt.Sprintf("no cluster versions found for %q in the %q channel", arch, channel),
 		}
+	}
+
+	if min {
+		return Vers[0], nil
 	}
 
 	return Vers[len(Vers)-1], nil
@@ -386,4 +434,15 @@ func (e *edge) UnmarshalJSON(data []byte) error {
 	e.Destination = fields[1]
 
 	return nil
+}
+
+type path []int
+
+func (p path) has(num int) bool {
+	for _, v := range p {
+		if num == v {
+			return true
+		}
+	}
+	return false
 }
