@@ -197,11 +197,15 @@ func TestMerge(t *testing.T) {
 			expDC: &declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "baz", DefaultChannel: "stable"},
 					{Schema: "olm.package", Name: "foo", DefaultChannel: "stable"},
 				},
 				Channels: []declcfg.Channel{
 					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
 						{Name: "bar.v0.1.0"},
+					}},
+					{Schema: "olm.channel", Name: "stable", Package: "baz", Entries: []declcfg.ChannelEntry{
+						{Name: "baz.v3.0.0", SkipRange: ">=0.1.17 <3.0.0"},
 					}},
 					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.0.5"},
@@ -219,6 +223,15 @@ func TestMerge(t *testing.T) {
 							// Can't merge properties since their keys are unknown.
 							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
 							property.MustBuildPackage("bar", "0.1.0"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "baz.v3.0.0",
+						Package: "baz",
+						Image:   "reg/baz:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("baz", "3.0.0"),
 						},
 					},
 					{
@@ -246,24 +259,6 @@ func TestMerge(t *testing.T) {
 						Image:   "reg/foo:latest",
 						Properties: []property.Property{
 							property.MustBuildPackage("foo", "0.1.1"),
-						},
-					},
-					{
-						Schema:  "olm.bundle",
-						Name:    "baz.v3.0.0",
-						Package: "baz",
-						Image:   "reg/baz:latest",
-						Properties: []property.Property{
-							property.MustBuildPackage("baz", "3.0.0"),
-						},
-					},
-					{
-						Schema:  "olm.bundle",
-						Name:    "baz.v2.0.0",
-						Package: "baz",
-						Image:   "reg/baz:latest",
-						Properties: []property.Property{
-							property.MustBuildPackage("baz", "2.0.0"),
 						},
 					},
 				},
