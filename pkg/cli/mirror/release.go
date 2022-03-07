@@ -207,11 +207,30 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.C
 	if err != nil {
 		return allDownloads, err
 	}
-	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
-	if err != nil {
-		return allDownloads, err
+
+	var newDownloads downloads
+	if channel.ShortestPath {
+		current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
+		if err != nil {
+			return allDownloads, err
+		}
+		newDownloads = gatherUpdates(current, newest, updates)
+
+	} else {
+		lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
+		if err != nil {
+			return allDownloads, err
+		}
+		highRange, err := semver.ParseRange(fmt.Sprintf("<=%s", last))
+		if err != nil {
+			return allDownloads, err
+		}
+		versions, err := cincinnati.GetUpdatesInRange(ctx, c, channel.Name, arch, highRange.AND(lowRange))
+		if err != nil {
+			return allDownloads, err
+		}
+		newDownloads = gatherUpdates(cincinnati.Update{}, cincinnati.Update{}, versions)
 	}
-	newDownloads := gatherUpdates(current, newest, updates)
 	allDownloads.Merge(newDownloads)
 
 	return allDownloads, nil
@@ -257,8 +276,14 @@ func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Updat
 		releaseDownloads[update.Image] = struct{}{}
 	}
 
-	releaseDownloads[current.Image] = struct{}{}
-	releaseDownloads[newest.Image] = struct{}{}
+	if current.Image != "" {
+		releaseDownloads[current.Image] = struct{}{}
+	}
+
+	if newest.Image != "" {
+		releaseDownloads[newest.Image] = struct{}{}
+	}
+
 	return releaseDownloads
 }
 

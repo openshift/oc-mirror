@@ -119,6 +119,9 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 		edgesByOrigin[origin] = destinations
 	}
 
+	// This may need to be optimized to calculate full channels.
+	// Processing the graph takes significant time for large
+	// channels
 	var shortestPath func(map[int][]int, int, int, path) []int
 	shortestPath = func(g map[int][]int, start, end int, path path) []int {
 		path = append(path, start)
@@ -212,7 +215,6 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		// If this is the target channel get
 		// requested version so we don't exceed the maximun version
 		targetVer = reqVer
-		logrus.Info(targetVer)
 	} else {
 		targetVer, err = GetChannelMinOrMax(ctx, c, arch, currChannel, false)
 		if err != nil {
@@ -345,6 +347,27 @@ func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Versio
 	}
 
 	return Vers, nil
+}
+
+// GetAllUpdates will return all OCP/OKD versions in a specified channel between to points
+func GetUpdatesInRange(ctx context.Context, c Client, channel, arch string, updateRange semver.Range) ([]Update, error) {
+	// Prepare parametrized cincinnati query.
+	c.SetQueryParams(arch, channel, "")
+
+	graph, err := getGraphData(ctx, c)
+	if err != nil {
+		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
+	}
+
+	// Find the all updates within the range
+	var updates []Update
+	for _, node := range graph.Nodes {
+		if updateRange(node.Version) {
+			updates = append(updates, Update(node))
+		}
+
+	}
+	return updates, nil
 }
 
 // getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel

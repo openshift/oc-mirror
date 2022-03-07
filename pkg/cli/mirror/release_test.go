@@ -30,18 +30,30 @@ func TestGetDownloads(t *testing.T) {
 		arch: []string{"test-arch"},
 		channels: []v1alpha2.ReleaseChannel{
 			{
-				Name:       "stable-4.0",
-				MinVersion: "4.0.0-5",
-				MaxVersion: "4.0.0-6",
-			},
-			{
 				Name:       "stable-4.1",
-				MinVersion: "4.1.0-6",
+				MinVersion: "4.0.0-4",
 				MaxVersion: "4.1.0-6",
 			},
 		},
 		expected: downloads{
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-4": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-5": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": struct{}{},
+		},
+	}, {
+		name: "Success/OneChannelShortestPath",
+		channels: []v1alpha2.ReleaseChannel{
+			{
+				Name:         "stable-4.1",
+				MinVersion:   "4.0.0-4",
+				MaxVersion:   "4.1.0-6",
+				ShortestPath: true,
+			},
+		},
+		arch: []string{"test-arch"},
+		expected: downloads{
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-4": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": struct{}{},
 		},
@@ -205,7 +217,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
 				  }
 				],
-				"edges": [[0,1],[1,2],[4,5]]
+				"edges": [[0,1],[1,2],[2,4],[4,5]]
 			  }`))
 			if err != nil {
 				t.Fatal(err)
@@ -279,7 +291,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.1.0-6"
 				  }
 				],
-				"edges": [[0,1],[1,2],[2,6],[4,5]]
+				"edges": [[0,1],[0,2],[1,2],[2,6],[4,5]]
 			  }`))
 			if err != nil {
 				t.Fatal(err)
