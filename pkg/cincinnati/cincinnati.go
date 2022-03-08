@@ -119,36 +119,49 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 		edgesByOrigin[origin] = destinations
 	}
 
-	// This may need to be optimized to calculate full channels.
-	// Processing the graph takes significant time for large
-	// channels
-	var shortestPath func(map[int][]int, int, int, path) []int
-	shortestPath = func(g map[int][]int, start, end int, path path) []int {
-		path = append(path, start)
-		if start == end {
-			return path
-		}
-		adj := g[start]
-		// If we get through the map and the start never
-		// reaches the end, return nothing
-		if len(adj) == 0 {
-			return []int{}
-		}
-		shortest := make([]int, 0)
-		for _, node := range adj {
-			if !path.has(node) {
-				currPath := shortestPath(g, node, end, path)
-				if len(currPath) > 0 {
-					if len(shortest) == 0 || len(currPath) < len(shortest) {
-						shortest = currPath
-					}
+	shortestPath := func(g map[int][]int, start, end int) []int {
+		prev := map[int]int{}
+		visited := map[int]bool{}
+		queue := []int{start}
+		visited[start] = true
+		prev[start] = -1
+
+		for len(queue) > 0 {
+			node := queue[0]
+			queue = queue[1:]
+			if node == end {
+				break
+			}
+
+			for _, neighbor := range g[node] {
+				if !visited[neighbor] {
+					prev[neighbor] = node
+					queue = append(queue, neighbor)
+					visited[neighbor] = true
 				}
 			}
+
 		}
-		return shortest
+
+		// No path to end
+		if !visited[end] {
+			return []int{}
+		}
+
+		path := []int{end}
+		for next := prev[end]; next != -1; next = prev[next] {
+			path = append(path, next)
+		}
+
+		// Reverse path.
+		for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+			path[i], path[j] = path[j], path[i]
+		}
+
+		return path
 	}
 
-	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx, path{})
+	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx)
 
 	var updates []Update
 	for _, i := range nextIdxs {
@@ -457,15 +470,4 @@ func (e *edge) UnmarshalJSON(data []byte) error {
 	e.Destination = fields[1]
 
 	return nil
-}
-
-type path []int
-
-func (p path) has(num int) bool {
-	for _, v := range p {
-		if num == v {
-			return true
-		}
-	}
-	return false
 }
