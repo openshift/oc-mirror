@@ -178,6 +178,9 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			IncludeAdditively: includeAdditively,
 			SkipDependencies:  ctlg.SkipDependencies,
 		}.Run(ctx)
+
+		verifyOperatorPkgFound(dic, dc)
+
 	}
 
 	return dc, err
@@ -222,7 +225,40 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		}
 	}
 
-	return a.Run(ctx)
+	resultdc, err := a.Run(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	verifyOperatorPkgFound(dic, resultdc)
+
+	return resultdc, nil
+}
+
+// Verify that each of the requested operator packages were found and added to the
+// DeclarativeConfig.
+func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
+	// FIXME Check resulting DC against DIC to determine if any operators were left out.
+	logrus.Debug("DiffIncludeConfig: ", dic)
+	logrus.Debug("DeclarativeConfig: ", dc)
+
+	for _, pkg := range dic.Packages {
+		logrus.Debug("Checking for package: ", pkg)
+		found := false
+
+		for _, dcpkg := range dc.Packages {
+			logrus.Debug("Comparing to package name: ", dcpkg.Name)
+			if dcpkg.Name == pkg.Name {
+				found = true
+				break // found the operator package, no need to keep searching
+			}
+		}
+
+		if !found {
+			// The operator package wasn't found. Log the error and continue on.
+			logrus.Errorf("Operator %s was not found, please check channel and starting version in the config file.", pkg.Name)
+		}
+	}
 }
 
 func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha2.Operator) (image.TypedImageMapping, error) {
