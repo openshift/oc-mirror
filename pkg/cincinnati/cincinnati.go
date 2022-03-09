@@ -121,9 +121,9 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 
 	shortestPath := func(g map[int][]int, start, end int) []int {
 		prev := map[int]int{}
-		visited := map[int]bool{}
+		visited := map[int]struct{}{}
 		queue := []int{start}
-		visited[start] = true
+		visited[start] = struct{}{}
 		prev[start] = -1
 
 		for len(queue) > 0 {
@@ -134,17 +134,16 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 			}
 
 			for _, neighbor := range g[node] {
-				if !visited[neighbor] {
+				if _, ok := visited[neighbor]; !ok {
 					prev[neighbor] = node
 					queue = append(queue, neighbor)
-					visited[neighbor] = true
+					visited[neighbor] = struct{}{}
 				}
 			}
-
 		}
 
 		// No path to end
-		if !visited[end] {
+		if _, ok := visited[end]; !ok {
 			return []int{}
 		}
 
