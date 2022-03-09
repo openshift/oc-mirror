@@ -238,7 +238,6 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 // Verify that each of the requested operator packages were found and added to the
 // DeclarativeConfig.
 func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
-	// FIXME Check resulting DC against DIC to determine if any operators were left out.
 	logrus.Debug("DiffIncludeConfig: ", dic)
 	logrus.Debug("DeclarativeConfig: ", dc)
 
