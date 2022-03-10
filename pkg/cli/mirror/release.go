@@ -239,11 +239,10 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.C
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
 func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch string, channels []v1alpha2.ReleaseChannel) (downloads, error) {
 	// Strip any OKD channels from the list
-	ocpChannels := make([]v1alpha2.ReleaseChannel, len(channels))
-	copy(ocpChannels, channels)
-	for i, ch := range ocpChannels {
-		if ch.Name == cincinnati.OkdChannel {
-			ocpChannels = append(ocpChannels[:i], ocpChannels[i+1:]...)
+	var ocpChannels []v1alpha2.ReleaseChannel
+	for _, ch := range channels {
+		if ch.Name != cincinnati.OkdChannel {
+			ocpChannels = append(ocpChannels, ch)
 		}
 	}
 	// If no other channels exist, return no downloads
