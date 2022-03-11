@@ -14,7 +14,10 @@ CONSOLE_REDHAT_COM_PULL_SECRET := ${CONSOLE_REDHAT_COM_PULL_SECRET}
 # e.g. make test ANSIBLE_PLAYBOOK_ARGS="--tags sneakernet"
 ANSIBLE_PLAYBOOK_ARGS :=
 
-all: default-scenario
+all:
+	thing=$$(cat /aws-creds/AWS_FAKE_ACCESS_KEY) && [ "$$thing" = "fannypack" ] && echo worked || echo failed
+	cat /aws-creds/AWS_FAKE_ACCESS_KEY
+	exit 1
 .PHONY: all
 
 default-scenario: create test delete
