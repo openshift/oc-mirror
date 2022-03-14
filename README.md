@@ -1,5 +1,6 @@
 # oc-mirror
 - [oc-mirror](#oc-mirror)
+  - [Community](#community)
   - [Usage](#usage)
     - [Configuration Examples](#configuration-examples)
     - [Environment Prep](#environment-prep)
@@ -16,6 +17,10 @@
     - [Test](#test)
 
 `oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images for mirror registries that support OpenShift environments.
+
+## Community
+Please join us for our oc-mirror weekly community meeting Thursdays at 12pm EST https://zoom.us/j/99871298397?pwd=eHYrYlQxTDJaOTQ2bDl3VXlRMjFpUT09 . Retrieve the meeting passcode from the first comment in the following issue: https://github.com/openshift/oc-mirror/issues/349 . 
+ 
 ## Usage
 [![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
 
