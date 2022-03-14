@@ -59,6 +59,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Addit
 		dstRef := srcRef
 		dstRef.Type = imagesource.DestinationFile
 		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
+		// The registry component is not included in the final path.
 		dstRef.Ref.Registry = ""
 
 		mmappings.Add(srcRef, dstRef, image.TypeGeneric)

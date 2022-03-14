@@ -373,6 +373,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 	}
 
+	if o.continuedOnError {
+		return fmt.Errorf("one or more errors occurred")
+	}
+
 	return cleanup()
 }
 
@@ -471,6 +475,7 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 
 		if o.ContinueOnError && (skip || skipAllTypes) {
 			logrus.Warn(err)
+			o.continuedOnError = true
 		} else {
 			return err
 		}
