@@ -183,7 +183,15 @@ func TestAssociateImageLayers(t *testing.T) {
 			imgMapping: map[string]string{"imgname:latest": "single_manifest"},
 			imgs:       []string{"imgname:latest"},
 			wantErr:    true,
-			expError:   &ErrInvalidComponent{},
+			expError:   &ErrInvalidImage{},
+		},
+		{
+			name:       "Invalid/InvalidImage",
+			imgTyp:     TypeGeneric,
+			imgMapping: map[string]string{"imgname:latest": "fake_manifest:latest"},
+			imgs:       []string{"imgname:latest"},
+			wantErr:    true,
+			expError:   &ErrInvalidImage{},
 		},
 	}
 	for _, test := range tests {

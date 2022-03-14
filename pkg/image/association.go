@@ -26,13 +26,12 @@ func (e *ErrNoMapping) Error() string {
 	return fmt.Sprintf("image %q has no mirror mapping", e.image)
 }
 
-type ErrInvalidComponent struct {
+type ErrInvalidImage struct {
 	image string
-	tag   string
 }
 
-func (e *ErrInvalidComponent) Error() string {
-	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
+func (e *ErrInvalidImage) Error() string {
+	return fmt.Sprintf("image %q is invalid or does not exist", e.image)
 }
 
 // Associations is a map for Association
@@ -316,7 +315,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 
 		// Verify that the dirRef exists before proceeding
 		if _, err := os.Stat(imagePath); err != nil {
-			errs = append(errs, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err))
+			errs = append(errs, &ErrInvalidImage{image})
 			continue
 		}
 
@@ -346,7 +345,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 
 	info, err := os.Lstat(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, &ErrInvalidComponent{image, tagOrID}
+		return nil, &ErrInvalidImage{image}
 	} else if err != nil {
 		return nil, err
 	}
