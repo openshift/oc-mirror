@@ -26,6 +26,15 @@ func (e *ErrNoMapping) Error() string {
 	return fmt.Sprintf("image %q has no mirror mapping", e.image)
 }
 
+type ErrInvalidComponent struct {
+	image string
+	tag   string
+}
+
+func (e *ErrInvalidComponent) Error() string {
+	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
+}
+
 type ErrInvalidImage struct {
 	image string
 }
@@ -345,7 +354,7 @@ func associateImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, 
 
 	info, err := os.Lstat(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, &ErrInvalidImage{image}
+		return nil, &ErrInvalidComponent{image, tagOrID}
 	} else if err != nil {
 		return nil, err
 	}

@@ -461,9 +461,10 @@ func (o *OperatorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesou
 	assocs, err := image.AssociateImageLayers(srcDir, mappings, images, image.TypeOperatorBundle)
 	if err != nil {
 		merr := &image.ErrNoMapping{}
+		cerr := &image.ErrInvalidComponent{}
 		ierr := &image.ErrInvalidImage{}
 		for _, err := range err.Errors() {
-			if (errors.As(err, &merr) || errors.As(err, &ierr)) && o.ContinueOnError {
+			if (errors.As(err, &merr) || errors.As(err, &ierr) || errors.As(err, &cerr)) && o.ContinueOnError {
 				continue
 			}
 			return nil, err
