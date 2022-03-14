@@ -2,9 +2,12 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
@@ -33,10 +36,18 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Addit
 			srcRef.Ref.Tag = "latest"
 		}
 
-		// The registry component is not included in the final path.
+		// Instead of returning an error, just log it.
+		isSkipErr := func(err error) bool {
+			return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
+		}
+
 		srcImage, err := bundle.PinImages(ctx, srcRef.Ref.Exact(), "", o.SourceSkipTLS, o.SourcePlainHTTP)
 		if err != nil {
-			return nil, err
+			if !isSkipErr(err) {
+				return nil, err
+			}
+			logrus.Warn(err)
+			continue
 		}
 		pinnedRef, err := imagesource.ParseReference(srcImage)
 		if err != nil {
