@@ -309,6 +309,12 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, utilerrors.NewAggregate(errs)
 	}
 
+	logrus.Debug("unpack release signatures")
+	err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+
 	logrus.Debug("rebuilding catalog images")
 
 	found, err := o.unpackCatalog(tmpdir, filesInArchive)

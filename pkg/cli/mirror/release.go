@@ -4,11 +4,21 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"bytes"
+	"errors"
+	"io/ioutil"
+	_ "embed"
+	"net/http"
+	"strings"
 	"path/filepath"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc/pkg/cli/admin/release"
+	"github.com/openshift/library-go/pkg/manifest"
+	"github.com/openshift/library-go/pkg/verify"
+	"github.com/openshift/library-go/pkg/verify/store/sigstore"
+	"github.com/openshift/library-go/pkg/verify/util"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -20,6 +30,13 @@ import (
 
 const (
 	releaseRepo = "release-images"
+
+	// maxDigestHashLen is used to truncate digest hash portion before using as part of
+	// signature file name.
+	maxDigestHashLen = 16
+
+	// signatureFileNameFmt defines format of the release image signature file name.
+	signatureFileNameFmt = "signature-%s-%s.json"
 )
 
 // ReleaseOptions configures either a Full or Diff mirror operation
@@ -144,6 +161,12 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 			return mmapping, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
 		}
 		mmapping.Merge(mappings)
+	}
+
+	err := o.generateReleaseSignatures(releaseDownloads)
+
+	if err != nil {
+		return nil, err
 	}
 
 	return mmapping, nil
@@ -341,4 +364,96 @@ func (d downloads) Merge(in downloads) {
 		}
 		d[k] = v
 	}
+}
+
+//go:embed release-configmap.yaml
+var b []byte
+
+func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) error {
+
+	httpClientConstructor := sigstore.NewCachedHTTPClientConstructor(o.HTTPClient, nil)
+
+	manifests, err := manifest.ParseManifests(bytes.NewReader(b))
+
+	if err != nil {
+		return err
+	}
+
+	// Attempt to load a verifier as defined by the release being mirrored
+	imageVerifier, err := verify.NewFromManifests(manifests, httpClientConstructor.HTTPClient)
+
+	if err != nil {
+		return err
+	}
+
+	for image, _ := range releaseDownloads {
+		digest := strings.Split(image, "@")[1]
+
+		ctx, cancelFn := context.WithCancel(context.Background())
+		defer cancelFn()
+		if err := imageVerifier.Verify(ctx, digest); err != nil {
+			// This may be a OKD release image hence no valid signature
+			logrus.Warnf("An image was retrieved that failed verification: %v", err)
+			continue
+		}
+
+		cmData, err := verify.GetSignaturesAsConfigmap(digest, imageVerifier.Signatures()[digest])
+		if err != nil {
+			return err
+		}
+
+		cmDataBytes, err := util.ConfigMapAsBytes(cmData)
+		if err != nil {
+			return err
+		}
+
+		fileName, err := createSignatureFileName(digest)
+		if err != nil {
+			return err
+		}
+
+		signaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir, fileName)
+
+		if err := os.MkdirAll(filepath.Dir(signaturePath), 0750); err != nil {
+			return err
+		}
+
+		if err := ioutil.WriteFile(signaturePath, cmDataBytes, 0640); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func createSignatureFileName(digest string) (string, error) {
+	parts := strings.SplitN(digest, ":", 3)
+	if len(parts) != 2 || len(parts[0]) == 0 || len(parts[1]) == 0 {
+		return "", fmt.Errorf("the provided digest, %s, must be of the form ALGO:HASH", digest)
+	}
+	algo, hash := parts[0], parts[1]
+
+	if len(hash) > maxDigestHashLen {
+		hash = hash[:maxDigestHashLen]
+	}
+	return fmt.Sprintf(signatureFileNameFmt, algo, hash), nil
+}
+
+func (o *ReleaseOptions) HTTPClient() (*http.Client, error) {
+	return &http.Client{}, nil
+}
+
+// unpackReleaseSignatures will unpack the release signatures if they exist
+func (o *MirrorOptions) unpackReleaseSignatures(dstDir string, filesInArchive map[string]string) error {
+	if err := unpack(config.ReleaseSignatureDir, dstDir, filesInArchive); err != nil {
+		nferr := &ErrArchiveFileNotFound{}
+		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
+			logrus.Debug("No release signatures found in archive, skipping")
+			return nil
+		}
+		return err
+	}
+	logrus.Infof("Wrote release signatures to %s", dstDir)
+	return nil
 }

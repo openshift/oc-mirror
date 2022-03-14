@@ -321,6 +321,15 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllICSPs(mapping, dir); err != nil {
 			return err
 		}
+
+		// Move release signatures into results dir
+		srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
+		dstSignaturePath := filepath.Join(dir, config.ReleaseSignatureDir)
+		if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
+			return err
+		}
+		logrus.Debugf("Moved any release signatures to %s", dir)
+
 		// Move charts into results dir
 		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
 		dstHelmPath := filepath.Join(dir, config.HelmDir)
