@@ -235,27 +235,25 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	return resultdc, nil
 }
 
-// Verify that each of the requested operator packages were found and added to the
-// DeclarativeConfig.
+// verifyOperatorPkgFound will verify that each of the requested operator packages were
+// found and added to the DeclarativeConfig.
 func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
 	logrus.Debug("DiffIncludeConfig: ", dic)
 	logrus.Debug("DeclarativeConfig: ", dc)
 
+	dcMap := make(map[string]bool)
+
+	// Load the declarative config packages into a map
+	for _, dcpkg := range dc.Packages {
+		dcMap[dcpkg.Name] = true
+	}
+
 	for _, pkg := range dic.Packages {
 		logrus.Debug("Checking for package: ", pkg)
-		found := false
 
-		for _, dcpkg := range dc.Packages {
-			logrus.Debug("Comparing to package name: ", dcpkg.Name)
-			if dcpkg.Name == pkg.Name {
-				found = true
-				break // found the operator package, no need to keep searching
-			}
-		}
-
-		if !found {
+		if !dcMap[pkg.Name] {
 			// The operator package wasn't found. Log the error and continue on.
-			logrus.Errorf("Operator %s was not found, please check channel and starting version in the config file.", pkg.Name)
+			logrus.Errorf("Operator %s was not found, please check name, startingVersion, and channels in the config file.", pkg.Name)
 		}
 	}
 }
