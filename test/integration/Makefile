@@ -1,3 +1,8 @@
+# To enable us to do cleanup on errors
+export SHELL:=/bin/bash
+export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
+.ONESHELL:
+
 # For virtualenv/ansible installation
 PYTHON := python3
 
@@ -17,7 +22,14 @@ ANSIBLE_PLAYBOOK_ARGS :=
 all: default-scenario
 .PHONY: all
 
-default-scenario: create test delete
+default-scenario: terraform collection
+	# This allows us to force tear_down even when a test fails, but still report failure
+	# It is enabled by .ONESHELL above
+	@function tear_down() {
+		make delete
+	}
+	@trap tear_down EXIT
+	@make create test
 .PHONY: default-scenario
 
 .venv/bin/pip:
