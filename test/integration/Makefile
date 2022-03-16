@@ -28,6 +28,7 @@ default-scenario: terraform collection
 	@function tear_down() {
 		make delete
 	}
+	@if [ -d /aws-creds ]; then source .env; fi
 	@trap tear_down EXIT
 	@make create test
 .PHONY: default-scenario
