@@ -10,7 +10,10 @@ import (
 	"github.com/containerd/containerd/remotes"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -146,6 +149,74 @@ func TestPinImages(t *testing.T) {
 				require.EqualError(t, err, c.expErrorStr)
 			}
 		})
+	}
+
+}
+
+func TestVerifyOperatorPkgFound(t *testing.T) {
+
+	hook := test.NewGlobal()
+
+	type testvopf struct {
+		desc        string
+		dic         action.DiffIncludeConfig
+		dc          *declcfg.DeclarativeConfig
+		logCount    int
+		expErrorStr string
+	}
+
+	cases := []testvopf{
+		{
+			desc: "Requested operator package not found in DC",
+			dic: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name: "foo",
+					},
+				},
+			},
+			dc: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{
+						Name: "bar",
+					},
+				},
+			},
+			logCount:    1,
+			expErrorStr: "Operator foo was not found",
+		},
+		{
+			desc: "Requested operator package found in DC",
+			dic: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name: "foo",
+					},
+				},
+			},
+			dc: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{
+						Name: "foo",
+					},
+				},
+			},
+			logCount:    0,
+			expErrorStr: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			verifyOperatorPkgFound(c.dic, c.dc)
+
+			assert.Equal(t, c.logCount, len(hook.AllEntries()))
+			if c.logCount > 0 && len(hook.Entries) > 0 {
+				assert.Contains(t, hook.LastEntry().Message, c.expErrorStr)
+			}
+
+		})
+		hook.Reset()
 	}
 
 }
