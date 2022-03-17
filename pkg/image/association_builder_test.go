@@ -230,6 +230,28 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			wantErr:  true,
 			expError: &ErrInvalidComponent{},
 		},
+		{
+			name:   "Invalid/MissingImage",
+			imgTyp: TypeGeneric,
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+							Tag:  "latest",
+						}},
+					Category: TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "fake_manifest",
+							Tag:  "latest",
+						},
+						Type: imagesource.DestinationFile,
+					},
+					Category: TypeGeneric}},
+			wantErr:  true,
+			expError: &ErrInvalidImage{},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

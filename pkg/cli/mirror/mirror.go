@@ -240,18 +240,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Create assocations
 		assocDir := filepath.Join(o.Dir, config.SourceDir)
 		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
-		skipErr := func(_ error) bool {
+
+		skipErr := func(err error) bool {
 			ierr := &image.ErrInvalidImage{}
+			cerr := &image.ErrInvalidComponent{}
+			return errors.As(err, &ierr) || errors.As(err, &cerr)
+		}
+
+		if errs != nil {
 			for _, e := range errs.Errors() {
-				if !errors.As(e, &ierr) {
-					return false
+				if err := o.checkErr(e, skipErr); err != nil {
+					return err
 				}
 			}
-			return true
 		}
-		if err := o.checkErr(errs, skipErr); err != nil {
-			return err
-		}
+
 		// Pack the images set
 		tmpBackend, err := o.Pack(cmd.Context(), assocs, meta, cfg.ArchiveSize)
 		if err != nil {
@@ -465,20 +468,24 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 }
 
 func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {
-	if err != nil {
-		var skip, skipAllTypes bool
-		if acceptableErr != nil {
-			skip = acceptableErr(err)
-		} else {
-			skipAllTypes = true
-		}
 
-		if o.ContinueOnError && (skip || skipAllTypes) {
-			logrus.Warn(err)
-			o.continuedOnError = true
-		} else {
-			return err
-		}
+	if err == nil {
+		return nil
 	}
+
+	var skip, skipAllTypes bool
+	if acceptableErr != nil {
+		skip = acceptableErr(err)
+	} else {
+		skipAllTypes = true
+	}
+	// Instead of returning an error, just log it.
+	if o.ContinueOnError && (skip || skipAllTypes) {
+		logrus.Warn(err)
+		o.continuedOnError = true
+	} else {
+		return err
+	}
+
 	return nil
 }
