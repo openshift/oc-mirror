@@ -164,6 +164,9 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			Registry: reg,
 			Refs:     []string{ctlg.Catalog},
 		}.Run(ctx)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// Generate and mirror a heads-only diff using only the catalog as a new ref.
 		dic, derr := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
@@ -178,12 +181,14 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			IncludeAdditively: includeAdditively,
 			SkipDependencies:  ctlg.SkipDependencies,
 		}.Run(ctx)
+		if err != nil {
+			return nil, err
+		}
 
 		verifyOperatorPkgFound(dic, dc)
-
 	}
 
-	return dc, err
+	return dc, nil
 }
 
 // renderDCDiff renders data in ctlg into a declarative config for o.Diff().
