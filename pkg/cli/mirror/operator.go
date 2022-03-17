@@ -479,7 +479,7 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 	opts.SecurityOptions.Insecure = insecure
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	regctx, err := config.CreateDefaultContext(insecure)
+	regctx, err := image.CreateDefaultContext(insecure)
 	if err != nil {
 		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}

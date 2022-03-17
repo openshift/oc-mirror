@@ -70,7 +70,7 @@ func TestImageBlocking(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		actual := IsBlocked(cfg, img.Ref)
+		actual := IsBlocked(cfg.Mirror.BlockedImages, img.Ref)
 
 		if actual != tt.want {
 			t.Errorf("Test %s: Expected '%v', got '%v'", tt.name, tt.want, actual)

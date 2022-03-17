@@ -418,7 +418,7 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, 
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
 	}
-	restctx, err := config.CreateDefaultContext(insecure)
+	restctx, err := image.CreateDefaultContext(insecure)
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 		}
 		logrus.Debugf("mirroring generic images: %q", srcs)
 	}
-	regctx, err := config.CreateDefaultContext(insecure)
+	regctx, err := image.CreateDefaultContext(insecure)
 	if err != nil {
 		return err
 	}
