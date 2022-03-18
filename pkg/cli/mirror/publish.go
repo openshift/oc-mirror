@@ -321,9 +321,6 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		if err != nil {
 			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}
-		if err := WriteCatalogSource(ctlgRefs, o.OutputDir); err != nil {
-			return allMappings, err
-		}
 		allMappings.Merge(ctlgRefs)
 	}
 
