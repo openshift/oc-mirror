@@ -1,17 +1,12 @@
 package mirror
 
 import (
-	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -148,6 +143,11 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("must specify --config or --from with registry destination")
 	}
 
+	var destInsecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		destInsecure = true
+	}
+
 	// Attempt to login to registry
 	// FIXME(jpower432): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
@@ -155,11 +155,11 @@ func (o *MirrorOptions) Validate() error {
 		logrus.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
 		logrus.Debugf("Using image %s to check permissions", ref)
-		imgRef, err := name.ParseReference(ref, o.getNameOpts()...)
+		imgRef, err := name.ParseReference(ref, getNameOpts(destInsecure)...)
 		if err != nil {
 			return err
 		}
-		if err := remote.CheckPushPermission(imgRef, authn.DefaultKeychain, o.createRT()); err != nil {
+		if err := remote.CheckPushPermission(imgRef, authn.DefaultKeychain, createRT(destInsecure)); err != nil {
 			return fmt.Errorf("error checking push permissions for %s: %v", o.ToMirror, err)
 		}
 	}
@@ -196,6 +196,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		destInsecure = true
 	}
 
+	cleanup := func() error {
+		if !o.SkipCleanup {
+			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
+		}
+		return nil
+	}
+
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
 	switch {
@@ -222,7 +229,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
-			return nil
+			return cleanup()
 		}
 
 		// Mirror planned images
@@ -268,7 +275,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-		if err := o.generateAllICSPs(mapping, dir); err != nil {
+		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
@@ -294,7 +301,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
-			return nil
+			return cleanup()
 		}
 
 		// Mirror planned images
@@ -314,12 +321,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err != nil {
 				return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 			}
-			if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
-				return err
-			}
 			mapping.Merge(ctlgRefs)
 		}
-		if err := o.generateAllICSPs(mapping, dir); err != nil {
+		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
 		// Move charts into results dir
@@ -360,52 +364,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 	}
 
-	if !o.SkipCleanup {
-		if err := os.RemoveAll(filepath.Join(o.Dir, config.SourceDir)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (o *MirrorOptions) getRemoteOpts(ctx context.Context) []remote.Option {
-	return []remote.Option{
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithTransport(o.createRT()),
-		remote.WithContext(ctx),
-	}
-}
-
-func (o *MirrorOptions) getNameOpts() (options []name.Option) {
-	if o.DestSkipTLS || o.DestPlainHTTP {
-		options = append(options, name.Insecure)
-	}
-	return options
-}
-
-func (o *MirrorOptions) createRT() http.RoundTripper {
-	var insecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		insecure = true
-	}
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			// By default, we wrap the transport in retries, so reduce the
-			// default dial timeout to 5s to avoid 5x 30s of connection
-			// timeouts when doing the "ping" on certain http registries.
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: insecure,
-		},
-	}
+	return cleanup()
 }
 
 // mirrorImage downloads individual images from an image mapping
@@ -461,23 +420,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	return a, nil
 }
 
-func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
-	resultsDir = filepath.Join(
-		o.Dir,
-		fmt.Sprintf("results-%v", time.Now().Unix()),
-	)
-	if err := os.MkdirAll(resultsDir, os.ModePerm); err != nil {
-		return resultsDir, err
-	}
-	return resultsDir, nil
-}
-
-func (o *MirrorOptions) newMetadataImage(uid string) string {
-	repo := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
-	return fmt.Sprintf("%s:%s", repo, uid)
-}
-
-func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir string) error {
+func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, dir string) error {
 
 	allICSPs := []operatorv1alpha1.ImageContentSourcePolicy{}
 	releases := image.ByCategory(mapping, image.TypeOCPRelease)
@@ -491,6 +434,11 @@ func (o *MirrorOptions) generateAllICSPs(mapping image.TypedImageMapping, dir st
 		}
 		allICSPs = append(allICSPs, icsps...)
 		return nil
+	}
+
+	ctlgRefs := image.ByCategory(operator, image.TypeOperatorCatalog)
+	if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
+		return err
 	}
 
 	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {

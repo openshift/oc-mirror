@@ -5,50 +5,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 )
-
-func TestAddOPMImage(t *testing.T) {
-
-	var cfg v1alpha2.ImageSetConfiguration
-	var meta v1alpha2.Metadata
-
-	// No past OPMImage.
-	cfg = v1alpha2.ImageSetConfiguration{}
-	meta = v1alpha2.Metadata{}
-	meta.MetadataSpec.PastMirror = v1alpha2.PastMirror{
-		Mirror: v1alpha2.Mirror{
-			AdditionalImages: []v1alpha2.AdditionalImages{
-				{Image: v1alpha2.Image{Name: "reg.com/ns/other:latest"}},
-			},
-		},
-	}
-
-	addOPMImage(&cfg, meta)
-	if assert.Len(t, cfg.Mirror.AdditionalImages, 1) {
-		require.Equal(t, cfg.Mirror.AdditionalImages[0].Image.Name, OPMImage)
-	}
-
-	// Has past OPMImage.
-	cfg = v1alpha2.ImageSetConfiguration{}
-	meta = v1alpha2.Metadata{}
-	meta.MetadataSpec.PastMirror = v1alpha2.PastMirror{
-		Mirror: v1alpha2.Mirror{
-			AdditionalImages: []v1alpha2.AdditionalImages{
-				{Image: v1alpha2.Image{Name: OPMImage}},
-				{Image: v1alpha2.Image{Name: "reg.com/ns/other:latest"}},
-			},
-		},
-	}
-
-	addOPMImage(&cfg, meta)
-	require.Len(t, cfg.Mirror.AdditionalImages, 0)
-}
 
 func TestCreate(t *testing.T) {
 	path := t.TempDir()
@@ -77,6 +39,5 @@ func TestCreate(t *testing.T) {
 	}
 	_, mappings, err := opts.Create(ctx, cfg)
 	require.NoError(t, err)
-	// One mapping for OPM and one for the requested image
-	require.Len(t, mappings, 2)
+	require.Len(t, mappings, 1)
 }

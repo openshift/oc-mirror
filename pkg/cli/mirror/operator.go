@@ -14,6 +14,11 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/remotes"
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/joelanford/ignore"
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/admin/catalog"
@@ -30,9 +35,10 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
-var (
-	// OPMImage pinned to upstream opm v1.19.0 (k8s 1.21).
-	OPMImage = "quay.io/operator-framework/opm@sha256:d7eb3d6e652142a387a56d719d4ae33cd55028e42853691d3af895e7cbba9cd6"
+const (
+	CatalogsDir = "catalogs"
+	LayoutsDir  = "layout"
+	IndexDir    = "index"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -43,11 +49,16 @@ type OperatorOptions struct {
 	SkipImagePin bool
 	Logger       *logrus.Entry
 
-	tmp string
+	tmp      string
+	insecure bool
 }
 
 func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
-	return &OperatorOptions{MirrorOptions: mo}
+	opts := &OperatorOptions{MirrorOptions: mo}
+	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
+		opts.insecure = true
+	}
+	return opts
 }
 
 // PlanFull plans a mirror for each catalog image in its entirety
@@ -323,8 +334,12 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, err
 	}
 
-	// Remove the catalog image from mappings.
+	// Remove the catalog image from mappings we are going to transfer this
+	// using an OCI layout
 	mappings.Remove(ctlgRef, image.TypeOperatorBundle)
+	if err := o.writeLayout(ctx, ctlgRef.Ref); err != nil {
+		return nil, err
+	}
 
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
 	for srcRef, dstRef := range mappings {
@@ -426,18 +441,66 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	return utilerrors.NewAggregate(errs)
 }
 
+func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef imgreference.DockerImageReference) error {
+
+	// Write catalog OCI layout file to src so it is included in the archive
+	// at a path unique to the image.
+	ctlgDir, err := getCatalogDir(ctlgRef)
+	if err != nil {
+		return err
+	}
+	layoutDir := filepath.Join(o.Dir, config.SourceDir, CatalogsDir, ctlgDir, LayoutsDir)
+	if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
+		return fmt.Errorf("error catalog layout dir: %v", err)
+	}
+
+	o.Logger.Debugf("writing catalog %q layout to %s", ctlgRef.Exact(), layoutDir)
+
+	ref, err := name.ParseReference(ctlgRef.Exact(), getNameOpts(o.insecure)...)
+	if err != nil {
+		return err
+	}
+	desc, err := remote.Get(ref, getRemoteOpts(ctx, o.insecure)...)
+	if err != nil {
+		return err
+	}
+
+	if desc.MediaType.IsImage() {
+		layoutPath, err := layout.Write(layoutDir, empty.Index)
+		if err != nil {
+			return fmt.Errorf("error creating OCI layout: %v", err)
+		}
+		img, err := desc.Image()
+		if err != nil {
+			return err
+		}
+		// Default to amd64 architecture with no multi-arch image
+		if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"})); err != nil {
+			return err
+		}
+
+	} else {
+		idx, err := desc.ImageIndex()
+		if err != nil {
+			return err
+		}
+		if _, err = layout.Write(layoutDir, idx); err != nil {
+			return fmt.Errorf("error creating OCI layout: %v", err)
+		}
+	}
+
+	return nil
+}
+
 func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
-	leafDir := ctlgRef.Tag
-	if leafDir == "" {
-		leafDir = ctlgRef.ID
+	ctlgDir, err := getCatalogDir(ctlgRef)
+	if err != nil {
+		return "", err
 	}
-	if leafDir == "" {
-		return "", fmt.Errorf("catalog %q must have either a tag or digest", ctlgRef.Exact())
-	}
-	indexDir := filepath.Join(o.Dir, config.SourceDir, "catalogs", ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name, leafDir)
+	indexDir := filepath.Join(o.Dir, config.SourceDir, CatalogsDir, ctlgDir, IndexDir)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
@@ -461,11 +524,18 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefe
 	return indexDir, nil
 }
 
-func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string) (*catalog.MirrorCatalogOptions, error) {
-	var insecure bool
-	if o.SourcePlainHTTP || o.SourceSkipTLS {
-		insecure = true
+func getCatalogDir(ctlgRef imgreference.DockerImageReference) (string, error) {
+	leafDir := ctlgRef.Tag
+	if leafDir == "" {
+		leafDir = ctlgRef.ID
 	}
+	if leafDir == "" {
+		return "", fmt.Errorf("catalog %q must have either a tag or digest", ctlgRef.Exact())
+	}
+	return filepath.Join(ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name, leafDir), nil
+}
+
+func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string) (*catalog.MirrorCatalogOptions, error) {
 
 	opts := catalog.NewMirrorCatalogOptions(o.IOStreams)
 	opts.DryRun = o.DryRun
@@ -481,10 +551,10 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 	}
 	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
-	opts.SecurityOptions.Insecure = insecure
+	opts.SecurityOptions.Insecure = o.insecure
 	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	regctx, err := image.CreateDefaultContext(insecure)
+	regctx, err := image.CreateDefaultContext(o.insecure)
 	if err != nil {
 		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}
@@ -494,11 +564,6 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 }
 
 const mappingFile = "mapping.txt"
-
-// isMappingFile returns true if p has a mapping file name.
-func isMappingFile(p string) bool {
-	return filepath.Base(p) == mappingFile
-}
 
 // Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L449-L503
 // Hoping this can be temporary, and `oc adm mirror catalog` libs support index.yaml direct mirroring.
