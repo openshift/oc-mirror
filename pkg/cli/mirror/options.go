@@ -32,6 +32,7 @@ type MirrorOptions struct {
 	SkipMissing      bool
 	ContinueOnError  bool
 	FilterOptions    []string
+	MaxPerRegistry   int
 	// cancelCh is a channel listening for command cancellations
 	cancelCh <-chan struct{}
 	once     sync.Once
@@ -56,6 +57,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
+	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 2, "Number of concurrent requests allowed per registry")
 
 	// TODO(jpower432): Make this flag visible again once release architecture selection
 	// has been more thouroughly vetted
