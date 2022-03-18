@@ -410,7 +410,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	a.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
 	a.KeepManifestList = true
 	a.SkipMultipleScopes = true
-	a.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: 2}
+	a.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: o.MaxPerRegistry}
 	regctx, err := image.CreateDefaultContext(insecure)
 	if err != nil {
 		return a, fmt.Errorf("error creating registry context: %v", err)
