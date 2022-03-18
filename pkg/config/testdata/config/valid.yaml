@@ -11,9 +11,9 @@ mirror:
     graph: true
   operators:
     - catalog: redhat-operators:v4.7
-      headsOnly: false
+      allPackages: true
     - catalog: certified-operators:v4.7
-      headsOnly: false
+      allPackages: true
       packages:
         - name: couchbase-operator
         - name: mongodb-operator

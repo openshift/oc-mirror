@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/sirupsen/logrus"
 )
@@ -15,11 +16,11 @@ import (
 type TypedImage struct {
 	imagesource.TypedImageReference
 	// Category adds image category type to TypedImageReference
-	Category ImageType
+	Category v1alpha2.ImageType
 }
 
 // ParseTypedImage will create a TypedImage from a string and type
-func ParseTypedImage(image string, typ ImageType) (TypedImage, error) {
+func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	ref, err := imagesource.ParseReference(image)
 	if err != nil {
 		return TypedImage{}, err
@@ -53,20 +54,20 @@ func (m TypedImageMapping) Merge(in TypedImageMapping) {
 }
 
 // Add stores a key-value pair into image map
-func (m TypedImageMapping) Add(srcRef, dstRef imagesource.TypedImageReference, typ ImageType) {
+func (m TypedImageMapping) Add(srcRef, dstRef imagesource.TypedImageReference, typ v1alpha2.ImageType) {
 	srcTypedRef := TypedImage{
 		TypedImageReference: srcRef,
 		Category:            typ,
 	}
 	dstTypedRef := TypedImage{
 		TypedImageReference: dstRef,
-		Category:            TypeGeneric,
+		Category:            v1alpha2.TypeGeneric,
 	}
 	m[srcTypedRef] = dstTypedRef
 }
 
 // Remove will remove an image from the map given the TypeImageReference and type
-func (m TypedImageMapping) Remove(ref imagesource.TypedImageReference, typ ImageType) {
+func (m TypedImageMapping) Remove(ref imagesource.TypedImageReference, typ v1alpha2.ImageType) {
 	typedRef := TypedImage{
 		TypedImageReference: ref,
 		Category:            typ,
@@ -75,8 +76,8 @@ func (m TypedImageMapping) Remove(ref imagesource.TypedImageReference, typ Image
 }
 
 // ByCategory will return a pruned mapping containing provided types
-func ByCategory(m TypedImageMapping, types ...ImageType) TypedImageMapping {
-	foundTypes := map[ImageType]struct{}{}
+func ByCategory(m TypedImageMapping, types ...v1alpha2.ImageType) TypedImageMapping {
+	foundTypes := map[v1alpha2.ImageType]struct{}{}
 	for _, typ := range types {
 		foundTypes[typ] = struct{}{}
 	}
@@ -92,7 +93,7 @@ func ByCategory(m TypedImageMapping, types ...ImageType) TypedImageMapping {
 }
 
 // ReadImageMapping reads a mapping.txt file and parses each line into a map k/v.
-func ReadImageMapping(mappingsPath, separator string, typ ImageType) (TypedImageMapping, error) {
+func ReadImageMapping(mappingsPath, separator string, typ v1alpha2.ImageType) (TypedImageMapping, error) {
 	f, err := os.Open(filepath.Clean(mappingsPath))
 	if err != nil {
 		return nil, err

@@ -10,7 +10,7 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 func TestGetCustomPaths(t *testing.T) {

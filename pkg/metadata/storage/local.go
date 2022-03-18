@@ -12,7 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/config"
 )
 
 var _ Backend = &localDirBackend{}
@@ -73,7 +74,7 @@ func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha2.Metadat
 
 	switch typeMeta.GroupVersionKind() {
 	case v1alpha2.GroupVersion.WithKind(v1alpha2.MetadataKind):
-		*meta, err = v1alpha2.LoadMetadata(data)
+		*meta, err = config.LoadMetadata(data)
 	default:
 		return fmt.Errorf("config GVK not recognized: %s", typeMeta.GroupVersionKind())
 	}

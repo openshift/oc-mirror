@@ -8,8 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 // Metadata object kind.
@@ -31,7 +29,7 @@ type MetadataSpec struct {
 	PastMirror PastMirror `json:"pastMirror"`
 	// PastAssociations define the history about the set of mirrored images including
 	// child manifest and layer digest information
-	PastAssociations []image.Association `json:"pastAssociations,omitempty"`
+	PastAssociations []Association `json:"pastAssociations,omitempty"`
 }
 
 type PastMirror struct {
@@ -42,7 +40,7 @@ type PastMirror struct {
 	Operators []OperatorMetadata `json:"operators,omitempty"`
 	// Associations are metadata about the set of mirrored images including
 	// child manifest and layer digest information
-	Associations []image.Association `json:"associations,omitempty"`
+	Associations []Association `json:"associations,omitempty"`
 }
 
 // OperatorMetadata holds an Operator's post-mirror metadata.
@@ -79,21 +77,6 @@ func NewMetadata() Metadata {
 			Kind:       MetadataKind,
 		},
 	}
-}
-
-func LoadMetadata(data []byte) (m Metadata, err error) {
-
-	gvk := GroupVersion.WithKind(MetadataKind)
-
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&m); err != nil {
-		return m, fmt.Errorf("decode %s: %v", gvk, err)
-	}
-
-	m.SetGroupVersionKind(gvk)
-
-	return m, nil
 }
 
 func (m *Metadata) MarshalJSON() ([]byte, error) {

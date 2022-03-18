@@ -3,14 +3,11 @@ package config
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
 func TestValidate(t *testing.T) {
-
-	trueValue := true
-	falseValue := false
 
 	type spec struct {
 		name     string
@@ -29,7 +26,7 @@ func TestValidate(t *testing.T) {
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &falseValue,
+								AllPackages: true,
 							},
 						},
 					},
@@ -45,7 +42,7 @@ func TestValidate(t *testing.T) {
 						Operators: []v1alpha2.Operator{
 							{
 								IncludeConfig: v1alpha2.IncludeConfig{},
-								HeadsOnly:     &trueValue,
+								AllPackages:   false,
 							},
 						},
 					},
@@ -62,7 +59,7 @@ func TestValidate(t *testing.T) {
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &falseValue,
+								AllPackages: true,
 							},
 						},
 					},
@@ -98,7 +95,7 @@ func TestValidate(t *testing.T) {
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &trueValue,
+								AllPackages: false,
 							},
 						},
 					},

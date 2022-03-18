@@ -6,7 +6,7 @@ import (
 
 	"github.com/blang/semver/v4"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")

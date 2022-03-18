@@ -7,8 +7,8 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -34,7 +35,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeOperatorBundle,
+			Category: v1alpha2.TypeOperatorBundle,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -46,7 +47,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeOperatorBundle,
+			Category: v1alpha2.TypeOperatorBundle,
 		},
 		icspScope:     "repository",
 		icspSizeLimit: 250000,
@@ -81,7 +82,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -93,7 +94,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		icspScope:     "repository",
 		icspSizeLimit: 250000,
@@ -127,7 +128,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeOCPRelease,
+			Category: v1alpha2.TypeOCPRelease,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -139,7 +140,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeOCPRelease,
+			Category: v1alpha2.TypeOCPRelease,
 		},
 		typ:           &ReleaseBuilder{},
 		icspScope:     "repository",
@@ -173,7 +174,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -185,7 +186,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		typ:           &GenericBuilder{},
 		icspScope:     "namespace",
@@ -219,7 +220,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -231,7 +232,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		typ:           &GenericBuilder{},
 		icspScope:     "registry",
@@ -265,7 +266,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		destImage: image.TypedImage{
 			TypedImageReference: imagesource.TypedImageReference{
@@ -277,7 +278,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		typ:           &GenericBuilder{},
 		icspScope:     "namespace",
@@ -311,7 +312,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		icspScope:     "namespace",
 		icspSizeLimit: 250000,
@@ -326,7 +327,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		expected: nil,
 	}, {
@@ -341,7 +342,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		icspScope:     "invalid",
 		icspSizeLimit: 250000,
@@ -356,7 +357,7 @@ func TestICSPGeneration(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: image.TypeGeneric,
+			Category: v1alpha2.TypeGeneric,
 		},
 		expected: nil,
 		err:      "invalid ICSP scope invalid",

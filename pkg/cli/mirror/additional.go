@@ -9,8 +9,8 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -62,7 +62,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Addit
 		// The registry component is not included in the final path.
 		dstRef.Ref.Registry = ""
 
-		mmappings.Add(srcRef, dstRef, image.TypeGeneric)
+		mmappings.Add(srcRef, dstRef, v1alpha2.TypeGeneric)
 	}
 
 	return mmappings, nil

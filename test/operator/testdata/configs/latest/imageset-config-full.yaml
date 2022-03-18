@@ -4,4 +4,4 @@ kind: ImageSetConfiguration
 mirror:
   operators:
   - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
-    headsOnly: false
+    allPackages: true

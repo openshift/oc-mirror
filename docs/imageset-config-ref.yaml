@@ -14,7 +14,7 @@ mirror:
     graph: true # Planned, include Cincinnati upgrade graph image in imageset
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
-      headsOnly: true # References latest version of each operator in catalog (true is the default value and can be omitted)
+      allPackages: true # AllPackages can be set to pull a full catalog and must be set to filter packages
       packages:
         - name: rhacs-operator
           startingVersion: '3.67.0'

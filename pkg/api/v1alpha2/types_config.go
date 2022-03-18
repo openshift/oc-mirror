@@ -1,12 +1,7 @@
 package v1alpha2
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
 )
 
 // ImageSetConfiguration object kind.
@@ -49,19 +44,17 @@ type ReleaseChannel struct {
 	// MaxVersion is maximum version in the
 	// release channel to mirror
 	MaxVersion string `json:"maxVersion"`
-	// HeadsOnly mode mirrors only the channel head.
-	// The default is true.
-	HeadsOnly *bool `json:"headsOnly,omitempty"`
 	// ShortestPath mode calculates the shortest path
 	// between the min and mav version
 	ShortestPath bool `json:"shortestPath,omitempty"`
+	// AllVersions mode mirrors all versions in the channel
+	AllVersions bool `json:"allVersions,omitempty"`
 }
 
+// IsHeadsOnly determine if the mode set mirrors only channel head.
+// Setting MaxVersion will override this setting.
 func (r ReleaseChannel) IsHeadsOnly() bool {
-	if r.HeadsOnly == nil {
-		return true
-	}
-	return *r.HeadsOnly
+	return !r.AllVersions
 }
 
 // Operator configures operator catalog mirroring.
@@ -76,21 +69,18 @@ type Operator struct {
 	// This image should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Catalog string `json:"catalog"`
-	// HeadsOnly mode mirrors only channel heads of all packages in the catalog.
-	// Channels specified in DiffIncludeConfig will override this setting;
-	// heads will still be included, but prior versions may also be included.
-	// The default is true.
-	HeadsOnly *bool `json:"headsOnly,omitempty"`
+	// allPackages
+	AllPackages bool `json:"allPackages,omitempty"`
 	// SkipDependencies will not include dependencies
 	// of bundles included in the diff if true.
 	SkipDependencies bool `json:"skipDeps,omitempty"`
 }
 
+// IsHeadsOnly determine if the mode set mirrors only channel heads of all packages in the catalog.
+// Channels specified in DiffIncludeConfig will override this setting;
+// heads will still be included, but prior versions may also be included.
 func (o Operator) IsHeadsOnly() bool {
-	if o.HeadsOnly == nil {
-		return true
-	}
-	return *o.HeadsOnly
+	return !o.AllPackages
 }
 
 type Helm struct {
@@ -137,23 +127,4 @@ type BlockedImages struct {
 
 type SampleImages struct {
 	Image `json:",inline"`
-}
-
-func LoadConfig(data []byte) (c ImageSetConfiguration, err error) {
-
-	gvk := GroupVersion.WithKind(ImageSetConfigurationKind)
-
-	if data, err = yaml.YAMLToJSON(data); err != nil {
-		return c, fmt.Errorf("yaml to json %s: %v", gvk, err)
-	}
-
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&c); err != nil {
-		return c, fmt.Errorf("decode %s: %v", gvk, err)
-	}
-
-	c.SetGroupVersionKind(gvk)
-
-	return c, nil
 }

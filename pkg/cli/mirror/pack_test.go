@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPack(t *testing.T) {
@@ -33,13 +34,13 @@ func TestPack(t *testing.T) {
 				ContinueOnError: false,
 				SkipMissing:     false,
 			},
-			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": map[string]image.Association{
+			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            image.TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -54,13 +55,13 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha2.Metadata{
 				MetadataSpec: v1alpha2.MetadataSpec{
-					PastAssociations: []image.Association{
+					PastAssociations: []v1alpha2.Association{
 						{
 							Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 							Path:            "single_manifest",
 							TagSymlink:      "latest",
 							ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-							Type:            image.TypeGeneric,
+							Type:            v1alpha2.TypeGeneric,
 							ManifestDigests: nil,
 							LayerDigests: []string{
 								"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -84,13 +85,13 @@ func TestPack(t *testing.T) {
 				IgnoreHistory:   true,
 			},
 			updates: true,
-			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": map[string]image.Association{
+			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            image.TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -105,13 +106,13 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha2.Metadata{
 				MetadataSpec: v1alpha2.MetadataSpec{
-					PastAssociations: []image.Association{
+					PastAssociations: []v1alpha2.Association{
 						{
 							Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 							Path:            "single_manifest",
 							TagSymlink:      "latest",
 							ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-							Type:            image.TypeGeneric,
+							Type:            v1alpha2.TypeGeneric,
 							ManifestDigests: nil,
 							LayerDigests: []string{
 								"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -134,13 +135,13 @@ func TestPack(t *testing.T) {
 				SkipMissing:     false,
 			},
 			updates: true,
-			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": map[string]image.Association{
+			assocs: image.AssociationSet{"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 				"imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            image.TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -155,7 +156,7 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha2.Metadata{
 				MetadataSpec: v1alpha2.MetadataSpec{
-					PastAssociations: []image.Association{},
+					PastAssociations: []v1alpha2.Association{},
 				},
 			},
 		},

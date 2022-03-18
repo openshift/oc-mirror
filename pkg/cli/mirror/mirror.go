@@ -21,13 +21,13 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -209,7 +209,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	case o.ManifestsOnly:
 		logrus.Info("Not implemented yet")
 	case len(o.OutputDir) > 0 && o.From == "":
-		cfg, err := config.LoadConfig(o.ConfigPath)
+		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
-		cfg, err := config.LoadConfig(o.ConfigPath)
+		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
 		}
@@ -464,9 +464,9 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, dir string) error {
 
 	allICSPs := []operatorv1alpha1.ImageContentSourcePolicy{}
-	releases := image.ByCategory(mapping, image.TypeOCPRelease)
-	generic := image.ByCategory(mapping, image.TypeGeneric)
-	operator := image.ByCategory(mapping, image.TypeOperatorBundle, image.TypeOperatorCatalog)
+	releases := image.ByCategory(mapping, v1alpha2.TypeOCPRelease)
+	generic := image.ByCategory(mapping, v1alpha2.TypeGeneric)
+	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorCatalog)
 
 	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
 		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
@@ -477,7 +477,7 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 		return nil
 	}
 
-	ctlgRefs := image.ByCategory(operator, image.TypeOperatorCatalog)
+	ctlgRefs := image.ByCategory(operator, v1alpha2.TypeOperatorCatalog)
 	if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
 		return err
 	}
