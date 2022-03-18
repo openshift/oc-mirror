@@ -1,4 +1,4 @@
 ---
 collections:
   - name: jharmison_redhat.oc_mirror_e2e
-    version: 0.4.10
+    version: 0.4.11
