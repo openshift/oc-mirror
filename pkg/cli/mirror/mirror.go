@@ -240,9 +240,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Create assocations
 		assocDir := filepath.Join(o.Dir, config.SourceDir)
 		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
-		if errs != nil {
-			return errs
+
+		skipErr := func(err error) bool {
+			ierr := &image.ErrInvalidImage{}
+			cerr := &image.ErrInvalidComponent{}
+			return errors.As(err, &ierr) || errors.As(err, &cerr)
 		}
+
+		if errs != nil {
+			for _, e := range errs.Errors() {
+				if err := o.checkErr(e, skipErr); err != nil {
+					return err
+				}
+			}
+		}
+
 		// Pack the images set
 		tmpBackend, err := o.Pack(cmd.Context(), assocs, meta, cfg.ArchiveSize)
 		if err != nil {
@@ -364,6 +376,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 	}
 
+	if o.continuedOnError {
+		return fmt.Errorf("one or more errors occurred")
+	}
+
 	return cleanup()
 }
 
@@ -392,10 +408,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 	if err := opts.Validate(); err != nil {
 		return err
 	}
-	if err := opts.Run(); err != nil {
-		return err
-	}
-	return nil
+	return o.checkErr(opts.Run(), nil)
 }
 
 func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImageOptions, error) {
@@ -452,4 +465,27 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 	}
 
 	return WriteICSPs(dir, allICSPs)
+}
+
+func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {
+
+	if err == nil {
+		return nil
+	}
+
+	var skip, skipAllTypes bool
+	if acceptableErr != nil {
+		skip = acceptableErr(err)
+	} else {
+		skipAllTypes = true
+	}
+	// Instead of returning an error, just log it.
+	if o.ContinueOnError && (skip || skipAllTypes) {
+		logrus.Warn(err)
+		o.continuedOnError = true
+	} else {
+		return err
+	}
+
+	return nil
 }

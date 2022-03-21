@@ -34,8 +34,9 @@ type MirrorOptions struct {
 	FilterOptions    []string
 	MaxPerRegistry   int
 	// cancelCh is a channel listening for command cancellations
-	cancelCh <-chan struct{}
-	once     sync.Once
+	cancelCh         <-chan struct{}
+	once             sync.Once
+	continuedOnError bool
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {

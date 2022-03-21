@@ -17,6 +17,14 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
+type ErrInvalidImage struct {
+	image string
+}
+
+func (e *ErrInvalidImage) Error() string {
+	return fmt.Sprintf("image %q is invalid or does not exist", e.image)
+}
+
 type ErrInvalidComponent struct {
 	image string
 	tag   string
@@ -28,7 +36,7 @@ func (e *ErrInvalidComponent) Error() string {
 
 // AssociateLocalImageLayers traverses a V2 directory and gathers all child manifests and layer digest information
 // for mirrored images
-func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (AssociationSet, error) {
+func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (AssociationSet, utilerrors.Aggregate) {
 	errs := []error{}
 	bundleAssociations := AssociationSet{}
 
@@ -48,7 +56,7 @@ func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (A
 
 		// Verify that the dirRef exists before proceeding
 		if _, err := os.Stat(imagePath); err != nil {
-			errs = append(errs, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err))
+			errs = append(errs, &ErrInvalidImage{image.String()})
 			continue
 		}
 
@@ -174,7 +182,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 
 // AssociateRemoteImageLayers queries remote manifests and gathers all child manifests and layer digest information
 // for mirrored images
-func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, insecure bool) (AssociationSet, error) {
+func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, insecure bool) (AssociationSet, utilerrors.Aggregate) {
 	errs := []error{}
 	bundleAssociations := AssociationSet{}
 
@@ -196,17 +204,20 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 
 		regctx, err := CreateDefaultContext(insecure)
 		if err != nil {
-			return nil, err
+			errs = append(errs, err)
+			continue
 		}
 
 		repo, err := regctx.RepositoryForRef(ctx, srcImg.Ref, insecure)
 		if err != nil {
-			return nil, fmt.Errorf("create repo for %s: %v", srcImg.Ref.Exact(), err)
+			errs = append(errs, fmt.Errorf("create repo for %s: %v", srcImg.Ref.Exact(), err))
+			continue
 		}
 
 		ms, err := repo.Manifests(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("open blob: %v", err)
+			errs = append(errs, fmt.Errorf("open blob: %v", err))
+			continue
 		}
 
 		// TODO(estroz): parallelize
