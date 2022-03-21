@@ -52,6 +52,9 @@ type ReleaseChannel struct {
 	// HeadsOnly mode mirrors only the channel head.
 	// The default is true.
 	HeadsOnly *bool `json:"headsOnly,omitempty"`
+	// ShortestPath mode calculates the shortest path
+	// between the min and mav version
+	ShortestPath bool `json:"shortestPath,omitempty"`
 }
 
 func (r ReleaseChannel) IsHeadsOnly() bool {

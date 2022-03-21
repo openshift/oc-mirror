@@ -70,6 +70,25 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid/UniqueReleaseChannels",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
+								{
+									Name: "channel1",
+								},
+								{
+									Name: "channel2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Invalid/HeadsOnlyTrue",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -86,6 +105,26 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration option: catalog cannot define packages with headsOnly set to true",
+		},
+		{
+			name: "Invalid/DuplicateChannels",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						OCP: v1alpha2.OCP{
+							Channels: []v1alpha2.ReleaseChannel{
+								{
+									Name: "channel",
+								},
+								{
+									Name: "channel",
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration option: duplicate release channel channel found in configuration",
 		},
 	}
 

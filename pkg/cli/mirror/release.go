@@ -207,11 +207,30 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.C
 	if err != nil {
 		return allDownloads, err
 	}
-	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
-	if err != nil {
-		return allDownloads, err
+
+	var newDownloads downloads
+	if channel.ShortestPath {
+		current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
+		if err != nil {
+			return allDownloads, err
+		}
+		newDownloads = gatherUpdates(current, newest, updates)
+
+	} else {
+		lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
+		if err != nil {
+			return allDownloads, err
+		}
+		highRange, err := semver.ParseRange(fmt.Sprintf("<=%s", last))
+		if err != nil {
+			return allDownloads, err
+		}
+		versions, err := cincinnati.GetUpdatesInRange(ctx, c, channel.Name, arch, highRange.AND(lowRange))
+		if err != nil {
+			return allDownloads, err
+		}
+		newDownloads = gatherUpdates(cincinnati.Update{}, cincinnati.Update{}, versions)
 	}
-	newDownloads := gatherUpdates(current, newest, updates)
 	allDownloads.Merge(newDownloads)
 
 	return allDownloads, nil
@@ -220,11 +239,10 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.C
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
 func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch string, channels []v1alpha2.ReleaseChannel) (downloads, error) {
 	// Strip any OKD channels from the list
-	ocpChannels := make([]v1alpha2.ReleaseChannel, len(channels))
-	copy(ocpChannels, channels)
-	for i, ch := range ocpChannels {
-		if ch.Name == cincinnati.OkdChannel {
-			ocpChannels = append(ocpChannels[:i], ocpChannels[i+1:]...)
+	var ocpChannels []v1alpha2.ReleaseChannel
+	for _, ch := range channels {
+		if ch.Name != cincinnati.OkdChannel {
+			ocpChannels = append(ocpChannels, ch)
 		}
 	}
 	// If no other channels exist, return no downloads
@@ -257,8 +275,14 @@ func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Updat
 		releaseDownloads[update.Image] = struct{}{}
 	}
 
-	releaseDownloads[current.Image] = struct{}{}
-	releaseDownloads[newest.Image] = struct{}{}
+	if current.Image != "" {
+		releaseDownloads[current.Image] = struct{}{}
+	}
+
+	if newest.Image != "" {
+		releaseDownloads[newest.Image] = struct{}{}
+	}
+
 	return releaseDownloads
 }
 

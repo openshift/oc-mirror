@@ -10,3 +10,4 @@ mirror:
       - name: stable-4.9
         minVersion: 4.9.13
         maxVersion: 4.9.26
+        shortestPath: true

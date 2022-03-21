@@ -119,33 +119,48 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 		edgesByOrigin[origin] = destinations
 	}
 
-	var shortestPath func(map[int][]int, int, int, path) []int
-	shortestPath = func(g map[int][]int, start, end int, path path) []int {
-		path = append(path, start)
-		if start == end {
-			return path
-		}
-		adj := g[start]
-		// If we get through the map and the start never
-		// reaches the end, return nothing
-		if len(adj) == 0 {
-			return []int{}
-		}
-		shortest := make([]int, 0)
-		for _, node := range adj {
-			if !path.has(node) {
-				currPath := shortestPath(g, node, end, path)
-				if len(currPath) > 0 {
-					if len(shortest) == 0 || len(currPath) < len(shortest) {
-						shortest = currPath
-					}
+	shortestPath := func(g map[int][]int, start, end int) []int {
+		prev := map[int]int{}
+		visited := map[int]struct{}{}
+		queue := []int{start}
+		visited[start] = struct{}{}
+		prev[start] = -1
+
+		for len(queue) > 0 {
+			node := queue[0]
+			queue = queue[1:]
+			if node == end {
+				break
+			}
+
+			for _, neighbor := range g[node] {
+				if _, ok := visited[neighbor]; !ok {
+					prev[neighbor] = node
+					queue = append(queue, neighbor)
+					visited[neighbor] = struct{}{}
 				}
 			}
 		}
-		return shortest
+
+		// No path to end
+		if _, ok := visited[end]; !ok {
+			return []int{}
+		}
+
+		path := []int{end}
+		for next := prev[end]; next != -1; next = prev[next] {
+			path = append(path, next)
+		}
+
+		// Reverse path.
+		for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+			path[i], path[j] = path[j], path[i]
+		}
+
+		return path
 	}
 
-	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx, path{})
+	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx)
 
 	var updates []Update
 	for _, i := range nextIdxs {
@@ -212,7 +227,6 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		// If this is the target channel get
 		// requested version so we don't exceed the maximun version
 		targetVer = reqVer
-		logrus.Info(targetVer)
 	} else {
 		targetVer, err = GetChannelMinOrMax(ctx, c, arch, currChannel, false)
 		if err != nil {
@@ -347,6 +361,27 @@ func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Versio
 	return Vers, nil
 }
 
+// GetAllUpdates will return all OCP/OKD versions in a specified channel between to points
+func GetUpdatesInRange(ctx context.Context, c Client, channel, arch string, updateRange semver.Range) ([]Update, error) {
+	// Prepare parametrized cincinnati query.
+	c.SetQueryParams(arch, channel, "")
+
+	graph, err := getGraphData(ctx, c)
+	if err != nil {
+		return nil, fmt.Errorf("error getting graph data for channel %s", channel)
+	}
+
+	// Find the all updates within the range
+	var updates []Update
+	for _, node := range graph.Nodes {
+		if updateRange(node.Version) {
+			updates = append(updates, Update(node))
+		}
+
+	}
+	return updates, nil
+}
+
 // getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel
 func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	transport := c.GetTransport()
@@ -434,15 +469,4 @@ func (e *edge) UnmarshalJSON(data []byte) error {
 	e.Destination = fields[1]
 
 	return nil
-}
-
-type path []int
-
-func (p path) has(num int) bool {
-	for _, v := range p {
-		if num == v {
-			return true
-		}
-	}
-	return false
 }
