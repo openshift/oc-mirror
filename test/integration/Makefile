@@ -28,20 +28,20 @@ default-scenario: terraform collection
 	@function tear_down() {
 		make delete
 	}
-	@if [ -d /aws-creds ]; then source .env; fi
+	@if [ -d /aws-creds ]; then echo "Detected CI, sourcing CI environment."; source .env; fi
 	@trap tear_down EXIT
 	@make create test
 .PHONY: default-scenario
 
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
-	.venv/bin/pip install --upgrade pip setuptools wheel
+	source .venv/bin/activate && pip install --upgrade pip setuptools wheel
 
 .venv/bin/ansible-galaxy: .venv/bin/pip requirements.txt
-	.venv/bin/pip install -r requirements.txt
+	source .venv/bin/activate && pip install -r requirements.txt
 
 collections/ansible_collections/jharmison_redhat/oc_mirror_e2e: .venv/bin/ansible-galaxy requirements.yml
-	.venv/bin/ansible-galaxy install -r requirements.yml
+	source .venv/bin/activate && ansible-galaxy install -r requirements.yml
 
 collection: collections/ansible_collections/jharmison_redhat/oc_mirror_e2e
 .PHONY: collection
@@ -56,7 +56,8 @@ terraform: bin/terraform
 .PHONY: terraform
 
 create: terraform collection
-	@.venv/bin/ansible-playbook \
+	@echo "Running jharmison_redhat.oc_mirror_e2e.create"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.create \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
@@ -66,7 +67,8 @@ create: terraform collection
 .PHONY: create
 
 test: collection
-	@.venv/bin/ansible-playbook \
+	@echo "Running jharmison_redhat.oc_mirror_e2e.test"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.test \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
@@ -76,7 +78,8 @@ test: collection
 .PHONY: test
 
 delete: terraform collection
-	@.venv/bin/ansible-playbook \
+	@echo "Running jharmison_redhat.oc_mirror_e2e.delete"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.delete \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
