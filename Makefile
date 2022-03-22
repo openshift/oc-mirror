@@ -51,23 +51,11 @@ test-e2e: build
 	./test/e2e-simple.sh ./bin/oc-mirror
 .PHONY: test-e2e
 
-_integration:
+test-integration: hack-build
 	@mkdir -p test/integration/output/clients
 	@cp bin/oc-mirror test/integration/output/clients/
 	@cd test/integration && make
-.PHONY: _integration
-
-test-integration: hack-build _integration
 .PHONY: test-integration
-
-# Currently disabled to get through rehearsals, so we can use target on appropriate PRs
-# To reenable, remove the octothorpe here -\
-#                    v---------------------/
-test-ci-integration: # build _integration
-	python3 --version
-	ls -halF bin
-	git status
-.PHONY: test-ci-integration
 
 sanity: tidy
 	git diff --exit-code
