@@ -28,7 +28,7 @@ default-scenario: terraform collection
 	@function tear_down() {
 		make delete
 	}
-	@if [ -d /aws-creds ]; then echo "Detected CI, sourcing CI environment."; source .env; fi
+	@if [ "${OPENSHIFT_CI}" ]; then echo "Detected CI, sourcing CI environment."; source .env; fi
 	@trap tear_down EXIT
 	@make create test
 .PHONY: default-scenario
