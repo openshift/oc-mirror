@@ -1,4 +1,4 @@
-ansible >= 4.10.0, <6.0.0
+ansible >= 5.2.0, <6.0.0
 jmespath >=0.10.0, <0.11.0
 cryptography ~=36.0.1
 kubernetes >=21.7.0, <22.0.0
