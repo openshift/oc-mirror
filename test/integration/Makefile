@@ -20,6 +20,22 @@ all: default-scenario
 default-scenario: create test delete
 .PHONY: default-scenario
 
+ci: terraform collection
+	# source env here
+	python3 --version
+	ls -halF bin
+	ls -halF /aws-creds ||:
+	ls -halF output/
+	touch output/thing
+	git status
+.PHONY: ci
+
+ci-delete: terraform collection
+	# source env here
+	ls -halF output/
+	rm -f output/thing
+.PHONY: ci-delete
+
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
 	.venv/bin/pip install --upgrade pip setuptools wheel
