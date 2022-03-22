@@ -28,10 +28,15 @@ default-scenario: terraform collection
 	@function tear_down() {
 		make delete
 	}
-	@if [ "${OPENSHIFT_CI}" ]; then echo "Detected CI, sourcing CI environment."; source .env; fi
 	@trap tear_down EXIT
 	@make create test
 .PHONY: default-scenario
+
+ci: terraform collection
+	@echo "Sourcing CI environment."; source .env; make create test
+
+ci-delete: terraform collection
+	@echo "Sourcing CI environment."; source .env; make delete
 
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
