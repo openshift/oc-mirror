@@ -5,6 +5,8 @@ import "fmt"
 // ImageType defines the content type for mirrored images
 type ImageType int
 
+// String returns the string representation
+// of an Image Type
 func (it ImageType) String() string {
 	return ImageTypeStrings[it]
 }
@@ -18,6 +20,8 @@ const (
 	TypeGeneric
 )
 
+// ImageTypeString defines the string
+// respresentation of every ImageType.
 var ImageTypeStrings = map[ImageType]string{
 	TypeOCPRelease:           "ocpRelease",
 	TypeOperatorCatalog:      "operatorCatalog",
