@@ -64,7 +64,9 @@ test-integration: hack-build _integration
 # To reenable, remove the octothorpe here -\
 #                    v---------------------/
 test-ci-integration: # build _integration
-	@true
+	python3 --version
+	ls -halF bin
+	git status
 .PHONY: test-ci-integration
 
 sanity: tidy
