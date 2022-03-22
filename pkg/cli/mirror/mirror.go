@@ -331,7 +331,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 		// Create associations
-		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, sourceInsecure)
+		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, sourceInsecure, o.SkipVerification)
 		skipErr := func(err error) bool {
 			ierr := &image.ErrInvalidImage{}
 			cerr := &image.ErrInvalidComponent{}
@@ -448,25 +448,25 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 }
 
 func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImageOptions, error) {
-	a := mirror.NewMirrorImageOptions(o.IOStreams)
-	a.SkipMissing = o.SkipMissing
-	a.ContinueOnError = o.ContinueOnError
-	a.DryRun = o.DryRun
-	a.FileDir = filepath.Join(o.Dir, config.SourceDir)
-	a.FromFileDir = o.From
-	a.SecurityOptions.Insecure = insecure
-	a.SecurityOptions.SkipVerification = o.SkipVerification
-	a.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
-	a.KeepManifestList = true
-	a.SkipMultipleScopes = true
-	a.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: o.MaxPerRegistry}
-	regctx, err := image.CreateDefaultContext(insecure)
+	opts := mirror.NewMirrorImageOptions(o.IOStreams)
+	opts.SkipMissing = o.SkipMissing
+	opts.ContinueOnError = o.ContinueOnError
+	opts.DryRun = o.DryRun
+	opts.FileDir = filepath.Join(o.Dir, config.SourceDir)
+	opts.FromFileDir = o.From
+	opts.SecurityOptions.Insecure = insecure
+	opts.SecurityOptions.SkipVerification = o.SkipVerification
+	opts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}
+	opts.KeepManifestList = true
+	opts.SkipMultipleScopes = true
+	opts.ParallelOptions = imagemanifest.ParallelOptions{MaxPerRegistry: o.MaxPerRegistry}
+	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {
-		return a, fmt.Errorf("error creating registry context: %v", err)
+		return opts, fmt.Errorf("error creating registry context: %v", err)
 	}
-	a.SecurityOptions.CachedContext = regctx
+	opts.SecurityOptions.CachedContext = regctx
 
-	return a, nil
+	return opts, nil
 }
 
 func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, dir string) error {
