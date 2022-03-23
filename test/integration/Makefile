@@ -33,10 +33,12 @@ default-scenario: terraform collection
 .PHONY: default-scenario
 
 ci: terraform collection
-	@echo "Sourcing CI environment."; source .env; make create test
+	@echo "Sourcing CI environment."; source .env; make create test PYTHON=$(PYTHON)
+.PHONY: ci
 
 ci-delete: terraform collection
-	@echo "Sourcing CI environment."; source .env; make delete
+	@echo "Sourcing CI environment."; source .env; make delete PYTHON=$(PYTHON)
+.PHONY: ci-delete
 
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
