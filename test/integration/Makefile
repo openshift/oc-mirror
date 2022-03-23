@@ -33,10 +33,12 @@ default-scenario: terraform collection
 .PHONY: default-scenario
 
 ci: terraform collection
+	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
 	@echo "Sourcing CI environment."; source .env; make create test PYTHON=$(PYTHON)
 .PHONY: ci
 
 ci-delete: terraform collection
+	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
 	@echo "Sourcing CI environment."; source .env; make delete PYTHON=$(PYTHON)
 .PHONY: ci-delete
 
