@@ -464,7 +464,7 @@ func (o *OperatorOptions) associateDeclarativeConfigImageLayers(ctlgRef imagesou
 		cerr := &image.ErrInvalidComponent{}
 		ierr := &image.ErrInvalidImage{}
 		for _, err := range err.Errors() {
-			if (errors.As(err, &merr) || errors.As(err, &ierr) || errors.As(err, &cerr)) && o.ContinueOnError {
+			if o.ContinueOnError && (errors.As(err, &merr) || errors.As(err, &ierr) || errors.As(err, &cerr)) {
 				continue
 			}
 			return nil, err
