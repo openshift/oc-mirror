@@ -109,7 +109,7 @@ realclean: clean
 # The following targets are only intended for use in OpenShift CI systems.    #
 ###############################################################################
 _ci:
-	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
+	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; exit 1; fi
 .PHONY: _ci
 
 ci: _ci
