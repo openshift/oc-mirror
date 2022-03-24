@@ -127,7 +127,7 @@ ci-delete: _ci ci-recover
 ci-save: _ci
 	@echo "Saving shared files."
 	@function save() {
-		if [ -f "$$1" ]; then cp "$$1" "$${SHARED_DIR}/"; fi
+		if [ -f "$$1" ]; then echo " - $$1"; cp "$$1" "$${SHARED_DIR}/"; fi
 	}
 	@for file in $(CI_SAVE_FILES); do save "output/$$file"; done
 	@for file in $(CI_SAVE_INSTALL_FILES); do save "output/install/$$file"; done
@@ -139,7 +139,7 @@ ci-recover: _ci
 	@function recover() {
 		local rec_file
 		rec_file="$$(basename "$$1")"
-		if [ -f "$${SHARED_DIR}/$$rec_file" ]; then cp "$${SHARED_DIR}/$$rec_file" "$$1"; fi
+		if [ -f "$${SHARED_DIR}/$$rec_file" ]; then echo " - $$1"; cp "$${SHARED_DIR}/$$rec_file" "$$1"; fi
 	}
 	@for file in $(CI_SAVE_FILES); do recover "output/$$file"; done
 	@for file in $(CI_SAVE_INSTALL_FILES); do recover "output/install/$$file"; done
@@ -149,7 +149,7 @@ ci-recover: _ci
 ci-artifacts: _ci
 	@echo "Recovering artifacts."
 	@function recover() {
-		if [ -f "$$1" ]; then cp "$$1" "$${ARTIFACT_DIR}/"; fi
+		if [ -f "$$1" ]; then echo " - $$1"; cp "$$1" "$${ARTIFACT_DIR}/"; fi
 	}
 	for file in $(CI_ARTIFACTS); do recover "$$file"; done
 .PHONY: ci-artifacts
@@ -157,7 +157,10 @@ ci-artifacts: _ci
 /usr/bin/python3.9:
 	dnf -y install python39
 
-ci-prereqs: _ci /usr/bin/python3.9 terraform collection
+/usr/bin/unzip:
+	dnf -y install unzip
+
+ci-prereqs: _ci /usr/bin/python3.9 /usr/bin/unzip terraform collection
 	source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.terraform_setup \
 		-e "output_dir=${PWD}/output"
@@ -170,11 +173,11 @@ ci-mock: /usr/bin/podman
 	mkdir -p ci/artifacts
 	mkdir -p ci/shared
 	function ci_run() {
-		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock "$$@"
+		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -e AWS_* -e CONSOLE_REDHAT_COM_PULL_SECRET -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock "$$@"
 	}
 	function ci_cleanup() {
-		ci_run make ci-delete
+		ci_run make ci-delete PYTHON=python3.9
 	}
 	trap ci_cleanup EXIT
-	ci_run make ci
+	ci_run make ci PYTHON=python3.9
 .PHONY: ci-mock
