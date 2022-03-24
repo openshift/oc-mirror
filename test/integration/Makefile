@@ -25,6 +25,8 @@ CI_SAVE_INSTALL_FILES := metadata.json terraform.cluster.tfstate
 CI_SAVE_TF_FILES := terraform.tfstate
 # Files to save as artifacts of runs
 CI_ARTIFACTS := .oc-mirror.log install/.openshift_install.log
+# CI needs the installer for an actual release baked in
+CI_OPENSHIFT_VERSION := 4.9
 
 all: default-scenario
 .PHONY: all
@@ -99,6 +101,7 @@ clean:
 	rm -rf .venv
 	rm -rf bin
 	rm -rf collections
+	rm -rf ci
 .PHONY: clean
 
 realclean: clean
@@ -117,11 +120,17 @@ ci: _ci
 		make ci-artifacts ci-save
 	}
 	@trap ci_save EXIT
-	@echo "Sourcing CI environment."; source .env; make create test PYTHON=$(PYTHON)
+	@echo "Sourcing CI environment."; source .env && \
+		make create test \
+		PYTHON=$(PYTHON) \
+		ANSIBLE_PLAYBOOK_ARGS="-e oc_bin=/usr/local/bin/oc -e openshift_install_bin=/usr/local/bin/openshift-install"
 .PHONY: ci
 
 ci-delete: _ci ci-recover
-	@echo "Sourcing CI environment."; source .env; make delete PYTHON=$(PYTHON)
+	@echo "Sourcing CI environment."; source .env && \
+		make delete \
+		PYTHON=$(PYTHON) \
+		ANSIBLE_PLAYBOOK_ARGS="-e oc_bin=/usr/local/bin/oc -e openshift_install_bin=/usr/local/bin/openshift-install"
 .PHONY: ci-delete
 
 ci-save: _ci
@@ -139,6 +148,8 @@ ci-recover: _ci
 	@function recover() {
 		local rec_file
 		rec_file="$$(basename "$$1")"
+		rec_dir="$$(dirname "$$1")"
+		mkdir -p "$$rec_dir"
 		if [ -f "$${SHARED_DIR}/$$rec_file" ]; then echo " - $$1"; cp "$${SHARED_DIR}/$$rec_file" "$$1"; fi
 	}
 	@for file in $(CI_SAVE_FILES); do recover "output/$$file"; done
@@ -178,14 +189,30 @@ ci-artifacts: _ci
 /usr/include/openssl/ssl.h:
 	dnf -y install openssl-devel
 
-ci-prereqs: _ci /usr/bin/python3.9 /usr/include/python3.9/Python.h /usr/bin/unzip /usr/bin/git /usr/bin/rsync /usr/bin/gcc /usr/include/ffi.h /usr/include/openssl/ssl.h terraform collection
+/usr/local/bin/openshift-install:
+	pushd /usr/local/bin && \
+		curl -sLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-$(CI_OPENSHIFT_VERSION)/openshift-install-linux.tar.gz && \
+		tar xvzf openshift-install-linux.tar.gz && \
+		rm -f openshift-install-linux.tar.gz && \
+		chmod +x openshift-install
+		popd
+
+/usr/local/bin/oc:
+	pushd /usr/local/bin && \
+		curl -sLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-$(CI_OPENSHIFT_VERSION)/openshift-client-linux.tar.gz && \
+		tar xvzf openshift-client-linux.tar.gz && \
+		rm -f openshift-client-linux.tar.gz && \
+		chmod +x kubectl oc
+		popd
+
+ci-prereqs: _ci /usr/bin/python3.9 /usr/include/python3.9/Python.h /usr/bin/unzip /usr/bin/git /usr/bin/rsync /usr/bin/gcc /usr/include/ffi.h /usr/include/openssl/ssl.h /usr/local/bin/openshift-install /usr/local/bin/oc terraform collection
 	source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.terraform_setup \
 		-e "output_dir=${PWD}/output" \
 		-e "terraform_binary_path=${PWD}/bin/terraform"
 .PHONY: ci-prereqs
 
-ci-mock: /usr/bin/podman
+ci-mock: realclean /usr/bin/podman
 	mkdir -p ci/artifacts
 	mkdir -p ci/shared
 	mkdir -p ci/secrets/pull-secret
