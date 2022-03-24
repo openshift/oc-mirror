@@ -546,7 +546,7 @@ github.com/openshift/oc/pkg/cli/image/workqueue
 github.com/openshift/oc/pkg/helpers/image/credentialprovider
 github.com/openshift/oc/pkg/helpers/image/dockerlayer
 github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
-# github.com/operator-framework/api v0.11.0
+# github.com/operator-framework/api v0.12.0
 github.com/operator-framework/api/pkg/constraints
 github.com/operator-framework/api/pkg/lib/version
 github.com/operator-framework/api/pkg/manifests
@@ -558,7 +558,7 @@ github.com/operator-framework/api/pkg/validation
 github.com/operator-framework/api/pkg/validation/errors
 github.com/operator-framework/api/pkg/validation/interfaces
 github.com/operator-framework/api/pkg/validation/internal
-# github.com/operator-framework/operator-registry v1.19.6-0.20220120140729-354cd3851678
+# github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773
 ## explicit
 github.com/operator-framework/operator-registry/alpha/action
 github.com/operator-framework/operator-registry/alpha/declcfg
