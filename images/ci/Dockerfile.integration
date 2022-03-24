@@ -1,0 +1,15 @@
+ARG OCP_VERSION=4.11
+
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-${OCP_VERSION} AS builder
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN make build
+
+FROM registry.ci.openshift.org/ocp/${OCP_VERSION}:base
+ARG OCP_VERSION
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror bin/oc-mirror
+
+RUN cd test/integration \
+ && make ci-prereqs

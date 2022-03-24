@@ -19,6 +19,13 @@ CONSOLE_REDHAT_COM_PULL_SECRET := ${CONSOLE_REDHAT_COM_PULL_SECRET}
 # e.g. make test ANSIBLE_PLAYBOOK_ARGS="--tags sneakernet"
 ANSIBLE_PLAYBOOK_ARGS :=
 
+# Files to save between steps for CI
+CI_SAVE_FILES := aws_credentials cluster_name
+CI_SAVE_INSTALL_FILES := metadata.json terraform.cluster.tfstate
+CI_SAVE_TF_FILES := terraform.tfstate
+# Files to save as artifacts of runs
+CI_ARTIFACTS := .oc-mirror.log install/.openshift_install.log
+
 all: default-scenario
 .PHONY: all
 
@@ -31,16 +38,6 @@ default-scenario: terraform collection
 	@trap tear_down EXIT
 	@make create test
 .PHONY: default-scenario
-
-ci: terraform collection
-	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
-	@echo "Sourcing CI environment."; source .env; make create test PYTHON=$(PYTHON)
-.PHONY: ci
-
-ci-delete: terraform collection
-	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
-	@echo "Sourcing CI environment."; source .env; make delete PYTHON=$(PYTHON)
-.PHONY: ci-delete
 
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
@@ -57,14 +54,16 @@ collection: collections/ansible_collections/jharmison_redhat/oc_mirror_e2e
 
 bin/terraform:
 	mkdir -p bin
-	cd bin \
-	&& curl -sLO https://releases.hashicorp.com/terraform/$(TERRAFORM_VERSION)/$(TERRAFORM_DOWNLOAD) \
-	&& unzip $(TERRAFORM_DOWNLOAD)
+	cd bin && \
+		curl -sLO https://releases.hashicorp.com/terraform/$(TERRAFORM_VERSION)/$(TERRAFORM_DOWNLOAD) && \
+		unzip $(TERRAFORM_DOWNLOAD) && \
+		rm -f $(TERRAFORM_DOWNLOAD) && \
+		cd ..
 
 terraform: bin/terraform
 .PHONY: terraform
 
-create: terraform collection
+create:
 	@echo "Running jharmison_redhat.oc_mirror_e2e.create"
 	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.create \
@@ -75,7 +74,7 @@ create: terraform collection
 		$(ANSIBLE_PLAYBOOK_ARGS)
 .PHONY: create
 
-test: collection
+test:
 	@echo "Running jharmison_redhat.oc_mirror_e2e.test"
 	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.test \
@@ -86,7 +85,7 @@ test: collection
 		$(ANSIBLE_PLAYBOOK_ARGS)
 .PHONY: test
 
-delete: terraform collection
+delete:
 	@echo "Running jharmison_redhat.oc_mirror_e2e.delete"
 	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.delete \
@@ -105,3 +104,77 @@ clean:
 realclean: clean
 	rm -rf output/*
 .PHONY: realclean
+
+###############################################################################
+# The following targets are only intended for use in OpenShift CI systems.    #
+###############################################################################
+_ci:
+	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; fi; exit 1
+.PHONY: _ci
+
+ci: _ci
+	@function ci_save() {
+		make ci-artifacts ci-save
+	}
+	@trap ci_save EXIT
+	@echo "Sourcing CI environment."; source .env; make create test PYTHON=$(PYTHON)
+.PHONY: ci
+
+ci-delete: _ci ci-recover
+	@echo "Sourcing CI environment."; source .env; make delete PYTHON=$(PYTHON)
+.PHONY: ci-delete
+
+ci-save: _ci
+	@echo "Saving shared files."
+	@function save() {
+		if [ -f "$$1" ]; then cp "$$1" "$${SHARED_DIR}/"; fi
+	}
+	@for file in $(CI_SAVE_FILES); do save "output/$$file"; done
+	@for file in $(CI_SAVE_INSTALL_FILES); do save "output/install/$$file"; done
+	@for file in $(CI_SAVE_TF_FILES); do save "output/terraform/$$file"; done
+.PHONY: ci-save
+
+ci-recover: _ci
+	@echo "Recovering shared files."
+	@function recover() {
+		local rec_file
+		rec_file="$$(basename "$$1")"
+		if [ -f "$${SHARED_DIR}/$$rec_file" ]; then cp "$${SHARED_DIR}/$$rec_file" "$$1"; fi
+	}
+	@for file in $(CI_SAVE_FILES); do recover "output/$$file"; done
+	@for file in $(CI_SAVE_INSTALL_FILES); do recover "output/install/$$file"; done
+	@for file in $(CI_SAVE_TF_FILES); do recover "output/terraform/$$file"; done
+.PHONY: ci-recover
+
+ci-artifacts: _ci
+	@echo "Recovering artifacts."
+	@function recover() {
+		if [ -f "$$1" ]; then cp "$$1" "$${ARTIFACT_DIR}/"; fi
+	}
+	for file in $(CI_ARTIFACTS); do recover "$$file"; done
+.PHONY: ci-artifacts
+
+/usr/bin/python3.9:
+	dnf -y install python39
+
+ci-prereqs: _ci /usr/bin/python3.9 terraform collection
+	source .venv/bin/activate && ansible-playbook \
+		jharmison_redhat.oc_mirror_e2e.terraform_setup \
+		-e "output_dir=${PWD}/output"
+.PHONY: ci-prereqs
+
+ci-mock: /usr/bin/podman
+	pushd ../..
+	podman build . -f images/ci/Dockerfile.integration -t oc-mirror-ci-mock
+	popd
+	mkdir -p ci/artifacts
+	mkdir -p ci/shared
+	function ci_run() {
+		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock "$$@"
+	}
+	function ci_cleanup() {
+		ci_run make ci-delete
+	}
+	trap ci_cleanup EXIT
+	ci_run make ci
+.PHONY: ci-mock
