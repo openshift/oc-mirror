@@ -23,10 +23,11 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								AllPackages: true,
+								Full: true,
 							},
 						},
 					},
@@ -41,8 +42,9 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog:       "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{},
-								AllPackages:   false,
+								Full:          false,
 							},
 						},
 					},
@@ -56,10 +58,11 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								AllPackages: true,
+								Full: true,
 							},
 						},
 					},
@@ -92,16 +95,17 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								AllPackages: false,
+								Full: false,
 							},
 						},
 					},
 				},
 			},
-			expError: "invalid configuration option: catalog cannot define packages with headsOnly set to true",
+			expError: "invalid configuration: catalog \"test-catalog\": cannot define packages with full key set to false",
 		},
 		{
 			name: "Invalid/DuplicateChannels",
@@ -121,7 +125,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			expError: "invalid configuration option: duplicate release channel channel found in configuration",
+			expError: "invalid configuration: release channel \"channel\": duplicate found in configuration",
 		},
 	}
 

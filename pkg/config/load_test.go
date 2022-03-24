@@ -43,12 +43,12 @@ func TestLoadConfig(t *testing.T) {
 					},
 					Operators: []v1alpha2.Operator{
 						{
-							Catalog:     "redhat-operators:v4.7",
-							AllPackages: true,
+							Catalog: "redhat-operators:v4.7",
+							Full:    true,
 						},
 						{
-							Catalog:     "certified-operators:v4.7",
-							AllPackages: true,
+							Catalog: "certified-operators:v4.7",
+							Full:    true,
 							IncludeConfig: v1alpha2.IncludeConfig{
 								Packages: []v1alpha2.IncludePackage{
 									{Name: "couchbase-operator"},
@@ -142,15 +142,15 @@ mirror:
   ocp:
     channels:
     - name: test-channel1
-      allVersions: true
+      full: true
     - name: test-channel2
-      allVersions: false
+      full: false
     - name: test-channel3
   operators:
   - catalog: registry.com/ns/foo:v1.2
-    allPackages: true
+    full: true
   - catalog: registry.com/ns/bar:v1.2
-    allPackages: false
+    full: false
   - catalog: registry.com/ns/baz:v1.2
 `
 

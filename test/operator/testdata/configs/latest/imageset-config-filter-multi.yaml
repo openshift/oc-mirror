@@ -7,7 +7,7 @@ storageConfig:
 mirror:
   operators:
   - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
-    allPackages: true
+    full: true
     packages:
       - name: foo
       - name: baz

@@ -67,16 +67,16 @@ type ReleaseChannel struct {
 	// ShortestPath mode calculates the shortest path
 	// between the min and mav version
 	ShortestPath bool `json:"shortestPath,omitempty"`
-	// AllVersions mode set the MinVersion to the
+	// Full mode set the MinVersion to the
 	// first release in the channel and the MaxVersion
 	// to the last release in the channel.
-	AllVersions bool `json:"allVersions,omitempty"`
+	Full bool `json:"full,omitempty"`
 }
 
 // IsHeadsOnly determine if the mode set mirrors only channel head.
 // Setting MaxVersion will override this setting.
 func (r ReleaseChannel) IsHeadsOnly() bool {
-	return !r.AllVersions
+	return !r.Full
 }
 
 // Operator defines the configuration for operator catalog mirroring.
@@ -91,9 +91,9 @@ type Operator struct {
 	// This image should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Catalog string `json:"catalog"`
-	// allPackages defines whether all packages within the catalog
+	// Full defines whether all packages within the catalog
 	// or specified IncludeConfig will be mirrored or just channel heads.
-	AllPackages bool `json:"allPackages,omitempty"`
+	Full bool `json:"full,omitempty"`
 	// SkipDependencies will not include dependencies
 	// of bundles included in the diff if true.
 	SkipDependencies bool `json:"skipDeps,omitempty"`
@@ -103,7 +103,7 @@ type Operator struct {
 // Channels specified in DiffIncludeConfig will override this setting;
 // heads will still be included, but prior versions may also be included.
 func (o Operator) IsHeadsOnly() bool {
-	return !o.AllPackages
+	return !o.Full
 }
 
 // Helm defines the configuration for Helm chart download
