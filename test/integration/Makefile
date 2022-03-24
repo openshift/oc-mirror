@@ -163,7 +163,8 @@ ci-artifacts: _ci
 ci-prereqs: _ci /usr/bin/python3.9 /usr/bin/unzip terraform collection
 	source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.terraform_setup \
-		-e "output_dir=${PWD}/output"
+		-e "output_dir=${PWD}/output" \
+		-e "terraform_binary_path=${PWD}/bin/terraform"
 .PHONY: ci-prereqs
 
 ci-mock: /usr/bin/podman
