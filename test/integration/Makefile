@@ -186,13 +186,21 @@ ci-prereqs: _ci /usr/bin/python3.9 /usr/include/python3.9/Python.h /usr/bin/unzi
 .PHONY: ci-prereqs
 
 ci-mock: /usr/bin/podman
+	mkdir -p ci/artifacts
+	mkdir -p ci/shared
+	mkdir -p ci/secrets/pull-secret
+	mkdir -p ci/secrets/aws-creds
+	@if [ -z "$$CONSOLE_REDHAT_COM_PULL_SECRET" ]; then read -sp "Pull secret: " CONSOLE_REDHAT_COM_PULL_SECRET; fi
+	@echo "$$CONSOLE_REDHAT_COM_PULL_SECRET" > ci/secrets/pull-secret/CONSOLE_REDHAT_COM_PULL_SECRET
+	@if [ -z "$$AWS_ACCESS_KEY_ID" ]; then read -sp "AWS Access key ID: " AWS_ACCESS_KEY_ID; fi
+	@echo "$$AWS_ACCESS_KEY_ID" > ci/secrets/aws-creds/AWS_ACCESS_KEY_ID
+	@if [ -z "$$AWS_SECRET_ACCESS_KEY" ]; then read -sp "AWS Secret access key: " AWS_SECRET_ACCESS_KEY; fi
+	@echo "$$AWS_SECRET_ACCESS_KEY" > ci/secrets/aws-creds/AWS_SECRET_ACCESS_KEY
 	pushd ../..
 	podman build . -f images/ci/Dockerfile.integration -t oc-mirror-ci-mock
 	popd
-	mkdir -p ci/artifacts
-	mkdir -p ci/shared
 	function ci_run() {
-		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -e AWS_* -e CONSOLE_REDHAT_COM_PULL_SECRET -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock /bin/sh -c "$$*"
+		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-mock /bin/sh -c "$$*"
 	}
 	function ci_cleanup() {
 		ci_run "cd test/integration && make ci-delete PYTHON=python3.9"
