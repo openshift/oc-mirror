@@ -1,4 +1,5 @@
 ---
 collections:
   - name: jharmison_redhat.oc_mirror_e2e
-    version: 0.4.11
+    source: ./output/jharmison_redhat-oc_mirror_e2e-0.5.0-devel.tar.gz
+    type: file
