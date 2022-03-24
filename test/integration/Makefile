@@ -192,11 +192,11 @@ ci-mock: /usr/bin/podman
 	mkdir -p ci/artifacts
 	mkdir -p ci/shared
 	function ci_run() {
-		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -e AWS_* -e CONSOLE_REDHAT_COM_PULL_SECRET -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock "$$@"
+		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -e AWS_* -e CONSOLE_REDHAT_COM_PULL_SECRET -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared --security-opt=label=disable --privileged --user 1000 oc-mirror-ci-mock /bin/sh -c "$$*"
 	}
 	function ci_cleanup() {
-		ci_run make ci-delete PYTHON=python3.9
+		ci_run "cd test/integration && make ci-delete PYTHON=python3.9"
 	}
 	trap ci_cleanup EXIT
-	ci_run make ci PYTHON=python3.9
+	ci_run "cd test/integration && make ci PYTHON=python3.9"
 .PHONY: ci-mock
