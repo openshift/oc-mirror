@@ -157,10 +157,28 @@ ci-artifacts: _ci
 /usr/bin/python3.9:
 	dnf -y install python39
 
+/usr/include/python3.9/Python.h:
+	dnf -y install python39-devel
+
 /usr/bin/unzip:
 	dnf -y install unzip
 
-ci-prereqs: _ci /usr/bin/python3.9 /usr/bin/unzip terraform collection
+/usr/bin/git:
+	dnf -y install git
+
+/usr/bin/rsync:
+	dnf -y install rsync
+
+/usr/bin/gcc:
+	dnf -y install gcc
+
+/usr/include/ffi.h:
+	dnf -y install libffi-devel
+
+/usr/include/openssl/ssl.h:
+	dnf -y install openssl-devel
+
+ci-prereqs: _ci /usr/bin/python3.9 /usr/include/python3.9/Python.h /usr/bin/unzip /usr/bin/git /usr/bin/rsync /usr/bin/gcc /usr/include/ffi.h /usr/include/openssl/ssl.h terraform collection
 	source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.terraform_setup \
 		-e "output_dir=${PWD}/output" \
