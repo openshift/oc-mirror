@@ -110,10 +110,6 @@ ci-delete:
 	scripts/run.sh delete
 .PHONY: ci-delete
 
-ci-prereqs:
-	scripts/ci-prereqs.sh
-.PHONY: ci-prereqs
-
 # This is intended to be run outside the environment 
 ci-mock:
 	scripts/ci-mock.sh

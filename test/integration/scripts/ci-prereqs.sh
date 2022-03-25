@@ -12,6 +12,7 @@ mirror_url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/sta
 declare -A dnf_provides
 declare -a need_installed
 dnf_provides=(
+    [make]=/usr/bin/make
     [python39]=/usr/bin/python3.9
     [python39-devel]=/usr/include/python3.9/Python.h
     [unzip]=/usr/bin/unzip
@@ -52,3 +53,10 @@ ansible-playbook \
     jharmison_redhat.oc_mirror_e2e.terraform_setup \
     -e "output_dir=${PWD}/output" \
     -e "terraform_binary_path=${PWD}/bin/terraform"
+
+# Pull oc-mirror from builder image stage location
+mkdir -p output/clients
+cp ../../bin/oc-mirror output/clients
+
+# Cleanup
+dnf clean all -y

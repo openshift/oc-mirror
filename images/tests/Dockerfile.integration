@@ -9,6 +9,4 @@ COPY . .
 COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror bin/oc-mirror
 
 RUN cd test/integration \
- && dnf -y install make \
- && make ci-prereqs PYTHON=python3.9 CI_OPENSHIFT_VERSION=4.9 \
- && dnf clean all
+ && scripts/ci-prereqs.sh
