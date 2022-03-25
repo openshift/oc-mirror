@@ -29,7 +29,7 @@ echo "$AWS_SECRET_ACCESS_KEY" > ci/secrets/aws-creds/AWS_SECRET_ACCESS_KEY
 # Execute commands inside the integration test folder in the container, with
 #  bind mounts for mocked artifacts, shared directories, and secrets
 function ci_run() {
-    $runtime run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-mock /bin/sh -c "cd test/integration && $*"
+    $runtime run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-integration /bin/sh -c "cd test/integration && $*"
 }
 
 # Remove the infra no matter what happens in the tests
