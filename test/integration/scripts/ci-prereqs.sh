@@ -6,7 +6,8 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 cd "$SCRIPT_DIR/.." || exit 1
 
 # This is used to download and install clients like the installer and oc
-mirror_url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-${CI_OPENSHIFT_VERSION}"
+TESTED_OPENSHIFT_VERSION="${CI_OPENSHIFT_VERSION:-4.9}"
+mirror_url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-${TESTED_OPENSHIFT_VERSION}"
 
 # These are used to map whether or not a package needs installed
 declare -A dnf_provides
