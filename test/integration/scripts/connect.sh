@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This only works for local runs of the integration test, not in CI or mock CI environments
+
 set -euo pipefail
 
 cd "$(dirname "$(realpath "$0")")"

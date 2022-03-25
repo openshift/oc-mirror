@@ -6,6 +6,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # The runtime used to execute the image
 runtime="${CONTAINER_RUNTIME:-podman}"
 
+# Build a fresh copy of the integration image
 "$SCRIPT_DIR/build-image.sh"
 
 # Make directories necessary for mocking CI
