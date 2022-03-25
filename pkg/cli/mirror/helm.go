@@ -62,7 +62,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 	c := downloader.ChartDownloader{
 		Out:     os.Stdout,
 		Keyring: "",
-		Verify:  downloader.VerifyNever,
+		Verify:  downloader.VerifyIfPossible,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
 			getter.WithInsecureSkipVerifyTLS(h.insecure),
