@@ -235,3 +235,7 @@ ci-mock: realclean /usr/bin/podman
 	trap ci_cleanup EXIT
 	ci_run "cd test/integration && make ci PYTHON=python3.9"
 .PHONY: ci-mock
+
+ci-mock-enter: /usr/bin/podman ci/shared
+	podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged --entrypoint bash oc-mirror-ci-mock
+.PHONY: ci-mock-enter
