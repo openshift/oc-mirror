@@ -2,7 +2,7 @@
 
 # This common file is intended for scripts run inside the integration environment
 
-cd "$(dirname "$SCRIPT_DIR")/.." || exit 1
+cd "$(dirname "$SCRIPT_DIR")" || exit 1
 
 if [ -z "${OPENSHIFT_CI}" ]; then
     echo "Not running in CI environment!" >&2
