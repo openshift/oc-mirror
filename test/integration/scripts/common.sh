@@ -48,6 +48,7 @@ function maybe_cp () {
     echo -n " - checking for $1"
     if [ -f "$1" ]; then
         echo " (found -> $2)"
+        mkdir -p "$(dirname "$2")"
         cp "$1" "$2"
     else
         echo " (not found)"
