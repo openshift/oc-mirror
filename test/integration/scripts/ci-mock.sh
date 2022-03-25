@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script is designed to run outside fo the CI image. It builds the CI image and
+#   stages a ci-like environment locally using your container runtime to validate that
+#   the tests execute correctly. Mostly it is to make sure that the container images
+#   are suitable, with minimal files share between, for multi-stage builds in OpenShift CI
+
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
