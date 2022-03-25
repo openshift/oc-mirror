@@ -19,15 +19,6 @@ CONSOLE_REDHAT_COM_PULL_SECRET := ${CONSOLE_REDHAT_COM_PULL_SECRET}
 # e.g. make test ANSIBLE_PLAYBOOK_ARGS="--tags sneakernet"
 ANSIBLE_PLAYBOOK_ARGS :=
 
-# Files to save between steps for CI
-CI_SAVE_FILES := aws_credentials cluster_name
-CI_SAVE_INSTALL_FILES := metadata.json terraform.cluster.tfstate
-CI_SAVE_TF_FILES := terraform.tfstate
-# Files to save as artifacts of runs
-CI_ARTIFACTS := .oc-mirror.log install/.openshift_install.log
-# CI needs the installer for an actual release baked in
-CI_OPENSHIFT_VERSION := 4.9
-
 all: default-scenario
 .PHONY: all
 
@@ -111,131 +102,19 @@ realclean: clean
 ###############################################################################
 # The following targets are only intended for use in OpenShift CI systems.    #
 ###############################################################################
-_ci:
-	@if [ -z "$${OPENSHIFT_CI}" ]; then echo "Not running in CI environment!"; exit 1; fi
-.PHONY: _ci
-
-ci: _ci
-	@function ci_save() {
-		make ci-artifacts ci-save
-	}
-	@trap ci_save EXIT
-	@echo "Sourcing CI environment."; source .env && \
-		make create test \
-		PYTHON=$(PYTHON) \
-		ANSIBLE_PLAYBOOK_ARGS="-e oc_bin=/usr/local/bin/oc -e openshift_install_bin=/usr/local/bin/openshift-install"
+ci:
+	scripts/run.sh
 .PHONY: ci
 
-ci-delete: _ci ci-recover
-	@echo "Sourcing CI environment."; source .env && \
-		make delete \
-		PYTHON=$(PYTHON) \
-		ANSIBLE_PLAYBOOK_ARGS="-e oc_bin=/usr/local/bin/oc -e openshift_install_bin=/usr/local/bin/openshift-install"
+ci-delete:
+	scripts/run.sh delete
 .PHONY: ci-delete
 
-ci-save: _ci
-	@echo "Saving shared files."
-	@function save() {
-		if [ -f "$$1" ]; then echo " - $$1"; cp "$$1" "$${SHARED_DIR}/"; fi
-	}
-	@for file in $(CI_SAVE_FILES); do save "output/$$file"; done
-	@for file in $(CI_SAVE_INSTALL_FILES); do save "output/install/$$file"; done
-	@for file in $(CI_SAVE_TF_FILES); do save "output/terraform/$$file"; done
-.PHONY: ci-save
-
-ci-recover: _ci
-	@echo "Recovering shared files."
-	@function recover() {
-		local rec_file
-		rec_file="$$(basename "$$1")"
-		rec_dir="$$(dirname "$$1")"
-		mkdir -p "$$rec_dir"
-		if [ -f "$${SHARED_DIR}/$$rec_file" ]; then echo " - $$1"; cp "$${SHARED_DIR}/$$rec_file" "$$1"; fi
-	}
-	@for file in $(CI_SAVE_FILES); do recover "output/$$file"; done
-	@for file in $(CI_SAVE_INSTALL_FILES); do recover "output/install/$$file"; done
-	@for file in $(CI_SAVE_TF_FILES); do recover "output/terraform/$$file"; done
-.PHONY: ci-recover
-
-ci-artifacts: _ci
-	@echo "Recovering artifacts."
-	@function recover() {
-		if [ -f "$$1" ]; then echo " - $$1"; cp "$$1" "$${ARTIFACT_DIR}/"; fi
-	}
-	for file in $(CI_ARTIFACTS); do recover "$$file"; done
-.PHONY: ci-artifacts
-
-/usr/bin/python3.9:
-	dnf -y install python39
-
-/usr/include/python3.9/Python.h:
-	dnf -y install python39-devel
-
-/usr/bin/unzip:
-	dnf -y install unzip
-
-/usr/bin/git:
-	dnf -y install git
-
-/usr/bin/rsync:
-	dnf -y install rsync
-
-/usr/bin/gcc:
-	dnf -y install gcc
-
-/usr/include/ffi.h:
-	dnf -y install libffi-devel
-
-/usr/include/openssl/ssl.h:
-	dnf -y install openssl-devel
-
-/usr/local/bin/openshift-install:
-	pushd /usr/local/bin && \
-		curl -sLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-$(CI_OPENSHIFT_VERSION)/openshift-install-linux.tar.gz && \
-		tar xvzf openshift-install-linux.tar.gz && \
-		rm -f openshift-install-linux.tar.gz && \
-		chmod +x openshift-install
-		popd
-
-/usr/local/bin/oc:
-	pushd /usr/local/bin && \
-		curl -sLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-$(CI_OPENSHIFT_VERSION)/openshift-client-linux.tar.gz && \
-		tar xvzf openshift-client-linux.tar.gz && \
-		rm -f openshift-client-linux.tar.gz && \
-		chmod +x kubectl oc
-		popd
-
-ci-prereqs: _ci /usr/bin/python3.9 /usr/include/python3.9/Python.h /usr/bin/unzip /usr/bin/git /usr/bin/rsync /usr/bin/gcc /usr/include/ffi.h /usr/include/openssl/ssl.h /usr/local/bin/openshift-install /usr/local/bin/oc terraform collection
-	source .venv/bin/activate && ansible-playbook \
-		jharmison_redhat.oc_mirror_e2e.terraform_setup \
-		-e "output_dir=${PWD}/output" \
-		-e "terraform_binary_path=${PWD}/bin/terraform"
+ci-prereqs:
+	scripts/ci-prereqs.sh
 .PHONY: ci-prereqs
 
-ci-mock: realclean /usr/bin/podman
-	mkdir -p ci/artifacts
-	mkdir -p ci/shared
-	mkdir -p ci/secrets/pull-secret
-	mkdir -p ci/secrets/aws-creds
-	@if [ -z "$$CONSOLE_REDHAT_COM_PULL_SECRET" ]; then read -sp "Pull secret: " CONSOLE_REDHAT_COM_PULL_SECRET; fi
-	@echo "$$CONSOLE_REDHAT_COM_PULL_SECRET" > ci/secrets/pull-secret/CONSOLE_REDHAT_COM_PULL_SECRET
-	@if [ -z "$$AWS_ACCESS_KEY_ID" ]; then read -sp "AWS Access key ID: " AWS_ACCESS_KEY_ID; fi
-	@echo "$$AWS_ACCESS_KEY_ID" > ci/secrets/aws-creds/AWS_ACCESS_KEY_ID
-	@if [ -z "$$AWS_SECRET_ACCESS_KEY" ]; then read -sp "AWS Secret access key: " AWS_SECRET_ACCESS_KEY; fi
-	@echo "$$AWS_SECRET_ACCESS_KEY" > ci/secrets/aws-creds/AWS_SECRET_ACCESS_KEY
-	pushd ../..
-	podman build . -f images/ci/Dockerfile.integration -t oc-mirror-ci-mock
-	popd
-	function ci_run() {
-		podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-mock /bin/sh -c "$$*"
-	}
-	function ci_cleanup() {
-		ci_run "cd test/integration && make ci-delete PYTHON=python3.9"
-	}
-	trap ci_cleanup EXIT
-	ci_run "cd test/integration && make ci PYTHON=python3.9"
+# This is intended to be run outside the environment 
+ci-mock:
+	scripts/ci-mock.sh
 .PHONY: ci-mock
-
-ci-mock-enter: /usr/bin/podman ci/shared
-	podman run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged --entrypoint bash oc-mirror-ci-mock
-.PHONY: ci-mock-enter
