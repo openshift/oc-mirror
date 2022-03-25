@@ -46,7 +46,7 @@ chmod +x openshift-install oc kubectl
 popd
 
 # Install Terraform and the e2e collection
-make terraform collection
+make terraform collection PYTHON=python3.9
 
 # Configure the terraform modules and providers
 source .venv/bin/activate
