@@ -52,9 +52,12 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	// Define a map that associates locations
 	// on disk to location in archive
 	paths := map[string]string{diskPath: config.V2Dir}
-	associations, err := image.ConvertToAssociationSet(meta.PastAssociations)
-	if err != nil {
-		return tmpBackend, err
+	associations := image.AssociationSet{}
+	if !o.IgnoreHistory {
+		associations, err = image.ConvertToAssociationSet(meta.PastAssociations)
+		if err != nil {
+			return tmpBackend, err
+		}
 	}
 	manifests, blobs, err := bundle.ReconcileV2Dir(associations, paths)
 	if err != nil {
