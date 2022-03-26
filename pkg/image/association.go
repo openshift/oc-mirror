@@ -182,7 +182,7 @@ func (as *AssociationSet) UpdatePath() error {
 	return nil
 }
 
-// GetDigests will return all layer and manifest digests in the association set
+// GetDigests will return all layer and manifest digests in the AssociationSet
 func (as *AssociationSet) GetDigests() []string {
 	var digests []string
 	for _, assocs := range *as {
@@ -195,41 +195,8 @@ func (as *AssociationSet) GetDigests() []string {
 	return digests
 }
 
-func (as AssociationSet) validate() error {
-	var errs []error
-	for _, imageName := range as.Keys() {
-		assocs, found := as.Search(imageName)
-		if !found {
-			return fmt.Errorf("image %q does not exist in association set", imageName)
-		}
-		for _, a := range assocs {
-
-			if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
-				continue
-			}
-			switch a.Type {
-			case TypeInvalid:
-				// TypeInvalid is the default value for the concrete type, which means the field was not set.
-				errs = append(errs, fmt.Errorf("image %q: must set image type", a.Name))
-			default:
-				errs = append(errs, fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type))
-			}
-
-			if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
-				errs = append(errs, fmt.Errorf("image %q: child descriptors cannot contain both manifests and image layers", a.Name))
-			}
-			if len(a.ManifestDigests) == 0 && len(a.LayerDigests) == 0 {
-				errs = append(errs, fmt.Errorf("image %q: child descriptors must contain at least one manifest or image layer", a.Name))
-			}
-
-			if a.ID == "" {
-				errs = append(errs, fmt.Errorf("image %q: tag or ID must be set", a.Name))
-			}
-		}
-	}
-	return utilerrors.NewAggregate(errs)
-}
-
+// GetImageFromBlob will search the AssociationSet for a blob and return the first
+// found image it is associated to
 func GetImageFromBlob(as AssociationSet, digest string) string {
 	for imageName, assocs := range as {
 		for _, assoc := range assocs {
@@ -242,4 +209,46 @@ func GetImageFromBlob(as AssociationSet, digest string) string {
 		}
 	}
 	return ""
+}
+
+func (as AssociationSet) validate() error {
+	var errs []error
+	for _, imageName := range as.Keys() {
+		assocs, found := as.Search(imageName)
+		if !found {
+			return fmt.Errorf("image %q does not exist in association set", imageName)
+		}
+		for _, a := range assocs {
+
+			if err := a.validate(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func (a Association) validate() error {
+
+	if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
+		return fmt.Errorf("image %q: child descriptors cannot contain both manifests and image layers", a.Name)
+	}
+	if len(a.ManifestDigests) == 0 && len(a.LayerDigests) == 0 {
+		return fmt.Errorf("image %q: child descriptors must contain at least one manifest or image layer", a.Name)
+	}
+
+	if a.ID == "" && a.TagSymlink == "" {
+		return fmt.Errorf("image %q: tag or ID must be set", a.Name)
+	}
+
+	if s, ok := imageTypeStrings[a.Type]; ok && s != "" {
+		return nil
+	}
+	switch a.Type {
+	case TypeInvalid:
+		// TypeInvalid is the default value for the concrete type, which means the field was not set.
+		return fmt.Errorf("image %q: must set image type", a.Name)
+	default:
+		return fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type)
+	}
 }

@@ -12,20 +12,24 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 // ReconcileV2Dir gathers all manifests and blobs that were collected during a run
 // and checks against the current list.
 // This function is used to prepare a list of files that need to added to the Imageset.
-func ReconcileV2Dir(meta v1alpha2.Metadata, filenames map[string]string) (manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob, err error) {
+func ReconcileV2Dir(assocs image.AssociationSet, filenames map[string]string) (manifests []string, blobs []string, err error) {
 
-	foundFiles := make(map[string]struct{}, len(meta.PastBlobs))
-	for _, pf := range meta.PastBlobs {
-		foundFiles[pf.ID] = struct{}{}
+	foundFiles := map[string]struct{}{}
+
+	// Checking against all digest because mirroring
+	// by digest can the manifest to pop up in the blobs
+	// directory
+	// TODO(jpower432): Invesitagte why this happens.
+	// Happens with oc image mirror as well.
+	for _, digest := range assocs.GetDigests() {
+		foundFiles[digest] = struct{}{}
 	}
-	// Ignore the current dir.
-	foundFiles["."] = struct{}{}
 
 	for rootOnDisk, rootInArchive := range filenames {
 
@@ -59,16 +63,7 @@ func ReconcileV2Dir(meta v1alpha2.Metadata, filenames map[string]string) (manife
 						logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
 						return nil
 					}
-					namespacename, err := getBetween(filename, "v2"+string(filepath.Separator), string(filepath.Separator)+"blobs")
-					if err != nil {
-						return err
-					}
-					file := v1alpha2.Blob{
-						ID:            info.Name(),
-						NamespaceName: namespacename,
-						TimeStamp:     meta.PastMirror.Timestamp,
-					}
-					blobs = append(blobs, file)
+					blobs = append(blobs, info.Name())
 					foundFiles[info.Name()] = struct{}{}
 					logrus.Debugf("Adding blob %s", info.Name())
 				}
@@ -80,17 +75,7 @@ func ReconcileV2Dir(meta v1alpha2.Metadata, filenames map[string]string) (manife
 				}
 				m := info.Mode()
 				if m.IsRegular() || m&fs.ModeSymlink != 0 {
-					namespacename, err := getBetween(filename, "v2"+string(filepath.Separator), string(filepath.Separator)+"manifests")
-					if err != nil {
-						return err
-					}
-					// TODO(jpower432): Identify and set tag
-					// for pruning
-					file := v1alpha2.Manifest{
-						Name:          nameInArchive,
-						NamespaceName: namespacename,
-					}
-					manifests = append(manifests, file)
+					manifests = append(manifests, nameInArchive)
 				}
 			}
 
@@ -153,21 +138,4 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 	}
 
 	return filesinArchive, err
-}
-
-func getBetween(path string, first string, last string) (string, error) {
-	// Get substring between two strings.
-	posFirst := strings.LastIndex(path, first)
-	if posFirst == -1 {
-		return "", fmt.Errorf("path %q does not contain %s", path, first)
-	}
-	posLast := strings.LastIndex(path, last)
-	if posLast == -1 {
-		return "", fmt.Errorf("path %q does not contain %s", path, last)
-	}
-	posFirstAdjusted := posFirst + len(first)
-	if posFirstAdjusted >= posLast {
-		return "", fmt.Errorf("path %q does not contain string data between values", path)
-	}
-	return path[posFirstAdjusted:posLast], nil
 }

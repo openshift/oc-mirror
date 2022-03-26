@@ -30,6 +30,15 @@ func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Bac
 // then uses the Backend to update the metadata storage medium.
 func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2.Metadata, skipTLSVerify, plainHTTP bool) error {
 
+	// If using heads only setting, aggregate all of the associations.
+	// Replace if using ranges to prune any old image information
+	// to support pruning.
+	if keepPastAssociations(meta.PastMirror.Mirror) {
+		meta.PastAssociations = append(meta.PastAssociations, meta.PastMirror.Associations...)
+	} else {
+		meta.PastAssociations = meta.PastMirror.Associations
+	}
+
 	var operatorErrs []error
 
 	mirror := meta.PastMirror
@@ -52,6 +61,25 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 
 	return nil
+}
+
+// TODO:(jpower432): Remove and use a
+// configuration key to determine whether pruning
+// is enabled
+func keepPastAssociations(mirror v1alpha2.Mirror) bool {
+	for _, release := range mirror.OCP.Channels {
+		if release.IsHeadsOnly() {
+			return true
+		}
+	}
+	for _, ctlg := range mirror.Operators {
+		// Keep for heads only and full catalog workflows
+		if ctlg.IsHeadsOnly() || len(ctlg.Packages) == 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func resolveOperatorMetadata(ctx context.Context, operator v1alpha2.Operator, skipTLSVerify, plainHTTP bool) (operatorMeta v1alpha2.OperatorMetadata, err error) {

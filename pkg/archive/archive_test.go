@@ -32,23 +32,23 @@ func TestSplitArchive(t *testing.T) {
 		name         string
 		source       string
 		maxSplitSize int64
-		blobs        []v1alpha2.Blob
-		manifests    []v1alpha2.Manifest
+		blobs        []string
+		manifests    []string
 		skipCleanup  bool
 		want         string
 	}{
 		{
 			name:         "testing tar format",
-			blobs:        []v1alpha2.Blob{{ID: "sha256:123456789"}},
-			manifests:    []v1alpha2.Manifest{{Name: "testmanifest"}},
+			blobs:        []string{"sha256:123456789"},
+			manifests:    []string{"testmanifest"},
 			maxSplitSize: 5 * 1024 * 1024,
 			skipCleanup:  false,
 			want:         "testbundle",
 		},
 		{
 			name:         "testing cleanup",
-			blobs:        []v1alpha2.Blob{{ID: "sha256:123456789"}},
-			manifests:    []v1alpha2.Manifest{{Name: "testmanifest"}},
+			blobs:        []string{"sha256:123456789"},
+			manifests:    []string{"testmanifest"},
 			maxSplitSize: 5 * 1024 * 1024,
 			skipCleanup:  true,
 			want:         "testbundle",

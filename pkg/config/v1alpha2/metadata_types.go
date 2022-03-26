@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 // Metadata object kind.
@@ -28,43 +29,20 @@ type MetadataSpec struct {
 	SingleUse bool `json:"singleUse"`
 	// PastMirror contains the previous mirrored content
 	PastMirror PastMirror `json:"pastMirror"`
-	// PastBlobs is a slice containing information for
-	// all files created for an imageset
-	PastBlobs Blobs `json:"pastBlobs"`
+	// PastAssociations define the history about the set of mirrored images including
+	// child manifest and layer digest information
+	PastAssociations []image.Association `json:"pastAssociations,omitempty"`
 }
 
 type PastMirror struct {
-	Timestamp int        `json:"timestamp"`
-	Sequence  int        `json:"sequence"`
-	Manifests []Manifest `json:"manifests"`
-	Blobs     Blobs      `json:"blobs"`
-	Mirror    Mirror     `json:"mirror"`
+	Timestamp int    `json:"timestamp"`
+	Sequence  int    `json:"sequence"`
+	Mirror    Mirror `json:"mirror"`
 	// Operators are metadata about the set of mirrored operators in a mirror operation.
 	Operators []OperatorMetadata `json:"operators,omitempty"`
-}
-
-type Blob struct {
-	ID string `json:"id"`
-	// NamespaceName of image that owns this blob.
-	// Required for blob lookups during the publish step.
-	NamespaceName string `json:"namespaceName"`
-	TimeStamp     int    `json:"timestamp"`
-}
-
-var _ sort.Interface = Blobs{}
-
-// Blobs is a sortable slice of Blob.
-type Blobs []Blob
-
-func (b Blobs) Len() int           { return len(b) }
-func (b Blobs) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b Blobs) Less(i, j int) bool { return b[i].TimeStamp < b[j].TimeStamp }
-
-type Manifest struct {
-	Name string `json:"name"`
-	Tag  string `json:"tag"`
-	// NamespaceName of image that owns this manifest.
-	NamespaceName string `json:"namespaceName"`
+	// Associations are metadata about the set of mirrored images including
+	// child manifest and layer digest information
+	Associations []image.Association `json:"associations,omitempty"`
 }
 
 // OperatorMetadata holds an Operator's post-mirror metadata.
@@ -115,9 +93,6 @@ func LoadMetadata(data []byte) (m Metadata, err error) {
 
 	m.SetGroupVersionKind(gvk)
 
-	// Make sure blobs are sorted by timestamp
-	sort.Sort(sort.Reverse(m.PastMirror.Blobs))
-
 	return m, nil
 }
 
@@ -125,9 +100,6 @@ func (m *Metadata) MarshalJSON() ([]byte, error) {
 
 	gvk := GroupVersion.WithKind(MetadataKind)
 	m.SetGroupVersionKind(gvk)
-
-	// Make sure blobs are sorted by timestamp
-	sort.Sort(sort.Reverse(m.PastMirror.Blobs))
 
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)

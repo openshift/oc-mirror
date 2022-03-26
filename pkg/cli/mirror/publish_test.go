@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -21,6 +20,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
@@ -142,8 +142,8 @@ func TestFindBlobRepo(t *testing.T) {
 			Type: "docker",
 			Ref: reference.DockerImageReference{
 				Registry:  "registry.com",
-				Namespace: "foo",
-				Name:      "test3/baz",
+				Namespace: "foo/test3",
+				Name:      "baz",
 			},
 		},
 	}, {
@@ -157,31 +157,20 @@ func TestFindBlobRepo(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			meta := v1alpha2.Metadata{
-				MetadataSpec: v1alpha2.MetadataSpec{
-					PastBlobs: []v1alpha2.Blob{
-						{
-							ID:            "found",
-							NamespaceName: "test1/baz",
-							TimeStamp:     1644586136,
-						},
-						{
-							ID:            "found",
-							NamespaceName: "test2/baz",
-							TimeStamp:     1644586137,
-						},
-						{
-							ID:            "found",
-							NamespaceName: "test3/baz",
-							TimeStamp:     1644586139,
-						},
-					},
+			assocs := image.AssociationSet{"registry.com/test3/baz": map[string]image.Association{
+				"registry.com/test3/baz": {
+					Name:            "registry.com/test3/baz",
+					Path:            "single_manifest",
+					TagSymlink:      "latest",
+					ID:              "",
+					Type:            image.TypeGeneric,
+					ManifestDigests: nil,
+					LayerDigests:    []string{"found"},
 				},
+			},
 			}
 
-			sort.Sort(sort.Reverse(meta.PastBlobs))
-
-			ref, err := test.options.findBlobRepo(meta.PastBlobs, test.digest)
+			ref, err := test.options.findBlobRepo(assocs, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {

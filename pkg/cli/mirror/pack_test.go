@@ -54,9 +54,22 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha2.Metadata{
 				MetadataSpec: v1alpha2.MetadataSpec{
-					PastBlobs: v1alpha2.Blobs{
+					PastAssociations: []image.Association{
 						{
-							ID: "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+							Path:            "single_manifest",
+							TagSymlink:      "latest",
+							ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+							Type:            image.TypeGeneric,
+							ManifestDigests: nil,
+							LayerDigests: []string{
+								"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+								"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+								"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+								"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+								"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+								"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+							},
 						},
 					},
 				},
@@ -91,7 +104,7 @@ func TestPack(t *testing.T) {
 			},
 			meta: v1alpha2.Metadata{
 				MetadataSpec: v1alpha2.MetadataSpec{
-					PastBlobs: v1alpha2.Blobs{},
+					PastAssociations: []image.Association{},
 				},
 			},
 		},
@@ -109,7 +122,7 @@ func TestPack(t *testing.T) {
 			ctx := context.Background()
 
 			// First run will create mirror_seq1_0000.tar
-			_, err = c.opts.Pack(ctx, c.assocs, c.meta, 0)
+			_, err = c.opts.Pack(ctx, c.assocs, &c.meta, 0)
 			t.Log(err)
 
 			if c.updates {
@@ -141,7 +154,7 @@ func copyV2(source, destination string) error {
 				return err
 			}
 		case m.IsDir():
-			return os.Mkdir(filepath.Join(destination, relPath), 0755)
+			return os.Mkdir(filepath.Join(destination, relPath), 0750)
 		default:
 			data, err := ioutil.ReadFile(filepath.Join(source, relPath))
 			if err != nil {
