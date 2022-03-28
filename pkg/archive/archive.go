@@ -258,7 +258,7 @@ func blobInArchive(file string) string {
 
 func includeFile(fpath string) bool {
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == "catalogs" || split[0] == config.HelmDir
+	return split[0] == config.InternalDir || split[0] == "catalogs" || split[0] == config.HelmDir || split[0] == config.ReleaseSignatureDir
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {
