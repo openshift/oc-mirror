@@ -12,6 +12,10 @@ fi
 # Source the virtual environment for all actions inside the integration area
 source .venv/bin/activate
 
+# Home is not being set for random UID in CI
+HOME="${HOME:-/tmp}"
+export HOME
+
 # The version of OpenShift to run with through the test suite with this version
 #   of oc-mirror (noting that it can be different than the target release for this
 #   version of oc-mirror)
