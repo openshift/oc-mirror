@@ -44,7 +44,7 @@ type SequenceError struct {
 }
 
 func (s *SequenceError) Error() string {
-	return fmt.Sprintf("invalid bundle sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
+	return fmt.Sprintf("invalid mirror sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
 }
 
 type ErrArchiveFileNotFound struct {
