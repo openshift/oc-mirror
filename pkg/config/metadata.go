@@ -16,6 +16,8 @@ const (
 	ReleaseSignatureDir = "release-signatures"
 	GraphDataDir        = "cincinnati"
 	CatalogsDir         = "catalogs"
+	LayoutsDir          = "layout"
+	IndexDir            = "index"
 )
 
 var (

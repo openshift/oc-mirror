@@ -33,11 +33,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
-)
-
-const (
-	LayoutsDir = "layout"
-	IndexDir   = "index"
+	"github.com/openshift/oc-mirror/pkg/operator"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -201,21 +197,26 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 	return dc, nil
 }
 
-// renderDCDiff renders data in ctlg into a declarative config for o.Diff().
+// renderDCDiff renders data in ctlg into a declarative config for o.PlanDiff().
+// This produces the declarative config that will be used to determine
+// differential images
 func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
+	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
+	for _, ctlg := range lastRun.Operators {
+		prevCatalog[ctlg.Catalog] = ctlg
+	}
+
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
+	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
+	full := !ctlg.IsHeadsOnly() && !hasInclude
+
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
-	dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
-	if err != nil {
-		return nil, err
-	}
 	a := action.Diff{
-		Registry:      reg,
-		NewRefs:       []string{ctlg.Catalog},
-		Logger:        catLogger,
-		IncludeConfig: dic,
+		Registry: reg,
+		NewRefs:  []string{ctlg.Catalog},
+		Logger:   catLogger,
 		// This is hard-coded to false because a diff post-metadata creation must always include
 		// newly published catalog data to join graphs. Any included objects previously included
 		// will be added as a diff as part of the latest diff mode.
@@ -223,31 +224,46 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		SkipDependencies:  ctlg.SkipDependencies,
 	}
 
-	// An old ref is always required to generate a latest diff.
-	// To make sure we always download the full include config
-	// don't set the old ref when that is specified
-	if !hasInclude {
-		for _, operator := range lastRun.Operators {
-			if operator.Catalog != ctlg.Catalog {
-				continue
-			}
-
-			if operator.ImagePin == "" {
-				return nil, fmt.Errorf("metadata sequence %d catalog %q: ImagePin must be set", lastRun.Sequence, ctlg.Catalog)
-			}
-			a.OldRefs = []string{operator.ImagePin}
-			break
-		}
-	}
-
-	resultdc, err := a.Run(ctx)
+	// Instead of creating a partial FBC with diff
+	// generate the current FBC according to the previous
+	// include config or just render the full catalog again
+	dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
 	if err != nil {
 		return nil, err
 	}
+	switch {
+	case full:
+		// Mirror the entire catalog.
+		dc, err = action.Render{
+			Registry: reg,
+			Refs:     []string{ctlg.Catalog},
+		}.Run(ctx)
+		if err != nil {
+			return nil, err
+		}
+	case !hasInclude:
+		// If a previous specified starting version can be found on
+		// the mirror run. Populate the IncludeConfig else, keep the
+		// IncludeConfig get a new catalog at heads only.
+		prev, found := prevCatalog[ctlg.Catalog]
+		if found {
+			dic, err = prev.IncludeConfig.ConvertToDiffIncludeConfig()
+			if err != nil {
+				return nil, err
+			}
+		}
+		fallthrough
+	default:
+		a.IncludeConfig = dic
+		dc, err = a.Run(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	verifyOperatorPkgFound(dic, resultdc)
+	verifyOperatorPkgFound(dic, dc)
 
-	return resultdc, nil
+	return dc, nil
 }
 
 // verifyOperatorPkgFound will verify that each of the requested operator packages were
@@ -334,8 +350,12 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	// Remove the catalog image from mappings we are going to transfer this
-	// using an OCI layout
-	mappings.Remove(ctlgRef, v1alpha2.TypeOperatorBundle)
+	// using an OCI layout.
+	ctlgImg := image.TypedImage{
+		TypedImageReference: ctlgRef,
+		Category:            v1alpha2.TypeOperatorBundle,
+	}
+	mappings.Remove(ctlgImg)
 	if err := o.writeLayout(ctx, ctlgRef.Ref); err != nil {
 		return nil, err
 	}
@@ -444,11 +464,11 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef imgreference.
 
 	// Write catalog OCI layout file to src so it is included in the archive
 	// at a path unique to the image.
-	ctlgDir, err := getCatalogDir(ctlgRef)
+	ctlgDir, err := operator.GenerateCatalogDir(ctlgRef)
 	if err != nil {
 		return err
 	}
-	layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, LayoutsDir)
+	layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
 	if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 		return fmt.Errorf("error catalog layout dir: %v", err)
 	}
@@ -495,11 +515,11 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefe
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
-	ctlgDir, err := getCatalogDir(ctlgRef)
+	ctlgDir, err := operator.GenerateCatalogDir(ctlgRef)
 	if err != nil {
 		return "", err
 	}
-	indexDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, IndexDir)
+	indexDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.IndexDir)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
@@ -521,17 +541,6 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefe
 	}
 
 	return indexDir, nil
-}
-
-func getCatalogDir(ctlgRef imgreference.DockerImageReference) (string, error) {
-	leafDir := ctlgRef.Tag
-	if leafDir == "" {
-		leafDir = ctlgRef.ID
-	}
-	if leafDir == "" {
-		return "", fmt.Errorf("catalog %q must have either a tag or digest", ctlgRef.Exact())
-	}
-	return filepath.Join(ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name, leafDir), nil
 }
 
 func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerImageReference, fileDir string) (*catalog.MirrorCatalogOptions, error) {

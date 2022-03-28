@@ -27,7 +27,7 @@ function headsonly_diff () {
 
     run_diff imageset-config-headsonly.yaml
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
 
@@ -40,7 +40,7 @@ function registry_backend () {
 
     run_diff imageset-config-headsonly-backend-registry.yaml
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
 
@@ -69,7 +69,7 @@ function custom_namespace {
 
     run_diff imageset-config-headsonly-backend-registry.yaml "custom"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
-    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1 foo.v0.3.2" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT} "custom"
 }
 

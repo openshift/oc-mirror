@@ -46,6 +46,8 @@ type PastMirror struct {
 	Mirror Mirror `json:"mirror"`
 	// Operators are metadata about the set of mirrored operators in a mirror operation.
 	Operators []OperatorMetadata `json:"operators,omitempty"`
+	// Platforms are metadata about the set of mirrored platform release channels in a mirror operation.
+	Platforms []PlatformMetadata `json:"platforms,omitempty"`
 	// Associations are metadata about the set of mirrored images including
 	// child manifest and layer digest information
 	Associations []Association `json:"associations,omitempty"`
@@ -59,6 +61,22 @@ type OperatorMetadata struct {
 	// This image will be pulled using the pull secret
 	// in the metadata's Mirror config for this catalog.
 	ImagePin string `json:"imagePin"`
+	// IncludeConfig in OperatorMetadata holds the starting
+	// versions of all newly mirrored catalogs. This will
+	// be populated the first time a catalog is mirrored
+	// and copied the remaining runs.
+	IncludeConfig `json:",inline"`
+}
+
+// ReleaseMetadata holds an Release's post-mirror metadata.
+type PlatformMetadata struct {
+	// Release references a channel name from the mirror spec.
+	ReleaseChannel string `json:"channel"`
+	// MinVersion in ReleaseMetadata holds the starting
+	// versions of all newly mirrored channels. This will
+	// be populated the first time a channel is mirrored
+	// and copied the remaining runs.
+	MinVersion string `json:"minVersion"`
 }
 
 var _ io.Writer = &InlinedIndex{}
