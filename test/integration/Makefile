@@ -1,3 +1,8 @@
+# To enable us to do cleanup on errors
+export SHELL:=/bin/bash
+export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
+.ONESHELL:
+
 # For virtualenv/ansible installation
 PYTHON := python3
 
@@ -17,49 +22,43 @@ ANSIBLE_PLAYBOOK_ARGS :=
 all: default-scenario
 .PHONY: all
 
-default-scenario: create test delete
+default-scenario: terraform collection
+	# This allows us to force tear_down even when a test fails, but still report failure
+	# It is enabled by .ONESHELL above
+	@function tear_down() {
+		make delete
+	}
+	@trap tear_down EXIT
+	@make create test
 .PHONY: default-scenario
-
-ci: terraform collection
-	# source env here
-	python3 --version
-	ls -halF bin
-	ls -halF /aws-creds ||:
-	ls -halF output/
-	touch output/thing
-	git status
-.PHONY: ci
-
-ci-delete: terraform collection
-	# source env here
-	ls -halF output/
-	rm -f output/thing
-.PHONY: ci-delete
 
 .venv/bin/pip:
 	$(PYTHON) -m venv .venv
-	.venv/bin/pip install --upgrade pip setuptools wheel
+	source .venv/bin/activate && pip install --upgrade pip setuptools wheel
 
 .venv/bin/ansible-galaxy: .venv/bin/pip requirements.txt
-	.venv/bin/pip install -r requirements.txt
+	source .venv/bin/activate && pip install -r requirements.txt
 
 collections/ansible_collections/jharmison_redhat/oc_mirror_e2e: .venv/bin/ansible-galaxy requirements.yml
-	.venv/bin/ansible-galaxy install -r requirements.yml
+	source .venv/bin/activate && ansible-galaxy install -r requirements.yml
 
 collection: collections/ansible_collections/jharmison_redhat/oc_mirror_e2e
 .PHONY: collection
 
 bin/terraform:
 	mkdir -p bin
-	cd bin \
-	&& curl -sLO https://releases.hashicorp.com/terraform/$(TERRAFORM_VERSION)/$(TERRAFORM_DOWNLOAD) \
-	&& unzip $(TERRAFORM_DOWNLOAD)
+	cd bin && \
+		curl -sLO https://releases.hashicorp.com/terraform/$(TERRAFORM_VERSION)/$(TERRAFORM_DOWNLOAD) && \
+		unzip $(TERRAFORM_DOWNLOAD) && \
+		rm -f $(TERRAFORM_DOWNLOAD) && \
+		cd ..
 
 terraform: bin/terraform
 .PHONY: terraform
 
-create: terraform collection
-	@.venv/bin/ansible-playbook \
+create:
+	@echo "Running jharmison_redhat.oc_mirror_e2e.create"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.create \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
@@ -68,8 +67,9 @@ create: terraform collection
 		$(ANSIBLE_PLAYBOOK_ARGS)
 .PHONY: create
 
-test: collection
-	@.venv/bin/ansible-playbook \
+test:
+	@echo "Running jharmison_redhat.oc_mirror_e2e.test"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.test \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
@@ -78,8 +78,9 @@ test: collection
 		$(ANSIBLE_PLAYBOOK_ARGS)
 .PHONY: test
 
-delete: terraform collection
-	@.venv/bin/ansible-playbook \
+delete:
+	@echo "Running jharmison_redhat.oc_mirror_e2e.delete"
+	@source .venv/bin/activate && ansible-playbook \
 		jharmison_redhat.oc_mirror_e2e.delete \
 		-e @vars.yml \
 		-e "output_dir=${PWD}/output" \
@@ -91,8 +92,20 @@ clean:
 	rm -rf .venv
 	rm -rf bin
 	rm -rf collections
+	rm -rf ci
 .PHONY: clean
 
 realclean: clean
 	rm -rf output/*
 .PHONY: realclean
+
+###############################################################################
+# The following targets are only intended for use in OpenShift CI systems.    #
+###############################################################################
+ci:
+	scripts/run.sh
+.PHONY: ci
+
+ci-delete:
+	scripts/run.sh delete
+.PHONY: ci-delete

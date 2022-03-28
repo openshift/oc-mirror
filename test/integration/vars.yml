@@ -18,7 +18,7 @@ scenario_stubs:
   metadata_backend: registry
   mirror_method: to_registry
   registry_type: docker_registry
-  operators_to_mirror: compliance_operator
+  # operators_to_mirror: compliance_operator # Disabled temporarily due to issue with live channels
 
 # If you want to override the ImageSetConfiguration generation with a custom change to the API, you might want to use something like this:
 #
