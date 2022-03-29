@@ -31,6 +31,7 @@ type MirrorOptions struct {
 	SkipCleanup      bool
 	SkipMissing      bool
 	ContinueOnError  bool
+	IgnoreHistory    bool
 	FilterOptions    []string
 	MaxPerRegistry   int
 	// cancelCh is a channel listening for command cancellations
@@ -52,6 +53,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DestPlainHTTP, "dest-use-http", o.DestPlainHTTP, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
+	fs.BoolVar(&o.IgnoreHistory, "ignore-history", o.IgnoreHistory, "Ignores past mirrors when downloading images and packing layers")
 	fs.StringSliceVar(&o.FilterOptions, "filter-by-os", o.FilterOptions, "A regular expression to control which release image is picked when multiple variants are available")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
 		"and attempt to mirror as much as possible")

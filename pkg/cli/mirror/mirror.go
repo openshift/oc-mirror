@@ -256,7 +256,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		// Pack the images set
-		tmpBackend, err := o.Pack(cmd.Context(), assocs, meta, cfg.ArchiveSize)
+		tmpBackend, err := o.Pack(cmd.Context(), assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no updates detected, process stopping")
@@ -322,7 +322,26 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
 			return err
 		}
+		// Create associations
+		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, sourceInsecure)
+		skipErr := func(err error) bool {
+			ierr := &image.ErrInvalidImage{}
+			cerr := &image.ErrInvalidComponent{}
+			return errors.As(err, &ierr) || errors.As(err, &cerr)
+		}
 
+		if errs != nil {
+			for _, e := range errs.Errors() {
+				if err := o.checkErr(e, skipErr); err != nil {
+					return err
+				}
+			}
+		}
+
+		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
+		if err != nil {
+			return err
+		}
 		// Process any catalog images
 		dir, err := o.createResultsDir()
 		if err != nil {
@@ -353,7 +372,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
 			return err
 		}
-		logrus.Debugf("Moved any downloaded Helm chart to %s", dir)
+		logrus.Debugf("Moved any downloaded Helm charts to %s", dir)
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)

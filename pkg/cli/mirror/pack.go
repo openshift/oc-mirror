@@ -34,7 +34,7 @@ const (
 
 // Pack will pack the imageset and return a temporary backend storing metadata for final push
 // The metadata has been updated by the plan stage at this point but not pushed to the backend
-func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, meta v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
+func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, meta *v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
 	tmpdir, _, err := o.mktempDir()
 	if err != nil {
 		return nil, err
@@ -47,14 +47,21 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 		return nil, err
 	}
 
-	if err := o.writeAssociations(assocs); err != nil {
-		return tmpBackend, fmt.Errorf("error writing association file: %v", err)
-	}
-
 	// Update metadata files and get newly created filepaths.
-	manifests, blobs, err := o.getFiles(meta)
+	diskPath := filepath.Join(o.Dir, config.SourceDir, config.V2Dir)
+	// Define a map that associates locations
+	// on disk to location in archive
+	paths := map[string]string{diskPath: config.V2Dir}
+	associations := image.AssociationSet{}
+	if !o.IgnoreHistory {
+		associations, err = image.ConvertToAssociationSet(meta.PastAssociations)
+		if err != nil {
+			return tmpBackend, err
+		}
+	}
+	manifests, blobs, err := bundle.ReconcileV2Dir(associations, paths)
 	if err != nil {
-		return tmpBackend, err
+		return tmpBackend, fmt.Errorf("error reconciling v2 files: %v", err)
 	}
 
 	// Stop the process if no new blobs
@@ -62,20 +69,15 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 		return tmpBackend, ErrNoUpdatesExist
 	}
 
-	// Add only the new manifests and blobs created to the current run.
-	// TODO(jpower432): This should be a reconciliation instead of just an addition
-	meta.PastMirror.Manifests = append(meta.PastMirror.Manifests, manifests...)
-	meta.PastMirror.Blobs = append(meta.PastMirror.Blobs, blobs...)
-
-	meta.PastBlobs = append(meta.PastBlobs, blobs...)
-
-	// Update the metadata.
-	if err := metadata.UpdateMetadata(ctx, tmpBackend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+	// Update Association in PastMirror to the current value and update
+	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
+	if err != nil {
+		return tmpBackend, err
+	}
+	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 		return tmpBackend, err
 	}
 
-	// If any errors occur after the metadata is written
-	// initiate metadata rollback
 	if err := o.prepareArchive(ctx, tmpBackend, archiveSize, meta.PastMirror.Sequence, manifests, blobs); err != nil {
 		return tmpBackend, err
 	}
@@ -90,7 +92,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	return tmpBackend, nil
 }
 
-func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Backend, archiveSize int64, seq int, manifests []v1alpha2.Manifest, blobs []v1alpha2.Blob) error {
+func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Backend, archiveSize int64, seq int, manifests, blobs []string) error {
 
 	segSize := defaultSegSize
 	if archiveSize != 0 {
@@ -123,27 +125,6 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Back
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 	return nil
-}
-
-func (o *MirrorOptions) getFiles(meta v1alpha2.Metadata) ([]v1alpha2.Manifest, []v1alpha2.Blob, error) {
-	diskPath := filepath.Join(o.Dir, config.SourceDir, config.V2Dir)
-	// Define a map that associates locations
-	// on disk to location in archive
-	paths := map[string]string{diskPath: config.V2Dir}
-	return bundle.ReconcileV2Dir(meta, paths)
-}
-
-func (o *MirrorOptions) writeAssociations(assocs image.AssociationSet) error {
-	assocPath := filepath.Join(o.Dir, config.SourceDir, config.AssociationsBasePath)
-	if err := os.MkdirAll(filepath.Dir(assocPath), 0755); err != nil {
-		return fmt.Errorf("mkdir image associations file: %v", err)
-	}
-	f, err := os.OpenFile(assocPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0640)
-	if err != nil {
-		return fmt.Errorf("open image associations file: %v", err)
-	}
-	defer f.Close()
-	return assocs.Encode(f)
 }
 
 func (o *MirrorOptions) mktempDir() (string, func(), error) {
