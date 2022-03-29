@@ -70,11 +70,10 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	}
 
 	// Update Association in PastMirror to the current value and update
-	mirrorAssocs, err := image.ConvertFromAssociationSet(assocs)
+	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 	if err != nil {
 		return tmpBackend, err
 	}
-	meta.PastMirror.Associations = mirrorAssocs
 	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 		return tmpBackend, err
 	}

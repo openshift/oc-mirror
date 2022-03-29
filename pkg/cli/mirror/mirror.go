@@ -324,14 +324,24 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		// Create associations
 		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, sourceInsecure)
-		if errs != nil {
-			return errs
+		skipErr := func(err error) bool {
+			ierr := &image.ErrInvalidImage{}
+			cerr := &image.ErrInvalidComponent{}
+			return errors.As(err, &ierr) || errors.As(err, &cerr)
 		}
-		mirrorAssocs, err := image.ConvertFromAssociationSet(assocs)
+
+		if errs != nil {
+			for _, e := range errs.Errors() {
+				if err := o.checkErr(e, skipErr); err != nil {
+					return err
+				}
+			}
+		}
+
+		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 		if err != nil {
 			return err
 		}
-		meta.PastMirror.Associations = mirrorAssocs
 		// Process any catalog images
 		dir, err := o.createResultsDir()
 		if err != nil {

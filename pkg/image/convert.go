@@ -6,7 +6,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
-// COnvertToAssociationSet will return an AssociationSet from a slice of Associations
+// ConvertToAssociationSet will return an AssociationSet from a slice of Associations
 func ConvertToAssociationSet(assoc []Association) (AssociationSet, error) {
 	assocSet := AssociationSet{}
 
