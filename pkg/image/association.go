@@ -35,6 +35,14 @@ func (e *ErrInvalidComponent) Error() string {
 	return fmt.Sprintf("image %q has invalid component %q", e.image, e.tag)
 }
 
+type ErrInvalidImage struct {
+	image string
+}
+
+func (e *ErrInvalidImage) Error() string {
+	return fmt.Sprintf("image %q is invalid or does not exist", e.image)
+}
+
 // Associations is a map for Association
 // searching
 type Associations map[string]Association
@@ -316,7 +324,7 @@ func AssociateImageLayers(rootDir string, imgMappings map[string]string, images 
 
 		// Verify that the dirRef exists before proceeding
 		if _, err := os.Stat(imagePath); err != nil {
-			errs = append(errs, fmt.Errorf("image %q mapping %q: %v", image, dirRef, err))
+			errs = append(errs, &ErrInvalidImage{image})
 			continue
 		}
 
