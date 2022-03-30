@@ -229,8 +229,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		if !o.IgnoreHistory {
 			// Prune out old associations if applicable
-			// Ignore history while transitioning to range could result
-			// in unexpected behavior
 			prevAssociations = removePreviouslyMirrored(mapping, prevAssociations)
 			if len(mapping) == 0 {
 				logrus.Infof("no new images detected, process stopping")
@@ -336,8 +334,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		if !o.IgnoreHistory {
 			// Prune out old associations if applicable
-			// Ignore history while transitioning to range could result
-			// in unexpected behavior
 			prevAssociations = removePreviouslyMirrored(mapping, prevAssociations)
 			if len(mapping) == 0 {
 				logrus.Infof("no new images detected, process stopping")
@@ -471,8 +467,12 @@ func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads imag
 	newPrevious := image.AssociationSet{}
 
 	for srcRef := range images {
-		// The skip-image-pin flag could create some unexpected behavior.
 		// All keys need to specify image with digest.
+		// Tagged images will need to be redownloaded to
+		// ensure their digests have not be updated.
+		if srcRef.Ref.ID == "" {
+			continue
+		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
 			logrus.Debugf("skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)

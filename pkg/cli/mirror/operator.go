@@ -114,7 +114,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 			return nil, err
 		}
 
-		mappings, err := o.plan(ctx, dc, ctlgRef, ctlg)
+		mappings, err := o.plan(ctx, dc, ctlgRef)
 		if err != nil {
 			return nil, err
 		}
@@ -243,11 +243,22 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		}
 	case !hasInclude:
 		// If a previous specified starting version can be found on
-		// the mirror run. Populate the IncludeConfig else, keep the
-		// IncludeConfig get a new catalog at heads only.
+		// the mirror run update IncludeConfig , else, keep the
+		// IncludeConfig to get a new catalog at heads only.
 		prev, found := prevCatalog[ctlg.Catalog]
 		if found {
-			dic, err = prev.IncludeConfig.ConvertToDiffIncludeConfig()
+			dc, err = action.Render{
+				Registry: reg,
+				Refs:     []string{ctlg.Catalog},
+			}.Run(ctx)
+			if err != nil {
+				return nil, err
+			}
+			ic, err := operator.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+			if err != nil {
+				return nil, err
+			}
+			dic, err = ic.ConvertToDiffIncludeConfig()
 			if err != nil {
 				return nil, err
 			}
@@ -289,7 +300,7 @@ func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.Declarativ
 	}
 }
 
-func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference, ctlg v1alpha2.Operator) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference) (image.TypedImageMapping, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 

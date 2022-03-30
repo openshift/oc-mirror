@@ -66,6 +66,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, prevAssocs, currAssocs image.A
 		return tmpBackend, ErrNoUpdatesExist
 	}
 
+	// Update Association in PastMirror to the current value and update
 	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(currAssocs)
 	if err != nil {
 		return tmpBackend, err

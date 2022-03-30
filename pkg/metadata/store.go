@@ -39,22 +39,16 @@ func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Bac
 // then uses the Backend to update the metadata storage medium.
 func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2.Metadata, workspace string, skipTLSVerify, plainHTTP bool) error {
 	pastMeta := v1alpha2.NewMetadata()
-	pastOperators := map[string]v1alpha2.IncludeConfig{}
 	pastReleases := map[string]string{}
 	merr := backend.ReadMetadata(ctx, &pastMeta, config.MetadataBasePath)
 	if merr != nil && !errors.Is(merr, storage.ErrMetadataNotExist) {
 		return merr
 	} else if merr == nil {
-		for _, ctlg := range pastMeta.PastMirror.Operators {
-			pastOperators[ctlg.Catalog] = ctlg.IncludeConfig
-		}
 		for _, ch := range pastMeta.PastMirror.Platforms {
 			pastReleases[ch.ReleaseChannel] = ch.MinVersion
 		}
 	}
 
-	// TODO(jpower432): Add a warning or return an error when the starting
-	// version recorded here no longer exists.
 	mirror := meta.PastMirror
 	// Store starting versions for new catalogs
 	logrus.Debugf("Resolving operator metadata")
@@ -84,12 +78,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 	defer reg.Destroy()
 	for _, operator := range mirror.Mirror.Operators {
-
-		ic, ok := pastOperators[operator.Catalog]
-		if !ok {
-			ic = v1alpha2.IncludeConfig{}
-		}
-		operatorMeta, err := resolveOperatorMetadata(ctx, operator, ic, reg, resolver, workspace)
+		operatorMeta, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace)
 		if err != nil {
 			operatorErrs = append(operatorErrs, err)
 			continue
@@ -131,7 +120,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	return nil
 }
 
-func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, ic v1alpha2.IncludeConfig, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
+func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
 	operatorMeta.Catalog = ctlg.Catalog
 	ctlgPin := ctlg.Catalog
 	if !image.IsImagePinned(ctlg.Catalog) {
@@ -142,10 +131,15 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, ic v1a
 	}
 	operatorMeta.ImagePin = ctlgPin
 
+	var ic v1alpha2.IncludeConfig
 	// Only collect the information
 	// for heads only work flows for conversions from ranges
 	// or full catalogs to heads only.
-	if len(ic.Packages) == 0 && ctlg.IsHeadsOnly() {
+	// TODO(jpower432): The include config is already generated
+	// during catalog processing. Would be better to write it to disk
+	// with the FBC and unmarshal it into the struct instead of generating
+	// it again on diff
+	if ctlg.IsHeadsOnly() {
 		// Determine the location of the created FBC
 		ctlgRef, err := imgreference.Parse(ctlg.Catalog)
 		if err != nil {

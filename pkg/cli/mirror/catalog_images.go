@@ -65,7 +65,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 		}
 
 		// From the index path determine the artifacts (index and layout) directory.
-		// Using that path determine the corresponding catalog image for processing.
+		// Using that path to determine the corresponding catalog image for processing.
 		slashPath := filepath.ToSlash(fpath)
 		if base := path.Base(slashPath); base == "index.json" {
 			slashPath = path.Dir(slashPath)
@@ -126,10 +126,8 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 
 func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage map[imagesource.TypedImageReference]string) error {
 	for ctlgRef, artifactDir := range catalogsByImage {
-		// An image for a particular catalog may not exist in the mirror registry yet,
-		// ex. when publish is run for the first time for a catalog (full/headsonly).
-		// If that is the case, then simply build the catalog image with the new
-		// declarative config catalog; otherwise render the existing and new catalogs together.
+		// Always build the catalog image with the new declarative config catalog
+		// using the original catalog as the base image
 		var layers []v1.Layer
 		var layoutPath layout.Path
 		refExact := ctlgRef.Ref.Exact()
