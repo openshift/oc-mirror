@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/sirupsen/logrus"
@@ -32,6 +36,9 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 		Use:   "operators",
 		Short: "List available operator catalog content and versions",
 		Example: templates.Examples(`
+		    # List available operator catalog release versions
+			oc-mirror list operators
+
 			# Output default operator catalogs for OpenShift release 4.8
 			oc-mirror list operators --catalogs --version=4.8
 
@@ -52,7 +59,7 @@ func NewOperatorsCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command
 	}
 
 	fs := cmd.Flags()
-	fs.BoolVar(&o.Catalogs, "catalogs", o.Catalogs, "List available catalogs for an OpenShift release version")
+	fs.BoolVar(&o.Catalogs, "catalogs", o.Catalogs, "List available catalogs for an OpenShift release version, requires --version")
 	fs.StringVar(&o.Catalog, "catalog", o.Catalog, "List information for a specified catalog")
 	fs.StringVar(&o.Package, "package", o.Package, "List information for a specified package")
 	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
@@ -145,25 +152,72 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		if _, err := fmt.Fprintln(w, "Available OpenShift OperatorHub catalogs:"); err != nil {
 			return err
 		}
-		if err := o.writeIndexRef(w); err != nil {
+		if err := o.listCatalogs(w); err != nil {
 			return err
 		}
 	default:
-		return cmd.Help()
+
+		vm, err := getVersionMap(catalogs[0])
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintln(w, "Catalog versions:")
+
+		for v := range vm {
+
+			if _, err := fmt.Fprintf(w, "  %s\n", v); err != nil {
+				return err
+			}
+
+		}
 	}
 
 	return nil
 }
 
-func (o *OperatorsOptions) writeIndexRef(w io.Writer) error {
-	catalogs := []string{"redhat", "certified", "community"}
+var catalogs = []string{
+	"registry.redhat.io/redhat/redhat-operator-index",
+	"registry.redhat.io/redhat/certified-operator-index",
+	"registry.redhat.io/redhat/community-operator-index",
+	"registry.redhat.io/redhat/redhat-marketplace-index",
+}
+
+func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
+
 	if _, err := fmt.Fprintf(w, "OpenShift %s:\n", o.Version); err != nil {
 		return err
 	}
 	for _, catalog := range catalogs {
-		if _, err := fmt.Fprintf(w, "registry.redhat.io/redhat/%s-operator-index:v%v\n", catalog, o.Version); err != nil {
-			return err
+		versions, err := getVersionMap(catalog)
+		if err != nil {
+			logrus.Error("Failed to get catalog version details: ", err)
+			continue
+		}
+
+		if versions["v"+o.Version] > 0 {
+			fmt.Fprintf(w, "%s:v%s\n", catalog, o.Version)
+		} else {
+			fmt.Fprintf(w, "Invalid catalog reference, please check version: %s:v%s\n", catalog, o.Version)
 		}
 	}
 	return nil
+}
+
+func getVersionMap(c string) (map[string]int, error) {
+	repo, err := name.NewRepository(c)
+	if err != nil {
+		return nil, err
+	}
+	versionTags, err := remote.List(repo, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return nil, err
+	}
+	versions := make(map[string]int)
+
+	for _, vt := range versionTags {
+		v := strings.Split(vt, "-")
+		versions[v[0]] += 1
+	}
+	return versions, nil
 }
