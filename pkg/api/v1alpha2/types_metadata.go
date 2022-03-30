@@ -8,8 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 // Metadata object kind.
@@ -18,10 +16,11 @@ const MetadataKind = "Metadata"
 // Metadata configures image set creation.
 type Metadata struct {
 	metav1.TypeMeta `json:",inline"`
-
+	// MetadataSpec defines the global specificed for Metadata types.
 	MetadataSpec `json:",inline"`
 }
 
+// MetadataSpec defines the global configuration specificed for Metadata types.
 type MetadataSpec struct {
 	// Uid uniquely identifies this metadata object.
 	Uid uuid.UUID `json:"uid"`
@@ -31,18 +30,25 @@ type MetadataSpec struct {
 	PastMirror PastMirror `json:"pastMirror"`
 	// PastAssociations define the history about the set of mirrored images including
 	// child manifest and layer digest information
-	PastAssociations []image.Association `json:"pastAssociations,omitempty"`
+	PastAssociations []Association `json:"pastAssociations,omitempty"`
 }
 
+// PastMirror defines the specification for previously mirrored content.
 type PastMirror struct {
-	Timestamp int    `json:"timestamp"`
-	Sequence  int    `json:"sequence"`
-	Mirror    Mirror `json:"mirror"`
+	// TimeStamp defines when the mirrored was proccessed.
+	Timestamp int `json:"timestamp"`
+	// Sequence defines the serial number
+	// assigned to the processed mirror.
+	Sequence int `json:"sequence"`
+	// Mirror defines the mirror defined
+	// in the ImageSetConfigurationSpec provided
+	// during the mirror processing.
+	Mirror Mirror `json:"mirror"`
 	// Operators are metadata about the set of mirrored operators in a mirror operation.
 	Operators []OperatorMetadata `json:"operators,omitempty"`
 	// Associations are metadata about the set of mirrored images including
 	// child manifest and layer digest information
-	Associations []image.Association `json:"associations,omitempty"`
+	Associations []Association `json:"associations,omitempty"`
 }
 
 // OperatorMetadata holds an Operator's post-mirror metadata.
@@ -72,6 +78,8 @@ func (index InlinedIndex) MarshalJSON() ([]byte, error) {
 	return json.Marshal(index)
 }
 
+// NewMetadata returns an empty
+// instance of Metadata with the type metadata defined.
 func NewMetadata() Metadata {
 	return Metadata{
 		TypeMeta: metav1.TypeMeta{
@@ -79,21 +87,6 @@ func NewMetadata() Metadata {
 			Kind:       MetadataKind,
 		},
 	}
-}
-
-func LoadMetadata(data []byte) (m Metadata, err error) {
-
-	gvk := GroupVersion.WithKind(MetadataKind)
-
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&m); err != nil {
-		return m, fmt.Errorf("decode %s: %v", gvk, err)
-	}
-
-	m.SetGroupVersionKind(gvk)
-
-	return m, nil
 }
 
 func (m *Metadata) MarshalJSON() ([]byte, error) {

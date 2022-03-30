@@ -3,17 +3,18 @@ package image
 import (
 	"fmt"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 // ConvertToAssociationSet will return an AssociationSet from a slice of Associations
-func ConvertToAssociationSet(assoc []Association) (AssociationSet, error) {
+func ConvertToAssociationSet(assoc []v1alpha2.Association) (AssociationSet, error) {
 	assocSet := AssociationSet{}
 
-	assocMapping := make(map[string]Association, len(assoc))
+	assocMapping := make(map[string]v1alpha2.Association, len(assoc))
 	var errs []error
 	for _, a := range assoc {
-		if err := a.validate(); err != nil {
+		if err := a.Validate(); err != nil {
 			errs = append(errs, err)
 		}
 		assocMapping[a.Name] = a
@@ -50,12 +51,12 @@ func ConvertToAssociationSet(assoc []Association) (AssociationSet, error) {
 }
 
 // COnvertFromAssociationSet will return a slice of Association from an AssociationSet
-func ConvertFromAssociationSet(assocSet AssociationSet) ([]Association, error) {
-	assocs := []Association{}
+func ConvertFromAssociationSet(assocSet AssociationSet) ([]v1alpha2.Association, error) {
+	assocs := []v1alpha2.Association{}
 	var errs []error
 	for _, as := range assocSet {
 		for _, a := range as {
-			if err := a.validate(); err != nil {
+			if err := a.Validate(); err != nil {
 				errs = append(errs, err)
 			}
 			assocs = append(assocs, a)

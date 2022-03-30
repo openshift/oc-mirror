@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
@@ -157,13 +157,13 @@ func TestFindBlobRepo(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			assocs := image.AssociationSet{"registry.com/test3/baz": map[string]image.Association{
+			assocs := image.AssociationSet{"registry.com/test3/baz": image.Associations{
 				"registry.com/test3/baz": {
 					Name:            "registry.com/test3/baz",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "",
-					Type:            image.TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests:    []string{"found"},
 				},

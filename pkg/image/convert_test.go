@@ -3,13 +3,14 @@ package image
 import (
 	"testing"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConvertToAssociationSet(t *testing.T) {
 	type spec struct {
 		desc   string
-		input  []Association
+		input  []v1alpha2.Association
 		expSet AssociationSet
 		err    string
 	}
@@ -23,7 +24,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -36,13 +37,13 @@ func TestConvertToAssociationSet(t *testing.T) {
 				},
 			},
 			},
-			input: []Association{
+			input: []v1alpha2.Association{
 				{
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -63,7 +64,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "latest",
 					ID:         "sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					ManifestDigests: []string{
 						"sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
 						"sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
@@ -77,7 +78,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 						"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -94,7 +95,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 						"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -111,7 +112,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -128,7 +129,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 						"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -141,13 +142,13 @@ func TestConvertToAssociationSet(t *testing.T) {
 					},
 				},
 			}},
-			input: []Association{
+			input: []v1alpha2.Association{
 				{
 					Name:       "imgname:latest",
 					Path:       "index_manifest",
 					TagSymlink: "latest",
 					ID:         "sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					ManifestDigests: []string{
 						"sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
 						"sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
@@ -161,7 +162,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 						"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -178,7 +179,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 						"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -195,7 +196,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -212,7 +213,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 						"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -229,7 +230,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 						"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -246,7 +247,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 						"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -263,7 +264,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -280,7 +281,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 						"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -303,7 +304,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:            "single_manifest",
 						TagSymlink:      "latest",
 						ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-						Type:            TypeGeneric,
+						Type:            v1alpha2.TypeGeneric,
 						ManifestDigests: nil,
 						LayerDigests: []string{
 							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -321,7 +322,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:       "index_manifest",
 						TagSymlink: "latest",
 						ID:         "sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
-						Type:       TypeGeneric,
+						Type:       v1alpha2.TypeGeneric,
 						ManifestDigests: []string{
 							"sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
 							"sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
@@ -335,7 +336,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:       "index_manifest",
 						TagSymlink: "",
 						ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-						Type:       TypeGeneric,
+						Type:       v1alpha2.TypeGeneric,
 						LayerDigests: []string{
 							"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 							"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -352,7 +353,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:       "index_manifest",
 						TagSymlink: "",
 						ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-						Type:       TypeGeneric,
+						Type:       v1alpha2.TypeGeneric,
 						LayerDigests: []string{
 							"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 							"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -369,7 +370,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:       "index_manifest",
 						TagSymlink: "",
 						ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-						Type:       TypeGeneric,
+						Type:       v1alpha2.TypeGeneric,
 						LayerDigests: []string{
 							"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 							"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -386,7 +387,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 						Path:       "index_manifest",
 						TagSymlink: "",
 						ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-						Type:       TypeGeneric,
+						Type:       v1alpha2.TypeGeneric,
 						LayerDigests: []string{
 							"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 							"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -399,13 +400,13 @@ func TestConvertToAssociationSet(t *testing.T) {
 						},
 					},
 				}},
-			input: []Association{
+			input: []v1alpha2.Association{
 				{
 					Name:            "imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Type:            TypeGeneric,
+					Type:            v1alpha2.TypeGeneric,
 					ManifestDigests: nil,
 					LayerDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
@@ -421,7 +422,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "latest",
 					ID:         "sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					ManifestDigests: []string{
 						"sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
 						"sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
@@ -435,7 +436,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 						"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -452,7 +453,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 						"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -469,7 +470,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -486,7 +487,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 						"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -503,7 +504,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:60f5921e0f6a21a485a0a4e9415761afb5b60814bbe8a6864cb12b90ae24c1d0",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b538f80385f9b48122e3da068c932a96ea5018afa3c7be79da00437414bd18cd",
 						"sha256:342a15c43afd15b4d93051022ecf020ea6fde1e14d34599f5b4c10a8a5bae3c6",
@@ -520,7 +521,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:9574416689665a82cb4eaf43463da5b6156071ebbec117262eef7fa32b4d7021",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:b4b72e716706d29f5d2351709c20bf737b94f876a5472a43ff1b6e203c65d27f",
 						"sha256:8d0157f7a4ed4136f430f737f0f79d650248e19ebd87371f1ae1735536f0eaf2",
@@ -537,7 +538,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",
@@ -554,7 +555,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:df20fa9351a15782c64e6dddb2d4a6f50bf6d3688060a34c4014b0d9a752eb4c",
 						"sha256:58445347cff86791f89717f3bf79ec6f597d146397d9e78136cf9e937f363555",
@@ -572,13 +573,13 @@ func TestConvertToAssociationSet(t *testing.T) {
 			desc:   "Failure/InvalidAssociation",
 			expSet: AssociationSet{},
 			err:    "invalid associations: association for \"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b\" is missing",
-			input: []Association{
+			input: []v1alpha2.Association{
 				{
 					Name:       "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
 					Path:       "single_manifest",
 					TagSymlink: "latest",
 					ID:         "sha256:bab3a6153010b614c8764548f0dbe34c4a7dce4ea278a94713c3e9a936bb74e6",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					ManifestDigests: []string{
 						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
 						"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
@@ -594,7 +595,7 @@ func TestConvertToAssociationSet(t *testing.T) {
 					Path:       "index_manifest",
 					TagSymlink: "",
 					ID:         "sha256:b8a825862d73b2f1110dd9c5fc0631f47117c7cd99e42efa34244cd82bd6742f",
-					Type:       TypeGeneric,
+					Type:       v1alpha2.TypeGeneric,
 					LayerDigests: []string{
 						"sha256:52278dd8e57993669c5b72a9620e89bebdc098f2af2379caaa8945f7403f77a2",
 						"sha256:1dc2a2c4dd124cf83f27e6d8852303f7874507b71a3f7b6a1265837b43279092",

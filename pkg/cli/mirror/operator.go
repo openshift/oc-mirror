@@ -30,8 +30,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -329,14 +329,14 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	mappingFile := filepath.Join(opts.ManifestDir, mappingFile)
-	mappings, err := image.ReadImageMapping(mappingFile, "=", image.TypeOperatorBundle)
+	mappings, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
 	if err != nil {
 		return nil, err
 	}
 
 	// Remove the catalog image from mappings we are going to transfer this
 	// using an OCI layout
-	mappings.Remove(ctlgRef, image.TypeOperatorBundle)
+	mappings.Remove(ctlgRef, v1alpha2.TypeOperatorBundle)
 	if err := o.writeLayout(ctx, ctlgRef.Ref); err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMapping) error {
 	var errs []error
 	validateFunc := func(img string) error {
-		ref, err := image.ParseTypedImage(img, image.TypeOperatorBundle)
+		ref, err := image.ParseTypedImage(img, v1alpha2.TypeOperatorBundle)
 		if err != nil {
 			return err
 		}

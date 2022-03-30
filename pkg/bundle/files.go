@@ -25,7 +25,7 @@ func ReconcileV2Dir(assocs image.AssociationSet, filenames map[string]string) (m
 	// Checking against all digest because mirroring
 	// by digest can cause the manifest to pop up in the blobs
 	// directory
-	// TODO(jpower432): Invesitagte why this happens.
+	// TODO(jpower432): Investigate why this happens.
 	// Happens with oc image mirror as well.
 	for _, digest := range assocs.GetDigests() {
 		foundFiles[digest] = struct{}{}

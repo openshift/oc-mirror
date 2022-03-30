@@ -26,6 +26,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
 	"github.com/openshift/oc-mirror/pkg/operator"
@@ -102,7 +103,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			catalogsByImage[ctlgRef] = slashPath
 
 			// Add to mapping for ICSP generation
-			refs.Add(sourceRef, ctlgRef, image.TypeOperatorCatalog)
+			refs.Add(sourceRef, ctlgRef, v1alpha2.TypeOperatorCatalog)
 		}
 		return nil
 	}); err != nil {

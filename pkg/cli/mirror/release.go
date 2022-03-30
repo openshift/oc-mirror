@@ -22,9 +22,9 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -345,12 +345,12 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 		return nil, err
 	}
 
-	mappings, err := image.ReadImageMapping(mappingPath, " ", image.TypeOCPRelease)
+	mappings, err := image.ReadImageMapping(mappingPath, " ", v1alpha2.TypeOCPRelease)
 	if err != nil {
 		return nil, err
 	}
 
-	releaseImageRef, err := image.ParseTypedImage(opts.From, image.TypeOCPRelease)
+	releaseImageRef, err := image.ParseTypedImage(opts.From, v1alpha2.TypeOCPRelease)
 	if err != nil {
 		return nil, err
 	}

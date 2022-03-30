@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution"
 	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
@@ -86,7 +87,7 @@ func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (A
 	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
-func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, typ ImageType, skipParse func(string) bool) (associations []Association, err error) {
+func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag string, typ v1alpha2.ImageType, skipParse func(string) bool) (associations []v1alpha2.Association, err error) {
 	if skipParse(image) {
 		return nil, nil
 	}
@@ -134,7 +135,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 		return nil, fmt.Errorf("error reading image manifest file: %v", err)
 	}
 
-	association := Association{
+	association := v1alpha2.Association{
 		Name:       image,
 		Path:       dirRef,
 		ID:         id,
@@ -234,7 +235,7 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 	return bundleAssociations, utilerrors.NewAggregate(errs)
 }
 
-func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcInfo TypedImage, ms distribution.ManifestService, skipParse func(string) bool, insecure bool) (associations []Association, err error) {
+func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcInfo TypedImage, ms distribution.ManifestService, skipParse func(string) bool, insecure bool) (associations []v1alpha2.Association, err error) {
 	if skipParse(srcImg) {
 		return nil, nil
 	}
@@ -252,7 +253,7 @@ func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcI
 		return nil, err
 	}
 
-	association := Association{
+	association := v1alpha2.Association{
 		Name:       srcImg,
 		Path:       dstImg,
 		ID:         srcInfo.Ref.ID,

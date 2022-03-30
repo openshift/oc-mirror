@@ -12,8 +12,8 @@ import (
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -49,7 +49,7 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: image.TypeGeneric,
+				Category: v1alpha2.TypeGeneric,
 			},
 		},
 		{
@@ -74,7 +74,7 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: image.TypeGeneric,
+				Category: v1alpha2.TypeGeneric,
 			},
 		},
 	}

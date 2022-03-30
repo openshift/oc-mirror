@@ -3,6 +3,7 @@ package image
 import (
 	"testing"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,12 +28,12 @@ func TestUpdateKey(t *testing.T) {
 
 func TestUpdateValue(t *testing.T) {
 	asSet := makeTestAssocationSet()
-	newAssoc := Association{
+	newAssoc := v1alpha2.Association{
 		Name:       testKeyName,
 		Path:       "new",
 		ID:         "new-id",
 		TagSymlink: "new-tag",
-		Type:       TypeGeneric,
+		Type:       v1alpha2.TypeGeneric,
 	}
 	require.NoError(t, asSet.UpdateValue(setTestKeyName, newAssoc))
 	assoc, ok := asSet[setTestKeyName][newAssoc.Name]
@@ -46,12 +47,12 @@ func TestMerge(t *testing.T) {
 	asSet := makeTestAssocationSet()
 	newASSet := AssociationSet{}
 	newAssocs := Associations{}
-	newAssoc := Association{
+	newAssoc := v1alpha2.Association{
 		Name:       "newKey",
 		Path:       "new",
 		ID:         "new-id",
 		TagSymlink: "new-tag",
-		Type:       TypeGeneric,
+		Type:       v1alpha2.TypeGeneric,
 	}
 	newAssocs["newKey"] = newAssoc
 	newASSet["setNewKey"] = newAssocs
@@ -88,12 +89,12 @@ func TestGetDigests(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	asSet := AssociationSet{}
-	newAssoc := Association{
+	newAssoc := v1alpha2.Association{
 		Name:       testKeyName,
 		Path:       "new",
 		ID:         "new-id",
 		TagSymlink: "new-tag",
-		Type:       TypeGeneric,
+		Type:       v1alpha2.TypeGeneric,
 	}
 	asSet.Add(setTestKeyName, newAssoc)
 	assocs, ok := asSet[setTestKeyName]
@@ -118,12 +119,12 @@ func TestGetImageFromBlob(t *testing.T) {
 func makeTestAssocationSet() AssociationSet {
 	asSet := AssociationSet{}
 	assocs := Associations{}
-	association := Association{
+	association := v1alpha2.Association{
 		Name:         testKeyName,
 		Path:         "test",
 		ID:           "test-id",
 		TagSymlink:   "test-tag",
-		Type:         TypeGeneric,
+		Type:         v1alpha2.TypeGeneric,
 		LayerDigests: []string{"test-layer"},
 	}
 	assocs[testKeyName] = association

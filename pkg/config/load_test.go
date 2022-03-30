@@ -1,4 +1,4 @@
-package v1alpha2
+package config
 
 import (
 	"io/ioutil"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,22 +17,20 @@ func TestLoadConfig(t *testing.T) {
 		file      string
 		inline    string
 		assertion require.ErrorAssertionFunc
-		expConfig ImageSetConfigurationSpec
+		expConfig v1alpha2.ImageSetConfigurationSpec
 		expError  string
 	}
-
-	falsePtr := new(bool)
 
 	specs := []spec{
 		{
 			name:      "Valid/Basic",
 			file:      filepath.Join("testdata", "config", "valid.yaml"),
 			assertion: require.NoError,
-			expConfig: ImageSetConfigurationSpec{
-				Mirror: Mirror{
-					OCP: OCP{
+			expConfig: v1alpha2.ImageSetConfigurationSpec{
+				Mirror: v1alpha2.Mirror{
+					OCP: v1alpha2.OCP{
 						Graph: true,
-						Channels: []ReleaseChannel{
+						Channels: []v1alpha2.ReleaseChannel{
 							{
 								Name: "stable-4.7",
 							},
@@ -42,26 +41,26 @@ func TestLoadConfig(t *testing.T) {
 							},
 						},
 					},
-					Operators: []Operator{
+					Operators: []v1alpha2.Operator{
 						{
-							Catalog:   "redhat-operators:v4.7",
-							HeadsOnly: falsePtr,
+							Catalog: "redhat-operators:v4.7",
+							Full:    true,
 						},
 						{
-							Catalog:   "certified-operators:v4.7",
-							HeadsOnly: falsePtr,
-							IncludeConfig: IncludeConfig{
-								Packages: []IncludePackage{
+							Catalog: "certified-operators:v4.7",
+							Full:    true,
+							IncludeConfig: v1alpha2.IncludeConfig{
+								Packages: []v1alpha2.IncludePackage{
 									{Name: "couchbase-operator"},
 									{
 										Name: "mongodb-operator",
-										IncludeBundle: IncludeBundle{
+										IncludeBundle: v1alpha2.IncludeBundle{
 											StartingVersion: semver.Version{Major: 1, Minor: 4, Patch: 0},
 										},
 									},
 									{
 										Name: "crunchy-postgresql-operator",
-										Channels: []IncludeChannel{
+										Channels: []v1alpha2.IncludeChannel{
 											{Name: "stable"},
 										},
 									},
@@ -72,31 +71,31 @@ func TestLoadConfig(t *testing.T) {
 							Catalog: "community-operators:v4.7",
 						},
 					},
-					AdditionalImages: []AdditionalImages{
-						{Image: Image{Name: "registry.redhat.io/ubi8/ubi:latest"}},
+					AdditionalImages: []v1alpha2.AdditionalImages{
+						{Image: v1alpha2.Image{Name: "registry.redhat.io/ubi8/ubi:latest"}},
 					},
-					Helm: Helm{
-						Repos: []Repo{
+					Helm: v1alpha2.Helm{
+						Repos: []v1alpha2.Repo{
 							{
 								URL:  "https://stefanprodan.github.io/podinfo",
 								Name: "podinfo",
-								Charts: []Chart{
+								Charts: []v1alpha2.Chart{
 									{Name: "podinfo", Version: "5.0.0"},
 								},
 							},
 						},
-						Local: []Chart{
+						Local: []v1alpha2.Chart{
 							{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
 						},
 					},
-					BlockedImages: []BlockedImages{
-						{Image: Image{Name: "alpine"}},
-						{Image: Image{Name: "redis"}},
+					BlockedImages: []v1alpha2.BlockedImages{
+						{Image: v1alpha2.Image{Name: "alpine"}},
+						{Image: v1alpha2.Image{Name: "redis"}},
 					},
-					Samples: []SampleImages{
-						{Image: Image{Name: "ruby"}},
-						{Image: Image{Name: "python"}},
-						{Image: Image{Name: "nginx"}},
+					Samples: []v1alpha2.SampleImages{
+						{Image: v1alpha2.Image{Name: "ruby"}},
+						{Image: v1alpha2.Image{Name: "python"}},
+						{Image: v1alpha2.Image{Name: "nginx"}},
 					},
 				},
 			},
@@ -140,18 +139,70 @@ func TestHeadsOnly(t *testing.T) {
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
+  ocp:
+    channels:
+    - name: test-channel1
+      full: true
+    - name: test-channel2
+      full: false
+    - name: test-channel3
   operators:
   - catalog: registry.com/ns/foo:v1.2
-    headsOnly: false
+    full: true
   - catalog: registry.com/ns/bar:v1.2
-    headsOnly: true
+    full: false
   - catalog: registry.com/ns/baz:v1.2
 `
 
 	cfg, err := LoadConfig([]byte(headsOnlyCfg))
 	require.NoError(t, err)
+	require.Len(t, cfg.Mirror.OCP.Channels, 3)
 	require.Len(t, cfg.Mirror.Operators, 3)
+	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
+	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
+	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
 	require.Equal(t, cfg.Mirror.Operators[0].IsHeadsOnly(), false)
 	require.Equal(t, cfg.Mirror.Operators[1].IsHeadsOnly(), true)
 	require.Equal(t, cfg.Mirror.Operators[2].IsHeadsOnly(), true)
+}
+
+func TestLoadMetadata(t *testing.T) {
+	// TODO(estroz): expected metadata.
+	type spec struct {
+		name      string
+		file      string
+		inline    string
+		assertion require.ErrorAssertionFunc
+	}
+
+	specs := []spec{
+		{
+			name:      "Valid/Basic",
+			file:      filepath.Join("testdata", "metadata", "valid.json"),
+			assertion: require.NoError,
+		},
+		{
+			name: "Invalid/BadStructure",
+			inline: `---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+foo: bar
+`,
+			assertion: require.Error,
+		},
+	}
+
+	for _, s := range specs {
+		t.Run(s.name, func(t *testing.T) {
+			data := []byte(s.inline)
+			if len(data) == 0 {
+				var err error
+				data, err = ioutil.ReadFile(s.file)
+				require.NoError(t, err)
+			}
+
+			_, err := LoadMetadata(data)
+			s.assertion(t, err)
+		})
+	}
 }

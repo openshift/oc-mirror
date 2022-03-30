@@ -21,7 +21,7 @@ import (
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 

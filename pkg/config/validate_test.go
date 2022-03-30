@@ -3,14 +3,11 @@ package config
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/config/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
 func TestValidate(t *testing.T) {
-
-	trueValue := true
-	falseValue := false
 
 	type spec struct {
 		name     string
@@ -26,10 +23,11 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &falseValue,
+								Full: true,
 							},
 						},
 					},
@@ -44,8 +42,9 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog:       "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{},
-								HeadsOnly:     &trueValue,
+								Full:          false,
 							},
 						},
 					},
@@ -59,10 +58,11 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &falseValue,
+								Full: true,
 							},
 						},
 					},
@@ -95,16 +95,17 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog: "test-catalog",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
 								},
-								HeadsOnly: &trueValue,
+								Full: false,
 							},
 						},
 					},
 				},
 			},
-			expError: "invalid configuration option: catalog cannot define packages with headsOnly set to true",
+			expError: "invalid configuration: catalog \"test-catalog\": cannot define packages with full key set to false",
 		},
 		{
 			name: "Invalid/DuplicateChannels",
@@ -124,7 +125,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			expError: "invalid configuration option: duplicate release channel channel found in configuration",
+			expError: "invalid configuration: release channel \"channel\": duplicate found in configuration",
 		},
 	}
 
