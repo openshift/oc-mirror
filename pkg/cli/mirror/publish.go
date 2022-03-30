@@ -228,7 +228,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			// Unpack association main manifest
 			if err := unpack(filepath.Join(manifestPath, assoc.ID), unpackDir, filesInArchive); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("error occured during unpacking %v", err))
 				continue
 			}
 
@@ -259,7 +259,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			if assoc.TagSymlink != "" {
 				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), unpackDir, filesInArchive); err != nil {
-					errs = append(errs, err)
+					errs = append(errs, fmt.Errorf("error unpacking symlink %v", err))
 					continue
 				}
 				m.Source.Ref.Tag = assoc.TagSymlink
@@ -475,10 +475,9 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.C
 }
 
 func unpack(archiveFilePath, dest string, filesInArchive map[string]string) error {
-	name := filepath.Base(archiveFilePath)
-	archivePath, found := filesInArchive[name]
+	archivePath, found := filesInArchive[archiveFilePath]
 	if !found {
-		return &ErrArchiveFileNotFound{name}
+		return &ErrArchiveFileNotFound{archiveFilePath}
 	}
 	if err := archive.NewArchiver().Extract(archivePath, archiveFilePath, dest); err != nil {
 		return err

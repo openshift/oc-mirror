@@ -78,7 +78,7 @@ func (o *DescribeOptions) Run(ctx context.Context) error {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	archive, ok := filesInArchive[config.MetadataFile]
+	archive, ok := filesInArchive[config.MetadataBasePath]
 	if !ok {
 		return errors.New("metadata is not in archive")
 	}
