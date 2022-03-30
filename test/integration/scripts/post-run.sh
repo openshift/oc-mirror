@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 source "$SCRIPT_DIR/common.sh"
@@ -12,7 +12,7 @@ for file in "${!save_files[@]}"; do
 done
 
 echo "Saving run artifacts"
-for file in "${!artifact_files[@]}"; do
-    path="${artifact_files[$file]}"
-    maybe_cp "$path" "${ARTIFACT_DIR}/$file" ||:
+for file in "${artifact_files[@]}"; do
+    basename="$(basename "$file")"
+    maybe_cp "$file" "${ARTIFACT_DIR}/$basename" ||:
 done
