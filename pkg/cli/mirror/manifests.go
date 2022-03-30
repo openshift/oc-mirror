@@ -210,6 +210,27 @@ func generateCatalogSource(name string, dest reference.DockerImageReference) ([]
 	return cs, nil
 }
 
+func generateUpdateService(name string, releaseRepo, graphDataImage reference.DockerImageReference) ([]byte, error) {
+
+	obj := map[string]interface{}{
+		"apiVersion": "updateservice.operator.openshift.io/v1",
+		"kind":       "UpdateService",
+		"metadata": map[string]interface{}{
+			"name": name,
+		},
+		"spec": map[string]interface{}{
+			"releases":       releaseRepo.AsRepository().Exact(),
+			"graphDataImage": graphDataImage.Exact(),
+		},
+	}
+	cs, err := yaml.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal UpdateService yaml: %v", err)
+	}
+
+	return cs, nil
+}
+
 // WriteICSPs will write provided ImageContentSourcePolicy objects to disk
 func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
@@ -259,5 +280,18 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		}
 	}
 	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
+	return nil
+}
+
+// WriteUpdateService will generate an UpdateService object and write it to disk
+func WriteUpdateService(release, graph image.TypedImage, dir string) error {
+	updateService, err := generateUpdateService("update-service", release.Ref, graph.Ref)
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
+		return fmt.Errorf("error writing UpdateService: %v", err)
+	}
+	logrus.Infof("Wrote UpdateService manifests to %s", dir)
 	return nil
 }

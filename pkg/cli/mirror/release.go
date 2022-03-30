@@ -362,6 +362,8 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 	if !ok {
 		return nil, fmt.Errorf("release images %s not found in mapping", opts.From)
 	}
+	releaseImageRef.Category = v1alpha2.TypeOCPRelease
+	dstReleaseRef.Category = v1alpha2.TypeOCPRelease
 	dstReleaseRef.Ref.Name = releaseRepo
 	mappings[releaseImageRef] = dstReleaseRef
 

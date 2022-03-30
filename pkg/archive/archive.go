@@ -49,6 +49,19 @@ func NewArchiver() Archiver {
 	}
 }
 
+// NewArchiverWithCompression creates a new archiver for tar archive manipultation with gzip compression
+func NewArchiverWithCompression() Archiver {
+	return &archiver.TarGz{
+		Tar: &archiver.Tar{
+			OverwriteExisting:      true,
+			MkdirAll:               true,
+			ImplicitTopLevelFolder: false,
+			StripComponents:        0,
+			ContinueOnError:        false,
+		},
+	}
+}
+
 // NewPackager create a new packager for build ImageSets
 func NewPackager(manifests []string, blobs []string) *packager {
 	manifestSetToArchive := make(map[string]struct{}, len(manifests))
@@ -256,8 +269,16 @@ func blobInArchive(file string) string {
 }
 
 func includeFile(fpath string) bool {
+	includeFiles := map[string]struct{}{
+		config.InternalDir:         {},
+		config.CatalogsDir:         {},
+		config.HelmDir:             {},
+		config.ReleaseSignatureDir: {},
+		config.GraphDataDir:        {},
+	}
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == "catalogs" || split[0] == config.HelmDir || split[0] == config.ReleaseSignatureDir
+	_, found := includeFiles[split[0]]
+	return found
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {

@@ -36,9 +36,8 @@ import (
 )
 
 const (
-	CatalogsDir = "catalogs"
-	LayoutsDir  = "layout"
-	IndexDir    = "index"
+	LayoutsDir = "layout"
+	IndexDir   = "index"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -449,7 +448,7 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef imgreference.
 	if err != nil {
 		return err
 	}
-	layoutDir := filepath.Join(o.Dir, config.SourceDir, CatalogsDir, ctlgDir, LayoutsDir)
+	layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, LayoutsDir)
 	if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 		return fmt.Errorf("error catalog layout dir: %v", err)
 	}
@@ -500,7 +499,7 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgrefe
 	if err != nil {
 		return "", err
 	}
-	indexDir := filepath.Join(o.Dir, config.SourceDir, CatalogsDir, ctlgDir, IndexDir)
+	indexDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, IndexDir)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
