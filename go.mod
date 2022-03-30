@@ -17,8 +17,9 @@ require (
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
-	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
-	github.com/openshift/library-go v0.0.0-20210831102543-1a08f0c3bd9a
+	github.com/openshift/api v0.0.0-20210907084939-33af3ff57ff1
+	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
+	github.com/openshift/library-go v0.0.0-20210906100234-6754cfd64cb5
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
 	github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773
 	github.com/sirupsen/logrus v1.8.1
@@ -27,7 +28,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
-	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.7.2
 	k8s.io/apimachinery v0.22.4
 	k8s.io/cli-runtime v0.22.4
@@ -57,8 +57,8 @@ require (
 	github.com/alicebob/sqlittle v1.4.0 // indirect
 	github.com/andybalholm/brotli v1.0.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210826220005-b48c857c3a0e // indirect
-	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
-	github.com/aws/aws-sdk-go v1.35.24 // indirect
+	github.com/asaskevich/govalidator v0.0.0-20200907205600-7a23bdc65eef // indirect
+	github.com/aws/aws-sdk-go v1.38.35 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -98,7 +98,7 @@ require (
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/cel-go v0.9.0 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
-	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
@@ -145,6 +145,7 @@ require (
 	github.com/onsi/gomega v1.15.0 // indirect
 	github.com/opencontainers/runc v1.0.2 // indirect
 	github.com/openshift/client-go v0.0.0-20210831095141-e19a065e79f7 // indirect
+	github.com/openshift/custom-resource-status v1.1.0 // indirect
 	github.com/operator-framework/api v0.12.0 // indirect
 	github.com/otiai10/copy v1.2.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
@@ -196,6 +197,7 @@ require (
 	gopkg.in/gorp.v1 v1.7.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/api v0.22.4 // indirect
 	k8s.io/apiextensions-apiserver v0.22.4 // indirect

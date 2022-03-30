@@ -405,6 +405,7 @@ metadata:
 spec:
   graphDataImage: registry.com/graph:latest
   releases: registry.com/releases
+  replicas: 2
 `
 
 	release, err := reference.Parse("registry.com/releases:latest")
@@ -413,5 +414,5 @@ spec:
 	require.NoError(t, err)
 	data, err := generateUpdateService("test", release, graph)
 	require.NoError(t, err)
-	require.Equal(t, string(data), expCfg)
+	require.Equal(t, expCfg, string(data))
 }
