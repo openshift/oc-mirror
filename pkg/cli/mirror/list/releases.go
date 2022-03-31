@@ -34,6 +34,8 @@ type ReleaseVersion struct {
 	Minor int
 }
 
+const OCP_Release_Repo = "quay.io/openshift-release-dev/ocp-release"
+
 func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	o := ReleasesOptions{}
 	o.RootOptions = ro
@@ -158,7 +160,7 @@ func listChannelsForVersion(ctx context.Context, client cincinnati.Client, o *Re
 
 func listOCPReleaseVersions() error {
 
-	repo, err := name.NewRepository("quay.io/openshift-release-dev/ocp-release")
+	repo, err := name.NewRepository(OCP_Release_Repo)
 	if err != nil {
 		return err
 	}
