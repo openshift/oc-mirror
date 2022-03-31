@@ -302,7 +302,7 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 
 // WriteUpdateService will generate an UpdateService object and write it to disk
 func WriteUpdateService(release, graph image.TypedImage, dir string) error {
-	updateService, err := generateUpdateService("update-service", release.Ref, graph.Ref)
+	updateService, err := generateUpdateService("update-service-oc-mirror", release.Ref, graph.Ref)
 	if err != nil {
 		return err
 	}
