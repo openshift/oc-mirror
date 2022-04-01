@@ -455,7 +455,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			asSet, err := AssociateRemoteImageLayers(context.TODO(), test.imgMapping, true)
+			asSet, err := AssociateRemoteImageLayers(context.TODO(), test.imgMapping, true, false)
 			if !test.wantErr {
 				require.NoError(t, err)
 				require.Equal(t, test.expResult, asSet)

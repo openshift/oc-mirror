@@ -11,10 +11,13 @@ import (
 
 	ctrsimgmanifest "github.com/containers/image/v5/manifest"
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -183,7 +186,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 
 // AssociateRemoteImageLayers queries remote manifests and gathers all child manifests and layer digest information
 // for mirrored images
-func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, insecure bool) (AssociationSet, utilerrors.Aggregate) {
+func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, insecure, skipVerification bool) (AssociationSet, utilerrors.Aggregate) {
 	errs := []error{}
 	bundleAssociations := AssociationSet{}
 
@@ -203,9 +206,9 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 			continue
 		}
 
-		regctx, err := CreateDefaultContext(insecure)
+		regctx, err := NewContext(skipVerification)
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("error creating registry context: %v", err))
 			continue
 		}
 
@@ -244,7 +247,7 @@ func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcI
 	if err != nil {
 		return nil, err
 	}
-	mn, err := ms.Get(ctx, dgst)
+	mn, err := ms.Get(ctx, dgst, preferManifestList)
 	if err != nil {
 		return nil, fmt.Errorf("error getting manifest %s: %v", dgst, err)
 	}
@@ -301,3 +304,10 @@ func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcI
 
 	return associations, nil
 }
+
+// PreferManifestList specifically requests a manifest list first
+var preferManifestList = distribution.WithManifestMediaTypes([]string{
+	manifestlist.MediaTypeManifestList,
+	schema2.MediaTypeManifest,
+	imgspecv1.MediaTypeImageManifest,
+})
