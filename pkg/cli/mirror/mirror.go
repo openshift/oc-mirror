@@ -281,6 +281,14 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry backends and generating the CatalogSource
 		mapping, err = o.Publish(cmd.Context())
 		if err != nil {
+			serr := &SequenceError{}
+			if errors.As(err, &serr) {
+				return fmt.Errorf(
+					"error occurred during publishing, expecting imageset with prefix mirror_seq%d: %v",
+					serr.wantSeq,
+					err,
+				)
+			}
 			return err
 		}
 		dir, err := o.createResultsDir()
