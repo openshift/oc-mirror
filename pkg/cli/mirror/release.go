@@ -1,24 +1,24 @@
 package mirror
 
 import (
-	"context"
-	"fmt"
-	"os"
 	"bytes"
-	"errors"
-	"io/ioutil"
+	"context"
 	_ "embed"
+	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
-	"strings"
+	"os"
 	"path/filepath"
+	"strings"
 
 	semver "github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/openshift/library-go/pkg/manifest"
 	"github.com/openshift/library-go/pkg/verify"
 	"github.com/openshift/library-go/pkg/verify/store/sigstore"
 	"github.com/openshift/library-go/pkg/verify/util"
+	"github.com/openshift/oc/pkg/cli/admin/release"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -75,16 +75,20 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 	for _, arch := range o.arch {
 
-		versionsByChannel := make(map[string]v1alpha2.ReleaseChannel, len(cfg.Mirror.OCP.Channels))
+		versionsByChannel := make(map[string]v1alpha2.ReleaseChannel, len(cfg.Mirror.Platform.Channels))
 
-		for _, ch := range cfg.Mirror.OCP.Channels {
+		for _, ch := range cfg.Mirror.Platform.Channels {
 
 			var client cincinnati.Client
 			var err error
-			if ch.Name == cincinnati.OkdChannel {
-				client, err = cincinnati.NewOKDClient(o.uuid)
-			} else {
+			switch ch.Type {
+			case v1alpha2.TypeOCP:
 				client, err = cincinnati.NewOCPClient(o.uuid)
+			case v1alpha2.TypeOKD:
+				client, err = cincinnati.NewOKDClient(o.uuid)
+			default:
+				errs = append(errs, fmt.Errorf("invalid platform type %v", ch.Type))
+				continue
 			}
 			if err != nil {
 				errs = append(errs, err)
@@ -121,7 +125,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 				versionsByChannel[ch.Name] = ch
 			}
 
-			downloads, err := o.getChannelDownloads(ctx, client, lastRun.Mirror.OCP.Channels, ch, arch)
+			downloads, err := o.getChannelDownloads(ctx, client, lastRun.Mirror.Platform.Channels, ch, arch)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -131,10 +135,10 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 		// Update cfg release channels with maximum and minimum versions
 		// if applicable
-		cfg.Mirror.OCP.Channels = updateReleaseChannel(cfg.Mirror.OCP.Channels, versionsByChannel)
+		cfg.Mirror.Platform.Channels = updateReleaseChannel(cfg.Mirror.Platform.Channels, versionsByChannel)
 
-		if len(cfg.Mirror.OCP.Channels) > 1 {
-			newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.OCP.Channels)
+		if len(cfg.Mirror.Platform.Channels) > 1 {
+			newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.Platform.Channels)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -264,7 +268,7 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch stri
 	// Strip any OKD channels from the list
 	var ocpChannels []v1alpha2.ReleaseChannel
 	for _, ch := range channels {
-		if ch.Name != cincinnati.OkdChannel {
+		if ch.Type == v1alpha2.TypeOCP {
 			ocpChannels = append(ocpChannels, ch)
 		}
 	}
@@ -410,7 +414,7 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 		return err
 	}
 
-	for image, _ := range releaseDownloads {
+	for image := range releaseDownloads {
 		digest := strings.Split(image, "@")[1]
 
 		ctx, cancelFn := context.WithCancel(context.Background())

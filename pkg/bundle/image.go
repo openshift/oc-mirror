@@ -22,7 +22,7 @@ func (e ErrBlocked) Error() string {
 
 // IsBlocked will return a boolean value on whether an image
 // is specified as blocked in the ImageSetConfigSpec
-func IsBlocked(blocked []v1alpha2.BlockedImages, imgRef reference.DockerImageReference) bool {
+func IsBlocked(blocked []v1alpha2.Image, imgRef reference.DockerImageReference) bool {
 
 	for _, block := range blocked {
 

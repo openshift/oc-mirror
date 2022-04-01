@@ -33,7 +33,7 @@ func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 
 func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
 	seen := map[string]bool{}
-	for _, channel := range cfg.Mirror.OCP.Channels {
+	for _, channel := range cfg.Mirror.Platform.Channels {
 		if seen[channel.Name] {
 			return fmt.Errorf(
 				"release channel %q: duplicate found in configuration", channel.Name,

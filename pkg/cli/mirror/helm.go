@@ -46,7 +46,7 @@ func NewHelmOptions(mo *MirrorOptions) *HelmOptions {
 
 func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
 
-	var images []v1alpha2.AdditionalImages
+	var images []v1alpha2.Image
 
 	// Create a temp file for to hold repo information
 	cleanup, file, err := mktempFile(h.Dir)
@@ -82,7 +82,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 		images = append(images, img...)
 	}
 
-	for _, repo := range cfg.Mirror.Helm.Repos {
+	for _, repo := range cfg.Mirror.Helm.Repositories {
 
 		// Add repo to temp file
 		if err := h.repoAdd(repo); err != nil {
@@ -115,7 +115,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 }
 
 // FindImages will download images found in a Helm chart on disk
-func findImages(path string, imagePaths ...string) (images []v1alpha2.AdditionalImages, err error) {
+func findImages(path string, imagePaths ...string) (images []v1alpha2.Image, err error) {
 
 	logrus.Debugf("Reading from path %s", path)
 
@@ -183,7 +183,7 @@ func render(chart *helmchart.Chart) (string, error) {
 }
 
 // repoAdd adds a Helm repo with given name and url
-func (h *HelmOptions) repoAdd(chartRepo v1alpha2.Repo) error {
+func (h *HelmOptions) repoAdd(chartRepo v1alpha2.Repository) error {
 
 	entry := helmrepo.Entry{
 		Name: chartRepo.Name,
@@ -242,7 +242,7 @@ func parseJSONPath(input interface{}, parser *jsonpath.JSONPath, template string
 }
 
 // search will return images from parsed object
-func search(yamlData []byte, paths ...string) (images []v1alpha2.AdditionalImages, err error) {
+func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err error) {
 
 	var data interface{}
 	// yaml.Unmarshal will convert YAMl to JSON first
@@ -261,10 +261,8 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.AdditionalImage
 
 		for _, result := range results {
 			logrus.Debugf("Found image %s", result)
-			img := v1alpha2.AdditionalImages{
-				Image: v1alpha2.Image{
-					Name: result,
-				},
+			img := v1alpha2.Image{
+				Name: result,
 			}
 
 			images = append(images, img)

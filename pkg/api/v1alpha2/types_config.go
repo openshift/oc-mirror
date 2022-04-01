@@ -26,26 +26,26 @@ type ImageSetConfigurationSpec struct {
 
 // Mirror defines the configuration for content types within the imageset.
 type Mirror struct {
-	// OCP defines the configuration for OCP and OKD content types.
-	OCP OCP `json:"ocp,omitempty"`
+	// Platform defines the configuration for OpenShift and OKD platform types.
+	Platform `json:"platform,omitempty"`
 	// Operators defines the configuration for Operator content types.
 	Operators []Operator `json:"operators,omitempty"`
 	// AdditionalImages defines the configuration for a list
 	// of individual image content types.
-	AdditionalImages []AdditionalImages `json:"additionalImages,omitempty"`
+	AdditionalImages []Image `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
-	Helm Helm `json:"helm,omitempty"`
+	Helm `json:"helm,omitempty"`
 	// BlockedImages define a list of images that will be blocked
 	// from the mirroring process if they exist in other content
 	// types in the configuration.
-	BlockedImages []BlockedImages `json:"blockedImages,omitempty"`
+	BlockedImages []Image `json:"blockedImages,omitempty"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
 	Samples []SampleImages `json:"samples,omitempty"`
 }
 
-// OCP defines the configuration for OCP and OKD content types.
-type OCP struct {
+// Platform defines the configuration for OpenShift and OKD platform types.
+type Platform struct {
 	// Graph defines whether Cincinnati graph data will
 	// downloaded and publish
 	Graph bool `json:"graph,omitempty"`
@@ -58,6 +58,9 @@ type OCP struct {
 // OCP and OKD channels
 type ReleaseChannel struct {
 	Name string `json:"name"`
+	// Type of the platform in the context of this tool.
+	// See the PlatformType enum for options. OCP is the default.
+	Type PlatformType `json:"type"`
 	// MinVersion is minimum version in the
 	// release channel to mirror
 	MinVersion string `json:"minVersion"`
@@ -109,14 +112,14 @@ func (o Operator) IsHeadsOnly() bool {
 // Helm defines the configuration for Helm chart download
 // and image mirroring
 type Helm struct {
-	// Repo is the helm repository containing the charts
-	Repos []Repo `json:"repos,omitempty"`
+	// Repositories are the Helm repositories containing the charts
+	Repositories []Repository `json:"repos,omitempty"`
 	// Local is the configuration for locally stored helm charts
 	Local []Chart `json:"local,omitempty"`
 }
 
-// Repo defines the configuration for a Helm repo.
-type Repo struct {
+// Repository defines the configuration for a Helm repository.
+type Repository struct {
 	// URL is the url of the Helm repository
 	URL string `json:"url"`
 	// Name is the name of the Helm repository
@@ -149,21 +152,9 @@ type Image struct {
 	Name string `json:"name"`
 }
 
-// AdditionalImages defines the configuration
-// individual image content types.
-type AdditionalImages struct {
-	Image `json:",inline"`
-}
-
-// BlockedImages the configuration for images that will be blocked
-// from the mirroring process if they exist in other content
-// types in the configuration.
-type BlockedImages struct {
-	Image `json:",inline"`
-}
-
 // SampleImages define the configuration
 // for Sameple content types.
+// Not implemented.
 type SampleImages struct {
 	Image `json:",inline"`
 }

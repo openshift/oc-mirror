@@ -85,7 +85,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	case err != nil && errors.Is(err, storage.ErrMetadataNotExist):
 		return fmt.Errorf("no metadata detected")
 	default:
-		if len(cfg.Mirror.OCP.Channels) != 0 {
+		if len(cfg.Mirror.Platform.Channels) != 0 {
 			if err := o.releaseUpdates(ctx, "amd64", cfg, meta.PastMirror); err != nil {
 				return err
 			}
@@ -103,7 +103,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1alpha2.ImageSetConfiguration, last v1alpha2.PastMirror) error {
 	logrus.Info("Getting release update information")
 	lastMaxVersion := map[string]semver.Version{}
-	for _, ch := range last.Mirror.OCP.Channels {
+	for _, ch := range last.Mirror.Platform.Channels {
 		version, err := semver.Parse(ch.MaxVersion)
 		if err != nil {
 			return err
@@ -115,7 +115,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1a
 	// versions if available
 	id := uuid.New()
 
-	for _, ch := range cfg.Mirror.OCP.Channels {
+	for _, ch := range cfg.Mirror.Platform.Channels {
 
 		var c cincinnati.Client
 		var err error
