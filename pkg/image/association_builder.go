@@ -15,10 +15,11 @@ import (
 	"github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-
+	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 type ErrInvalidImage struct {
@@ -186,13 +187,23 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 
 // AssociateRemoteImageLayers queries remote manifests and gathers all child manifests and layer digest information
 // for mirrored images
-func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, insecure, skipVerification bool) (AssociationSet, utilerrors.Aggregate) {
+func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMapping, skipTlS, plainHTTP, skipVerification bool) (AssociationSet, utilerrors.Aggregate) {
+	var insecure bool
+	if skipTlS || plainHTTP {
+		insecure = true
+	}
 	errs := []error{}
 	bundleAssociations := AssociationSet{}
 
 	skipParse := func(ref string) bool {
 		seen := bundleAssociations.SetContainsKey(ref)
 		return seen
+	}
+
+	resolver, err := containerdregistry.NewResolver("", skipTlS, plainHTTP, nil)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating image resolver: %v", err))
+		return bundleAssociations, utilerrors.NewAggregate(errs)
 	}
 
 	for srcImg, dstImg := range imgMappings {
@@ -202,8 +213,21 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 		}
 
 		if srcImg.Ref.ID == "" {
-			errs = append(errs, &ErrInvalidComponent{srcImg.String(), srcImg.Ref.ID})
-			continue
+			if srcImg.Ref.Tag == "" {
+				errs = append(errs, &ErrInvalidComponent{srcImg.String(), srcImg.Ref.Tag})
+				continue
+			}
+			imgWithID, err := ResolveToPin(ctx, resolver, srcImg.Ref.Exact())
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			pinnedRef, err := imagesource.ParseReference(imgWithID)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error parsing source image %s: %v", imgWithID, err))
+				continue
+			}
+			srcImg.Ref.ID = pinnedRef.Ref.ID
 		}
 
 		regctx, err := NewContext(skipVerification)

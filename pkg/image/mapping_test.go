@@ -279,3 +279,54 @@ func TestReadImageMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestToRegistry(t *testing.T) {
+	toMirror := "test.registry"
+	inputMapping := TypedImageMapping{
+		{TypedImageReference: imagesource.TypedImageReference{
+			Ref: reference.DockerImageReference{
+				Registry:  "some-registry",
+				Namespace: "namespace",
+				Name:      "image",
+				ID:        "sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+			},
+			Type: imagesource.DestinationRegistry,
+		},
+			Category: v1alpha2.TypeOperatorBundle}: {
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "disconn-registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+				},
+				Type: imagesource.DestinationFile,
+			},
+			Category: v1alpha2.TypeOperatorBundle}}
+
+	expMapping := TypedImageMapping{
+		{TypedImageReference: imagesource.TypedImageReference{
+			Ref: reference.DockerImageReference{
+				Registry:  "some-registry",
+				Namespace: "namespace",
+				Name:      "image",
+				ID:        "sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+			},
+			Type: imagesource.DestinationRegistry,
+		},
+			Category: v1alpha2.TypeOperatorBundle}: {
+			TypedImageReference: imagesource.TypedImageReference{
+				Ref: reference.DockerImageReference{
+					Registry:  "test.registry",
+					Namespace: "namespace",
+					Name:      "image",
+					ID:        "sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+					Tag:       "30c794",
+				},
+				Type: imagesource.DestinationRegistry,
+			},
+			Category: v1alpha2.TypeOperatorBundle}}
+
+	inputMapping.ToRegistry(toMirror, "")
+	require.Equal(t, expMapping, inputMapping)
+}
