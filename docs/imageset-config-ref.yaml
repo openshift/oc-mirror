@@ -5,7 +5,7 @@ storageConfig:
     imageURL: localhost:5000/test:latest # Stores metadata in an image
     skipTLS: true # Disable TLS certificate checking or use plain HTTP 
 mirror:
-  ocp:
+  platform:
     channels:
       - name: stable-4.9 # References latest stable release
       - name: stable-4.7 # Annotation references min and max version. 
@@ -20,16 +20,16 @@ mirror:
           startingVersion: '3.67.0'
           channels:
             - name: 'latest'
-  additionalimages: # List of additional images to be included in imageset
+  additionalImages: # List of additional images to be included in imageset
     - name: registry.redhat.io/ubi8/ubi:latest
-  blockedimages: # Planned, list of base images to be blocked (best effort)
+  blockedImages: # Planned, list of base images to be blocked (best effort)
     - name: alpine
     - name: redis
   helm:
     local:
       - name: podinfo
         path: /test/podinfo-5.0.0.tar.gz
-    repos:
+    repositories:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
         charts:
