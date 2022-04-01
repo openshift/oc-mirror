@@ -39,6 +39,7 @@ func NewVersionCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 			oc-mirror version
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
+			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run())
 		},
 	}

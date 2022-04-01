@@ -41,7 +41,7 @@ func (b *localDirBackend) init() error {
 		b.fs = afero.NewOsFs()
 	}
 
-	if err := b.fs.MkdirAll(b.dir, 0755); err != nil {
+	if err := b.fs.MkdirAll(b.dir, 0750); err != nil {
 		return err
 	}
 
@@ -147,7 +147,7 @@ func (b *localDirBackend) WriteObject(ctx context.Context, fpath string, obj int
 func (b *localDirBackend) GetWriter(_ context.Context, fpath string) (io.Writer, error) {
 
 	// Create a child dirs necessary.
-	if err := b.fs.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
+	if err := b.fs.MkdirAll(filepath.Dir(fpath), 0750); err != nil {
 		return nil, fmt.Errorf("error creating object child path: %v", err)
 	}
 
