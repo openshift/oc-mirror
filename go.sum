@@ -430,7 +430,6 @@ github.com/dhui/dktest v0.3.0/go.mod h1:cyzIUfGsBEbZ6BT7tnXqAShHSXCZhSNmFl70sZ7c
 github.com/distribution/distribution/v3 v3.0.0-20210804104954-38ab4c606ee3 h1:rEK0juuU5idazw//KzUcL3yYwUU3DIe2OnfJwjDBqno=
 github.com/distribution/distribution/v3 v3.0.0-20210804104954-38ab4c606ee3/go.mod h1:gt38b7cvVKazi5XkHvINNytZXgTEntyhtyM3HQz46Nk=
 github.com/dnaeon/go-vcr v1.0.1/go.mod h1:aBB1+wY4s93YsC3HHjMBMrwTj2R9FHDzUr9KyGc8n1E=
-github.com/docker/cli v0.0.0-20200130152716-5d0cf8839492/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli v20.10.7+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli v20.10.12+incompatible h1:lZlz0uzG+GH+c0plStMUdF/qk3ppmgnswpR5EbqzVGA=
 github.com/docker/cli v20.10.12+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
@@ -1224,10 +1223,10 @@ github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5/go.mod h1:/wsWhb9smxS
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
 github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
-github.com/operator-framework/api v0.11.0 h1:W9V1NNwl3LWPQL9S1pDaFONCarJLl8Xu6gdF9w54hTE=
-github.com/operator-framework/api v0.11.0/go.mod h1:FTiYGm11fZQ3cSX+EQHc/UWoGZAwkGfyeHU+wMJ8jmA=
-github.com/operator-framework/operator-registry v1.19.6-0.20220120140729-354cd3851678 h1:XAi8mGCev5HZHjCvOnweWrpMLkxExcPKZsD9L871rvA=
-github.com/operator-framework/operator-registry v1.19.6-0.20220120140729-354cd3851678/go.mod h1:XT2ihzyUMOB9K0dI9wxoY+6DDE0NVOrqtnQvnElEyXs=
+github.com/operator-framework/api v0.12.0 h1:aHxHk50/Y1J4Ogdk2J6tYofgX+GEqyBPCMyun+JFqV4=
+github.com/operator-framework/api v0.12.0/go.mod h1:FTiYGm11fZQ3cSX+EQHc/UWoGZAwkGfyeHU+wMJ8jmA=
+github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773 h1:OEUAU/Fw7sPm+KU/mREYL7FnlZRAswaRqx2DM8wGM/Q=
+github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773/go.mod h1:qDxBCYPeOMlOXd95Zi1q4GpiKwK9i9Mag1AkrMOoFNU=
 github.com/ostreedev/ostree-go v0.0.0-20190702140239-759a8c1ac913/go.mod h1:J6OG6YJVEWopen4avK3VNQSnALmmjvniMmni/YFYAwc=
 github.com/otiai10/copy v1.2.0 h1:HvG945u96iNadPoG2/Ja2+AUJeW5YuFQMixq9yirC+k=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
