@@ -23,7 +23,7 @@
             "name": "ubuntu"
           }
         ],
-        "ocp": {
+        "platform": {
           "graph": true,
           "channels": [
             {
@@ -44,7 +44,7 @@
             "path": "localhost:5000/test@sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
             "id": "sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
             "tagSymlink": "latest",
-            "type": 5,
+            "type": "generic",
             "manifestDigests": [
               "sha256:cbc1e8cea8c78cfa1490c4f01b2be59d43ddbbad6987d938def1960f64bcd02c",
               "sha256:f52d79a9d0a3c23e6ac4c3c8f2ed8d6337ea47f4e2dfd46201756160ca193308",

@@ -48,16 +48,15 @@ func TestSearch(t *testing.T) {
 		name    string
 		path    string
 		ipaths  []string
-		want    []v1alpha2.AdditionalImages
+		want    []v1alpha2.Image
 		wantErr bool
 	}{
 		{
 			name:   "test podinfo",
 			path:   "testdata/artifacts/podinfo.yaml",
 			ipaths: getImagesPath(),
-			want: []v1alpha2.AdditionalImages{
-				{Image: v1alpha2.Image{
-					Name: "ghcr.io/stefanprodan/podinfo:6.0.0"}},
+			want: []v1alpha2.Image{
+				{Name: "ghcr.io/stefanprodan/podinfo:6.0.0"},
 			},
 			wantErr: false,
 		},
@@ -151,9 +150,8 @@ func TestFindImages(t *testing.T) {
 
 	ipaths := []string{}
 	path := "testdata/artifacts/podinfo-6.0.0.tgz"
-	want := []v1alpha2.AdditionalImages{
-		{Image: v1alpha2.Image{
-			Name: "ghcr.io/stefanprodan/podinfo:6.0.0"}},
+	want := []v1alpha2.Image{
+		{Name: "ghcr.io/stefanprodan/podinfo:6.0.0"},
 	}
 
 	imgs, err := findImages(path, ipaths...)

@@ -12,7 +12,6 @@
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
-  ocp:
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.9
       full: true

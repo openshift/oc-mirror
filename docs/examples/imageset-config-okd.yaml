@@ -1,12 +1,10 @@
-# This example demonstrates how to mirror a specific
-# okd release. Optionally, omit the version to mirror
-# the latest release.
+# This example demonstrates how to mirror the latest
+# okd release.
 ---
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
-  ocp:
+  platform:
     channels:
       - name: okd
-        minVersion: '4.10.0-0.okd-2022-01-20-011141'
-        maxVersion: '4.10.0-0.okd-2022-01-20-011141'
+        type: okd
