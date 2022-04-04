@@ -99,3 +99,30 @@ func TestReleasesValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestParseVersionTags(t *testing.T) {
+	tags := []string{
+		"4.1.10-something",
+		"5.0.1",
+		"4.11.2-other",
+		"4.10.0-arch",
+		"v4.0",
+		"4.2",
+		"sometag",
+	}
+	expected := []ReleaseVersion{
+		{Major: 4, Minor: 1},
+		{Major: 4, Minor: 2},
+		{Major: 4, Minor: 10},
+		{Major: 4, Minor: 11},
+		{Major: 5, Minor: 0},
+	}
+	verlist := parseVersionTags(tags)
+	for i, v := range verlist {
+		require.Equal(t, expected[i], v)
+	}
+
+	// verify that both lists are equal length
+	require.Equal(t, len(expected), len(verlist))
+
+}

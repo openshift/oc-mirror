@@ -13,7 +13,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -104,7 +103,7 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 	}
 
 	if len(o.Channel) == 0 {
-		return listOCPReleaseVersions()
+		return listOCPReleaseVersions(w)
 	}
 
 	return listChannels(o, w, ctx, client)
@@ -158,7 +157,7 @@ func listChannelsForVersion(ctx context.Context, client cincinnati.Client, o *Re
 	return nil
 }
 
-func listOCPReleaseVersions() error {
+func listOCPReleaseVersions(w io.Writer) error {
 
 	repo, err := name.NewRepository(OCP_Release_Repo)
 	if err != nil {
@@ -169,20 +168,28 @@ func listOCPReleaseVersions() error {
 		return err
 	}
 
+	versions := parseVersionTags(versionTags)
+
+	fmt.Fprint(w, "The following OCP release minor versions are available: \n")
+
+	for _, ver := range versions {
+		fmt.Fprintf(w, "  %s\n", ver.String())
+	}
+
+	return nil
+}
+
+// Parse all the release image tags, and create a list of just the major.minor versions.
+func parseVersionTags(versionTags []string) []ReleaseVersion {
+	// Use a map to capture the unique major.minor versions
 	ocpVersions := make(map[string]ReleaseVersion)
 	for _, tag := range versionTags {
-		s := strings.Split(tag, ".")
-		if len(s) > 1 {
-			var r ReleaseVersion
-			r.Major, err = strconv.Atoi(s[0])
-			if err != nil {
-				continue // tag is not $major.$minor.$patch(.*) continue to next tag
-			}
-			r.Minor, _ = strconv.Atoi(s[1])
-			v := fmt.Sprintf("%d.%d", r.Major, r.Minor)
-			ocpVersions[v] = r
+		r := ReleaseVersion{}
+		if err := r.parseTag(tag); err != nil {
+			// tag is not $major.$minor.$patch(.*) continue to next tag
+			continue
 		}
-
+		ocpVersions[r.String()] = r
 	}
 
 	versions := make([]ReleaseVersion, 0, len(ocpVersions))
@@ -196,8 +203,23 @@ func listOCPReleaseVersions() error {
 		}
 		return versions[i].Major < versions[j].Major
 	})
+	return versions
+}
 
-	logrus.Info("OCP Versions: ", versions)
+func (r *ReleaseVersion) String() string {
+	return fmt.Sprintf("%d.%d", r.Major, r.Minor)
+}
 
+func (r *ReleaseVersion) parseTag(tag string) error {
+	s := strings.Split(tag, ".")
+	if len(s) <= 1 {
+		return errors.New("Unable parse major.minor version from tag " + tag)
+	}
+	var err error
+	r.Major, err = strconv.Atoi(s[0])
+	if err != nil {
+		return errors.New("Unable to parse major version number " + err.Error())
+	}
+	r.Minor, _ = strconv.Atoi(s[1]) // if minor version unparsed, defaults to 0
 	return nil
 }
