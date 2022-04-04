@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
@@ -30,7 +30,7 @@ const (
 	graphBaseImage = "registry.access.redhat.com/ubi8/ubi:latest"
 	// URL where graph archive is stored
 	graphURL       = "https://github.com/openshift/cincinnati-graph-data/archive/master.tar.gz"
-	outputFile     = "master.tar.gz"
+	outputFile     = "cincinnati-graph-data.tar.gz"
 	getDataTimeout = time.Minute * 60
 )
 
@@ -88,24 +88,20 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 	layoutDir := filepath.Join(dstDir, "layout")
 
 	// unpack graph data archive and build image
-	graphToBuild := filepath.Join(dstDir, "rendered")
-	if err := os.MkdirAll(graphToBuild, os.ModePerm); err != nil {
-		return refs, err
-	}
-
-	if err := archive.NewArchiverWithCompression().Unarchive(filepath.Join(dstDir, config.GraphDataDir, outputFile), graphToBuild); err != nil {
-		return refs, err
-	}
-
-	add, err := builder.LayerFromPath("/var/lib/cincinnati/graph-data/", filepath.Join(graphToBuild, "cincinnati-graph-data-master"))
+	graphToFile := filepath.Join(dstDir, config.GraphDataDir, outputFile)
+	add, err := builder.LayerFromPath(".", graphToFile)
 	if err != nil {
 		return refs, fmt.Errorf("error creating add layer: %v", err)
+	}
+	untarCmd := fmt.Sprintf("tar xvzf %s -C /var/lib/cincinnati/graph-data/ --strip-components=1", outputFile)
+	update := func(cfg *v1.ConfigFile) {
+		cfg.Config.Cmd = []string{"/bin/bash", "-c", untarCmd}
 	}
 	layoutPath, err := imgBuilder.CreateLayout(ubiImage.Ref.Exact(), layoutDir)
 	if err != nil {
 		return refs, fmt.Errorf("error creating OCI layout: %v", err)
 	}
-	if err := imgBuilder.Run(ctx, graphImage.Ref.Exact(), layoutPath, nil, add); err != nil {
+	if err := imgBuilder.Run(ctx, graphImage.Ref.Exact(), layoutPath, update, add); err != nil {
 		return refs, nil
 	}
 

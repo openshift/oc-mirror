@@ -49,19 +49,6 @@ func NewArchiver() Archiver {
 	}
 }
 
-// NewArchiverWithCompression creates a new archiver for tar archive manipultation with gzip compression
-func NewArchiverWithCompression() Archiver {
-	return &archiver.TarGz{
-		Tar: &archiver.Tar{
-			OverwriteExisting:      true,
-			MkdirAll:               true,
-			ImplicitTopLevelFolder: false,
-			StripComponents:        0,
-			ContinueOnError:        false,
-		},
-	}
-}
-
 // NewPackager create a new packager for build ImageSets
 func NewPackager(manifests []string, blobs []string) *packager {
 	manifestSetToArchive := make(map[string]struct{}, len(manifests))
