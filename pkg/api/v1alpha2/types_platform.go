@@ -24,7 +24,13 @@ var platformStringsType = map[string]PlatformType{
 	"okd": TypeOKD,
 }
 
-// MarshalJSON marshals the enum as a quoted json string
+// String returns the string representation
+// of an PlatformType
+func (pt PlatformType) String() string {
+	return platformTypeStrings[pt]
+}
+
+// MarshalJSON marshals the PlatformType as a quoted json string
 func (pt PlatformType) MarshalJSON() ([]byte, error) {
 	if err := pt.validate(); err != nil {
 		return nil, err
@@ -32,17 +38,10 @@ func (pt PlatformType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(pt.String())
 }
 
-// String returns the string representation
-// of an PlatformType
-func (pt PlatformType) String() string {
-	return platformTypeStrings[pt]
-}
-
-// UnmarshalJSON unmarshals a quoted json string to the enum value
+// UnmarshalJSON unmarshals a quoted json string to the PlatformType
 func (pt *PlatformType) UnmarshalJSON(b []byte) error {
 	var j string
-	err := json.Unmarshal(b, &j)
-	if err != nil {
+	if err := json.Unmarshal(b, &j); err != nil {
 		return err
 	}
 

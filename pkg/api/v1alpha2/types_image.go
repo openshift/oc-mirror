@@ -40,7 +40,7 @@ func (it ImageType) String() string {
 	return imageTypeStrings[it]
 }
 
-// MarshalJSON marshals the enum as a quoted json string
+// MarshalJSON marshals the ImageType as a quoted json string
 func (it ImageType) MarshalJSON() ([]byte, error) {
 	if err := it.validate(); err != nil {
 		return nil, err
@@ -48,11 +48,10 @@ func (it ImageType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(it.String())
 }
 
-// UnmarshalJSON unmashals a quoted json string to the enum value
+// UnmarshalJSON unmarshals a quoted json string to the ImageType
 func (it *ImageType) UnmarshalJSON(b []byte) error {
 	var j string
-	err := json.Unmarshal(b, &j)
-	if err != nil {
+	if err := json.Unmarshal(b, &j); err != nil {
 		return err
 	}
 
@@ -98,7 +97,7 @@ type Association struct {
 	LayerDigests []string `json:"layerDigests,omitempty"`
 }
 
-// validates checks that the Association fields are set as expected
+// Validate checks that the Association fields are set as expected
 func (a Association) Validate() error {
 
 	if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
