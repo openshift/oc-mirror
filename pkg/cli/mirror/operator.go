@@ -552,9 +552,8 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 	o.Logger.Debugf("running mirrorer with manifests dir %s", opts.ManifestDir)
 
 	opts.SecurityOptions.Insecure = o.insecure
-	opts.SecurityOptions.SkipVerification = o.SkipVerification
 
-	regctx, err := image.CreateDefaultContext(o.insecure)
+	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {
 		return nil, fmt.Errorf("error creating registry context: %v", err)
 	}

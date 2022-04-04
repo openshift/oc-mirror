@@ -232,7 +232,7 @@ func Unarchive(a Archiver, source, destination string, excludePaths []string) er
 func (p *packager) createArchive(splitPath string) (splitFile *os.File, err error) {
 
 	// create a new target file
-	splitFile, err = os.Create(splitPath)
+	splitFile, err = os.Create(filepath.Clean(splitPath))
 	if err != nil {
 		return nil, fmt.Errorf("creating %s: %v", splitPath, err)
 	}

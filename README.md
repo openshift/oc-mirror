@@ -133,7 +133,7 @@ See the [config spec][config-spec] for an in-depth description of fields.
 ### Requirements
 
 - All top-level requirements
-- [`go`][go] version 1.16+
+- [`go`][go] version 1.17+
 
 ### Build
 

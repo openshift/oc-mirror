@@ -44,7 +44,7 @@ type SequenceError struct {
 }
 
 func (s *SequenceError) Error() string {
-	return fmt.Sprintf("invalid bundle sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
+	return fmt.Sprintf("invalid mirror sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
 }
 
 type ErrArchiveFileNotFound struct {
@@ -409,13 +409,9 @@ func copyBlobFile(src io.Reader, dstPath string) error {
 }
 
 func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, missingLayers map[string][]string) error {
-	var insecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		insecure = true
-	}
-	restctx, err := image.CreateDefaultContext(insecure)
+	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating registry context: %v", err)
 	}
 
 	asSet, err := image.ConvertToAssociationSet(meta.PastAssociations)
@@ -429,7 +425,7 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, 
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
 		}
-		if err := o.fetchBlob(ctx, restctx, imgRef.Ref, layerDigest, dstBlobPaths); err != nil {
+		if err := o.fetchBlob(ctx, regctx, imgRef.Ref, layerDigest, dstBlobPaths); err != nil {
 			errs = append(errs, fmt.Errorf("layer %s: %v", layerDigest, err))
 			continue
 		}
@@ -440,13 +436,13 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, 
 
 // fetchBlob fetches a blob at <o.ToMirror>/<resource>/blobs/<layerDigest>
 // then copies it to each path in dstPaths.
-func (o *MirrorOptions) fetchBlob(ctx context.Context, restctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
+func (o *MirrorOptions) fetchBlob(ctx context.Context, regctx *registryclient.Context, ref reference.DockerImageReference, layerDigest string, dstPaths []string) error {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
 	}
 	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
-	repo, err := restctx.RepositoryForRef(ctx, ref, insecure)
+	repo, err := regctx.RepositoryForRef(ctx, ref, insecure)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
 	}
@@ -509,10 +505,11 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 		}
 		logrus.Debugf("mirroring generic images: %q", srcs)
 	}
-	regctx, err := image.CreateDefaultContext(insecure)
+	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating registry context: %v", err)
 	}
+
 	genOpts := imgmirror.NewMirrorImageOptions(o.IOStreams)
 	genOpts.Mappings = mappings
 	genOpts.DryRun = o.DryRun
