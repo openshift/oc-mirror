@@ -24,7 +24,7 @@ func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 }
 
 // Plan provides an image mapping with source and destination for provided AdditionalImages
-func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.AdditionalImages) (image.TypedImageMapping, error) {
+func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image) (image.TypedImageMapping, error) {
 	mmappings := make(image.TypedImageMapping, len(imageList))
 	for _, img := range imageList {
 		// Get source image information

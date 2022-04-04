@@ -16,11 +16,7 @@ func TestCreate(t *testing.T) {
 	path := t.TempDir()
 	ctx := context.Background()
 
-	img := v1alpha2.AdditionalImages{
-		Image: v1alpha2.Image{
-			Name: "quay.io/redhatgov/oc-mirror-dev:latest",
-		},
-	}
+	img := v1alpha2.Image{Name: "quay.io/redhatgov/oc-mirror-dev:latest"}
 
 	cfg := v1alpha2.ImageSetConfiguration{}
 	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, img)

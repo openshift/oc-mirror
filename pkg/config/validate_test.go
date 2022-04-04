@@ -74,7 +74,7 @@ func TestValidate(t *testing.T) {
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
+						Platform: v1alpha2.Platform{
 							Channels: []v1alpha2.ReleaseChannel{
 								{
 									Name: "channel1",
@@ -112,7 +112,7 @@ func TestValidate(t *testing.T) {
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
-						OCP: v1alpha2.OCP{
+						Platform: v1alpha2.Platform{
 							Channels: []v1alpha2.ReleaseChannel{
 								{
 									Name: "channel",

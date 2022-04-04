@@ -28,7 +28,7 @@ func TestLoadConfig(t *testing.T) {
 			assertion: require.NoError,
 			expConfig: v1alpha2.ImageSetConfigurationSpec{
 				Mirror: v1alpha2.Mirror{
-					OCP: v1alpha2.OCP{
+					Platform: v1alpha2.Platform{
 						Graph: true,
 						Channels: []v1alpha2.ReleaseChannel{
 							{
@@ -38,6 +38,10 @@ func TestLoadConfig(t *testing.T) {
 								Name:       "stable-4.6",
 								MinVersion: "4.6.3",
 								MaxVersion: "4.6.13",
+							},
+							{
+								Name: "okd",
+								Type: v1alpha2.TypeOKD,
 							},
 						},
 					},
@@ -71,11 +75,11 @@ func TestLoadConfig(t *testing.T) {
 							Catalog: "community-operators:v4.7",
 						},
 					},
-					AdditionalImages: []v1alpha2.AdditionalImages{
-						{Image: v1alpha2.Image{Name: "registry.redhat.io/ubi8/ubi:latest"}},
+					AdditionalImages: []v1alpha2.Image{
+						{Name: "registry.redhat.io/ubi8/ubi:latest"},
 					},
 					Helm: v1alpha2.Helm{
-						Repos: []v1alpha2.Repo{
+						Repositories: []v1alpha2.Repository{
 							{
 								URL:  "https://stefanprodan.github.io/podinfo",
 								Name: "podinfo",
@@ -88,9 +92,9 @@ func TestLoadConfig(t *testing.T) {
 							{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
 						},
 					},
-					BlockedImages: []v1alpha2.BlockedImages{
-						{Image: v1alpha2.Image{Name: "alpine"}},
-						{Image: v1alpha2.Image{Name: "redis"}},
+					BlockedImages: []v1alpha2.Image{
+						{Name: "alpine"},
+						{Name: "redis"},
 					},
 					Samples: []v1alpha2.SampleImages{
 						{Image: v1alpha2.Image{Name: "ruby"}},
@@ -139,7 +143,7 @@ func TestHeadsOnly(t *testing.T) {
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
-  ocp:
+  platform:
     channels:
     - name: test-channel1
       full: true
@@ -156,11 +160,11 @@ mirror:
 
 	cfg, err := LoadConfig([]byte(headsOnlyCfg))
 	require.NoError(t, err)
-	require.Len(t, cfg.Mirror.OCP.Channels, 3)
+	require.Len(t, cfg.Mirror.Platform.Channels, 3)
 	require.Len(t, cfg.Mirror.Operators, 3)
-	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
-	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
-	require.Equal(t, cfg.Mirror.OCP.Channels[0].IsHeadsOnly(), false)
+	require.Equal(t, cfg.Mirror.Platform.Channels[0].IsHeadsOnly(), false)
+	require.Equal(t, cfg.Mirror.Platform.Channels[0].IsHeadsOnly(), false)
+	require.Equal(t, cfg.Mirror.Platform.Channels[0].IsHeadsOnly(), false)
 	require.Equal(t, cfg.Mirror.Operators[0].IsHeadsOnly(), false)
 	require.Equal(t, cfg.Mirror.Operators[1].IsHeadsOnly(), true)
 	require.Equal(t, cfg.Mirror.Operators[2].IsHeadsOnly(), true)

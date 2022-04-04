@@ -1,15 +1,13 @@
 package v1alpha2
 
-import "fmt"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
 
 // ImageType defines the content type for mirrored images
 type ImageType int
-
-// String returns the string representation
-// of an Image Type
-func (it ImageType) String() string {
-	return ImageTypeStrings[it]
-}
 
 const (
 	TypeInvalid ImageType = iota
@@ -20,14 +18,58 @@ const (
 	TypeGeneric
 )
 
-// ImageTypeString defines the string
-// respresentation of every ImageType.
-var ImageTypeStrings = map[ImageType]string{
+var imageTypeStrings = map[ImageType]string{
 	TypeOCPRelease:           "ocpRelease",
 	TypeOperatorCatalog:      "operatorCatalog",
 	TypeOperatorBundle:       "operatorBundle",
 	TypeOperatorRelatedImage: "operatorRelatedImage",
 	TypeGeneric:              "generic",
+}
+
+var imageStringsType = map[string]ImageType{
+	"ocpRelease":           TypeOCPRelease,
+	"operatorCatalog":      TypeOperatorCatalog,
+	"operatorBundle":       TypeOperatorBundle,
+	"operatorRelatedImage": TypeOperatorRelatedImage,
+	"generic":              TypeGeneric,
+}
+
+// String returns the string representation
+// of an Image Type
+func (it ImageType) String() string {
+	return imageTypeStrings[it]
+}
+
+// MarshalJSON marshals the ImageType as a quoted json string
+func (it ImageType) MarshalJSON() ([]byte, error) {
+	if err := it.validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(it.String())
+}
+
+// UnmarshalJSON unmarshals a quoted json string to the ImageType
+func (it *ImageType) UnmarshalJSON(b []byte) error {
+	var j string
+	if err := json.Unmarshal(b, &j); err != nil {
+		return err
+	}
+
+	*it = imageStringsType[j]
+	return nil
+}
+
+func (it ImageType) validate() error {
+	if _, found := imageTypeStrings[it]; found {
+		return nil
+	}
+	switch it {
+	case TypeInvalid:
+		// TypeInvalid is the default value for the concrete type, which means the field was not set.
+		return errors.New("must set image type")
+	default:
+		return fmt.Errorf("unknown image type %v", it)
+	}
 }
 
 // Association between an image and its children, either image layers or child manifests.
@@ -55,7 +97,7 @@ type Association struct {
 	LayerDigests []string `json:"layerDigests,omitempty"`
 }
 
-// Validates checks that the Association fields are set as expected
+// Validate checks that the Association fields are set as expected
 func (a Association) Validate() error {
 
 	if len(a.ManifestDigests) != 0 && len(a.LayerDigests) != 0 {
@@ -69,14 +111,5 @@ func (a Association) Validate() error {
 		return fmt.Errorf("image %q: tag or ID must be set", a.Name)
 	}
 
-	if s, ok := ImageTypeStrings[a.Type]; ok && s != "" {
-		return nil
-	}
-	switch a.Type {
-	case TypeInvalid:
-		// TypeInvalid is the default value for the concrete type, which means the field was not set.
-		return fmt.Errorf("image %q: must set image type", a.Name)
-	default:
-		return fmt.Errorf("image %q: unknown image type %v", a.Name, a.Type)
-	}
+	return a.Type.validate()
 }

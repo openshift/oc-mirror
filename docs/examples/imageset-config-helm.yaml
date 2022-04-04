@@ -8,7 +8,7 @@ apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
   helm:
-    repos:
+    repositories:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
         charts:

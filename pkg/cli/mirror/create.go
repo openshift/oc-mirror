@@ -94,7 +94,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 
 	mmappings := image.TypedImageMapping{}
 
-	if len(cfg.Mirror.OCP.Channels) != 0 {
+	if len(cfg.Mirror.Platform.Channels) != 0 {
 		release := NewReleaseOptions(o)
 		mappings, err := release.Plan(ctx, meta.PastMirror, cfg)
 		if err != nil {
@@ -118,7 +118,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 		mmappings.Merge(mappings)
 	}
 
-	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repos) != 0 {
+	if len(cfg.Mirror.Helm.Local) != 0 || len(cfg.Mirror.Helm.Repositories) != 0 {
 		helm := NewHelmOptions(o)
 		mappings, err := helm.PullCharts(ctx, *cfg)
 		if err != nil {

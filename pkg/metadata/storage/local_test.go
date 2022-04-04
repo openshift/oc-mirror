@@ -29,7 +29,7 @@ func TestLocalBackend(t *testing.T) {
 		Timestamp: int(time.Now().Unix()),
 		Sequence:  1,
 		Mirror: v1alpha2.Mirror{
-			OCP: v1alpha2.OCP{
+			Platform: v1alpha2.Platform{
 				Channels: []v1alpha2.ReleaseChannel{
 					{Name: "stable-4.7", MinVersion: "4.7.13"},
 				},

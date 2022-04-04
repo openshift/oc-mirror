@@ -32,8 +32,8 @@ func TestPlan_Additional(t *testing.T) {
 			cfg: v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
-						AdditionalImages: []v1alpha2.AdditionalImages{
-							{Image: v1alpha2.Image{Name: "quay.io/redhatgov/oc-mirror-dev:latest"}},
+						AdditionalImages: []v1alpha2.Image{
+							{Name: "quay.io/redhatgov/oc-mirror-dev:latest"},
 						},
 					},
 				},
@@ -57,8 +57,8 @@ func TestPlan_Additional(t *testing.T) {
 			cfg: v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
-						AdditionalImages: []v1alpha2.AdditionalImages{
-							{Image: v1alpha2.Image{Name: "quay.io/redhatgov/oc-mirror-dev"}},
+						AdditionalImages: []v1alpha2.Image{
+							{Name: "quay.io/redhatgov/oc-mirror-dev"},
 						},
 					},
 				},

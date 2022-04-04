@@ -14,7 +14,7 @@ storageConfig:
   #local:
   #  path: /path/to/dir
 mirror:
-  ocp:
+  platform:
     channels:
       - name: stable-4.9
     graph: true

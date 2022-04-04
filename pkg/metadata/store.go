@@ -67,7 +67,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 // configuration key to determine whether pruning
 // is enabled
 func keepPastAssociations(mirror v1alpha2.Mirror) bool {
-	for _, release := range mirror.OCP.Channels {
+	for _, release := range mirror.Platform.Channels {
 		if release.IsHeadsOnly() {
 			return true
 		}
