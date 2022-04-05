@@ -28,12 +28,13 @@ type ReleasesOptions struct {
 	Version  string
 }
 
-type ReleaseVersion struct {
-	Major int
-	Minor int
+// used to capture major.minor version from release tags
+type releaseVersion struct {
+	major int
+	minor int
 }
 
-const OCP_Release_Repo = "quay.io/openshift-release-dev/ocp-release"
+const OCPReleaseRepo = "quay.io/openshift-release-dev/ocp-release"
 
 func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	o := ReleasesOptions{}
@@ -159,7 +160,7 @@ func listChannelsForVersion(ctx context.Context, client cincinnati.Client, o *Re
 
 func listOCPReleaseVersions(w io.Writer) error {
 
-	repo, err := name.NewRepository(OCP_Release_Repo)
+	repo, err := name.NewRepository(OCPReleaseRepo)
 	if err != nil {
 		return err
 	}
@@ -170,7 +171,7 @@ func listOCPReleaseVersions(w io.Writer) error {
 
 	versions := parseVersionTags(versionTags)
 
-	fmt.Fprint(w, "The following OCP release minor versions are available: \n")
+	fmt.Fprint(w, "Available OpenShift Container Platform release versions: \n")
 
 	for _, ver := range versions {
 		fmt.Fprintf(w, "  %s\n", ver.String())
@@ -180,11 +181,11 @@ func listOCPReleaseVersions(w io.Writer) error {
 }
 
 // Parse all the release image tags, and create a list of just the major.minor versions.
-func parseVersionTags(versionTags []string) []ReleaseVersion {
+func parseVersionTags(versionTags []string) []releaseVersion {
 	// Use a map to capture the unique major.minor versions
-	ocpVersions := make(map[string]ReleaseVersion)
+	ocpVersions := make(map[string]releaseVersion)
 	for _, tag := range versionTags {
-		r := ReleaseVersion{}
+		r := releaseVersion{}
 		if err := r.parseTag(tag); err != nil {
 			// tag is not $major.$minor.$patch(.*) continue to next tag
 			continue
@@ -192,34 +193,34 @@ func parseVersionTags(versionTags []string) []ReleaseVersion {
 		ocpVersions[r.String()] = r
 	}
 
-	versions := make([]ReleaseVersion, 0, len(ocpVersions))
+	versions := make([]releaseVersion, 0, len(ocpVersions))
 	for k := range ocpVersions {
 		versions = append(versions, ocpVersions[k])
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
-		if versions[i].Major == versions[j].Major {
-			return versions[i].Minor < versions[j].Minor
+		if versions[i].major == versions[j].major {
+			return versions[i].minor < versions[j].minor
 		}
-		return versions[i].Major < versions[j].Major
+		return versions[i].major < versions[j].major
 	})
 	return versions
 }
 
-func (r *ReleaseVersion) String() string {
-	return fmt.Sprintf("%d.%d", r.Major, r.Minor)
+func (r *releaseVersion) String() string {
+	return fmt.Sprintf("%d.%d", r.major, r.minor)
 }
 
-func (r *ReleaseVersion) parseTag(tag string) error {
+func (r *releaseVersion) parseTag(tag string) error {
 	s := strings.Split(tag, ".")
 	if len(s) <= 1 {
 		return errors.New("Unable parse major.minor version from tag " + tag)
 	}
 	var err error
-	r.Major, err = strconv.Atoi(s[0])
+	r.major, err = strconv.Atoi(s[0])
 	if err != nil {
 		return errors.New("Unable to parse major version number " + err.Error())
 	}
-	r.Minor, _ = strconv.Atoi(s[1]) // if minor version unparsed, defaults to 0
+	r.minor, _ = strconv.Atoi(s[1]) // if minor version unparsed, defaults to 0
 	return nil
 }

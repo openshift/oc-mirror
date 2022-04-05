@@ -110,12 +110,12 @@ func TestParseVersionTags(t *testing.T) {
 		"4.2",
 		"sometag",
 	}
-	expected := []ReleaseVersion{
-		{Major: 4, Minor: 1},
-		{Major: 4, Minor: 2},
-		{Major: 4, Minor: 10},
-		{Major: 4, Minor: 11},
-		{Major: 5, Minor: 0},
+	expected := []releaseVersion{
+		{major: 4, minor: 1},
+		{major: 4, minor: 2},
+		{major: 4, minor: 10},
+		{major: 4, minor: 11},
+		{major: 5, minor: 0},
 	}
 	verlist := parseVersionTags(tags)
 	for i, v := range verlist {

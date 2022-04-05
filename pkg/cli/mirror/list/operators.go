@@ -162,7 +162,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 			return err
 		}
 
-		fmt.Fprintln(w, "Catalog versions:")
+		fmt.Fprintln(w, "Available OpenShift OperatorHub catalog versions:")
 
 		for v := range vm {
 
