@@ -13,7 +13,7 @@ const (
 	BlobDir          	= "blobs"
 	MetadataFile     	= ".metadata.json"
 	AssociationsFile 	= "image-associations.gob"
-	ReleaseSignatureDir = "release-signatures"
+	ReleaseSignatureDir	= "release-signatures"
 )
 
 var (
