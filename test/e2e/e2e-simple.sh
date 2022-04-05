@@ -2,13 +2,15 @@
 
 set -eu
 
-source test/lib.sh
-source test/testcases.sh
+DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+source "$DIR/lib/check.sh"
+source "$DIR/lib/workflow.sh"
+source "$DIR/lib/util.sh"
+source "$DIR/testcases.sh"
 
 CMD="${1:?cmd bin path is required}"
 CMD="$(cd "$(dirname "$CMD")" && pwd)/$(basename "$CMD")"
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DATA_TMP=$(mktemp -d "${DIR}/operator-test.XXXXX")
 CREATE_FULL_DIR="${DATA_TMP}/create_full"
 CREATE_DIFF_DIR="${DATA_TMP}/create_diff"
@@ -19,15 +21,15 @@ REGISTRY_DISCONN_DIR="${DATA_TMP}/disconn"
 WORKSPACE="oc-mirror-workspace"
 CATALOGNAMESPACE="redhatgov/oc-mirror-dev"
 REGISTRY_CONN_PORT=5000
-METADATA_REGISTRY="localhost:$REGISTRY_CONN_PORT"
-METADATA_CATALOGNAMESPACE="${METADATA_REGISTRY}/${CATALOGNAMESPACE}"
 REGISTRY_DISCONN_PORT=5001
-NS=""
+METADATA_REGISTRY="localhost.localdomain:$REGISTRY_CONN_PORT"
+METADATA_CATALOGNAMESPACE="${METADATA_REGISTRY}/${CATALOGNAMESPACE}"
+
 
 GOBIN=$HOME/go/bin
 PATH=$PATH:$GOBIN
 
-trap cleanup EXIT
+trap cleanup_all EXIT
 
 # Install crane and registry2
 install_deps
@@ -35,8 +37,8 @@ install_deps
 for i in "${!TESTCASES[@]}"; do
     echo "INFO: Running ${TESTCASES[$i]}"
     mkdir -p "$DATA_TMP"
-    setup_reg
+    setup_reg 
     ${TESTCASES[$i]}
     rm -rf "$DATA_TMP"
-    cleanup
+    cleanup_all
 done

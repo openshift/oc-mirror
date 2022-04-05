@@ -48,7 +48,7 @@ test-unit:
 .PHONY: test-unit
 
 test-e2e: build
-	./test/e2e-simple.sh ./bin/oc-mirror
+	./test/e2e/e2e-simple.sh ./bin/oc-mirror
 .PHONY: test-e2e
 
 test-integration: hack-build

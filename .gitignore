@@ -5,7 +5,7 @@
 coverage.out
 **/mirror*.tar
 sha256sum.txt
-/test/operator-test.*
+/test/e2e/operator-test.*
 **/publish.tmp.*
 **/test-output
 **/.metadata.json
