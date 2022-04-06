@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
@@ -37,41 +36,4 @@ func TestCreate(t *testing.T) {
 	_, mappings, err := opts.Create(ctx, cfg)
 	require.NoError(t, err)
 	require.Len(t, mappings, 1)
-}
-
-func TestAddGraphImage(t *testing.T) {
-
-	var cfg v1alpha2.ImageSetConfiguration
-	var meta v1alpha2.Metadata
-
-	// No past GraphImage.
-	cfg = v1alpha2.ImageSetConfiguration{}
-	meta = v1alpha2.Metadata{}
-	meta.MetadataSpec.PastMirror = v1alpha2.PastMirror{
-		Mirror: v1alpha2.Mirror{
-			AdditionalImages: []v1alpha2.Image{
-				{Name: "reg.com/ns/other:latest"},
-			},
-		},
-	}
-
-	addGraphImage(&cfg, meta)
-	if assert.Len(t, cfg.Mirror.AdditionalImages, 1) {
-		require.Equal(t, cfg.Mirror.AdditionalImages[0].Name, graphBaseImage)
-	}
-
-	// Has past OPMImage.
-	cfg = v1alpha2.ImageSetConfiguration{}
-	meta = v1alpha2.Metadata{}
-	meta.MetadataSpec.PastMirror = v1alpha2.PastMirror{
-		Mirror: v1alpha2.Mirror{
-			AdditionalImages: []v1alpha2.Image{
-				{Name: graphBaseImage},
-				{Name: "reg.com/ns/other:latest"},
-			},
-		},
-	}
-
-	addGraphImage(&cfg, meta)
-	require.Len(t, cfg.Mirror.AdditionalImages, 0)
 }

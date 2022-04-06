@@ -105,8 +105,10 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 
 		if cfg.Mirror.Platform.Graph {
 			logrus.Info("Adding graph data")
-			// Ensure meta has the latest Cincinnati graph base image (UBI), and if not add it to cfg for mirroring.
-			addGraphImage(cfg, meta)
+			// Always add the graph base image to the metadata if needed,
+			// to ensure it does not get pruned before use.
+			cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha2.Image{Name: graphBaseImage})
+
 			releaseDir := filepath.Join(o.Dir, config.SourceDir, config.GraphDataDir)
 			if err := os.MkdirAll(releaseDir, 0750); err != nil {
 				return mmappings, err
@@ -149,17 +151,3 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 }
 
 type operatorFunc func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error)
-
-// Make sure the latest Cincinnati graph base image exists during the publishing step
-// in case it does not exist in a past mirror.
-func addGraphImage(cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata) {
-
-	for _, img := range meta.PastMirror.Mirror.AdditionalImages {
-		if img.Name == graphBaseImage {
-			return
-		}
-	}
-
-	cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha2.Image{Name: graphBaseImage})
-	return
-}
