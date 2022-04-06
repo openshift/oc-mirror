@@ -60,3 +60,7 @@ test-integration: hack-build
 sanity: tidy
 	git diff --exit-code
 .PHONY: sanity
+
+publish-catalog:
+	@cd test/operator && make
+.PHONY: publish-catalog
