@@ -5,8 +5,15 @@ metadata:
   name: bars.test.bar
 spec:
   group: test.bar
+  scope: Namespaced
   names:
     kind: Bar
     plural: bars
   versions:
     - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true

@@ -5,11 +5,11 @@ metadata:
   annotations:
     capabilities: BasicInstall
     certified: 'false'
-    containerImage: REGISTRY_CATALOGNAMESPACE:foo-v0.1.0
+    containerImage: REGISTRY_CATALOGNAMESPACE:foo-v0.1.1
     description: The Foo Operator does Foo things.
-    olm.skipRange: <0.1.0
+    olm.skipRange: <0.1.1
     repository: https://github.com/openshift/oc-mirror
-  name: foo.v0.1.0
+  name: foo.v0.1.1
 spec:
   customresourcedefinitions:
     owned:
@@ -35,13 +35,13 @@ spec:
             metadata:
               labels:
                 app: foo-operator
-                version: v0.1.0
+                version: v0.1.1
               name: foo-operator
             spec:
               containers:
               - command:
                 - /run.sh
-                image: REGISTRY_CATALOGNAMESPACE:foo-v0.1.0
+                image: REGISTRY_CATALOGNAMESPACE:foo-v0.1.1
                 imagePullPolicy: Always
                 name: foo
     strategy: deployment
@@ -65,6 +65,7 @@ spec:
   provider:
     name: Foo
   relatedImages:
-  - image: REGISTRY_CATALOGNAMESPACE:foo-v0.1.0
+  - image: REGISTRY_CATALOGNAMESPACE:foo-v0.1.1
     name: operator
-  version: 0.1.0
+  replaces: foo.v0.1.0
+  version: 0.1.1

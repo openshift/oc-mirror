@@ -5,8 +5,15 @@ metadata:
   name: foos.test.foo
 spec:
   group: test.foo
+  scope: Namespaced
   names:
     kind: Foo
     plural: foos
   versions:
     - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
