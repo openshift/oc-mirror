@@ -1,0 +1,13 @@
+<svg viewbox="0 0 200 200">
+    <path d="M 0, 80
+             C 0, 5 5, 0 80, 0
+             S 160, 5 160, 80
+               160, 160 80, 160
+               0, 160 0, 80"
+          fill="#7B8794" transform="translate(5,1)">
+    </path>
+  <style>
+    .name { font: bold 62px serif; fill: red; }
+  </style>
+  <text class="name" transform="translate(25,86) rotate(20)">bar</text>
+</svg>
