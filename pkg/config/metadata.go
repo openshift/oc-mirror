@@ -5,15 +5,17 @@ import (
 )
 
 const (
-	SourceDir        	= "src"
-	PublishDir       	= "publish"
-	InternalDir      	= "internal"
-	HelmDir          	= "charts"
-	V2Dir            	= "v2"
-	BlobDir          	= "blobs"
-	MetadataFile     	= ".metadata.json"
-	AssociationsFile 	= "image-associations.gob"
-	ReleaseSignatureDir	= "release-signatures"
+	SourceDir           = "src"
+	PublishDir          = "publish"
+	InternalDir         = "internal"
+	HelmDir             = "charts"
+	V2Dir               = "v2"
+	BlobDir             = "blobs"
+	MetadataFile        = ".metadata.json"
+	AssociationsFile    = "image-associations.gob"
+	ReleaseSignatureDir = "release-signatures"
+	GraphDataDir        = "cincinnati"
+	CatalogsDir         = "catalogs"
 )
 
 var (

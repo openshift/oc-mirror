@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
 	"github.com/openshift/oc-mirror/pkg/operator"
@@ -36,7 +37,7 @@ import (
 // unpackCatalog will unpack file-based catalogs if they exists
 func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]string) (bool, error) {
 	var found bool
-	if err := unpack(CatalogsDir, dstDir, filesInArchive); err != nil {
+	if err := unpack(config.CatalogsDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
 			logrus.Debug("No catalogs found in archive, skipping catalog rebuild")
@@ -79,7 +80,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			slashPath = path.Dir(slashPath)
 			slashPath = strings.TrimSuffix(slashPath, IndexDir)
 
-			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, CatalogsDir))
+			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
 			regRepoNs, id := path.Split(path.Dir(repoPath))
 			regRepoNs = path.Clean(regRepoNs)
 			var img string

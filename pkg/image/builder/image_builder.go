@@ -176,7 +176,7 @@ func LayerFromPath(targetPath, path string) (v1.Layer, error) {
 	if pathInfo.IsDir() {
 		err := filepath.Walk(path, func(fp string, info os.FileInfo, err error) error {
 			if err != nil {
-				return nil
+				return err
 			}
 			rel, err := filepath.Rel(path, fp)
 			if err != nil {

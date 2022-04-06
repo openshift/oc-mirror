@@ -350,17 +350,26 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-		// Process any catalog images
 		dir, err := o.createResultsDir()
 		if err != nil {
 			return err
 		}
+
+		// process catalog FBC images
 		if len(cfg.Mirror.Operators) > 0 {
 			ctlgRefs, err := o.rebuildCatalogs(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
 			if err != nil {
 				return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 			}
 			mapping.Merge(ctlgRefs)
+		}
+		// process Cincinnati graph data image
+		if len(cfg.Mirror.Platform.Channels) > 0 && cfg.Mirror.Platform.Graph {
+			graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
+			if err != nil {
+				return fmt.Errorf("error building cincinnati graph image: %v", err)
+			}
+			mapping.Merge(graphRef)
 		}
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
@@ -472,7 +481,8 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, dir string) error {
 
 	allICSPs := []operatorv1alpha1.ImageContentSourcePolicy{}
-	releases := image.ByCategory(mapping, v1alpha2.TypeOCPRelease)
+	releases := image.ByCategory(mapping, v1alpha2.TypeOCPRelease, v1alpha2.TypeOCPReleaseContent)
+	graphs := image.ByCategory(mapping, v1alpha2.TypeCincinnatiGraph)
 	generic := image.ByCategory(mapping, v1alpha2.TypeGeneric)
 	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorCatalog)
 
@@ -485,9 +495,31 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 		return nil
 	}
 
+	if len(graphs) == 1 {
+		releaseImages := image.ByCategory(releases, v1alpha2.TypeOCPRelease)
+		if len(releaseImages) != 0 {
+			for _, graph := range graphs {
+				var release image.TypedImage
+				// Just grab the first release image.
+				// The value is used as a repo and all release images
+				// are stored in the same repo
+				for _, v := range releaseImages {
+					release = v
+					break
+				}
+				if err := WriteUpdateService(release, graph, dir); err != nil {
+					return err
+				}
+			}
+		}
+
+	}
+
 	ctlgRefs := image.ByCategory(operator, v1alpha2.TypeOperatorCatalog)
-	if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
-		return err
+	if len(ctlgRefs) != 0 {
+		if err := WriteCatalogSource(ctlgRefs, dir); err != nil {
+			return err
+		}
 	}
 
 	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {

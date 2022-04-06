@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,11 +12,12 @@ import (
 	"strings"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/image"
 )
@@ -26,6 +28,7 @@ const (
 	repositoryICSPScope = "repository"
 	namespaceICSPScope  = "namespace"
 	icspKind            = "ImageContentSourcePolicy"
+	updateServiceKind   = "UpdateService"
 )
 
 var icspTypeMeta = metav1.TypeMeta{
@@ -210,6 +213,41 @@ func generateCatalogSource(name string, dest reference.DockerImageReference) ([]
 	return cs, nil
 }
 
+// Use this type to keep the
+// status off the generated manifest
+type updateService struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              cincinnativ1.UpdateServiceSpec `json:"spec"`
+}
+
+func generateUpdateService(name string, releaseRepo, graphDataImage reference.DockerImageReference) ([]byte, error) {
+	var updateServiceMeta = metav1.TypeMeta{
+		APIVersion: cincinnativ1.GroupVersion.String(),
+		Kind:       updateServiceKind,
+	}
+
+	obj := updateService{
+		TypeMeta: updateServiceMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: cincinnativ1.UpdateServiceSpec{
+			Replicas:       2,
+			Releases:       releaseRepo.AsRepository().Exact(),
+			GraphDataImage: graphDataImage.Exact(),
+		},
+	}
+	cs, err := yaml.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal UpdateService yaml: %v", err)
+	}
+	// creationTimestamp is a struct, omitempty does not apply
+	cs = bytes.ReplaceAll(cs, []byte("  creationTimestamp: null\n"), []byte(""))
+
+	return cs, nil
+}
+
 // WriteICSPs will write provided ImageContentSourcePolicy objects to disk
 func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
@@ -259,5 +297,18 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		}
 	}
 	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
+	return nil
+}
+
+// WriteUpdateService will generate an UpdateService object and write it to disk
+func WriteUpdateService(release, graph image.TypedImage, dir string) error {
+	updateService, err := generateUpdateService("update-service-oc-mirror", release.Ref, graph.Ref)
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
+		return fmt.Errorf("error writing UpdateService: %v", err)
+	}
+	logrus.Infof("Wrote UpdateService manifests to %s", dir)
 	return nil
 }

@@ -12,13 +12,19 @@ type ImageType int
 const (
 	TypeInvalid ImageType = iota
 	TypeOCPRelease
+	TypeOCPReleaseContent
+	TypeCincinnatiGraph
 	TypeOperatorCatalog
 	TypeOperatorBundle
 	TypeOperatorRelatedImage
 	TypeGeneric
 )
 
+// ImageTypeString defines the string
+// respresentation of every ImageType.
 var imageTypeStrings = map[ImageType]string{
+	TypeOCPReleaseContent:    "ocpReleaseContent",
+	TypeCincinnatiGraph:      "cincinnatiGraph",
 	TypeOCPRelease:           "ocpRelease",
 	TypeOperatorCatalog:      "operatorCatalog",
 	TypeOperatorBundle:       "operatorBundle",
@@ -27,6 +33,8 @@ var imageTypeStrings = map[ImageType]string{
 }
 
 var imageStringsType = map[string]ImageType{
+	"ocpReleaseContent":    TypeOCPReleaseContent,
+	"cincinnatiGraph":      TypeCincinnatiGraph,
 	"ocpRelease":           TypeOCPRelease,
 	"operatorCatalog":      TypeOperatorCatalog,
 	"operatorBundle":       TypeOperatorBundle,

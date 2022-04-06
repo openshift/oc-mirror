@@ -117,14 +117,14 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 				logrus.Debugf("Found archive %s", path)
 				return a.Walk(path, func(f archiver.File) error {
 					switch t := f.Header.(type) {
-						case *tar.Header:                                        
-							name := filepath.Clean(t.Name)
-							filesinArchive[name] = path
-							match++
-							return nil
-						default:
-							return fmt.Errorf("file type not currently implemented %v", t)
-					}					
+					case *tar.Header:
+						name := filepath.Clean(t.Name)
+						filesinArchive[name] = path
+						match++
+						return nil
+					default:
+						return fmt.Errorf("file type not currently implemented %v", t)
+					}
 				})
 			}
 
@@ -140,13 +140,13 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 		// Walk the archive and load the file names into the map
 		err = a.Walk(from, func(f archiver.File) error {
 			switch t := f.Header.(type) {
-				case *tar.Header:                                        
-					name := filepath.Clean(t.Name)
-					filesinArchive[name] = from
-					return nil
-				default:
-					return fmt.Errorf("file type not currently implemented %v", t)
-			}								
+			case *tar.Header:
+				name := filepath.Clean(t.Name)
+				filesinArchive[name] = from
+				return nil
+			default:
+				return fmt.Errorf("file type not currently implemented %v", t)
+			}
 		})
 	}
 

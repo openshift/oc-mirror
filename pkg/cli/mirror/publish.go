@@ -318,24 +318,51 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
-	logrus.Debug("rebuilding catalog images")
+	mappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+	allMappings.Merge(mappings)
 
-	found, err := o.unpackCatalog(tmpdir, filesInArchive)
+	// Replace old metadata with new metadata
+	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
+		return allMappings, err
+	}
+
+	return allMappings, nil
+}
+
+// proccessCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
+func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
+	allMappings := image.TypedImageMapping{}
+	// process catalogs
+	logrus.Debug("rebuilding catalog images")
+	found, err := o.unpackCatalog(dir, filesInArchive)
 	if err != nil {
 		return allMappings, err
 	}
 
 	if found {
-		ctlgRefs, err := o.rebuildCatalogs(ctx, tmpdir)
+		ctlgRefs, err := o.rebuildCatalogs(ctx, dir)
 		if err != nil {
 			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}
 		allMappings.Merge(ctlgRefs)
 	}
 
-	// Replace old metadata with new metadata
-	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
+	logrus.Debug("building cincinnati graph data image")
+	// process cincinnati graph image
+	found, err = o.unpackRelease(dir, filesInArchive)
+	if err != nil {
 		return allMappings, err
+	}
+
+	if found {
+		graphRef, err := o.buildGraphImage(ctx, dir)
+		if err != nil {
+			return allMappings, fmt.Errorf("error building cincinnati graph image: %v", err)
+		}
+		allMappings.Merge(graphRef)
 	}
 
 	return allMappings, nil
@@ -513,6 +540,8 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	genOpts.Mappings = mappings
 	genOpts.DryRun = o.DryRun
 	genOpts.FromFileDir = fromDir
+	genOpts.SkipMissing = o.SkipMissing
+	genOpts.ContinueOnError = o.ContinueOnError
 	// Filter must be a wildcard for publishing because we
 	// cannot filter images within a catalog
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}

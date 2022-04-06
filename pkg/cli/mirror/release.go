@@ -349,12 +349,12 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 		return nil, err
 	}
 
-	mappings, err := image.ReadImageMapping(mappingPath, " ", v1alpha2.TypeOCPRelease)
+	mappings, err := image.ReadImageMapping(mappingPath, " ", v1alpha2.TypeOCPReleaseContent)
 	if err != nil {
 		return nil, err
 	}
 
-	releaseImageRef, err := image.ParseTypedImage(opts.From, v1alpha2.TypeOCPRelease)
+	releaseImageRef, err := image.ParseTypedImage(opts.From, v1alpha2.TypeOCPReleaseContent)
 	if err != nil {
 		return nil, err
 	}
@@ -362,6 +362,8 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 	if !ok {
 		return nil, fmt.Errorf("release images %s not found in mapping", opts.From)
 	}
+	releaseImageRef.Category = v1alpha2.TypeOCPRelease
+	dstReleaseRef.Category = v1alpha2.TypeOCPRelease
 	dstReleaseRef.Ref.Name = releaseRepo
 	mappings[releaseImageRef] = dstReleaseRef
 

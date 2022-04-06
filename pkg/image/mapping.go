@@ -61,7 +61,7 @@ func (m TypedImageMapping) Add(srcRef, dstRef imagesource.TypedImageReference, t
 	}
 	dstTypedRef := TypedImage{
 		TypedImageReference: dstRef,
-		Category:            v1alpha2.TypeGeneric,
+		Category:            typ,
 	}
 	m[srcTypedRef] = dstTypedRef
 }
