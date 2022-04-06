@@ -388,24 +388,26 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			mapping.Merge(ctlgRefs)
 		}
 		// process Cincinnati graph data image
-		if len(cfg.Mirror.Platform.Channels) > 0 && cfg.Mirror.Platform.Graph {
-			graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
-			if err != nil {
-				return fmt.Errorf("error building cincinnati graph image: %v", err)
+		if len(cfg.Mirror.Platform.Channels) > 0 {
+			// Move release signatures into results dir
+			srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
+			dstSignaturePath := filepath.Join(dir, config.ReleaseSignatureDir)
+			if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
+				return err
 			}
-			mapping.Merge(graphRef)
+			logrus.Debugf("Moved any release signatures to %s", dir)
+
+			if cfg.Mirror.Platform.Graph {
+				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
+				if err != nil {
+					return fmt.Errorf("error building cincinnati graph image: %v", err)
+				}
+				mapping.Merge(graphRef)
+			}
 		}
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
-
-		// Move release signatures into results dir
-		srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
-		dstSignaturePath := filepath.Join(dir, config.ReleaseSignatureDir)
-		if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
-			return err
-		}
-		logrus.Debugf("Moved any release signatures to %s", dir)
 
 		// Move charts into results dir
 		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)

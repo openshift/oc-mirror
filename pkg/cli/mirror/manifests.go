@@ -286,6 +286,11 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 
 // WriteCatalogSource will generate a CatalogSource object and write it to disk
 func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
+	if len(mapping) == 0 {
+		logrus.Debug("No catalogs found in mapping")
+		return nil
+	}
+
 	for source, dest := range mapping {
 		name := source.Ref.Name
 		catalogSource, err := generateCatalogSource(name, dest.Ref)

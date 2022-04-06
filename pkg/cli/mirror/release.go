@@ -431,6 +431,11 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 		return err
 	}
 
+	signatureBasePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
+	if err := os.MkdirAll(signatureBasePath, 0750); err != nil {
+		return err
+	}
+
 	for image := range releaseDownloads {
 		digest := strings.Split(image, "@")[1]
 
@@ -457,11 +462,7 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 			return err
 		}
 
-		signaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir, fileName)
-
-		if err := os.MkdirAll(filepath.Dir(signaturePath), 0750); err != nil {
-			return err
-		}
+		signaturePath := filepath.Join(signatureBasePath, fileName)
 
 		if err := ioutil.WriteFile(signaturePath, cmDataBytes, 0640); err != nil {
 			return err

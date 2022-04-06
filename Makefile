@@ -57,10 +57,21 @@ test-integration: hack-build
 	@cd test/integration && make
 .PHONY: test-integration
 
-sanity: tidy
+sanity: tidy format vet
 	git diff --exit-code
 .PHONY: sanity
 
 publish-catalog:
 	@cd test/operator && make
 .PHONY: publish-catalog
+
+format: 
+	go fmt ./pkg/...
+	go fmt ./cmd/...
+.PHONY: format
+
+vet: 
+	go vet ./pkg/...
+	go vet ./cmd/...
+.PHONY: vet
+
