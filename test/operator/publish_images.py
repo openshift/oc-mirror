@@ -99,7 +99,7 @@ def build_and_push(context: Path = None, image: str = None, extra_args: str = No
     os.chdir(context)
 
     # Build
-    base_command = f'{RUNTIME} build . --format=oci -t {image}'
+    base_command = f'{RUNTIME} build . --format=docker -t {image}'
     if extra_args is None:
         command = base_command
     else:
@@ -108,7 +108,7 @@ def build_and_push(context: Path = None, image: str = None, extra_args: str = No
         logger.debug(line)
 
     # Push
-    for line in shell(f'{RUNTIME} push --format=oci {image}'):
+    for line in shell(f'{RUNTIME} push --format=docker {image}'):
         logger.debug(line)
 
     logger.debug(f'Returning to {prev_dir}')
