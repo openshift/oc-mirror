@@ -116,7 +116,7 @@ func (as AssociationSet) Merge(in AssociationSet) {
 
 // Encode Associations in an efficient, opaque format.
 func (as AssociationSet) Encode(w io.Writer) error {
-	if err := as.validate(); err != nil {
+	if err := as.Validate(); err != nil {
 		return fmt.Errorf("invalid image associations: %v", err)
 	}
 	enc := gob.NewEncoder(w)
@@ -160,6 +160,27 @@ func (as *AssociationSet) UpdatePath() error {
 	return nil
 }
 
+// Validate AssociationSet and all contained Associations
+func (as AssociationSet) Validate() error {
+	var errs []error
+	for imageName, assocs := range as {
+		for _, assoc := range assocs {
+			if len(assoc.ManifestDigests) != 0 {
+				for _, digest := range assoc.ManifestDigests {
+					if _, found := assocs[digest]; !found {
+						errs = append(errs, fmt.Errorf("image %q: digest %s not found", imageName, digest))
+						continue
+					}
+				}
+			}
+			if err := assoc.Validate(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
 // GetDigests will return all layer and manifest digests in the AssociationSet
 func (as *AssociationSet) GetDigests() []string {
 	var digests []string
@@ -189,19 +210,16 @@ func GetImageFromBlob(as AssociationSet, digest string) string {
 	return ""
 }
 
-func (as AssociationSet) validate() error {
-	var errs []error
-	for _, imageName := range as.Keys() {
-		assocs, found := as.Search(imageName)
-		if !found {
-			return fmt.Errorf("image %q does not exist in association set", imageName)
+// Prune will return a pruned AssociationSet containing provided keys
+func Prune(in AssociationSet, keepKey []string) (AssociationSet, error) {
+	// return a new map with the pruned mapping
+	pruned := AssociationSet{}
+	for _, key := range keepKey {
+		assocs, ok := in[key]
+		if !ok {
+			return pruned, fmt.Errorf("key %s does not exist in provided associations", key)
 		}
-		for _, a := range assocs {
-
-			if err := a.Validate(); err != nil {
-				errs = append(errs, err)
-			}
-		}
+		pruned[key] = assocs
 	}
-	return utilerrors.NewAggregate(errs)
+	return pruned, nil
 }

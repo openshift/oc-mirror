@@ -229,7 +229,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		if !o.IgnoreHistory {
 			// Prune out old associations if applicable
-			prevAssociations = removePreviouslyMirrored(mapping, prevAssociations)
+			prevAssociations, err = removePreviouslyMirrored(mapping, prevAssociations)
+			if err != nil {
+				return err
+			}
 			if len(mapping) == 0 {
 				logrus.Infof("no new images detected, process stopping")
 				return nil
@@ -334,7 +337,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		if !o.IgnoreHistory {
 			// Prune out old associations if applicable
-			prevAssociations = removePreviouslyMirrored(mapping, prevAssociations)
+			prevAssociations, err = removePreviouslyMirrored(mapping, prevAssociations)
+			if err != nil {
+				return err
+			}
 			if len(mapping) == 0 {
 				logrus.Infof("no new images detected, process stopping")
 				return nil
@@ -462,10 +468,8 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 // removePreviouslyMirrored will check if an image has been previously mirrored
 // and remove it from the mapping if found. The new past associations are returned.
-func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads image.AssociationSet) image.AssociationSet {
-
-	newPrevious := image.AssociationSet{}
-
+func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads image.AssociationSet) (image.AssociationSet, error) {
+	var keep []string
 	for srcRef := range images {
 		// All keys need to specify image with digest.
 		// Tagged images will need to be redownloaded to
@@ -476,11 +480,16 @@ func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads imag
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
 			logrus.Debugf("skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
-			assoc, _ := prevDownloads.Search(srcRef.Ref.String())
-			newPrevious.Add(srcRef.Ref.String(), assoc...)
+			keep = append(keep, srcRef.Ref.String())
 		}
 	}
-	return newPrevious
+
+	prunedDownloads, err := image.Prune(prevDownloads, keep)
+	if err != nil {
+		return prunedDownloads, err
+	}
+
+	return prunedDownloads, prunedDownloads.Validate()
 }
 
 // mirrorImage downloads individual images from an image mapping
