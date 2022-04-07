@@ -64,15 +64,10 @@ function setup_reg() {
 # prep_registry will copy the needed catalog image
 # to the connected registry
 function prep_registry() {
-   local diff="${1:?diff bool required}"
+   local CATALOGTAG="${1:?CATALOGTAG required}"
   # Copy target catalog to connected registry
-   if $diff; then
-    crane copy --insecure quay.io/${CATALOGNAMESPACE}:test-catalog-diff \
+    crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
     localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
-  else
-    crane copy --insecure quay.io/${CATALOGNAMESPACE}:test-catalog-latest \
-    localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
-  fi
 }
 
 # parse_args will parse common arguments

@@ -5,10 +5,11 @@
 function workflow_full() {
   parse_args "$@"
   local config="${1:?config required}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
-  prep_registry false
+  prep_registry "${catalog_tag}"
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   pushd $PUBLISH_FULL_DIR
   if $DIFF; then
@@ -23,10 +24,11 @@ function workflow_full() {
 function workflow_diff() {
   parse_args "$@"
   local config="${1:?config required}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_DIFF_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_DIFF_DIR" "$config" true
-  prep_registry true
+  prep_registry "${catalog_tag}"
   run_cmd --config "${CREATE_DIFF_DIR}/$config" "file://${CREATE_DIFF_DIR}" $CREATE_FLAGS
   pushd ${PUBLISH_DIFF_DIR}
   run_cmd --from "${CREATE_DIFF_DIR}/mirror_seq2_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $PUBLISH_FLAGS
@@ -38,10 +40,11 @@ function workflow_diff() {
 function workflow_no_updates() {
   parse_args "$@"
   local config="${1:?config required}"
+   local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
-  prep_registry false
+  prep_registry "${catalog_tag}"
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   pushd $PUBLISH_FULL_DIR
@@ -56,7 +59,7 @@ function workflow_mirror2mirror() {
   local config="${1:?config required}"
    # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "${CREATE_FULL_DIR}" "$config" false
-  prep_registry false
+  prep_registry "test-catalog-latest"
   pushd ${CREATE_FULL_DIR}
   run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $CREATE_FLAGS
   popd
@@ -72,7 +75,6 @@ function workflow_helm() {
   mkdir $PUBLISH_FULL_DIR
   # Copy the helm chart and config in workspace
   setup_helm_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" "$chart"
-  prep_registry false
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   pushd $PUBLISH_FULL_DIR
   run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $PUBLISH_FLAGS
