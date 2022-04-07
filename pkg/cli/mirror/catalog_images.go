@@ -128,7 +128,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 	for ctlgRef, artifactDir := range catalogsByImage {
 		// Always build the catalog image with the new declarative config catalog
 		// using the original catalog as the base image
-		var layers []v1.Layer
 		var layoutPath layout.Path
 		refExact := ctlgRef.Ref.Exact()
 
@@ -153,12 +152,16 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		}
 
 		// Since we are defining the FBC as index.json, remove
-		// any .yaml files from the initial image to ensure they are not processed instead
-		deleted, err := deleteLayer("/configs/.wh.index.yaml")
+		// remove anything that may currently exist
+		deleted, err := deleteLayer("/.wh.configs")
 		if err != nil {
 			return fmt.Errorf("error creating deleted layer: %v", err)
 		}
-		layers = append(layers, add, deleted)
+
+		// Delete must be first in the slice
+		// so that the /configs directory is deleted
+		// and then add back with the new FBC.
+		layers := []v1.Layer{deleted, add}
 
 		layoutDir := filepath.Join(artifactDir, config.LayoutsDir)
 		layoutPath, err = imgBuilder.CreateLayout("", layoutDir)

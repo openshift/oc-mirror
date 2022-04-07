@@ -223,20 +223,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
-			return err
-		}
-		if !o.IgnoreHistory {
-			// Prune out old associations if applicable
-			prevAssociations, err = removePreviouslyMirrored(mapping, prevAssociations)
-			if err != nil {
-				return err
-			}
-			if len(mapping) == 0 {
+			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
 				return nil
 			}
+			return err
 		}
 
 		if o.DryRun {
@@ -331,20 +324,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry to registry mapping
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
-		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
-			return err
-		}
-		if !o.IgnoreHistory {
-			// Prune out old associations if applicable
-			prevAssociations, err = removePreviouslyMirrored(mapping, prevAssociations)
-			if err != nil {
-				return err
-			}
-			if len(mapping) == 0 {
+			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
 				return nil
 			}
+			return err
 		}
 
 		if o.DryRun {
@@ -468,7 +454,16 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 // removePreviouslyMirrored will check if an image has been previously mirrored
 // and remove it from the mapping if found. The new past associations are returned.
-func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads image.AssociationSet) (image.AssociationSet, error) {
+func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping, meta v1alpha2.Metadata) (image.AssociationSet, error) {
+	prevDownloads, err := image.ConvertToAssociationSet(meta.PastAssociations)
+	if err != nil {
+		return image.AssociationSet{}, err
+	}
+
+	if o.IgnoreHistory {
+		return prevDownloads, nil
+	}
+
 	var keep []string
 	for srcRef := range images {
 		// All keys need to specify image with digest.
@@ -487,6 +482,10 @@ func removePreviouslyMirrored(images image.TypedImageMapping, prevDownloads imag
 	prunedDownloads, err := image.Prune(prevDownloads, keep)
 	if err != nil {
 		return prunedDownloads, err
+	}
+
+	if len(images) == 0 {
+		return image.AssociationSet{}, ErrNoUpdatesExist
 	}
 
 	return prunedDownloads, prunedDownloads.Validate()

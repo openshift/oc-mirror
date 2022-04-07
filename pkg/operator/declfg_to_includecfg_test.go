@@ -383,6 +383,96 @@ func TestUpdateIncludeConfig(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Success/NoNextBundle",
+			cfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "foo", DefaultChannel: "stable"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.0.2", Skips: []string{"bar.v0.0.1"}},
+					}},
+					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.1.0"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.0.2",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.0.2"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "foo.v0.1.0",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.1.0"),
+						},
+					},
+				},
+			},
+			in: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									StartingVersion: semver.MustParse("0.1.0"),
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									StartingVersion: semver.MustParse("0.1.0"),
+								},
+							},
+						},
+					},
+				},
+			},
+			exp: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									StartingVersion: semver.MustParse("0.0.0"),
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									StartingVersion: semver.MustParse("0.1.0"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, s := range specs {

@@ -71,12 +71,16 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 		containerdregistry.WithCacheDir(cacheDir),
 		containerdregistry.SkipTLSVerify(skipTLSVerify),
 		containerdregistry.WithPlainHTTP(plainHTTP),
+		// The containerd registry impl is somewhat verbose, even on the happy path,
+		// so discard all logger logs. Any important failures will be returned from
+		// registry methods and eventually logged as fatal errors.
 		containerdregistry.WithLog(nullLogger),
 	)
 	if err != nil {
 		return err
 	}
 	defer reg.Destroy()
+
 	for _, operator := range mirror.Mirror.Operators {
 		operatorMeta, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace)
 		if err != nil {

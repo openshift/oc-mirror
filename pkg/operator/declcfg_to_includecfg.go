@@ -7,6 +7,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
+	"github.com/sirupsen/logrus"
 )
 
 // ConvertDCToIncludeConfig converts a heads-only rendered declarative config to an IncludeConfig
@@ -104,9 +105,11 @@ func UpdateIncludeConfig(dc declcfg.DeclarativeConfig, curr v1alpha2.IncludeConf
 	return ic, nil
 }
 
+// getCurrBundle will process the current package return the starting bundle based
+// on the previous IncludeConfig
 func getCurrBundle(mpkg model.Package, icPkg v1alpha2.IncludePackage) ([]v1alpha2.IncludeChannel, error) {
 
-	// Add every bundle with a specified bundle name or \
+	// Add every bundle with a specified bundle name or
 	// directly satisfying a bundle version to bundles.
 	includeChannels := make(map[string]v1alpha2.IncludeBundle, len(icPkg.Channels))
 	for _, ch := range icPkg.Channels {
@@ -131,11 +134,11 @@ func getCurrBundle(mpkg model.Package, icPkg v1alpha2.IncludePackage) ([]v1alpha
 		var err error
 		icBundle, found := includeChannels[ch.Name]
 
-		// If the channel is new, return the channel head
-		// if the channel is found and the bundle is found
+		// If the channel is new, return the channel head.
+		// If the channel is found and the bundle is found,
 		// keep the current include bundle. If the target version
 		// does not exist in the bundle set, sort by version and
-		// find the next version using binary search
+		// find the next version using binary search.
 		if !found {
 			startingBundle, err = getHeadBundle(*ch)
 			if err != nil {
@@ -160,6 +163,8 @@ func getCurrBundle(mpkg model.Package, icPkg v1alpha2.IncludePackage) ([]v1alpha
 	return channels, nil
 }
 
+// findNextBundle will find the next highest bundle in a set of versions in relation
+// to the target.
 func findNextBundle(versions []semver.Version, target semver.Version) (v1alpha2.IncludeBundle, error) {
 	sort.Slice(versions, func(i, j int) bool {
 		return versions[i].LT(versions[j])
@@ -168,12 +173,18 @@ func findNextBundle(versions []semver.Version, target semver.Version) (v1alpha2.
 	return v1alpha2.IncludeBundle{StartingVersion: nextVerision}, nil
 }
 
+// search perform a binary search to find the next highest version in relation
+// to the target.
 func search(versions []semver.Version, target semver.Version, low, high int) semver.Version {
-	if high < low {
+	// If the target is the highest version, there is no next
+	// version so return
+	if high < low || versions[len(versions)-1].EQ(target) {
 		return semver.Version{}
 	}
 
 	mid := low + (high+low)/2
+	logrus.Info(versions[mid])
+	logrus.Info(versions[high])
 	if versions[mid].EQ(target) {
 		return versions[mid+1]
 	}
@@ -185,6 +196,8 @@ func search(versions []semver.Version, target semver.Version, low, high int) sem
 	return search(versions, target, low, high)
 }
 
+// getChannelHeads proccess each channel in package and sets the starting
+// bundle to the channel head.
 func getChannelHeads(mpkg model.Package) ([]v1alpha2.IncludeChannel, error) {
 	channels := []v1alpha2.IncludeChannel{}
 
@@ -204,6 +217,7 @@ func getChannelHeads(mpkg model.Package) ([]v1alpha2.IncludeChannel, error) {
 	return channels, nil
 }
 
+// getHeadBundle return the channel head bundle for the current channel.
 func getHeadBundle(mch model.Channel) (v1alpha2.IncludeBundle, error) {
 	bundle, err := mch.Head()
 	if err != nil {
