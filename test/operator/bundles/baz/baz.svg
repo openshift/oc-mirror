@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+    viewBox="0 0 1280 1280" style="enable-background:new 0 0 1280 1280;" xml:space="preserve">
+<style type="text/css">
+  .squircle { fill: #7B8794; transform: translate(5px, 1px); }
+  .name { font: bold 400px sans serif; fill: red; transform: translate(130px, 500px) rotate(20deg); }
+</style>
+<g>
+  <path class="squircle" d="M 0, 500
+                            C 0, 5 5, 0 500, 0
+                            S 1000, 5 1000, 500
+                              1000, 1000 500, 1000
+                              0, 1000 0, 500"/>
+  <text class="name">baz</text>
+</g>
+</svg>

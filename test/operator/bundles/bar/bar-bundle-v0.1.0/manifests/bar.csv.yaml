@@ -1,0 +1,70 @@
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    capabilities: BasicInstall
+    certified: 'false'
+    containerImage: REGISTRY_CATALOGNAMESPACE:bar-v0.1.0
+    description: The Bar Operator does Bar things.
+    olm.skipRange: <0.1.0
+    repository: https://github.com/openshift/oc-mirror
+  name: bar.v0.1.0
+spec:
+  customresourcedefinitions:
+    owned:
+    - group: test.bar
+      kind: Bar
+      name: bars.test.bar
+      version: v1alpha1
+  description: The Bar Operator does Bar things.
+  displayName: Bar Operator
+  icon:
+  - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJpY29uIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKICAgIHZpZXdCb3g9IjAgMCAxMjgwIDEyODAiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDEyODAgMTI4MDsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgogIC5zcXVpcmNsZSB7IGZpbGw6ICM3Qjg3OTQ7IHRyYW5zZm9ybTogdHJhbnNsYXRlKDVweCwgMXB4KTsgfQogIC5uYW1lIHsgZm9udDogYm9sZCA0MDBweCBzYW5zIHNlcmlmOyBmaWxsOiByZWQ7IHRyYW5zZm9ybTogdHJhbnNsYXRlKDEzMHB4LCA1MDBweCkgcm90YXRlKDIwZGVnKTsgfQo8L3N0eWxlPgo8Zz4KICA8cGF0aCBjbGFzcz0ic3F1aXJjbGUiIGQ9Ik0gMCwgNTAwCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBDIDAsIDUgNSwgMCA1MDAsIDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFMgMTAwMCwgNSAxMDAwLCA1MDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMTAwMCwgMTAwMCA1MDAsIDEwMDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMCwgMTAwMCAwLCA1MDAiLz4KICA8dGV4dCBjbGFzcz0ibmFtZSI+YmFyPC90ZXh0Pgo8L2c+Cjwvc3ZnPgo=
+    mediatype: image/svg+xml
+  install:
+    spec:
+      deployments:
+      - name: bar-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: bar-operator
+          template:
+            metadata:
+              labels:
+                app: bar-operator
+                version: v0.1.0
+              name: bar-operator
+            spec:
+              containers:
+              - command:
+                - /run.sh
+                image: REGISTRY_CATALOGNAMESPACE:bar-v0.1.0
+                imagePullPolicy: Always
+                name: bar
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - bar
+  labels:
+    name: bar-operator
+  maintainers:
+  - email: oc-mirror@openshift.org
+    name: oc-mirror developers
+  maturity: beta
+  provider:
+    name: Bar
+  relatedImages:
+  - image: REGISTRY_CATALOGNAMESPACE:bar-v0.1.0
+    name: operator
+  version: 0.1.0

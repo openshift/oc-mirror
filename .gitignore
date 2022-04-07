@@ -27,7 +27,11 @@ tags
 imageset-config.yaml
 
 # Local integration test files
-test/integration/.venv
+__pycache__
+*.pyc
+.venv
+.requirements
+.built
 test/integration/collections
 test/integration/bin
 test/integration/output/*
