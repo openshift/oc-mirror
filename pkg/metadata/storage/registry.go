@@ -200,13 +200,17 @@ func (b *registryBackend) pushImage(ctx context.Context, data []byte, fpath stri
 
 // exists checks if the image exists
 func (b *registryBackend) exists(ctx context.Context) error {
+	var terr *transport.Error
 	opts := b.getOpts(ctx)
 	_, err := crane.Manifest(b.src.Ref.Exact(), opts...)
-	var terr *transport.Error
+
 	switch {
-	case err != nil && errors.As(err, &terr) && terr.StatusCode == 404:
+	case err == nil:
+		// fail fast
+		return nil
+	case errors.As(err, &terr) && terr.StatusCode == 404:
 		return ErrMetadataNotExist
-	case err != nil && errors.As(err, &terr) && terr.StatusCode == 401:
+	case errors.As(err, &terr) && terr.StatusCode == 401:
 		var nameOpts []name.Option
 		if b.insecure {
 			nameOpts = append(nameOpts, name.Insecure)

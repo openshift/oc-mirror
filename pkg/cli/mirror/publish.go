@@ -62,6 +62,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 	var currentMeta v1alpha2.Metadata
 	var incomingMeta v1alpha2.Metadata
+	currentAssocs := image.AssociationSet{}
 	a := archive.NewArchiver()
 	allMappings := image.TypedImageMapping{}
 	var insecure bool
@@ -141,6 +142,11 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		}
 	}
 
+	incomingAssocs, err := image.ConvertToAssociationSet(incomingMeta.PastAssociations)
+	if err != nil {
+		return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+	}
+
 	// Read in current metadata, if present
 	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
@@ -161,6 +167,10 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
 			return allMappings, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
 		}
+		currentAssocs, err = image.ConvertToAssociationSet(currentMeta.PastAssociations)
+		if err != nil {
+			return allMappings, fmt.Errorf("error processing current past associations: %v", err)
+		}
 	}
 
 	// Unpack chart to user destination if it exists
@@ -178,6 +188,40 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
+	logrus.Debug("process all images in imageset")
+	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
+	if err != nil {
+		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
+	}
+	allMappings.Merge(imgMappings)
+
+	if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
+		return allMappings, err
+	}
+
+	logrus.Debug("unpack release signatures")
+	if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
+		return allMappings, err
+	}
+
+	customMappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+	allMappings.Merge(customMappings)
+
+	// Replace old metadata with new metadata
+	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
+		return allMappings, err
+	}
+
+	return allMappings, nil
+}
+
+// proccessMirroredImages unpacks, reconstructs, and published all images in the provided imageset to the specified registry.
+func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
+	allMappings := image.TypedImageMapping{}
+	var errs []error
 	toMirrorRef, err := imagesource.ParseReference(o.ToMirror)
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
@@ -187,8 +231,6 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
 
-	var errs []error
-
 	for _, imageName := range assocs.Keys() {
 
 		var mmapping []imgmirror.Mapping
@@ -196,7 +238,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		cleanUnpackDir, unpackDir, err := mktempDir(tmpdir)
+		cleanUnpackDir, unpackDir, err := mktempDir(o.Dir)
 		if err != nil {
 			return allMappings, err
 		}
@@ -290,6 +332,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
+				// Must use metadata for current published run to find images already mirrored.
 				if err := o.fetchBlobs(ctx, currentMeta, missingLayers); err != nil {
 					return allMappings, err
 				}
@@ -308,28 +351,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			cleanUnpackDir()
 		}
 	}
-	if len(errs) != 0 {
-		return allMappings, utilerrors.NewAggregate(errs)
-	}
-
-	logrus.Debug("unpack release signatures")
-	err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-
-	mappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-	allMappings.Merge(mappings)
-
-	// Replace old metadata with new metadata
-	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-		return allMappings, err
-	}
-
-	return allMappings, nil
+	return allMappings, utilerrors.NewAggregate(errs)
 }
 
 // proccessCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive

@@ -78,6 +78,9 @@ func (o *ReleasesOptions) Run(ctx context.Context) error {
 	w := o.IOStreams.Out
 
 	client, err := cincinnati.NewOCPClient(uuid.New())
+	if err != nil {
+		return err
+	}
 
 	if o.Channels {
 		channels, err := cincinnati.GetChannels(ctx, client, o.Channel)
