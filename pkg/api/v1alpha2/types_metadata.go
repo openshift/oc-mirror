@@ -10,17 +10,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Metadata object kind.
+// MetadataKind object kind.
 const MetadataKind = "Metadata"
 
 // Metadata configures image set creation.
 type Metadata struct {
 	metav1.TypeMeta `json:",inline"`
-	// MetadataSpec defines the global specificed for Metadata types.
+	// MetadataSpec defines the global specified for Metadata types.
 	MetadataSpec `json:",inline"`
 }
 
-// MetadataSpec defines the global configuration specificed for Metadata types.
+// MetadataSpec defines the global configuration specified for Metadata types.
 type MetadataSpec struct {
 	// Uid uniquely identifies this metadata object.
 	Uid uuid.UUID `json:"uid"`
@@ -35,7 +35,7 @@ type MetadataSpec struct {
 
 // PastMirror defines the specification for previously mirrored content.
 type PastMirror struct {
-	// TimeStamp defines when the mirrored was proccessed.
+	// TimeStamp defines when the mirrored was processed.
 	Timestamp int `json:"timestamp"`
 	// Sequence defines the serial number
 	// assigned to the processed mirror.
@@ -46,6 +46,8 @@ type PastMirror struct {
 	Mirror Mirror `json:"mirror"`
 	// Operators are metadata about the set of mirrored operators in a mirror operation.
 	Operators []OperatorMetadata `json:"operators,omitempty"`
+	// Platforms are metadata about the set of mirrored platform release channels in a mirror operation.
+	Platforms []PlatformMetadata `json:"platforms,omitempty"`
 	// Associations are metadata about the set of mirrored images including
 	// child manifest and layer digest information
 	Associations []Association `json:"associations,omitempty"`
@@ -59,6 +61,22 @@ type OperatorMetadata struct {
 	// This image will be pulled using the pull secret
 	// in the metadata's Mirror config for this catalog.
 	ImagePin string `json:"imagePin"`
+	// IncludeConfig in OperatorMetadata holds the starting
+	// versions of all heads-only mirrored catalogs. It will
+	// be validated against the current catalog during each run
+	// and updated.
+	IncludeConfig `json:",inline"`
+}
+
+// PlatformMetadata holds an Release's post-mirror metadata.
+type PlatformMetadata struct {
+	// Release references a channel name from the mirror spec.
+	ReleaseChannel string `json:"channel"`
+	// MinVersion in OCPMetadata holds the starting
+	// versions of all newly mirrored channels. This will
+	// be populated the first time a channel is mirrored
+	// and copied the remaining runs.
+	MinVersion string `json:"minVersion"`
 }
 
 var _ io.Writer = &InlinedIndex{}

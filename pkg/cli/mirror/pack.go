@@ -34,7 +34,7 @@ const (
 
 // Pack will pack the imageset and return a temporary backend storing metadata for final push
 // The metadata has been updated by the plan stage at this point but not pushed to the backend
-func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, meta *v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
+func (o *MirrorOptions) Pack(ctx context.Context, prevAssocs, currAssocs image.AssociationSet, meta *v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
 	tmpdir, _, err := o.mktempDir()
 	if err != nil {
 		return nil, err
@@ -52,14 +52,11 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	// Define a map that associates locations
 	// on disk to location in archive
 	paths := map[string]string{diskPath: config.V2Dir}
-	associations := image.AssociationSet{}
+	reconcileAssociation := image.AssociationSet{}
 	if !o.IgnoreHistory {
-		associations, err = image.ConvertToAssociationSet(meta.PastAssociations)
-		if err != nil {
-			return tmpBackend, err
-		}
+		reconcileAssociation = prevAssocs
 	}
-	manifests, blobs, err := bundle.ReconcileV2Dir(associations, paths)
+	manifests, blobs, err := bundle.ReconcileV2Dir(reconcileAssociation, paths)
 	if err != nil {
 		return tmpBackend, fmt.Errorf("error reconciling v2 files: %v", err)
 	}
@@ -70,11 +67,16 @@ func (o *MirrorOptions) Pack(ctx context.Context, assocs image.AssociationSet, m
 	}
 
 	// Update Association in PastMirror to the current value and update
-	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
+	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(currAssocs)
 	if err != nil {
 		return tmpBackend, err
 	}
-	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+	prevAssocs.Merge(currAssocs)
+	meta.PastAssociations, err = image.ConvertFromAssociationSet(prevAssocs)
+	if err != nil {
+		return tmpBackend, err
+	}
+	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, filepath.Join(o.Dir, config.SourceDir), o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 		return tmpBackend, err
 	}
 

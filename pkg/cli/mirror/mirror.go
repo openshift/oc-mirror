@@ -223,6 +223,15 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
+		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		if err != nil {
+			if errors.Is(err, ErrNoUpdatesExist) {
+				logrus.Infof("no new images detected, process stopping")
+				return nil
+			}
+			return err
+		}
+
 		if o.DryRun {
 			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
@@ -237,7 +246,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		// Create assocations
+		// Create and store associations
 		assocDir := filepath.Join(o.Dir, config.SourceDir)
 		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
 
@@ -256,7 +265,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		// Pack the images set
-		tmpBackend, err := o.Pack(cmd.Context(), assocs, &meta, cfg.ArchiveSize)
+		tmpBackend, err := o.Pack(cmd.Context(), prevAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no updates detected, process stopping")
@@ -315,6 +324,15 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry to registry mapping
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
+		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		if err != nil {
+			if errors.Is(err, ErrNoUpdatesExist) {
+				logrus.Infof("no new images detected, process stopping")
+				return nil
+			}
+			return err
+		}
+
 		if o.DryRun {
 			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
@@ -350,6 +368,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
+		prevAssociations.Merge(assocs)
+		meta.PastAssociations, err = image.ConvertFromAssociationSet(prevAssociations)
+		if err != nil {
+			return err
+		}
+
 		dir, err := o.createResultsDir()
 		if err != nil {
 			return err
@@ -409,7 +433,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 			// Update source metadata
-			err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, o.SourceSkipTLS, o.SourcePlainHTTP)
+			err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, filepath.Join(o.Dir, config.SourceDir), o.SourceSkipTLS, o.SourcePlainHTTP)
 			if err != nil {
 				return err
 			}
@@ -428,6 +452,45 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	return cleanup()
 }
 
+// removePreviouslyMirrored will check if an image has been previously mirrored
+// and remove it from the mapping if found. The new past associations are returned.
+func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping, meta v1alpha2.Metadata) (image.AssociationSet, error) {
+	prevDownloads, err := image.ConvertToAssociationSet(meta.PastAssociations)
+	if err != nil {
+		return image.AssociationSet{}, err
+	}
+
+	if o.IgnoreHistory {
+		return prevDownloads, nil
+	}
+
+	var keep []string
+	for srcRef := range images {
+		// All keys need to specify image with digest.
+		// Tagged images will need to be redownloaded to
+		// ensure their digests have not be updated.
+		if srcRef.Ref.ID == "" {
+			continue
+		}
+		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
+			logrus.Debugf("skipping previously mirrored image %s", srcRef.Ref.String())
+			images.Remove(srcRef)
+			keep = append(keep, srcRef.Ref.String())
+		}
+	}
+
+	prunedDownloads, err := image.Prune(prevDownloads, keep)
+	if err != nil {
+		return prunedDownloads, err
+	}
+
+	if len(images) == 0 {
+		return image.AssociationSet{}, ErrNoUpdatesExist
+	}
+
+	return prunedDownloads, prunedDownloads.Validate()
+}
+
 // mirrorImage downloads individual images from an image mapping
 func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 
@@ -440,9 +503,10 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
 		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
-			logrus.Warnf("skipping blocked images %s", srcRef.String())
+			logrus.Warnf("skipping blocked image %s", srcRef.String())
 			continue
 		}
+
 		mappings = append(mappings, mirror.Mapping{
 			Source:      srcRef.TypedImageReference,
 			Destination: dstRef.TypedImageReference,
