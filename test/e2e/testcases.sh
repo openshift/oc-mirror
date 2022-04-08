@@ -45,7 +45,7 @@ function pruned_catalogs() {
 
     workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-    "bar.v0.1.0 foo.v0.1.1 foo.v0.2.0" \
+    "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
 

@@ -7,7 +7,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
-	"github.com/sirupsen/logrus"
 )
 
 // ConvertDCToIncludeConfig converts a heads-only rendered declarative config to an IncludeConfig
@@ -183,8 +182,6 @@ func search(versions []semver.Version, target semver.Version, low, high int) sem
 	}
 
 	mid := low + (high+low)/2
-	logrus.Info(versions[mid])
-	logrus.Info(versions[high])
 	if versions[mid].EQ(target) {
 		return versions[mid+1]
 	}
