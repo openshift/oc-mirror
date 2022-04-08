@@ -618,6 +618,16 @@ github.com/openshift/api/image/docker10
 github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/image/v1
 github.com/openshift/api/operator/v1alpha1
+# github.com/openshift/build-machinery-go v0.0.0-20220121085309-f94edc2d6874
+## explicit; go 1.13
+github.com/openshift/build-machinery-go
+github.com/openshift/build-machinery-go/make
+github.com/openshift/build-machinery-go/make/lib
+github.com/openshift/build-machinery-go/make/targets
+github.com/openshift/build-machinery-go/make/targets/golang
+github.com/openshift/build-machinery-go/make/targets/openshift
+github.com/openshift/build-machinery-go/make/targets/openshift/operator
+github.com/openshift/build-machinery-go/scripts
 # github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 ## explicit; go 1.16
 github.com/openshift/cincinnati-operator/api/v1

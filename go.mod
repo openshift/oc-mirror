@@ -18,6 +18,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
 	github.com/openshift/api v0.0.0-20210907084939-33af3ff57ff1
+	github.com/openshift/build-machinery-go v0.0.0-20220121085309-f94edc2d6874
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 	github.com/openshift/library-go v0.0.0-20210906100234-6754cfd64cb5
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
@@ -32,7 +33,6 @@ require (
 	k8s.io/apimachinery v0.22.4
 	k8s.io/cli-runtime v0.22.4
 	k8s.io/client-go v0.22.4
-	k8s.io/component-base v0.22.4
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubectl v0.22.4
@@ -202,6 +202,7 @@ require (
 	k8s.io/api v0.22.4 // indirect
 	k8s.io/apiextensions-apiserver v0.22.4 // indirect
 	k8s.io/apiserver v0.22.4 // indirect
+	k8s.io/component-base v0.22.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c // indirect
 	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a // indirect
 	oras.land/oras-go v0.4.0 // indirect
