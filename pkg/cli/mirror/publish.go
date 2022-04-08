@@ -372,7 +372,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 
 	// archive that we do not want to unpack
-	exclude := []string{"blobs", "v2", config.HelmDir}
+	exclude := []string{config.BlobDir, config.V2Dir, config.HelmDir}
 
 	file, err := os.Stat(o.From)
 	if err != nil {

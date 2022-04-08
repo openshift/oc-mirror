@@ -48,7 +48,7 @@ test-unit:
 .PHONY: test-unit
 
 test-e2e: build
-	./test/e2e-simple.sh ./bin/oc-mirror
+	./test/e2e/e2e-simple.sh ./bin/oc-mirror
 .PHONY: test-e2e
 
 test-integration: hack-build
@@ -57,10 +57,21 @@ test-integration: hack-build
 	@cd test/integration && make
 .PHONY: test-integration
 
-sanity: tidy
+sanity: tidy format vet
 	git diff --exit-code
 .PHONY: sanity
 
 publish-catalog:
 	@cd test/operator && make
 .PHONY: publish-catalog
+
+format: 
+	go fmt ./pkg/...
+	go fmt ./cmd/...
+.PHONY: format
+
+vet: 
+	go vet ./pkg/...
+	go vet ./cmd/...
+.PHONY: vet
+

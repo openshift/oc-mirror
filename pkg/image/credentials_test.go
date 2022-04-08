@@ -12,18 +12,18 @@ func TestNewContext(t *testing.T) {
 	tests := []struct {
 		name             string
 		skipVerification bool
-		expected         func(registryclient.Context) bool
+		expected         func(*registryclient.Context) bool
 		err              string
 	}{{
 		name:             "Valid/WithRetries",
 		skipVerification: true,
-		expected: func(ctx registryclient.Context) bool {
+		expected: func(ctx *registryclient.Context) bool {
 			return ctx.DisableDigestVerification
 		},
 	}, {
 		name:             "Valid/WithSkipVerification",
 		skipVerification: false,
-		expected: func(ctx registryclient.Context) bool {
+		expected: func(ctx *registryclient.Context) bool {
 			return !ctx.DisableDigestVerification
 		},
 	}}
@@ -34,7 +34,7 @@ func TestNewContext(t *testing.T) {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.True(t, test.expected(*regctx))
+				require.True(t, test.expected(regctx))
 			}
 		})
 	}

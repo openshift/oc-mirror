@@ -1,18 +1,23 @@
+#!/usr/bin/env bash
+
+# These are used to define all testcase
+# run during end to end test
 declare -a TESTCASES
 TESTCASES[1]="full_catalog"
 TESTCASES[2]="headsonly_diff"
-TESTCASES[3]="registry_backend"
-TESTCASES[4]="mirror_to_mirror"
-TESTCASES[5]="mirror_to_mirror_nostorage"
-TESTCASES[6]="custom_namespace"
-TESTCASES[7]="package_filtering"
-TESTCASES[8]="skip_deps"
-TESTCASES[9]="helm_local"
-TESTCASES[10]="no_updates_exist"
+TESTCASES[3]="pruned_catalogs"
+TESTCASES[4]="registry_backend"
+TESTCASES[5]="mirror_to_mirror"
+TESTCASES[6]="mirror_to_mirror_nostorage"
+TESTCASES[7]="custom_namespace"
+TESTCASES[8]="package_filtering"
+TESTCASES[9]="skip_deps"
+TESTCASES[10]="helm_local"
+TESTCASES[11]="no_updates_exist"
 
 # Test full catalog mode.
 function full_catalog () {
-    run_full imageset-config-full.yaml true
+    workflow_full imageset-config-full.yaml "test-catalog-latest" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -20,25 +25,38 @@ function full_catalog () {
 
 # Test heads-only mode
 function headsonly_diff () {
-    run_full imageset-config-headsonly.yaml true
+    workflow_full imageset-config-headsonly.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 
-    run_diff imageset-config-headsonly.yaml
+    workflow_diff imageset-config-headsonly.yaml "test-catalog-diff" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
 
+# Test heads-only mode with catalogs that prune bundles
+function pruned_catalogs() {
+    workflow_full imageset-config-headsonly.yaml "test-catalog-prune" --diff -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.1.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+
+    workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.2.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
 # Test registry backend
 function registry_backend () {
-    run_full imageset-config-headsonly-backend-registry.yaml true
+    workflow_full imageset-config-headsonly-backend-registry.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 
-    run_diff imageset-config-headsonly-backend-registry.yaml
+    workflow_diff imageset-config-headsonly-backend-registry.yaml "test-catalog-diff" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -46,7 +64,7 @@ function registry_backend () {
 
 # Test mirror to mirror with local backend
 function mirror_to_mirror() {
-    mirror2mirror imageset-config-headsonly.yaml
+    workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-latest" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -54,7 +72,7 @@ function mirror_to_mirror() {
 
 # Test mirror to mirror no backend
 function mirror_to_mirror_nostorage() {
-    mirror2mirror imageset-config-full.yaml
+    workflow_mirror2mirror imageset-config-full.yaml "test-catalog-latest" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -62,12 +80,12 @@ function mirror_to_mirror_nostorage() {
 
 # Test registry backend with custom namespace
 function custom_namespace {
-    run_full imageset-config-headsonly-backend-registry.yaml true "custom"
+    workflow_full imageset-config-headsonly-backend-registry.yaml "test-catalog-latest" --diff -n="custom" -c="--source-use-http"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT} "custom"
 
-    run_diff imageset-config-headsonly-backend-registry.yaml "custom"
+    workflow_diff imageset-config-headsonly-backend-registry.yaml "test-catalog-diff" -n="custom" -c="--source-use-http"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/custom/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT} "custom"
@@ -76,12 +94,12 @@ function custom_namespace {
 
 # Test package filtering
 function package_filtering {
-    run_full imageset-config-filter.yaml true
+    workflow_full imageset-config-filter.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 
-    run_diff imageset-config-filter-multi.yaml
+    workflow_diff imageset-config-filter-multi.yaml "test-catalog-diff" -c="--source-use-http"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -89,7 +107,7 @@ function package_filtering {
 
 # Test skip deps
 function skip_deps {
-    run_full imageset-config-skip-deps.yaml true
+    workflow_full imageset-config-skip-deps.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest" \
     "bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -98,12 +116,13 @@ function skip_deps {
 
 # Test local helm chart
 function helm_local {
-    run_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
+    workflow_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
     check_helm "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }
 
+# Test no udpates
 function no_updates_exist {
-    run_no_updates imageset-config-headsonly.yaml true
+    workflow_no_updates imageset-config-headsonly.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
