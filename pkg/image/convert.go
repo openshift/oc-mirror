@@ -19,7 +19,13 @@ func ConvertToAssociationSet(assocs []v1alpha2.Association) (AssociationSet, err
 			errs = append(errs, err)
 			continue
 		}
-		assocMapping[a.Name] = a
+
+		// The association name itself
+		// is not unique because images can
+		// share child manifest so using the
+		// name and path/image as the key for
+		// unique combination.
+		assocMapping[a.Name+a.Path] = a
 	}
 	if len(errs) != 0 {
 		return assocSet, utilerrors.NewAggregate(errs)
@@ -35,7 +41,7 @@ func ConvertToAssociationSet(assocs []v1alpha2.Association) (AssociationSet, err
 			assocSet.Add(value.Name, value)
 			for _, digest := range value.ManifestDigests {
 				logrus.Debugf("image %q: processing child manifest %s", value.Name, digest)
-				child, ok := assocMapping[digest]
+				child, ok := assocMapping[digest+value.Path]
 				if !ok {
 					return assocSet, fmt.Errorf("invalid associations: association for %q is missing", digest)
 				}
