@@ -119,7 +119,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1a
 
 		var c cincinnati.Client
 		var err error
-		if ch.Name == cincinnati.OkdChannel {
+		if ch.Type == v1alpha2.TypeOKD {
 			c, err = cincinnati.NewOKDClient(id)
 		} else {
 			c, err = cincinnati.NewOCPClient(id)

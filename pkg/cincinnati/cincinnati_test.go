@@ -172,24 +172,32 @@ func TestGetMinorMax(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
-	channelName := "test-channel"
 	tests := []struct {
-		name string
-
+		name          string
+		channel       string
 		expectedQuery string
 		versions      []semver.Version
 		err           string
-	}{{
-		name:          "Valid/OneChannel",
-		expectedQuery: "channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
-	}}
+	}{
+		{
+			name:          "Valid/OneChannel",
+			channel:       "stable-4.0",
+			expectedQuery: "channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6"}),
+		},
+		{
+			name:          "Invalid/EmptyChannel",
+			channel:       "empty-4.0",
+			expectedQuery: "channel=empty-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			err:           "NoVersionsFound: no cluster versions found in the \"empty-4.0\" channel",
+		},
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := getHandler(t, requestQuery)
+			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
@@ -198,7 +206,7 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			versions, err := GetVersions(context.Background(), c, channelName)
+			versions, err := GetVersions(context.Background(), c, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.versions, versions)
@@ -356,7 +364,7 @@ func TestCalculateUpgrades(t *testing.T) {
 			{Version: semver.MustParse("4.2.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-5"},
 		},
 	}, {
-		name:          "Failure/InvalidVersion",
+		name:          "Failure/InvalidLastVersion",
 		sourceChannel: "stable-4.2",
 		targetChannel: "stable-4.3",
 		last:          semver.MustParse("4.2.0-9"),
@@ -693,6 +701,16 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 		ch := keys[len(keys)-1]
 
 		switch {
+		case ch == "empty-4.0":
+			_, err := w.Write([]byte(`{
+				"nodes": [],
+				"edges": []
+			  }`))
+			if err != nil {
+				t.Fatal(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		case ch == "stable-4.0":
 			_, err := w.Write([]byte(`{
 				"nodes": [

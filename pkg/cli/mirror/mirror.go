@@ -616,7 +616,7 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	}
 	// Instead of returning an error, just log it.
 	if o.ContinueOnError && (skip || skipAllTypes) {
-		logrus.Warn(err)
+		logrus.Error(err)
 		o.continuedOnError = true
 	} else {
 		return err
