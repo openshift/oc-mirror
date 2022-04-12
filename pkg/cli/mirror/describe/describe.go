@@ -5,20 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/cli"
-	"github.com/openshift/oc-mirror/pkg/config"
-	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 type DescribeOptions struct {
@@ -66,41 +59,9 @@ func (o *DescribeOptions) Validate() error {
 
 func (o *DescribeOptions) Run(ctx context.Context) error {
 
-	a := archive.NewArchiver()
-	var meta v1alpha2.Metadata
-
-	// Get archive with metadata
-	filesInArchive, err := bundle.ReadImageSet(a, o.From)
-
+	meta, err := bundle.ReadMetadataFromFile(ctx, o.From)
 	if err != nil {
-		return err
-	}
-
-	// Create workspace to work from
-	tmpdir, err := ioutil.TempDir(".", "metadata")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpdir)
-
-	archive, ok := filesInArchive[config.MetadataBasePath]
-	if !ok {
-		return errors.New("metadata is not in archive")
-	}
-
-	logrus.Debug("Extracting incoming metadata")
-	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
-		return err
-	}
-
-	workspace, err := storage.NewLocalBackend(tmpdir)
-
-	if err != nil {
-		return err
-	}
-
-	if err := workspace.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
-		return err
+		return fmt.Errorf("error retrieving metadata from %q: %v", o.From, err)
 	}
 
 	// Process metadata for output

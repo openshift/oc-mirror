@@ -143,6 +143,8 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
+	case o.ManifestsOnly && len(o.From) == 0:
+		return fmt.Errorf("must specify a path to an archive with --from with --manifest-only")
 	}
 
 	var destInsecure bool
@@ -208,7 +210,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	var meta v1alpha2.Metadata
 	switch {
 	case o.ManifestsOnly:
-		logrus.Info("Not implemented yet")
+		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
+		if err != nil {
+			return fmt.Errorf("error retrieving metadata from %q: %v", o.From, err)
+		}
+
+		mapping, err := image.ConvertToTypedMapping(meta.PastAssociations)
+		if err != nil {
+			return err
+		}
+		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
+		results, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		return o.generateAllManifests(mapping, results)
 	case len(o.OutputDir) > 0 && o.From == "":
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
