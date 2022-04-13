@@ -4,11 +4,18 @@ ifdef OS_GIT_VERSION
 SOURCE_GIT_TAG := ${OS_GIT_VERSION}
 endif
 
-SOURCE_GIT_COMMIT := $(shell git rev-parse HEAD)
+# Include the library makefile
+include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
+	golang.mk \
+	targets/openshift/images.mk \
+	targets/openshift/deps-gomod.mk \
+)
 
-GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="0" \
-                   -X k8s.io/component-base/version.gitMinor="2" \
-                   -X k8s.io/component-base/version.gitVersion="v0.2.0-alpha.1" \
+GO_BUILD_PACKAGES := ./cmd/...
+
+GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="1" \
+                   -X k8s.io/component-base/version.gitMinor="22" \
+                   -X k8s.io/component-base/version.gitVersion="v0.22.4" \
                    -X k8s.io/component-base/version.gitCommit="$(SOURCE_GIT_COMMIT)" \
                    -X k8s.io/component-base/version.buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')" \
                    -X k8s.io/component-base/version.gitTreeState="clean" \
@@ -17,15 +24,17 @@ GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="0" \
                    -X k8s.io/client-go/pkg/version.buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')" \
                    -X k8s.io/client-go/pkg/version.gitTreeState="$(SOURCE_GIT_TREE_STATE)"
 
-
-
-GO_BUILD_FLAGS :=-tags 'json1 -mod=vendor'
+GO_BUILD_FLAGS :=-tags 'json1'
+GO_BUILD_BINDIR :=./bin
 
 all: clean tidy test-unit build
 .PHONY: all
 
-build: clean
-	$(GO) build $(GO_BUILD_FLAGS) -ldflags="$(GO_LD_EXTRAFLAGS)" -o bin/oc-mirror ./cmd/oc-mirror
+cross-build-linux-amd64:
+	+@GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build
+.PHONY: cross-build-linux-amd64
+
+cross-build: cross-build-linux-amd64
 .PHONY: build
 
 hack-build: clean
@@ -39,7 +48,7 @@ tidy:
 .PHONY: vendor
 
 clean:
-	@rm -rf ./bin/*
+	@rm -rf ./$(GO_BUILD_BINDIR)/*
 	@cd test/integration && make clean
 .PHONY: clean
 
@@ -48,7 +57,7 @@ test-unit:
 .PHONY: test-unit
 
 test-e2e: build
-	./test/e2e/e2e-simple.sh ./bin/oc-mirror
+	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror
 .PHONY: test-e2e
 
 test-integration: hack-build
@@ -66,12 +75,11 @@ publish-catalog:
 .PHONY: publish-catalog
 
 format: 
-	go fmt ./pkg/...
-	go fmt ./cmd/...
+	$(GO) fmt ./pkg/...
+	$(GO) fmt ./cmd/...
 .PHONY: format
 
 vet: 
-	go vet ./pkg/...
-	go vet ./cmd/...
+	$(GO) vet ./pkg/...
+	$(GO) vet ./cmd/...
 .PHONY: vet
-

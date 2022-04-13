@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
-	"k8s.io/component-base/version"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/version"
 )
 
 type VersionOptions struct {
