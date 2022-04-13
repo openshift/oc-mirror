@@ -55,16 +55,33 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 	}
 
 	for _, manifest := range idxManifest.Manifests {
-		if manifest.MediaType == types.DockerManifestSchema2 {
+		switch manifest.MediaType {
+		case types.DockerManifestSchema2:
 			v2format = true
+		case types.OCIManifestSchema1:
+			v2format = false
+		default:
+			return fmt.Errorf("image %q: unsupported manifest format %q", targetRef, manifest.MediaType)
 		}
 
 		img, err := layoutPath.Image(manifest.Digest)
 		if err != nil {
 			return err
 		}
-		// Add new layers to image
-		img, err = mutate.AppendLayers(img, layers...)
+
+		// Add new layers to image.
+		// Ensure they have the right media type.
+		var mt types.MediaType
+		if v2format {
+			mt = types.DockerLayer
+		} else {
+			mt = types.OCILayer
+		}
+		additions := make([]mutate.Addendum, 0, len(layers))
+		for _, layer := range layers {
+			additions = append(additions, mutate.Addendum{Layer: layer, MediaType: mt})
+		}
+		img, err = mutate.Append(img, additions...)
 		if err != nil {
 			return err
 		}
