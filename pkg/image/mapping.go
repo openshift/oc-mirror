@@ -37,6 +37,9 @@ func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 		dest.Ref.Registry = registry
 		dest.Ref.Namespace = path.Join(namespace, dest.Ref.Namespace)
 		dest.Ref.ID = src.Ref.ID
+		if dest.Ref.Tag == "" && len(src.Ref.ID) > 13 {
+			dest.Ref.Tag = src.Ref.ID[7:13]
+		}
 		m[src] = dest
 	}
 }

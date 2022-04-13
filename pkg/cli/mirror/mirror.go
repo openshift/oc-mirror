@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -349,11 +350,11 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 		// Create associations
-		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, sourceInsecure, o.SkipVerification)
+		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
 		skipErr := func(err error) bool {
 			ierr := &image.ErrInvalidImage{}
 			cerr := &image.ErrInvalidComponent{}
-			return errors.As(err, &ierr) || errors.As(err, &cerr)
+			return errors.As(err, &ierr) || errors.As(err, &cerr) || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
 		}
 
 		if errs != nil {
