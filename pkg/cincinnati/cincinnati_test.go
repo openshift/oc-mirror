@@ -321,6 +321,18 @@ func TestCalculateUpgrades(t *testing.T) {
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		},
 	}, {
+		name:          "Success/TwoChannelsDifferentPrefix",
+		sourceChannel: "stable-4.3",
+		targetChannel: "fast-4.3",
+		last:          semver.MustParse("4.3.0"),
+		req:           semver.MustParse("4.3.1"),
+		current:       Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		requested:     Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		needed: []Update{
+			{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+			{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		},
+	}, {
 		name:          "SuccessWithWarning/NoUpgradePath",
 		sourceChannel: "stable-4.1",
 		targetChannel: "stable-4.2",
@@ -349,7 +361,7 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel: "stable-4.3",
 		last:          semver.MustParse("4.2.0-9"),
 		req:           semver.MustParse("4.3.4"),
-		err:           "cannot get current: VersionNotFound: current version 4.2.0-9 not found in the \"stable-4.2\" channel",
+		err:           "channel \"stable-4.2\": VersionNotFound: current version 4.2.0-9 not found in the \"stable-4.2\" channel",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -371,6 +383,71 @@ func TestCalculateUpgrades(t *testing.T) {
 				require.Equal(t, test.current, cur)
 				require.Equal(t, test.requested, req)
 				require.Equal(t, test.needed, updates)
+			} else {
+				require.EqualError(t, err, test.err)
+			}
+		})
+	}
+}
+
+func TestHandleBlockedEdges(t *testing.T) {
+	arch := "test-arch"
+
+	tests := []struct {
+		name          string
+		sourceChannel string
+		targetChannel string
+		last          semver.Version
+		req           semver.Version
+		exp           bool
+		err           string
+	}{{
+		name:          "Success/OneChannel",
+		sourceChannel: "stable-4.0",
+		targetChannel: "stable-4.1",
+		last:          semver.MustParse("4.0.0-5"),
+		req:           semver.MustParse("4.1.0-6"),
+		exp:           false,
+	}, {
+		name:          "Success/TwoChannelsDifferentPrefix",
+		sourceChannel: "stable-4.3",
+		targetChannel: "fast-4.3",
+		last:          semver.MustParse("4.3.0"),
+		req:           semver.MustParse("4.3.1"),
+		exp:           false,
+	}, {
+		name:          "SuccessWithWarning/NoUpgradePath",
+		sourceChannel: "stable-4.1",
+		targetChannel: "stable-4.2",
+		last:          semver.MustParse("4.1.0-6"),
+		req:           semver.MustParse("4.2.0-2"),
+		exp:           false,
+	}, {
+		name:          "SuccessWithWarning/BlockedEdge",
+		sourceChannel: "stable-4.2",
+		targetChannel: "stable-4.3",
+		last:          semver.MustParse("4.2.0-3"),
+		req:           semver.MustParse("4.3.0"),
+		exp:           true,
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requestQuery := make(chan string, 10)
+			defer close(requestQuery)
+
+			handler := getHandlerMulti(t, requestQuery)
+
+			ts := httptest.NewServer(http.HandlerFunc(handler))
+			t.Cleanup(ts.Close)
+
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+
+			isBlocked, err := handleBlockedEdges(context.Background(), &mockClient{url: endpoint}, arch, test.targetChannel, test.last)
+
+			if test.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, test.exp, isBlocked)
 			} else {
 				require.EqualError(t, err, test.err)
 			}
@@ -478,6 +555,48 @@ func TestNodeUnmarshalJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetSemVerFromChannel(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		sourceChannel string
+		targetChannel string
+		err           string
+		expSource     semver.Version
+		expTarget     semver.Version
+		expPrefix     string
+	}{
+		{
+			name:          "Valid/StableChannels",
+			sourceChannel: "stable-4.1",
+			targetChannel: "fast-4.2",
+			expSource:     semver.MustParse("4.1.0"),
+			expTarget:     semver.MustParse("4.2.0"),
+			expPrefix:     "stable",
+		},
+		{
+			name:          "Invalid/InvalidChannelPrefix",
+			sourceChannel: "stable-4.1",
+			targetChannel: "fast:4.2",
+			err:           "invalid channel name fast:4.2",
+		},
+	}
+	for _, test := range tests {
+		source, target, prefix, err := getSemverFromChannels(test.sourceChannel, test.targetChannel)
+		t.Run(test.name, func(t *testing.T) {
+			if test.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, test.expPrefix, prefix)
+				require.Equal(t, test.expSource, source)
+				require.Equal(t, test.expTarget, target)
+			} else {
+				require.EqualError(t, err, test.err)
+			}
+		})
+	}
+
 }
 
 func getSemVers(stringVers []string) (vers []semver.Version) {
@@ -688,6 +807,33 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 				}
 				],
 				"edges": [[0,1]]
+			}`))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				t.Fatal(err)
+				return
+			}
+		case ch == "fast-4.3":
+			_, err := w.Write([]byte(`{
+				"nodes": [
+				{
+					"version": "4.2.0-5",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-5"
+				},	
+				{
+					"version": "4.3.0",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.0"
+				},
+				{
+					"version": "4.3.1",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.1"
+				},
+				{
+					"version": "4.3.2",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.2"
+				}
+				],
+				"edges": [[0,1],[1,2],[2,3]]
 			}`))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
