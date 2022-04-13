@@ -154,10 +154,16 @@ func (b *registryBackend) unpack(ctx context.Context, fpath string) error {
 		StripComponents:        0,
 		ContinueOnError:        false,
 	}
-	if err := arc.Unarchive(filepath.Join(b.localDirBackend.dir, tempTar), b.localDirBackend.dir); err != nil {
+	tempTar = filepath.Join(b.localDirBackend.dir, tempTar)
+	if err := arc.Unarchive(tempTar, b.localDirBackend.dir); err != nil {
 		return err
-	} // adjust perms, unpack leaves the file user-writable only
-	return b.localDirBackend.fs.Chmod(fpath, 0600)
+	}
+	// adjust perms, unpack leaves the file user-writable only
+	if err := b.localDirBackend.fs.Chmod(fpath, 0600); err != nil {
+		return fmt.Errorf("metadata %q does not contain required content: %v", b.src.Ref.Exact(), err)
+	}
+
+	return nil
 }
 
 // Stat checks the existence of the metadata from a registry source
