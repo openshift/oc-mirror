@@ -157,7 +157,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 	default:
 
-		vm, err := getVersionMap(catalogs[0])
+		vm, err := GetVersionMap(catalogs[0])
 		if err != nil {
 			return err
 		}
@@ -189,7 +189,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 		return err
 	}
 	for _, catalog := range catalogs {
-		versions, err := getVersionMap(catalog)
+		versions, err := GetVersionMap(catalog)
 		if err != nil {
 			logrus.Error("Failed to get catalog version details: ", err)
 			continue
@@ -204,8 +204,8 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 	return nil
 }
 
-func getVersionMap(c string) (map[string]int, error) {
-	repo, err := name.NewRepository(c)
+func GetVersionMap(catalog string) (map[string]int, error) {
+	repo, err := name.NewRepository(catalog)
 	if err != nil {
 		return nil, err
 	}
