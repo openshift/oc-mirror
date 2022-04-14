@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -59,10 +59,10 @@ func ByConfig(dir string, storage v1alpha2.StorageConfig) (Backend, error) {
 	}
 	switch b.(type) {
 	case *localDirBackend:
-		logrus.Debugf("Using local backend at location %s", storage.Local.Path)
+		klog.V(4).Info("Using local backend at location %s", storage.Local.Path)
 		return NewLocalBackend(storage.Local.Path)
 	case *registryBackend:
-		logrus.Debugf("Using registry backend at location %s", storage.Registry.ImageURL)
+		klog.V(4).Info("Using registry backend at location %s", storage.Registry.ImageURL)
 		return NewRegistryBackend(storage.Registry, dir)
 	default:
 		return nil, errors.New("unsupported backend configuration")

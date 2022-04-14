@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -27,7 +27,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 	var err error
 	if !cfg.StorageConfig.IsSet() {
 		meta.SingleUse = true
-		logrus.Warnf("backend is not configured in %s, using stateless mode", o.ConfigPath)
+		klog.Warning("backend is not configured in %s, using stateless mode", o.ConfigPath)
 		cfg.StorageConfig.Local = &v1alpha2.LocalConfig{Path: path}
 		backend, err = storage.ByConfig(path, cfg.StorageConfig)
 		if err != nil {
@@ -35,7 +35,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 		}
 		defer func() {
 			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
-				logrus.Error(err)
+				klog.Error(err)
 			}
 		}()
 	} else {
@@ -57,7 +57,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 	// and a new UUID. Otherwise, use data from the last mirror to mirror just the layer diff.
 	switch {
 	case merr != nil:
-		logrus.Info("No metadata detected, creating new workspace")
+		klog.Info("No metadata detected, creating new workspace")
 		meta.Uid = uuid.New()
 		thisRun.Sequence = 1
 		thisRun.Mirror = cfg.Mirror
@@ -128,7 +128,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 	}
 
 	if len(cfg.Mirror.Samples) != 0 {
-		logrus.Debugf("sample images full not implemented")
+		klog.V(4).Info("sample images full not implemented")
 	}
 
 	return mmappings, nil

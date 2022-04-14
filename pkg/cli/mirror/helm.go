@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/action"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -18,6 +17,7 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 	"k8s.io/client-go/util/jsonpath"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -90,7 +90,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 		}
 
 		for _, chart := range repo.Charts {
-			logrus.Infof("Pulling chart %s", chart.Name)
+			klog.Infof("Pulling chart %s", chart.Name)
 			// TODO: Do something with the returned verifications
 			ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
 			dest := filepath.Join(h.Dir, config.SourceDir, config.HelmDir)
@@ -117,7 +117,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 // FindImages will download images found in a Helm chart on disk
 func findImages(path string, imagePaths ...string) (images []v1alpha2.Image, err error) {
 
-	logrus.Debugf("Reading from path %s", path)
+	klog.V(4).Info("Reading from path %s", path)
 
 	// Get all json paths where images
 	// are located
@@ -202,7 +202,7 @@ func (h *HelmOptions) repoAdd(chartRepo v1alpha2.Repository) error {
 
 	// Check for existing repo name
 	if helmFile.Has(chartRepo.Name) {
-		logrus.Infof("repository name (%s) already exists", chartRepo.Name)
+		klog.Infof("repository name (%s) already exists", chartRepo.Name)
 		return nil
 	}
 
@@ -247,7 +247,7 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err erro
 	var data interface{}
 	// yaml.Unmarshal will convert YAMl to JSON first
 	if err := yaml.Unmarshal(yamlData, &data); err != nil {
-		logrus.Error(err)
+		klog.Error(err)
 	}
 
 	j := jsonpath.New("")
@@ -260,7 +260,7 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err erro
 		}
 
 		for _, result := range results {
-			logrus.Debugf("Found image %s", result)
+			klog.V(4).Info("Found image %s", result)
 			img := v1alpha2.Image{
 				Name: result,
 			}
@@ -278,7 +278,7 @@ func mktempFile(dir string) (func(), string, error) {
 	file, err := ioutil.TempFile(dir, "repo.*")
 	return func() {
 		if err := os.Remove(file.Name()); err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 	}, file.Name(), err
 }

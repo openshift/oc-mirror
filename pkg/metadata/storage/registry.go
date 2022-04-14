@@ -19,7 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/mholt/archiver/v3"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -64,7 +64,7 @@ func NewRegistryBackend(cfg *v1alpha2.RegistryConfig, dir string) (Backend, erro
 
 // ReadMetadata unpacks the metadata image and read it from disk
 func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
-	logrus.Debugf("Checking for existing metadata image at %s", b.src)
+	klog.V(4).Info("Checking for existing metadata image at %s", b.src)
 	// Check if image exists
 	if err := b.exists(ctx); err != nil {
 		return err
@@ -108,7 +108,7 @@ func (b *registryBackend) WriteObject(ctx context.Context, fpath string, obj int
 	if err := b.localDirBackend.WriteObject(ctx, fpath, obj); err != nil {
 		return err
 	}
-	logrus.Debugf("Pushing metadata to registry at %s", b.src)
+	klog.V(4).Info("Pushing metadata to registry at %s", b.src)
 	return b.pushImage(ctx, data, fpath)
 }
 
@@ -162,7 +162,7 @@ func (b *registryBackend) unpack(ctx context.Context, fpath string) error {
 
 // Stat checks the existence of the metadata from a registry source
 func (b *registryBackend) Stat(ctx context.Context, fpath string) (os.FileInfo, error) {
-	logrus.Debugf("Checking for existing metadata image at %s", b.src.String())
+	klog.V(4).Info("Checking for existing metadata image at %s", b.src.String())
 	// Check if image exists
 	if err := b.exists(ctx); err != nil {
 		return nil, err

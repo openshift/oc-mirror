@@ -7,7 +7,7 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
@@ -46,7 +46,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 			if !isSkipErr(err) {
 				return nil, err
 			}
-			logrus.Warn(err)
+			klog.Warning(err)
 			continue
 		}
 		pinnedRef, err := imagesource.ParseReference(srcImage)

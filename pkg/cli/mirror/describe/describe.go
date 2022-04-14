@@ -8,8 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
@@ -83,7 +83,7 @@ func (o *DescribeOptions) Run(ctx context.Context) error {
 		return errors.New("metadata is not in archive")
 	}
 
-	logrus.Debug("Extracting incoming metadata")
+	klog.V(4).Info("Extracting incoming metadata")
 	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
 		return err
 	}

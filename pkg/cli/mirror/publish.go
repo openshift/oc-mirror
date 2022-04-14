@@ -18,8 +18,8 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	imgmirror "github.com/openshift/oc/pkg/cli/image/mirror"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/archive"
@@ -58,7 +58,7 @@ func (e *ErrArchiveFileNotFound) Error() string {
 // Publish will plan a mirroring operation based on provided imageset on disk
 func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, error) {
 
-	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
+	klog.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
 	var currentMeta v1alpha2.Metadata
 	var incomingMeta v1alpha2.Metadata
@@ -89,7 +89,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		defer cleanup()
 	}
 
-	logrus.Debugf("Unarchiving metadata into %s", tmpdir)
+	klog.V(4).Info("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
 	filesInArchive, err := bundle.ReadImageSet(a, o.From)
@@ -116,7 +116,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	// Determine stateless or stateful mode
 	var backend storage.Backend
 	if incomingMeta.SingleUse {
-		logrus.Warn("metadata has single-use label, using stateless mode")
+		klog.Warning("metadata has single-use label, using stateless mode")
 		cfg := v1alpha2.StorageConfig{
 			Local: &v1alpha2.LocalConfig{Path: o.Dir}}
 		backend, err = storage.ByConfig(o.Dir, cfg)
@@ -125,7 +125,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		}
 		defer func() {
 			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
-				logrus.Error(err)
+				klog.Error(err)
 			}
 		}()
 	} else {
@@ -146,7 +146,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return allMappings, err
 	case err != nil:
-		logrus.Infof("No existing metadata found. Setting up new workspace")
+		klog.Infof("No existing metadata found. Setting up new workspace")
 		// Check that this is the first imageset
 		incomingRun := incomingMeta.PastMirror
 		if incomingRun.Sequence != 1 {
@@ -155,7 +155,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	default:
 		// Complete metadata checks
 		// UUID mismatch will now be seen as a new workspace.
-		logrus.Debug("Check metadata sequence number")
+		klog.V(4).Infof("Check metadata sequence number")
 		currRun := currentMeta.PastMirror
 		incomingRun := incomingMeta.PastMirror
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
@@ -164,7 +164,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	// Unpack chart to user destination if it exists
-	logrus.Debugf("Unpacking any provided Helm charts to %s", o.OutputDir)
+	klog.V(4).Info("Unpacking any provided Helm charts to %s", o.OutputDir)
 	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
 		return allMappings, err
 	}
@@ -182,7 +182,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
 	}
-	logrus.Debugf("mirror reference: %#v", toMirrorRef)
+	klog.V(4).Info("mirror reference: %#v", toMirrorRef)
 	if toMirrorRef.Type != imagesource.DestinationRegistry {
 		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
@@ -208,7 +208,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
-			logrus.Debugf("reading assoc: %s", assoc.Name)
+			klog.V(4).Info("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
 					if hasManifest := assocs.ContainsKey(imageName, manifestDigest); !hasManifest {
@@ -218,7 +218,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 					manifestArchivePath := filepath.Join(manifestPath, manifestDigest)
 					switch _, err := os.Stat(manifestArchivePath); {
 					case err == nil:
-						logrus.Debugf("Manifest found %s found in %s", manifestDigest, assoc.Path)
+						klog.V(4).Info("Manifest found %s found in %s", manifestDigest, assoc.Path)
 					case errors.Is(err, os.ErrNotExist):
 						if err := unpack(manifestArchivePath, unpackDir, filesInArchive); err != nil {
 							errs = append(errs, err)
@@ -236,7 +236,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			}
 
 			for _, layerDigest := range assoc.LayerDigests {
-				logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
+				klog.V(4).Info("Found layer %v for image %s", layerDigest, imageName)
 				// Construct blob path, which is adjacent to the manifests path.
 				blobPath := filepath.Join("blobs", layerDigest)
 				imagePath := filepath.Join(unpackDir, "v2", assoc.Path)
@@ -244,7 +244,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 				aerr := &ErrArchiveFileNotFound{}
 				switch err := unpack(blobPath, imagePath, filesInArchive); {
 				case err == nil:
-					logrus.Debugf("Blob %s found in %s", layerDigest, assoc.Path)
+					klog.V(4).Info("Blob %s found in %s", layerDigest, assoc.Path)
 				case errors.Is(err, os.ErrNotExist) || errors.As(err, &aerr):
 					// Image layer must exist in the mirror registry since it wasn't archived,
 					// so fetch the layer and place it in the blob dir so it can be mirrored by `oc`.
@@ -312,13 +312,13 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, utilerrors.NewAggregate(errs)
 	}
 
-	logrus.Debug("unpack release signatures")
+	klog.V(4).Infof("unpack release signatures")
 	err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive)
 	if err != nil {
 		return allMappings, err
 	}
 
-	logrus.Debug("rebuilding catalog images")
+	klog.V(4).Infof("rebuilding catalog images")
 
 	found, err := o.unpackCatalog(tmpdir, filesInArchive)
 	if err != nil {
@@ -367,7 +367,7 @@ func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 			extension = strings.TrimPrefix(extension, ".")
 
 			if extension == a.String() {
-				logrus.Debugf("Extracting archive %s", path)
+				klog.V(4).Info("Extracting archive %s", path)
 				if err := archive.Unarchive(a, path, dest, exclude); err != nil {
 					return err
 				}
@@ -378,7 +378,7 @@ func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 
 	} else {
 
-		logrus.Infof("Extracting archive %s", o.From)
+		klog.Infof("Extracting archive %s", o.From)
 		if err := archive.Unarchive(a, o.From, dest, exclude); err != nil {
 			return err
 		}
@@ -390,7 +390,7 @@ func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 // TODO(estroz): symlink blobs instead of copying them to avoid data duplication.
 // `oc` mirror libs should be able to follow these symlinks.
 func copyBlobFile(src io.Reader, dstPath string) error {
-	logrus.Debugf("copying blob to %s", dstPath)
+	klog.V(4).Info("copying blob to %s", dstPath)
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return err
 	}
@@ -441,7 +441,7 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, regctx *registryclient.Co
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
 	}
-	logrus.Debugf("copying blob %s from %s", layerDigest, ref.Exact())
+	klog.V(4).Info("copying blob %s from %s", layerDigest, ref.Exact())
 	repo, err := regctx.RepositoryForRef(ctx, ref, insecure)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
@@ -486,7 +486,7 @@ func mktempDir(dir string) (func(), string, error) {
 	dir, err := ioutil.TempDir(dir, "images.*")
 	return func() {
 		if err := os.RemoveAll(dir); err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 	}, dir, err
 }
@@ -498,13 +498,13 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 		insecure = true
 	}
 	// Mirror all file sources of each available image type to mirror registry.
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		var srcs []string
-		for _, m := range mappings {
-			srcs = append(srcs, m.Source.String())
-		}
-		logrus.Debugf("mirroring generic images: %q", srcs)
+
+	var srcs []string
+	for _, m := range mappings {
+		srcs = append(srcs, m.Source.String())
 	}
+	klog.V(4).Info("mirroring generic images: %q", srcs)
+
 	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {
 		return fmt.Errorf("error creating registry context: %v", err)

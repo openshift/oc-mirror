@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/archive"
@@ -97,7 +97,7 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Back
 	segSize := defaultSegSize
 	if archiveSize != 0 {
 		segSize = archiveSize
-		logrus.Debugf("Using user provided archive size %d GiB", segSize)
+		klog.V(4).Info("Using user provided archive size %d GiB", segSize)
 	}
 	segSize *= segMultiplier
 
@@ -133,7 +133,7 @@ func (o *MirrorOptions) mktempDir() (string, func(), error) {
 	dir := filepath.Join(o.Dir, config.SourceDir, fmt.Sprintf("tmpbackend.%d", time.Now().Unix()))
 	return dir, func() {
 		if err := os.RemoveAll(dir); err != nil {
-			logrus.Error(err)
+			klog.Error(err)
 		}
 	}, os.MkdirAll(dir, os.ModePerm)
 }

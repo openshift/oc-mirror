@@ -24,7 +24,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	operatorimage "github.com/operator-framework/operator-registry/pkg/image"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -39,7 +39,7 @@ func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]s
 	if err := unpack(CatalogsDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			logrus.Debug("No catalogs found in archive, skipping catalog rebuild")
+			klog.V(4).Info("No catalogs found in archive, skipping catalog rebuild")
 			return found, nil
 		}
 		return found, err
@@ -174,7 +174,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		switch _, _, rerr := resolver.Resolve(ctx, refExact); {
 		case errors.Is(rerr, errdefs.ErrNotFound):
-			logrus.Infof("Catalog image %q found, building from file with file-based catalog ", refExact)
+			klog.Infof("Catalog image %q found, building from file with file-based catalog ", refExact)
 
 			add, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, IndexDir, "index.json"))
 			if err != nil {
@@ -195,7 +195,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 				return fmt.Errorf("error creating OCI layout: %v", err)
 			}
 		case rerr == nil:
-			logrus.Infof("Catalog image %q found, rendering with file-based catalog", refExact)
+			klog.Infof("Catalog image %q found, rendering with file-based catalog", refExact)
 
 			dcDir := filepath.Join(artifactDir, IndexDir)
 			dc, err := action.Render{

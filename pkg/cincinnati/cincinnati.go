@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/blang/semver/v4"
-	"github.com/sirupsen/logrus"
 	"k8s.io/klog/v2"
 )
 
@@ -248,11 +247,12 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
 		_, requested, _, err = GetUpdates(ctx, c, arch, targetChannel, targetVer, targetVer)
-		logrus.Warnf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+		//Warnf is 5?
+		klog.V(5).Infof("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
 
-	logrus.Debugf("Getting updates for version %s in channel %s", startVer.String(), currChannel)
+	klog.V(4).Info("Getting updates for version %s in channel %s", startVer.String(), currChannel)
 	_, requested, upgrades, err = GetUpdates(ctx, c, arch, currChannel, startVer, targetVer)
 	if err != nil {
 		return requested, upgrades, nil
@@ -396,6 +396,7 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 		if c.GetTransport().TLSClientConfig.ClientCAs == nil {
 			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
 		} else {
+
 			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
 		}
 	}
@@ -403,7 +404,7 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	if transport != nil && transport.Proxy != nil {
 		proxy, err := transport.Proxy(req)
 		if err == nil && proxy != nil {
-			klog.V(5).Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
+			klog.Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
 		}
 	}
 

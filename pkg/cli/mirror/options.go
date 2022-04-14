@@ -7,8 +7,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 )
@@ -65,7 +65,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	// TODO(jpower432): Make this flag visible again once release architecture selection
 	// has been more thouroughly vetted
 	if err := fs.MarkHidden("filter-by-os"); err != nil {
-		logrus.Panic(err.Error())
+		klog.Error(err.Error())
 	}
 }
 

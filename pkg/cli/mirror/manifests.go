@@ -12,10 +12,10 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/image"
 )
@@ -162,7 +162,7 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
 		if len(v.Ref.ID) == 0 {
-			logrus.Warnf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
+			klog.Warningf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
 		switch {
@@ -214,7 +214,7 @@ func generateCatalogSource(name string, dest reference.DockerImageReference) ([]
 func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
 	if len(icsps) == 0 {
-		logrus.Debug("No ICSPs generated to write")
+		klog.V(4).Info("No ICSPs generated to write")
 		return nil
 	}
 
@@ -241,7 +241,7 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 		return fmt.Errorf("error writing ImageContentSourcePolicy: %v", err)
 	}
 
-	logrus.Infof("Wrote ICSP manifests to %s", dir)
+	klog.Infof("Wrote ICSP manifests to %s", dir)
 
 	return nil
 }
@@ -258,6 +258,6 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 			return fmt.Errorf("error writing CatalogSource: %v", err)
 		}
 	}
-	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
+	klog.Infof("Wrote CatalogSource manifests to %s", dir)
 	return nil
 }

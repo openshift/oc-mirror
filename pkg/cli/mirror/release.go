@@ -19,8 +19,8 @@ import (
 	"github.com/openshift/library-go/pkg/verify/store/sigstore"
 	"github.com/openshift/library-go/pkg/verify/util"
 	"github.com/openshift/oc/pkg/cli/admin/release"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
@@ -151,7 +151,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 	}
 
 	for img := range releaseDownloads {
-		logrus.Debugf("Starting release download for version %s", img)
+		klog.V(4).Info("Starting release download for version %s", img)
 		opts, err := o.newMirrorReleaseOptions(srcDir)
 		if err != nil {
 			return mmapping, err
@@ -387,7 +387,7 @@ func (d downloads) Merge(in downloads) {
 	for k, v := range in {
 		_, ok := d[k]
 		if ok {
-			logrus.Debugf("download %s exists", k)
+			klog.V(4).Info("download %s exists", k)
 			continue
 		}
 		d[k] = v
@@ -421,7 +421,7 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 		defer cancelFn()
 		if err := imageVerifier.Verify(ctx, digest); err != nil {
 			// This may be a OKD release image hence no valid signature
-			logrus.Warnf("An image was retrieved that failed verification: %v", err)
+			klog.Warningf("An image was retrieved that failed verification: %v", err)
 			continue
 		}
 
@@ -477,11 +477,11 @@ func (o *MirrorOptions) unpackReleaseSignatures(dstDir string, filesInArchive ma
 	if err := unpack(config.ReleaseSignatureDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			logrus.Debug("No release signatures found in archive, skipping")
+			klog.V(4).Infof("No release signatures found in archive, skipping")
 			return nil
 		}
 		return err
 	}
-	logrus.Infof("Wrote release signatures to %s", dstDir)
+	klog.Infof("Wrote release signatures to %s", dstDir)
 	return nil
 }

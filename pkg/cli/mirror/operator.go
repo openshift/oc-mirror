@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -368,7 +369,7 @@ func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMappi
 		}
 		_, ok := mapping[ref]
 		if !ok {
-			logrus.Warnf("image %s is not included in mapping", img)
+			klog.Warningf("image %s is not included in mapping", img)
 		}
 		return nil
 	}
@@ -404,15 +405,15 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	for i, b := range dc.Bundles {
 
 		if !image.IsImagePinned(b.Image) {
-			logrus.Warnf("bundle %s: pinning bundle image %s to digest", b.Name, b.Image)
+			klog.Warningf("bundle %s: pinning bundle image %s to digest", b.Name, b.Image)
 
 			if !image.IsImageTagged(b.Image) {
-				logrus.Warnf("bundle %s: bundle image tag not set", b.Name)
+				klog.Warningf("bundle %s: bundle image tag not set", b.Name)
 				continue
 			}
 			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
 				if isSkipErr(err) {
-					logrus.Warnf("skipping bundle %s image %s resolve error: %v", b.Name, b.Image, err)
+					klog.Warningf("skipping bundle %s image %s resolve error: %v", b.Name, b.Image, err)
 				} else {
 					errs = append(errs, err)
 				}
@@ -420,16 +421,16 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 		}
 		for j, ri := range b.RelatedImages {
 			if !image.IsImagePinned(ri.Image) {
-				logrus.Warnf("bundle %s: pinning related image %s to digest", ri.Name, ri.Image)
+				klog.Warningf("bundle %s: pinning related image %s to digest", ri.Name, ri.Image)
 
 				if !image.IsImageTagged(ri.Image) {
-					logrus.Warnf("bundle %s: related image tag not set", b.Name)
+					klog.Warningf("bundle %s: related image tag not set", b.Name)
 					continue
 				}
 
 				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
 					if isSkipErr(err) {
-						logrus.Warnf("skipping bundle %s related image %s=%s resolve error: %v", b.Name, ri.Name, ri.Image, err)
+						klog.Warningf("skipping bundle %s related image %s=%s resolve error: %v", b.Name, ri.Name, ri.Image, err)
 					} else {
 						errs = append(errs, err)
 					}

@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
-
-	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type OperatorsOptions struct {
@@ -99,7 +98,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 		// Find target channel for searching
 		for _, c := range res.Channels {
@@ -125,10 +124,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 	case len(o.Catalog) > 0:
 		lp := action.ListPackages{
@@ -136,10 +135,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lp.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			logrus.Fatal(err)
+			klog.Fatal(err)
 		}
 	case o.Catalogs:
 		if _, err := fmt.Fprintln(w, "Available OpenShift OperatorHub catalogs:"); err != nil {

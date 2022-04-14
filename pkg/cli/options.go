@@ -1,68 +1,49 @@
 package cli
 
 import (
-	"io"
+	"flag"
 	"io/ioutil"
-	"os"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/crypto/ssh/terminal"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/klog/v2"
 )
 
 type RootOptions struct {
 	genericclioptions.IOStreams
 
 	Dir      string
-	LogLevel string
+	LogLevel int
 
 	logfileCleanup func()
 }
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
-	fs.StringVar(&o.LogLevel, "log-level", "info", "Log level (e.g. \"debug | info | warn | error\")")
+	//TODO tell int is needed vs str now
+	fs.IntVarP(&o.LogLevel, "verbose", "v", 2, "Log level (e.g. \"Error (1), Info (2) | Warning (3) | Debug (4)\")")
 	if err := fs.MarkHidden("dir"); err != nil {
-		logrus.Panic(err.Error())
+		klog.Fatal(err.Error())
 	}
 }
 
 func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
-	logrus.SetOutput(ioutil.Discard)
-	logrus.SetLevel(logrus.TraceLevel)
 
-	level, err := logrus.ParseLevel(o.LogLevel)
-	if err != nil {
-		logrus.Fatalf("parse root options log-level: %v", err)
-	}
-
-	logrus.AddHook(newFileHookWithNewlineTruncate(os.Stderr, level, &logrus.TextFormatter{
-		// Setting ForceColors is necessary because logrus.TextFormatter determines
-		// whether or not to enable colors by looking at the output of the logger.
-		// In this case, the output is ioutil.Discard, which is not a terminal.
-		// Overriding it here allows the same check to be done, but against the
-		// hook's output instead of the logger's output.
-		ForceColors:            terminal.IsTerminal(int(os.Stderr.Fd())),
-		DisableTimestamp:       true,
-		DisableLevelTruncation: true,
-		DisableQuote:           true,
-	}))
-
-	cleanup, logfile := setupFileHook(".")
-	o.logfileCleanup = cleanup
-
-	// Add to root IOStream options
-	o.IOStreams = genericclioptions.IOStreams{
-		In:     o.IOStreams.In,
-		Out:    io.MultiWriter(o.IOStreams.Out, logfile),
-		ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logfile),
-	}
+	var fsv2 flag.FlagSet
+	klog.InitFlags(&fsv2)
+	checkErr(fsv2.Set("stderrthreshold", "4"))
+	klog.SetOutput(ioutil.Discard)
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {
 	if o.logfileCleanup != nil {
 		o.logfileCleanup()
+	}
+}
+
+func checkErr(err error) {
+	if err != nil {
+		klog.Fatal(err)
 	}
 }
