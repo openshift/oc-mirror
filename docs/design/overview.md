@@ -1,6 +1,14 @@
 
 
 # oc-mirror Design Overview
+===
+- [oc-mirror Design Overview](#oc-mirror-design-overview)
+  - [Summary](#summary)
+  - [Features](#features)
+  - [Design Considerations](#design-considerations)
+  - [Key Components](#key-components)
+  - [Operation](#operation)
+  - [Imageset Configuration](#imageset-configuration)
 
 ## Summary 
 oc-mirror assists with lifecycle management of mirror registries that support OpenShift environments by performing differential update operations and synchronizations.   
@@ -8,7 +16,7 @@ oc-mirror assists with lifecycle management of mirror registries that support Op
 ## Features
 1. Differential Synchronization of OpenShift Release Images
 2. Differential Synchronization of Operator images
-3. Synchronization of OpenShift cincinnati graph data image (planned)
+3. Synchronization of OpenShift cincinnati graph data image
 4. Synchronization of OpenShift Release images by version or channel latest
 5. Synchronization of Operator Images by full catalog and full catalog at latest (HEAD) operator versions. Also, allows for synchronization of individual operators by version to each channels' HEAD.
 6. Synchronization of helm charts
@@ -16,6 +24,7 @@ oc-mirror assists with lifecycle management of mirror registries that support Op
 8. Remote state backends
 9. Base image filtering (planned)
 10. (multi) Cluster resource management
+11. Registry maintenance with image pruning
 
 ## Design Considerations
 1. Deterministic -  Each application phase’s results are the same regardless of where the application is executed from within each phase’s environment. This allows for oc-mirror to underpin a website, run in CI, reconcile as an operator, or run from the CLI as a standalone binary or as an oc plugin.
@@ -82,3 +91,10 @@ During the “publish diff” phase for differential updates:
 5. Output cluster ICSPs / Catalog Source / Cincinnati
 6. Optionally update (multi) cluster ICSPs / Catalog Source / Cincinnati 
 7. Update backend metadata
+
+## Imageset Configuration
+
+The imageset configuration is intended to reflect the current state of the registry mirroring. Any content types or images that are added to the 
+configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is 
+done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will stop the pruning attempt and continue. If you using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges. More information on `oc-mirror` workflows can be found [here](workflows.md).
+

@@ -44,10 +44,9 @@ type MirrorOptions struct {
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.ConfigPath, "config", "c", o.ConfigPath, "Path to imageset configuration file")
 	fs.BoolVar(&o.SkipImagePin, "skip-image-pin", o.SkipImagePin, "Do not replace image tags with digest pins in operator catalogs")
-	fs.StringVar(&o.From, "from", o.From, "The path to an input file (e.g. archived imageset)")
+	fs.StringVar(&o.From, "from", o.From, "Path to an input file (e.g. archived imageset)")
 	fs.BoolVar(&o.ManifestsOnly, "manifests-only", o.ManifestsOnly, "Generate manifests and do not mirror")
-	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images "+
-		"(experimental: only works for mirror to disk)")
+	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images")
 	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Disable TLS validation for source registry")
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Disable TLS validation for destination registry")
 	fs.BoolVar(&o.SourcePlainHTTP, "source-use-http", o.SourcePlainHTTP, "Use plain HTTP for source registry")

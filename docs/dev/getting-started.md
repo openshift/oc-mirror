@@ -1,5 +1,10 @@
 Developers: Getting Started with `oc-mirror`
 ====
+- [Developers: Getting Started with `oc-mirror`](#developers-getting-started-with-oc-mirror)
+  - [External Dependencies](#external-dependencies)
+  - [Building](#building)
+  - [CI](#ci)
+  - [Local Testing](#local-testing)
 
 Let's get started!
 
