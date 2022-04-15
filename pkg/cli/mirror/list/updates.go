@@ -28,7 +28,8 @@ import (
 
 type UpdatesOptions struct {
 	*cli.RootOptions
-	ConfigPath string
+	ConfigPath    string
+	FilterOptions []string
 }
 
 func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
@@ -47,6 +48,7 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 			oc-mirror list updates --config mirror-config.yaml
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
+			kcmdutil.CheckErr(o.Complete())
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
@@ -56,12 +58,32 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.StringVarP(&o.ConfigPath, "config", "c", o.ConfigPath, "Path to imageset configuration file")
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+		"picked when multiple variants are available")
+
+	// TODO(jpower432): Make this flag visible again once release architecture selection
+	// has been more thouroughly vetted
+	if err := fs.MarkHidden("filter-options"); err != nil {
+		logrus.Panic(err.Error())
+	}
 	return cmd
+}
+
+func (o *UpdatesOptions) Complete() error {
+	if len(o.FilterOptions) == 0 {
+		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
+	}
+	return nil
 }
 
 func (o *UpdatesOptions) Validate() error {
 	if len(o.ConfigPath) == 0 {
 		return fmt.Errorf("must specify config using --config")
+	}
+	for _, arch := range o.FilterOptions {
+		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
+			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
+		}
 	}
 	return nil
 }
@@ -85,11 +107,14 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	case err != nil && errors.Is(err, storage.ErrMetadataNotExist):
 		return fmt.Errorf("no metadata detected")
 	default:
-		if len(cfg.Mirror.Platform.Channels) != 0 {
-			if err := o.releaseUpdates(ctx, "amd64", cfg, meta.PastMirror); err != nil {
-				return err
+		for _, arch := range o.FilterOptions {
+			if len(cfg.Mirror.Platform.Channels) != 0 {
+				if err := o.releaseUpdates(ctx, arch, cfg, meta.PastMirror); err != nil {
+					return err
+				}
 			}
 		}
+
 		if len(cfg.Mirror.Operators) != 0 {
 			if err := o.operatorUpdates(ctx, cfg, meta); err != nil {
 				return err
@@ -145,7 +170,7 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1a
 			vers = append(vers, upgrade.Version)
 		}
 
-		if err := o.writeReleaseColumns(vers, ch.Name); err != nil {
+		if err := o.writeReleaseColumns(vers, arch, ch.Name); err != nil {
 			return err
 		}
 	}
@@ -205,7 +230,7 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha2.ImageS
 	return nil
 }
 
-func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, channel string) error {
+func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, arch, channel string) error {
 	if len(upgrades) == 0 {
 		if _, err := fmt.Fprintf(os.Stdout, "No updates found for release channel %s\n", channel); err != nil {
 			return err
@@ -213,7 +238,10 @@ func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, channel s
 		return nil
 	}
 	tw := tabwriter.NewWriter(o.IOStreams.Out, 0, 4, 2, ' ', 0)
-	if _, err := fmt.Fprintf(tw, "TARGET CHANNEL:\t%s\n", channel); err != nil {
+	if _, err := fmt.Fprintf(tw, "CHANNEL:\t%s\n", channel); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(tw, "ARCHITECTURE:\t%s\n", arch); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(tw, "VERSIONS"); err != nil {

@@ -175,6 +175,7 @@ func TestGetVersions(t *testing.T) {
 	tests := []struct {
 		name          string
 		channel       string
+		arch          string
 		expectedQuery string
 		versions      []semver.Version
 		err           string
@@ -182,13 +183,15 @@ func TestGetVersions(t *testing.T) {
 		{
 			name:          "Valid/OneChannel",
 			channel:       "stable-4.0",
-			expectedQuery: "channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			arch:          "test-arch",
+			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
 			versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6"}),
 		},
 		{
 			name:          "Invalid/EmptyChannel",
 			channel:       "empty-4.0",
-			expectedQuery: "channel=empty-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			arch:          "test-arch",
+			expectedQuery: "arch=test-arch&channel=empty-4.0&id=01234567-0123-0123-0123-0123456789ab",
 			err:           "NoVersionsFound: no cluster versions found in the \"empty-4.0\" channel",
 		},
 	}
@@ -206,7 +209,7 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			versions, err := GetVersions(context.Background(), c, test.channel)
+			versions, err := GetVersions(context.Background(), c, test.arch, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.versions, versions)

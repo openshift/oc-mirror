@@ -28,6 +28,12 @@ const (
 	OkdUpdateURL = "https://origin-release.ci.openshift.org/graph"
 )
 
+// SupportedArchs are architectures accepted when calculating
+// upgrades with Cincinnati.
+// TODO(jpower432): Validate this in all inclusive and applies to
+// OKD
+var SupportedArchs = map[string]struct{}{"amd64": {}, "ppc64le": {}, "s390x": {}}
+
 // Error is returned when are unable to get updates.
 type Error struct {
 	// Reason is the reason suggested for the Cincinnati calculation error.
@@ -282,7 +288,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 // handleBlockedEdges will check for the starting version in the current channel
 // if it does not exist the version is blocked.
 func handleBlockedEdges(ctx context.Context, c Client, arch, targetChannel string, startVer semver.Version) (bool, error) {
-	chanVersions, err := GetVersions(ctx, c, targetChannel)
+	chanVersions, err := GetVersions(ctx, c, arch, targetChannel)
 	if err != nil {
 		return true, err
 	}
@@ -334,11 +340,9 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 	}
 
 	// Find the all versions within the graph.
-	Vers := []semver.Version{}
+	var Vers []semver.Version
 	for _, node := range graph.Nodes {
-
 		Vers = append(Vers, node.Version)
-
 	}
 
 	semver.Sort(Vers)
@@ -385,10 +389,10 @@ func GetChannels(ctx context.Context, c Client, channel string) (map[string]stru
 	return channels, nil
 }
 
-// GetVersions will return all the update payloads
-func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Version, error) {
+// GetVersions will return all update payloads in a specified channel.
+func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.
-	c.SetQueryParams("", channel, "")
+	c.SetQueryParams(arch, channel, "")
 
 	graph, err := getGraphData(ctx, c)
 	if err != nil {
@@ -399,7 +403,7 @@ func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Versio
 		}
 	}
 	// Find the all versions within the graph.
-	Vers := []semver.Version{}
+	var Vers []semver.Version
 	for _, node := range graph.Nodes {
 
 		Vers = append(Vers, node.Version)

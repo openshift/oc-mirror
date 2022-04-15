@@ -54,7 +54,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
 	fs.BoolVar(&o.IgnoreHistory, "ignore-history", o.IgnoreHistory, "Ignores past mirrors when downloading images and packing layers")
-	fs.StringSliceVar(&o.FilterOptions, "filter-by-os", o.FilterOptions, "A regular expression to control which release image is picked when multiple variants are available")
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+		"picked when multiple variants are available")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
 		"and attempt to mirror as much as possible")
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
@@ -64,7 +65,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 
 	// TODO(jpower432): Make this flag visible again once release architecture selection
 	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-by-os"); err != nil {
+	if err := fs.MarkHidden("filter-options"); err != nil {
 		logrus.Panic(err.Error())
 	}
 }
