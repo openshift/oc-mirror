@@ -135,6 +135,8 @@ func TestGetChannelDownloads(t *testing.T) {
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-4": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-5": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-7": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-8": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.1.0-6": struct{}{},
 		},
 	}, {
@@ -270,6 +272,10 @@ func TestGetCrossChannelDownloads(t *testing.T) {
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-5-another": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6":         struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.0.0-6-another": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-7":         struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-7-another": struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-8":         struct{}{},
+			"quay.io/openshift-release-dev/ocp-release:4.0.0-8-another": struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.1.0-6":         struct{}{},
 			"quay.io/openshift-release-dev/ocp-release:4.1.0-6-another": struct{}{},
 		},
@@ -371,7 +377,7 @@ func (c mockClient) GetTransport() *http.Transport {
 	return &http.Transport{}
 }
 
-// Mock Cincinnati API
+// getHandlerMulti mock a multi channel and multi arch Cincinnati API
 func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -426,12 +432,12 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8"
 				  }
 				],
 				"edges": [[0,1],[1,2],[2,4],[4,5]]
@@ -461,15 +467,15 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0-another"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2-another"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7-another"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3-another"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8-another"
 				  }
 				],
-				"edges": [[0,1],[1,2],[4,5]]
+				"edges": [[0,1],[1,2],[2,4],[4,5]]
 			  }`))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -496,12 +502,12 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8"
 				  },
 				  {
 					"version": "4.1.0-6",
@@ -535,19 +541,19 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0-another"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2-another"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7-another"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3-another"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8-another"
 				  },
 				  {
 					"version": "4.1.0-6",
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.1.0-6-another"
 				  }
 				],
-				"edges": [[0,1],[1,2],[2,6],[4,5]]
+				"edges": [[0,1],[0,2],[1,2],[2,6],[4,5]]
 			  }`))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -574,12 +580,12 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8"
 				  },
 				  {
 					"version": "4.1.0-6",
@@ -617,12 +623,12 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0-another"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2-another"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7-another"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3-another"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8-another"
 				  },
 				  {
 					"version": "4.1.0-6",
@@ -633,7 +639,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.1.1-another"
 				  }
 				],
-				"edges": [[0,1],[1,2],[2,6],[4,5],[5,6]]
+				"edges": [[0,1],[0,2],[1,2],[2,6],[4,5],[5,6]]
 			  }`))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)

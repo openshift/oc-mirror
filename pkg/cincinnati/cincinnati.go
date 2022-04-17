@@ -201,7 +201,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
-	// edge is hit
+	// edge is hit.
 	latest, err := GetChannelMinOrMax(ctx, c, arch, sourceChannel, false)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf("channel %q: %v", sourceChannel, err)
@@ -212,6 +212,9 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 	}
 
 	requested, newUpgrades, err := calculate(ctx, c, arch, sourceChannel, targetChannel, latest, reqVer)
+	if err != nil {
+		return Update{}, Update{}, nil, err
+	}
 	upgrades = append(upgrades, newUpgrades...)
 
 	var finalUpgrades []Update
@@ -223,7 +226,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		}
 	}
 
-	return current, requested, finalUpgrades, err
+	return current, requested, finalUpgrades, nil
 }
 
 // calculate will calculate Cincinnati upgrades between channels by finding the latest versions in the source channels
@@ -362,7 +365,7 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 }
 
 // GetChannels fetches the channels containing update payloads from the specified
-// upstream Cincinnati stack
+// upstream Cincinnati stack.
 func GetChannels(ctx context.Context, c Client, channel string) (map[string]struct{}, error) {
 	// Prepare parametrized cincinnati query.
 	c.SetQueryParams("", channel, "")
@@ -389,7 +392,8 @@ func GetChannels(ctx context.Context, c Client, channel string) (map[string]stru
 	return channels, nil
 }
 
-// GetVersions will return all update payloads in a specified channel.
+// GetVersions will returns all update payloads from the specified
+// upstream Cincinnati stack given architecture and channel.
 func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.
 	c.SetQueryParams(arch, channel, "")
