@@ -17,7 +17,7 @@ func TestReleasesComplete(t *testing.T) {
 
 	cases := []spec{
 		{
-			name: "Valid/ChannelEmpty",
+			name: "Valid/ChannelEmpty/Version X.Y",
 			opts: &ReleasesOptions{
 				Channel: "",
 				Version: "4.8",
@@ -32,6 +32,41 @@ func TestReleasesComplete(t *testing.T) {
 					Dir: "bar",
 				},
 			},
+		},
+		{
+			name: "Valid/ChannelEmpty/Version X.Y.Z",
+			opts: &ReleasesOptions{
+				Channel: "",
+				Version: "4.9.10",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expOpts: &ReleasesOptions{
+				Channel: "stable-4.9",
+				Version: "4.9.10",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+		},
+		{
+			name: "Valid/ChannelEmpty/Version invalid string",
+			opts: &ReleasesOptions{
+				Channel: "",
+				Version: "bad",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expOpts: &ReleasesOptions{
+				Channel: "",
+				Version: "bad",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expError: "Unable parse major.minor version from: bad",
 		},
 	}
 
