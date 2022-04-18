@@ -224,7 +224,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
@@ -266,7 +266,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		// Pack the images set
-		tmpBackend, err := o.Pack(cmd.Context(), prevAssociations, assocs, &meta, cfg.ArchiveSize)
+		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no updates detected, process stopping")
@@ -325,7 +325,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry to registry mapping
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
-		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
@@ -365,12 +365,22 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			}
 		}
 
+		// Prune the images that differ between the previous Associations and the
+		// pruned Associations.
+		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+		if err != nil {
+			return err
+		}
+		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
+			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
+		}
+
 		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 		if err != nil {
 			return err
 		}
-		prevAssociations.Merge(assocs)
-		meta.PastAssociations, err = image.ConvertFromAssociationSet(prevAssociations)
+		prunedAssociations.Merge(assocs)
+		meta.PastAssociations, err = image.ConvertFromAssociationSet(prunedAssociations)
 		if err != nil {
 			return err
 		}
@@ -502,11 +512,12 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 		return err
 	}
 
-	// Create mapping from source and destination images
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
 		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
 			logrus.Warnf("skipping blocked image %s", srcRef.String())
+			// Remove to make sure this does end up in the metadata
+			images.Remove(srcRef)
 			continue
 		}
 
