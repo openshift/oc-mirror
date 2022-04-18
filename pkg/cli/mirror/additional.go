@@ -8,9 +8,9 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"k8s.io/klog/v2"
+	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/bundle"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -26,11 +26,15 @@ func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 // Plan provides an image mapping with source and destination for provided AdditionalImages
 func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image) (image.TypedImageMapping, error) {
 	mmappings := make(image.TypedImageMapping, len(imageList))
+	resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, o.SourcePlainHTTP, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating image resolver: %v", err)
+	}
 	for _, img := range imageList {
 		// Get source image information
 		srcRef, err := imagesource.ParseReference(img.Name)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
+			return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
 		if setLatest(srcRef) {
 			srcRef.Ref.Tag = "latest"
@@ -41,10 +45,15 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 			return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
 		}
 
-		srcImage, err := bundle.PinImages(ctx, srcRef.Ref.Exact(), "", o.SourceSkipTLS, o.SourcePlainHTTP)
-		if err != nil {
-			if !isSkipErr(err) {
-				return nil, err
+		ref := srcRef.Ref.Exact()
+		if !image.IsImagePinned(ref) {
+			srcImage, err := image.ResolveToPin(ctx, resolver, ref)
+			if err != nil {
+				if !isSkipErr(err) {
+					return mmappings, err
+				}
+				logrus.Warn(err)
+				continue
 			}
 			klog.Warning(err)
 			continue
@@ -53,7 +62,6 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 		if err != nil {
 			return nil, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
-		srcRef.Ref.ID = pinnedRef.Ref.ID
 
 		// Set destination image information as file by default
 		dstRef := srcRef

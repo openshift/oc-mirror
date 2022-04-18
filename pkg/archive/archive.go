@@ -256,8 +256,16 @@ func blobInArchive(file string) string {
 }
 
 func includeFile(fpath string) bool {
+	includeFiles := map[string]struct{}{
+		config.InternalDir:         {},
+		config.CatalogsDir:         {},
+		config.HelmDir:             {},
+		config.ReleaseSignatureDir: {},
+		config.GraphDataDir:        {},
+	}
 	split := strings.Split(filepath.Clean(fpath), string(filepath.Separator))
-	return split[0] == config.InternalDir || split[0] == "catalogs" || split[0] == config.HelmDir || split[0] == config.ReleaseSignatureDir
+	_, found := includeFiles[split[0]]
+	return found
 }
 
 func shouldRemove(fpath string, info fs.FileInfo) bool {

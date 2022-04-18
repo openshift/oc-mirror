@@ -1,0 +1,78 @@
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    capabilities: BasicInstall
+    certified: 'false'
+    containerImage: REGISTRY_CATALOGNAMESPACE:foo-v0.3.2
+    description: The Foo Operator does Foo things.
+    olm.skipRange: <0.3.1
+    repository: https://github.com/openshift/oc-mirror
+  name: foo.v0.3.2
+spec:
+  customresourcedefinitions:
+    owned:
+    - group: test.foo
+      kind: Foo
+      name: foos.test.foo
+      version: v1
+    - group: test.foo
+      kind: Foo
+      name: foos.test.foo
+      version: v2
+  description: The Foo Operator does Foo things.
+  displayName: Foo Operator
+  icon:
+  - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJpY29uIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKICAgIHZpZXdCb3g9IjAgMCAxMjgwIDEyODAiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDEyODAgMTI4MDsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgogIC5zcXVpcmNsZSB7IGZpbGw6ICM3Qjg3OTQ7IHRyYW5zZm9ybTogdHJhbnNsYXRlKDVweCwgMXB4KTsgfQogIC5uYW1lIHsgZm9udDogYm9sZCA0MDBweCBzYW5zIHNlcmlmOyBmaWxsOiByZWQ7IHRyYW5zZm9ybTogdHJhbnNsYXRlKDEzMHB4LCA1MDBweCkgcm90YXRlKDIwZGVnKTsgfQo8L3N0eWxlPgo8Zz4KICA8cGF0aCBjbGFzcz0ic3F1aXJjbGUiIGQ9Ik0gMCwgNTAwCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBDIDAsIDUgNSwgMCA1MDAsIDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFMgMTAwMCwgNSAxMDAwLCA1MDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMTAwMCwgMTAwMCA1MDAsIDEwMDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgMCwgMTAwMCAwLCA1MDAiLz4KICA8dGV4dCBjbGFzcz0ibmFtZSI+Zm9vPC90ZXh0Pgo8L2c+Cjwvc3ZnPgo=
+    mediatype: image/svg+xml
+  install:
+    spec:
+      deployments:
+      - name: foo-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: foo-operator
+          template:
+            metadata:
+              labels:
+                app: foo-operator
+                version: v0.3.2
+              name: foo-operator
+            spec:
+              containers:
+              - command:
+                - /run.sh
+                image: REGISTRY_CATALOGNAMESPACE:foo-v0.3.2
+                imagePullPolicy: Always
+                name: foo
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - foo
+  labels:
+    name: foo-operator
+  maintainers:
+  - email: oc-mirror@openshift.org
+    name: oc-mirror developers
+  maturity: beta
+  provider:
+    name: Foo
+  relatedImages:
+  - image: REGISTRY_CATALOGNAMESPACE:foo-v0.3.2
+    name: operator
+  replaces: foo.v0.2.0
+  skips:
+  - foo.v0.3.0
+  - foo.v0.3.1
+  version: 0.3.2

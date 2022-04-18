@@ -173,9 +173,10 @@ func TestPack(t *testing.T) {
 			require.NoError(t, copyV2(filepath.Join("testdata", config.V2Dir), path))
 			ctx := context.Background()
 
+			prevAssocs, err := image.ConvertToAssociationSet(c.meta.PastAssociations)
+			require.NoError(t, err)
 			// First run will create mirror_seq1_0000.tar
-			_, err = c.opts.Pack(ctx, c.assocs, &c.meta, 0)
-			t.Log(err)
+			_, err = c.opts.Pack(ctx, prevAssocs, c.assocs, &c.meta, 0)
 
 			if c.updates {
 				require.NoError(t, err)

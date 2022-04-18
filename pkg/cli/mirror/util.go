@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -67,4 +68,16 @@ func (o *MirrorOptions) createResultsDir() (resultsDir string, err error) {
 func (o *MirrorOptions) newMetadataImage(uid string) string {
 	repo := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
 	return fmt.Sprintf("%s:%s", repo, uid)
+}
+
+func getTLSConfig() (*tls.Config, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	config := &tls.Config{
+		RootCAs:    certPool,
+		MinVersion: tls.VersionTLS12,
+	}
+	return config, nil
 }

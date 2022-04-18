@@ -62,7 +62,6 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 		case pkg.StartingBundle != "":
 			dpkg.Bundles = []string{pkg.StartingBundle}
 		}
-		dic.Packages = append(dic.Packages, dpkg)
 
 		for chIdx, ch := range pkg.Channels {
 			if ch.Name == "" {
@@ -81,6 +80,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 			}
 			dpkg.Channels = append(dpkg.Channels, dch)
 		}
+		dic.Packages = append(dic.Packages, dpkg)
 	}
 
 	return dic, nil

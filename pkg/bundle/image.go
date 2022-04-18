@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -9,7 +8,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 type ErrBlocked struct {
@@ -32,15 +30,4 @@ func IsBlocked(blocked []v1alpha2.Image, imgRef reference.DockerImageReference) 
 		}
 	}
 	return false
-}
-
-func PinImages(ctx context.Context, ref, resolverConfigPath string, skipTLSVerify, plainHTTP bool) (string, error) {
-	resolver, err := containerdregistry.NewResolver(resolverConfigPath, skipTLSVerify, plainHTTP, nil)
-	if err != nil {
-		return "", fmt.Errorf("error creating image resolver: %v", err)
-	}
-	if !image.IsImagePinned(ref) {
-		return image.ResolveToPin(ctx, resolver, ref)
-	}
-	return ref, nil
 }

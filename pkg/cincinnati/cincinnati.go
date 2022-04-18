@@ -176,16 +176,36 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)
 	}
 
+	// Check the major and minor versions are the same with different
+	// channel prefixes
+	source, target, _, err := getSemverFromChannels(sourceChannel, targetChannel)
+	if err != nil {
+		return Update{}, Update{}, nil, err
+	}
+	if source.EQ(target) {
+		isBlocked, err := handleBlockedEdges(ctx, c, arch, targetChannel, startVer)
+		if err != nil {
+			return Update{}, Update{}, nil, err
+		}
+		if isBlocked {
+			// If blocked path is found, just return the requested version and any accumulated
+			// upgrades to the caller
+			logrus.Warnf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+			return GetUpdates(ctx, c, arch, targetChannel, reqVer, reqVer)
+		}
+		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)
+	}
+
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
 	// edge is hit
 	latest, err := GetChannelMinOrMax(ctx, c, arch, sourceChannel, false)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf("cannot get latest: %v", err)
+		return Update{}, Update{}, nil, fmt.Errorf("channel %q: %v", sourceChannel, err)
 	}
 	current, _, upgrades, err := GetUpdates(ctx, c, arch, sourceChannel, startVer, latest)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf("cannot get current: %v", err)
+		return Update{}, Update{}, nil, fmt.Errorf("channel %q: %v", sourceChannel, err)
 	}
 
 	requested, newUpgrades, err := calculate(ctx, c, arch, sourceChannel, targetChannel, latest, reqVer)
@@ -204,46 +224,35 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 }
 
 func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
-	// Get semver representation of source and target channel versions
-	sourceIdx := strings.LastIndex(sourceChannel, "-")
-	if sourceIdx == -1 {
-		return requested, upgrades, fmt.Errorf("invalid channel name %s", sourceChannel)
+	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
+	if err != nil {
+		return requested, upgrades, err
 	}
-	targetIdx := strings.LastIndex(targetChannel, "-")
-	if targetIdx == -1 {
-		return requested, upgrades, fmt.Errorf("invalid channel name %s", targetChannel)
-	}
-	source := semver.MustParse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
-	target := semver.MustParse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
-
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
 	source.Minor++
-	currChannel := fmt.Sprintf("%s-%v.%v", sourceChannel[:sourceIdx], source.Major, source.Minor)
+	currChannel := fmt.Sprintf("%s-%v.%v", prefix, source.Major, source.Minor)
 
 	var targetVer semver.Version
-	if currChannel == targetChannel {
-		// If this is the target channel get
+	if source.EQ(target) {
+		// If this is the target channel major.minor get
 		// requested version so we don't exceed the maximun version
+		// Set the target channel to make sure we have the intended
+		// channel prefix
 		targetVer = reqVer
+		currChannel = targetChannel
 	} else {
 		targetVer, err = GetChannelMinOrMax(ctx, c, arch, currChannel, false)
 		if err != nil {
-			return requested, upgrades, nil
+			return requested, upgrades, err
 		}
 	}
 
-	// Handles blocked edges
-	chanVersions, err := GetVersions(ctx, c, currChannel)
+	isBlocked, err := handleBlockedEdges(ctx, c, arch, currChannel, startVer)
 	if err != nil {
-		return requested, upgrades, nil
+		return requested, upgrades, err
 	}
-	foundVersions := make(map[string]struct{})
-	for _, v := range chanVersions {
-		foundVersions[v.String()] = struct{}{}
-	}
-
-	if _, found := foundVersions[startVer.String()]; !found {
+	if isBlocked {
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
 		_, requested, _, err = GetUpdates(ctx, c, arch, targetChannel, targetVer, targetVer)
@@ -255,7 +264,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 	klog.V(4).Info("Getting updates for version %s in channel %s", startVer.String(), currChannel)
 	_, requested, upgrades, err = GetUpdates(ctx, c, arch, currChannel, startVer, targetVer)
 	if err != nil {
-		return requested, upgrades, nil
+		return requested, upgrades, err
 	}
 
 	if source.EQ(target) {
@@ -264,12 +273,51 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 
 	req, up, err := calculate(ctx, c, arch, currChannel, targetChannel, targetVer, reqVer)
 	if err != nil {
-		return requested, upgrades, nil
+		return requested, upgrades, err
 	}
 	requested = req
 	upgrades = append(upgrades, up...)
 
 	return requested, upgrades, nil
+}
+
+// handleBlockedEdges will check for the the starting version in the current channel
+// if it does not exists the version is blocked.
+func handleBlockedEdges(ctx context.Context, c Client, arch, targetChannel string, startVer semver.Version) (bool, error) {
+	chanVersions, err := GetVersions(ctx, c, targetChannel)
+	if err != nil {
+		return true, err
+	}
+	for _, v := range chanVersions {
+		if v.EQ(startVer) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// getSemverFromChannel will return the major and minor version from the source and target channels. The prefix returned is
+// for the source channels for cross channel calculations.
+func getSemverFromChannels(sourceChannel, targetChannel string) (source, target semver.Version, prefix string, err error) {
+	// Get semver representation of source and target channel versions
+	sourceIdx := strings.LastIndex(sourceChannel, "-")
+	if sourceIdx == -1 {
+		return source, target, prefix, fmt.Errorf("invalid channel name %s", sourceChannel)
+	}
+	targetIdx := strings.LastIndex(targetChannel, "-")
+	if targetIdx == -1 {
+		return source, target, prefix, fmt.Errorf("invalid channel name %s", targetChannel)
+	}
+	source, err = semver.Parse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
+	if err != nil {
+		return source, target, prefix, err
+	}
+	target, err = semver.Parse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
+	if err != nil {
+		return source, target, prefix, err
+	}
+	prefix = sourceChannel[:sourceIdx]
+	return source, target, prefix, nil
 }
 
 // GetChannelLatest fetches the latest version from the specified
@@ -349,14 +397,14 @@ func GetVersions(ctx context.Context, c Client, channel string) ([]semver.Versio
 
 	}
 
-	semver.Sort(Vers)
-
 	if len(Vers) == 0 {
 		return nil, &Error{
 			Reason:  "NoVersionsFound",
 			Message: fmt.Sprintf("no cluster versions found in the %q channel", channel),
 		}
 	}
+
+	semver.Sort(Vers)
 
 	return Vers, nil
 }

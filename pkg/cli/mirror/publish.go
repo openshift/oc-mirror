@@ -231,7 +231,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			// Unpack association main manifest
 			if err := unpack(filepath.Join(manifestPath, assoc.ID), unpackDir, filesInArchive); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("error occured during unpacking %v", err))
 				continue
 			}
 
@@ -262,7 +262,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			if assoc.TagSymlink != "" {
 				if err := unpack(filepath.Join(manifestPath, assoc.TagSymlink), unpackDir, filesInArchive); err != nil {
-					errs = append(errs, err)
+					errs = append(errs, fmt.Errorf("error unpacking symlink %v", err))
 					continue
 				}
 				m.Source.Ref.Tag = assoc.TagSymlink
@@ -319,19 +319,11 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	klog.V(4).Infof("rebuilding catalog images")
-
-	found, err := o.unpackCatalog(tmpdir, filesInArchive)
+	mappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
 	if err != nil {
 		return allMappings, err
 	}
-
-	if found {
-		ctlgRefs, err := o.rebuildCatalogs(ctx, tmpdir)
-		if err != nil {
-			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
-		}
-		allMappings.Merge(ctlgRefs)
-	}
+	allMappings.Merge(mappings)
 
 	// Replace old metadata with new metadata
 	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
@@ -341,11 +333,47 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	return allMappings, nil
 }
 
+// proccessCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
+func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
+	allMappings := image.TypedImageMapping{}
+	// process catalogs
+	logrus.Debug("rebuilding catalog images")
+	found, err := o.unpackCatalog(dir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+
+	if found {
+		ctlgRefs, err := o.rebuildCatalogs(ctx, dir)
+		if err != nil {
+			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
+		}
+		allMappings.Merge(ctlgRefs)
+	}
+
+	logrus.Debug("building cincinnati graph data image")
+	// process cincinnati graph image
+	found, err = o.unpackRelease(dir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+
+	if found {
+		graphRef, err := o.buildGraphImage(ctx, dir)
+		if err != nil {
+			return allMappings, fmt.Errorf("error building cincinnati graph image: %v", err)
+		}
+		allMappings.Merge(graphRef)
+	}
+
+	return allMappings, nil
+}
+
 // unpackImageSet unarchives all provided tar archives	if err != nil {
 func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
 
 	// archive that we do not want to unpack
-	exclude := []string{"blobs", "v2", config.HelmDir}
+	exclude := []string{config.BlobDir, config.V2Dir, config.HelmDir}
 
 	file, err := os.Stat(o.From)
 	if err != nil {
@@ -468,10 +496,9 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, regctx *registryclient.Co
 }
 
 func unpack(archiveFilePath, dest string, filesInArchive map[string]string) error {
-	name := filepath.Base(archiveFilePath)
-	archivePath, found := filesInArchive[name]
+	archivePath, found := filesInArchive[archiveFilePath]
 	if !found {
-		return &ErrArchiveFileNotFound{name}
+		return &ErrArchiveFileNotFound{archiveFilePath}
 	}
 	if err := archive.NewArchiver().Extract(archivePath, archiveFilePath, dest); err != nil {
 		return err
@@ -514,6 +541,8 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	genOpts.Mappings = mappings
 	genOpts.DryRun = o.DryRun
 	genOpts.FromFileDir = fromDir
+	genOpts.SkipMissing = o.SkipMissing
+	genOpts.ContinueOnError = o.ContinueOnError
 	// Filter must be a wildcard for publishing because we
 	// cannot filter images within a catalog
 	genOpts.FilterOptions = imagemanifest.FilterOptions{FilterByOS: ".*"}

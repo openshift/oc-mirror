@@ -5,7 +5,7 @@
 coverage.out
 **/mirror*.tar
 sha256sum.txt
-/test/operator-test.*
+/test/e2e/operator-test.*
 **/publish.tmp.*
 **/test-output
 **/.metadata.json
@@ -22,12 +22,17 @@ pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 .idea
 tags
 *.swp
+.vscode
 
 # Local imageset-config.yaml
 imageset-config.yaml
 
 # Local integration test files
-test/integration/.venv
+__pycache__
+*.pyc
+.venv
+.requirements
+.built
 test/integration/collections
 test/integration/bin
 test/integration/output/*

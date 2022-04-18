@@ -376,3 +376,43 @@ func TestICSPGeneration(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateCatalogSource(t *testing.T) {
+
+	expCfg := `apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: test
+  namespace: openshift-marketplace
+spec:
+  image: registry.com/catalog:latest
+  sourceType: grpc
+`
+
+	ref, err := reference.Parse("registry.com/catalog:latest")
+	require.NoError(t, err)
+	data, err := generateCatalogSource("test", ref)
+	require.NoError(t, err)
+	require.Equal(t, string(data), expCfg)
+}
+
+func TestGenerateUpdateService(t *testing.T) {
+
+	expCfg := `apiVersion: updateservice.operator.openshift.io/v1
+kind: UpdateService
+metadata:
+  name: test
+spec:
+  graphDataImage: registry.com/graph:latest
+  releases: registry.com/releases
+  replicas: 2
+`
+
+	release, err := reference.Parse("registry.com/releases:latest")
+	require.NoError(t, err)
+	graph, err := reference.Parse("registry.com/graph:latest")
+	require.NoError(t, err)
+	data, err := generateUpdateService("test", release, graph)
+	require.NoError(t, err)
+	require.Equal(t, expCfg, string(data))
+}

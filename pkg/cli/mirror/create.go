@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -101,6 +102,21 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 			return mmappings, err
 		}
 		mmappings.Merge(mappings)
+
+		if cfg.Mirror.Platform.Graph {
+			logrus.Info("Adding graph data")
+			// Always add the graph base image to the metadata if needed,
+			// to ensure it does not get pruned before use.
+			cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha2.Image{Name: graphBaseImage})
+
+			releaseDir := filepath.Join(o.Dir, config.SourceDir, config.GraphDataDir)
+			if err := os.MkdirAll(releaseDir, 0750); err != nil {
+				return mmappings, err
+			}
+			if err := downloadGraphData(ctx, releaseDir, graphURL); err != nil {
+				return mmappings, err
+			}
+		}
 	}
 
 	mappings, err := operatorPlan(ctx, *cfg)
