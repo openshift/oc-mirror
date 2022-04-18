@@ -243,7 +243,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 			return nil, err
 		}
 	case !hasInclude:
-		// If a previous specified starting version can be found on
+		// If a previous specified minimum version can be found on
 		// the mirror run update IncludeConfig , else, keep the
 		// IncludeConfig to get a new catalog at heads only.
 		prev, found := prevCatalog[ctlg.Catalog]
@@ -296,7 +296,7 @@ func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.Declarativ
 
 		if !dcMap[pkg.Name] {
 			// The operator package wasn't found. Log the error and continue on.
-			logrus.Errorf("Operator %s was not found, please check name, startingVersion, and channels in the config file.", pkg.Name)
+			logrus.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
 		}
 	}
 }

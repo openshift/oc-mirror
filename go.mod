@@ -220,3 +220,5 @@ replace (
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
 	k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
 )
+
+replace github.com/operator-framework/operator-registry => github.com/dinhxuanvu/operator-registry v1.13.5-0.20220419220231-14e8b35c4105

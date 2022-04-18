@@ -7,6 +7,8 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/action"
 )
 
+// IncludeConfig defines a list of packages for
+// operator version selection.
 type IncludeConfig struct {
 	// Packages to include.
 	Packages []IncludePackage `json:"packages" yaml:"packages"`
@@ -34,19 +36,21 @@ type IncludeChannel struct {
 	IncludeBundle `json:",inline"`
 }
 
+// IncludeBundle contains a name (required) and versions (optional) to
+// include in the diff. The full package or channel is only included if no
+// versions are specified.
 type IncludeBundle struct {
 	// MinVersion to include, plus all versions in the upgrade graph to the MaxVersion.
 	MinVersion string `json:"minVersion,omitempty" yaml:"minVersion,omitempty"`
 	// MaxVersion to include as the channel head version.
 	MaxVersion string `json:"maxVersion,omitempty" yaml:"maxVersion,omitempty"`
-	// MinBundle to include, plus all bundles in the upgrade graph to the MaxBundle.
+	// MinBundle to include, plus all bundles in the upgrade graph to the channel head.
 	// Set this field only if the named bundle has no semantic version metadata.
 	MinBundle string `json:"minBundle,omitempty" yaml:"minBundle,omitempty"`
-	// MaxBundle to include as the channel head bundle.
-	// Set this field only if the named bundle has no semantic version metadata.
-	MaxBundle string `json:"maxBundle,omitempty" yaml:"maxBundle,omitempty"`
 }
 
+// ConvertToDiffIncludeConfig converts an IncludeConfig to a DiffIncludeConfig type to
+// interact with `operator-registry` libraries.
 func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeConfig, err error) {
 	if ic == nil {
 		return dic, nil
@@ -62,12 +66,16 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 
 		dpkg := action.DiffIncludePackage{Name: pkg.Name}
 		switch {
+		case pkg.MinVersion != "" && pkg.MaxVersion != "":
+			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
 		case pkg.MinVersion != "":
 			minVer, err := semver.Parse(pkg.MinVersion)
 			if err != nil {
 				return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 			}
 			dpkg.Versions = []semver.Version{minVer}
+		case pkg.MaxVersion != "":
+			dpkg.Range = fmt.Sprintf("<=%s", pkg.MaxVersion)
 		case pkg.MinBundle != "":
 			dpkg.Bundles = []string{pkg.MinBundle}
 		}
@@ -82,12 +90,16 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 
 			dch := action.DiffIncludeChannel{Name: ch.Name}
 			switch {
+			case ch.MinVersion != "" && ch.MaxVersion != "":
+				dch.Range = fmt.Sprintf(">=%s <=%s", ch.MinVersion, ch.MaxVersion)
 			case ch.MinVersion != "":
-				minVer, err := semver.Parse(ch.MinVersion)
+				ver, err := semver.Parse(ch.MinVersion)
 				if err != nil {
 					return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
 				}
-				dch.Versions = []semver.Version{minVer}
+				dch.Versions = []semver.Version{ver}
+			case ch.MaxVersion != "":
+				dch.Range = fmt.Sprintf("<=%s", ch.MaxVersion)
 			case ch.MinBundle != "":
 				dch.Bundles = []string{ch.MinBundle}
 			}
@@ -101,7 +113,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 
 func (b IncludeBundle) validate() error {
 	if b.MinVersion != "" && b.MinBundle != "" {
-		return fmt.Errorf("starting version and bundle are mutually exclusive")
+		return fmt.Errorf("minimum version and bundle are mutually exclusive")
 	}
 	return nil
 }
