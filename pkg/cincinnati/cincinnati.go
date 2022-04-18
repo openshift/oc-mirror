@@ -286,8 +286,8 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 	return source, target, prefix, nil
 }
 
-// handleBlockedEdges will check for the the starting version in the current channel
-// if it does not exists the version is blocked.
+// handleBlockedEdges will check for the starting version in the current channel
+// if it does not exist the version is blocked.
 func (c Client) handleBlockedEdges(ctx context.Context, uri *url.URL, arch, targetChannel string, startVer semver.Version) (bool, error) {
 	chanVersions, err := c.GetVersions(ctx, uri, targetChannel)
 	if err != nil {
