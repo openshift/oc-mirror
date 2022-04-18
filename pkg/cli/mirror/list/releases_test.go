@@ -26,8 +26,9 @@ func TestReleasesComplete(t *testing.T) {
 				},
 			},
 			expOpts: &ReleasesOptions{
-				Channel: "stable-4.8",
-				Version: "4.8",
+				Channel:       "stable-4.8",
+				Version:       "4.8",
+				FilterOptions: []string{"amd64"},
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
@@ -100,11 +101,18 @@ func TestReleasesValidate(t *testing.T) {
 			expError: "must specify --version or --channel",
 		},
 		{
-			name: "Invalid/NoCatalog",
+			name: "Invalid/NoVersionsWithChannels",
 			opts: &ReleasesOptions{
 				Channels: true,
 			},
 			expError: `must specify --version`,
+		},
+		{
+			name: "Invalid/UnsupportedArch",
+			opts: &ReleasesOptions{
+				FilterOptions: []string{"fake"},
+			},
+			expError: "architecture \"fake\" is not a supported release architecture",
 		},
 		{
 			name: "Valid/Channels",

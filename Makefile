@@ -31,11 +31,11 @@ all: clean tidy test-unit build
 .PHONY: all
 
 cross-build-linux-amd64:
-	+@GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build
+	+@GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
 .PHONY: cross-build-linux-amd64
 
 cross-build: cross-build-linux-amd64
-.PHONY: build
+.PHONY: cross-build
 
 hack-build: clean
 	./hack/build.sh
@@ -45,7 +45,7 @@ tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
 	$(GO) mod vendor
-.PHONY: vendor
+.PHONY: tidy
 
 clean:
 	@rm -rf ./$(GO_BUILD_BINDIR)/*
