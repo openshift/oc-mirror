@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
@@ -59,7 +58,7 @@ func TestLoadConfig(t *testing.T) {
 									{
 										Name: "mongodb-operator",
 										IncludeBundle: v1alpha2.IncludeBundle{
-											StartingVersion: semver.Version{Major: 1, Minor: 4, Patch: 0},
+											MinVersion: "1.4.0",
 										},
 									},
 									{

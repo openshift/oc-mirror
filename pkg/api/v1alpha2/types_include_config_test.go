@@ -26,7 +26,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -37,7 +37,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -78,13 +78,13 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					{
 						Name: "bar",
 						IncludeBundle: IncludeBundle{
-							StartingVersion: semver.MustParse("0.1.0"),
+							MinVersion: "0.1.0",
 						},
 					},
 					{
 						Name: "foo",
 						IncludeBundle: IncludeBundle{
-							StartingVersion: semver.MustParse("0.1.0"),
+							MinVersion: "0.1.0",
 						},
 					},
 				},

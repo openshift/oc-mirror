@@ -49,8 +49,9 @@ func getFirstBundle(mpkg model.Package) []v1alpha2.IncludeChannel {
 			return ch.Bundles[keys[i]].Version.GT(ch.Bundles[keys[j]].Version)
 		})
 
+		firstBundle := ch.Bundles[keys[len(keys)-1]].Version
 		b := v1alpha2.IncludeBundle{
-			StartingVersion: ch.Bundles[keys[len(keys)-1]].Version,
+			MinVersion: firstBundle.String(),
 		}
 		c.IncludeBundle = b
 		channels = append(channels, c)
@@ -146,11 +147,15 @@ func getCurrBundle(mpkg model.Package, icPkg v1alpha2.IncludePackage) ([]v1alpha
 			c.IncludeBundle = startingBundle
 			channels = append(channels, c)
 			continue
-		} else if _, found = bundleSet[icBundle.StartingVersion.String()]; found {
+		} else if _, found = bundleSet[icBundle.MinVersion]; found {
 			startingBundle = icBundle
 		} else {
-			versionsToInclude = append(versionsToInclude, icBundle.StartingVersion)
-			startingBundle, err = findNextBundle(versionsToInclude, icBundle.StartingVersion)
+			minVer, err := semver.Parse(icBundle.MinVersion)
+			if err != nil {
+				return nil, err
+			}
+			versionsToInclude = append(versionsToInclude, minVer)
+			startingBundle, err = findNextBundle(versionsToInclude, minVer)
 			if err != nil {
 				return nil, err
 			}
@@ -168,8 +173,8 @@ func findNextBundle(versions []semver.Version, target semver.Version) (v1alpha2.
 	sort.Slice(versions, func(i, j int) bool {
 		return versions[i].LT(versions[j])
 	})
-	nextVerision := search(versions, target, 0, len(versions)-1)
-	return v1alpha2.IncludeBundle{StartingVersion: nextVerision}, nil
+	nextVersion := search(versions, target, 0, len(versions)-1)
+	return v1alpha2.IncludeBundle{MinVersion: nextVersion.String()}, nil
 }
 
 // search perform a binary search to find the next highest version in relation
@@ -221,5 +226,5 @@ func getHeadBundle(mch model.Channel) (v1alpha2.IncludeBundle, error) {
 		return v1alpha2.IncludeBundle{}, err
 	}
 
-	return v1alpha2.IncludeBundle{StartingVersion: bundle.Version}, nil
+	return v1alpha2.IncludeBundle{MinVersion: bundle.Version.String()}, nil
 }

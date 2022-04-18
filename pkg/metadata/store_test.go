@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blang/semver/v4"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -61,13 +60,13 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							{
 								Name: "alpha",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("1.0.0"),
+									MinVersion: "1.0.0",
 								},
 							},
 						},
@@ -78,7 +77,7 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("1.0.0"),
+									MinVersion: "1.0.0",
 								},
 							},
 						},
@@ -89,7 +88,7 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							{
 								Name: "beta",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},

@@ -11,4 +11,4 @@ mirror:
     packages:
       - name: foo
       - name: baz
-        startingVersion: 1.0.1
+        minVersion: 1.0.1

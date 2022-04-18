@@ -35,11 +35,16 @@ type IncludeChannel struct {
 }
 
 type IncludeBundle struct {
-	// StartingVersion to include, plus all versions in the upgrade graph to the channel head.
-	StartingVersion semver.Version `json:"startingVersion,omitempty" yaml:"startingVersion,omitempty"`
-	// StartingBundle to include, plus all bundles in the upgrade graph to the channel head.
+	// MinVersion to include, plus all versions in the upgrade graph to the MaxVersion.
+	MinVersion string `json:"minVersion,omitempty" yaml:"minVersion,omitempty"`
+	// MaxVersion to include as the channel head version.
+	MaxVersion string `json:"maxVersion,omitempty" yaml:"maxVersion,omitempty"`
+	// MinBundle to include, plus all bundles in the upgrade graph to the MaxBundle.
 	// Set this field only if the named bundle has no semantic version metadata.
-	StartingBundle string `json:"startingBundle,omitempty" yaml:"startingBundle,omitempty"`
+	MinBundle string `json:"minBundle,omitempty" yaml:"minBundle,omitempty"`
+	// MaxBundle to include as the channel head bundle.
+	// Set this field only if the named bundle has no semantic version metadata.
+	MaxBundle string `json:"maxBundle,omitempty" yaml:"maxBundle,omitempty"`
 }
 
 func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeConfig, err error) {
@@ -57,10 +62,14 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 
 		dpkg := action.DiffIncludePackage{Name: pkg.Name}
 		switch {
-		case !pkg.StartingVersion.EQ(semver.Version{}):
-			dpkg.Versions = []semver.Version{pkg.StartingVersion}
-		case pkg.StartingBundle != "":
-			dpkg.Bundles = []string{pkg.StartingBundle}
+		case pkg.MinVersion != "":
+			minVer, err := semver.Parse(pkg.MinVersion)
+			if err != nil {
+				return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
+			}
+			dpkg.Versions = []semver.Version{minVer}
+		case pkg.MinBundle != "":
+			dpkg.Bundles = []string{pkg.MinBundle}
 		}
 
 		for chIdx, ch := range pkg.Channels {
@@ -73,10 +82,14 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 
 			dch := action.DiffIncludeChannel{Name: ch.Name}
 			switch {
-			case !ch.StartingVersion.EQ(semver.Version{}):
-				dch.Versions = []semver.Version{ch.StartingVersion}
-			case ch.StartingBundle != "":
-				dch.Bundles = []string{ch.StartingBundle}
+			case ch.MinVersion != "":
+				minVer, err := semver.Parse(ch.MinVersion)
+				if err != nil {
+					return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
+				}
+				dch.Versions = []semver.Version{minVer}
+			case ch.MinBundle != "":
+				dch.Bundles = []string{ch.MinBundle}
 			}
 			dpkg.Channels = append(dpkg.Channels, dch)
 		}
@@ -87,7 +100,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 }
 
 func (b IncludeBundle) validate() error {
-	if !b.StartingVersion.EQ(semver.Version{}) && b.StartingBundle != "" {
+	if b.MinVersion != "" && b.MinBundle != "" {
 		return fmt.Errorf("starting version and bundle are mutually exclusive")
 	}
 	return nil
