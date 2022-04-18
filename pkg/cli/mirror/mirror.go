@@ -24,6 +24,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
@@ -128,7 +129,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(o.FilterOptions) == 0 {
-		o.FilterOptions = []string{"amd64"}
+		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
 
 	return nil
@@ -171,9 +172,8 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
-	var supportedArchs = map[string]struct{}{"amd64": {}, "ppc64le": {}, "s390x": {}}
 	for _, arch := range o.FilterOptions {
-		if _, ok := supportedArchs[arch]; !ok {
+		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
 			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
 		}
 	}
@@ -616,7 +616,7 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	}
 	// Instead of returning an error, just log it.
 	if o.ContinueOnError && (skip || skipAllTypes) {
-		logrus.Warn(err)
+		logrus.Error(err)
 		o.continuedOnError = true
 	} else {
 		return err

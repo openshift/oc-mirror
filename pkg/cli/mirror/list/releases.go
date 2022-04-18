@@ -13,19 +13,22 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 type ReleasesOptions struct {
 	*cli.RootOptions
-	Channel  string
-	Channels bool
-	Version  string
+	Channel       string
+	Channels      bool
+	Version       string
+	FilterOptions []string
 }
 
 // used to capture major.minor version from release tags
@@ -67,6 +70,14 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.BoolVar(&o.Channels, "channels", o.Channels, "List all channel information")
 	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+		"picked when multiple variants are available")
+
+	// TODO(jpower432): Make this flag visible again once release architecture selection
+	// has been more thouroughly vetted
+	if err := fs.MarkHidden("filter-options"); err != nil {
+		logrus.Panic(err.Error())
+	}
 
 	o.BindFlags(cmd.PersistentFlags())
 
@@ -77,6 +88,9 @@ func (o *ReleasesOptions) Complete() error {
 	if len(o.Version) > 0 && len(o.Channel) == 0 {
 		o.Channel = fmt.Sprintf("stable-%s", o.Version)
 	}
+	if len(o.FilterOptions) == 0 {
+		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
+	}
 	return nil
 }
 
@@ -86,6 +100,11 @@ func (o *ReleasesOptions) Validate() error {
 	}
 	if o.Channel == "stable-" {
 		return errors.New("must specify --version or --channel")
+	}
+	for _, arch := range o.FilterOptions {
+		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
+			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
+		}
 	}
 	return nil
 }
@@ -125,18 +144,21 @@ func listChannels(o *ReleasesOptions, w io.Writer, ctx context.Context, client c
 		}
 	}
 
-	vers, err := cincinnati.GetVersions(ctx, client, o.Channel)
-	if err != nil {
-		return err
-	}
-
-	if _, err := fmt.Fprintf(w, "Channel: %v\n", o.Channel); err != nil {
-		return err
-	}
-	for _, ver := range vers {
-		if _, err := fmt.Fprintf(w, "%s\n", ver); err != nil {
+	for _, arch := range o.FilterOptions {
+		vers, err := cincinnati.GetVersions(ctx, client, arch, o.Channel)
+		if err != nil {
 			return err
 		}
+
+		if _, err := fmt.Fprintf(w, "Channel: %v\nArchitecture: %v\n", o.Channel, arch); err != nil {
+			return err
+		}
+		for _, ver := range vers {
+			if _, err := fmt.Fprintf(w, "%s\n", ver); err != nil {
+				return err
+			}
+		}
+
 	}
 	return nil
 }

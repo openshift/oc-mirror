@@ -9,6 +9,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
+// ErrNoPreviousRelease is returned when no releases can be found in the
+// release channels.
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
 // FindRelease will find the minimum or maximum release for a set of ReleaseChannels
@@ -36,7 +38,11 @@ func FindRelease(channels []v1alpha2.ReleaseChannel, min bool) (string, semver.V
 }
 
 func findReleases(channels []v1alpha2.ReleaseChannel, min bool) (map[string]semver.Version, error) {
-	vers := make(map[string]semver.Version)
+	vers := make(map[string]semver.Version, len(channels))
+	if len(channels) == 0 {
+		return vers, ErrNoPreviousRelease
+	}
+
 	for _, ch := range channels {
 
 		ver := ch.MaxVersion
@@ -50,9 +56,5 @@ func findReleases(channels []v1alpha2.ReleaseChannel, min bool) (map[string]semv
 		vers[ch.Name] = parsedVer
 	}
 
-	if len(vers) != 0 {
-		return vers, nil
-	}
-
-	return nil, ErrNoPreviousRelease
+	return vers, nil
 }

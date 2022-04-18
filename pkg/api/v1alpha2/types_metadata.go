@@ -68,11 +68,11 @@ type OperatorMetadata struct {
 	IncludeConfig `json:",inline"`
 }
 
-// PlatformMetadata holds an Release's post-mirror metadata.
+// PlatformMetadata holds a Platform's post-mirror metadata.
 type PlatformMetadata struct {
-	// Release references a channel name from the mirror spec.
+	// ReleaseChannel references a channel name from the mirror spec.
 	ReleaseChannel string `json:"channel"`
-	// MinVersion in OCPMetadata holds the starting
+	// MinVersion in PlatformMetadata holds the starting
 	// versions of all newly mirrored channels. This will
 	// be populated the first time a channel is mirrored
 	// and copied the remaining runs.
