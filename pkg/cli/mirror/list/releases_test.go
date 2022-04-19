@@ -44,8 +44,9 @@ func TestReleasesComplete(t *testing.T) {
 				},
 			},
 			expOpts: &ReleasesOptions{
-				Channel: "stable-4.9",
-				Version: "4.9.10",
+				Channel:       "stable-4.9",
+				Version:       "4.9.10",
+				FilterOptions: []string{"amd64"},
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
