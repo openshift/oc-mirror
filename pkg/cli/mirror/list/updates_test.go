@@ -11,17 +11,29 @@ func TestUpdatesComplete(t *testing.T) {
 	type spec struct {
 		name     string
 		opts     *UpdatesOptions
+		args     []string
 		expOpts  *UpdatesOptions
 		expError string
 	}
 
 	cases := []spec{
 		{
-			opts: &UpdatesOptions{
-				ConfigPath: "foo",
-			},
+			name: "Valid/DefaultArchitecture",
+			opts: &UpdatesOptions{},
+			args: []string{"foo"},
 			expOpts: &UpdatesOptions{
 				FilterOptions: []string{v1alpha2.DefaultPlatformArchitecture},
+				ConfigPath:    "foo",
+			},
+		},
+		{
+			name: "Valid/SuppliedArchitecture",
+			opts: &UpdatesOptions{
+				FilterOptions: []string{"test"},
+			},
+			args: []string{"foo"},
+			expOpts: &UpdatesOptions{
+				FilterOptions: []string{"test"},
 				ConfigPath:    "foo",
 			},
 		},
@@ -29,7 +41,7 @@ func TestUpdatesComplete(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := c.opts.Complete()
+			err := c.opts.Complete(c.args)
 			if c.expError != "" {
 				require.EqualError(t, err, c.expError)
 			} else {
@@ -52,7 +64,7 @@ func TestUpdatesValidate(t *testing.T) {
 		{
 			name:     "Invalid/NoConfigPath",
 			opts:     &UpdatesOptions{},
-			expError: `must specify config using --config`,
+			expError: `must specify imageset configuration using --config`,
 		},
 		{
 			name: "Invalid/UnsupportedArch",
