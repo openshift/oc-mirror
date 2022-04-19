@@ -112,7 +112,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 					// Update version to release channel
 					ch.MaxVersion = latest.String()
-					logrus.Debugf("Detected minimum version as %s", ch.MaxVersion)
+					klog.V(4).Infof("Detected minimum version as %s", ch.MaxVersion)
 					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
 						min, found := prevChannels[ch.Name]
 						if !found {
@@ -120,7 +120,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 							min = latest.String()
 						}
 						ch.MinVersion = min
-						logrus.Debugf("Detected minimum version as %s", ch.MinVersion)
+						klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
 					}
 				}
 
@@ -133,7 +133,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 						continue
 					}
 					ch.MinVersion = first.String()
-					logrus.Debugf("Detected minimum version as %s", ch.MinVersion)
+					klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
 				}
 				versionsByChannel[ch.Name] = ch
 			} else {
@@ -141,7 +141,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 				// is skipped when processing release metadata.
 				// QUESTION(jpower432): This is enforced during config validation
 				// for catalogs. Should we do the same here?
-				logrus.Debugf("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
+				klog.V(4).Infof("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch
 			}
@@ -326,7 +326,7 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, ocpClient
 func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Update) downloads {
 	releaseDownloads := downloads{}
 	for _, update := range updates {
-		logrus.Debugf("Found update %s", update.Version)
+		klog.V(4).Infof("Found update %s", update.Version)
 		releaseDownloads[update.Image] = struct{}{}
 	}
 

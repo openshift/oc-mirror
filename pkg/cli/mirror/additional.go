@@ -7,8 +7,8 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"k8s.io/klog/v2"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -52,7 +52,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 				if !isSkipErr(err) {
 					return mmappings, err
 				}
-				logrus.Warn(err)
+				klog.Warning(err)
 				continue
 			}
 			klog.Warning(err)

@@ -243,7 +243,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				logrus.Infof("no new images detected, process stopping")
+				klog.Infof("no new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -344,7 +344,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				logrus.Infof("no new images detected, process stopping")
+				klog.Infof("no new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -422,7 +422,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
 				return err
 			}
-			logrus.Debugf("Moved any release signatures to %s", dir)
+			klog.V(4).Infof("Moved any release signatures to %s", dir)
 
 			if cfg.Mirror.Platform.Graph {
 				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
@@ -501,7 +501,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 			continue
 		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
-			logrus.Debugf("skipping previously mirrored image %s", srcRef.Ref.String())
+			klog.V(4).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
 			keep = append(keep, srcRef.Ref.String())
 		}

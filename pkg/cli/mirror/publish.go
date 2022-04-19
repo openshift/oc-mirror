@@ -99,7 +99,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	// Unpack chart to user destination if it exists
-	logrus.Debugf("Unpacking any provided Helm charts to %s", o.OutputDir)
+	klog.V(4).Infof("Unpacking any provided Helm charts to %s", o.OutputDir)
 	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
 		return allMappings, err
 	}
@@ -113,7 +113,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
-	logrus.Debug("process all images in imageset")
+	klog.V(4).Infof("process all images in imageset")
 	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
 	if err != nil {
 		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
@@ -124,7 +124,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
-	logrus.Debug("unpack release signatures")
+	klog.V(4).Infof("unpack release signatures")
 	if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
 		return allMappings, err
 	}
@@ -204,7 +204,7 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 		// Complete metadata checks
 		// UUID mismatch will now be seen as a new workspace.
 		if !o.SkipMetadataCheck {
-      klog.V(4).Info("Check metadata sequence number")
+			klog.V(4).Info("Check metadata sequence number")
 			currRun := curr.PastMirror
 			incomingRun := incoming.PastMirror
 			if incomingRun.Sequence != (currRun.Sequence + 1) {
@@ -355,7 +355,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	// process catalogs
-	logrus.Debug("rebuilding catalog images")
+	klog.V(4).Infof("rebuilding catalog images")
 	found, err := o.unpackCatalog(dir, filesInArchive)
 	if err != nil {
 		return allMappings, err
@@ -369,7 +369,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 		allMappings.Merge(ctlgRefs)
 	}
 
-	logrus.Debug("building cincinnati graph data image")
+	klog.V(4).Infof("building cincinnati graph data image")
 	// process cincinnati graph image
 	found, err = o.unpackRelease(dir, filesInArchive)
 	if err != nil {

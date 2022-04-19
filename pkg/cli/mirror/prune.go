@@ -9,8 +9,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -26,11 +26,11 @@ func (o *MirrorOptions) pruneRegistry(ctx context.Context, prev, curr image.Asso
 
 func (o *MirrorOptions) pruneImages(ctx context.Context, as image.AssociationSet) error {
 	if len(as) == 0 {
-		logrus.Debug("No image specified for pruning")
+		klog.V(4).Infof("No image specified for pruning")
 		return nil
 	}
 
-	logrus.Info("Pruning images outside out range from registry")
+	klog.Info("Pruning images outside out range from registry")
 	var destInsecure bool
 	var terr *transport.Error
 	var errs []error
@@ -52,9 +52,9 @@ func (o *MirrorOptions) pruneImages(ctx context.Context, as image.AssociationSet
 		err = remote.Delete(nameRef, remoteOpts...)
 		switch {
 		case err == nil:
-			logrus.Debugf("image %q removed", imageName)
+			klog.V(4).Infof("image %q removed", imageName)
 		case errors.As(err, &terr):
-			logrus.Warnf("registry %q: %d response code for image deletion request, ending pruning attempt", o.ToMirror, terr.StatusCode)
+			klog.Warningf("registry %q: %d response code for image deletion request, ending pruning attempt", o.ToMirror, terr.StatusCode)
 			return nil
 		default:
 			errs = append(errs, fmt.Errorf("image %q: pruning error: %v", nameRef.String(), err))
