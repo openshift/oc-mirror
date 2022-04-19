@@ -64,7 +64,7 @@ func TestUpdatesValidate(t *testing.T) {
 		{
 			name:     "Invalid/NoConfigPath",
 			opts:     &UpdatesOptions{},
-			expError: `must specify imageset configuration using --config`,
+			expError: `must specify imageset configuration`,
 		},
 		{
 			name: "Invalid/UnsupportedArch",

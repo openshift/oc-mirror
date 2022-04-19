@@ -70,7 +70,10 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 }
 
 func (o *UpdatesOptions) Complete(args []string) error {
-	o.ConfigPath = args[0]
+	if len(args) == 1 {
+		o.ConfigPath = args[0]
+	}
+
 	if len(o.FilterOptions) == 0 {
 		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
@@ -79,7 +82,7 @@ func (o *UpdatesOptions) Complete(args []string) error {
 
 func (o *UpdatesOptions) Validate() error {
 	if len(o.ConfigPath) == 0 {
-		return fmt.Errorf("must specify imageset configuration using --config")
+		return errors.New("must specify imageset configuration")
 	}
 	for _, arch := range o.FilterOptions {
 		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
