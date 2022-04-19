@@ -24,7 +24,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-func TestMetadataError(t *testing.T) {
+func TestHandleMetadata(t *testing.T) {
 
 	ctx := context.Background()
 
@@ -32,21 +32,31 @@ func TestMetadataError(t *testing.T) {
 	gotUUID, err := uuid.Parse("360a43c2-8a14-4b5d-906b-07491459f25f")
 	require.NoError(t, err)
 
-	type fields struct {
-		archivePath string
+	type spec struct {
+		name        string
+		opts        *MirrorOptions
+		metadata    string
+		expCurr     int
+		expIncoming int
+		want        error
+		wantErr     bool
 	}
-	tests := []struct {
-		name     string
-		metadata string
-		fields   fields
-		want     error
-		wantErr  bool
-	}{
+
+	tests := []spec{
 		{
-			name:     "Invalid/FirstRun",
+			name: "Invalid/FirstRun",
+
 			metadata: "",
-			fields: fields{
-				archivePath: "testdata/artifacts/testbundle_seq2.tar",
+			opts: &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				DestSkipTLS: true,
+				From:        "testdata/artifacts/testbundle_seq2.tar",
 			},
 			want:    &SequenceError{1, 2},
 			wantErr: true,
@@ -54,35 +64,50 @@ func TestMetadataError(t *testing.T) {
 		{
 			name:     "Invalid/OutOfOrder",
 			metadata: "testdata/configs/one.json",
-			fields: fields{
-				archivePath: "testdata/artifacts/testbundle_seq3.tar",
-			},
-			want:    &SequenceError{2, 3},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(registry.New())
-			t.Cleanup(server.Close)
-			u, err := url.Parse(server.URL)
-			require.NoError(t, err)
-
-			tmpdir := t.TempDir()
-
-			opts := &MirrorOptions{
+			opts: &MirrorOptions{
 				RootOptions: &cli.RootOptions{
 					IOStreams: genericclioptions.IOStreams{
 						In:     os.Stdin,
 						Out:    os.Stdout,
 						ErrOut: os.Stderr,
 					},
-					Dir: tmpdir,
 				},
 				DestSkipTLS: true,
-				From:        tt.fields.archivePath,
-				ToMirror:    u.Host,
-			}
+				From:        "testdata/artifacts/testbundle_seq3.tar",
+			},
+			want:    &SequenceError{2, 3},
+			wantErr: true,
+		},
+		{
+			name:        "Valid/SkipMetadataCheck",
+			metadata:    "testdata/configs/one.json",
+			expCurr:     1,
+			expIncoming: 3,
+			opts: &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				DestSkipTLS:       true,
+				SkipMetadataCheck: true,
+				From:              "testdata/artifacts/testbundle_seq3.tar",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			tmpdir := t.TempDir()
+			server := httptest.NewServer(registry.New())
+			t.Cleanup(server.Close)
+			u, err := url.Parse(server.URL)
+			require.NoError(t, err)
+			tt.opts.Dir = tmpdir
+			tt.opts.ToMirror = u.Host
 
 			// Copy metadata in place for tests with existing
 			if tt.metadata != "" {
@@ -97,10 +122,14 @@ func TestMetadataError(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			_, err = opts.Publish(ctx)
+			filesInArchive := map[string]string{config.MetadataBasePath: tt.opts.From}
+
+			_, incoming, curr, err := tt.opts.handleMetadata(ctx, filepath.Join(tmpdir, "foo"), filesInArchive)
 
 			if !tt.wantErr {
 				require.NoError(t, err)
+				require.Equal(t, tt.expIncoming, incoming.PastMirror.Sequence)
+				require.Equal(t, tt.expCurr, curr.PastMirror.Sequence)
 			} else {
 				require.EqualError(t, err, tt.want.Error())
 			}

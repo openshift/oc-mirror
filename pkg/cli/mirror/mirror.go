@@ -434,14 +434,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 			metaImage := o.newMetadataImage(meta.Uid.String())
-			targetCfg := v1alpha2.StorageConfig{
-				Registry: &v1alpha2.RegistryConfig{
-					ImageURL: metaImage,
-					SkipTLS:  destInsecure,
-				},
+			targetCfg := &v1alpha2.RegistryConfig{
+				ImageURL: metaImage,
+				SkipTLS:  destInsecure,
 			}
 
-			targetBackend, err := storage.ByConfig(o.Dir, targetCfg)
+			targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
 			if err != nil {
 				return err
 			}
