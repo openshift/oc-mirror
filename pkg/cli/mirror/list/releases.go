@@ -86,7 +86,13 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 
 func (o *ReleasesOptions) Complete() error {
 	if len(o.Version) > 0 && len(o.Channel) == 0 {
-		o.Channel = fmt.Sprintf("stable-%s", o.Version)
+
+		r := releaseVersion{}
+		if err := r.parseTag(o.Version); err != nil {
+			return err
+		}
+
+		o.Channel = fmt.Sprintf("stable-%s", r.String())
 	}
 	if len(o.FilterOptions) == 0 {
 		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
@@ -236,12 +242,12 @@ func (r *releaseVersion) String() string {
 func (r *releaseVersion) parseTag(tag string) error {
 	s := strings.Split(tag, ".")
 	if len(s) <= 1 {
-		return errors.New("Unable parse major.minor version from tag " + tag)
+		return errors.New("Unable parse major.minor version from: " + tag)
 	}
 	var err error
 	r.major, err = strconv.Atoi(s[0])
 	if err != nil {
-		return errors.New("Unable to parse major version number " + err.Error())
+		return errors.New("Unable to parse major version number. " + err.Error())
 	}
 	r.minor, _ = strconv.Atoi(s[1]) // if minor version unparsed, defaults to 0
 	return nil
