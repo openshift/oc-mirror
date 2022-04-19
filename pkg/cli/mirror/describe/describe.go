@@ -39,7 +39,7 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 		`),
 		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete(cmd, f, args))
+			kcmdutil.CheckErr(o.Complete(args))
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
@@ -50,12 +50,17 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	return cmd
 }
 
-func (o *DescribeOptions) Complete(cmd *cobra.Command, f kcmdutil.Factory, args []string) error {
-	o.From = args[0]
+func (o *DescribeOptions) Complete(args []string) error {
+	if len(args) == 1 {
+		o.From = args[0]
+	}
 	return nil
 }
 
 func (o *DescribeOptions) Validate() error {
+	if len(o.From) == 0 {
+		return errors.New("must specify path to imageset archive")
+	}
 	return nil
 }
 
