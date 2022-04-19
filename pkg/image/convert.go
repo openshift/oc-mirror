@@ -3,9 +3,11 @@ package image
 import (
 	"fmt"
 
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 // ConvertToAssociationSet will return an AssociationSet from a slice of Associations
@@ -62,7 +64,7 @@ func ConvertToAssociationSet(assocs []v1alpha2.Association) (AssociationSet, err
 	return assocSet, nil
 }
 
-// COnvertFromAssociationSet will return a slice of Association from an AssociationSet
+// ConvertFromAssociationSet will return a slice of Association from an AssociationSet
 func ConvertFromAssociationSet(assocSet AssociationSet) ([]v1alpha2.Association, error) {
 	assocs := []v1alpha2.Association{}
 	var errs []error
@@ -76,4 +78,33 @@ func ConvertFromAssociationSet(assocSet AssociationSet) ([]v1alpha2.Association,
 		}
 	}
 	return assocs, utilerrors.NewAggregate(errs)
+}
+
+// ConvertToTypedMapping will return a TypedMappingFrom an AssociationSet
+func ConvertToTypedMapping(assocs []v1alpha2.Association) (TypedImageMapping, error) {
+	mapping := TypedImageMapping{}
+	var errs []error
+	childManifest := make(map[string]struct{})
+	for _, a := range assocs {
+		if err := a.Validate(); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, digest := range a.ManifestDigests {
+			childManifest[digest] = struct{}{}
+		}
+	}
+
+	for _, a := range assocs {
+		if _, ok := childManifest[a.Name]; ok {
+			continue
+		}
+		typedImg, err := imagesource.ParseReference(a.Name)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		mapping.Add(typedImg, typedImg, a.Type)
+	}
+	return mapping, utilerrors.NewAggregate(errs)
 }

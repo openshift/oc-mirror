@@ -174,6 +174,13 @@ func TestMirrorValidate(t *testing.T) {
 			expError: "must specify a registry destination",
 		},
 		{
+			name: "Invalid/NoFromWithManifestOnly",
+			opts: &MirrorOptions{
+				ManifestsOnly: true,
+			},
+			expError: "must specify a path to an archive with --from with --manifest-only",
+		},
+		{
 			name: "Invalid/NoSource",
 			opts: &MirrorOptions{
 				ToMirror: u.Host,
@@ -188,7 +195,7 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
-			name: "Invalid/UnsupportReleaseArch",
+			name: "Invalid/UnsupportedReleaseArch",
 			opts: &MirrorOptions{
 				ConfigPath:    "foo",
 				ToMirror:      u.Host,

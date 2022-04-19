@@ -2,8 +2,11 @@ package bundle
 
 import (
 	"archive/tar"
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,9 +14,11 @@ import (
 	"github.com/mholt/archiver/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 // ReconcileV2Dir gathers all manifests and blobs that were collected during a run
@@ -151,4 +156,45 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 	}
 
 	return filesinArchive, err
+}
+
+// ReadMetadataFromFile will return the metadata from a given imageset
+func ReadMetadataFromFile(ctx context.Context, archivePath string) (v1alpha2.Metadata, error) {
+	a := archive.NewArchiver()
+	meta := v1alpha2.NewMetadata()
+
+	// Get archive with metadata
+	filesInArchive, err := ReadImageSet(a, archivePath)
+	if err != nil {
+		return meta, err
+	}
+
+	// Create workspace to work from
+	tmpdir, err := ioutil.TempDir(".", "metadata")
+	if err != nil {
+		return meta, err
+	}
+	defer os.RemoveAll(tmpdir)
+
+	archive, ok := filesInArchive[config.MetadataBasePath]
+	if !ok {
+		return meta, errors.New("metadata is not in archive")
+	}
+
+	logrus.Debug("Extracting incoming metadata")
+	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
+		return meta, err
+	}
+
+	workspace, err := storage.NewLocalBackend(tmpdir)
+
+	if err != nil {
+		return meta, err
+	}
+
+	if workspace.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+		return meta, err
+	}
+
+	return meta, nil
 }
