@@ -24,6 +24,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
@@ -128,7 +129,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(o.FilterOptions) == 0 {
-		o.FilterOptions = []string{"amd64"}
+		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
 
 	return nil
@@ -142,6 +143,8 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("must specify a configuration file with --config")
 	case len(o.ToMirror) > 0 && len(o.ConfigPath) == 0 && len(o.From) == 0:
 		return fmt.Errorf("must specify --config or --from with registry destination")
+	case o.ManifestsOnly && len(o.From) == 0:
+		return fmt.Errorf("must specify a path to an archive with --from with --manifest-only")
 	}
 
 	var destInsecure bool
@@ -171,9 +174,8 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
-	var supportedArchs = map[string]struct{}{"amd64": {}, "ppc64le": {}, "s390x": {}}
 	for _, arch := range o.FilterOptions {
-		if _, ok := supportedArchs[arch]; !ok {
+		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
 			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
 		}
 	}
@@ -208,7 +210,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	var meta v1alpha2.Metadata
 	switch {
 	case o.ManifestsOnly:
-		klog.Info("Not implemented yet")
+		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
+		if err != nil {
+			return fmt.Errorf("error retrieving metadata from %q: %v", o.From, err)
+		}
+
+		mapping, err := image.ConvertToTypedMapping(meta.PastAssociations)
+		if err != nil {
+			return err
+		}
+		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
+		results, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		return o.generateAllManifests(mapping, results)
 	case len(o.OutputDir) > 0 && o.From == "":
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
@@ -224,7 +240,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
@@ -266,7 +282,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		// Pack the images set
-		tmpBackend, err := o.Pack(cmd.Context(), prevAssociations, assocs, &meta, cfg.ArchiveSize)
+		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				klog.Infof("no updates detected, process stopping")
@@ -325,7 +341,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry to registry mapping
 		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
 
-		prevAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				logrus.Infof("no new images detected, process stopping")
@@ -365,12 +381,22 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			}
 		}
 
+		// Prune the images that differ between the previous Associations and the
+		// pruned Associations.
+		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+		if err != nil {
+			return err
+		}
+		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
+			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
+		}
+
 		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 		if err != nil {
 			return err
 		}
-		prevAssociations.Merge(assocs)
-		meta.PastAssociations, err = image.ConvertFromAssociationSet(prevAssociations)
+		prunedAssociations.Merge(assocs)
+		meta.PastAssociations, err = image.ConvertFromAssociationSet(prunedAssociations)
 		if err != nil {
 			return err
 		}
@@ -425,14 +451,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 			metaImage := o.newMetadataImage(meta.Uid.String())
-			targetCfg := v1alpha2.StorageConfig{
-				Registry: &v1alpha2.RegistryConfig{
-					ImageURL: metaImage,
-					SkipTLS:  destInsecure,
-				},
+			targetCfg := &v1alpha2.RegistryConfig{
+				ImageURL: metaImage,
+				SkipTLS:  destInsecure,
 			}
 
-			targetBackend, err := storage.ByConfig(o.Dir, targetCfg)
+			targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
 			if err != nil {
 				return err
 			}
@@ -503,11 +527,12 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 		return err
 	}
 
-	// Create mapping from source and destination images
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
 		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
-			klog.Warningf("skipping blocked images %s", srcRef.String())
+			klog.Warningf("skipping blocked image %s", srcRef.String())
+			// Remove to make sure this does end up in the metadata
+			images.Remove(srcRef)
 			continue
 		}
 
@@ -617,7 +642,7 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	}
 	// Instead of returning an error, just log it.
 	if o.ContinueOnError && (skip || skipAllTypes) {
-		klog.Warning(err)
+		klog.Error(err)
 		o.continuedOnError = true
 	} else {
 		return err

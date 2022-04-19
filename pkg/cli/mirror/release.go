@@ -164,9 +164,14 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 		}
 
 		if len(cfg.Mirror.Platform.Channels) > 1 {
-			newDownloads, err := o.getCrossChannelDownloads(ctx, arch, cfg.Mirror.Platform.Channels)
+			client, err := cincinnati.NewOCPClient(o.uuid)
 			if err != nil {
 				errs = append(errs, err)
+				continue
+			}
+			newDownloads, err := o.getCrossChannelDownloads(ctx, client, arch, cfg.Mirror.Platform.Channels)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error calculating cross channel upgrades: %v", err))
 				continue
 			}
 			releaseDownloads.Merge(newDownloads)
@@ -290,7 +295,7 @@ func (o *ReleaseOptions) getChannelDownloads(ctx context.Context, c cincinnati.C
 }
 
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
-func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch string, channels []v1alpha2.ReleaseChannel) (downloads, error) {
+func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, ocpClient cincinnati.Client, arch string, channels []v1alpha2.ReleaseChannel) (downloads, error) {
 	// Strip any OKD channels from the list
 	var ocpChannels []v1alpha2.ReleaseChannel
 	for _, ch := range channels {
@@ -302,10 +307,6 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch stri
 	if len(ocpChannels) == 0 {
 		return downloads{}, nil
 	}
-	client, err := cincinnati.NewOCPClient(o.uuid)
-	if err != nil {
-		return downloads{}, err
-	}
 
 	firstCh, first, err := cincinnati.FindRelease(ocpChannels, true)
 	if err != nil {
@@ -315,7 +316,7 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, arch stri
 	if err != nil {
 		return downloads{}, fmt.Errorf("failed to find maximum release version: %v", err)
 	}
-	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, client, arch, firstCh, lastCh, first, last)
+	current, newest, updates, err := cincinnati.CalculateUpgrades(ctx, ocpClient, arch, firstCh, lastCh, first, last)
 	if err != nil {
 		return downloads{}, fmt.Errorf("failed to get upgrade graph: %v", err)
 	}

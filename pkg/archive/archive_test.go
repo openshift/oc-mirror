@@ -12,6 +12,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/stretchr/testify/require"
 )
 
 /* FIXME(jpower432): known issue with many small files
@@ -21,12 +22,8 @@ the tar size will end up larger than specified by the
 func TestSplitArchive(t *testing.T) {
 
 	testdir, err := os.MkdirTemp("", "test")
-
+	require.NoError(t, err)
 	defer os.RemoveAll(testdir)
-
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	tests := []struct {
 		name         string
@@ -55,70 +52,52 @@ func TestSplitArchive(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packager := NewPackager(tt.manifests, tt.blobs)
 
-		packager := NewPackager(tt.manifests, tt.blobs)
+			require.NoError(t, os.MkdirAll(filepath.Join(testdir, config.SourceDir), os.ModePerm))
 
-		if err := os.MkdirAll(filepath.Join(testdir, config.SourceDir), os.ModePerm); err != nil {
-			t.Fail()
-		}
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
 
-		cwd, err := os.Getwd()
-		if err != nil {
-			t.Fatal(err)
-		}
+			// Change dir before archiving to avoid issues with symlink paths
+			require.NoError(t, os.Chdir(filepath.Join(testdir, config.SourceDir)))
+			require.NoError(t, writeFiles())
 
-		// Change dir before archiving to avoid issues with symlink paths
-		if err := os.Chdir(filepath.Join(testdir, config.SourceDir)); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Chdir(cwd)
+			backend, err := storage.NewLocalBackend(t.TempDir())
+			require.NoError(t, err)
 
-		if err := writeFiles(); err != nil {
-			t.Fatal(err)
-		}
+			meta := v1alpha2.Metadata{}
+			require.NoError(t, backend.WriteMetadata(context.Background(), &meta, config.MetadataBasePath))
 
-		backend, err := storage.NewLocalBackend(t.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
+			require.NoError(t, packager.CreateSplitArchive(context.Background(), backend, tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup))
 
-		meta := v1alpha2.Metadata{}
-		if err := backend.WriteMetadata(context.Background(), &meta, config.MetadataBasePath); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := packager.CreateSplitArchive(context.Background(), backend, tt.maxSplitSize, cwd, ".", tt.want, tt.skipCleanup); err != nil {
-			t.Errorf("Test %s: Failed to create archives for %s: %v", tt.name, tt.want, err)
-		}
-
-		_, err = os.Stat(filepath.Join(cwd, "test1"))
-		if !tt.skipCleanup {
-			if err == nil {
-				t.Error("File test1 was found, expected to be cleaned up")
+			_, err = os.Stat(filepath.Join(cwd, "test1"))
+			if !tt.skipCleanup {
+				if err == nil {
+					t.Error("File test1 was found, expected to be cleaned up")
+				}
+			} else {
+				if err != nil {
+					t.Error("File test1 was not found, expected to skip cleanup")
+				}
 			}
-		} else {
-			if err != nil {
-				t.Error("File test1 was not found, expected to skip cleanup")
-			}
-		}
 
-		err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
+			err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
 
-			if strings.Contains(info.Name(), tt.want) {
+				if strings.Contains(info.Name(), tt.want) {
 
-				if info.Size() > tt.maxSplitSize {
-					return fmt.Errorf("Test %s: Expected '%v' to be less than '%v'", tt.name, info.Size(), tt.maxSplitSize)
+					if info.Size() > tt.maxSplitSize {
+						return fmt.Errorf("Test %s: Expected '%v' to be less than '%v'", tt.name, info.Size(), tt.maxSplitSize)
+					}
+
+					return os.RemoveAll(path)
 				}
 
-				return os.RemoveAll(path)
-			}
-
-			return nil
+				return nil
+			})
+			require.NoError(t, err)
 		})
-
-		if err != nil {
-			t.Error(err)
-		}
 	}
 }
 

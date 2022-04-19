@@ -17,7 +17,7 @@ func TestReleasesComplete(t *testing.T) {
 
 	cases := []spec{
 		{
-			name: "Valid/ChannelEmpty",
+			name: "Valid/ChannelEmpty/Version X.Y",
 			opts: &ReleasesOptions{
 				Channel: "",
 				Version: "4.8",
@@ -26,12 +26,49 @@ func TestReleasesComplete(t *testing.T) {
 				},
 			},
 			expOpts: &ReleasesOptions{
-				Channel: "stable-4.8",
-				Version: "4.8",
+				Channel:       "stable-4.8",
+				Version:       "4.8",
+				FilterOptions: []string{"amd64"},
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
 			},
+		},
+		{
+			name: "Valid/ChannelEmpty/Version X.Y.Z",
+			opts: &ReleasesOptions{
+				Channel: "",
+				Version: "4.9.10",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expOpts: &ReleasesOptions{
+				Channel:       "stable-4.9",
+				Version:       "4.9.10",
+				FilterOptions: []string{"amd64"},
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+		},
+		{
+			name: "Valid/ChannelEmpty/Version invalid string",
+			opts: &ReleasesOptions{
+				Channel: "",
+				Version: "bad",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expOpts: &ReleasesOptions{
+				Channel: "",
+				Version: "bad",
+				RootOptions: &cli.RootOptions{
+					Dir: "bar",
+				},
+			},
+			expError: "Unable parse major.minor version from: bad",
 		},
 	}
 
@@ -65,11 +102,18 @@ func TestReleasesValidate(t *testing.T) {
 			expError: "must specify --version or --channel",
 		},
 		{
-			name: "Invalid/NoCatalog",
+			name: "Invalid/NoVersionsWithChannels",
 			opts: &ReleasesOptions{
 				Channels: true,
 			},
 			expError: `must specify --version`,
+		},
+		{
+			name: "Invalid/UnsupportedArch",
+			opts: &ReleasesOptions{
+				FilterOptions: []string{"fake"},
+			},
+			expError: "architecture \"fake\" is not a supported release architecture",
 		},
 		{
 			name: "Valid/Channels",

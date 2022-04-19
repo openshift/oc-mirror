@@ -44,9 +44,7 @@ func (as AssociationSet) UpdateKey(oldKey, newKey string) error {
 	if !found {
 		return errors.New("key does not exist in map")
 	}
-	for _, value := range values {
-		as.Add(newKey, value)
-	}
+	as.Add(newKey, values...)
 	delete(as, oldKey)
 
 	return nil

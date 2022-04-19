@@ -5,6 +5,11 @@ import (
 	"errors"
 )
 
+// DefaultPlatformArchitecture defines the default
+// architecture used be mirroring platform
+// release payloads.
+const DefaultPlatformArchitecture = "amd64"
+
 // PlatformType defines the content type for platforms
 type PlatformType int
 
