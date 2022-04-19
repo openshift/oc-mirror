@@ -139,8 +139,6 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 			} else {
 				// Range is set. Ensure full is true so this
 				// is skipped when processing release metadata.
-				// QUESTION(jpower432): This is enforced during config validation
-				// for catalogs. Should we do the same here?
 				logrus.Debugf("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch

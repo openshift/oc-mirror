@@ -17,52 +17,16 @@ func TestValidate(t *testing.T) {
 
 	cases := []spec{
 		{
-			name: "Valid/HeadsOnlyFalse",
+			name: "Valid/UniqueCatalogs",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "test-catalog",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
-								},
-								Full: true,
+								Catalog: "test-catalog1",
 							},
-						},
-					},
-				},
-			},
-			expError: "",
-		},
-		{
-			name: "Valid/NoIncludePackages",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
 							{
-								Catalog:       "test-catalog",
-								IncludeConfig: v1alpha2.IncludeConfig{},
-								Full:          false,
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Valid/HeadsOnlyFalse",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
-							{
-								Catalog: "test-catalog",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
-								},
-								Full: true,
+								Catalog: "test-catalog2",
 							},
 						},
 					},
@@ -89,23 +53,22 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
-			name: "Invalid/HeadsOnlyTrue",
+			name: "Invalid/DuplicateCatalogs",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
 								Catalog: "test-catalog",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{{Name: "foo"}},
-								},
-								Full: false,
+							},
+							{
+								Catalog: "test-catalog",
 							},
 						},
 					},
 				},
 			},
-			expError: "invalid configuration: catalog \"test-catalog\": cannot define packages with full key set to false",
+			expError: "invalid configuration: catalog \"test-catalog\": duplicate found in configuration",
 		},
 		{
 			name: "Invalid/DuplicateChannels",

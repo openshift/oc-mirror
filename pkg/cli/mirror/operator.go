@@ -166,8 +166,6 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, err error) {
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
-	// Only add on top of channel heads if both HeadsOnly and IncludeConfig are specified.
-	includeAdditively := ctlg.IsHeadsOnly() && hasInclude
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified (the default).
 	full := !ctlg.IsHeadsOnly() && !hasInclude
 
@@ -188,12 +186,11 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			return nil, derr
 		}
 		dc, err = action.Diff{
-			Registry:          reg,
-			NewRefs:           []string{ctlg.Catalog},
-			Logger:            catLogger,
-			IncludeConfig:     dic,
-			IncludeAdditively: includeAdditively,
-			SkipDependencies:  ctlg.SkipDependencies,
+			Registry:         reg,
+			NewRefs:          []string{ctlg.Catalog},
+			Logger:           catLogger,
+			IncludeConfig:    dic,
+			SkipDependencies: ctlg.SkipDependencies,
 		}.Run(ctx)
 		if err != nil {
 			return nil, err
@@ -222,14 +219,10 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 	a := action.Diff{
-		Registry: reg,
-		NewRefs:  []string{ctlg.Catalog},
-		Logger:   catLogger,
-		// This is hard-coded to false because a diff post-metadata creation must always include
-		// newly published catalog data to join graphs. Any included objects previously included
-		// will be added as a diff as part of the latest diff mode.
-		IncludeAdditively: false,
-		SkipDependencies:  ctlg.SkipDependencies,
+		Registry:         reg,
+		NewRefs:          []string{ctlg.Catalog},
+		Logger:           catLogger,
+		SkipDependencies: ctlg.SkipDependencies,
 	}
 
 	// Instead of creating a partial FBC with diff
