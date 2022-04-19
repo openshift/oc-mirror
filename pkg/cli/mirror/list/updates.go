@@ -38,17 +38,18 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "updates",
-		Short: "List available updates in upgrade graph from upstream sources",
+		Short: "List available updates in upgrade graph from upstream sources.",
 		Long: templates.LongDesc(`
 		List available updates in the upgrade graph for releases and operators from upstream sources
 		based on current state. A storage configuration must be specified to use this command.
 	`),
 		Example: templates.Examples(`
 			# List updates between remote and current workspace
-			oc-mirror list updates --config mirror-config.yaml
+			oc-mirror list updates mirror-config.yaml
 		`),
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			kcmdutil.CheckErr(o.Complete())
+			kcmdutil.CheckErr(o.Complete(args))
 			kcmdutil.CheckErr(o.Validate())
 			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
@@ -57,7 +58,6 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	o.BindFlags(cmd.PersistentFlags())
 
 	fs := cmd.Flags()
-	fs.StringVarP(&o.ConfigPath, "config", "c", o.ConfigPath, "Path to imageset configuration file")
 	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
 		"picked when multiple variants are available")
 
@@ -69,7 +69,11 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	return cmd
 }
 
-func (o *UpdatesOptions) Complete() error {
+func (o *UpdatesOptions) Complete(args []string) error {
+	if len(args) == 1 {
+		o.ConfigPath = args[0]
+	}
+
 	if len(o.FilterOptions) == 0 {
 		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
@@ -78,7 +82,7 @@ func (o *UpdatesOptions) Complete() error {
 
 func (o *UpdatesOptions) Validate() error {
 	if len(o.ConfigPath) == 0 {
-		return fmt.Errorf("must specify config using --config")
+		return errors.New("must specify imageset configuration")
 	}
 	for _, arch := range o.FilterOptions {
 		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
@@ -126,7 +130,6 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 }
 
 func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1alpha2.ImageSetConfiguration, last v1alpha2.PastMirror) error {
-	logrus.Info("Getting release update information")
 	lastMaxVersion := map[string]semver.Version{}
 	for _, ch := range last.Mirror.Platform.Channels {
 		version, err := semver.Parse(ch.MaxVersion)
@@ -178,7 +181,6 @@ func (o UpdatesOptions) releaseUpdates(ctx context.Context, arch string, cfg v1a
 }
 
 func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata) error {
-	logrus.Info("Getting operator update information")
 	dstDir, err := os.MkdirTemp(o.Dir, "updatetmp-")
 	if err != nil {
 		return err
@@ -238,13 +240,10 @@ func (o UpdatesOptions) writeReleaseColumns(upgrades []semver.Version, arch, cha
 		return nil
 	}
 	tw := tabwriter.NewWriter(o.IOStreams.Out, 0, 4, 2, ' ', 0)
-	if _, err := fmt.Fprintf(tw, "CHANNEL:\t%s\n", channel); err != nil {
+	if _, err := fmt.Fprintf(tw, "Listing update for release channel:\t%s\n", channel); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(tw, "ARCHITECTURE:\t%s\n", arch); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(tw, "VERSIONS"); err != nil {
+	if _, err := fmt.Fprintf(tw, "Architecture:\t%s\n", arch); err != nil {
 		return err
 	}
 	for _, upgrade := range upgrades {
@@ -263,10 +262,10 @@ func (o UpdatesOptions) writeCatalogColumns(dc declcfg.DeclarativeConfig, catalo
 		return nil
 	}
 	tw := tabwriter.NewWriter(o.IOStreams.Out, 0, 4, 2, ' ', 0)
-	if _, err := fmt.Fprintf(tw, "Listing update for catalog:\t%s", catalog); err != nil {
+	if _, err := fmt.Fprintf(tw, "Listing update for catalog:\t%s\n", catalog); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(tw, "PACKAGE\tCHANNEL\tBUNDLE\tREPLACES"); err != nil {
+	if _, err := fmt.Fprintln(tw, "Package\tChannel\tBundle\tReplaces"); err != nil {
 		return err
 	}
 	mod, err := declcfg.ConvertToModel(dc)
