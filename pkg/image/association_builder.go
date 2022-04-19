@@ -120,7 +120,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 	case m.IsRegular():
 		// Layer ID is the file name, and no tag exists.
 		tag = defaultTag
-		if defaultTag != "" {
+		if defaultTag != "" && len(id) > 13 {
 			// If set, add a subset of the digest to randomize the
 			// tag in the event multiple digests are pulled for the same
 			// image

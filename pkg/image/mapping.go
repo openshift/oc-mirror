@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TypedImage defines an a image with the destination and content type
 type TypedImage struct {
 	imagesource.TypedImageReference
 	// Category adds image category type to TypedImageReference
@@ -25,7 +26,20 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	if err != nil {
 		return TypedImage{}, err
 	}
-	return TypedImage{ref, typ}, nil
+	t := TypedImage{ref, typ}
+	return t.SetDefaults(), nil
+}
+
+// SetDefaults sets the default values for TypedImage fields
+func (t TypedImage) SetDefaults() TypedImage {
+	if len(t.Ref.Tag) == 0 {
+		if len(t.Ref.ID) > 13 {
+			t.Ref.Tag = t.Ref.ID[7:13]
+		} else {
+			t.Ref.Tag = "latest"
+		}
+	}
+	return t
 }
 
 type TypedImageMapping map[TypedImage]TypedImage
@@ -37,9 +51,7 @@ func (m TypedImageMapping) ToRegistry(registry, namespace string) {
 		dest.Ref.Registry = registry
 		dest.Ref.Namespace = path.Join(namespace, dest.Ref.Namespace)
 		dest.Ref.ID = src.Ref.ID
-		if dest.Ref.Tag == "" && len(src.Ref.ID) > 13 {
-			dest.Ref.Tag = src.Ref.ID[7:13]
-		}
+		dest = dest.SetDefaults()
 		m[src] = dest
 	}
 }
