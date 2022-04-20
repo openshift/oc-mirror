@@ -42,7 +42,7 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run())
+			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
 	}
 
@@ -60,7 +60,7 @@ func (o *InitOptions) Validate() error {
 	return nil
 }
 
-func (o *InitOptions) Run() error {
+func (o *InitOptions) Run(ctx context.Context) error {
 	var err error
 
 	gitVersion := version.Get().GitVersion
