@@ -45,10 +45,14 @@ var (
 
 		When using file mirroring, the --from and --config flags control the location of the images to mirror. The --config flag accepts
 		an imageset configuration file and the --from flag accepts the location of the imageset on disk. The --from input can be passed as a 
-		file or directory, but must contain only one image sequence. The naming convention for an imageset is mirror_seq<sequence number>_<tar count>.tar.
+		file or directory, but must contain only one image sequence. The naming convention for an imageset is mirror\_seq<sequence number>\_<tar count>.tar.
 
-		The location of the workspace used defaults to oc-mirror-workspace in the current directory when publishing image content or using the  to 
-		mirror workflow. If using the file:// destination scheme, the oc-mirror-workspace directory will be located in the directory specified by the argument.
+		The location of the directory used by oc-mirror as a workspace defaults to the name oc-mirror-workspace. The location of this directory
+		is outlined in the following: 
+
+		1. Destination prefix is docker:// - The current working directory will be used.
+		2. Destination prefix is file:// - The destination directory specified will be used.
+
 		`,
 	)
 	mirrorExamples = templates.Examples(
@@ -68,14 +72,12 @@ var (
 		# Publish to a registry and add a top-level namespace
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
 
-		# Publish to a registry and add a top-level namespace
-		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
-
 		# Generate manifests for previously created mirror archive
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace --manifests-only
 
-		# Skip metadata check during imageset publishing. Example shown with --ignore-history creation
-		# as this the required workflow with --skip-metadata-check.
+		# Skip metadata check during imageset publishing. This example shows a two-step process.
+		# A differential imageset would have to be created with --ignore-history to be
+		# successfully published with --skip-metadata-check.
 		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
 		oc-mirror --from mirror_seq2_000000.tar docker://localhost:5000/namespace --skip-metadata-check
 		`,
