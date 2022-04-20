@@ -42,12 +42,30 @@ function pruned_catalogs() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 
     workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 }
+
+# Test heads-only mode with catalogs that prune bundles
+function pruned_catalogs_mirror_to_mirror() {
+    workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.1.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+
+    workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.2.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+}
+
 
 # Test registry backend
 function registry_backend () {
@@ -117,7 +135,7 @@ function skip_deps {
 # Test local helm chart
 function helm_local {
     workflow_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
-    check_helm "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }
 
 # Test no udpates

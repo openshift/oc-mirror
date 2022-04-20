@@ -93,7 +93,7 @@ function parse_args() {
       shift # past argument=value
       ;;
     --diff)
-      DIFF=YES
+      DIFF=true
       shift # past argument with no value
       ;;
     -*|--*)
