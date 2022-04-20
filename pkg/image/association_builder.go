@@ -123,8 +123,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 		if defaultTag != "" {
 			// If set, add a subset of the digest to randomize the
 			// tag in the event multiple digests are pulled for the same
-			// image. The first 6 character from that hash will be used
-			// so checking that the hash value is long
+			// image.
 			partial, err := getPartialDigest(id)
 			if err != nil {
 				return nil, fmt.Errorf("error calculating partial digest for %s: %v", id, err)
