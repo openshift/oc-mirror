@@ -63,14 +63,10 @@ func (o *InitOptions) Validate() error {
 func (o *InitOptions) Run(ctx context.Context) error {
 	var err error
 
-	gitVersion := version.Get().GitVersion
-	// Example: v4.1.1-g01d6cf7
-	// Example: v4.2.0
-	vers, err := semver.ParseTolerant(gitVersion)
+	releaseChannel, err := getReleaseChannelFromGit()
 	if err != nil {
-		return fmt.Errorf("unable to parse oc-mirror version: %s ; %w", gitVersion, err)
+		return err
 	}
-	releaseChannel := fmt.Sprintf("stable-%d.%d", vers.Major, vers.Minor)
 
 	catalog, err := getCatalog()
 	if err != nil {
@@ -160,6 +156,18 @@ func (o *InitOptions) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func getReleaseChannelFromGit() (string, error) {
+	gitVersion := version.Get().GitVersion
+	// Example: v4.1.1-g01d6cf7
+	// Example: v4.2.0
+	vers, err := semver.ParseTolerant(gitVersion)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse oc-mirror version: %s ; %w", gitVersion, err)
+	}
+	releaseChannel := fmt.Sprintf("stable-%d.%d", vers.Major, vers.Minor)
+	return releaseChannel, nil
 }
 
 func getCatalog() (string, error) {
