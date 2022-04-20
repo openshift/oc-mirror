@@ -120,11 +120,16 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 	case m.IsRegular():
 		// Layer ID is the file name, and no tag exists.
 		tag = defaultTag
-		if defaultTag != "" && len(id) > 13 {
+		if defaultTag != "" {
 			// If set, add a subset of the digest to randomize the
 			// tag in the event multiple digests are pulled for the same
-			// image
-			tag = defaultTag + id[7:13]
+			// image. The first 6 character from that hash will be used
+			// so checking that the hash value is long
+			partial, err := getPartialDigest(id)
+			if err != nil {
+				return nil, fmt.Errorf("error calculating partial digest for %s: %v", id, err)
+			}
+			tag = defaultTag + partial
 			manifestDir := filepath.Dir(manifestPath)
 			symlink := filepath.Join(manifestDir, tag)
 			if err := os.Symlink(info.Name(), symlink); err != nil {

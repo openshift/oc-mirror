@@ -4,21 +4,32 @@
 # run during end to end test
 declare -a TESTCASES
 TESTCASES[1]="full_catalog"
-TESTCASES[2]="headsonly_diff"
-TESTCASES[3]="pruned_catalogs"
-TESTCASES[4]="registry_backend"
-TESTCASES[5]="mirror_to_mirror"
-TESTCASES[6]="mirror_to_mirror_nostorage"
-TESTCASES[7]="custom_namespace"
-TESTCASES[8]="package_filtering"
-TESTCASES[9]="skip_deps"
-TESTCASES[10]="helm_local"
-TESTCASES[11]="no_updates_exist"
+TESTCASES[2]="full_catalog_with_digest"
+TESTCASES[3]="headsonly_diff"
+TESTCASES[4]="pruned_catalogs"
+TESTCASES[5]="registry_backend"
+TESTCASES[6]="mirror_to_mirror"
+TESTCASES[7]="mirror_to_mirror_nostorage"
+TESTCASES[8]="custom_namespace"
+TESTCASES[9]="package_filtering"
+TESTCASES[10]="skip_deps"
+TESTCASES[11]="helm_local"
+TESTCASES[12]="no_updates_exist"
 
 # Test full catalog mode.
 function full_catalog () {
     workflow_full imageset-config-full.yaml "test-catalog-latest" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+# Test full catalog mode with digest.
+function full_catalog_with_digest() {
+    workflow_full imageset-config-full-digest.yaml "test-catalog-latest" -c="--source-use-http"
+    TMPTAG=$(echo $CATALOGDIGEST | cut -d: -f 2)
+    TMPTAG=${TMPTAG:0:6}
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${TMPTAG}\
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }

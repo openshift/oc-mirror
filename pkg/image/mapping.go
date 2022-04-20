@@ -33,15 +33,20 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 // SetDefaults sets the default values for TypedImage fields
 func (t TypedImage) SetDefaults() TypedImage {
 	if len(t.Ref.Tag) == 0 {
-		if len(t.Ref.ID) > 13 {
-			t.Ref.Tag = t.Ref.ID[7:13]
-		} else {
+		partial, err := getPartialDigest(t.Ref.ID)
+		// If unable to get a partial digest
+		// Set the tag to latest
+		if err != nil {
 			t.Ref.Tag = "latest"
+		} else {
+			t.Ref.Tag = partial
 		}
 	}
 	return t
 }
 
+// TypedImageMapping is a mapping that contains a key,value pairs of
+// image sources and destinations.
 type TypedImageMapping map[TypedImage]TypedImage
 
 // ToRegistry will convert all mapping values to a registry destination
