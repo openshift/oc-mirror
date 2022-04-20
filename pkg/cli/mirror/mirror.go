@@ -35,6 +35,53 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+var (
+	mirrorlongDesc = templates.LongDesc(
+		` 
+		Create and publish user-configured mirrors with a declarative configuration input.
+		Accepts an argument defining the destination for the mirrored images using the prefix file:// for a local mirror packed into a 
+		tar archive or docker:// for images to be stream registry to registry without being stored locally. The default docker credentials are 
+		used for authenticating to the registries. The podman location for credentials is also supported as a secondary location.
+
+		When using file mirroring, the --from and --config flags control the location of the images to mirror. The --config flag accepts
+		an imageset configuration file and the --from flag accepts the location of the imageset on disk. The --from input can be passed as a 
+		file or directory, but must contain only one image sequence. The naming convention for an imageset is mirror_seq<sequence number>_<tar count>.tar.
+
+		The location of the workspace used defaults to oc-mirror-workspace in the current directory when publishing image content or using the  to 
+		mirror workflow. If using the file:// destination scheme, the oc-mirror-workspace directory will be located in the directory specified by the argument.
+		`,
+	)
+	mirrorExamples = templates.Examples(
+		`
+		# Mirror to a directory
+		oc-mirror --config mirror-config.yaml file://mirror
+
+		# Mirror to a directory without layer and image differential operations
+		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
+
+		# Mirror to mirror publish
+		oc-mirror --config mirror-config.yaml docker://localhost:5000
+
+		# Publish a previously created mirror archive
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
+
+		# Publish to a registry and add a top-level namespace
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
+
+		# Publish to a registry and add a top-level namespace
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
+
+		# Generate manifests for previously created mirror archive
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace --manifests-only
+
+		# Skip metadata check during imageset publishing. Example shown with --ignore-history creation
+		# as this the the required workflow with skip-metadata-check.
+		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
+		oc-mirror --from mirror_seq2_000000.tar docker://localhost:5000/namespace --skip-metadata-check
+		`,
+	)
+)
+
 func NewMirrorCmd() *cobra.Command {
 	o := MirrorOptions{}
 	o.RootOptions = &cli.RootOptions{
@@ -51,25 +98,13 @@ func NewMirrorCmd() *cobra.Command {
 	f := kcmdutil.NewFactory(matchVersionKubeConfigFlags)
 
 	cmd := &cobra.Command{
-		Use:   filepath.Base(os.Args[0]),
-		Short: "Manage mirrors per user configuration",
-		Long: templates.LongDesc(`
-			Create and publish user-configured mirrors with
-            a declarative configuration input.
-		`),
-		Example: templates.Examples(`
-			# Mirror to a directory
-			oc-mirror --config mirror-config.yaml file://mirror
-
-			# Mirror to mirror publish
-			oc-mirror --config mirror-config.yaml docker://localhost:5000
-
-			# Publish a previously created mirror archive
-			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
-
-			# Publish to a registry and add a top-level namespace
-			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
-		`),
+		Use: fmt.Sprintf(
+			"%s <destination type>:<destination location>",
+			filepath.Base(os.Args[0]),
+		),
+		Short:             "Manage mirrors per user configuration",
+		Long:              mirrorlongDesc,
+		Example:           mirrorExamples,
 		PersistentPreRun:  o.LogfilePreRun,
 		PersistentPostRun: o.LogfilePostRun,
 		Args:              cobra.MinimumNArgs(1),
@@ -479,7 +514,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	for srcRef := range images {
 		// All keys need to specify image with digest.
 		// Tagged images will need to be redownloaded to
-		// ensure their digests have not be updated.
+		// ensure their digests have not been updated.
 		if srcRef.Ref.ID == "" {
 			continue
 		}

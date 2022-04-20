@@ -31,7 +31,7 @@ func NewDescribeCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	o.RootOptions = ro
 
 	cmd := &cobra.Command{
-		Use:   "describe",
+		Use:   "describe <archive path>",
 		Short: "Pretty print the contents of mirror metadata",
 		Example: templates.Examples(`
 			# Output the contents of 'mirror_seq1_00000.tar'
