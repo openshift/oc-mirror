@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/version"
 )
 
@@ -164,7 +164,7 @@ func (o *InitOptions) Run() error {
 
 func getCatalog() (string, error) {
 	catalogBase := "registry.redhat.io/redhat/redhat-operator-index"
-	versionMap, err := list.GetVersionMap(catalogBase)
+	versionMap, err := image.GetTagsFromImage(catalogBase)
 	if err != nil {
 		return "", fmt.Errorf("unable to get version map for init: %w", err)
 	}

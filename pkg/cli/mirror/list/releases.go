@@ -9,9 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -19,6 +16,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 type ReleasesOptions struct {
@@ -159,17 +157,16 @@ func listChannelsForVersion(ctx context.Context, client cincinnati.Client, o *Re
 }
 
 func listOCPReleaseVersions(w io.Writer) error {
-
-	repo, err := name.NewRepository(OCPReleaseRepo)
-	if err != nil {
-		return err
-	}
-	versionTags, err := remote.List(repo, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	tags, err := image.GetTagsFromImage(OCPReleaseRepo)
 	if err != nil {
 		return err
 	}
 
-	versions := parseVersionTags(versionTags)
+	tagSlice := make([]string, 10)
+	for tag, _ := range tags {
+		tagSlice = append(tagSlice, tag)
+	}
+	versions := parseVersionTags(tagSlice)
 
 	fmt.Fprint(w, "Available OpenShift Container Platform release versions: \n")
 
