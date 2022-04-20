@@ -40,7 +40,7 @@ var (
 		` 
 		Create and publish user-configured mirrors with a declarative configuration input.
 		Accepts an argument defining the destination for the mirrored images using the prefix file:// for a local mirror packed into a 
-		tar archive or docker:// for images to be stream registry to registry without being stored locally. The default docker credentials are 
+		tar archive or docker:// for images to be streamed registry to registry without being stored locally. The default docker credentials are 
 		used for authenticating to the registries. The podman location for credentials is also supported as a secondary location.
 
 		When using file mirroring, the --from and --config flags control the location of the images to mirror. The --config flag accepts
@@ -75,7 +75,7 @@ var (
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace --manifests-only
 
 		# Skip metadata check during imageset publishing. Example shown with --ignore-history creation
-		# as this the the required workflow with skip-metadata-check.
+		# as this the required workflow with --skip-metadata-check.
 		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
 		oc-mirror --from mirror_seq2_000000.tar docker://localhost:5000/namespace --skip-metadata-check
 		`,
