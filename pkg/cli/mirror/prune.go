@@ -19,7 +19,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
-// pruneRegistry
+// pruneRegistry plans and executes registry pruning based on current and previous Associations.
 func (o *MirrorOptions) pruneRegistry(ctx context.Context, prev, curr image.AssociationSet) error {
 	deleter, toRemove, err := o.planImagePruning(ctx, curr, prev)
 	if err != nil {
@@ -139,6 +139,7 @@ type manifestDeleter struct {
 
 var _ imageprune.ManifestDeleter = &manifestDeleter{}
 
+// NewManifestDeleter create a new implementation of the ManifestDeleter interface
 func NewManifestDeleter(ctx context.Context, w, errOut io.Writer, registry string, insecure bool) imageprune.ManifestDeleter {
 	getNameOpts(insecure)
 	return &manifestDeleter{
@@ -150,6 +151,7 @@ func NewManifestDeleter(ctx context.Context, w, errOut io.Writer, registry strin
 	}
 }
 
+// DeleteManifest deletes manifest from a repository.
 func (p *manifestDeleter) DeleteManifest(repo, manifest string) error {
 	var terr *transport.Error
 	fmt.Fprintf(p.w, "Deleting manifest %s from repo %s\n", manifest, repo)
