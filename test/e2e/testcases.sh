@@ -7,14 +7,15 @@ TESTCASES[1]="full_catalog"
 TESTCASES[2]="full_catalog_with_digest"
 TESTCASES[3]="headsonly_diff"
 TESTCASES[4]="pruned_catalogs"
-TESTCASES[5]="registry_backend"
-TESTCASES[6]="mirror_to_mirror"
-TESTCASES[7]="mirror_to_mirror_nostorage"
-TESTCASES[8]="custom_namespace"
-TESTCASES[9]="package_filtering"
-TESTCASES[10]="skip_deps"
-TESTCASES[11]="helm_local"
-TESTCASES[12]="no_updates_exist"
+TESTCASES[5]="pruned_catalog_with_target"
+TESTCASES[6]="registry_backend"
+TESTCASES[7]="mirror_to_mirror"
+TESTCASES[8]="mirror_to_mirror_nostorage"
+TESTCASES[9]="custom_namespace"
+TESTCASES[10]="package_filtering"
+TESTCASES[11]="skip_deps"
+TESTCASES[12]="helm_local"
+TESTCASES[13]="no_updates_exist"
 
 # Test full catalog mode.
 function full_catalog () {
@@ -62,6 +63,22 @@ function pruned_catalogs() {
     check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 }
 
+# Test heads-only mode with catalogs that prune with a custom target
+# name set
+function pruned_catalogs_with_target() {
+    workflow_full imageset-config-headsonly-newtarget.yaml "test-catalog-prune" --diff -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
+    "bar.v0.1.0 foo.v0.1.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+
+    workflow_diff imageset-config-headsonly-newtarget.yaml "test-catalog-prune-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
+    "bar.v0.1.0 foo.v0.2.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+}
+
 # Test heads-only mode with catalogs that prune bundles
 function pruned_catalogs_mirror_to_mirror() {
     workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune" -c="--source-use-http"
@@ -76,7 +93,6 @@ function pruned_catalogs_mirror_to_mirror() {
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
     check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 }
-
 
 # Test registry backend
 function registry_backend () {
