@@ -2,24 +2,17 @@ package image
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/fs"
-	"io/ioutil"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/docker/distribution/manifest"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/internal/testutils"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 func TestAssociateLocalImageLayers(t *testing.T) {
@@ -257,7 +250,7 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tmpdir := t.TempDir()
-			require.NoError(t, copyV2("testdata", tmpdir))
+			require.NoError(t, testutils.LocalMirrorFromFiles("testdata", tmpdir))
 			asSet, err := AssociateLocalImageLayers(tmpdir, test.imgMapping)
 			if !test.wantErr {
 				require.NoError(t, err)
@@ -271,7 +264,7 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 
 func TestAssociateRemoteImageLayers(t *testing.T) {
 
-	server := httptest.NewServer(mirrorV2("testdata"))
+	server := httptest.NewServer(testutils.RegistryFromFiles("testdata"))
 	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
@@ -548,62 +541,4 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			}
 		})
 	}
-}
-
-func mirrorV2(v2Dir string) http.HandlerFunc {
-	dir := http.Dir(v2Dir)
-	fileHandler := http.FileServer(dir)
-	handler := func(w http.ResponseWriter, req *http.Request) {
-		if req.Method == "GET" && req.URL.Path == "/v2/" {
-			w.Header().Set("Docker-Distribution-API-Version", "2.0")
-		}
-		if req.Method == "GET" {
-			switch path.Base(path.Dir(req.URL.Path)) {
-			case "blobs":
-				w.Header().Set("Content-Type", "application/octet-stream")
-			case "manifests":
-				if f, err := dir.Open(req.URL.Path); err == nil {
-					defer f.Close()
-					if data, err := ioutil.ReadAll(f); err == nil {
-						var versioned manifest.Versioned
-						if err = json.Unmarshal(data, &versioned); err == nil {
-							w.Header().Set("Content-Type", versioned.MediaType)
-						}
-					}
-				}
-			}
-		}
-		fileHandler.ServeHTTP(w, req)
-	}
-	return http.HandlerFunc(handler)
-}
-
-func copyV2(source, destination string) error {
-	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		relPath := strings.Replace(path, source, "", 1)
-		if relPath == "" {
-			return nil
-		}
-		switch m := info.Mode(); {
-		case m&fs.ModeSymlink != 0: // Tag is the file name, so follow the symlink to the layer ID-named file.
-			dst, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			id := filepath.Base(dst)
-			if err := os.Symlink(id, filepath.Join(destination, relPath)); err != nil {
-				return err
-			}
-		case m.IsDir():
-			return os.Mkdir(filepath.Join(destination, relPath), 0755)
-		default:
-			data, err := ioutil.ReadFile(filepath.Join(source, relPath))
-			if err != nil {
-				return err
-			}
-			return ioutil.WriteFile(filepath.Join(destination, relPath), data, 0777)
-		}
-		return nil
-	})
-	return err
 }

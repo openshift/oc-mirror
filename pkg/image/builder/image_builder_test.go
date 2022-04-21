@@ -2,21 +2,19 @@ package builder
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/internal/testutils"
 )
 
 func TestCreateLayout(t *testing.T) {
@@ -39,14 +37,16 @@ func TestCreateLayout(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			tmpdir := t.TempDir()
+			server := httptest.NewServer(registry.New())
+			t.Cleanup(server.Close)
 
-			targetRef := prepareImage(t, tmpdir)
+			targetRef, err := testutils.WriteTestImage(server, tmpdir)
+			require.NoError(t, err)
 
 			builder := &ImageBuilder{
 				NameOpts: []name.Option{name.Insecure},
 			}
 
-			var err error
 			var lp layout.Path
 			if test.existingImage {
 				lp, err = builder.CreateLayout(targetRef, t.TempDir())
@@ -88,8 +88,11 @@ func TestRun(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			tmpdir := t.TempDir()
+			server := httptest.NewServer(registry.New())
+			t.Cleanup(server.Close)
 
-			targetRef := prepareImage(t, tmpdir)
+			targetRef, err := testutils.WriteTestImage(server, tmpdir)
+			require.NoError(t, err)
 
 			d1 := []byte("hello\ngo\n")
 			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
@@ -189,26 +192,4 @@ func TestLayoutFromPath(t *testing.T) {
 			}
 		})
 	}
-}
-
-func prepareImage(t *testing.T, dir string) string {
-	server := httptest.NewServer(registry.New())
-	t.Cleanup(server.Close)
-	u, err := url.Parse(server.URL)
-	require.NoError(t, err)
-	c := map[string][]byte{
-		"/testfile": []byte("test contents contents"),
-	}
-	targetRef := fmt.Sprintf("%s/bar:foo", u.Host)
-	tag, err := name.NewTag(targetRef)
-	require.NoError(t, err)
-	i, _ := crane.Image(c)
-	require.NoError(t, crane.Push(i, tag.String()))
-	lp, err := layout.Write(dir, empty.Index)
-	require.NoError(t, err)
-	require.NoError(t, lp.AppendImage(i))
-	idx, err := lp.ImageIndex()
-	require.NoError(t, err)
-	require.NoError(t, remote.WriteIndex(tag, idx))
-	return targetRef
 }
