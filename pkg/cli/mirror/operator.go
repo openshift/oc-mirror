@@ -107,13 +107,22 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
 
+		targetName, err := ctlg.GetUniqueName()
+		if err != nil {
+			return nil, err
+		}
+		targetCtlg, err := imagesource.ParseReference(targetName)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing catalog: %v", err)
+		}
+
 		// Render the catalog to mirror into a declarative config.
 		dc, err := renderDC(ctx, reg, ctlg)
 		if err != nil {
 			return nil, err
 		}
 
-		mappings, err := o.plan(ctx, dc, ctlgRef)
+		mappings, err := o.plan(ctx, dc, ctlgRef, targetCtlg)
 		if err != nil {
 			return nil, err
 		}
@@ -299,7 +308,7 @@ func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.Declarativ
 	}
 }
 
-func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef imagesource.TypedImageReference) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -318,7 +327,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		}
 	}
 
-	indexDir, err := o.writeDC(dc, ctlgRef.Ref)
+	indexDir, err := o.writeDC(dc, ctlgRef.Ref, targetCtlg.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +375,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, err
 	}
 	mappings.Remove(ctlgImg)
-	if err := o.writeLayout(ctx, ctlgRef.Ref); err != nil {
+	if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
 		return nil, err
 	}
 
@@ -470,11 +479,11 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef imgreference.DockerImageReference) error {
+func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg imgreference.DockerImageReference) error {
 
 	// Write catalog OCI layout file to src so it is included in the archive
 	// at a path unique to the image.
-	ctlgDir, err := operator.GenerateCatalogDir(ctlgRef)
+	ctlgDir, err := operator.GenerateCatalogDir(targetCtlg)
 	if err != nil {
 		return err
 	}
@@ -521,11 +530,11 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef imgreference.
 	return nil
 }
 
-func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef imgreference.DockerImageReference) (string, error) {
+func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef, targetCtlg imgreference.DockerImageReference) (string, error) {
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
-	ctlgDir, err := operator.GenerateCatalogDir(ctlgRef)
+	ctlgDir, err := operator.GenerateCatalogDir(targetCtlg)
 	if err != nil {
 		return "", err
 	}
