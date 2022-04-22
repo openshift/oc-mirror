@@ -15,25 +15,26 @@ import (
 
 type MirrorOptions struct {
 	*cli.RootOptions
-	OutputDir        string
-	ConfigPath       string
-	SkipImagePin     bool
-	ManifestsOnly    bool
-	From             string
-	ToMirror         string
-	UserNamespace    string
-	DryRun           bool
-	SourceSkipTLS    bool
-	DestSkipTLS      bool
-	SourcePlainHTTP  bool
-	DestPlainHTTP    bool
-	SkipVerification bool
-	SkipCleanup      bool
-	SkipMissing      bool
-	ContinueOnError  bool
-	IgnoreHistory    bool
-	FilterOptions    []string
-	MaxPerRegistry   int
+	OutputDir         string
+	ConfigPath        string
+	SkipImagePin      bool
+	ManifestsOnly     bool
+	From              string
+	ToMirror          string
+	UserNamespace     string
+	DryRun            bool
+	SourceSkipTLS     bool
+	DestSkipTLS       bool
+	SourcePlainHTTP   bool
+	DestPlainHTTP     bool
+	SkipVerification  bool
+	SkipCleanup       bool
+	SkipMissing       bool
+	SkipMetadataCheck bool
+	ContinueOnError   bool
+	IgnoreHistory     bool
+	FilterOptions     []string
+	MaxPerRegistry    int
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
 	once             sync.Once
@@ -51,10 +52,15 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Disable TLS validation for destination registry")
 	fs.BoolVar(&o.SourcePlainHTTP, "source-use-http", o.SourcePlainHTTP, "Use plain HTTP for source registry")
 	fs.BoolVar(&o.DestPlainHTTP, "dest-use-http", o.DestPlainHTTP, "Use plain HTTP for destination registry")
-	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip digest verification")
+	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip verifying the integrity of the retrieved content."+
+		"This is not recommended, but may be necessary when importing images from older image registries."+
+		"Only bypass verification if the registry is known to be trustworthy.")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
-	fs.BoolVar(&o.IgnoreHistory, "ignore-history", o.IgnoreHistory, "Ignores past mirrors when downloading images and packing layers")
-	fs.StringSliceVar(&o.FilterOptions, "filter-by-os", o.FilterOptions, "A regular expression to control which release image is picked when multiple variants are available")
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+		"picked when multiple variants are available")
+	fs.BoolVar(&o.IgnoreHistory, "ignore-history", o.IgnoreHistory, "Ignore past mirrors when downloading images and packing layers")
+	fs.BoolVar(&o.SkipMetadataCheck, "skip-metadata-check", o.SkipMetadataCheck, "Skip metadata when publishing an imageset."+
+		"This is only recommended when the imageset was created --ignore-history")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
 		"and attempt to mirror as much as possible")
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
@@ -64,8 +70,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 
 	// TODO(jpower432): Make this flag visible again once release architecture selection
 	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-by-os"); err != nil {
-		klog.Error(err.Error())
+	if err := fs.MarkHidden("filter-options"); err != nil {
+		klog.Panic(err.Error())
 	}
 }
 

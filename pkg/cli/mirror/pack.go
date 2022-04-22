@@ -39,10 +39,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, prevAssocs, currAssocs image.A
 	if err != nil {
 		return nil, err
 	}
-	cfg := v1alpha2.StorageConfig{
-		Local: &v1alpha2.LocalConfig{Path: tmpdir},
-	}
-	tmpBackend, err := storage.ByConfig(tmpdir, cfg)
+	tmpBackend, err := storage.NewLocalBackend(tmpdir)
 	if err != nil {
 		return nil, err
 	}

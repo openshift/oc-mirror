@@ -2,7 +2,10 @@ package cli
 
 import (
 	"flag"
+	"io"
 	"io/ioutil"
+	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -33,7 +36,15 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	var fsv2 flag.FlagSet
 	klog.InitFlags(&fsv2)
 	checkErr(fsv2.Set("stderrthreshold", "4"))
-	klog.SetOutput(ioutil.Discard)
+
+	f, err := os.OpenFile("oc-mirror.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+	wrt := io.MultiWriter(ioutil.Discard, f)
+
+	klog.SetOutput(wrt)
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {

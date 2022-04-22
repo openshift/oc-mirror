@@ -17,7 +17,7 @@ import (
 
 func TestGetUpdates(t *testing.T) {
 	arch := "test-arch"
-	channelName := "test-channel"
+	channelName := "stable-4.0"
 	tests := []struct {
 		name    string
 		version string
@@ -32,7 +32,7 @@ func TestGetUpdates(t *testing.T) {
 		name:          "Valid/DirectUpdate",
 		version:       "4.0.0-4",
 		reqVer:        "4.0.0-5",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 		requested:     Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		available: []Update{
@@ -42,16 +42,15 @@ func TestGetUpdates(t *testing.T) {
 	}, {
 		name:          "Valid/FullChannel",
 		version:       "4.0.0-4",
-		reqVer:        "4.0.0-0.3",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
+		reqVer:        "4.0.0-8",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
-		requested:     Update{Version: semver.MustParse("4.0.0-0.3"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"},
+		requested:     Update{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
 		available: []Update{
 			{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-			{Version: semver.MustParse("4.0.0-6+2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"},
-			{Version: semver.MustParse("4.0.0-0.2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"},
-			{Version: semver.MustParse("4.0.0-0.3"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"},
+			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
 		},
 	}, {
 		name:          "Valid/NoUpdates",
@@ -59,27 +58,27 @@ func TestGetUpdates(t *testing.T) {
 		reqVer:        "4.0.0-0.okd-0",
 		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 		requested:     Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		available:     nil,
 	}, {
 		name:          "Invalid/UnknownCurrentVersion",
 		version:       "4.0.0-3",
 		reqVer:        "0.0.0",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-3",
-		err:           "VersionNotFound: current version 4.0.0-3 not found in the \"test-channel\" channel",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-3",
+		err:           "VersionNotFound: current version 4.0.0-3 not found in the \"stable-4.0\" channel",
 	}, {
 		name:          "Invalid/UnknownRequestedVersion",
 		version:       "4.0.0-5",
-		reqVer:        "4.0.0-7",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
-		err:           "VersionNotFound: requested version 4.0.0-7 not found in the \"test-channel\" channel",
+		reqVer:        "4.0.0-9",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-5",
+		err:           "VersionNotFound: requested version 4.0.0-9 not found in the \"stable-4.0\" channel",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := getHandler(t, requestQuery)
+			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
@@ -115,7 +114,7 @@ func TestGetUpdates(t *testing.T) {
 
 func TestGetMinorMax(t *testing.T) {
 	arch := "test-arch"
-	channelName := "test-channel"
+	channelName := "stable-4.0"
 	tests := []struct {
 		name string
 
@@ -125,12 +124,12 @@ func TestGetMinorMax(t *testing.T) {
 		err           string
 	}{{
 		name:          "Valid/MaxChannel",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		version:       semver.MustParse("4.0.0-6+2"),
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+		version:       semver.MustParse("4.0.0-8"),
 	}, {
 		name:          "Valid/MinChannel",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		version:       semver.MustParse("4.0.0-0.2"),
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+		version:       semver.MustParse("4.0.0-0.okd-0"),
 		min:           true,
 	}}
 	for _, test := range tests {
@@ -138,7 +137,7 @@ func TestGetMinorMax(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := getHandler(t, requestQuery)
+			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
@@ -172,24 +171,35 @@ func TestGetMinorMax(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
-	channelName := "test-channel"
 	tests := []struct {
-		name string
-
+		name          string
+		channel       string
+		arch          string
 		expectedQuery string
 		versions      []semver.Version
 		err           string
-	}{{
-		name:          "Valid/OneChannel",
-		expectedQuery: "channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
-		versions:      getSemVers([]string{"4.0.0-0.2", "4.0.0-0.3", "4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-6+2"}),
-	}}
+	}{
+		{
+			name:          "Valid/OneChannel",
+			channel:       "stable-4.0",
+			arch:          "test-arch",
+			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			versions:      getSemVers([]string{"4.0.0-0.okd-0", "4.0.0-4", "4.0.0-5", "4.0.0-6", "4.0.0-7", "4.0.0-8"}),
+		},
+		{
+			name:          "Invalid/EmptyChannel",
+			channel:       "empty-4.0",
+			arch:          "test-arch",
+			expectedQuery: "arch=test-arch&channel=empty-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			err:           "NoVersionsFound: no cluster versions found in the \"empty-4.0\" channel",
+		},
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := getHandler(t, requestQuery)
+			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
@@ -198,7 +208,7 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			versions, err := GetVersions(context.Background(), c, channelName)
+			versions, err := GetVersions(context.Background(), c, test.arch, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.versions, versions)
@@ -224,7 +234,7 @@ func TestGetVersions(t *testing.T) {
 
 func TestGetUpdatesInRange(t *testing.T) {
 	arch := "test-arch"
-	channelName := "test-channel"
+	channelName := "stable-4.0"
 	tests := []struct {
 		name string
 
@@ -234,11 +244,12 @@ func TestGetUpdatesInRange(t *testing.T) {
 		err           string
 	}{{
 		name:          "Valid/OneChannel",
-		expectedQuery: "arch=test-arch&channel=test-channel&id=01234567-0123-0123-0123-0123456789ab",
+		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
 		versions: []Update{
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-			{Version: semver.MustParse("4.0.0-6+2"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"},
+			{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
+			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
 		},
 		releaseRange: semver.MustParseRange(">=4.0.0-5"),
 	}}
@@ -247,7 +258,7 @@ func TestGetUpdatesInRange(t *testing.T) {
 			requestQuery := make(chan string, 1)
 			defer close(requestQuery)
 
-			handler := getHandler(t, requestQuery)
+			handler := getHandlerMulti(t, requestQuery)
 
 			ts := httptest.NewServer(http.HandlerFunc(handler))
 			t.Cleanup(ts.Close)
@@ -284,84 +295,93 @@ func TestCalculateUpgrades(t *testing.T) {
 	arch := "test-arch"
 
 	tests := []struct {
-		name          string
-		sourceChannel string
-		targetChannel string
-		last          semver.Version
-		req           semver.Version
-		current       Update
-		requested     Update
-		needed        []Update
-		err           string
+		name            string
+		sourceChannel   string
+		targetChannel   string
+		curr            semver.Version
+		req             semver.Version
+		currentUpdate   Update
+		requestedUpdate Update
+		neededUpdates   []Update
+		err             string
 	}{{
-		name:          "Success/OneChannel",
-		sourceChannel: "stable-4.0",
-		targetChannel: "stable-4.1",
-		last:          semver.MustParse("4.0.0-5"),
-		req:           semver.MustParse("4.1.0-6"),
-		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		requested:     Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
-		needed: []Update{
+		name:            "Success/OneChannel",
+		sourceChannel:   "stable-4.0",
+		targetChannel:   "stable-4.1",
+		curr:            semver.MustParse("4.0.0-5"),
+		req:             semver.MustParse("4.1.0-6"),
+		currentUpdate:   Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+		requestedUpdate: Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		neededUpdates: []Update{
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		},
 	}, {
-		name:          "Success/TwoChannels",
-		sourceChannel: "stable-4.0",
-		targetChannel: "stable-4.2",
-		last:          semver.MustParse("4.0.0-5"),
-		req:           semver.MustParse("4.2.0-3"),
-		current:       Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		requested:     Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
-		needed: []Update{
+		name:            "Success/TwoChannels",
+		sourceChannel:   "stable-4.0",
+		targetChannel:   "stable-4.2",
+		curr:            semver.MustParse("4.0.0-5"),
+		req:             semver.MustParse("4.2.0-3"),
+		currentUpdate:   Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+		requestedUpdate: Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+		neededUpdates: []Update{
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 		},
 	}, {
-		name:          "Success/TwoChannelsDifferentPrefix",
-		sourceChannel: "stable-4.3",
-		targetChannel: "fast-4.3",
-		last:          semver.MustParse("4.3.0"),
-		req:           semver.MustParse("4.3.1"),
-		current:       Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		requested:     Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
-		needed: []Update{
+		name:            "Success/TwoChannelsDifferentPrefix",
+		sourceChannel:   "stable-4.3",
+		targetChannel:   "fast-4.3",
+		curr:            semver.MustParse("4.3.0"),
+		req:             semver.MustParse("4.3.1"),
+		currentUpdate:   Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		requestedUpdate: Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		neededUpdates: []Update{
 			{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
 			{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
 		},
 	}, {
-		name:          "SuccessWithWarning/NoUpgradePath",
-		sourceChannel: "stable-4.1",
-		targetChannel: "stable-4.2",
-		last:          semver.MustParse("4.1.0-6"),
-		req:           semver.MustParse("4.2.0-2"),
-		current:       Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
-		requested:     Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
-		needed: []Update{
+		name:            "SuccessWithWarning/NoUpgradePath",
+		sourceChannel:   "stable-4.1",
+		targetChannel:   "stable-4.2",
+		curr:            semver.MustParse("4.1.0-6"),
+		req:             semver.MustParse("4.2.0-2"),
+		currentUpdate:   Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		requestedUpdate: Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
+		neededUpdates: []Update{
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		},
 	}, {
-		name:          "SuccessWithWarning/BlockedEdge",
-		sourceChannel: "stable-4.2",
-		targetChannel: "stable-4.3",
-		last:          semver.MustParse("4.2.0-3"),
-		req:           semver.MustParse("4.3.0"),
-		current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
-		requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		needed: []Update{
+		name:            "SuccessWithWarning/BlockedEdge",
+		sourceChannel:   "stable-4.2",
+		targetChannel:   "stable-4.3",
+		curr:            semver.MustParse("4.2.0-3"),
+		req:             semver.MustParse("4.3.0"),
+		currentUpdate:   Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+		requestedUpdate: Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		neededUpdates: []Update{
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 			{Version: semver.MustParse("4.2.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-5"},
 		},
 	}, {
-		name:          "Failure/InvalidVersion",
+		name:          "Failure/InvalidLastVersion",
 		sourceChannel: "stable-4.2",
 		targetChannel: "stable-4.3",
-		last:          semver.MustParse("4.2.0-9"),
+		curr:          semver.MustParse("4.2.0-9"),
 		req:           semver.MustParse("4.3.4"),
 		err:           "channel \"stable-4.2\": VersionNotFound: current version 4.2.0-9 not found in the \"stable-4.2\" channel",
+	}, {
+		name:          "Failure/InvalidRequestedVersion",
+		sourceChannel: "stable-4.2",
+		targetChannel: "stable-4.3",
+		curr:          semver.MustParse("4.2.0-3"),
+		req:           semver.MustParse("4.3.5"),
+		err:           "VersionNotFound: current version 4.3.5 not found in the \"stable-4.3\" channel",
 	}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -376,13 +396,13 @@ func TestCalculateUpgrades(t *testing.T) {
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			cur, req, updates, err := CalculateUpgrades(context.Background(), &mockClient{url: endpoint}, arch, test.sourceChannel, test.targetChannel, test.last, test.req)
+			cur, req, updates, err := CalculateUpgrades(context.Background(), &mockClient{url: endpoint}, arch, test.sourceChannel, test.targetChannel, test.curr, test.req)
 
 			if test.err == "" {
 				require.NoError(t, err)
-				require.Equal(t, test.current, cur)
-				require.Equal(t, test.requested, req)
-				require.Equal(t, test.needed, updates)
+				require.Equal(t, test.currentUpdate, cur)
+				require.Equal(t, test.requestedUpdate, req)
+				require.Equal(t, test.neededUpdates, updates)
 			} else {
 				require.EqualError(t, err, test.err)
 			}
@@ -606,66 +626,7 @@ func getSemVers(stringVers []string) (vers []semver.Version) {
 	return vers
 }
 
-func getHandler(t *testing.T, requestQuery chan<- string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case requestQuery <- r.URL.RawQuery:
-		default:
-			t.Fatalf("received multiple requests at upstream URL")
-		}
-
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		mtype := r.Header.Get("Accept")
-		if mtype != GraphMediaType {
-			w.WriteHeader(http.StatusUnsupportedMediaType)
-			return
-		}
-
-		_, err := w.Write([]byte(`{
-			"nodes": [
-			  {
-				"version": "4.0.0-4",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-4"
-			  },
-			  {
-				"version": "4.0.0-5",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-5"
-			  },
-			  {
-				"version": "4.0.0-6",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6"
-			  },
-			  {
-				"version": "4.0.0-6+2",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-6+2"
-			  },
-			  {
-				"version": "4.0.0-0.okd-0",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
-			  },
-			  {
-				"version": "4.0.0-0.2",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
-			  },
-			  {
-				"version": "4.0.0-0.3",
-				"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
-			  }
-			],
-			"edges": [[0,1],[1,2],[2,3],[1,3],[3,5],[5,6]]
-		  }`))
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			t.Fatal(err)
-			return
-		}
-	}
-}
-
+// getHanlderMulti mocks a multi channel Cincinnati API
 func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -693,6 +654,16 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 		ch := keys[len(keys)-1]
 
 		switch {
+		case ch == "empty-4.0":
+			_, err := w.Write([]byte(`{
+				"nodes": [],
+				"edges": []
+			  }`))
+			if err != nil {
+				t.Fatal(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		case ch == "stable-4.0":
 			_, err := w.Write([]byte(`{
 				"nodes": [
@@ -713,15 +684,15 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8"
 				  }
 				],
-				"edges": [[0,1],[1,2],[4,5]]
+				"edges": [[0,1],[1,2],[2,4],[2,5],[4,5]]
 			  }`))
 			if err != nil {
 				t.Fatal(err)
@@ -748,19 +719,19 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"
 				  },
 				  {
-					"version": "4.0.0-0.2",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.2"
+					"version": "4.0.0-7",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-7"
 				  },
 				  {
-					"version": "4.0.0-0.3",
-					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.3"
+					"version": "4.0.0-8",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-8"
 				  },
 				  {
 					"version": "4.1.0-6",
 					"payload": "quay.io/openshift-release-dev/ocp-release:4.1.0-6"
 				  }
 				],
-				"edges": [[0,1],[1,2],[2,6],[4,5]]
+				"edges": [[0,1],[1,2],[2,4],[2,5],[4,5],[5,6]]
 			  }`))
 			if err != nil {
 				t.Fatal(err)

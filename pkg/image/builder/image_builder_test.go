@@ -209,6 +209,6 @@ func prepareImage(t *testing.T, dir string) string {
 	require.NoError(t, lp.AppendImage(i))
 	idx, err := lp.ImageIndex()
 	require.NoError(t, err)
-	remote.WriteIndex(tag, idx)
+	require.NoError(t, remote.WriteIndex(tag, idx))
 	return targetRef
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// Client is a Cincinnati client which can be used to fetch update graphs from
+// an upstream Cincinnati stack.
 type Client interface {
 	GetURL() *url.URL
 	SetQueryParams(arch, channel, version string)
@@ -26,7 +28,7 @@ type ocpClient struct {
 
 // NewOCPClient creates a new OCP Cincinnati client with the given client identifier.
 func NewOCPClient(id uuid.UUID) (Client, error) {
-	upstream, err := url.Parse(UpdateUrl)
+	upstream, err := url.Parse(UpdateURL)
 	if err != nil {
 		return &ocpClient{}, err
 	}

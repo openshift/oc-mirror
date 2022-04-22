@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -133,4 +134,11 @@ func prepFiles(root string, paths []string, files []string) error {
 		}
 	}
 	return nil
+}
+
+func TestReadMetadataFromFile(t *testing.T) {
+	path := filepath.Join("testdata", "artifacts", "testbundle_seq2.tar")
+	meta, err := ReadMetadataFromFile(context.TODO(), path)
+	require.NoError(t, err)
+	require.Equal(t, meta.PastMirror.Sequence, 2)
 }
