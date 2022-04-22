@@ -2,7 +2,7 @@
 
 # oc-mirror Design Overview
 ===
-- [oc-mirror Design Overview](#oc-mirror-design-overview)
+- [# oc-mirror Design Overview](#-oc-mirror-design-overview)
   - [Summary](#summary)
   - [Features](#features)
   - [Design Considerations](#design-considerations)
@@ -95,6 +95,9 @@ During the “publish diff” phase for differential updates:
 ## Imageset Configuration
 
 The imageset configuration is intended to reflect the current state of the registry mirroring. Any content types or images that are added to the 
-configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is 
-done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will stop the pruning attempt and continue. If you using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges. More information on `oc-mirror` workflows can be found [here](workflows.md).
+configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will log the pruning attempt and continue. If you are using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges. 
+
+More information on  the `oc-mirror` imageset configuration can be found [here](imageset-configuration.md).
+
+More information on `oc-mirror` workflows can be found [here](workflows.md).
 
