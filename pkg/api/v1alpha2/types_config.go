@@ -109,7 +109,7 @@ type Operator struct {
 	Full bool `json:"full,omitempty"`
 	// SkipDependencies will not include dependencies
 	// of bundles included in the diff if true.
-	SkipDependencies bool `json:"skipDeps,omitempty"`
+	SkipDependencies bool `json:"skipDependencies,omitempty"`
 }
 
 // GetUniqueName determines the catalog name that will
@@ -146,7 +146,7 @@ func (o Operator) IsHeadsOnly() bool {
 // and image mirroring
 type Helm struct {
 	// Repositories are the Helm repositories containing the charts
-	Repositories []Repository `json:"repos,omitempty"`
+	Repositories []Repository `json:"repositories,omitempty"`
 	// Local is the configuration for locally stored helm charts
 	Local []Chart `json:"local,omitempty"`
 }
@@ -175,7 +175,7 @@ type Chart struct {
 	Path string `json:"path,omitempty"`
 	// ImagePaths are custom JSON paths for images location
 	// in the helm manifest or templates
-	ImagePaths []string `json:"imagepaths,omitempty"`
+	ImagePaths []string `json:"imagePaths,omitempty"`
 }
 
 // Image contains image pull information.

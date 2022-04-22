@@ -34,7 +34,7 @@ mirror:
     local:
       - name: podinfo
         path: /test/podinfo-5.0.0.tar.gz
-    repos:
+    repositories:
       - name: podinfo
         url: https://stefanprodan.github.io/podinfo
         charts:
