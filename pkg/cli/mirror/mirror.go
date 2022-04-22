@@ -268,7 +268,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
 
@@ -366,7 +366,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
 		meta, mapping, err = o.Create(cmd.Context(), cfg)
@@ -565,7 +565,13 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
-		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
+		// TODO(jpower432): Optmize this search
+		//
+		blocked, err := isBlocked(cfg.Mirror.BlockedImages, srcRef.Ref)
+		if err != nil {
+			return err
+		}
+		if blocked {
 			logrus.Warnf("skipping blocked image %s", srcRef.String())
 			// Remove to make sure this does end up in the metadata
 			images.Remove(srcRef)
