@@ -27,7 +27,7 @@ GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="1" \
 GO_BUILD_FLAGS :=-tags 'json1'
 GO_BUILD_BINDIR :=./bin
 
-all: clean tidy test-unit build
+all: tidy test-unit build
 .PHONY: all
 
 cross-build-linux-amd64:
