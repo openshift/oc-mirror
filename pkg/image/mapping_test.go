@@ -280,6 +280,102 @@ func TestReadImageMapping(t *testing.T) {
 	}
 }
 
+func TestSetDefaults(t *testing.T) {
+	tests := []struct {
+		name     string
+		mapping  TypedImage
+		expected TypedImage
+	}{
+		{
+			name: "Valid/NoChanges",
+			mapping: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+			expected: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+		},
+		{
+			name: "Valid/SetLatest",
+			mapping: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+			expected: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+		},
+		{
+			name: "Valid/SetWithPartialDigest",
+			mapping: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fdb393d8227cbe9756537d3f215a3098ae797bd4bde422aaa10ebde84a940877",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+			expected: TypedImage{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "fdb393",
+						ID:        "sha256:fdb393d8227cbe9756537d3f215a3098ae797bd4bde422aaa10ebde84a940877",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := test.mapping.SetDefaults()
+			require.Equal(t, test.expected, actual)
+		})
+	}
+}
+
 func TestToRegistry(t *testing.T) {
 	toMirror := "test.registry"
 	inputMapping := TypedImageMapping{

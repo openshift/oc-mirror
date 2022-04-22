@@ -123,8 +123,12 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 		if defaultTag != "" {
 			// If set, add a subset of the digest to randomize the
 			// tag in the event multiple digests are pulled for the same
-			// image
-			tag = defaultTag + id[7:13]
+			// image.
+			partial, err := getPartialDigest(id)
+			if err != nil {
+				return nil, fmt.Errorf("error calculating partial digest for %s: %v", id, err)
+			}
+			tag = defaultTag + partial
 			manifestDir := filepath.Dir(manifestPath)
 			symlink := filepath.Join(manifestDir, tag)
 			if err := os.Symlink(info.Name(), symlink); err != nil {

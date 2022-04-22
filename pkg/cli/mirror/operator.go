@@ -106,7 +106,6 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		if err != nil {
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
-		ctlgRef.Ref = ctlgRef.Ref.DockerClientDefaults()
 
 		// Render the catalog to mirror into a declarative config.
 		dc, err := renderDC(ctx, reg, ctlg)
@@ -362,9 +361,9 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 	// Remove the catalog image from mappings we are going to transfer this
 	// using an OCI layout.
-	ctlgImg := image.TypedImage{
-		TypedImageReference: ctlgRef,
-		Category:            v1alpha2.TypeOperatorBundle,
+	ctlgImg, err := image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
+	if err != nil {
+		return nil, err
 	}
 	mappings.Remove(ctlgImg)
 	if err := o.writeLayout(ctx, ctlgRef.Ref); err != nil {
