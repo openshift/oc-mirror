@@ -104,7 +104,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 		mmappings.Merge(mappings)
 
 		if cfg.Mirror.Platform.Graph {
-			logrus.Info("Adding graph data")
+			klog.Info("Adding graph data")
 			// Always add the graph base image to the metadata if needed,
 			// to ensure it does not get pruned before use.
 			cfg.Mirror.AdditionalImages = append(cfg.Mirror.AdditionalImages, v1alpha2.Image{Name: graphBaseImage})

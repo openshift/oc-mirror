@@ -190,7 +190,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 	for _, catalog := range catalogs {
 		versions, err := getVersionMap(catalog)
 		if err != nil {
-			logrus.Error("Failed to get catalog version details: ", err)
+			klog.Error("Failed to get catalog version details: ", err)
 			continue
 		}
 

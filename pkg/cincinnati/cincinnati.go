@@ -190,7 +190,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		if isBlocked {
 			// If blocked path is found, just return the requested version and any accumulated
 			// upgrades to the caller
-			logrus.Warnf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+			klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 			return GetUpdates(ctx, c, arch, targetChannel, reqVer, reqVer)
 		}
 		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)

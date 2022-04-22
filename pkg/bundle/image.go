@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"

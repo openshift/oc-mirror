@@ -286,7 +286,7 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 // WriteCatalogSource will generate a CatalogSource object and write it to disk
 func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 	if len(mapping) == 0 {
-		logrus.Debug("No catalogs found in mapping")
+		klog.V(4).Info("No catalogs found in mapping")
 		return nil
 	}
 
@@ -313,6 +313,6 @@ func WriteUpdateService(release, graph image.TypedImage, dir string) error {
 	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
 		return fmt.Errorf("error writing UpdateService: %v", err)
 	}
-	logrus.Infof("Wrote UpdateService manifests to %s", dir)
+	klog.Infof("Wrote UpdateService manifests to %s", dir)
 	return nil
 }

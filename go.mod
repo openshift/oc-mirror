@@ -28,12 +28,12 @@ require (
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
+	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
 	helm.sh/helm/v3 v3.7.2
 	k8s.io/apimachinery v0.22.4
 	k8s.io/cli-runtime v0.22.4
 	k8s.io/client-go v0.22.4
-	k8s.io/component-base v0.22.4
+	k8s.io/component-base v0.22.4 // indirect
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/kubectl v0.22.4
 	sigs.k8s.io/kustomize/kyaml v0.11.0
@@ -43,6 +43,8 @@ require (
 require golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 
 require github.com/go-logr/logr v1.2.0 // indirect
+
+require gopkg.in/yaml.v2 v2.4.0
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -199,12 +201,10 @@ require (
 	gopkg.in/gorp.v1 v1.7.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/api v0.22.4 // indirect
 	k8s.io/apiextensions-apiserver v0.22.4 // indirect
 	k8s.io/apiserver v0.22.4 // indirect
-	k8s.io/component-base v0.22.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20211109043538-20434351676c // indirect
 	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a // indirect
 	oras.land/oras-go v0.4.0 // indirect

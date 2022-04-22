@@ -337,7 +337,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	// process catalogs
-	logrus.Debug("rebuilding catalog images")
+	klog.V(4).Infof("rebuilding catalog images")
 	found, err := o.unpackCatalog(dir, filesInArchive)
 	if err != nil {
 		return allMappings, err
@@ -351,7 +351,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 		allMappings.Merge(ctlgRefs)
 	}
 
-	logrus.Debug("building cincinnati graph data image")
+	klog.V(4).Infof("building cincinnati graph data image")
 	// process cincinnati graph image
 	found, err = o.unpackRelease(dir, filesInArchive)
 	if err != nil {
