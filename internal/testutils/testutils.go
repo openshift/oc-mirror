@@ -57,7 +57,7 @@ func WriteTestImage(testServer *httptest.Server, dir string) (string, error) {
 	return targetRef, nil
 }
 
-// RegistryFromFiles a local V2 directory at the destintation will the source directory.
+// RegistryFromFiles mirror a local V2 directory at the destintation with the source directory.
 func RegistryFromFiles(source string) http.HandlerFunc {
 	dir := http.Dir(source)
 	fileHandler := http.FileServer(dir)
@@ -86,7 +86,7 @@ func RegistryFromFiles(source string) http.HandlerFunc {
 	return http.HandlerFunc(handler)
 }
 
-// LocalMirrorFromFiles a local V2 directory at the destintation will the source directory.
+// LocalMirrorFromFiles copies a local V2 directory to the destintation with the source directory.
 func LocalMirrorFromFiles(source string, destination string) error {
 	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		relPath := strings.Replace(path, source, "", 1)
