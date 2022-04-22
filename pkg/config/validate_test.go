@@ -34,6 +34,25 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid/UniqueCatalogsWithTarget",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:    "test-catalog",
+								TargetName: "test1",
+							},
+							{
+								Catalog:    "test-catalog",
+								TargetName: "test2",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Valid/UniqueReleaseChannels",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -69,6 +88,26 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: catalog \"test-catalog\": duplicate found in configuration",
+		},
+		{
+			name: "Invalid/DuplicateCatalogsWithTarget",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:    "test-catalog1",
+								TargetName: "test",
+							},
+							{
+								Catalog:    "test-catalog2",
+								TargetName: "test",
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: catalog \"test\": duplicate found in configuration",
 		},
 		{
 			name: "Invalid/DuplicateChannels",
