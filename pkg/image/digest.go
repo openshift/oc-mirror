@@ -18,8 +18,11 @@ func getPartialDigest(d string) (string, error) {
 		return "", err
 	}
 
-	if len(d) < 13 {
+	tagStart := 7
+	tagEnd := 13
+
+	if len(d) < tagEnd {
 		return "", fmt.Errorf("digest %q does not meet length requirements for partial calculations", d)
 	}
-	return d[7:13], nil
+	return d[tagStart:tagEnd], nil
 }
