@@ -473,7 +473,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			}},
 		},
 		{
-			name:   "Invalid/InvalidComponent",
+			name:   "Invalid/InvalidComponentNoTag",
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
@@ -491,6 +491,50 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 					Category: v1alpha2.TypeGeneric}},
 			wantErr:  true,
 			expError: &ErrInvalidComponent{},
+		},
+		{
+			name:   "Invalid/InvalidComponentWrongTag",
+			imgTyp: v1alpha2.TypeGeneric,
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "imgname",
+							Tag:  "fake",
+						}},
+					Category: v1alpha2.TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name: "single_manifest",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeGeneric}},
+			wantErr:  true,
+			expError: &ErrInvalidComponent{},
+		},
+		{
+			name:   "Invalid/MissingImage",
+			imgTyp: v1alpha2.TypeGeneric,
+			imgMapping: map[TypedImage]TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name:     "fake_manifest",
+							Tag:      "latest",
+							Registry: u.Host,
+						}},
+					Category: v1alpha2.TypeGeneric}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Name:     "single_manifest",
+							Registry: "test-registry.com",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeGeneric}},
+			wantErr:  true,
+			expError: &ErrInvalidImage{},
 		},
 	}
 	for _, test := range tests {
