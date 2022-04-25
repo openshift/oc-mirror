@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,18 +41,20 @@ func TestImageBlocking(t *testing.T) {
 		},
 		{
 			name:          "Success/ImageBlockedNoTag",
-			blockedImages: []v1alpha2.Image{{Name: "openshift-migration-velero-restic-restore-helper-rhel8"}},
-			ref:           "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8",
+			blockedImages: []v1alpha2.Image{{Name: "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8:latest"}},
+			ref:           "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8:latest",
 			want:          true,
+		},
+		{
+			name:          "Failure/InvalidRegexp",
+			blockedImages: []v1alpha2.Image{{Name: "a(b"}},
+			ref:           "registry.redhat.io/rhmtc/openshift-migration-velero-restic-restore-helper-rhel8",
+			err:           "error parsing blocked image regular expression a(b: error parsing regexp: missing closing ): `a(b`",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
-			img, err := imagesource.ParseReference(test.ref)
-			require.NoError(t, err)
-
-			actual, err := isBlocked(test.blockedImages, img.Ref)
+			actual, err := isBlocked(test.blockedImages, test.ref)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -63,4 +64,48 @@ func TestImageBlocking(t *testing.T) {
 
 		})
 	}
+}
+
+func BenchmarkIsBlocked_1(b *testing.B) {
+	blocked := []v1alpha2.Image{
+		{Name: "alpine1"},
+	}
+	for i := 0; i < b.N; i++ {
+		_, err := isBlocked(blocked, "test-registry.com/library/nomatch")
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkIsBlocked_5(b *testing.B) {
+	blocked := []v1alpha2.Image{
+		{Name: "alpine1"},
+		{Name: "alpine2"},
+		{Name: "alpine3"},
+		{Name: "alpine4"},
+		{Name: "alpine5"},
+	}
+	for i := 0; i < b.N; i++ {
+		_, err := isBlocked(blocked, "test-registry.com/library/nomatch")
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkIsBlocked_10(b *testing.B) {
+	blocked := []v1alpha2.Image{
+		{Name: "alpine1"},
+		{Name: "alpine2"},
+		{Name: "alpine3"},
+		{Name: "alpine4"},
+		{Name: "alpine5"},
+		{Name: "alpine6"},
+		{Name: "alpine7"},
+		{Name: "alpine8"},
+		{Name: "alpine9"},
+		{Name: "alpine10"},
+	}
+	for i := 0; i < b.N; i++ {
+		_, err := isBlocked(blocked, "test-registry.com/library/nomatch")
+		require.NoError(b, err)
+	}
+
 }

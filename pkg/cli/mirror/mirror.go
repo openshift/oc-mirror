@@ -245,6 +245,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
+
+	// Three modes options
+	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
+	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
+	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+
 	switch {
 	case o.ManifestsOnly:
 		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
@@ -262,7 +268,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 		return o.generateAllManifests(mapping, results)
-	case len(o.OutputDir) > 0 && o.From == "":
+	case mirrorToDisk:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
@@ -338,7 +344,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 		}
-	case len(o.ToMirror) > 0 && len(o.From) > 0:
+	case diskToMirror:
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
 		// registry backends and generating the CatalogSource
@@ -361,7 +367,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
-	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
+	case mirrorToMirror:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
@@ -565,9 +571,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
-		// TODO(jpower432): Optmize this search
-		//
-		blocked, err := isBlocked(cfg.Mirror.BlockedImages, srcRef.Ref)
+		blocked, err := isBlocked(cfg.Mirror.BlockedImages, srcRef.Ref.Exact())
 		if err != nil {
 			return err
 		}

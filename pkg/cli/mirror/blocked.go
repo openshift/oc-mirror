@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
@@ -18,14 +17,14 @@ func (e ErrBlocked) Error() string {
 
 // IsBlocked will return a boolean value on whether an image
 // is specified as blocked in the ImageSetConfigSpec
-func isBlocked(blocked []v1alpha2.Image, imgRef reference.DockerImageReference) (bool, error) {
+func isBlocked(blocked []v1alpha2.Image, imgRef string) (bool, error) {
 	for _, img := range blocked {
 		matcher, err := regexp.Compile(img.Name)
 		if err != nil {
 			return false, fmt.Errorf("error parsing blocked image regular expression %s: %v", img.Name, err)
 		}
 
-		if matcher.MatchString(imgRef.Exact()) {
+		if matcher.MatchString(imgRef) {
 			return true, nil
 		}
 	}
