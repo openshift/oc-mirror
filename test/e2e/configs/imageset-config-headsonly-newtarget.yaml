@@ -1,0 +1,12 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: DATA_TMP
+mirror:
+  operators:
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
+    targetName: TARGET_CATALOG_NAME
+    targetTag: TARGET_CATALOG_TAG
+    

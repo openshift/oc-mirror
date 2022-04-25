@@ -9,10 +9,12 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config"
 )
 
-func MakeCreateDirs(rootDir string) error {
+// MakeWorkspaceDir creates the initial
+// directories needed for image processing.
+func MakeWorkspaceDirs(rootDir string) error {
 	paths := []string{
 		filepath.Join(config.SourceDir, config.PublishDir),
-		filepath.Join(config.SourceDir, "v2"),
+		filepath.Join(config.SourceDir, config.V2Dir),
 		filepath.Join(config.SourceDir, config.HelmDir),
 	}
 	for _, p := range paths {

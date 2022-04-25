@@ -7,7 +7,6 @@ import (
 
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -103,7 +102,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			return err
 		}
 		// Find target channel for searching
 		for _, c := range res.Channels {
@@ -129,10 +128,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			return err
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			logrus.Fatal(err)
+			return err
 		}
 	case len(o.Catalog) > 0:
 		lp := action.ListPackages{
@@ -140,10 +139,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lp.Run(ctx)
 		if err != nil {
-			logrus.Fatal(err)
+			return fmt.Errorf("failed to list operators, please check catalog name - %s : %w", o.Catalog, err)
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			logrus.Fatal(err)
+			return err
 		}
 	case o.Catalogs:
 		if _, err := fmt.Fprintln(w, "Available OpenShift OperatorHub catalogs:"); err != nil {
@@ -188,7 +187,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 	for _, catalog := range catalogs {
 		versions, err := image.GetTagsFromImage(catalog)
 		if err != nil {
-			logrus.Error("Failed to get catalog version details: ", err)
+			fmt.Fprintf(w, "Failed to get catalog version details: %s", err)
 			continue
 		}
 

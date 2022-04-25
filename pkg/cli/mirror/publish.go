@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
@@ -59,15 +58,7 @@ func (e *ErrArchiveFileNotFound) Error() string {
 func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, error) {
 
 	logrus.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
-
-	var currentMeta v1alpha2.Metadata
-	var incomingMeta v1alpha2.Metadata
-	a := archive.NewArchiver()
 	allMappings := image.TypedImageMapping{}
-	var insecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		insecure = true
-	}
 
 	// Set target dir for resulting artifacts
 	if o.OutputDir == "" {
@@ -92,75 +83,18 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	logrus.Debugf("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
-	filesInArchive, err := bundle.ReadImageSet(a, o.From)
+	filesInArchive, err := bundle.ReadImageSet(archive.NewArchiver(), o.From)
 	if err != nil {
 		return allMappings, err
 	}
 
-	// Extract imageset
-	if err := o.unpackImageSet(a, tmpdir); err != nil {
-		return allMappings, err
-	}
-
-	// Create a local workspace backend for incoming data
-	workspace, err := storage.NewLocalBackend(tmpdir)
+	backend, incomingMeta, currentMeta, err := o.handleMetadata(ctx, tmpdir, filesInArchive)
 	if err != nil {
-		return allMappings, fmt.Errorf("error opening local backend: %v", err)
-	}
-	// Load incoming metadta
-	if err := workspace.ReadMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-		return allMappings, fmt.Errorf("error reading incoming metadata: %v", err)
-	}
-
-	metaImage := o.newMetadataImage(incomingMeta.Uid.String())
-	// Determine stateless or stateful mode
-	var backend storage.Backend
-	if incomingMeta.SingleUse {
-		logrus.Warn("metadata has single-use label, using stateless mode")
-		cfg := v1alpha2.StorageConfig{
-			Local: &v1alpha2.LocalConfig{Path: o.Dir}}
-		backend, err = storage.ByConfig(o.Dir, cfg)
-		if err != nil {
-			return allMappings, err
-		}
-		defer func() {
-			if err := backend.Cleanup(ctx, config.MetadataBasePath); err != nil {
-				logrus.Error(err)
-			}
-		}()
-	} else {
-		cfg := v1alpha2.StorageConfig{
-			Registry: &v1alpha2.RegistryConfig{
-				ImageURL: metaImage,
-				SkipTLS:  insecure,
-			},
-		}
-		backend, err = storage.ByConfig(o.Dir, cfg)
-		if err != nil {
-			return allMappings, err
-		}
-	}
-
-	// Read in current metadata, if present
-	switch err := backend.ReadMetadata(ctx, &currentMeta, config.MetadataBasePath); {
-	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
 		return allMappings, err
-	case err != nil:
-		logrus.Infof("No existing metadata found. Setting up new workspace")
-		// Check that this is the first imageset
-		incomingRun := incomingMeta.PastMirror
-		if incomingRun.Sequence != 1 {
-			return allMappings, &SequenceError{1, incomingRun.Sequence}
-		}
-	default:
-		// Complete metadata checks
-		// UUID mismatch will now be seen as a new workspace.
-		logrus.Debug("Check metadata sequence number")
-		currRun := currentMeta.PastMirror
-		incomingRun := incomingMeta.PastMirror
-		if incomingRun.Sequence != (currRun.Sequence + 1) {
-			return allMappings, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
-		}
+	}
+	incomingAssocs, err := image.ConvertToAssociationSet(incomingMeta.PastAssociations)
+	if err != nil {
+		return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
 	}
 
 	// Unpack chart to user destination if it exists
@@ -178,6 +112,118 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
+	logrus.Debug("process all images in imageset")
+	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
+	if err != nil {
+		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
+	}
+	allMappings.Merge(imgMappings)
+
+	if len(currentMeta.PastAssociations) != 0 {
+		currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
+		if err != nil {
+			return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+		}
+		if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
+			return allMappings, err
+		}
+	}
+
+	logrus.Debug("unpack release signatures")
+	if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
+		return allMappings, err
+	}
+
+	customMappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
+	if err != nil {
+		return allMappings, err
+	}
+	allMappings.Merge(customMappings)
+
+	// Replace old metadata with new metadata if metadata is not single use
+	if !incomingMeta.SingleUse {
+		if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
+			return allMappings, err
+		}
+	}
+
+	return allMappings, nil
+}
+
+// handleMetadata unpacks and performs sequence checks on metadata coming from the imageset and metadata
+// exists in the registry.
+func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error) {
+	// Extract metadata from archive
+	if err := unpack(config.MetadataBasePath, tmpdir, filesInArchive); err != nil {
+		return backend, incoming, curr, err
+	}
+
+	var insecure bool
+	if o.DestPlainHTTP || o.DestSkipTLS {
+		insecure = true
+	}
+	// Create a local workspace backend for incoming data
+	workspace, err := storage.NewLocalBackend(tmpdir)
+	if err != nil {
+		return backend, incoming, curr, fmt.Errorf("error opening local backend: %v", err)
+	}
+	// Load incoming metadta
+	if err := workspace.ReadMetadata(ctx, &incoming, config.MetadataBasePath); err != nil {
+		return backend, incoming, curr, fmt.Errorf("error reading incoming metadata: %v", err)
+	}
+
+	metaImage := o.newMetadataImage(incoming.Uid.String())
+	// Determine stateless or stateful mode
+	if incoming.SingleUse {
+		logrus.Warn("metadata has single-use label, using stateless mode")
+		// Create backend for any temporary storage
+		// but skips metadata sequence checks
+		backend, err = storage.NewLocalBackend(o.Dir)
+		if err != nil {
+			return backend, incoming, curr, fmt.Errorf("error creating temporary backend for metadata at %s: %v", o.Dir, err)
+		}
+		return backend, incoming, curr, nil
+	}
+
+	cfg := &v1alpha2.RegistryConfig{
+		ImageURL: metaImage,
+		SkipTLS:  insecure,
+	}
+	backend, err = storage.NewRegistryBackend(cfg, o.Dir)
+	if err != nil {
+		return backend, incoming, curr, fmt.Errorf("error creating backend for metadata at %s: %v", metaImage, err)
+	}
+
+	// Read in current metadata, if present
+	switch err := backend.ReadMetadata(ctx, &curr, config.MetadataBasePath); {
+	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
+		return backend, incoming, curr, err
+	case err != nil:
+		logrus.Infof("No existing metadata found. Setting up new workspace")
+		// Check that this is the first imageset
+		incomingRun := incoming.PastMirror
+		if incomingRun.Sequence != 1 {
+			return backend, incoming, curr, &SequenceError{1, incomingRun.Sequence}
+		}
+	default:
+		// Complete metadata checks
+		// UUID mismatch will now be seen as a new workspace.
+		if !o.SkipMetadataCheck {
+			logrus.Debug("Check metadata sequence number")
+			currRun := curr.PastMirror
+			incomingRun := incoming.PastMirror
+			if incomingRun.Sequence != (currRun.Sequence + 1) {
+				return backend, incoming, curr, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
+			}
+		}
+	}
+	return backend, incoming, curr, nil
+}
+
+// proccessMirroredImages unpacks, reconstructs, and published all images in the provided imageset to the specified registry.
+func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
+	allMappings := image.TypedImageMapping{}
+	var errs []error
 	toMirrorRef, err := imagesource.ParseReference(o.ToMirror)
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
@@ -187,8 +233,6 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
 
-	var errs []error
-
 	for _, imageName := range assocs.Keys() {
 
 		var mmapping []imgmirror.Mapping
@@ -196,7 +240,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		values, _ := assocs.Search(imageName)
 
 		// Create temp workspace for image processing
-		cleanUnpackDir, unpackDir, err := mktempDir(tmpdir)
+		cleanUnpackDir, unpackDir, err := mktempDir(o.Dir)
 		if err != nil {
 			return allMappings, err
 		}
@@ -205,7 +249,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			// Map of remote layer digest to the set of paths they should be fetched to.
 			missingLayers := map[string][]string{}
-			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
+			manifestPath := filepath.Join(config.V2Dir, assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
 			logrus.Debugf("reading assoc: %s", assoc.Name)
@@ -239,7 +283,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 				logrus.Debugf("Found layer %v for image %s", layerDigest, imageName)
 				// Construct blob path, which is adjacent to the manifests path.
 				blobPath := filepath.Join("blobs", layerDigest)
-				imagePath := filepath.Join(unpackDir, "v2", assoc.Path)
+				imagePath := filepath.Join(unpackDir, config.V2Dir, assoc.Path)
 				imageBlobPath := filepath.Join(imagePath, blobPath)
 				aerr := &ErrArchiveFileNotFound{}
 				switch err := unpack(blobPath, imagePath, filesInArchive); {
@@ -278,7 +322,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			// Add references for the mirror mapping
 			mmapping = append(mmapping, m)
 
-			// Add top level assocation to the ICSP mapping
+			// Add top level association to the ICSP mapping
 			if assoc.Name == imageName {
 				source, err := imagesource.ParseReference(imageName)
 				if err != nil {
@@ -290,6 +334,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 			if len(missingLayers) != 0 {
 				// Fetch all layers and mount them at the specified paths.
+				// Must use metadata for current published run to find images already mirrored.
 				if err := o.fetchBlobs(ctx, currentMeta, missingLayers); err != nil {
 					return allMappings, err
 				}
@@ -308,28 +353,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 			cleanUnpackDir()
 		}
 	}
-	if len(errs) != 0 {
-		return allMappings, utilerrors.NewAggregate(errs)
-	}
-
-	logrus.Debug("unpack release signatures")
-	err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-
-	mappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-	allMappings.Merge(mappings)
-
-	// Replace old metadata with new metadata
-	if err := backend.WriteMetadata(ctx, &incomingMeta, config.MetadataBasePath); err != nil {
-		return allMappings, err
-	}
-
-	return allMappings, nil
+	return allMappings, utilerrors.NewAggregate(errs)
 }
 
 // proccessCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
@@ -366,52 +390,6 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 	}
 
 	return allMappings, nil
-}
-
-// unpackImageSet unarchives all provided tar archives	if err != nil {
-func (o *MirrorOptions) unpackImageSet(a archive.Archiver, dest string) error {
-
-	// archive that we do not want to unpack
-	exclude := []string{config.BlobDir, config.V2Dir, config.HelmDir}
-
-	file, err := os.Stat(o.From)
-	if err != nil {
-		return err
-	}
-
-	if file.IsDir() {
-
-		err = filepath.Walk(o.From, func(path string, info os.FileInfo, err error) error {
-
-			if err != nil {
-				return fmt.Errorf("traversing %s: %v", path, err)
-			}
-			if info == nil {
-				return fmt.Errorf("no file info")
-			}
-
-			extension := filepath.Ext(path)
-			extension = strings.TrimPrefix(extension, ".")
-
-			if extension == a.String() {
-				logrus.Debugf("Extracting archive %s", path)
-				if err := archive.Unarchive(a, path, dest, exclude); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-
-	} else {
-
-		logrus.Infof("Extracting archive %s", o.From)
-		if err := archive.Unarchive(a, o.From, dest, exclude); err != nil {
-			return err
-		}
-	}
-
-	return err
 }
 
 // TODO(estroz): symlink blobs instead of copying them to avoid data duplication.

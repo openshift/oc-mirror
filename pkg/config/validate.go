@@ -23,10 +23,18 @@ func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 }
 
 func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
+	seen := map[string]bool{}
 	for _, ctlg := range cfg.Mirror.Operators {
-		if len(ctlg.IncludeConfig.Packages) != 0 && ctlg.IsHeadsOnly() {
-			return fmt.Errorf("catalog %q: cannot define packages with full key set to false", ctlg.Catalog)
+		ctlgName, err := ctlg.GetUniqueName()
+		if err != nil {
+			return err
 		}
+		if seen[ctlgName] {
+			return fmt.Errorf(
+				"catalog %q: duplicate found in configuration", ctlgName,
+			)
+		}
+		seen[ctlgName] = true
 	}
 	return nil
 }

@@ -6,27 +6,20 @@ cluster_name: '{{ lookup("password", output_dir + "/cluster_name chars=ascii_low
 cluster_domain: redhat4govaws.io
 
 # This is important for default generation of the ImageSetConfiguration, for OpenShift release versions as well as operator catalog versions
-openshift_version: 4.9
+openshift_version: "4.10"
 
 # Basically, there are only a few good choices here (depending on your AWS account configuration). You're best off not changing it unless you know why.
 aws_region: us-west-2
 
+# Mirror metadata directly to the registry (choose from registry or local)
+storage_config_backend: registry
 
-# These are selections from the scenarios available at:
-# https://github.com/jharmison-redhat/oc-mirror-e2e/tree/main/collection/playbooks/vars/scenario_stubs
-scenario_stubs:
-  metadata_backend: registry
-  mirror_method: to_registry
-  registry_type: docker_registry
-  # operators_to_mirror: compliance_operator # Disabled temporarily due to issue with live channels
+# The type of registry to use in the integration test (choose from docker_registry or redhat_quay)
+registry_type: docker_registry
 
-# If you want to override the ImageSetConfiguration generation with a custom change to the API, you might want to use something like this:
-#
-# imageset_config_override: |-
-#   apiVersion: mirror.openshift.io/v1alpha2
-#   kind: ImageSetConfiguration
-#   ocp:
-#     channels:
-#       - name: stable-4.9
-#         minVersion: 4.9.10
-#         maxVersion: 4.9.17
+# The operators to mirror, install, and test
+# Choose any of the following (or none):
+# - foo
+# - compliance_operator
+operators_to_mirror:
+- foo

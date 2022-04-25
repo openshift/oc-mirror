@@ -5,11 +5,13 @@
 #   the tests execute correctly. Mostly it is to make sure that the container images
 #   are suitable, with minimal files share between, for multi-stage builds in OpenShift CI
 
-set -euo pipefail
+set -eo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # The runtime used to execute the image
 runtime="${CONTAINER_RUNTIME:-podman}"
+
+cd "$SCRIPT_DIR/.."
 
 # Build a fresh copy of the integration image
 "$SCRIPT_DIR/build-image.sh"
@@ -34,7 +36,7 @@ echo "$AWS_SECRET_ACCESS_KEY" > ci/secrets/aws-creds/AWS_SECRET_ACCESS_KEY
 # Execute commands inside the integration test folder in the container, with
 #  bind mounts for mocked artifacts, shared directories, and secrets
 function ci_run() {
-    $runtime run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-integration /bin/sh -c "cd test/integration && $*"
+    $runtime run --rm -it -e OPENSHIFT_CI=true -e SHARED_DIR="/shared" -e ARTIFACT_DIR="/artifacts" -v ./ci/artifacts:/artifacts -v ./ci/shared:/shared -v ./ci/secrets:/etc/ci --security-opt=label=disable --privileged oc-mirror-ci-integration /bin/sh -c "chown -R 1000:1000 . /shared /artifacts && cd test/integration && $* && cd ../.. && chown -R 0:0 . /shared /artifacts"
 }
 
 # Remove the infra no matter what happens in the tests

@@ -68,7 +68,11 @@ function prep_registry() {
   # Copy target catalog to connected registry
     crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
     localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
+
+    CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
+
+
 
 # parse_args will parse common arguments
 # for each workflow function
@@ -93,7 +97,7 @@ function parse_args() {
       shift # past argument=value
       ;;
     --diff)
-      DIFF=YES
+      DIFF=true
       shift # past argument with no value
       ;;
     -*|--*)
@@ -113,6 +117,7 @@ function setup_operator_testdata() {
   local OUTPUT_DIR="${2:?OUTPUT_DIR required}"
   local CONFIG_PATH="${3:?CONFIG_PATH required}"
   local DIFF="${4:?DIFF bool required}"
+  local CATALOG_DIGEST="${5:-""}"
   if $DIFF; then
     INDEX_PATH=diff
   else
@@ -122,6 +127,9 @@ function setup_operator_testdata() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_DIGEST@'"$CATALOG_DIGEST"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_NAME@'"$TARGET_CATALOG_NAME"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
 }
 

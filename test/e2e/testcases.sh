@@ -4,21 +4,33 @@
 # run during end to end test
 declare -a TESTCASES
 TESTCASES[1]="full_catalog"
-TESTCASES[2]="headsonly_diff"
-TESTCASES[3]="pruned_catalogs"
-TESTCASES[4]="registry_backend"
-TESTCASES[5]="mirror_to_mirror"
-TESTCASES[6]="mirror_to_mirror_nostorage"
-TESTCASES[7]="custom_namespace"
-TESTCASES[8]="package_filtering"
-TESTCASES[9]="skip_deps"
-TESTCASES[10]="helm_local"
-TESTCASES[11]="no_updates_exist"
+TESTCASES[2]="full_catalog_with_digest"
+TESTCASES[3]="headsonly_diff"
+TESTCASES[4]="pruned_catalogs"
+TESTCASES[5]="pruned_catalogs_with_target"
+TESTCASES[6]="registry_backend"
+TESTCASES[7]="mirror_to_mirror"
+TESTCASES[8]="mirror_to_mirror_nostorage"
+TESTCASES[9]="custom_namespace"
+TESTCASES[10]="package_filtering"
+TESTCASES[11]="skip_deps"
+TESTCASES[12]="helm_local"
+TESTCASES[13]="no_updates_exist"
 
 # Test full catalog mode.
 function full_catalog () {
     workflow_full imageset-config-full.yaml "test-catalog-latest" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+# Test full catalog mode with digest.
+function full_catalog_with_digest() {
+    workflow_full imageset-config-full-digest.yaml "test-catalog-latest" -c="--source-use-http"
+    TMPTAG=$(echo $CATALOGDIGEST | cut -d: -f 2)
+    TMPTAG=${TMPTAG:0:6}
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${TMPTAG}\
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
@@ -42,11 +54,44 @@ function pruned_catalogs() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 
     workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+}
+
+# Test heads-only mode with catalogs that prune with a custom target
+# name set
+function pruned_catalogs_with_target() {
+    workflow_full imageset-config-headsonly-newtarget.yaml "test-catalog-prune" --diff -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
+    "bar.v0.1.0 foo.v0.1.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+
+    workflow_diff imageset-config-headsonly-newtarget.yaml "test-catalog-prune-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
+    "bar.v0.1.0 foo.v0.2.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+}
+
+# Test heads-only mode with catalogs that prune bundles
+function pruned_catalogs_mirror_to_mirror() {
+    workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.1.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
+
+    workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "bar.v0.1.0 foo.v0.2.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 }
 
 # Test registry backend
@@ -117,7 +162,7 @@ function skip_deps {
 # Test local helm chart
 function helm_local {
     workflow_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
-    check_helm "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }
 
 # Test no udpates

@@ -1,6 +1,10 @@
 Developers: Working with the test indexes/bundles/operators
 ====
-
+- [Developers: Working with the test indexes/bundles/operators](#developers-working-with-the-test-indexesbundlesoperators)
+  - [A primer on why](#a-primer-on-why)
+  - [Catalog structure](#catalog-structure)
+    - [A thought exercise about the ways that indexes could be published and captured by `oc-mirror`](#a-thought-exercise-about-the-ways-that-indexes-could-be-published-and-captured-by-oc-mirror)
+  - [Test catalog sources of truth](#test-catalog-sources-of-truth)
 ## A primer on why
 
 Some of the most complex logic in `oc-mirror` is related to resolving operator upgrade graphs, especially in relation to differential upgrades. Although Operator Registry is vendored and the API there is leveraged for point-in-time calculations, the logic for handling snapshots with a temporal component is `oc-mirror`'s native domain. That is, if you mirror an operator from a catalog, publish it, then perform a differential mirror to collect updates a not insignificant amount of work goes into designing a new catalog in which your previous mirror and the new one are organized into a valid upgrade graph for your environment.

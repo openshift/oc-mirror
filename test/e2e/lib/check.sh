@@ -62,12 +62,11 @@ function check_bundles() {
   done
 }
 
-# check_helm ensures the image(s) found in the chart is correct and
-# images are pullable.
-function check_helm() {
+# check_images_exists ensures the image(s) is found and pullable.
+function check_image_exists() {
   local expected_image="${1:?expected image required}"
    if ! crane digest --insecure $expected_image; then
-      echo "helm image $expected_image not pushed to registry"
+      echo "image $expected_image not pushed to registry"
       return 1
     fi
 }
@@ -80,4 +79,15 @@ function check_sequence_number() {
     echo "expected_past_mirrors does not match actual_past_mirrors"
     return 1
   fi
+}
+
+# check_image_removed will check if an image has been pruned from the registry
+function check_image_removed() {
+   local removed_image="${1:?removed image required}"
+   set -e
+   output=$(crane digest --insecure $removed_image 2>&1) && returncode=$? || returncode=$?
+   if [[ $returncode != 1 ]]; then
+      echo "image $removed_image still exists in registry"
+      return 1
+    fi
 }

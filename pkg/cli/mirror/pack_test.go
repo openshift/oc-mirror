@@ -2,15 +2,13 @@ package mirror
 
 import (
 	"context"
-	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/openshift/oc-mirror/internal/testutils"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -170,7 +168,7 @@ func TestPack(t *testing.T) {
 			c.opts.OutputDir = tmpdir
 			err := os.MkdirAll(path, os.ModePerm)
 			require.NoError(t, err)
-			require.NoError(t, copyV2(filepath.Join("testdata", config.V2Dir), path))
+			require.NoError(t, testutils.LocalMirrorFromFiles(filepath.Join("testdata", config.V2Dir), path))
 			ctx := context.Background()
 
 			prevAssocs, err := image.ConvertToAssociationSet(c.meta.PastAssociations)
@@ -188,34 +186,4 @@ func TestPack(t *testing.T) {
 			}
 		})
 	}
-}
-
-func copyV2(source, destination string) error {
-	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		relPath := strings.Replace(path, source, "", 1)
-		if relPath == "" {
-			return nil
-		}
-		switch m := info.Mode(); {
-		case m&fs.ModeSymlink != 0: // Tag is the file name, so follow the symlink to the layer ID-named file.
-			dst, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			id := filepath.Base(dst)
-			if err := os.Symlink(id, filepath.Join(destination, relPath)); err != nil {
-				return err
-			}
-		case m.IsDir():
-			return os.Mkdir(filepath.Join(destination, relPath), 0750)
-		default:
-			data, err := ioutil.ReadFile(filepath.Join(source, relPath))
-			if err != nil {
-				return err
-			}
-			return ioutil.WriteFile(filepath.Join(destination, relPath), data, 0777)
-		}
-		return nil
-	})
-	return err
 }
