@@ -83,6 +83,10 @@ func (o *InitOptions) Run(ctx context.Context) error {
 			APIVersion: v1alpha2.GroupVersion.String(),
 		},
 		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+			StorageConfig: v1alpha2.StorageConfig{
+				Registry: nil,
+				Local:    &v1alpha2.LocalConfig{Path: "./"},
+			},
 			Mirror: v1alpha2.Mirror{
 				Platform: v1alpha2.Platform{
 					Graph: false,
@@ -120,10 +124,6 @@ func (o *InitOptions) Run(ctx context.Context) error {
 				},
 				Helm:          v1alpha2.Helm{},
 				BlockedImages: nil,
-			},
-			StorageConfig: v1alpha2.StorageConfig{
-				Registry: nil,
-				Local:    &v1alpha2.LocalConfig{Path: "./"},
 			},
 		},
 	}
