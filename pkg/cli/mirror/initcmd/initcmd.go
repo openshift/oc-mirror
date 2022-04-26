@@ -2,6 +2,7 @@ package initcmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/version"
 )
+
+var catalogBase = "registry.redhat.io/redhat/redhat-operator-index"
 
 type InitOptions struct {
 	*cli.RootOptions
@@ -42,7 +45,7 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run(cmd.Context()))
+			kcmdutil.CheckErr(o.Run(context.WithValue(cmd.Context(), "catalogBase", catalogBase)))
 		},
 	}
 
@@ -67,8 +70,7 @@ func (o *InitOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	catalog, err := getCatalog()
+	catalog, err := getCatalog(ctx.Value("catalogBase").(string))
 	if err != nil {
 		return err
 	}
@@ -170,8 +172,7 @@ func getReleaseChannelFromGit() (string, error) {
 	return releaseChannel, nil
 }
 
-func getCatalog() (string, error) {
-	catalogBase := "registry.redhat.io/redhat/redhat-operator-index"
+func getCatalog(catalogBase string) (string, error) {
 	versionMap, err := image.GetTagsFromImage(catalogBase)
 	if err != nil {
 		return "", fmt.Errorf("unable to get version map for init: %w", err)
