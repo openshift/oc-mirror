@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/blang/semver/v4"
+	"reflect"
+	"sort"
 	"strings"
 
+	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
+	yamlv2 "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
@@ -142,7 +144,7 @@ func (o *InitOptions) Run(ctx context.Context) error {
 	case "":
 		fallthrough
 	case "yaml":
-		marshalled, err := yaml.Marshal(&imageSetConfig)
+		marshalled, err := orderedYamlMarshal(&imageSetConfig)
 		if err != nil {
 			return err
 		}
@@ -208,4 +210,103 @@ func (o *InitOptions) promptCustomRegistry() (string, error) {
 	}
 	customRegistry = strings.TrimSpace(customRegistry)
 	return customRegistry, nil
+}
+
+// Key order doesn't matter to machines, but is nice for humans.
+// oc-mirror init output is for humans.
+// Issue with k8s yaml library: no support for MapSlice
+// Our structs have json tags but not yaml tags, and I didn't want to add yaml tags everywhere,
+// so the JSON marshaller is used to adapt those tags and key sorting happens here.
+// This is less code than adding MarshalYAML with MapSlices to our types
+func orderedYamlMarshal(obj interface{}) ([]byte, error) {
+	bytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var yamlObj map[string]interface{}
+	err = yamlv2.Unmarshal(bytes, &yamlObj)
+	if err != nil {
+		return nil, err
+	}
+	slices := interfaceToMapSlice(yamlObj)
+	yamlOrder := map[string]map[string]int{
+		"": {
+			"kind":          1,
+			"apiVersion":    2,
+			"storageConfig": 3,
+			"mirror":        4,
+		},
+		"mirror": {
+			"platform":         1,
+			"operators":        2,
+			"additionalImages": 3,
+			"helm":             4,
+		},
+		"packages": {
+			"name":            1,
+			"startingVersion": 2,
+			"channels":        3,
+		},
+		"operators": {
+			"catalog":  1,
+			"packages": 2,
+		},
+		"channels": {
+			"name": -1,
+		},
+	}
+	sortedSlices := deepMapKeySort(slices, yamlOrder, "")
+	bytes, err = yamlv2.Marshal(&sortedSlices)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+func interfaceToMapSlice(slice interface{}) yamlv2.MapSlice {
+	mapSlice := yamlv2.MapSlice{}
+	iter := reflect.ValueOf(slice).MapRange()
+	for iter.Next() {
+		mapSlice = append(mapSlice, yamlv2.MapItem{
+			Key:   fmt.Sprintf("%v", iter.Key()),
+			Value: iter.Value().Interface(),
+		})
+	}
+	return mapSlice
+}
+
+// map[parent][child]index
+func deepMapKeySort(slice interface{}, orders map[string]map[string]int, parentKey string) interface{} {
+	switch slice.(type) {
+	case yamlv2.MapSlice:
+		slices := (slice).(yamlv2.MapSlice)
+		for sliceIndex, mapItem := range slices {
+			key := fmt.Sprintf("%v", mapItem.Key)
+			switch reflect.ValueOf(mapItem.Value).Kind() {
+			case reflect.Slice:
+				slices[sliceIndex].Value = deepMapKeySort(mapItem.Value, orders, key)
+			case reflect.Map:
+				childMapSlice := interfaceToMapSlice(mapItem.Value)
+				slices[sliceIndex].Value = deepMapKeySort(childMapSlice, orders, key)
+			}
+		}
+		sort.Slice(slices, func(i, j int) bool {
+			keyI := slices[i].Key.(string)
+			keyJ := slices[j].Key.(string)
+			return orders[parentKey][keyI] < orders[parentKey][keyJ]
+		})
+		return slices
+	}
+	switch reflect.ValueOf(slice).Kind() {
+	case reflect.Slice:
+		slice_ := slice.([]interface{})
+		for i := range slice_ {
+			slice_[i] = deepMapKeySort(slice_[i], orders, parentKey)
+		}
+		return slice
+	case reflect.Map:
+		mapSlice := interfaceToMapSlice(slice)
+		return deepMapKeySort(mapSlice, orders, parentKey)
+	}
+	return slice
 }
