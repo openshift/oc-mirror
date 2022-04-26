@@ -11,14 +11,16 @@ import (
 
 func TestConvertDCToIncludeConfig(t *testing.T) {
 	type spec struct {
-		name string
-		cfg  declcfg.DeclarativeConfig
-		exp  v1alpha2.IncludeConfig
+		name     string
+		cfg      declcfg.DeclarativeConfig
+		strategy IncludeConfigConverter
+		exp      v1alpha2.IncludeConfig
 	}
 
 	specs := []spec{
 		{
-			name: "Success/HeadsOnly",
+			name:     "Success/HeadsOnly",
+			strategy: &catalogStrategy{},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -85,7 +87,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 
 	for _, s := range specs {
 		t.Run(s.name, func(t *testing.T) {
-			ic, err := ConvertDCToIncludeConfig(s.cfg)
+			ic, err := s.strategy.ConvertDCToIncludeConfig(s.cfg)
 			require.NoError(t, err)
 			require.Equal(t, s.exp, ic)
 		})
@@ -95,16 +97,18 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 func TestUpdateIncludeConfig(t *testing.T) {
 
 	type spec struct {
-		name   string
-		cfg    declcfg.DeclarativeConfig
-		in     v1alpha2.IncludeConfig
-		exp    v1alpha2.IncludeConfig
-		expErr string
+		name     string
+		cfg      declcfg.DeclarativeConfig
+		strategy IncludeConfigConverter
+		in       v1alpha2.IncludeConfig
+		exp      v1alpha2.IncludeConfig
+		expErr   string
 	}
 
 	specs := []spec{
 		{
-			name: "Success/NewPackages",
+			name:     "Success/NewPackages",
+			strategy: &catalogStrategy{},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -183,7 +187,8 @@ func TestUpdateIncludeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "Success/NewChannels",
+			name:     "Success/NewChannels",
+			strategy: &catalogStrategy{},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -293,7 +298,8 @@ func TestUpdateIncludeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "Success/PruneChannelHead",
+			name:     "Success/PruneChannelHead",
+			strategy: &catalogStrategy{},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -435,7 +441,8 @@ func TestUpdateIncludeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "Success/NoNextBundle",
+			name:     "Success/NoNextBundle",
+			strategy: &catalogStrategy{},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -528,7 +535,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 
 	for _, s := range specs {
 		t.Run(s.name, func(t *testing.T) {
-			ic, err := UpdateIncludeConfig(s.cfg, s.in)
+			ic, err := s.strategy.UpdateIncludeConfig(s.cfg, s.in)
 			if s.expErr != "" {
 				require.EqualError(t, err, s.expErr)
 			} else {

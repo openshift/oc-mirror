@@ -167,7 +167,7 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, err error) {
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
-	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified (the default).
+	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
 	full := !ctlg.IsHeadsOnly() && !hasInclude
 
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
@@ -197,6 +197,10 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			return nil, err
 		}
 
+		// TODO(jpower432): Need to change DiffIncluder to give
+		// an options for heads-only instead of full. If I will have to find a way to
+		// get channel heads without a declarative config. This may be complex.
+
 		verifyOperatorPkgFound(dic, dc)
 	}
 
@@ -213,6 +217,10 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	}
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
+	// Process the catalog at heads-only or specified or specified
+	// packages at heads-only
+	catalogHeadsOnly := ctlg.IsHeadsOnly() && !hasInclude
+	includeWithHeadsOnly := ctlg.IsHeadsOnly() && hasInclude
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
 	full := !ctlg.IsHeadsOnly() && !hasInclude
 
@@ -243,10 +251,11 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		if err != nil {
 			return nil, err
 		}
-	case !hasInclude:
-		// If a previous specified minimum version can be found on
+	case catalogHeadsOnly:
+		// If a previous specified starting version can be found on
 		// the mirror run update IncludeConfig , else, keep the
 		// IncludeConfig to get a new catalog at heads only.
+		converter := operator.NewCatalogStrategy()
 		prev, found := prevCatalog[ctlg.Catalog]
 		if found {
 			dc, err = action.Render{
@@ -256,7 +265,30 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 			if err != nil {
 				return nil, err
 			}
-			ic, err := operator.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+			ic, err := converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+			if err != nil {
+				return nil, err
+			}
+			dic, err = ic.ConvertToDiffIncludeConfig()
+			if err != nil {
+				return nil, err
+			}
+		}
+		fallthrough
+	case includeWithHeadsOnly:
+		// If a previous specified starting version can be found on
+		// the mirror run update IncludeConfig , else, keep the
+		// IncludeConfig to get a new catalog at heads only. Need to diff the
+		// catalog will full channels first to get current information from packages.
+		converter := operator.NewIncludeStrategy(ctlg.IncludeConfig)
+		prev, found := prevCatalog[ctlg.Catalog]
+		if found {
+			a.IncludeConfig = dic
+			dc, err = a.Run(ctx)
+			if err != nil {
+				return nil, err
+			}
+			ic, err := converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
 			if err != nil {
 				return nil, err
 			}
