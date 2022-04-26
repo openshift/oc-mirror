@@ -87,7 +87,7 @@ storageConfig:
 mirror:
   platform:
     channels:
-    - name: stable-4.1
+    - name: stable-0.0
       type: ocp
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
@@ -118,7 +118,7 @@ mirror:
     "platform": {
       "channels": [
         {
-          "name": "stable-4.1",
+          "name": "stable-0.0",
           "type": "ocp"
         }
       ]
@@ -175,7 +175,7 @@ storageConfig:
 mirror:
   platform:
     channels:
-    - name: stable-4.1
+    - name: stable-0.0
       type: ocp
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
@@ -206,7 +206,7 @@ mirror:
     "platform": {
       "channels": [
         {
-          "name": "stable-4.1",
+          "name": "stable-0.0",
           "type": "ocp"
         }
       ]
