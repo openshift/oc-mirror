@@ -142,6 +142,8 @@ make
 ./bin/oc-mirror -h
 ```
 
+**Note:** Using `oc-mirror init` with local builds may result in unexpected release channel names.
+
 ### Test
 
 Unit:
