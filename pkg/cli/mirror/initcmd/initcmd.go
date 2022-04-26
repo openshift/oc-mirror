@@ -23,16 +23,16 @@ import (
 	"github.com/openshift/oc-mirror/pkg/version"
 )
 
-var catalogBase = "registry.redhat.io/redhat/redhat-operator-index"
-
 type InitOptions struct {
 	*cli.RootOptions
-	Output string // TODO rename: format? Be consistent with `version`
+	Output      string
+	catalogBase string
 }
 
 func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	o := InitOptions{
 		RootOptions: ro,
+		catalogBase: "registry.redhat.io/redhat/redhat-operator-index",
 	}
 
 	cmd := &cobra.Command{
@@ -47,7 +47,7 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run(context.WithValue(cmd.Context(), "catalogBase", catalogBase)))
+			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
 	}
 
@@ -72,7 +72,7 @@ func (o *InitOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	catalog, err := getCatalog(ctx.Value("catalogBase").(string))
+	catalog, err := getCatalog(o.catalogBase)
 	if err != nil {
 		return err
 	}

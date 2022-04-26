@@ -260,14 +260,14 @@ mirror:
 				t.Error(err)
 			}
 			catalog := fmt.Sprintf("%s/redhat/redhat-operator-index", u.Host)
-			ctx := context.WithValue(context.TODO(), "catalogBase", catalog)
+			c.opts.catalogBase = catalog
 
 			c.opts.In = strings.NewReader(c.stdIn)
 			outBuf := new(strings.Builder)
 			errOutBuf := new(strings.Builder)
 			c.opts.Out = outBuf
 			c.opts.ErrOut = errOutBuf
-			err = c.opts.Run(ctx)
+			err = c.opts.Run(context.TODO())
 			if c.expError != "" {
 				require.EqualError(t, err, c.expError)
 			} else {
