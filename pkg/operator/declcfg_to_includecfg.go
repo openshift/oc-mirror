@@ -181,7 +181,7 @@ func search(versions []semver.Version, target semver.Version, low, high int) sem
 		return semver.Version{}
 	}
 
-	mid := low + (high+low)/2
+	mid := low + (high-low)/2
 	if versions[mid].EQ(target) {
 		return versions[mid+1]
 	}
@@ -190,7 +190,7 @@ func search(versions []semver.Version, target semver.Version, low, high int) sem
 		return search(versions, target, mid+1, high)
 	}
 
-	return search(versions, target, low, high)
+	return search(versions, target, low, mid-1)
 }
 
 // getChannelHeads proccess each channel in package and sets the starting
