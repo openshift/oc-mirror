@@ -71,7 +71,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	// TODO(jpower432): Make this flag visible again once release architecture selection
 	// has been more thouroughly vetted
 	if err := fs.MarkHidden("filter-options"); err != nil {
-		klog.Panic(err.Error())
+		klog.Error(err.Error())
 	}
 }
 

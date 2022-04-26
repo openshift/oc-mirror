@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 

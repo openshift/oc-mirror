@@ -3,8 +3,6 @@ package cli
 import (
 	"flag"
 	"io"
-	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -37,14 +35,13 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	klog.InitFlags(&fsv2)
 	checkErr(fsv2.Set("stderrthreshold", "4"))
 
-	f, err := os.OpenFile("oc-mirror.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE | os.O_APPEND | os.O_RDWR, 0666)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		panic(err)
 	}
-	defer f.Close()
-	wrt := io.MultiWriter(ioutil.Discard, f)
-
-	klog.SetOutput(wrt)
+	mw := io.MultiWriter(os.Stdout, logFile)
+	
+	klog.SetOutput(mw)
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {

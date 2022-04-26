@@ -181,7 +181,7 @@ func ReadMetadataFromFile(ctx context.Context, archivePath string) (v1alpha2.Met
 		return meta, errors.New("metadata is not in archive")
 	}
 
-	logrus.Debug("Extracting incoming metadata")
+	klog.V(4).Infof("Extracting incoming metadata")
 	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
 		return meta, err
 	}
