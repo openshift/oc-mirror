@@ -146,7 +146,7 @@ func (o *InitOptions) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(o.Out, string(marshalled))
+		fmt.Fprint(o.Out, string(marshalled))
 	case "json":
 		marshalled, err := json.MarshalIndent(&imageSetConfig, "", "  ")
 		if err != nil {
