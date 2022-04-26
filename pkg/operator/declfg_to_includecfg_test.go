@@ -303,6 +303,8 @@ func TestUpdateIncludeConfig(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
 						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
+						{Name: "bar.v0.1.2", Skips: []string{"bar.v0.1.1"}},
+						{Name: "bar.v0.1.3", Skips: []string{"bar.v0.1.2"}},
 					}},
 					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
@@ -317,6 +319,26 @@ func TestUpdateIncludeConfig(t *testing.T) {
 						Properties: []property.Property{
 							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
 							property.MustBuildPackage("bar", "0.1.1"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.2",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.2"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.3",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.3"),
 						},
 					},
 					{
