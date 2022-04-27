@@ -246,7 +246,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
 
-	// Three modes options
+	// Three mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
@@ -523,7 +523,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 // removePreviouslyMirrored will check if an image has been previously mirrored
-// and remove it from the mapping if found. The new past associations are returned.
+// and remove it from the mapping if found. These images are added to the current AssociationSet
+// to maintain a history of images. Any images in the AssociationSet that was not requested in the mapping
+// will be pruned from the history.
 func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping, meta v1alpha2.Metadata) (image.AssociationSet, error) {
 	prevDownloads, err := image.ConvertToAssociationSet(meta.PastAssociations)
 	if err != nil {
@@ -561,7 +563,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	return prunedDownloads, prunedDownloads.Validate()
 }
 
-// mirrorImage downloads individual images from an image mapping
+// mirrorMappings downloads individual images from an image mapping
 func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 
 	opts, err := o.newMirrorImageOptions(insecure)
@@ -577,7 +579,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 		}
 		if blocked {
 			logrus.Warnf("skipping blocked image %s", srcRef.String())
-			// Remove to make sure this does end up in the metadata
+			// Remove to make sure this does not end up in the metadata
 			images.Remove(srcRef)
 			continue
 		}
@@ -641,7 +643,7 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 				var release image.TypedImage
 				// Just grab the first release image.
 				// The value is used as a repo and all release images
-				// are stored in the same repo
+				// are stored in the same repo.
 				for _, v := range releaseImages {
 					release = v
 					break
