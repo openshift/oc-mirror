@@ -77,7 +77,7 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									MinVersion: "1.0.0",
+									MinVersion: "1.1.0",
 								},
 							},
 						},
@@ -88,7 +88,7 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							{
 								Name: "beta",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									MinVersion: "0.1.0",
+									MinVersion: "0.3.1",
 								},
 							},
 						},

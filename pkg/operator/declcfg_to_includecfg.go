@@ -9,7 +9,7 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/model"
 )
 
-// IncludeConfigConverter defines methods for Include Config creation and manipulation
+// IncludeConfigConverter defines methods for IncludeConfig creation and manipulation.
 type IncludeConfigConverter interface {
 	ConvertDCToIncludeConfig(declcfg.DeclarativeConfig) (v1alpha2.IncludeConfig, error)
 	UpdateIncludeConfig(declcfg.DeclarativeConfig, v1alpha2.IncludeConfig) (v1alpha2.IncludeConfig, error)

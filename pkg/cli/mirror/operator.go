@@ -64,7 +64,7 @@ func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha2.ImageSetCon
 
 // PlanDiff plans only the diff between each old and new catalog image pair
 func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, lastRun v1alpha2.PastMirror) (image.TypedImageMapping, error) {
-	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (*declcfg.DeclarativeConfig, error) {
+	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (*declcfg.DeclarativeConfig, v1alpha2.IncludeConfig, error) {
 		return o.renderDCDiff(ctx, reg, ctlg, lastRun)
 	}
 	return o.run(ctx, cfg, f)
@@ -81,7 +81,7 @@ func (o *OperatorOptions) complete() {
 	}
 }
 
-type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha2.Operator) (*declcfg.DeclarativeConfig, error)
+type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha2.Operator) (*declcfg.DeclarativeConfig, v1alpha2.IncludeConfig, error)
 
 func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
 	o.complete()
@@ -118,12 +118,12 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		}
 
 		// Render the catalog to mirror into a declarative config.
-		dc, err := renderDC(ctx, reg, ctlg)
+		dc, ic, err := renderDC(ctx, reg, ctlg)
 		if err != nil {
 			return nil, err
 		}
 
-		mappings, err := o.plan(ctx, dc, ctlgRef, targetCtlg)
+		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +164,7 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 }
 
 // renderDCFull renders data in ctlg into a declarative config for o.Full().
-func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, err error) {
+func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
@@ -178,13 +178,13 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			Refs:     []string{ctlg.Catalog},
 		}.Run(ctx)
 		if err != nil {
-			return nil, err
+			return dc, ic, err
 		}
 	} else {
 		// Generate and mirror a heads-only diff using only the catalog as a new ref.
 		dic, derr := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
 		if derr != nil {
-			return nil, derr
+			return dc, ic, derr
 		}
 		dc, err = action.Diff{
 			Registry:         reg,
@@ -194,23 +194,32 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			SkipDependencies: ctlg.SkipDependencies,
 		}.Run(ctx)
 		if err != nil {
-			return nil, err
+			return dc, ic, err
 		}
 
-		// TODO(jpower432): Need to change DiffIncluder to give
-		// an options for heads-only instead of full. If I will have to find a way to
-		// get channel heads without a declarative config. This may be complex.
+		var converter operator.IncludeConfigConverter
+		if hasInclude {
+			converter = operator.NewIncludeStrategy(ctlg.IncludeConfig)
+		} else {
+			converter = operator.NewCatalogStrategy()
+		}
+
+		// Render ic for incorporation into the metadata
+		ic, err = converter.ConvertDCToIncludeConfig(*dc)
+		if err != nil {
+			return dc, ic, fmt.Errorf("error converting declarative config to include config: %v", err)
+		}
 
 		verifyOperatorPkgFound(dic, dc)
 	}
 
-	return dc, nil
+	return dc, ic, nil
 }
 
 // renderDCDiff renders data in ctlg into a declarative config for o.PlanDiff().
 // This produces the declarative config that will be used to determine
 // differential images
-func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, err error) {
+func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
 	for _, ctlg := range lastRun.Operators {
 		prevCatalog[ctlg.Catalog] = ctlg
@@ -239,7 +248,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// include config or just render the full catalog again
 	dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
 	if err != nil {
-		return nil, err
+		return dc, ic, err
 	}
 	switch {
 	case full:
@@ -249,66 +258,58 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 			Refs:     []string{ctlg.Catalog},
 		}.Run(ctx)
 		if err != nil {
-			return nil, err
+			return dc, ic, err
 		}
-	case catalogHeadsOnly:
-		// If a previous specified starting version can be found on
-		// the mirror run update IncludeConfig , else, keep the
-		// IncludeConfig to get a new catalog at heads only.
-		converter := operator.NewCatalogStrategy()
+	case catalogHeadsOnly || includeWithHeadsOnly:
+		// If a previous catalog is found, reconcile the
+		// previously stored IncludeConfig with the current catalog information
+		// to make sure the bundles still exist. This causes the declarative config
+		// to be rendered once to get the full information and then a second time to
+		// get the final copy.
 		prev, found := prevCatalog[ctlg.Catalog]
 		if found {
-			dc, err = action.Render{
-				Registry: reg,
-				Refs:     []string{ctlg.Catalog},
-			}.Run(ctx)
-			if err != nil {
-				return nil, err
+			var converter operator.IncludeConfigConverter
+			if catalogHeadsOnly {
+				converter = operator.NewCatalogStrategy()
+				dc, err = action.Render{
+					Registry: reg,
+					Refs:     []string{ctlg.Catalog},
+				}.Run(ctx)
+				if err != nil {
+					return dc, ic, err
+				}
+			} else {
+				converter = operator.NewIncludeStrategy(ctlg.IncludeConfig)
+				a.IncludeConfig = dic
+				dc, err = a.Run(ctx)
+				if err != nil {
+					return dc, ic, &UuidError{}
+				}
 			}
+
 			ic, err := converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
 			if err != nil {
-				return nil, err
+				return dc, ic, err
 			}
 			dic, err = ic.ConvertToDiffIncludeConfig()
 			if err != nil {
-				return nil, err
-			}
-		}
-		fallthrough
-	case includeWithHeadsOnly:
-		// If a previous specified starting version can be found on
-		// the mirror run update IncludeConfig , else, keep the
-		// IncludeConfig to get a new catalog at heads only. Need to diff the
-		// catalog will full channels first to get current information from packages.
-		converter := operator.NewIncludeStrategy(ctlg.IncludeConfig)
-		prev, found := prevCatalog[ctlg.Catalog]
-		if found {
-			a.IncludeConfig = dic
-			dc, err = a.Run(ctx)
-			if err != nil {
-				return nil, err
-			}
-			ic, err := converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
-			if err != nil {
-				return nil, err
-			}
-			dic, err = ic.ConvertToDiffIncludeConfig()
-			if err != nil {
-				return nil, err
+				return dc, ic, fmt.Errorf("error converting include config for catalog heads-only mode: %v", err)
 			}
 		}
 		fallthrough
 	default:
+		// Default case is include
+		// config will full channels
 		a.IncludeConfig = dic
 		dc, err = a.Run(ctx)
 		if err != nil {
-			return nil, err
+			return dc, ic, err
 		}
 	}
 
 	verifyOperatorPkgFound(dic, dc)
 
-	return dc, nil
+	return dc, ic, nil
 }
 
 // verifyOperatorPkgFound will verify that each of the requested operator packages were
@@ -334,7 +335,7 @@ func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.Declarativ
 	}
 }
 
-func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -353,7 +354,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		}
 	}
 
-	indexDir, err := o.writeDC(dc, ctlgRef.Ref, targetCtlg.Ref)
+	indexDir, err := o.writeConfigs(dc, ic, ctlgRef.Ref, targetCtlg.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +557,8 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg i
 	return nil
 }
 
-func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef, targetCtlg imgreference.DockerImageReference) (string, error) {
+// writeConfig
+func (o *OperatorOptions) writeConfigs(dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg imgreference.DockerImageReference) (string, error) {
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
@@ -564,7 +566,8 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef, target
 	if err != nil {
 		return "", err
 	}
-	indexDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.IndexDir)
+	catalogBasePath := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir)
+	indexDir := filepath.Join(catalogBasePath, config.IndexDir)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
@@ -572,17 +575,33 @@ func (o *OperatorOptions) writeDC(dc *declcfg.DeclarativeConfig, ctlgRef, target
 
 	o.Logger.Debugf("writing catalog %q diff to %s", ctlgRef.Exact(), catalogIndexPath)
 
-	f, err := os.Create(catalogIndexPath)
+	indexFile, err := os.Create(catalogIndexPath)
 	if err != nil {
 		return "", fmt.Errorf("error creating diff index file: %v", err)
 	}
+
+	o.Logger.Debugf("writing catalog %q diff to %s", ctlgRef.Exact(), catalogIndexPath)
+
+	includeConfigPath := filepath.Join(catalogBasePath, config.IncludeConfigFile)
+	includeFile, err := os.Create(includeConfigPath)
+	if err != nil {
+		return "", fmt.Errorf("error creating include config file: %v", err)
+	}
+
 	defer func() {
-		if err := f.Close(); err != nil {
+		if err := includeFile.Close(); err != nil {
+			o.Logger.Error(err)
+		}
+		if err := indexFile.Close(); err != nil {
 			o.Logger.Error(err)
 		}
 	}()
-	if err := declcfg.WriteJSON(*dc, f); err != nil {
+
+	if err := declcfg.WriteJSON(*dc, indexFile); err != nil {
 		return "", fmt.Errorf("error writing diff catalog: %v", err)
+	}
+	if err := ic.Encode(includeFile); err != nil {
+		return "", fmt.Errorf("error writing include config file: %v", err)
 	}
 
 	return indexDir, nil
