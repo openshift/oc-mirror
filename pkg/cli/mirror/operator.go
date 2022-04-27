@@ -226,7 +226,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	}
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
-	// Process the catalog at heads-only or specified or specified
+	// Process the catalog at heads-only or specified
 	// packages at heads-only
 	catalogHeadsOnly := ctlg.IsHeadsOnly() && !hasInclude
 	includeWithHeadsOnly := ctlg.IsHeadsOnly() && hasInclude
@@ -280,20 +280,23 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 				}
 			} else {
 				converter = operator.NewIncludeStrategy(ctlg.IncludeConfig)
+				// Must set the current
+				// diff include configuration to get the full
+				// channels before recalculating.
 				a.IncludeConfig = dic
 				dc, err = a.Run(ctx)
 				if err != nil {
-					return dc, ic, &UuidError{}
+					return dc, ic, err
 				}
 			}
 
-			ic, err := converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+			ic, err = converter.UpdateIncludeConfig(*dc, prev.IncludeConfig)
 			if err != nil {
-				return dc, ic, err
+				return dc, ic, fmt.Errorf("error updating include config: %v", err)
 			}
 			dic, err = ic.ConvertToDiffIncludeConfig()
 			if err != nil {
-				return dc, ic, fmt.Errorf("error converting include config for catalog heads-only mode: %v", err)
+				return dc, ic, fmt.Errorf("error during include config conversion to declarative config: %v", err)
 			}
 		}
 		fallthrough
@@ -580,9 +583,10 @@ func (o *OperatorOptions) writeConfigs(dc *declcfg.DeclarativeConfig, ic v1alpha
 		return "", fmt.Errorf("error creating diff index file: %v", err)
 	}
 
-	o.Logger.Debugf("writing catalog %q diff to %s", ctlgRef.Exact(), catalogIndexPath)
-
 	includeConfigPath := filepath.Join(catalogBasePath, config.IncludeConfigFile)
+
+	o.Logger.Debugf("writing catalog %q include config to %s", ctlgRef.Exact(), includeConfigPath)
+
 	includeFile, err := os.Create(includeConfigPath)
 	if err != nil {
 		return "", fmt.Errorf("error creating include config file: %v", err)

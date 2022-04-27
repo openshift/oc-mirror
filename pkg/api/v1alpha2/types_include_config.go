@@ -127,7 +127,7 @@ func (ic *IncludeConfig) Encode(w io.Writer) error {
 func (ic *IncludeConfig) Decode(r io.Reader) error {
 	dec := gob.NewDecoder(r)
 	if err := dec.Decode(ic); err != nil {
-		return fmt.Errorf("error decoding image associations: %v", err)
+		return fmt.Errorf("error decoding include config: %v", err)
 	}
 	return nil
 }

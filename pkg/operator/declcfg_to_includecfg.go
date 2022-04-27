@@ -117,7 +117,7 @@ func (s *includeStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig)
 	for _, mpkg := range inputModel {
 		icPkg, found := currPackages[mpkg.Name]
 		if !found || !includePackageVersionsSet(icPkg) {
-			icPkg := v1alpha2.IncludePackage{
+			icPkg = v1alpha2.IncludePackage{
 				Name:     mpkg.Name,
 				Channels: getFirstBundle(*mpkg),
 			}
@@ -157,7 +157,7 @@ func (s *includeStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev
 	for _, mpkg := range inputModel {
 		icPkg, found := currPackages[mpkg.Name]
 		if !found || !includePackageVersionsSet(icPkg) {
-			icPkg := v1alpha2.IncludePackage{
+			icPkg = v1alpha2.IncludePackage{
 				Name: mpkg.Name,
 			}
 			prevPkg, found := prevPackages[mpkg.Name]
