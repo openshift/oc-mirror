@@ -26,7 +26,9 @@ We are currently running automated unit tests with CI and are working on an auto
 ## Local Testing
 
 We have developed local end-to-end test scripts to verify `oc-mirror` functionality with various imageset configurations.
-When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
+When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../../test/e2e/e2e-simple.sh). This can be run with `make test-e2e`.
+
+Unit test can be run with `make test-unit`.
 
 If you would like to conduct a more exhaustive end-to-end test in a full integration environment, including an isolated VPC and a real OpenShift installation, you will need an AWS IAM user access key and secret and a pull secret from the [OpenShift console](https://console.redhat.com/openshift/install/aws/installer-provisioned). You can then run the following:
 

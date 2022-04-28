@@ -6,7 +6,7 @@
   - [How can you interact with metadata through the `oc-mirror` CLI?](#how-can-you-interact-with-metadata-through-the-oc-mirror-cli)
     - [Describe](#describe)
     - [Ignore History](#ignore-history)
-  - [Skip Metadata Check](#skip-metadata-check)
+    - [Skip Metadata Check](#skip-metadata-check)
     - [Why do we use a sequence number?](#why-do-we-use-a-sequence-number)
   
 ## Overview
@@ -31,12 +31,12 @@ When interacting with `oc-mirror` in a connected environment, the imageset confi
 
 By default, `oc-mirror` will not redownload images or blob detected in the past runs of the tools. If an image does not need to be redownloaded the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
 
-## Skip Metadata Check
+### Skip Metadata Check
 
 In disk to mirror workflows, the metadata sequence is checked against previously mirrored imagesets to ensure no erros occur when reconstituting images before publishing. In the event that a sequence archived is lost, the `skip-metadata-check` flag can be used. To get the workspace back into a healthy state, perform the following tasks:
 
 - Create a new imageset with `--ignore-history` to ensure all images and blob are packed into the archive
-- Publish the imageset with `skip-metadata-check` to allow the imageset to overwrite the sequence number
+- Publish the imageset with `---skip-metadata-check` to allow the imageset to overwrite the sequence number
 
 ### Why do we use a sequence number?
 
