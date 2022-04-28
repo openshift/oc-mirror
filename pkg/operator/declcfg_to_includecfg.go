@@ -19,6 +19,7 @@ var _ IncludeConfigConverter = &catalogStrategy{}
 
 type catalogStrategy struct{}
 
+// NewCatalogStrategy will return the catalog implementation for the IncludeConfigConverter.
 func NewCatalogStrategy() IncludeConfigConverter {
 	return &catalogStrategy{}
 }
@@ -97,6 +98,7 @@ type includeStrategy struct {
 	curr v1alpha2.IncludeConfig
 }
 
+// NewIncludeStrategy will return the package implementation for the IncludeConfigConverter.
 func NewIncludeStrategy(curr v1alpha2.IncludeConfig) IncludeConfigConverter {
 	return &includeStrategy{curr}
 }

@@ -122,7 +122,7 @@ func (ic *IncludeConfig) Encode(w io.Writer) error {
 	return nil
 }
 
-// Decode IncludeConfig from an opaque format. Only useable if Include Config
+// Decode IncludeConfig from an opaque format. Only usable if Include Config
 // was encoded with Encode().
 func (ic *IncludeConfig) Decode(r io.Reader) error {
 	dec := gob.NewDecoder(r)
