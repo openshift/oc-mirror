@@ -231,7 +231,6 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 }
 
 func TestUpdateIncludeConfig(t *testing.T) {
-
 	type spec struct {
 		name     string
 		cfg      declcfg.DeclarativeConfig

@@ -38,6 +38,8 @@ trap cleanup_all EXIT
 # Install crane and registry2
 install_deps
 
+echo "INFO: Running ${#TESTCASES[@]} test cases"
+
 for i in "${!TESTCASES[@]}"; do
     echo "INFO: Running ${TESTCASES[$i]}"
     mkdir -p "$DATA_TMP"
