@@ -191,7 +191,7 @@ func listOCPReleaseVersions(w io.Writer) error {
 	}
 
 	tagSlice := make([]string, 10)
-	for tag, _ := range tags {
+	for tag := range tags {
 		tagSlice = append(tagSlice, tag)
 	}
 	versions := parseVersionTags(tagSlice)

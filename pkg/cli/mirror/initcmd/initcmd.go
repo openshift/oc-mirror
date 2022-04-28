@@ -277,9 +277,8 @@ func interfaceToMapSlice(slice interface{}) yamlv2.MapSlice {
 
 // map[parent][child]index
 func deepMapKeySort(slice interface{}, orders map[string]map[string]int, parentKey string) interface{} {
-	switch slice.(type) {
+	switch slices := slice.(type) {
 	case yamlv2.MapSlice:
-		slices := (slice).(yamlv2.MapSlice)
 		for sliceIndex, mapItem := range slices {
 			key := fmt.Sprintf("%v", mapItem.Key)
 			switch reflect.ValueOf(mapItem.Value).Kind() {
