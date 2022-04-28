@@ -142,7 +142,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lp.Run(ctx)
 		if err != nil {
-			return errors.New("Failed to list operators, please check catalog name: " + o.Catalog)
+			return fmt.Errorf("failed to list operators, please check catalog name - %s : %w", o.Catalog, err)
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
 			return err
