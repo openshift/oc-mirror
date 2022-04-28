@@ -153,7 +153,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 	default:
 
-		vm, err := image.GetTagsFromImage(catalogs[0])
+		vm, err := image.GetVersionsFromImage(catalogs[0])
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 		return err
 	}
 	for _, catalog := range catalogs {
-		versions, err := image.GetTagsFromImage(catalog)
+		versions, err := image.GetVersionsFromImage(catalog)
 		if err != nil {
 			fmt.Fprintf(w, "Failed to get catalog version details: %s", err)
 			continue

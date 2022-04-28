@@ -175,7 +175,7 @@ func getReleaseChannelFromGit() (string, error) {
 }
 
 func getCatalog(catalogBase string) (string, error) {
-	versionMap, err := image.GetTagsFromImage(catalogBase)
+	versionMap, err := image.GetVersionsFromImage(catalogBase)
 	if err != nil {
 		return "", fmt.Errorf("unable to get version map for init: %w", err)
 	}

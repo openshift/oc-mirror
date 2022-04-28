@@ -185,7 +185,7 @@ func listChannelsForVersion(ctx context.Context, client cincinnati.Client, o *Re
 }
 
 func listOCPReleaseVersions(w io.Writer) error {
-	tags, err := image.GetTagsFromImage(OCPReleaseRepo)
+	tags, err := image.GetVersionsFromImage(OCPReleaseRepo)
 	if err != nil {
 		return err
 	}
