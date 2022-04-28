@@ -1,5 +1,6 @@
 # This config demonstrates how to mirror a version range
-# in the specified channel for an OpenShift release.
+# in the specified channel for an OpenShift release and the shortest
+# upgrade path in between
 ---
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
@@ -9,3 +10,4 @@ mirror:
       - name: stable-4.9
         minVersion: 4.9.13
         maxVersion: 4.9.26
+        shortestPath: true
