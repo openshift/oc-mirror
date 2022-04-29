@@ -9,18 +9,18 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/model"
 )
 
-// IncludeConfigConverter defines methods for IncludeConfig creation and manipulation.
-type IncludeConfigConverter interface {
+// IncludeConfigManager defines methods for IncludeConfig creation and manipulation.
+type IncludeConfigManager interface {
 	ConvertDCToIncludeConfig(declcfg.DeclarativeConfig) (v1alpha2.IncludeConfig, error)
 	UpdateIncludeConfig(declcfg.DeclarativeConfig, v1alpha2.IncludeConfig) (v1alpha2.IncludeConfig, error)
 }
 
-var _ IncludeConfigConverter = &catalogStrategy{}
+var _ IncludeConfigManager = &catalogStrategy{}
 
 type catalogStrategy struct{}
 
-// NewCatalogStrategy will return the catalog implementation for the IncludeConfigConverter.
-func NewCatalogStrategy() IncludeConfigConverter {
+// NewCatalogStrategy will return the catalog implementation for the IncludeConfigManager.
+func NewCatalogStrategy() IncludeConfigManager {
 	return &catalogStrategy{}
 }
 
@@ -92,20 +92,22 @@ func (s *catalogStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, curr
 	return ic, nil
 }
 
-var _ IncludeConfigConverter = &includeStrategy{}
+var _ IncludeConfigManager = &packageStrategy{}
 
-type includeStrategy struct {
+type packageStrategy struct {
 	curr v1alpha2.IncludeConfig
 }
 
-// NewIncludeStrategy will return the package implementation for the IncludeConfigConverter.
-func NewIncludeStrategy(curr v1alpha2.IncludeConfig) IncludeConfigConverter {
-	return &includeStrategy{curr}
+// NewPackageStrategy will return the package implementation for the IncludeConfigManager.
+// The current IncludeConfig specified through user-configuration is used to determine
+// what packages should be managed and what package have configuration information set.
+func NewPackageStrategy(curr v1alpha2.IncludeConfig) IncludeConfigManager {
+	return &packageStrategy{curr}
 }
 
 // ConvertDCToIncludeConfig converts a heads-only rendered declarative config to an IncludeConfig
 // with all of the package channels with the lowest bundle version.
-func (s *includeStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig) (ic v1alpha2.IncludeConfig, err error) {
+func (s *packageStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig) (ic v1alpha2.IncludeConfig, err error) {
 	inputModel, err := declcfg.ConvertToModel(dc)
 	if err != nil {
 		return ic, err
@@ -137,7 +139,7 @@ func (s *includeStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig)
 
 // UpdateIncludeConfig will process the current IncludeConfig to add any new packages or channels. Starting versions are
 // also validated and incremented if the version no longer exists in the catalog.
-func (s *includeStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev v1alpha2.IncludeConfig) (ic v1alpha2.IncludeConfig, err error) {
+func (s *packageStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev v1alpha2.IncludeConfig) (ic v1alpha2.IncludeConfig, err error) {
 	inputModel, err := declcfg.ConvertToModel(dc)
 	if err != nil {
 		return ic, err

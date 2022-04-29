@@ -89,7 +89,7 @@ function pruned_catalogs_with_target() {
 function pruned_catalogs_with_include() {
     workflow_full imageset-config-filter-multi-prune.yaml "test-catalog-prune" --diff -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
-    "bar.v0.1.0 foo.v0.1.0 foo.v0.1.1" \
+    "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
     check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:535b8534"
 

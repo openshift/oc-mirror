@@ -222,4 +222,4 @@ replace (
 	k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
 )
 
-replace github.com/operator-framework/operator-registry => github.com/jpower432/operator-registry v1.19.6-0.20220506200726-7edfc3bc97cc
+replace github.com/operator-framework/operator-registry => github.com/dinhxuanvu/operator-registry v1.13.5-0.20220511214249-b2884ca79f5f

@@ -13,7 +13,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 	type spec struct {
 		name     string
 		cfg      declcfg.DeclarativeConfig
-		strategy IncludeConfigConverter
+		strategy IncludeConfigManager
 		exp      v1alpha2.IncludeConfig
 	}
 
@@ -85,7 +85,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 		},
 		{
 			name: "Success/HeadsOnlyPackages",
-			strategy: &includeStrategy{
+			strategy: &packageStrategy{
 				curr: v1alpha2.IncludeConfig{
 					Packages: []v1alpha2.IncludePackage{
 						{
@@ -234,7 +234,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 	type spec struct {
 		name     string
 		cfg      declcfg.DeclarativeConfig
-		strategy IncludeConfigConverter
+		strategy IncludeConfigManager
 		in       v1alpha2.IncludeConfig
 		exp      v1alpha2.IncludeConfig
 		expErr   string
@@ -577,7 +577,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 		},
 		{
 			name: "Success/PruneChannelHeadWithPackages",
-			strategy: &includeStrategy{
+			strategy: &packageStrategy{
 				curr: v1alpha2.IncludeConfig{
 					Packages: []v1alpha2.IncludePackage{
 						{

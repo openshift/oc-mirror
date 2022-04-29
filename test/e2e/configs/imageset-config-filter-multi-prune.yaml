@@ -7,8 +7,7 @@ storageConfig:
 mirror:
   operators:
   - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
-    full: true
     packages:
       - name: foo
       - name: bar
-        startingVersion: 0.1.0
+        minVersion: 0.1.0
