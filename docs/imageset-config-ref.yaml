@@ -22,9 +22,10 @@ mirror:
             - name: 'latest'
   additionalImages: # List of additional images to be included in imageset
     - name: registry.redhat.io/ubi8/ubi:latest
-  blockedImages: # Planned, list of base images to be blocked (best effort)
+  blockedImages: # Image to block by name or regular expression
     - name: alpine
     - name: redis
+    - name: ^blocked-registry.com
   helm:
     local:
       - name: podinfo
