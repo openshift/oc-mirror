@@ -94,7 +94,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 								{
 									Name: "stable",
 									IncludeBundle: v1alpha2.IncludeBundle{
-										StartingVersion: semver.MustParse("0.1.2"),
+										MinVersion: "0.1.2",
 									},
 								},
 							},
@@ -200,7 +200,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.2"),
+									MinVersion: "0.1.2",
 								},
 							},
 						},
@@ -211,7 +211,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.0.1"),
+									MinVersion: "0.0.1",
 								},
 							},
 						},
@@ -586,7 +586,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 								{
 									Name: "stable",
 									IncludeBundle: v1alpha2.IncludeBundle{
-										StartingVersion: semver.MustParse("0.1.3"),
+										MinVersion: "0.1.3",
 									},
 								},
 							},
@@ -692,7 +692,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.2"),
+									MinVersion: "0.1.2",
 								},
 							},
 						},
@@ -703,7 +703,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -718,7 +718,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.3"),
+									MinVersion: "0.1.3",
 								},
 							},
 						},
@@ -729,7 +729,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.2.0"),
+									MinVersion: "0.2.0",
 								},
 							},
 						},
