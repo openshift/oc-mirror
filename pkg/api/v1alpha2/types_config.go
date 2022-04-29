@@ -1,6 +1,9 @@
 package v1alpha2
 
 import (
+	"fmt"
+
+	"github.com/openshift/library-go/pkg/image/reference"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -88,18 +91,48 @@ type Operator struct {
 	// If HeadsOnly is true, these objects are mirrored on top of heads of all channels.
 	// Otherwise, only these specific objects are mirrored.
 	IncludeConfig `json:",inline"`
-
 	// Catalog image to mirror. This image must be pullable and available for subsequent
 	// pulls on later mirrors.
 	// This image should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Catalog string `json:"catalog"`
+	// TargetName is the target image name the catalog will be built with. If unset,
+	// the catalog will be published with the provided name in the Catalog
+	// field.
+	TargetName string `json:"targetName,omitempty"`
+	// TargetTag is the tag the catalog image will be built with. If unset,
+	// the catalog will be publish with the provided tag in the Catalog
+	// field or a tag calculated from the partial digest.
+	TargetTag string `json:"targetTag,omitempty"`
 	// Full defines whether all packages within the catalog
 	// or specified IncludeConfig will be mirrored or just channel heads.
 	Full bool `json:"full,omitempty"`
 	// SkipDependencies will not include dependencies
 	// of bundles included in the diff if true.
 	SkipDependencies bool `json:"skipDeps,omitempty"`
+}
+
+// GetUniqueName determines the catalog name that will
+// be tracked in the metadata and built. This depends on what fields
+// are set between Catalog, TargetName, and TargetTag.
+func (o Operator) GetUniqueName() (string, error) {
+	if o.TargetName == "" && o.TargetTag == "" {
+		return o.Catalog, nil
+	}
+
+	catalogRef, err := reference.Parse(o.Catalog)
+	if err != nil {
+		return "", fmt.Errorf("error parsing source catalog %s: %v", catalogRef, err)
+	}
+	if o.TargetName != "" {
+		catalogRef.Name = o.TargetName
+	}
+	if o.TargetTag != "" {
+		catalogRef.ID = ""
+		catalogRef.Tag = o.TargetTag
+	}
+
+	return catalogRef.Exact(), nil
 }
 
 // IsHeadsOnly determine if the mode set mirrors only channel heads of all packages in the catalog.

@@ -291,8 +291,22 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		return nil
 	}
 
+	// Keep track of the names and to make sure no
+	// manifest are overwritten.
+	// If found, increment the name suffix by one.
+	names := make(map[string]int, len(mapping))
 	for source, dest := range mapping {
 		name := source.Ref.Name
+
+		value, found := names[name]
+		if found {
+			value++
+			names[name] = value
+			name = fmt.Sprintf("%s-%d", name, value)
+		} else {
+			names[name] = 0
+		}
+
 		catalogSource, err := generateCatalogSource(name, dest.Ref)
 		if err != nil {
 			return err

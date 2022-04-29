@@ -125,7 +125,14 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 }
 
 func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
-	operatorMeta.Catalog = ctlg.Catalog
+	ctlgName, err := ctlg.GetUniqueName()
+	if err != nil {
+		return v1alpha2.OperatorMetadata{}, err
+	}
+	operatorMeta.Catalog = ctlgName
+
+	// Stick to Catalog here because we
+	// are referencing the source
 	ctlgPin := ctlg.Catalog
 	if !image.IsImagePinned(ctlg.Catalog) {
 		ctlgPin, err = image.ResolveToPin(ctx, resolver, ctlg.Catalog)
@@ -143,9 +150,10 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 	// during catalog processing. Would be better to write it to disk
 	// with the FBC and unmarshal it into the struct instead of generating
 	// it again on diff
-	if ctlg.IsHeadsOnly() {
+	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
+	if ctlg.IsHeadsOnly() && !hasInclude {
 		// Determine the location of the created FBC
-		ctlgRef, err := imgreference.Parse(ctlg.Catalog)
+		ctlgRef, err := imgreference.Parse(ctlgName)
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err
 		}
