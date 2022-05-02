@@ -16,25 +16,25 @@
 
 ## Platforms
 
-Container management platforms release channels can be specified for mirroring. 
+Release channels for container management platforms can be specified for mirroring. 
 Currently, OpenShift Container Platform is supported by all `oc-mirror` commands.
 OKD is a supported type in the imageset configuration, but not by the `oc-mirror` list commands.
 
 ## Operators
 
-Catalog images can be specified for mirroring. Bundle images and all the dependencies
-will be mirrored and the catalog with be rebuilt by `oc-mirror` with the custom file-based catalog
-generated during package filtering.
-
+Catalog images can be specified for mirroring. The associated bundles will be processed
+to determine all bundle images and dependency images needed.
+A file-based catalog is stored in the imageset and used to build
+a custom catalog image in the target registry.
 
 ## Additional Images
 
-Single images to mirrored can be specified in an image set. If no tag is specified, the latest tag will be assigned.
+Individual images can be specified in an imageset configuration. If no tag is specified, the "latest" tag will be assigned.
 
 ## Helm Chart
 
 Helm chart locations can be specified for download and `oc-mirror` will detect and mirror images contained in the chart
-on a best-effort bases. Local Helm charts as well as public Helm charts in a repository can be used. `oc-mirror` will search well-known locations, but custom image locations can be passed with the `imagepath` key. Example:
+on a best-effort basis. Local and remote Helm charts can be used. `oc-mirror` will search well-known locations, but custom image locations can be passed with the `imagePaths` key. Example:
 
 
 ```
@@ -55,15 +55,16 @@ mirror:
 # Limitations
 
 ## Platforms and Catalogs
-Current limitations of the imageset configuration is duplication when it comes to specifying channels and catalogs. A catalog or release
-channel can only be specified and configured one time. `oc-mirror` will return an error is this is violated.
 
-OKD is supported by the mirroring processes, but the discovery `list` tools do not support OKD.
+- Duplicate release channel names: A release channel can only be configured one time under the `platform` key. `oc-mirror` will return an error when this is violated.
+- Duplicate target catalog names - A target catalog name is generated from the source catalog name and any target information set with the keys `targetName` and `targetTag`. The target names must be unique. `oc-mirror` will return an error when this is violated.
+
+OKD is supported by the mirroring process but not the discovery `list` tools.
 
 ## Helm Charts
 
-- Private repositories are current not supported. 
-- Helm charts that require alterations to the values.yaml to render are no currently supported.
+- Private repositories are currently not supported. 
+- Helm charts that require alterations to the `values.yaml` to render are not currently supported.
 
 
 
