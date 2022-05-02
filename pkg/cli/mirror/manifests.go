@@ -14,11 +14,11 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"gopkg.in/yaml.v2"
+	"github.com/openshift/oc-mirror/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"github.com/openshift/oc-mirror/pkg/image"
+	"sigs.k8s.io/yaml"
 )
 
 const (
