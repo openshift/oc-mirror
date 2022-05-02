@@ -17,6 +17,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+// Archiver defines the methods require to interface with an
+// imageset archive.
 type Archiver interface {
 	String() string
 	Archive([]string, string) error
@@ -49,7 +51,7 @@ func NewArchiver() Archiver {
 	}
 }
 
-// NewPackager create a new packager for build ImageSets
+// NewPackager create a new packager for imageset building.
 func NewPackager(manifests []string, blobs []string) *packager {
 	manifestSetToArchive := make(map[string]struct{}, len(manifests))
 	blobSetToArchive := make(map[string]struct{}, len(blobs))
@@ -70,7 +72,7 @@ func NewPackager(manifests []string, blobs []string) *packager {
 	}
 }
 
-// CreateSplitArchive will create multiple tar archives from source directory
+// CreateSplitArchive will create one or more archives from the provided source directory.
 func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backend, maxSplitSize int64, destDir, sourceDir, prefix string, skipCleanup bool) error {
 
 	// Declare split variables

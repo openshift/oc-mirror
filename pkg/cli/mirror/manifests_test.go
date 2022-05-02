@@ -1,6 +1,8 @@
 package mirror
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -372,6 +374,148 @@ func TestICSPGeneration(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, icsps)
+			}
+		})
+	}
+}
+
+func TestWriteCatalogSource(t *testing.T) {
+	tests := []struct {
+		name          string
+		images        image.TypedImageMapping
+		expectedFiles []string
+		err           string
+	}{
+		{
+			name: "Success/UniqueCatalogNames",
+			images: image.TypedImageMapping{
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry: "test-registry",
+						Name:     "dev",
+						Tag:      "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry: "test-registry",
+							Name:     "dev",
+							Tag:      "latest",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry: "test-registry",
+						Name:     "staging",
+						Tag:      "v1",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry: "test-registry",
+							Name:     "staging",
+							Tag:      "v1",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+			},
+			expectedFiles: []string{
+				"catalogSource-dev.yaml",
+				"catalogSource-staging.yaml",
+			},
+		},
+		{
+			name: "Success/DuplicateCatalogName",
+			images: image.TypedImageMapping{
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry: "test-registry",
+						Name:     "dev",
+						Tag:      "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry: "test-registry",
+							Name:     "dev",
+							Tag:      "latest",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry: "test-registry",
+						Name:     "dev",
+						Tag:      "v1",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry: "test-registry",
+							Name:     "dev",
+							Tag:      "v1",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry: "test-registry",
+						Name:     "dev",
+						Tag:      "v2",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry: "test-registry",
+							Name:     "dev",
+							Tag:      "v2",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+			},
+			expectedFiles: []string{
+				"catalogSource-dev.yaml",
+				"catalogSource-dev-1.yaml",
+				"catalogSource-dev-2.yaml",
+			},
+		},
+		{
+			name:   "Success/EmptyMapping",
+			images: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpdir := t.TempDir()
+			err := WriteCatalogSource(test.images, tmpdir)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				if test.expectedFiles != nil {
+					for _, file := range test.expectedFiles {
+						catalogSourceFile := filepath.Join(tmpdir, file)
+						_, err := os.Stat(catalogSourceFile)
+						require.NoError(t, err)
+					}
+
+				}
 			}
 		})
 	}

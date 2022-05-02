@@ -37,7 +37,7 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	o.RootOptions = ro
 
 	cmd := &cobra.Command{
-		Use:   "updates",
+		Use:   "updates <configuration path>",
 		Short: "List available updates in upgrade graph from upstream sources.",
 		Long: templates.LongDesc(`
 		List available updates in the upgrade graph for releases and operators from upstream sources

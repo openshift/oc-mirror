@@ -123,8 +123,12 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 		if defaultTag != "" {
 			// If set, add a subset of the digest to randomize the
 			// tag in the event multiple digests are pulled for the same
-			// image
-			tag = defaultTag + id[7:13]
+			// image.
+			partial, err := getPartialDigest(id)
+			if err != nil {
+				return nil, fmt.Errorf("error calculating partial digest for %s: %v", id, err)
+			}
+			tag = defaultTag + partial
 			manifestDir := filepath.Dir(manifestPath)
 			symlink := filepath.Join(manifestDir, tag)
 			if err := os.Symlink(info.Name(), symlink); err != nil {
@@ -219,7 +223,7 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 			}
 			imgWithID, err := ResolveToPin(ctx, resolver, srcImg.Ref.Exact())
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, &ErrInvalidComponent{srcImg.String(), srcImg.Ref.Tag})
 				continue
 			}
 			pinnedRef, err := imagesource.ParseReference(imgWithID)
@@ -238,7 +242,7 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 
 		repo, err := regctx.RepositoryForRef(ctx, srcImg.Ref, insecure)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("create repo for %s: %v", srcImg.Ref.Exact(), err))
+			errs = append(errs, &ErrInvalidImage{srcImg.Ref.Exact()})
 			continue
 		}
 
@@ -273,7 +277,7 @@ func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcI
 	}
 	mn, err := ms.Get(ctx, dgst, preferManifestList)
 	if err != nil {
-		return nil, fmt.Errorf("error getting manifest %s: %v", dgst, err)
+		return nil, &ErrInvalidComponent{srcImg, dgst.String()}
 	}
 	mt, payload, err := mn.Payload()
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 )
 
 // DefaultPlatformArchitecture defines the default
-// architecture used be mirroring platform
+// architecture used by mirroring platform
 // release payloads.
 const DefaultPlatformArchitecture = "amd64"
 

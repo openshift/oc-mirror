@@ -59,7 +59,6 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 
 	klog.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 	allMappings := image.TypedImageMapping{}
-	currentAssocs := image.AssociationSet{}
 
 	// Set target dir for resulting artifacts
 	if o.OutputDir == "" {
@@ -120,8 +119,14 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 	allMappings.Merge(imgMappings)
 
-	if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
-		return allMappings, err
+	if len(currentMeta.PastAssociations) != 0 {
+		currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
+		if err != nil {
+			return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+		}
+		if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
+			return allMappings, err
+		}
 	}
 
 	klog.V(4).Infof("unpack release signatures")

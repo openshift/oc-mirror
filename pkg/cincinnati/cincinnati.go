@@ -243,7 +243,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 	var targetVer semver.Version
 	if source.EQ(target) {
 		// If this is the target channel major.minor get
-		// requested version so we don't exceed the maximun version
+		// requested version, so we don't exceed the maximum version
 		// Set the target channel to make sure we have the intended
 		// channel prefix
 		targetVer = reqVer
@@ -392,7 +392,7 @@ func GetChannels(ctx context.Context, c Client, channel string) (map[string]stru
 	return channels, nil
 }
 
-// GetVersions will returns all update payloads from the specified
+// GetVersions will return all update payloads from the specified
 // upstream Cincinnati stack given architecture and channel.
 func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.

@@ -6,14 +6,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 )
@@ -105,7 +104,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			klog.Fatal(err)
+			return err
 		}
 		// Find target channel for searching
 		for _, c := range res.Channels {
@@ -131,10 +130,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lc.Run(ctx)
 		if err != nil {
-			klog.Fatal(err)
+			return err
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			klog.Fatal(err)
+			return err
 		}
 	case len(o.Catalog) > 0:
 		lp := action.ListPackages{
@@ -142,10 +141,10 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 		res, err := lp.Run(ctx)
 		if err != nil {
-			klog.Fatal(err)
+			return fmt.Errorf("failed to list operators, please check catalog name - %s : %w", o.Catalog, err)
 		}
 		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
-			klog.Fatal(err)
+			return err
 		}
 	case o.Catalogs:
 		if _, err := fmt.Fprintln(w, "Available OpenShift OperatorHub catalogs:"); err != nil {
@@ -190,7 +189,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 	for _, catalog := range catalogs {
 		versions, err := getVersionMap(catalog)
 		if err != nil {
-			klog.Error("Failed to get catalog version details: ", err)
+			fmt.Fprintf(w, "Failed to get catalog version details: %s", err)
 			continue
 		}
 

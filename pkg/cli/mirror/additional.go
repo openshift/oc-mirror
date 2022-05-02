@@ -36,9 +36,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 		if err != nil {
 			return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
-		if setLatest(srcRef) {
-			srcRef.Ref.Tag = "latest"
-		}
+		srcRef.Ref = srcRef.Ref.DockerClientDefaults()
 
 		// Instead of returning an error, just log it.
 		isSkipErr := func(err error) bool {
@@ -65,7 +63,6 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 		// Set destination image information as file by default
 		dstRef := srcRef
 		dstRef.Type = imagesource.DestinationFile
-		dstRef.Ref = dstRef.Ref.DockerClientDefaults()
 		// The registry component is not included in the final path.
 		dstRef.Ref.Registry = ""
 
@@ -73,8 +70,4 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 	}
 
 	return mmappings, nil
-}
-
-func setLatest(img imagesource.TypedImageReference) bool {
-	return len(img.Ref.ID) == 0 && len(img.Ref.Tag) == 0
 }

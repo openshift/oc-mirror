@@ -7,12 +7,14 @@ function workflow_full() {
   local config="${1:?config required}"
   local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
-  # Copy the catalog to the connected registry so they can have the same tag
-  setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
   prep_registry "${catalog_tag}"
+  # Copy the catalog to the connected registry so they can have the same tag
+  # Full is the only place catalog digests could be used so setting and using the
+  # CATALOGDIGEST set by prep_registry here.
+  setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false $CATALOGDIGEST
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   pushd $PUBLISH_FULL_DIR
-  if $DIFF; then
+  if !$DIFF; then
     cleanup_conn
   fi
   run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $PUBLISH_FLAGS
@@ -40,7 +42,7 @@ function workflow_diff() {
 function workflow_no_updates() {
   parse_args "$@"
   local config="${1:?config required}"
-   local catalog_tag="${2:?catalog_tag required}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
@@ -57,9 +59,10 @@ function workflow_no_updates() {
 function workflow_mirror2mirror() {
   parse_args "$@"
   local config="${1:?config required}"
+  local catalog_tag="${2:?catalog_tag required}"
    # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "${CREATE_FULL_DIR}" "$config" false
-  prep_registry "test-catalog-latest"
+  prep_registry "$catalog_tag"
   pushd ${CREATE_FULL_DIR}
   run_cmd --config "${CREATE_FULL_DIR}/$config" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $CREATE_FLAGS
   popd

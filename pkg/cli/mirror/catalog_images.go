@@ -51,7 +51,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	}
 
 	dstDir = filepath.Clean(dstDir)
-	catalogsByImage := map[imagesource.TypedImageReference]string{}
+	catalogsByImage := map[image.TypedImage]string{}
 	if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
 
 		// Skip the layouts dir because we only need
@@ -82,7 +82,8 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 				// Tag.
 				img = fmt.Sprintf("%s:%s", regRepoNs, id)
 			}
-			ctlgRef := imagesource.TypedImageReference{Type: imagesource.DestinationRegistry}
+			ctlgRef := image.TypedImage{}
+			ctlgRef.Type = imagesource.DestinationRegistry
 			sourceRef, err := imagesource.ParseReference(img)
 			if err != nil {
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
@@ -91,11 +92,15 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			// Update registry so the existing catalog image can be pulled.
 			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
 			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
+			ctlgRef = ctlgRef.SetDefaults()
+			// Unset the ID when passing to the image builder.
+			// Tags are needed here since the digest will be recalculated.
+			ctlgRef.Ref.ID = ""
 
 			catalogsByImage[ctlgRef] = slashPath
 
 			// Add to mapping for ICSP generation
-			refs.Add(sourceRef, ctlgRef, v1alpha2.TypeOperatorCatalog)
+			refs.Add(sourceRef, ctlgRef.TypedImageReference, v1alpha2.TypeOperatorCatalog)
 		}
 		return nil
 	}); err != nil {
@@ -124,7 +129,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	return refs, nil
 }
 
-func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage map[imagesource.TypedImageReference]string) error {
+func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage map[image.TypedImage]string) error {
 	for ctlgRef, artifactDir := range catalogsByImage {
 		// Always build the catalog image with the new declarative config catalog
 		// using the original catalog as the base image

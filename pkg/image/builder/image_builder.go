@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -40,6 +41,12 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 
 	b.init()
 	var v2format bool
+
+	targetIdx := strings.Index(targetRef, "@")
+	if targetIdx != -1 {
+		return fmt.Errorf("target reference %q must have a tag reference", targetRef)
+	}
+
 	tag, err := name.NewTag(targetRef, b.NameOpts...)
 	if err != nil {
 		return err

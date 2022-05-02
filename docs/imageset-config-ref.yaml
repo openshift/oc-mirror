@@ -14,7 +14,7 @@ mirror:
     graph: true # Planned, include Cincinnati upgrade graph image in imageset
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
-      full: true # AllPackages can be set to pull a full catalog and must be set to filter packages
+      full: true # full can be set to pull a full catalog and must be set to filter packages
       packages:
         - name: rhacs-operator
           startingVersion: '3.67.0'
@@ -22,9 +22,10 @@ mirror:
             - name: 'latest'
   additionalImages: # List of additional images to be included in imageset
     - name: registry.redhat.io/ubi8/ubi:latest
-  blockedImages: # Planned, list of base images to be blocked (best effort)
+  blockedImages: # Image to block by name or regular expression
     - name: alpine
     - name: redis
+    - name: ^blocked-registry.com
   helm:
     local:
       - name: podinfo

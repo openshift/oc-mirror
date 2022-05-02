@@ -139,8 +139,6 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 			} else {
 				// Range is set. Ensure full is true so this
 				// is skipped when processing release metadata.
-				// QUESTION(jpower432): This is enforced during config validation
-				// for catalogs. Should we do the same here?
 				klog.V(4).Infof("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch
@@ -390,10 +388,11 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 	if !ok {
 		return nil, fmt.Errorf("release images %s not found in mapping", opts.From)
 	}
-	releaseImageRef.Category = v1alpha2.TypeOCPRelease
-	dstReleaseRef.Category = v1alpha2.TypeOCPRelease
+	// Remove and readd the release image to the
+	// mapping with the correct repo name and image type.
+	mappings.Remove(releaseImageRef)
 	dstReleaseRef.Ref.Name = releaseRepo
-	mappings[releaseImageRef] = dstReleaseRef
+	mappings.Add(releaseImageRef.TypedImageReference, dstReleaseRef.TypedImageReference, v1alpha2.TypeOCPRelease)
 
 	return mappings, nil
 }

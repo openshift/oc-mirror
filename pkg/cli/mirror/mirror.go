@@ -35,6 +35,55 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+var (
+	mirrorlongDesc = templates.LongDesc(
+		` 
+		Create and publish user-configured mirrors with a declarative configuration input.
+		Accepts an argument defining the destination for the mirrored images using the prefix file:// for a local mirror packed into a 
+		tar archive or docker:// for images to be streamed registry to registry without being stored locally. The default docker credentials are 
+		used for authenticating to the registries. The podman location for credentials is also supported as a secondary location.
+
+		When using file mirroring, the --from and --config flags control the location of the images to mirror. The --config flag accepts
+		an imageset configuration file and the --from flag accepts the location of the imageset on disk. The --from input can be passed as a 
+		file or directory, but must contain only one image sequence. The naming convention for an imageset is mirror\_seq<sequence number>\_<tar count>.tar.
+
+		The location of the directory used by oc-mirror as a workspace defaults to the name oc-mirror-workspace. The location of this directory
+		is outlined in the following: 
+
+		1. Destination prefix is docker:// - The current working directory will be used.
+		2. Destination prefix is file:// - The destination directory specified will be used.
+
+		`,
+	)
+	mirrorExamples = templates.Examples(
+		`
+		# Mirror to a directory
+		oc-mirror --config mirror-config.yaml file://mirror
+
+		# Mirror to a directory without layer and image differential operations
+		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
+
+		# Mirror to mirror publish
+		oc-mirror --config mirror-config.yaml docker://localhost:5000
+
+		# Publish a previously created mirror archive
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
+
+		# Publish to a registry and add a top-level namespace
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
+
+		# Generate manifests for previously created mirror archive
+		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace --manifests-only
+
+		# Skip metadata check during imageset publishing. This example shows a two-step process.
+		# A differential imageset would have to be created with --ignore-history to be
+		# successfully published with --skip-metadata-check.
+		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
+		oc-mirror --from mirror_seq2_000000.tar docker://localhost:5000/namespace --skip-metadata-check
+		`,
+	)
+)
+
 func NewMirrorCmd() *cobra.Command {
 	o := MirrorOptions{}
 	o.RootOptions = &cli.RootOptions{
@@ -51,25 +100,13 @@ func NewMirrorCmd() *cobra.Command {
 	f := kcmdutil.NewFactory(matchVersionKubeConfigFlags)
 
 	cmd := &cobra.Command{
-		Use:   filepath.Base(os.Args[0]),
-		Short: "Manage mirrors per user configuration",
-		Long: templates.LongDesc(`
-			Create and publish user-configured mirrors with
-            a declarative configuration input.
-		`),
-		Example: templates.Examples(`
-			# Mirror to a directory
-			oc-mirror --config mirror-config.yaml file://mirror
-
-			# Mirror to mirror publish
-			oc-mirror --config mirror-config.yaml docker://localhost:5000
-
-			# Publish a previously created mirror archive
-			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
-
-			# Publish to a registry and add a top-level namespace
-			oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
-		`),
+		Use: fmt.Sprintf(
+			"%s <destination type>:<destination location>",
+			filepath.Base(os.Args[0]),
+		),
+		Short:             "Manage mirrors per user configuration",
+		Long:              mirrorlongDesc,
+		Example:           mirrorExamples,
 		PersistentPreRun:  o.LogfilePreRun,
 		PersistentPostRun: o.LogfilePostRun,
 		Args:              cobra.MinimumNArgs(1),
@@ -208,6 +245,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
+
+	// Three mode options
+	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
+	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
+	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+
 	switch {
 	case o.ManifestsOnly:
 		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
@@ -225,13 +268,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 		return o.generateAllManifests(mapping, results)
-	case len(o.OutputDir) > 0 && o.From == "":
+	case mirrorToDisk:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
 		}
 
-		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
 
@@ -301,7 +344,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 		}
-	case len(o.ToMirror) > 0 && len(o.From) > 0:
+	case diskToMirror:
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
 		// registry backends and generating the CatalogSource
@@ -324,12 +367,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
-	case len(o.ToMirror) > 0 && len(o.ConfigPath) > 0:
+	case mirrorToMirror:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
 		}
-		if err := bundle.MakeCreateDirs(o.Dir); err != nil {
+		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
 		meta, mapping, err = o.Create(cmd.Context(), cfg)
@@ -481,7 +524,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 // removePreviouslyMirrored will check if an image has been previously mirrored
-// and remove it from the mapping if found. The new past associations are returned.
+// and remove it from the mapping if found. These images are added to the current AssociationSet
+// to maintain a history of images. Any images in the AssociationSet that was not requested in the mapping
+// will be pruned from the history.
 func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping, meta v1alpha2.Metadata) (image.AssociationSet, error) {
 	prevDownloads, err := image.ConvertToAssociationSet(meta.PastAssociations)
 	if err != nil {
@@ -496,7 +541,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	for srcRef := range images {
 		// All keys need to specify image with digest.
 		// Tagged images will need to be redownloaded to
-		// ensure their digests have not be updated.
+		// ensure their digests have not been updated.
 		if srcRef.Ref.ID == "" {
 			continue
 		}
@@ -519,7 +564,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	return prunedDownloads, prunedDownloads.Validate()
 }
 
-// mirrorImage downloads individual images from an image mapping
+// mirrorMappings downloads individual images from an image mapping
 func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 
 	opts, err := o.newMirrorImageOptions(insecure)
@@ -529,9 +574,13 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 
 	var mappings []mirror.Mapping
 	for srcRef, dstRef := range images {
-		if bundle.IsBlocked(cfg.Mirror.BlockedImages, srcRef.Ref) {
+		blocked, err := isBlocked(cfg.Mirror.BlockedImages, srcRef.Ref.Exact())
+		if err != nil {
+			return err
+		}
+		if blocked {
 			klog.Warningf("skipping blocked image %s", srcRef.String())
-			// Remove to make sure this does end up in the metadata
+			// Remove to make sure this does not end up in the metadata
 			images.Remove(srcRef)
 			continue
 		}
@@ -595,7 +644,7 @@ func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, di
 				var release image.TypedImage
 				// Just grab the first release image.
 				// The value is used as a repo and all release images
-				// are stored in the same repo
+				// are stored in the same repo.
 				for _, v := range releaseImages {
 					release = v
 					break
