@@ -45,20 +45,20 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 
 		ref := srcRef.Ref.Exact()
 		if !image.IsImagePinned(ref) {
-            srcImage, err := image.ResolveToPin(ctx, resolver, ref)
-            if err != nil {
-                if !isSkipErr(err) {
-                    return mmappings, err
-                }
-                klog.Warning(err)
-                continue
-            }
-            pinnedRef, err := imagesource.ParseReference(srcImage)
-            if err != nil {
-                return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
-            }
-            srcRef.Ref.ID = pinnedRef.Ref.ID
-        }
+			srcImage, err := image.ResolveToPin(ctx, resolver, ref)
+			if err != nil {
+				if !isSkipErr(err) {
+					return mmappings, err
+				}
+				klog.Warning(err)
+				continue
+			}
+			pinnedRef, err := imagesource.ParseReference(srcImage)
+			if err != nil {
+				return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
+			}
+			srcRef.Ref.ID = pinnedRef.Ref.ID
+		}
 
 		// Set destination image information as file by default
 		dstRef := srcRef

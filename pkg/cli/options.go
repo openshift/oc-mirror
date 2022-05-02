@@ -35,12 +35,12 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	klog.InitFlags(&fsv2)
 	checkErr(fsv2.Set("stderrthreshold", "4"))
 
-	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE | os.O_APPEND | os.O_RDWR, 0666)
+	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		panic(err)
 	}
 	mw := io.MultiWriter(os.Stdout, logFile)
-	
+
 	klog.SetOutput(mw)
 }
 

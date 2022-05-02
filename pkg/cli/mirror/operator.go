@@ -33,8 +33,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/operator"
 	"k8s.io/klog/v2"
-  "github.com/openshift/oc-mirror/pkg/operator"
 )
 
 const (
