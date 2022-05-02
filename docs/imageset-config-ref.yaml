@@ -11,7 +11,7 @@ mirror:
       - name: stable-4.7 # Annotation references min and max version. 
         minVersion: '4.6.13'
         maxVersion: '4.7.18'
-    graph: true # Planned, include Cincinnati upgrade graph image in imageset
+    graph: true # Include Cincinnati upgrade graph image in imageset
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
       full: true # full can be set to pull a full catalog and must be set to filter packages

@@ -1,5 +1,10 @@
 Developers: Getting Started with `oc-mirror`
 ====
+- [Developers: Getting Started with `oc-mirror`](#developers-getting-started-with-oc-mirror)
+  - [External Dependencies](#external-dependencies)
+  - [Building](#building)
+  - [CI](#ci)
+  - [Local Testing](#local-testing)
 
 Let's get started!
 
@@ -27,7 +32,9 @@ When a PR has been approved to test (a step required for anyone not on the appro
 ## Local Testing
 
 We have developed local end-to-end test scripts to verify `oc-mirror` functionality with various imageset configurations.
-When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../test/../../test/e2e-simple.sh)
+When added a new feature or changing a current feature ensure the functionality is covered by the end-to-test located [here](../../test/e2e/e2e-simple.sh). This can be run with `make test-e2e`.
+
+Unit test can be run with `make test-unit`.
 
 If you would like to locally execute the smoke test in the full integration environment, you will need an AWS IAM user access key and secret and a pull secret from the [OpenShift console](https://console.redhat.com/openshift/install/aws/installer-provisioned). You can then run the following:
 
