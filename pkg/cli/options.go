@@ -37,7 +37,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 
 	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
-		panic(err)
+		klog.Fatal(err)
 	}
 	mw := io.MultiWriter(os.Stdout, logFile)
 
