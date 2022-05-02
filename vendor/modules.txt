@@ -692,7 +692,7 @@ github.com/operator-framework/api/pkg/validation
 github.com/operator-framework/api/pkg/validation/errors
 github.com/operator-framework/api/pkg/validation/interfaces
 github.com/operator-framework/api/pkg/validation/internal
-# github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773 => github.com/dinhxuanvu/operator-registry v1.13.5-0.20220419220231-14e8b35c4105
+# github.com/operator-framework/operator-registry v1.21.1-0.20220502161945-aa8db09278a0
 ## explicit; go 1.17
 github.com/operator-framework/operator-registry/alpha/action
 github.com/operator-framework/operator-registry/alpha/declcfg
@@ -1530,4 +1530,3 @@ sigs.k8s.io/yaml
 # k8s.io/cli-runtime => github.com/openshift/kubernetes-cli-runtime v0.0.0-20210730111823-1570202448c3
 # k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
 # k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
-# github.com/operator-framework/operator-registry => github.com/dinhxuanvu/operator-registry v1.13.5-0.20220419220231-14e8b35c4105

@@ -21,7 +21,7 @@ require (
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 	github.com/openshift/library-go v0.0.0-20210906100234-6754cfd64cb5
 	github.com/openshift/oc v0.0.0-alpha.0.0.20210721184532-4df50be4d929
-	github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773
+	github.com/operator-framework/operator-registry v1.21.1-0.20220502161945-aa8db09278a0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.7.1
 	github.com/spf13/cobra v1.3.0
@@ -220,5 +220,3 @@ replace (
 	k8s.io/client-go => github.com/openshift/kubernetes-client-go v0.0.0-20210730111819-978c4383ac68
 	k8s.io/kubectl => github.com/openshift/kubernetes-kubectl v0.0.0-20210730111826-9c6734b9d97d
 )
-
-replace github.com/operator-framework/operator-registry => github.com/dinhxuanvu/operator-registry v1.13.5-0.20220419220231-14e8b35c4105
