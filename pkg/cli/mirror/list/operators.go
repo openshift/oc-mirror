@@ -4,11 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/spf13/cobra"
@@ -16,6 +12,7 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 type OperatorsOptions struct {
@@ -156,7 +153,7 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 		}
 	default:
 
-		vm, err := getVersionMap(catalogs[0])
+		vm, err := image.GetVersionsFromImage(catalogs[0])
 		if err != nil {
 			return err
 		}
@@ -188,7 +185,7 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 		return err
 	}
 	for _, catalog := range catalogs {
-		versions, err := getVersionMap(catalog)
+		versions, err := image.GetVersionsFromImage(catalog)
 		if err != nil {
 			fmt.Fprintf(w, "Failed to get catalog version details: %s", err)
 			continue
@@ -201,22 +198,4 @@ func (o *OperatorsOptions) listCatalogs(w io.Writer) error {
 		}
 	}
 	return nil
-}
-
-func getVersionMap(c string) (map[string]int, error) {
-	repo, err := name.NewRepository(c)
-	if err != nil {
-		return nil, err
-	}
-	versionTags, err := remote.List(repo, remote.WithAuthFromKeychain(authn.DefaultKeychain))
-	if err != nil {
-		return nil, err
-	}
-	versions := make(map[string]int)
-
-	for _, vt := range versionTags {
-		v := strings.Split(vt, "-")
-		versions[v[0]] += 1
-	}
-	return versions, nil
 }

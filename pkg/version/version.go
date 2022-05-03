@@ -26,7 +26,7 @@ var (
 	commitFromGit string
 	// versionFromGit is a constant representing the version tag that
 	// generated this build. It should be set during build via -ldflags.
-	versionFromGit = "unknown"
+	versionFromGit = "v0.0.0-unknown"
 	// major version
 	majorFromGit string
 	// minor version

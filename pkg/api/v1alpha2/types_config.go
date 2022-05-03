@@ -66,10 +66,10 @@ type ReleaseChannel struct {
 	Type PlatformType `json:"type"`
 	// MinVersion is minimum version in the
 	// release channel to mirror
-	MinVersion string `json:"minVersion"`
+	MinVersion string `json:"minVersion,omitempty"`
 	// MaxVersion is maximum version in the
 	// release channel to mirror
-	MaxVersion string `json:"maxVersion"`
+	MaxVersion string `json:"maxVersion,omitempty"`
 	// ShortestPath mode calculates the shortest path
 	// between the min and mav version
 	ShortestPath bool `json:"shortestPath,omitempty"`

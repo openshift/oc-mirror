@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/initcmd"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/list"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/version"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -125,6 +126,7 @@ func NewMirrorCmd() *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(f, o.RootOptions))
 	cmd.AddCommand(list.NewListCommand(f, o.RootOptions))
 	cmd.AddCommand(describe.NewDescribeCommand(f, o.RootOptions))
+	cmd.AddCommand(initcmd.NewInitCommand(f, o.RootOptions))
 
 	return cmd
 }
