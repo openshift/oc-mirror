@@ -45,19 +45,5 @@ done
 chmod +x openshift-install oc kubectl
 popd
 
-# Install Terraform and the e2e collection
-make terraform collection PYTHON=python3.9
-
-# Configure the terraform modules and providers
-source .venv/bin/activate
-ansible-playbook \
-    jharmison_redhat.oc_mirror_e2e.terraform_setup \
-    -e "output_dir=${PWD}/output" \
-    -e "terraform_binary_path=${PWD}/bin/terraform"
-
-# Pull oc-mirror from builder image stage location
-mkdir -p output/clients
-cp ../../bin/oc-mirror output/clients
-
 # Cleanup
 dnf clean all -y

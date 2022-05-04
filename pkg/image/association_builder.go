@@ -20,6 +20,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/config"
 )
 
 type ErrInvalidImage struct {
@@ -50,7 +51,7 @@ func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (A
 		return seen
 	}
 
-	localRoot := filepath.Join(rootDir, "v2")
+	localRoot := filepath.Join(rootDir, config.V2Dir)
 	for image, diskLoc := range imgMappings {
 		if diskLoc.Type != imagesource.DestinationFile {
 			errs = append(errs, fmt.Errorf("image destination for %q is not type file", image.Ref.Exact()))

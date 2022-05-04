@@ -12,7 +12,8 @@ Developers: Style Guides with `oc-mirror`
 # Code Formatting
 
 - Use `go fmt`
-- All code should be error-free when run through `golint` and `go vet`. 
+- All code should be error-free when run through `go vet`. 
+- `make sanity` can also be run to check this.
 
 # Docs Style
 

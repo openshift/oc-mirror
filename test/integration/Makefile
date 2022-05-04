@@ -7,7 +7,7 @@ export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
 PYTHON := python3
 
 # For terraform download
-TERRAFORM_VERSION := 1.1.6
+TERRAFORM_VERSION := 1.1.9
 TERRAFORM_OS := linux
 TERRAFORM_ARCH := amd64
 TERRAFORM_DOWNLOAD = terraform_$(TERRAFORM_VERSION)_$(TERRAFORM_OS)_$(TERRAFORM_ARCH).zip
@@ -102,10 +102,22 @@ realclean: clean
 ###############################################################################
 # The following targets are only intended for use in OpenShift CI systems.    #
 ###############################################################################
-ci:
-	scripts/run.sh
+_ci_setup:
+	@export HOME="$${HOME:-/alabama}"
+	@cp -r . "$${HOME}/test"
+	@cd "$${HOME}/test"
+	@echo "      ansible_remote_tmp: '$${HOME}'" >> hosts.yml
+	@make terraform collection PYTHON=python3.9
+.PHONY: _ci_setup
+
+ci: _ci_setup
+	@export HOME="$${HOME:-/alabama}"
+	@cd "$${HOME}/test"
+	@scripts/run.sh
 .PHONY: ci
 
-ci-delete:
-	scripts/run.sh delete
+ci-delete: _ci_setup
+	@export HOME="$${HOME:-/alabama}"
+	@cd "$${HOME}/test"
+	@scripts/run.sh delete
 .PHONY: ci-delete

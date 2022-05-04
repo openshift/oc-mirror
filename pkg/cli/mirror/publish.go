@@ -249,7 +249,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 
 			// Map of remote layer digest to the set of paths they should be fetched to.
 			missingLayers := map[string][]string{}
-			manifestPath := filepath.Join("v2", assoc.Path, "manifests")
+			manifestPath := filepath.Join(config.V2Dir, assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
 			klog.V(4).Info("reading assoc: %s", assoc.Name)
@@ -283,7 +283,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 				klog.V(4).Info("Found layer %v for image %s", layerDigest, imageName)
 				// Construct blob path, which is adjacent to the manifests path.
 				blobPath := filepath.Join("blobs", layerDigest)
-				imagePath := filepath.Join(unpackDir, "v2", assoc.Path)
+				imagePath := filepath.Join(unpackDir, config.V2Dir, assoc.Path)
 				imageBlobPath := filepath.Join(imagePath, blobPath)
 				aerr := &ErrArchiveFileNotFound{}
 				switch err := unpack(blobPath, imagePath, filesInArchive); {

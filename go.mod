@@ -28,6 +28,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
+	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.7.2
 	k8s.io/apimachinery v0.22.4
 	k8s.io/cli-runtime v0.22.4
@@ -42,8 +43,6 @@ require (
 require golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 
 require github.com/go-logr/logr v1.2.0 // indirect
-
-require gopkg.in/yaml.v2 v2.4.0 // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect

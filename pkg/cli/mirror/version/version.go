@@ -45,7 +45,7 @@ func NewVersionCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	}
 
 	fs := cmd.Flags()
-	fs.BoolVar(&o.Short, "short", o.Short, "If true, print just the version number")
+	fs.BoolVar(&o.Short, "short", o.Short, "Print just the version number")
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
 	o.BindFlags(cmd.PersistentFlags())
 

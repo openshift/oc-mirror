@@ -350,6 +350,8 @@ type mockClient struct {
 	url *url.URL
 }
 
+var _ cincinnati.Client = &mockClient{}
+
 func (c mockClient) GetID() uuid.UUID {
 	return uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 }
