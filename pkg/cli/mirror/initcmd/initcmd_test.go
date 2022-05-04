@@ -93,10 +93,8 @@ mirror:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
     packages:
     - name: serverless-operator
-      startingVersion: 0.0.0
       channels:
       - name: stable
-        startingVersion: 0.0.0
   additionalImages:
   - name: registry.redhat.io/ubi8/ubi:latest
   helm: {}
@@ -130,11 +128,9 @@ mirror:
             "name": "serverless-operator",
             "channels": [
               {
-                "name": "stable",
-                "startingVersion": "0.0.0"
+                "name": "stable"
               }
-            ],
-            "startingVersion": "0.0.0"
+            ]
           }
         ],
         "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.11"
@@ -170,8 +166,6 @@ storageConfig:
   registry:
     imageURL: localhost:5000/test:latest
     skipTLS: false
-  local:
-    path: ./
 mirror:
   platform:
     channels:
@@ -181,10 +175,8 @@ mirror:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
     packages:
     - name: serverless-operator
-      startingVersion: 0.0.0
       channels:
       - name: stable
-        startingVersion: 0.0.0
   additionalImages:
   - name: registry.redhat.io/ubi8/ubi:latest
   helm: {}
@@ -218,11 +210,9 @@ mirror:
             "name": "serverless-operator",
             "channels": [
               {
-                "name": "stable",
-                "startingVersion": "0.0.0"
+                "name": "stable"
               }
-            ],
-            "startingVersion": "0.0.0"
+            ]
           }
         ],
         "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.11"
@@ -239,9 +229,6 @@ mirror:
     "registry": {
       "imageURL": "localhost:5000/test:latest",
       "skipTLS": false
-    },
-    "local": {
-      "path": "./"
     }
   }
 }

@@ -8,7 +8,7 @@ mirror:
   operators:
   - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
     full: true
-    skipDeps: true
+    skipDependencies: true
     packages:
       - name: foo
         maxVersion: 0.3.0
