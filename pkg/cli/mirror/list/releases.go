@@ -67,7 +67,7 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.BoolVar(&o.Channels, "channels", o.Channels, "List all channel information")
 	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
-	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image "+
 		"picked when multiple variants are available")
 
 	o.BindFlags(cmd.PersistentFlags())

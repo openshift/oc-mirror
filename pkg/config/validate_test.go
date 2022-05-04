@@ -58,6 +58,7 @@ func TestValidate(t *testing.T) {
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 					Mirror: v1alpha2.Mirror{
 						Platform: v1alpha2.Platform{
+							Architectures: []string{v1alpha2.DefaultPlatformArchitecture},
 							Channels: []v1alpha2.ReleaseChannel{
 								{
 									Name: "channel1",
@@ -128,6 +129,27 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: release channel \"channel\": duplicate found in configuration",
+		},
+		{
+			name: "Invalid/UnsupportedReleaseArchitecture",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Platform: v1alpha2.Platform{
+							Architectures: []string{"fake"},
+							Channels: []v1alpha2.ReleaseChannel{
+								{
+									Name: "channel1",
+								},
+								{
+									Name: "channel2",
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: release architecture \"fake\" is not a supported architecture",
 		},
 	}
 

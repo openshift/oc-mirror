@@ -43,7 +43,6 @@ const (
 // on a particular release image.
 type ReleaseOptions struct {
 	*MirrorOptions
-	arch []string
 	// insecure indicates whether the source
 	// registry is insecure
 	insecure bool
@@ -54,7 +53,6 @@ type ReleaseOptions struct {
 func NewReleaseOptions(mo *MirrorOptions) *ReleaseOptions {
 	relOpts := &ReleaseOptions{
 		MirrorOptions: mo,
-		arch:          mo.FilterOptions,
 		uuid:          uuid.New(),
 	}
 	if mo.SourcePlainHTTP || mo.SourceSkipTLS {
@@ -78,7 +76,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 		prevChannels[ch.ReleaseChannel] = ch.MinVersion
 	}
 
-	for _, arch := range o.arch {
+	for _, arch := range cfg.Mirror.Platform.Architectures {
 
 		versionsByChannel := make(map[string]v1alpha2.ReleaseChannel, len(cfg.Mirror.Platform.Channels))
 

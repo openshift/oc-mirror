@@ -3,7 +3,6 @@ package list
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,19 +21,7 @@ func TestUpdatesComplete(t *testing.T) {
 			opts: &UpdatesOptions{},
 			args: []string{"foo"},
 			expOpts: &UpdatesOptions{
-				FilterOptions: []string{v1alpha2.DefaultPlatformArchitecture},
-				ConfigPath:    "foo",
-			},
-		},
-		{
-			name: "Valid/SuppliedArchitecture",
-			opts: &UpdatesOptions{
-				FilterOptions: []string{"test"},
-			},
-			args: []string{"foo"},
-			expOpts: &UpdatesOptions{
-				FilterOptions: []string{"test"},
-				ConfigPath:    "foo",
+				ConfigPath: "foo",
 			},
 		},
 	}
@@ -65,14 +52,6 @@ func TestUpdatesValidate(t *testing.T) {
 			name:     "Invalid/NoConfigPath",
 			opts:     &UpdatesOptions{},
 			expError: `must specify imageset configuration`,
-		},
-		{
-			name: "Invalid/UnsupportedArch",
-			opts: &UpdatesOptions{
-				ConfigPath:    "foo",
-				FilterOptions: []string{"fake"},
-			},
-			expError: "architecture \"fake\" is not a supported release architecture",
 		},
 		{
 			name: "Valid/WithConfig",

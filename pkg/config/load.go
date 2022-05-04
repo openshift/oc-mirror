@@ -41,6 +41,8 @@ func ReadConfig(configPath string) (c v1alpha2.ImageSetConfiguration, err error)
 		return c, fmt.Errorf("config GVK not recognized: %s", typeMeta.GroupVersionKind())
 	}
 
+	Complete(&c)
+
 	return c, Validate(&c)
 }
 
