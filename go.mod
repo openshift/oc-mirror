@@ -43,7 +43,7 @@ require golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 
 require github.com/go-logr/logr v1.2.0 // indirect
 
-require gopkg.in/yaml.v2 v2.4.0
+require gopkg.in/yaml.v2 v2.4.0 // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
