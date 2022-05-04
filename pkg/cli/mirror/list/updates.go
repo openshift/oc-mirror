@@ -60,12 +60,6 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 	fs := cmd.Flags()
 	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
 		"picked when multiple variants are available")
-
-	// TODO(jpower432): Make this flag visible again once release architecture selection
-	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-options"); err != nil {
-		logrus.Panic(err.Error())
-	}
 	return cmd
 }
 
