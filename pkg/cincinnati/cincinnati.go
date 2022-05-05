@@ -174,16 +174,23 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	}
 
 	// Get semver representation of source and target channel versions
-	sourceIdx := strings.LastIndex(sourceChannel, "-")
-	if sourceIdx == -1 {
-		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", sourceChannel)
+	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
+	if err != nil {
+		return current, requested, upgrades, err
 	}
-	targetIdx := strings.LastIndex(targetChannel, "-")
-	if targetIdx == -1 {
-		return Update{}, Update{}, nil, fmt.Errorf("invalid channel name %s", targetChannel)
+
+	if source.EQ(target) {
+		isBlocked, err := c.handleBlockedEdges(ctx, uri, arch, targetChannel, version)
+		if err != nil {
+			return Update{}, Update{}, nil, err
+		}
+		if isBlocked {
+			// If blocked path is found, just return the requested version
+			logrus.Warnf("No upgrade path for %s in target channel %s", version.String(), targetChannel)
+			return c.GetUpdates(ctx, uri, arch, targetChannel, reqVer, reqVer)
+		}
+		return c.GetUpdates(ctx, uri, arch, targetChannel, version, reqVer)
 	}
-	source := semver.MustParse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
-	target := semver.MustParse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
 
 	// Get latest version from sourceChannel
 	latest, err := c.GetChannelLatest(ctx, uri, arch, sourceChannel)
@@ -198,7 +205,7 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	for {
 		// Bump the minor version on the channel
 		source.Minor++
-		currChannel := fmt.Sprintf("%s-%v.%v", targetChannel[:targetIdx], source.Major, source.Minor)
+		currChannel := fmt.Sprintf("%s-%v.%v", prefix, source.Major, source.Minor)
 		logrus.Debugf("Processing channel %s", currChannel)
 
 		// Get versions in channel
@@ -212,10 +219,11 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 		}
 
 		var newLatest semver.Version
-		if currChannel == targetChannel {
+		if source.EQ(target) {
 			// If this is the target channel get
 			// requested version
 			newLatest = reqVer
+			currChannel = targetChannel
 		} else {
 			// Get the latest from current channel
 			newLatest, err = c.GetChannelLatest(ctx, uri, arch, currChannel)
@@ -226,13 +234,18 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 
 		// If the previous latest version exists in this channel then get updates
 		logrus.Debugf("Getting updates for latest %s in channel %s", latest.String(), currChannel)
-
-		if _, found := foundVersions[latest.String()]; !found {
-			_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, reqVer, reqVer)
+		isBlocked, err := c.handleBlockedEdges(ctx, uri, arch, currChannel, latest)
+		if err != nil {
+			return current, requested, upgrades, err
+		}
+		if isBlocked {
 			// return nil instead of upgrades
 			// so we don't process an incomplete upgrade path
+			_, requested, _, err = c.GetUpdates(ctx, uri, arch, targetChannel, reqVer, reqVer)
+			logrus.Warnf("No upgrade path for %s in target channel %s", latest.String(), targetChannel)
 			return current, requested, nil, err
 		}
+
 		_, req, currUpgrades, err := c.GetUpdates(ctx, uri, arch, currChannel, latest, newLatest)
 		if err != nil {
 			return current, requested, upgrades, err
@@ -247,6 +260,47 @@ func (c Client) CalculateUpgrades(ctx context.Context, uri *url.URL, arch, sourc
 	}
 
 	return current, requested, upgrades, err
+}
+
+// getSemverFromChannel will return the major and minor version from the source and target channels. The prefix returned is
+// for the source channels for cross channel calculations.
+func getSemverFromChannels(sourceChannel, targetChannel string) (source, target semver.Version, prefix string, err error) {
+	// Get semver representation of source and target channel versions
+	sourceIdx := strings.LastIndex(sourceChannel, "-")
+	if sourceIdx == -1 {
+		return source, target, prefix, fmt.Errorf("invalid channel name %s", sourceChannel)
+	}
+	targetIdx := strings.LastIndex(targetChannel, "-")
+	if targetIdx == -1 {
+		return source, target, prefix, fmt.Errorf("invalid channel name %s", targetChannel)
+	}
+	source, err = semver.Parse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
+	if err != nil {
+		return source, target, prefix, err
+	}
+	target, err = semver.Parse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
+	if err != nil {
+		return source, target, prefix, err
+	}
+	prefix = sourceChannel[:sourceIdx]
+	return source, target, prefix, nil
+}
+
+// handleBlockedEdges will check for the starting version in the current channel
+// if it does not exist the version is blocked.
+func (c Client) handleBlockedEdges(ctx context.Context, uri *url.URL, arch, targetChannel string, startVer semver.Version) (bool, error) {
+	chanVersions, err := c.GetVersions(ctx, uri, targetChannel)
+	if err != nil {
+		return true, err
+	}
+
+	for _, v := range chanVersions {
+		if v.EQ(startVer) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 // GetChannelLatest fetches the latest version from the specified
