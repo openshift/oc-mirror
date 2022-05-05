@@ -12,6 +12,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
 
@@ -309,15 +310,28 @@ func TestCalculateUpgrades(t *testing.T) {
 		requested:     Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
 		needed:        nil,
 	}, {
-		name:          "no upgrade path and no version in channel",
-		sourceChannel: "stable-4.2",
-		targetChannel: "stable-4.3",
-		last:          semver.MustParse("4.2.0-3"),
-		req:           semver.MustParse("4.3.0"),
-		current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
-		requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		needed:        nil,
-	}}
+		name:          "Success/TwoChannelsDifferentPrefix",
+		sourceChannel: "stable-4.3",
+		targetChannel: "fast-4.3",
+		last:          semver.MustParse("4.3.0"),
+		req:           semver.MustParse("4.3.1"),
+		current:       Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		requested:     Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		needed: []Update{
+
+			{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		},
+	},
+		{
+			name:          "no upgrade path and no version in channel",
+			sourceChannel: "stable-4.2",
+			targetChannel: "stable-4.3",
+			last:          semver.MustParse("4.2.0-3"),
+			req:           semver.MustParse("4.3.0"),
+			current:       Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+			requested:     Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+			needed:        nil,
+		}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 10)
@@ -355,6 +369,115 @@ func TestCalculateUpgrades(t *testing.T) {
 				if err == nil || err.Error() != test.err {
 					t.Fatalf("expected err to be %s, got: %v", test.err, err)
 				}
+			}
+		})
+	}
+}
+
+func TestHandleBlockedEdges(t *testing.T) {
+	clientID := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
+	arch := "test-arch"
+
+	tests := []struct {
+		name          string
+		sourceChannel string
+		targetChannel string
+		last          semver.Version
+		req           semver.Version
+		exp           bool
+		err           string
+	}{{
+		name:          "Success/OneChannel",
+		sourceChannel: "stable-4.0",
+		targetChannel: "stable-4.1",
+		last:          semver.MustParse("4.0.0-5"),
+		req:           semver.MustParse("4.1.0-6"),
+		exp:           false,
+	}, {
+		name:          "Success/TwoChannelsDifferentPrefix",
+		sourceChannel: "stable-4.3",
+		targetChannel: "fast-4.3",
+		last:          semver.MustParse("4.3.0"),
+		req:           semver.MustParse("4.3.1"),
+		exp:           false,
+	}, {
+		name:          "SuccessWithWarning/NoUpgradePath",
+		sourceChannel: "stable-4.1",
+		targetChannel: "stable-4.2",
+		last:          semver.MustParse("4.1.0-6"),
+		req:           semver.MustParse("4.2.0-2"),
+		exp:           false,
+	}, {
+		name:          "SuccessWithWarning/BlockedEdge",
+		sourceChannel: "stable-4.2",
+		targetChannel: "stable-4.3",
+		last:          semver.MustParse("4.2.0-3"),
+		req:           semver.MustParse("4.3.0"),
+		exp:           true,
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requestQuery := make(chan string, 10)
+			defer close(requestQuery)
+
+			handler := getHandlerMulti(t, requestQuery)
+
+			ts := httptest.NewServer(http.HandlerFunc(handler))
+			t.Cleanup(ts.Close)
+
+			c, uri, err := NewClient(ts.URL, clientID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			isBlocked, err := c.handleBlockedEdges(context.Background(), uri, arch, test.targetChannel, test.last)
+
+			if test.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, test.exp, isBlocked)
+			} else {
+				require.EqualError(t, err, test.err)
+			}
+		})
+	}
+}
+
+func TestGetSemVerFromChannel(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		sourceChannel string
+		targetChannel string
+		err           string
+		expSource     semver.Version
+		expTarget     semver.Version
+		expPrefix     string
+	}{
+		{
+			name:          "Valid/StableChannels",
+			sourceChannel: "stable-4.1",
+			targetChannel: "fast-4.2",
+			expSource:     semver.MustParse("4.1.0"),
+			expTarget:     semver.MustParse("4.2.0"),
+			expPrefix:     "stable",
+		},
+		{
+			name:          "Invalid/InvalidChannelPrefix",
+			sourceChannel: "stable-4.1",
+			targetChannel: "fast:4.2",
+			err:           "invalid channel name fast:4.2",
+		},
+	}
+	for _, test := range tests {
+		source, target, prefix, err := getSemverFromChannels(test.sourceChannel, test.targetChannel)
+		t.Run(test.name, func(t *testing.T) {
+			if test.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, test.expPrefix, prefix)
+				require.Equal(t, test.expSource, source)
+				require.Equal(t, test.expTarget, target)
+			} else {
+				require.EqualError(t, err, test.err)
 			}
 		})
 	}
@@ -647,6 +770,33 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 			if err != nil {
 				t.Fatal(err)
 				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		case ch == "fast-4.3":
+			_, err := w.Write([]byte(`{
+				"nodes": [
+				{
+					"version": "4.2.0-5",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-5"
+				},	
+				{
+					"version": "4.3.0",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.0"
+				},
+				{
+					"version": "4.3.1",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.1"
+				},
+				{
+					"version": "4.3.2",
+					"payload": "quay.io/openshift-release-dev/ocp-release:4.3.2"
+				}
+				],
+				"edges": [[0,1],[1,2],[2,3]]
+			}`))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				t.Fatal(err)
 				return
 			}
 		default:
