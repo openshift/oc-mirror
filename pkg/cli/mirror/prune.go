@@ -58,14 +58,35 @@ func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.A
 	// We are only processing keys where we have
 	// access to the manifest digest. Associated
 	// tags will be deleted with the manifest.
-	for _, key := range outputSet.Keys() {
-		if ref, err := reference.Parse(key); err == nil {
-			ref.Registry = ""
-			repoLoc := path.Join(o.UserNamespace, ref.AsRepository().String())
+	for key, assocs := range outputSet {
+
+		imageAssoc, ok := assocs[key]
+		if !ok {
+			return deleter, reposByManifest, fmt.Errorf("invalid associations for image %s", key)
+		}
+
+		ref, err := reference.Parse(imageAssoc.Path)
+		if err != nil {
+			return deleter, reposByManifest, fmt.Errorf("invalid association set")
+		}
+
+		if imageAssoc.ID != "" {
+			var repoLoc string
+
+			// If the imageAssoc path is the location
+			// in the target registry (i.e. mirror to mirror), unset the
+			// registry information and use the repo location as is.
+			if ref.Registry != "" {
+				ref.Registry = ""
+				repoLoc = ref.AsRepository().String()
+			} else {
+				repoLoc = path.Join(o.UserNamespace, ref.AsRepository().String())
+			}
+
 			// A new digest must be parsed because there
 			// the original image location is kept as a private field
 			// after instantiation.
-			reposByManifest[ref.ID] = repoLoc
+			reposByManifest[imageAssoc.ID] = repoLoc
 		}
 	}
 	return deleter, reposByManifest, nil
