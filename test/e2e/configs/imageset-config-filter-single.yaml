@@ -8,7 +8,8 @@ mirror:
   operators:
   - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
     full: true
+    skipDependencies: true
     packages:
-      - name: foo
       - name: baz
         minVersion: 1.0.1
+        maxVersion: 1.0.1

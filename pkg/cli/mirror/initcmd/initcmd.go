@@ -132,12 +132,14 @@ func (o *InitOptions) Run(ctx context.Context) error {
 		},
 	}
 
-	if "" != customRegistry {
+	if customRegistry != "" {
 		registry := &v1alpha2.RegistryConfig{
 			ImageURL: customRegistry,
 			SkipTLS:  false,
 		}
 		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Registry = registry
+		// Unset the local default backend
+		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Local = nil
 	}
 
 	switch o.Output {

@@ -12,6 +12,7 @@ type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
 
 var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseChannels}
 
+// Validation will check an ImageSetConfiguration for input errors.
 func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationChecks {

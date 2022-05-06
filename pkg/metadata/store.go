@@ -50,7 +50,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 
 	mirror := meta.PastMirror
-	// Store starting versions for new catalogs
+	// Store minimum versions for new catalogs
 	logrus.Debugf("Resolving operator metadata")
 	var operatorErrs []error
 
@@ -94,7 +94,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 		return utilerrors.NewAggregate(operatorErrs)
 	}
 
-	// Store starting versions for new release channels
+	// Store minimum versions for new release channels
 	logrus.Debugf("Resolving OCP release metadata")
 	for _, channel := range mirror.Mirror.Platform.Channels {
 

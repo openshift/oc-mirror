@@ -1331,8 +1331,8 @@ github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnh
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/operator-framework/api v0.12.0 h1:aHxHk50/Y1J4Ogdk2J6tYofgX+GEqyBPCMyun+JFqV4=
 github.com/operator-framework/api v0.12.0/go.mod h1:FTiYGm11fZQ3cSX+EQHc/UWoGZAwkGfyeHU+wMJ8jmA=
-github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773 h1:OEUAU/Fw7sPm+KU/mREYL7FnlZRAswaRqx2DM8wGM/Q=
-github.com/operator-framework/operator-registry v1.21.1-0.20220324153146-de3610408773/go.mod h1:qDxBCYPeOMlOXd95Zi1q4GpiKwK9i9Mag1AkrMOoFNU=
+github.com/operator-framework/operator-registry v1.21.1-0.20220502161945-aa8db09278a0 h1:MHvkLHeYBix8KYeZxFIYgjIvtm8wI4jNet80lV0RaoY=
+github.com/operator-framework/operator-registry v1.21.1-0.20220502161945-aa8db09278a0/go.mod h1:qDxBCYPeOMlOXd95Zi1q4GpiKwK9i9Mag1AkrMOoFNU=
 github.com/ostreedev/ostree-go v0.0.0-20190702140239-759a8c1ac913/go.mod h1:J6OG6YJVEWopen4avK3VNQSnALmmjvniMmni/YFYAwc=
 github.com/otiai10/copy v1.2.0 h1:HvG945u96iNadPoG2/Ja2+AUJeW5YuFQMixq9yirC+k=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=

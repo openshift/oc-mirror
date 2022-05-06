@@ -3,7 +3,6 @@ package operator
 import (
 	"testing"
 
-	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
@@ -63,7 +62,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -74,7 +73,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -149,7 +148,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -164,7 +163,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -175,7 +174,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -242,7 +241,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -253,7 +252,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -268,13 +267,13 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "alpha",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -285,7 +284,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -390,7 +389,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -401,7 +400,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -416,7 +415,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.1"),
+									MinVersion: "0.1.1",
 								},
 							},
 						},
@@ -427,7 +426,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.2.0"),
+									MinVersion: "0.2.0",
 								},
 							},
 						},
@@ -480,7 +479,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -491,7 +490,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -506,7 +505,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.0.0"),
+									MinVersion: "0.0.0",
 								},
 							},
 						},
@@ -517,7 +516,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},

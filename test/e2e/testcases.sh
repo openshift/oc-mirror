@@ -4,7 +4,7 @@
 # run during end to end test
 declare -a TESTCASES
 TESTCASES[1]="full_catalog"
-TESTCASES[2]="full_catalog_with_digest"
+TESTCASES[2]="full_catalog"
 TESTCASES[3]="headsonly_diff"
 TESTCASES[4]="pruned_catalogs"
 TESTCASES[5]="pruned_catalogs_with_target"
@@ -13,9 +13,13 @@ TESTCASES[7]="mirror_to_mirror"
 TESTCASES[8]="mirror_to_mirror_nostorage"
 TESTCASES[9]="custom_namespace"
 TESTCASES[10]="package_filtering"
-TESTCASES[11]="skip_deps"
-TESTCASES[12]="helm_local"
-TESTCASES[13]="no_updates_exist"
+TESTCASES[11]="single_version"
+TESTCASES[12]="version_range"
+TESTCASES[13]="max_version"
+TESTCASES[14]="skip_deps"
+TESTCASES[15]="helm_local"
+TESTCASES[16]="no_updates_exist"
+
 
 # Test full catalog mode.
 function full_catalog () {
@@ -29,6 +33,7 @@ function full_catalog () {
 function full_catalog_with_digest() {
     workflow_full imageset-config-full-digest.yaml "test-catalog-latest" -c="--source-use-http"
     TMPTAG=$(echo $CATALOGDIGEST | cut -d: -f 2)
+    ## We default to 6 for the partial digest length to get unique tags per repo
     TMPTAG=${TMPTAG:0:6}
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${TMPTAG}\
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
@@ -150,6 +155,31 @@ function package_filtering {
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
 
+# Test catalog with one version in a package specified
+function single_version () {
+    workflow_full imageset-config-filter-single.yaml "test-catalog-latest" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "baz.v1.0.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+# Test catalog with a version range in a package specified
+function version_range () {
+    workflow_full imageset-config-filter-range.yaml "test-catalog-latest" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "foo.v0.2.0 foo.v0.3.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+# Test catalog with a max version in a package specified
+function max_version () {
+    workflow_full imageset-config-filter-max.yaml "test-catalog-latest" -c="--source-use-http"
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "foo.v0.1.0 foo.v0.2.0 foo.v0.3.0" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+
 # Test skip deps
 function skip_deps {
     workflow_full imageset-config-skip-deps.yaml "test-catalog-latest" --diff -c="--source-use-http"
@@ -165,7 +195,7 @@ function helm_local {
     check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }
 
-# Test no udpates
+# Test no updates
 function no_updates_exist {
     workflow_no_updates imageset-config-headsonly.yaml "test-catalog-latest" --diff -c="--source-use-http"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \

@@ -17,7 +17,7 @@ mirror:
       full: true # full can be set to pull a full catalog and must be set to filter packages
       packages:
         - name: rhacs-operator
-          startingVersion: '3.67.0'
+          minVersion: '3.67.0'
           channels:
             - name: 'latest'
   additionalImages: # List of additional images to be included in imageset

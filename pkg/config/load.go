@@ -17,6 +17,8 @@ import (
 // versions do not matter to the caller.
 // See https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/config/config.go
 
+// ReadConfig opens an imageset configuration file at the given path
+// and loads it into a v1alpha2.ImageSetConfiguration instance for processing and validation.
 func ReadConfig(configPath string) (c v1alpha2.ImageSetConfiguration, err error) {
 
 	data, err := ioutil.ReadFile(filepath.Clean(configPath))
@@ -42,6 +44,7 @@ func ReadConfig(configPath string) (c v1alpha2.ImageSetConfiguration, err error)
 	return c, Validate(&c)
 }
 
+// LoadConfig loads data into a v1alpha2.ImageSetConfiguration instance
 func LoadConfig(data []byte) (c v1alpha2.ImageSetConfiguration, err error) {
 
 	gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.ImageSetConfigurationKind)
@@ -61,6 +64,7 @@ func LoadConfig(data []byte) (c v1alpha2.ImageSetConfiguration, err error) {
 	return c, nil
 }
 
+// LoadMetadata loads data into a v1alpha2.Metadata instance
 func LoadMetadata(data []byte) (m v1alpha2.Metadata, err error) {
 
 	gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.MetadataKind)

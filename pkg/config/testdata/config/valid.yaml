@@ -19,7 +19,7 @@ mirror:
       packages:
         - name: couchbase-operator
         - name: mongodb-operator
-          startingVersion: '1.4.0'
+          minVersion: '1.4.0'
         - name: crunchy-postgresql-operator
           channels:
             - name: 'stable'

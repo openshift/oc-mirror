@@ -10,9 +10,10 @@ import (
 
 func TestConvertToDiffIncludeConfig(t *testing.T) {
 	type spec struct {
-		name string
-		cfg  IncludeConfig
-		exp  action.DiffIncludeConfig
+		name     string
+		cfg      IncludeConfig
+		exp      action.DiffIncludeConfig
+		expError string
 	}
 
 	specs := []spec{
@@ -26,7 +27,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
+									MaxVersion: "0.2.0",
 								},
 							},
 						},
@@ -37,7 +39,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: IncludeBundle{
-									StartingVersion: semver.MustParse("0.1.0"),
+									MinVersion: "0.1.0",
 								},
 							},
 						},
@@ -50,10 +52,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 						Name: "bar",
 						Channels: []action.DiffIncludeChannel{
 							{
-								Name: "stable",
-								Versions: []semver.Version{
-									semver.MustParse("0.1.0"),
-								},
+								Name:  "stable",
+								Range: ">=0.1.0 <=0.2.0",
 							},
 						},
 					},
@@ -78,13 +78,41 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					{
 						Name: "bar",
 						IncludeBundle: IncludeBundle{
-							StartingVersion: semver.MustParse("0.1.0"),
+							MinVersion: "0.1.0",
+							MaxVersion: "0.2.0",
 						},
 					},
 					{
 						Name: "foo",
 						IncludeBundle: IncludeBundle{
-							StartingVersion: semver.MustParse("0.1.0"),
+							MinVersion: "0.1.0",
+						},
+					},
+				},
+			},
+			exp: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name:  "bar",
+						Range: ">=0.1.0 <=0.2.0",
+					},
+					{
+						Name: "foo",
+						Versions: []semver.Version{
+							semver.MustParse("0.1.0"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid/WithMinVersionOnly",
+			cfg: IncludeConfig{
+				Packages: []IncludePackage{
+					{
+						Name: "bar",
+						IncludeBundle: IncludeBundle{
+							MinVersion: "0.1.0",
 						},
 					},
 				},
@@ -97,22 +125,120 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 							semver.MustParse("0.1.0"),
 						},
 					},
+				},
+			},
+		},
+		{
+			name: "Valid/WithMaxVersionOnly",
+			cfg: IncludeConfig{
+				Packages: []IncludePackage{
+					{
+						Name: "bar",
+						IncludeBundle: IncludeBundle{
+							MaxVersion: "1.0.0",
+						},
+					},
 					{
 						Name: "foo",
-						Versions: []semver.Version{
-							semver.MustParse("0.1.0"),
+						Channels: []IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: IncludeBundle{
+									MaxVersion: "0.2.0",
+								},
+							},
 						},
 					},
 				},
 			},
+			exp: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name:  "bar",
+						Range: "<=1.0.0",
+					},
+					{
+						Name: "foo",
+						Channels: []action.DiffIncludeChannel{
+							{
+								Name:  "stable",
+								Range: "<=0.2.0",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid/WithMinAndMaxVersion",
+			cfg: IncludeConfig{
+				Packages: []IncludePackage{
+					{
+						Name: "bar",
+						IncludeBundle: IncludeBundle{
+							MinVersion: "0.1.0",
+							MaxVersion: "0.2.0",
+						},
+					},
+				},
+			},
+			exp: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name:  "bar",
+						Range: ">=0.1.0 <=0.2.0",
+					},
+				},
+			},
+		},
+		{
+			name: "Valid/WithMinBundle",
+			cfg: IncludeConfig{
+				Packages: []IncludePackage{
+					{
+						Name: "bar",
+						IncludeBundle: IncludeBundle{
+							MinBundle: "bundle-0.1.0",
+						},
+					},
+				},
+			},
+			exp: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name: "bar",
+						Bundles: []string{
+							"bundle-0.1.0",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/NoPackageName",
+			cfg: IncludeConfig{
+				Packages: []IncludePackage{
+					{
+						IncludeBundle: IncludeBundle{
+							MinVersion: "0.1.0",
+						},
+					},
+				},
+			},
+			exp:      action.DiffIncludeConfig{},
+			expError: "package 0 requires a name",
 		},
 	}
 
 	for _, s := range specs {
 		t.Run(s.name, func(t *testing.T) {
 			dic, err := s.cfg.ConvertToDiffIncludeConfig()
-			require.NoError(t, err)
-			require.Equal(t, s.exp, dic)
+			if s.expError != "" {
+				require.EqualError(t, err, s.expError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, s.exp, dic)
+			}
 		})
 	}
 }
