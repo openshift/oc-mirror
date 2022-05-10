@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"os"
 
@@ -29,22 +30,26 @@ func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 }
 
 func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
-
 	var fsv2 flag.FlagSet
+	// Configure klog flags
 	klog.InitFlags(&fsv2)
 	checkErr(fsv2.Set("stderrthreshold", "4"))
+	checkErr(fsv2.Set("skip_headers", "true"))
+	checkErr(fsv2.Set("logtostderr", "false"))
+	checkErr(fsv2.Set("alsologtostderr", "false"))
+	checkErr(fsv2.Set("v", fmt.Sprintf("%d", o.LogLevel)))
 
 	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	mw := io.MultiWriter(os.Stdout, logFile)
 
-	o.logfileCleanup = func () {
-		//Close io steam / file
+	o.logfileCleanup = func() {
+		klog.Flush()
+		checkErr(logFile.Close())
 	}
-	klog.SetOutput(mw)
 
+	klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
 	// Add to root IOStream options
 	o.IOStreams = genericclioptions.IOStreams{
 		In:     o.IOStreams.In,

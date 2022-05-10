@@ -64,7 +64,7 @@ func NewRegistryBackend(cfg *v1alpha2.RegistryConfig, dir string) (Backend, erro
 
 // ReadMetadata unpacks the metadata image and read it from disk
 func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
-	klog.V(4).Info("Checking for existing metadata image at %s", b.src)
+	klog.V(4).Infof("Checking for existing metadata image at %s", b.src)
 	// Check if image exists
 	if err := b.exists(ctx); err != nil {
 		return err
@@ -108,7 +108,7 @@ func (b *registryBackend) WriteObject(ctx context.Context, fpath string, obj int
 	if err := b.localDirBackend.WriteObject(ctx, fpath, obj); err != nil {
 		return err
 	}
-	klog.V(4).Info("Pushing metadata to registry at %s", b.src)
+	klog.V(4).Infof("Pushing metadata to registry at %s", b.src)
 	return b.pushImage(ctx, data, fpath)
 }
 
@@ -168,7 +168,7 @@ func (b *registryBackend) unpack(ctx context.Context, fpath string) error {
 
 // Stat checks the existence of the metadata from a registry source
 func (b *registryBackend) Stat(ctx context.Context, fpath string) (os.FileInfo, error) {
-	klog.V(4).Info("Checking for existing metadata image at %s", b.src.String())
+	klog.V(4).Infof("Checking for existing metadata image at %s", b.src.String())
 	// Check if image exists
 	if err := b.exists(ctx); err != nil {
 		return nil, err

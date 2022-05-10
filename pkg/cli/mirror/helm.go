@@ -117,7 +117,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 // FindImages will download images found in a Helm chart on disk
 func findImages(path string, imagePaths ...string) (images []v1alpha2.Image, err error) {
 
-	klog.V(4).Info("Reading from path %s", path)
+	klog.V(4).Infof("Reading from path %s", path)
 
 	// Get all json paths where images
 	// are located
@@ -260,7 +260,7 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err erro
 		}
 
 		for _, result := range results {
-			klog.V(4).Info("Found image %s", result)
+			klog.V(4).Infof("Found image %s", result)
 			img := v1alpha2.Image{
 				Name: result,
 			}

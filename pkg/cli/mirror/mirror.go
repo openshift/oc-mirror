@@ -197,7 +197,7 @@ func (o *MirrorOptions) Validate() error {
 	if len(o.ToMirror) > 0 {
 		klog.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
-		klog.V(4).Info("Using image %s to check permissions", ref)
+		klog.V(4).Infof("Using image %s to check permissions", ref)
 		imgRef, err := name.ParseReference(ref, getNameOpts(destInsecure)...)
 		if err != nil {
 			return err
@@ -480,7 +480,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
-		klog.V(4).Info("Moved any release signatures to %s", dir)
+		klog.V(4).Infof("Moved any release signatures to %s", dir)
 
 		// Move charts into results dir
 		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
@@ -488,7 +488,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
 			return err
 		}
-		klog.V(4).Info("Moved any downloaded Helm charts to %s", dir)
+		klog.V(4).Infof("Moved any downloaded Helm charts to %s", dir)
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)

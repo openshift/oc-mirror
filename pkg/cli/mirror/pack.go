@@ -96,7 +96,7 @@ func (o *MirrorOptions) prepareArchive(ctx context.Context, backend storage.Back
 	segSize := defaultSegSize
 	if archiveSize != 0 {
 		segSize = archiveSize
-		klog.V(4).Info("Using user provided archive size %d GiB", segSize)
+		klog.V(4).Infof("Using user provided archive size %d GiB", segSize)
 	}
 	segSize *= segMultiplier
 

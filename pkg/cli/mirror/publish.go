@@ -80,7 +80,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		defer cleanup()
 	}
 
-	klog.V(4).Info("Unarchiving metadata into %s", tmpdir)
+	klog.V(4).Infof("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
 	filesInArchive, err := bundle.ReadImageSet(archive.NewArchiver(), o.From)
@@ -209,7 +209,7 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 		// Complete metadata checks
 		// UUID mismatch will now be seen as a new workspace.
 		if !o.SkipMetadataCheck {
-			klog.V(4).Info("Check metadata sequence number")
+			klog.V(4).Info("Checking metadata sequence number")
 			currRun := curr.PastMirror
 			incomingRun := incoming.PastMirror
 			if incomingRun.Sequence != (currRun.Sequence + 1) {
@@ -228,7 +228,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
 	}
-	klog.V(4).Info("mirror reference: %#v", toMirrorRef)
+	klog.V(4).Infof("mirror reference: %#v", toMirrorRef)
 	if toMirrorRef.Type != imagesource.DestinationRegistry {
 		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
@@ -252,7 +252,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 			manifestPath := filepath.Join(config.V2Dir, assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
-			klog.V(4).Info("reading assoc: %s", assoc.Name)
+			klog.V(4).Infof("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
 					if hasManifest := assocs.ContainsKey(imageName, manifestDigest); !hasManifest {
@@ -262,7 +262,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 					manifestArchivePath := filepath.Join(manifestPath, manifestDigest)
 					switch _, err := os.Stat(manifestArchivePath); {
 					case err == nil:
-						klog.V(4).Info("Manifest found %s found in %s", manifestDigest, assoc.Path)
+						klog.V(4).Infof("Manifest found %s found in %s", manifestDigest, assoc.Path)
 					case errors.Is(err, os.ErrNotExist):
 						if err := unpack(manifestArchivePath, unpackDir, filesInArchive); err != nil {
 							errs = append(errs, err)
@@ -280,7 +280,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 			}
 
 			for _, layerDigest := range assoc.LayerDigests {
-				klog.V(4).Info("Found layer %v for image %s", layerDigest, imageName)
+				klog.V(4).Infof("Found layer %v for image %s", layerDigest, imageName)
 				// Construct blob path, which is adjacent to the manifests path.
 				blobPath := filepath.Join("blobs", layerDigest)
 				imagePath := filepath.Join(unpackDir, config.V2Dir, assoc.Path)
@@ -288,7 +288,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 				aerr := &ErrArchiveFileNotFound{}
 				switch err := unpack(blobPath, imagePath, filesInArchive); {
 				case err == nil:
-					klog.V(4).Info("Blob %s found in %s", layerDigest, assoc.Path)
+					klog.V(4).Infof("Blob %s found in %s", layerDigest, assoc.Path)
 				case errors.Is(err, os.ErrNotExist) || errors.As(err, &aerr):
 					// Image layer must exist in the mirror registry since it wasn't archived,
 					// so fetch the layer and place it in the blob dir so it can be mirrored by `oc`.
@@ -395,7 +395,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 // TODO(estroz): symlink blobs instead of copying them to avoid data duplication.
 // `oc` mirror libs should be able to follow these symlinks.
 func copyBlobFile(src io.Reader, dstPath string) error {
-	klog.V(4).Info("copying blob to %s", dstPath)
+	klog.V(4).Infof("copying blob to %s", dstPath)
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return err
 	}
@@ -446,7 +446,7 @@ func (o *MirrorOptions) fetchBlob(ctx context.Context, regctx *registryclient.Co
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
 	}
-	klog.V(4).Info("copying blob %s from %s", layerDigest, ref.Exact())
+	klog.V(4).Infof("copying blob %s from %s", layerDigest, ref.Exact())
 	repo, err := regctx.RepositoryForRef(ctx, ref, insecure)
 	if err != nil {
 		return fmt.Errorf("create repo for %s: %v", ref, err)
@@ -507,7 +507,7 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	for _, m := range mappings {
 		srcs = append(srcs, m.Source.String())
 	}
-	klog.V(4).Info("mirroring generic images: %q", srcs)
+	klog.V(4).Infof("mirroring generic images: %q", srcs)
 
 	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {

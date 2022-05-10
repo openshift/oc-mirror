@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	
+
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/spf13/cobra"

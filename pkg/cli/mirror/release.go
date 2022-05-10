@@ -180,7 +180,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 	}
 
 	for img := range releaseDownloads {
-		klog.V(4).Info("Starting release download for version %s", img)
+		klog.V(4).Infof("Starting release download for version %s", img)
 		opts, err := o.newMirrorReleaseOptions(srcDir)
 		if err != nil {
 			return mmapping, err
@@ -404,7 +404,7 @@ func (d downloads) Merge(in downloads) {
 	for k, v := range in {
 		_, ok := d[k]
 		if ok {
-			klog.V(4).Info("download %s exists", k)
+			klog.V(4).Infof("download %s exists", k)
 			continue
 		}
 		d[k] = v

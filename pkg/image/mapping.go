@@ -66,7 +66,7 @@ func (m TypedImageMapping) Merge(in TypedImageMapping) {
 	for k, v := range in {
 		_, found := m[k]
 		if found {
-			klog.V(4).Info("source image %s already exists in mapping", k.String())
+			klog.V(4).Infof("source image %s already exists in mapping", k.String())
 			continue
 		}
 		m[k] = v
