@@ -1,7 +1,7 @@
-# oc-mirror Imageset Configuration
+Design: oc-mirror Imageset Configuration
 ===
 
-- [# oc-mirror Imageset Configuration](#-oc-mirror-imageset-configuration)
+- [Design: oc-mirror Imageset Configuration](#design-oc-mirror-imageset-configuration)
 - [Content Types](#content-types)
   - [Platforms](#platforms)
   - [Operators](#operators)

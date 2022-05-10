@@ -1,6 +1,6 @@
-# oc-mirror Metadata Management
+Design: oc-mirror Metadata Management
 ===
-- [# oc-mirror Metadata Management](#-oc-mirror-metadata-management)
+- [Design: oc-mirror Metadata Management](#design-oc-mirror-metadata-management)
   - [Overview](#overview)
   - [Where is metadata stored?](#where-is-metadata-stored)
   - [How can you interact with metadata through the `oc-mirror` CLI?](#how-can-you-interact-with-metadata-through-the-oc-mirror-cli)
@@ -20,7 +20,7 @@ When interacting with `oc-mirror` in a connected environment, the imageset confi
 ## How can you interact with metadata through the `oc-mirror` CLI?
 
 1. `oc-mirror` describe
-2. `oc-mirror` with `--ignore-history flags
+2. `oc-mirror` with `--ignore-history` flags
 3. `oc-mirror` with `--skip-metadata-check`
 
 ### Describe

@@ -1,8 +1,8 @@
 
 
-# oc-mirror Design Overview
+Design: oc-mirror Design Overview
 ===
-- [# oc-mirror Design Overview](#-oc-mirror-design-overview)
+- [Design: oc-mirror Design Overview](#design-oc-mirror-design-overview)
   - [Summary](#summary)
   - [Features](#features)
   - [Design Considerations](#design-considerations)
