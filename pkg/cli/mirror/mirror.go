@@ -247,6 +247,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
+	mappingPath := filepath.Join(o.Dir, mappingFile)
 
 	// Three mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
@@ -295,7 +296,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
@@ -369,6 +369,11 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateAllManifests(mapping, dir); err != nil {
 			return err
 		}
+
+		logrus.Infof("Writing image mapping to %s", mappingPath)
+		if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
+			return err
+		}
 	case mirrorToMirror:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
@@ -396,7 +401,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
