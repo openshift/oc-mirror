@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/openshift/oc-mirror/pkg/cli/mirror"
-	"k8s.io/klog/v2"
+	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 func main() {
@@ -12,6 +12,6 @@ func main() {
 
 func checkErr(err error) {
 	if err != nil {
-		klog.Fatal(err)
+		kcmdutil.CheckErr(err)
 	}
 }

@@ -264,7 +264,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		// upgrades to the caller
 		_, requested, _, err = GetUpdates(ctx, c, arch, targetChannel, targetVer, targetVer)
 		//Warnf is 5?
-		klog.V(5).Infof("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+		klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
 

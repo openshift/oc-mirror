@@ -22,7 +22,6 @@ type RootOptions struct {
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
-	//TODO tell int is needed vs str now
 	fs.IntVarP(&o.LogLevel, "verbose", "v", 2, "Log level (e.g. \"Error (1), Info (2) | Warning (3) | Debug (4)\")")
 	if err := fs.MarkHidden("dir"); err != nil {
 		klog.Fatal(err.Error())
@@ -41,7 +40,17 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	}
 	mw := io.MultiWriter(os.Stdout, logFile)
 
+	o.logfileCleanup = func () {
+		//Close io steam / file
+	}
 	klog.SetOutput(mw)
+
+	// Add to root IOStream options
+	o.IOStreams = genericclioptions.IOStreams{
+		In:     o.IOStreams.In,
+		Out:    io.MultiWriter(o.IOStreams.Out, logFile),
+		ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logFile),
+	}
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {

@@ -37,12 +37,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const (
-	CatalogsDir = "catalogs"
-	LayoutsDir  = "layout"
-	IndexDir    = "index"
-)
-
 // OperatorOptions configures either a Full or Diff mirror operation
 // on a particular operator catalog image.
 type OperatorOptions struct {
