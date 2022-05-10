@@ -15,7 +15,7 @@ aws_region: us-west-2
 storage_config_backend: registry
 
 # The type of registry to use in the integration test (choose from docker_registry or redhat_quay)
-registry_type: docker_registry
+registry_type: mirror_registry
 
 # The operators to mirror, install, and test
 # Choose any of the following (or none):
