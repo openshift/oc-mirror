@@ -247,7 +247,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
-	mappingPath := filepath.Join(o.Dir, mappingFile)
 
 	// Three mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
@@ -270,7 +269,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-		return o.generateAllManifests(mapping, results)
+		return o.generateResults(mapping, results)
 	case mirrorToDisk:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
@@ -296,6 +295,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
@@ -303,7 +303,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return cleanup()
 		}
 
-		// Mirror planned images
 		if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
 			return err
 		}
@@ -349,7 +348,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	case diskToMirror:
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
-		// registry backends and generating the CatalogSource
+		// registry backends.
 		mapping, err = o.Publish(cmd.Context())
 		if err != nil {
 			serr := &SequenceError{}
@@ -366,12 +365,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-		if err := o.generateAllManifests(mapping, dir); err != nil {
-			return err
-		}
-
-		logrus.Infof("Writing image mapping to %s", mappingPath)
-		if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
+		if err := o.generateResults(mapping, dir); err != nil {
 			return err
 		}
 	case mirrorToMirror:
@@ -401,6 +395,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
+			mappingPath := filepath.Join(o.Dir, mappingFile)
 			logrus.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
@@ -408,13 +403,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return cleanup()
 		}
 
-		// Mirror planned images
-		// TODO(jpower432): Investigate how to mirror to mirror and
-		// specific source and dest TLS configuration
+		// QUESTION(jpower432): Can you specify different TLS configuration for source
+		// and destination with `oc image mirror`?
 		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
 			return err
 		}
-		// Create associations
+
 		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
 		skipErr := func(err error) bool {
 			ierr := &image.ErrInvalidImage{}
@@ -481,7 +475,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				mapping.Merge(graphRef)
 			}
 		}
-		if err := o.generateAllManifests(mapping, dir); err != nil {
+		if err := o.generateResults(mapping, dir); err != nil {
 			return err
 		}
 
@@ -508,14 +502,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err != nil {
 				return err
 			}
-			// Update source metadata
-			err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, filepath.Join(o.Dir, config.SourceDir), o.SourceSkipTLS, o.SourcePlainHTTP)
-			if err != nil {
+
+			workspace := filepath.Join(o.Dir, config.SourceDir)
+			if err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 				return err
 			}
-			// Sync target metadata
-			err = metadata.SyncMetadata(cmd.Context(), sourceBackend, targetBackend)
-			if err != nil {
+			if err := metadata.SyncMetadata(cmd.Context(), sourceBackend, targetBackend); err != nil {
 				return err
 			}
 		}
@@ -625,7 +617,12 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	return opts, nil
 }
 
-func (o *MirrorOptions) generateAllManifests(mapping image.TypedImageMapping, dir string) error {
+func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
+
+	mappingResultsPath := filepath.Join(dir, mappingFile)
+	if err := image.WriteImageMapping(mapping, mappingResultsPath); err != nil {
+		return err
+	}
 
 	allICSPs := []operatorv1alpha1.ImageContentSourcePolicy{}
 	releases := image.ByCategory(mapping, v1alpha2.TypeOCPRelease, v1alpha2.TypeOCPReleaseContent)
