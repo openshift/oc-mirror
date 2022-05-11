@@ -6,6 +6,8 @@ storageConfig:
     skipTLS: true # Disable TLS certificate checking or use plain HTTP 
 mirror:
   platform:
+    architectures:
+      - "s390x" # Architectures to mirror for the collection of release versions (defaults to amd64)
     channels:
       - name: stable-4.9 # References latest stable release
       - name: stable-4.7 # Annotation references min and max version. 

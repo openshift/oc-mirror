@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -68,14 +67,8 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.BoolVar(&o.Channels, "channels", o.Channels, "List all channel information")
 	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
-	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
+	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image "+
 		"picked when multiple variants are available")
-
-	// TODO(jpower432): Make this flag visible again once release architecture selection
-	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-options"); err != nil {
-		logrus.Panic(err.Error())
-	}
 
 	o.BindFlags(cmd.PersistentFlags())
 

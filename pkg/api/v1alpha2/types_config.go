@@ -55,6 +55,10 @@ type Platform struct {
 	// Channels defines the configuration for individual
 	// OCP and OKD channels
 	Channels []ReleaseChannel `json:"channels,omitempty"`
+	// Architectures defines one or more architectures
+	// to mirror for the release image. This is defined at the
+	// platform level to enable cross-channel upgrades.
+	Architectures []string `json:"architectures,omitempty"`
 }
 
 // ReleaseChannel defines the configuration for individual

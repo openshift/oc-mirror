@@ -24,7 +24,6 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/bundle"
-	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/describe"
 	"github.com/openshift/oc-mirror/pkg/cli/mirror/initcmd"
@@ -167,10 +166,6 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown destination scheme %q", typStr)
 	}
 
-	if len(o.FilterOptions) == 0 {
-		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
-	}
-
 	return nil
 }
 
@@ -210,12 +205,6 @@ func (o *MirrorOptions) Validate() error {
 	if len(o.From) > 0 {
 		if _, err := os.Stat(o.From); err != nil {
 			return err
-		}
-	}
-
-	for _, arch := range o.FilterOptions {
-		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
-			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
 		}
 	}
 

@@ -6,13 +6,14 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/cincinnati"
 )
 
 type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
 
-var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseChannels}
+var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateReleaseArchitectures}
 
-// Validation will check an ImageSetConfiguration for input errors.
+// Validate will check an ImagesetConfiguration for input errors.
 func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationChecks {
@@ -49,6 +50,15 @@ func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
 			)
 		}
 		seen[channel.Name] = true
+	}
+	return nil
+}
+
+func validateReleaseArchitectures(cfg *v1alpha2.ImageSetConfiguration) error {
+	for _, arch := range cfg.Mirror.Platform.Architectures {
+		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
+			return fmt.Errorf("release architecture %q is not a supported architecture", arch)
+		}
 	}
 	return nil
 }

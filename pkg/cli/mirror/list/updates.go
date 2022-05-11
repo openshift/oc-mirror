@@ -28,8 +28,7 @@ import (
 
 type UpdatesOptions struct {
 	*cli.RootOptions
-	ConfigPath    string
-	FilterOptions []string
+	ConfigPath string
 }
 
 func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
@@ -57,15 +56,6 @@ func NewUpdatesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	o.BindFlags(cmd.PersistentFlags())
 
-	fs := cmd.Flags()
-	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
-		"picked when multiple variants are available")
-
-	// TODO(jpower432): Make this flag visible again once release architecture selection
-	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-options"); err != nil {
-		logrus.Panic(err.Error())
-	}
 	return cmd
 }
 
@@ -73,21 +63,12 @@ func (o *UpdatesOptions) Complete(args []string) error {
 	if len(args) == 1 {
 		o.ConfigPath = args[0]
 	}
-
-	if len(o.FilterOptions) == 0 {
-		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
-	}
 	return nil
 }
 
 func (o *UpdatesOptions) Validate() error {
 	if len(o.ConfigPath) == 0 {
 		return errors.New("must specify imageset configuration")
-	}
-	for _, arch := range o.FilterOptions {
-		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
-			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
-		}
 	}
 	return nil
 }
@@ -111,7 +92,7 @@ func (o *UpdatesOptions) Run(ctx context.Context) error {
 	case err != nil && errors.Is(err, storage.ErrMetadataNotExist):
 		return fmt.Errorf("no metadata detected")
 	default:
-		for _, arch := range o.FilterOptions {
+		for _, arch := range cfg.Mirror.Platform.Architectures {
 			if len(cfg.Mirror.Platform.Channels) != 0 {
 				if err := o.releaseUpdates(ctx, arch, cfg, meta.PastMirror); err != nil {
 					return err

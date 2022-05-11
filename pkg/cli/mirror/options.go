@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
-	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
 )
@@ -33,7 +32,6 @@ type MirrorOptions struct {
 	SkipMetadataCheck bool
 	ContinueOnError   bool
 	IgnoreHistory     bool
-	FilterOptions     []string
 	MaxPerRegistry    int
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
@@ -55,8 +53,6 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 		"This is not recommended, but may be necessary when importing images from older image registries."+
 		"Only bypass verification if the registry is known to be trustworthy.")
 	fs.BoolVar(&o.SkipCleanup, "skip-cleanup", o.SkipCleanup, "Skip removal of artifact directories")
-	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image"+
-		"picked when multiple variants are available")
 	fs.BoolVar(&o.IgnoreHistory, "ignore-history", o.IgnoreHistory, "Ignore past mirrors when downloading images and packing layers")
 	fs.BoolVar(&o.SkipMetadataCheck, "skip-metadata-check", o.SkipMetadataCheck, "Skip metadata when publishing an imageset."+
 		"This is only recommended when the imageset was created --ignore-history")
@@ -66,12 +62,6 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
 	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 2, "Number of concurrent requests allowed per registry")
-
-	// TODO(jpower432): Make this flag visible again once release architecture selection
-	// has been more thouroughly vetted
-	if err := fs.MarkHidden("filter-options"); err != nil {
-		klog.Fatal(err.Error())
-	}
 }
 
 func (o *MirrorOptions) init() {
