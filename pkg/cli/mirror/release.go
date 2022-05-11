@@ -19,8 +19,8 @@ import (
 	"github.com/openshift/library-go/pkg/verify/store/sigstore"
 	"github.com/openshift/library-go/pkg/verify/util"
 	"github.com/openshift/oc/pkg/cli/admin/release"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
@@ -112,7 +112,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 					// Update version to release channel
 					ch.MaxVersion = latest.String()
-					logrus.Debugf("Detected minimum version as %s", ch.MaxVersion)
+					klog.V(4).Infof("Detected minimum version as %s", ch.MaxVersion)
 					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
 						min, found := prevChannels[ch.Name]
 						if !found {
@@ -120,7 +120,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 							min = latest.String()
 						}
 						ch.MinVersion = min
-						logrus.Debugf("Detected minimum version as %s", ch.MinVersion)
+						klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
 					}
 				}
 
@@ -133,13 +133,13 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 						continue
 					}
 					ch.MinVersion = first.String()
-					logrus.Debugf("Detected minimum version as %s", ch.MinVersion)
+					klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
 				}
 				versionsByChannel[ch.Name] = ch
 			} else {
 				// Range is set. Ensure full is true so this
 				// is skipped when processing release metadata.
-				logrus.Debugf("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
+				klog.V(4).Infof("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch
 			}
@@ -180,7 +180,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 	}
 
 	for img := range releaseDownloads {
-		logrus.Debugf("Starting release download for version %s", img)
+		klog.V(4).Infof("Starting release download for version %s", img)
 		opts, err := o.newMirrorReleaseOptions(srcDir)
 		if err != nil {
 			return mmapping, err
@@ -324,7 +324,7 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, ocpClient
 func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Update) downloads {
 	releaseDownloads := downloads{}
 	for _, update := range updates {
-		logrus.Debugf("Found update %s", update.Version)
+		klog.V(4).Infof("Found update %s", update.Version)
 		releaseDownloads[update.Image] = struct{}{}
 	}
 
@@ -404,7 +404,7 @@ func (d downloads) Merge(in downloads) {
 	for k, v := range in {
 		_, ok := d[k]
 		if ok {
-			logrus.Debugf("download %s exists", k)
+			klog.V(4).Infof("download %s exists", k)
 			continue
 		}
 		d[k] = v
@@ -443,7 +443,7 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 		defer cancelFn()
 		if err := imageVerifier.Verify(ctx, digest); err != nil {
 			// This may be a OKD release image hence no valid signature
-			logrus.Warnf("An image was retrieved that failed verification: %v", err)
+			klog.Warningf("An image was retrieved that failed verification: %v", err)
 			continue
 		}
 
@@ -495,11 +495,11 @@ func (o *MirrorOptions) unpackReleaseSignatures(dstDir string, filesInArchive ma
 	if err := unpack(config.ReleaseSignatureDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			logrus.Debug("No release signatures found in archive, skipping")
+			klog.V(4).Infof("No release signatures found in archive, skipping")
 			return nil
 		}
 		return err
 	}
-	logrus.Infof("Wrote release signatures to %s", dstDir)
+	klog.Infof("Wrote release signatures to %s", dstDir)
 	return nil
 }

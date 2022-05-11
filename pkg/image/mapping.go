@@ -10,7 +10,7 @@ import (
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 )
 
 // TypedImage defines an a image with the destination and content type
@@ -66,7 +66,7 @@ func (m TypedImageMapping) Merge(in TypedImageMapping) {
 	for k, v := range in {
 		_, found := m[k]
 		if found {
-			logrus.Debugf("source image %s already exists in mapping", k.String())
+			klog.V(4).Infof("source image %s already exists in mapping", k.String())
 			continue
 		}
 		m[k] = v

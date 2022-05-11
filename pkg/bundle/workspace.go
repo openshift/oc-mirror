@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/config"
 )
@@ -20,13 +20,13 @@ func MakeWorkspaceDirs(rootDir string) error {
 	for _, p := range paths {
 		dir := filepath.Join(rootDir, p)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			logrus.Infof("Creating directory: %v", dir)
+			klog.Infof("Creating directory: %v", dir)
 			err := os.MkdirAll(dir, os.ModePerm)
 			if err != nil {
 				return err
 			}
 		} else {
-			logrus.Infof("Found: %v", dir)
+			klog.Infof("Found: %v", dir)
 		}
 	}
 	return nil

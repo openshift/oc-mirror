@@ -4,7 +4,7 @@
 # needed to run against a local test registry and provide informative
 # debug data in case of test errors.
 function run_cmd() {
-  local test_flags="--log-level debug --dest-use-http --skip-cleanup"
+  local test_flags="--verbose=4 --dest-use-http --skip-cleanup"
 
   echo "$CMD" "$@" $test_flags
   echo

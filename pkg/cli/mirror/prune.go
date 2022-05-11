@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/admin/prune/imageprune"
-	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/image"
 )
@@ -74,11 +74,11 @@ func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.A
 // pruneImages performs the image deletion based on the provided map of repos and manifests.
 func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]string, maxWorkers int) error {
 	if len(reposByManifest) == 0 {
-		logrus.Debug("No images specified for pruning")
+		klog.V(4).Info("No images specified for pruning")
 		return nil
 	}
 
-	logrus.Infof("Pruning %d image(s) from registry", len(reposByManifest))
+	klog.Infof("Pruning %d image(s) from registry", len(reposByManifest))
 
 	var keys []string
 	for k := range reposByManifest {

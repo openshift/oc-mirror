@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/mholt/archiver/v3"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -124,7 +124,7 @@ func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backe
 			p.packedBlobs[info.Name()] = struct{}{}
 
 		default:
-			logrus.Debugf("File %s will not be archived, skipping...", fpath)
+			klog.V(4).Infof("File %s will not be archived, skipping...", fpath)
 			return nil
 		}
 
@@ -181,7 +181,7 @@ func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backe
 			}
 		}
 
-		logrus.Debugf("File %s added to archive", fpath)
+		klog.V(4).Infof("File %s added to archive", fpath)
 
 		splitSize += info.Size()
 
@@ -240,7 +240,7 @@ func (p *packager) createArchive(splitPath string) (splitFile *os.File, err erro
 	}
 
 	// Create a new tar archive for writing
-	logrus.Infof("Creating archive %s", splitPath)
+	klog.Infof("Creating archive %s", splitPath)
 	if err = p.Create(splitFile); err != nil {
 		return nil, fmt.Errorf("creating archive %s: %v", splitPath, err)
 	}

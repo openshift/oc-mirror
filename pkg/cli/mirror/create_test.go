@@ -24,7 +24,7 @@ func TestCreate(t *testing.T) {
 	opts := MirrorOptions{
 		RootOptions: &cli.RootOptions{
 			Dir:      path,
-			LogLevel: "info",
+			LogLevel: 2,
 			IOStreams: genericclioptions.IOStreams{
 				In:     os.Stdin,
 				Out:    os.Stdout,

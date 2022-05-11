@@ -14,12 +14,11 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
-	"github.com/sirupsen/logrus"
+	"github.com/openshift/oc-mirror/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
-
-	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 const (
@@ -165,7 +164,7 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
 		if len(v.Ref.ID) == 0 {
-			logrus.Warnf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
+			klog.Warningf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
 		switch {
@@ -252,7 +251,7 @@ func generateUpdateService(name string, releaseRepo, graphDataImage reference.Do
 func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) error {
 
 	if len(icsps) == 0 {
-		logrus.Debug("No ICSPs generated to write")
+		klog.V(4).Info("No ICSPs generated to write")
 		return nil
 	}
 
@@ -279,7 +278,7 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 		return fmt.Errorf("error writing ImageContentSourcePolicy: %v", err)
 	}
 
-	logrus.Infof("Wrote ICSP manifests to %s", dir)
+	klog.Infof("Wrote ICSP manifests to %s", dir)
 
 	return nil
 }
@@ -287,7 +286,7 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 // WriteCatalogSource will generate a CatalogSource object and write it to disk
 func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 	if len(mapping) == 0 {
-		logrus.Debug("No catalogs found in mapping")
+		klog.V(4).Info("No catalogs found in mapping")
 		return nil
 	}
 
@@ -315,7 +314,7 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 			return fmt.Errorf("error writing CatalogSource: %v", err)
 		}
 	}
-	logrus.Infof("Wrote CatalogSource manifests to %s", dir)
+	klog.Infof("Wrote CatalogSource manifests to %s", dir)
 	return nil
 }
 
@@ -328,6 +327,6 @@ func WriteUpdateService(release, graph image.TypedImage, dir string) error {
 	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
 		return fmt.Errorf("error writing UpdateService: %v", err)
 	}
-	logrus.Infof("Wrote UpdateService manifests to %s", dir)
+	klog.Infof("Wrote UpdateService manifests to %s", dir)
 	return nil
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -50,7 +50,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 				if !isSkipErr(err) {
 					return mmappings, err
 				}
-				logrus.Warn(err)
+				klog.Warning(err)
 				continue
 			}
 			pinnedRef, err := imagesource.ParseReference(srcImage)

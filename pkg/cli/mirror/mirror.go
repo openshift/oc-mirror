@@ -16,9 +16,9 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 	"github.com/openshift/oc/pkg/cli/image/mirror"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
@@ -195,9 +195,9 @@ func (o *MirrorOptions) Validate() error {
 	// FIXME(jpower432): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
 	if len(o.ToMirror) > 0 {
-		logrus.Infof("Checking push permissions for %s", o.ToMirror)
+		klog.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
-		logrus.Debugf("Using image %s to check permissions", ref)
+		klog.V(4).Infof("Using image %s to check permissions", ref)
 		imgRef, err := name.ParseReference(ref, getNameOpts(destInsecure)...)
 		if err != nil {
 			return err
@@ -288,7 +288,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				logrus.Infof("no new images detected, process stopping")
+				klog.Infof("no new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -296,7 +296,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		if o.DryRun {
 			mappingPath := filepath.Join(o.Dir, mappingFile)
-			logrus.Infof("Writing image mapping to %s", mappingPath)
+			klog.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
@@ -329,7 +329,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				logrus.Infof("no updates detected, process stopping")
+				klog.Infof("no updates detected, process stopping")
 				return nil
 			}
 			return err
@@ -388,7 +388,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				logrus.Infof("no new images detected, process stopping")
+				klog.Infof("no new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -396,7 +396,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		if o.DryRun {
 			mappingPath := filepath.Join(o.Dir, mappingFile)
-			logrus.Infof("Writing image mapping to %s", mappingPath)
+			klog.Infof("Writing image mapping to %s", mappingPath)
 			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
 				return err
 			}
@@ -465,7 +465,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
 				return err
 			}
-			logrus.Debugf("Moved any release signatures to %s", dir)
+			klog.V(4).Infof("Moved any release signatures to %s", dir)
 
 			if cfg.Mirror.Platform.Graph {
 				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
@@ -478,6 +478,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateResults(mapping, dir); err != nil {
 			return err
 		}
+		klog.V(4).Infof("Moved any release signatures to %s", dir)
 
 		// Move charts into results dir
 		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
@@ -485,7 +486,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
 			return err
 		}
-		logrus.Debugf("Moved any downloaded Helm charts to %s", dir)
+		klog.V(4).Infof("Moved any downloaded Helm charts to %s", dir)
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
@@ -543,7 +544,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 			continue
 		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
-			logrus.Debugf("skipping previously mirrored image %s", srcRef.Ref.String())
+			klog.V(4).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
 			keep = append(keep, srcRef.Ref.String())
 		}
@@ -576,7 +577,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 			return err
 		}
 		if blocked {
-			logrus.Warnf("skipping blocked image %s", srcRef.String())
+			klog.Warningf("skipping blocked image %s", srcRef.String())
 			// Remove to make sure this does not end up in the metadata
 			images.Remove(srcRef)
 			continue
@@ -693,7 +694,7 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	}
 	// Instead of returning an error, just log it.
 	if o.ContinueOnError && (skip || skipAllTypes) {
-		logrus.Error(err)
+		klog.Error(err)
 		o.continuedOnError = true
 	} else {
 		return err

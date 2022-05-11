@@ -16,7 +16,7 @@ import (
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -31,7 +31,7 @@ func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]s
 	if err := unpack(config.CatalogsDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			logrus.Debug("No catalogs found in archive, skipping catalog rebuild")
+			klog.V(4).Info("No catalogs found in archive, skipping catalog rebuild")
 			return found, nil
 		}
 		return found, err
@@ -149,7 +149,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			RemoteOpts: remoteOpts,
 		}
 
-		logrus.Infof("Rendering catalog image %q with file-based catalog ", refExact)
+		klog.Infof("Rendering catalog image %q with file-based catalog ", refExact)
 
 		add, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, config.IndexDir, "index.json"))
 		if err != nil {

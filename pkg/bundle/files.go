@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/mholt/archiver/v3"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/archive"
@@ -66,12 +66,12 @@ func ReconcileV2Dir(assocs image.AssociationSet, filenames map[string]string) (m
 			case config.BlobDir:
 				if info.Mode().IsRegular() {
 					if _, found := foundFiles[info.Name()]; found {
-						logrus.Debugf("Blob %s exists in imageset, skipping...", info.Name())
+						klog.V(4).Infof("Blob %s exists in imageset, skipping...", info.Name())
 						return nil
 					}
 					blobs = append(blobs, info.Name())
 					foundFiles[info.Name()] = struct{}{}
-					logrus.Debugf("Adding blob %s", info.Name())
+					klog.V(4).Infof("Adding blob %s", info.Name())
 				}
 			default:
 				// Skips the blob dir which
@@ -119,7 +119,7 @@ func ReadImageSet(a archive.Archiver, from string) (map[string]string, error) {
 			extension := filepath.Ext(path)
 			extension = strings.TrimPrefix(extension, ".")
 			if extension == a.String() {
-				logrus.Debugf("Found archive %s", path)
+				klog.V(4).Infof("Found archive %s", path)
 				return a.Walk(path, func(f archiver.File) error {
 					switch t := f.Header.(type) {
 					case *tar.Header:
@@ -181,7 +181,7 @@ func ReadMetadataFromFile(ctx context.Context, archivePath string) (v1alpha2.Met
 		return meta, errors.New("metadata is not in archive")
 	}
 
-	logrus.Debug("Extracting incoming metadata")
+	klog.V(4).Infof("Extracting incoming metadata")
 	if err := a.Extract(archive, config.MetadataBasePath, tmpdir); err != nil {
 		return meta, err
 	}

@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -56,7 +56,7 @@ func (b *localDirBackend) init() error {
 // ReadMetadata reads the provided metadata from disk.
 func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha2.Metadata, path string) error {
 
-	logrus.Debugf("looking for metadata file at %q", path)
+	klog.V(4).Infof("looking for metadata file at %q", path)
 
 	data, err := afero.ReadFile(b.fs, path)
 	if err != nil {
@@ -169,7 +169,6 @@ func (b *localDirBackend) Stat(_ context.Context, fpath string) (os.FileInfo, er
 	info, err := b.fs.Stat(fpath)
 	switch {
 	case err != nil && errors.Is(err, os.ErrNotExist):
-		logrus.Info(b.fs.Name())
 		return nil, ErrMetadataNotExist
 	case err != nil:
 		return nil, err
