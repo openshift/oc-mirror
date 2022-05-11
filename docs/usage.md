@@ -6,6 +6,7 @@
     - [Authentication:](#authentication)
     - [Certificate Trust](#certificate-trust)
   - [Basic Usage](#basic-usage)
+    - [oc-mirror vs oc mirror](#oc-mirror-vs-oc-mirror)
     - [Content Discovery](#content-discovery)
       - [Updates](#updates)
       - [Releases](#releases)
@@ -17,6 +18,7 @@
   - [Mirroring Process](#mirroring-process)
     - [Running `oc-mirror` For First Time](#running-oc-mirror-for-first-time)
     - [Running `oc-mirror` For Differential Updates](#running-oc-mirror-for-differential-updates)
+  - [Notes about flag usage](#notes-about-flag-usage)
   - [Glossary](#glossary)
 
 ## Overview
@@ -130,6 +132,15 @@ To create a new full imageset, use the following command with the target directo
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:
 
 `oc-mirror --config imageset-config.yaml file://archives`
+
+## Notes about flag usage
+
+1. The `max-per-registry` flag will control the number of concurrent request per registry. Setting this value can allow for faster image download speeds. The default is 2.
+2. The `continue-on-error` flag can be used to continue the mirroring process in the event that an image or images cannot be downloaded. The `skip-missing` flag will account for images that return a 404 status code specified with tags only. By default `oc-mirror` translates tagged image
+requests into digests before mirroring. There is an issue to capture improvements to the skip-missing functionality to allow support for digests in the library used for mirroring (https://github.com/openshift/oc/issues/1104).
+3. The `skip-cleanup` flag can be used to keep the workspace from being deleted after mirroring operations.
+> WARNING: Running oc-mirror against a workspace that has not been cleaned can result in unexpected behavior.
+ 
 ## Glossary
 
-`imageset` - Refers to the artifact or collection of artifacts produced by `oc-mirror`. 
+`imageset` - Refers to the artifact or collection of artifacts produced by `oc-mirror`.

@@ -1,6 +1,6 @@
-# oc-mirror Workflows Overview
+Design: oc-mirror Workflows Overview
 ===
-- [# oc-mirror Workflows Overview](#-oc-mirror-workflows-overview)
+- [Design: oc-mirror Workflows Overview](#design-oc-mirror-workflows-overview)
   - [Workflows](#workflows)
     - [Heads-Only](#heads-only)
     - [Full](#full)
