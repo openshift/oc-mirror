@@ -17,6 +17,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
+const mappingFile = "mapping.txt"
+
 func getRemoteOpts(ctx context.Context, insecure bool) []remote.Option {
 	return []remote.Option{
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),

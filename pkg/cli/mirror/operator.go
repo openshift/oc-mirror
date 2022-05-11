@@ -582,8 +582,6 @@ func (o *OperatorOptions) newMirrorCatalogOptions(ctlgRef imgreference.DockerIma
 	return opts, nil
 }
 
-const mappingFile = "mapping.txt"
-
 // Copied from https://github.com/openshift/oc/blob/4df50be4d929ce036c4f07893c07a1782eadbbba/pkg/cli/admin/catalog/mirror.go#L449-L503
 // Hoping this can be temporary, and `oc adm mirror catalog` libs support index.yaml direct mirroring.
 
