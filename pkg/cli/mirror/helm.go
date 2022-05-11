@@ -247,7 +247,7 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err erro
 	var data interface{}
 	// yaml.Unmarshal will convert YAMl to JSON first
 	if err := yaml.Unmarshal(yamlData, &data); err != nil {
-		klog.Error(err)
+		return nil, err
 	}
 
 	j := jsonpath.New("")
