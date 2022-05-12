@@ -156,11 +156,13 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err
 		}
+
 		icLoc := filepath.Join(workspace, config.CatalogsDir, ctlgLoc, config.IncludeConfigFile)
 		includeFile, err := os.Open(icLoc)
 		if err != nil {
 			return operatorMeta, fmt.Errorf("error opening include config file: %v", err)
 		}
+		defer includeFile.Close()
 
 		if err := ic.Decode(includeFile); err != nil {
 			return operatorMeta, fmt.Errorf("error decoding include config file: %v", err)
