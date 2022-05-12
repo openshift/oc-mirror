@@ -31,7 +31,7 @@ func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]s
 	if err := unpack(config.CatalogsDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			klog.V(4).Info("No catalogs found in archive, skipping catalog rebuild")
+			klog.V(2).Info("No catalogs found in archive, skipping catalog rebuild")
 			return found, nil
 		}
 		return found, err

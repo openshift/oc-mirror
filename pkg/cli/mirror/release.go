@@ -110,7 +110,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 					// Update version to release channel
 					ch.MaxVersion = latest.String()
-					klog.V(4).Infof("Detected minimum version as %s", ch.MaxVersion)
+					klog.V(2).Infof("Detected minimum version as %s", ch.MaxVersion)
 					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
 						min, found := prevChannels[ch.Name]
 						if !found {
@@ -118,7 +118,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 							min = latest.String()
 						}
 						ch.MinVersion = min
-						klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
+						klog.V(2).Infof("Detected minimum version as %s", ch.MinVersion)
 					}
 				}
 
@@ -131,13 +131,13 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 						continue
 					}
 					ch.MinVersion = first.String()
-					klog.V(4).Infof("Detected minimum version as %s", ch.MinVersion)
+					klog.V(2).Infof("Detected minimum version as %s", ch.MinVersion)
 				}
 				versionsByChannel[ch.Name] = ch
 			} else {
 				// Range is set. Ensure full is true so this
 				// is skipped when processing release metadata.
-				klog.V(4).Infof("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
+				klog.V(2).Infof("Processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch
 			}
@@ -178,7 +178,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 	}
 
 	for img := range releaseDownloads {
-		klog.V(4).Infof("Starting release download for version %s", img)
+		klog.V(3).Infof("Starting release download for version %s", img)
 		opts, err := o.newMirrorReleaseOptions(srcDir)
 		if err != nil {
 			return mmapping, err
@@ -322,7 +322,7 @@ func (o *ReleaseOptions) getCrossChannelDownloads(ctx context.Context, ocpClient
 func gatherUpdates(current, newest cincinnati.Update, updates []cincinnati.Update) downloads {
 	releaseDownloads := downloads{}
 	for _, update := range updates {
-		klog.V(4).Infof("Found update %s", update.Version)
+		klog.V(1).Infof("Found update %s", update.Version)
 		releaseDownloads[update.Image] = struct{}{}
 	}
 
@@ -402,7 +402,7 @@ func (d downloads) Merge(in downloads) {
 	for k, v := range in {
 		_, ok := d[k]
 		if ok {
-			klog.V(4).Infof("download %s exists", k)
+			klog.V(1).Infof("download %s exists", k)
 			continue
 		}
 		d[k] = v
@@ -493,7 +493,7 @@ func (o *MirrorOptions) unpackReleaseSignatures(dstDir string, filesInArchive ma
 	if err := unpack(config.ReleaseSignatureDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			klog.V(4).Infof("No release signatures found in archive, skipping")
+			klog.V(2).Infof("No release signatures found in archive, skipping")
 			return nil
 		}
 		return err

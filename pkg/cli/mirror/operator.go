@@ -197,7 +197,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			return nil, err
 		}
 
-		verifyOperatorPkgFound(dic, dc)
+		o.verifyOperatorPkgFound(dic, dc)
 	}
 
 	return dc, nil
@@ -274,16 +274,16 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		}
 	}
 
-	verifyOperatorPkgFound(dic, dc)
+	o.verifyOperatorPkgFound(dic, dc)
 
 	return dc, nil
 }
 
 // verifyOperatorPkgFound will verify that each of the requested operator packages were
 // found and added to the DeclarativeConfig.
-func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
-	logrus.Debug("DiffIncludeConfig: ", dic)
-	logrus.Debug("DeclarativeConfig: ", dc)
+func (o *OperatorOptions) verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
+	o.Logger.Debug("DiffIncludeConfig: ", dic)
+	o.Logger.Debug("DeclarativeConfig: ", dc)
 
 	dcMap := make(map[string]bool)
 
@@ -293,11 +293,11 @@ func verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.Declarativ
 	}
 
 	for _, pkg := range dic.Packages {
-		logrus.Debug("Checking for package: ", pkg)
+		klog.V(2).Infof("Checking for package: ", pkg)
 
 		if !dcMap[pkg.Name] {
 			// The operator package wasn't found. Log the error and continue on.
-			logrus.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
+			o.Logger.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
 		}
 	}
 }

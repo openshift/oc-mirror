@@ -56,7 +56,7 @@ func (b *localDirBackend) init() error {
 // ReadMetadata reads the provided metadata from disk.
 func (b *localDirBackend) ReadMetadata(_ context.Context, meta *v1alpha2.Metadata, path string) error {
 
-	klog.V(4).Infof("looking for metadata file at %q", path)
+	klog.V(2).Infof("looking for metadata file at %q", path)
 
 	data, err := afero.ReadFile(b.fs, path)
 	if err != nil {

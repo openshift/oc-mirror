@@ -144,7 +144,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 	}
 
 	if len(cfg.Mirror.Samples) != 0 {
-		klog.V(4).Info("sample images full not implemented")
+		klog.Info("sample images full not implemented")
 	}
 
 	return mmappings, nil

@@ -80,7 +80,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		defer cleanup()
 	}
 
-	klog.V(4).Infof("Unarchiving metadata into %s", tmpdir)
+	klog.V(2).Infof("Unarchiving metadata into %s", tmpdir)
 
 	// Get file information from the source archives
 	filesInArchive, err := bundle.ReadImageSet(archive.NewArchiver(), o.From)
@@ -98,7 +98,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	// Unpack chart to user destination if it exists
-	klog.V(4).Infof("Unpacking any provided Helm charts to %s", o.OutputDir)
+	klog.V(1).Infof("Unpacking any provided Helm charts to %s", o.OutputDir)
 	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
 		return allMappings, err
 	}
@@ -112,7 +112,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
-	klog.V(4).Infof("process all images in imageset")
+	klog.V(3).Infof("process all images in imageset")
 	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
 	if err != nil {
 		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
@@ -129,7 +129,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		}
 	}
 
-	klog.V(4).Infof("unpack release signatures")
+	klog.V(1).Infof("unpack release signatures")
 	if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
 		return allMappings, err
 	}
@@ -209,7 +209,7 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 		// Complete metadata checks
 		// UUID mismatch will now be seen as a new workspace.
 		if !o.SkipMetadataCheck {
-			klog.V(4).Info("Checking metadata sequence number")
+			klog.V(3).Info("Checking metadata sequence number")
 			currRun := curr.PastMirror
 			incomingRun := incoming.PastMirror
 			if incomingRun.Sequence != (currRun.Sequence + 1) {
@@ -228,7 +228,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
 	}
-	klog.V(4).Infof("mirror reference: %#v", toMirrorRef)
+	klog.V(2).Infof("mirror reference: %#v", toMirrorRef)
 	if toMirrorRef.Type != imagesource.DestinationRegistry {
 		return allMappings, fmt.Errorf("destination %q must be a registry reference", o.ToMirror)
 	}
@@ -252,7 +252,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 			manifestPath := filepath.Join(config.V2Dir, assoc.Path, "manifests")
 
 			// Ensure child manifests are all unpacked
-			klog.V(4).Infof("reading assoc: %s", assoc.Name)
+			klog.V(3).Infof("reading assoc: %s", assoc.Name)
 			if len(assoc.ManifestDigests) != 0 {
 				for _, manifestDigest := range assoc.ManifestDigests {
 					if hasManifest := assocs.ContainsKey(imageName, manifestDigest); !hasManifest {
@@ -360,7 +360,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	// process catalogs
-	klog.V(4).Infof("rebuilding catalog images")
+	klog.V(2).Infof("rebuilding catalog images")
 	found, err := o.unpackCatalog(dir, filesInArchive)
 	if err != nil {
 		return allMappings, err
@@ -374,7 +374,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 		allMappings.Merge(ctlgRefs)
 	}
 
-	klog.V(4).Infof("building cincinnati graph data image")
+	klog.V(2).Infof("building cincinnati graph data image")
 	// process cincinnati graph image
 	found, err = o.unpackRelease(dir, filesInArchive)
 	if err != nil {
@@ -507,7 +507,7 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	for _, m := range mappings {
 		srcs = append(srcs, m.Source.String())
 	}
-	klog.V(4).Infof("mirroring generic images: %q", srcs)
+	klog.V(2).Infof("mirroring generic images: %q", srcs)
 
 	regctx, err := image.NewContext(o.SkipVerification)
 	if err != nil {

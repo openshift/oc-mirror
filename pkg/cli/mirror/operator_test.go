@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/containerd/remotes"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -155,7 +156,12 @@ func TestPinImages(t *testing.T) {
 
 func TestVerifyOperatorPkgFound(t *testing.T) {
 
-	hook := test.NewGlobal()
+	mo := &MirrorOptions{
+		RootOptions: &cli.RootOptions{},
+	}
+	o := NewOperatorOptions(mo)
+	o.complete()
+	hook := test.NewLocal(o.Logger.Logger)
 
 	type testvopf struct {
 		desc        string
@@ -208,7 +214,7 @@ func TestVerifyOperatorPkgFound(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			verifyOperatorPkgFound(c.dic, c.dc)
+			o.verifyOperatorPkgFound(c.dic, c.dc)
 
 			assert.Equal(t, c.logCount, len(hook.AllEntries()))
 			if c.logCount > 0 && len(hook.Entries) > 0 {
@@ -218,7 +224,6 @@ func TestVerifyOperatorPkgFound(t *testing.T) {
 		})
 		hook.Reset()
 	}
-
 }
 
 type mockResolver struct {

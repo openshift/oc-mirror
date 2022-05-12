@@ -192,7 +192,7 @@ func (o *MirrorOptions) Validate() error {
 	if len(o.ToMirror) > 0 {
 		klog.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
-		klog.V(4).Infof("Using image %s to check permissions", ref)
+		klog.V(2).Infof("Using image %s to check permissions", ref)
 		imgRef, err := name.ParseReference(ref, getNameOpts(destInsecure)...)
 		if err != nil {
 			return err
@@ -454,7 +454,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
 				return err
 			}
-			klog.V(4).Infof("Moved any release signatures to %s", dir)
+			klog.V(1).Infof("Moved any release signatures to %s", dir)
 
 			if cfg.Mirror.Platform.Graph {
 				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
@@ -467,7 +467,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.generateResults(mapping, dir); err != nil {
 			return err
 		}
-		klog.V(4).Infof("Moved any release signatures to %s", dir)
+		klog.V(1).Infof("Moved any release signatures to %s", dir)
 
 		// Move charts into results dir
 		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
@@ -475,7 +475,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
 			return err
 		}
-		klog.V(4).Infof("Moved any downloaded Helm charts to %s", dir)
+		klog.V(1).Infof("Moved any downloaded Helm charts to %s", dir)
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
@@ -533,7 +533,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 			continue
 		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
-			klog.V(4).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
+			klog.V(2).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
 			keep = append(keep, srcRef.Ref.String())
 		}

@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -23,7 +25,7 @@ type RootOptions struct {
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
-	fs.IntVarP(&o.LogLevel, "verbose", "v", 2, "Log level (e.g. \"Error (1), Info (2) | Warning (3) | Debug (4)\")")
+	fs.IntVarP(&o.LogLevel, "verbose", "v", o.LogLevel, "Number for the log level verbosity (valid 1-9, default is 0)")
 	if err := fs.MarkHidden("dir"); err != nil {
 		klog.Fatal(err.Error())
 	}
@@ -44,18 +46,44 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 		klog.Fatal(err)
 	}
 
-	o.logfileCleanup = func() {
-		klog.Flush()
-		checkErr(logFile.Close())
+	klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
+
+	// Setup logrus for use with operator-registry
+	logrus.SetOutput(ioutil.Discard)
+
+	var logrusLevel logrus.Level
+	switch o.LogLevel {
+	case 0:
+		logrusLevel = logrus.InfoLevel
+	case 1:
+		logrusLevel = logrus.DebugLevel
+	case 2:
+		logrusLevel = logrus.DebugLevel
+	default:
+		logrusLevel = logrus.TraceLevel
 	}
 
-	klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
+	logrus.SetLevel(logrusLevel)
+	logrus.AddHook(newFileHookWithNewlineTruncate(o.IOStreams.ErrOut, logrusLevel, &logrus.TextFormatter{
+		DisableTimestamp:       true,
+		DisableLevelTruncation: true,
+		DisableQuote:           true,
+	}))
+	logrusCleanup := setupFileHook(logFile)
+
 	// Add to root IOStream options
 	o.IOStreams = genericclioptions.IOStreams{
 		In:     o.IOStreams.In,
 		Out:    io.MultiWriter(o.IOStreams.Out, logFile),
 		ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logFile),
 	}
+
+	o.logfileCleanup = func() {
+		klog.Flush()
+		logrusCleanup()
+		checkErr(logFile.Close())
+	}
+
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {

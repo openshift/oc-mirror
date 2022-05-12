@@ -14,6 +14,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
@@ -51,7 +52,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 
 	mirror := meta.PastMirror
 	// Store minimum versions for new catalogs
-	logrus.Debugf("Resolving operator metadata")
+	klog.V(1).Info("Resolving operator metadata")
 	var operatorErrs []error
 
 	resolver, err := containerdregistry.NewResolver("", skipTLSVerify, plainHTTP, nil)
@@ -95,7 +96,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 
 	// Store minimum versions for new release channels
-	logrus.Debugf("Resolving OCP release metadata")
+	klog.V(1).Info("Resolving OCP release metadata")
 	for _, channel := range mirror.Mirror.Platform.Channels {
 
 		// Only collect the information
@@ -106,7 +107,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 		}
 		min, ok := pastReleases[channel.Name]
 		if !ok {
-			logrus.Debugf("channel %q not found, setting new min to %q", channel.Name, channel.MinVersion)
+			klog.V(2).Infof("channel %q not found, setting new min to %q", channel.Name, channel.MinVersion)
 			min = channel.MinVersion
 		}
 
