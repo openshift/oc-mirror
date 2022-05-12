@@ -118,7 +118,7 @@ To create a new full imageset, use the following command with the target directo
 `oc-mirror --config imageset-config.yaml file://archives`
 
 
-> **WARNING**: Depending on the configuration file used, this process may download multiple hundreds of gigabytes of data. This may take quite a while. Use the optional `log-level=debug` command line flag for more verbose output to track command execution.
+> **WARNING**: Depending on the configuration file used, this process may download multiple hundreds of gigabytes of data. This may take quite a while. Use the optional `-v` command line flag for more verbose output to track command execution.
 
 **Note:** After `oc-mirror` has finished, an imageset named mirror_seq1_000000.tar will have been created and available in your specified directory. Use this file with `oc-mirror` to mirror the imageset to a disconnected registry:
 
