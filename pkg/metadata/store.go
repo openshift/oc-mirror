@@ -10,7 +10,6 @@ import (
 
 	"github.com/containerd/containerd/remotes"
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
-	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -146,34 +145,29 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 	// Only collect the information
 	// for heads only work flows for conversions from ranges
 	// or full catalogs to heads only.
-	// TODO(jpower432): The include config is already generated
-	// during catalog processing. Would be better to write it to disk
-	// with the FBC and unmarshal it into the struct instead of generating
-	// it again on diff
-	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
-	if ctlg.IsHeadsOnly() && !hasInclude {
+	if ctlg.IsHeadsOnly() {
+
 		// Determine the location of the created FBC
 		ctlgRef, err := imgreference.Parse(ctlgName)
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err
 		}
-		dcLoc, err := operator.GenerateCatalogDir(ctlgRef)
+		ctlgLoc, err := operator.GenerateCatalogDir(ctlgRef)
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err
 		}
-		dcLoc = filepath.Join(workspace, config.CatalogsDir, dcLoc, config.IndexDir)
-		dc, err := action.Render{
-			Registry:       reg,
-			Refs:           []string{dcLoc},
-			AllowedRefMask: action.RefAll,
-		}.Run(ctx)
+
+		icLoc := filepath.Join(workspace, config.CatalogsDir, ctlgLoc, config.IncludeConfigFile)
+		includeFile, err := os.Open(icLoc)
 		if err != nil {
-			return v1alpha2.OperatorMetadata{}, err
+			return operatorMeta, fmt.Errorf("error opening include config file: %v", err)
 		}
-		ic, err = operator.ConvertDCToIncludeConfig(*dc)
-		if err != nil {
-			return v1alpha2.OperatorMetadata{}, err
+		defer includeFile.Close()
+
+		if err := ic.Decode(includeFile); err != nil {
+			return operatorMeta, fmt.Errorf("error decoding include config file: %v", err)
 		}
+
 	}
 
 	operatorMeta.IncludeConfig = ic

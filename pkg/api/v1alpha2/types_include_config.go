@@ -1,7 +1,9 @@
 package v1alpha2
 
 import (
+	"encoding/gob"
 	"fmt"
+	"io"
 
 	"github.com/blang/semver/v4"
 	"github.com/operator-framework/operator-registry/alpha/action"
@@ -52,7 +54,7 @@ type IncludeBundle struct {
 // ConvertToDiffIncludeConfig converts an IncludeConfig to a DiffIncludeConfig type to
 // interact with `operator-registry` libraries.
 func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeConfig, err error) {
-	if ic == nil {
+	if ic == nil || len(ic.Packages) == 0 {
 		return dic, nil
 	}
 
@@ -109,6 +111,25 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 	}
 
 	return dic, nil
+}
+
+// Encode IncludeConfig in an efficient, opaque format.
+func (ic *IncludeConfig) Encode(w io.Writer) error {
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(ic); err != nil {
+		return fmt.Errorf("error encoding include config: %v", err)
+	}
+	return nil
+}
+
+// Decode IncludeConfig from an opaque format. Only usable if Include Config
+// was encoded with Encode().
+func (ic *IncludeConfig) Decode(r io.Reader) error {
+	dec := gob.NewDecoder(r)
+	if err := dec.Decode(ic); err != nil {
+		return fmt.Errorf("error decoding include config: %v", err)
+	}
+	return nil
 }
 
 func (b IncludeBundle) validate() error {
