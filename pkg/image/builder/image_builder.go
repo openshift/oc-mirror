@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -18,18 +19,18 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 )
 
 type ImageBuilder struct {
 	NameOpts   []name.Option
 	RemoteOpts []remote.Option
-	Logger     *logrus.Entry
+	Logger     klog.Logger
 }
 
 func (b *ImageBuilder) init() {
-	if b.Logger == nil {
-		b.Logger = logrus.NewEntry(logrus.New())
+	if b.Logger == (logr.Logger{}) {
+		b.Logger = klog.NewKlogr()
 	}
 }
 
@@ -38,7 +39,6 @@ type configUpdateFunc func(*v1.ConfigFile)
 // Run modifies and pushes the catalog image existing in an OCI layout. The image configuration will be updated
 // with the required labels and any provided layers will be appended.
 func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath layout.Path, update configUpdateFunc, layers ...v1.Layer) error {
-
 	b.init()
 	var v2format bool
 
@@ -134,7 +134,7 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	b.init()
 	if srcRef == "" {
-		b.Logger.Debugf("Using existing OCI layout to %s", dir)
+		b.Logger.V(1).Info("Using existing OCI layout to %s", dir)
 		return layout.FromPath(dir)
 	}
 
@@ -150,7 +150,7 @@ func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	if err != nil {
 		return "", err
 	}
-	b.Logger.Debugf("Writing OCI layout to %s", dir)
+	b.Logger.V(1).Info("Writing OCI layout to %s", dir)
 	return layout.Write(dir, idx)
 }
 

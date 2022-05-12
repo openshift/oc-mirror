@@ -3,7 +3,6 @@ package cli
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -70,18 +69,7 @@ func (h *fileHook) Fire(entry *logrus.Entry) error {
 	return nil
 }
 
-func setupFileHook(baseDir string) (func(), *os.File) {
-	if baseDir != "" && baseDir != "." {
-		if err := os.MkdirAll(baseDir, 0750); err != nil {
-			logrus.Fatalf("failed to create base directory for logs: %v", err)
-		}
-	}
-	logPath := filepath.Join(baseDir, ".oc-mirror.log")
-	logfile, err := os.OpenFile(filepath.Clean(logPath), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
-	if err != nil {
-		logrus.Fatalf("failed to open log file: %v", err)
-	}
-
+func setupFileHook(logfile *os.File) func() {
 	originalHooks := logrus.LevelHooks{}
 	for k, v := range logrus.StandardLogger().Hooks {
 		originalHooks[k] = v
@@ -94,9 +82,6 @@ func setupFileHook(baseDir string) (func(), *os.File) {
 	}))
 
 	return func() {
-		if err := logfile.Close(); err != nil {
-			logrus.Error(err)
-		}
 		logrus.StandardLogger().ReplaceHooks(originalHooks)
-	}, logfile
+	}
 }

@@ -59,10 +59,10 @@ func ByConfig(dir string, storage v1alpha2.StorageConfig) (Backend, error) {
 	}
 	switch b.(type) {
 	case *localDirBackend:
-		klog.V(4).Infof("Using local backend at location %s", storage.Local.Path)
+		klog.V(1).Infof("Using local backend at location %s", storage.Local.Path)
 		return NewLocalBackend(storage.Local.Path)
 	case *registryBackend:
-		klog.V(4).Infof("Using registry backend at location %s", storage.Registry.ImageURL)
+		klog.V(1).Infof("Using registry backend at location %s", storage.Registry.ImageURL)
 		return NewRegistryBackend(storage.Registry, dir)
 	default:
 		return nil, errors.New("unsupported backend configuration")

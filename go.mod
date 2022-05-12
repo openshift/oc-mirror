@@ -10,6 +10,7 @@ require (
 	github.com/docker/cli v20.10.12+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
+	github.com/go-logr/logr v1.2.0
 	github.com/google/go-containerregistry v0.8.0
 	github.com/google/uuid v1.3.0
 	github.com/joelanford/ignore v0.0.0-20210610194209-63d4919d8fb2
@@ -41,8 +42,6 @@ require (
 )
 
 require golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
-
-require github.com/go-logr/logr v1.2.0 // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect

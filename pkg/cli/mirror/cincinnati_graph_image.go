@@ -13,13 +13,14 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
+	"k8s.io/klog/v2"
+
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
-	"github.com/sirupsen/logrus"
 )
 
 // This is a temporary solution until this data is distributed as container images
@@ -40,7 +41,7 @@ func (o *MirrorOptions) unpackRelease(dstDir string, filesInArchive map[string]s
 	if err := unpack(config.GraphDataDir, dstDir, filesInArchive); err != nil {
 		nferr := &ErrArchiveFileNotFound{}
 		if errors.As(err, &nferr) || errors.Is(err, os.ErrNotExist) {
-			logrus.Debug("No  graph data found in archive, skipping graph image build")
+			klog.V(1).Info("No  graph data found in archive, skipping graph image build")
 			return found, nil
 		}
 		return found, err

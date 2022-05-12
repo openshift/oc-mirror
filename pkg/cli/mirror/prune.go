@@ -95,7 +95,7 @@ func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.A
 // pruneImages performs the image deletion based on the provided map of repos and manifests.
 func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]string, maxWorkers int) error {
 	if len(reposByManifest) == 0 {
-		klog.V(4).Info("No images specified for pruning")
+		klog.V(2).Info("No images specified for pruning")
 		return nil
 	}
 

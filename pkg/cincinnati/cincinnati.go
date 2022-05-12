@@ -268,7 +268,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		return requested, upgrades, err
 	}
 
-	klog.V(4).Infof("Getting updates for version %s in channel %s", startVer.String(), currChannel)
+	klog.V(1).Infof("Getting updates for version %s in channel %s", startVer.String(), currChannel)
 	_, requested, upgrades, err = GetUpdates(ctx, c, arch, currChannel, startVer, targetVer)
 	if err != nil {
 		return requested, upgrades, err

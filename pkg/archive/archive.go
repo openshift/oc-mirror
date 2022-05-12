@@ -124,7 +124,7 @@ func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backe
 			p.packedBlobs[info.Name()] = struct{}{}
 
 		default:
-			klog.V(4).Infof("File %s will not be archived, skipping...", fpath)
+			klog.V(1).Infof("File %s will not be archived, skipping...", fpath)
 			return nil
 		}
 
@@ -181,7 +181,7 @@ func (p *packager) CreateSplitArchive(ctx context.Context, backend storage.Backe
 			}
 		}
 
-		klog.V(4).Infof("File %s added to archive", fpath)
+		klog.V(1).Infof("File %s added to archive", fpath)
 
 		splitSize += info.Size()
 
