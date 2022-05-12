@@ -119,6 +119,10 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 	allMappings.Merge(imgMappings)
 
+	if o.DryRun {
+		return allMappings, nil
+	}
+
 	if len(currentMeta.PastAssociations) != 0 {
 		currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
 		if err != nil {
