@@ -283,17 +283,15 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
+		if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
+			return err
+		}
+
 		if o.DryRun {
-			mappingPath := filepath.Join(o.Dir, mappingFile)
-			klog.Infof("Writing image mapping to %s", mappingPath)
-			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
+			if err := o.outputDryRunMapping(mapping); err != nil {
 				return err
 			}
 			return cleanup()
-		}
-
-		if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
-			return err
 		}
 
 		// Create and store associations
@@ -350,6 +348,14 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			}
 			return err
 		}
+
+		if o.DryRun {
+			if err := o.outputDryRunMapping(mapping); err != nil {
+				return err
+			}
+			return cleanup()
+		}
+
 		dir, err := o.createResultsDir()
 		if err != nil {
 			return err
@@ -383,19 +389,17 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		if o.DryRun {
-			mappingPath := filepath.Join(o.Dir, mappingFile)
-			klog.Infof("Writing image mapping to %s", mappingPath)
-			if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
-				return err
-			}
-			return cleanup()
-		}
-
 		// QUESTION(jpower432): Can you specify different TLS configuration for source
 		// and destination with `oc image mirror`?
 		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
 			return err
+		}
+
+		if o.DryRun {
+			if err := o.outputDryRunMapping(mapping); err != nil {
+				return err
+			}
+			return cleanup()
 		}
 
 		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
@@ -508,6 +512,15 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	}
 
 	return cleanup()
+}
+
+func (o *MirrorOptions) outputDryRunMapping(mapping image.TypedImageMapping) error {
+	mappingPath := filepath.Join(o.Dir, mappingFile)
+	klog.Infof("writing image mapping to %s", mappingPath)
+	if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
+		return err
+	}
+	return nil
 }
 
 // removePreviouslyMirrored will check if an image has been previously mirrored
