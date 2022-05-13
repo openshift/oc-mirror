@@ -194,7 +194,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 		mmapping.Merge(mappings)
 	}
 
-	err := o.generateReleaseSignatures(releaseDownloads)
+	err := o.generateReleaseSignatures(ctx, releaseDownloads)
 
 	if err != nil {
 		return nil, err
@@ -412,7 +412,7 @@ func (d downloads) Merge(in downloads) {
 //go:embed release-configmap.yaml
 var b []byte
 
-func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) error {
+func (o *ReleaseOptions) generateReleaseSignatures(ctx context.Context, releaseDownloads downloads) error {
 
 	httpClientConstructor := sigstore.NewCachedHTTPClientConstructor(o.HTTPClient, nil)
 
@@ -437,8 +437,6 @@ func (o *ReleaseOptions) generateReleaseSignatures(releaseDownloads downloads) e
 	for image := range releaseDownloads {
 		digest := strings.Split(image, "@")[1]
 
-		ctx, cancelFn := context.WithCancel(context.Background())
-		defer cancelFn()
 		if err := imageVerifier.Verify(ctx, digest); err != nil {
 			// This may be a OKD release image hence no valid signature
 			klog.Warningf("An image was retrieved that failed verification: %v", err)

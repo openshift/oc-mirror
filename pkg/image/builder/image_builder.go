@@ -22,10 +22,30 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// ImageBuilder use an OCI workspace to add layers and change configuration to images.
 type ImageBuilder struct {
 	NameOpts   []name.Option
 	RemoteOpts []remote.Option
 	Logger     klog.Logger
+}
+
+// ErrInvalidReference is returned the target reference is a digest.
+type ErrInvalidReference struct {
+	image string
+}
+
+func (e ErrInvalidReference) Error() string {
+	return fmt.Sprintf("target reference %q must have a tag reference", e.image)
+}
+
+// NewImageBuilder creates a new instance of an ImageBuilder.
+func NewImageBuilder(nameOpts []name.Option, remoteOpts []remote.Option) *ImageBuilder {
+	b := &ImageBuilder{
+		NameOpts:   nameOpts,
+		RemoteOpts: remoteOpts,
+	}
+	b.init()
+	return b
 }
 
 func (b *ImageBuilder) init() {
@@ -42,9 +62,13 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 	b.init()
 	var v2format bool
 
+	// Target can't have a digest since we are
+	// adding layers and possibly updating the
+	// configuration. This will result in a failure
+	// due to computed hash differences.
 	targetIdx := strings.Index(targetRef, "@")
 	if targetIdx != -1 {
-		return fmt.Errorf("target reference %q must have a tag reference", targetRef)
+		return &ErrInvalidReference{targetRef}
 	}
 
 	tag, err := name.NewTag(targetRef, b.NameOpts...)
@@ -106,7 +130,7 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 			}
 		}
 
-		layoutOpts := []layout.Option{}
+		var layoutOpts []layout.Option
 		if manifest.Platform != nil {
 			layoutOpts = append(layoutOpts, layout.WithPlatform(*manifest.Platform))
 		}
@@ -134,7 +158,7 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	b.init()
 	if srcRef == "" {
-		b.Logger.V(1).Info("Using existing OCI layout to %s", dir)
+		b.Logger.V(1).Info("Using existing OCI layout to " + dir)
 		return layout.FromPath(dir)
 	}
 
@@ -150,11 +174,11 @@ func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	if err != nil {
 		return "", err
 	}
-	b.Logger.V(1).Info("Writing OCI layout to %s", dir)
+	b.Logger.V(1).Info("Writing OCI layout to " + dir)
 	return layout.Write(dir, idx)
 }
 
-// LayerFromFile will write the contents of the path(s) the target
+// LayerFromPath will write the contents of the path(s) the target
 // directory and build a v1.Layer
 func LayerFromPath(targetPath, path string) (v1.Layer, error) {
 	var b bytes.Buffer

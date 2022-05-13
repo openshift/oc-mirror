@@ -12,6 +12,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/internal/testutils"
@@ -25,11 +26,11 @@ func TestCreateLayout(t *testing.T) {
 		err           string
 	}{
 		{
-			name:          "Valid/ExistingImage",
+			name:          "Success/ExistingImage",
 			existingImage: true,
 		},
 		{
-			name:          "Valid/NewImage",
+			name:          "Success/NewImage",
 			existingImage: false,
 		},
 	}
@@ -43,9 +44,7 @@ func TestCreateLayout(t *testing.T) {
 			targetRef, err := testutils.WriteTestImage(server, tmpdir)
 			require.NoError(t, err)
 
-			builder := &ImageBuilder{
-				NameOpts: []name.Option{name.Insecure},
-			}
+			builder := NewImageBuilder([]name.Option{name.Insecure}, nil)
 
 			var lp layout.Path
 			if test.existingImage {
@@ -71,17 +70,35 @@ func TestCreateLayout(t *testing.T) {
 func TestRun(t *testing.T) {
 
 	tests := []struct {
-		name          string
-		existingImage bool
-		err           string
+		name             string
+		existingImage    bool
+		pinToDigest      bool
+		update           configUpdateFunc
+		configAssertFunc func(cfg v1.ConfigFile) bool
+		err              error
 	}{
 		{
-			name:          "Valid/ExistingImage",
+			name:          "Success/ExistingImage",
 			existingImage: true,
 		},
 		{
-			name:          "Valid/NewImage",
+			name:          "Success/NewImage",
 			existingImage: false,
+		},
+		{
+			name:          "Success/WithConfigUpdate",
+			existingImage: true,
+			update: func(cfg *v1.ConfigFile) {
+				cfg.Config.Cmd = []string{"newcommand"}
+			},
+			configAssertFunc: func(cfg v1.ConfigFile) bool {
+				return cfg.Config.Cmd[0] == "newcommand"
+			},
+		},
+		{
+			name:        "Failure/DigestReference",
+			pinToDigest: true,
+			err:         &ErrInvalidReference{},
 		},
 	}
 	for _, test := range tests {
@@ -94,15 +111,18 @@ func TestRun(t *testing.T) {
 			targetRef, err := testutils.WriteTestImage(server, tmpdir)
 			require.NoError(t, err)
 
+			if test.pinToDigest {
+				targetRef, err = pinToDigest(targetRef)
+				require.NoError(t, err)
+			}
+
 			d1 := []byte("hello\ngo\n")
 			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
 
 			add, err := LayerFromPath("/testfile", filepath.Join(tmpdir, "test"))
 			require.NoError(t, err)
 
-			builder := &ImageBuilder{
-				NameOpts: []name.Option{name.Insecure},
-			}
+			builder := NewImageBuilder([]name.Option{name.Insecure}, nil)
 
 			var layout layout.Path
 			if test.existingImage {
@@ -112,8 +132,8 @@ func TestRun(t *testing.T) {
 				layout, err = builder.CreateLayout("", tmpdir)
 				require.NoError(t, err)
 			}
-			err = builder.Run(context.Background(), targetRef, layout, nil, []v1.Layer{add}...)
-			if test.err == "" {
+			err = builder.Run(context.Background(), targetRef, layout, test.update, []v1.Layer{add}...)
+			if test.err == nil {
 				require.NoError(t, err)
 
 				// Get new image information
@@ -124,6 +144,10 @@ func TestRun(t *testing.T) {
 				img, err := desc.Image()
 				require.NoError(t, err)
 				layers, err := img.Layers()
+				require.NoError(t, err)
+				idx, err := desc.ImageIndex()
+				require.NoError(t, err)
+				im, err := idx.IndexManifest()
 				require.NoError(t, err)
 
 				// Check that new layer is present
@@ -138,9 +162,16 @@ func TestRun(t *testing.T) {
 					}
 				}
 				require.True(t, found)
+				require.Len(t, im.Manifests, 1)
+
+				if test.update != nil {
+					config, err := img.ConfigFile()
+					require.NoError(t, err)
+					require.True(t, test.configAssertFunc(*config))
+				}
 
 			} else {
-				require.EqualError(t, err, test.err)
+				require.ErrorAs(t, err, &test.err)
 			}
 		})
 	}
@@ -170,7 +201,7 @@ func TestLayoutFromPath(t *testing.T) {
 
 			tmpdir := t.TempDir()
 
-			// prep directory will files to write into layer
+			// prep directory with files to write into layer
 			d1 := []byte("hello\ngo\n")
 			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
 
@@ -192,4 +223,13 @@ func TestLayoutFromPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func pinToDigest(unpinnedImage string) (string, error) {
+	ref, err := reference.Parse(unpinnedImage)
+	if err != nil {
+		return "", err
+	}
+	ref.ID = "sha256:fc1ca63b4a6ac038808ae33c4498b122f9cf7a43dca278228e985986d3f81091"
+	return ref.Exact(), nil
 }

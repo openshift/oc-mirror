@@ -144,10 +144,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		// Check push permissions before trying to resolve for Quay compatibility
 		nameOpts := getNameOpts(destInsecure)
 		remoteOpts := getRemoteOpts(ctx, destInsecure)
-		imgBuilder := &builder.ImageBuilder{
-			NameOpts:   nameOpts,
-			RemoteOpts: remoteOpts,
-		}
+		imgBuilder := builder.NewImageBuilder(nameOpts, remoteOpts)
 
 		klog.Infof("Rendering catalog image %q with file-based catalog ", refExact)
 
@@ -156,7 +153,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			return fmt.Errorf("error creating add layer: %v", err)
 		}
 
-		// Since we are defining the FBC as index.json, remove
+		// Since we are defining the FBC as index.json,
 		// remove anything that may currently exist
 		deleted, err := deleteLayer("/.wh.configs")
 		if err != nil {

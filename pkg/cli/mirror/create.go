@@ -113,7 +113,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 			if err := os.MkdirAll(releaseDir, 0750); err != nil {
 				return mmappings, err
 			}
-			if err := downloadGraphData(ctx, releaseDir, graphURL); err != nil {
+			if err := downloadGraphData(ctx, releaseDir); err != nil {
 				return mmappings, err
 			}
 		}
