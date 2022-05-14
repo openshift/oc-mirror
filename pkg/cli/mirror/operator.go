@@ -211,7 +211,9 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			return dc, ic, fmt.Errorf("error converting declarative config to include config: %v", err)
 		}
 
-		o.verifyOperatorPkgFound(dic, dc)
+		if err := o.verifyDC(dic, dc); err != nil {
+			return dc, ic, err
+		}
 	}
 
 	return dc, ic, nil
@@ -314,32 +316,45 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		}
 	}
 
-	o.verifyOperatorPkgFound(dic, dc)
+	if err := o.verifyDC(dic, dc); err != nil {
+		return dc, ic, err
+	}
 
 	return dc, ic, nil
 }
 
-// verifyOperatorPkgFound will verify that each of the requested operator packages were
+// verifyDC verifies the declarative config and that each of the requested operator packages were
 // found and added to the DeclarativeConfig.
-func (o *OperatorOptions) verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
+func (o *OperatorOptions) verifyDC(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
 	o.Logger.Debug("DiffIncludeConfig: ", dic)
 	o.Logger.Debug("DeclarativeConfig: ", dc)
 
-	dcMap := make(map[string]bool)
+	// Converting the dc to the model results in running
+	// model validations. This checks default channels and
+	// replace chain.
+	// TODO(jpower432): Invalid replace chain may not appear very
+	// straight forward. Need a way to identify what bundle is missing
+	// from the replace chain.
+	if _, err := declcfg.ConvertToModel(*dc); err != nil {
+		return err
+	}
 
+	dcMap := make(map[string]bool)
 	// Load the declarative config packages into a map
 	for _, dcpkg := range dc.Packages {
 		dcMap[dcpkg.Name] = true
 	}
 
 	for _, pkg := range dic.Packages {
-		klog.V(2).Infof("Checking for package: ", pkg)
+		klog.V(2).Infof("Checking for package: %s", pkg)
 
 		if !dcMap[pkg.Name] {
 			// The operator package wasn't found. Log the error and continue on.
 			o.Logger.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
 		}
 	}
+
+	return nil
 }
 
 func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {

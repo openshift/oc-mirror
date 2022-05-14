@@ -10,12 +10,14 @@ import (
 	"github.com/containerd/containerd/remotes"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func TestPinImages(t *testing.T) {
@@ -154,7 +156,7 @@ func TestPinImages(t *testing.T) {
 
 }
 
-func TestVerifyOperatorPkgFound(t *testing.T) {
+func TestVerifyDC(t *testing.T) {
 
 	mo := &MirrorOptions{
 		RootOptions: &cli.RootOptions{},
@@ -164,16 +166,17 @@ func TestVerifyOperatorPkgFound(t *testing.T) {
 	hook := test.NewLocal(o.Logger.Logger)
 
 	type testvopf struct {
-		desc        string
-		dic         action.DiffIncludeConfig
-		dc          *declcfg.DeclarativeConfig
-		logCount    int
-		expErrorStr string
+		desc           string
+		dic            action.DiffIncludeConfig
+		dc             *declcfg.DeclarativeConfig
+		logCount       int
+		expErrorStr    string
+		expErrReturned string
 	}
 
 	cases := []testvopf{
 		{
-			desc: "Requested operator package not found in DC",
+			desc: "SuccessWithWarning/PackageNotFoundInDC",
 			dic: action.DiffIncludeConfig{
 				Packages: []action.DiffIncludePackage{
 					{
@@ -184,7 +187,25 @@ func TestVerifyOperatorPkgFound(t *testing.T) {
 			dc: &declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{
-						Name: "bar",
+						Name:           "bar",
+						DefaultChannel: "stable",
+					},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.1",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.1"),
+						},
 					},
 				},
 			},
@@ -192,33 +213,148 @@ func TestVerifyOperatorPkgFound(t *testing.T) {
 			expErrorStr: "Operator foo was not found",
 		},
 		{
-			desc: "Requested operator package found in DC",
+			desc: "Success/PackageFoundInDC",
 			dic: action.DiffIncludeConfig{
 				Packages: []action.DiffIncludePackage{
 					{
-						Name: "foo",
+						Name: "bar",
 					},
 				},
 			},
 			dc: &declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{
-						Name: "foo",
+						Name:           "bar",
+						DefaultChannel: "stable",
+					},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.1",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.1"),
+						},
 					},
 				},
 			},
 			logCount:    0,
 			expErrorStr: "",
 		},
+		{
+			desc: "Failure/DefaultChannelNotInDC",
+			dic: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name: "bar",
+					},
+				},
+			},
+			dc: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{
+						Name:           "bar",
+						DefaultChannel: "stable",
+					},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "alpha", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.1",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.1"),
+						},
+					},
+				},
+			},
+			logCount:    0,
+			expErrorStr: "",
+			expErrReturned: `invalid index:
+└── invalid package "bar":
+    └── invalid channel "stable":
+        └── channel must contain at least one bundle`,
+		},
+		{
+			desc: "Failure/InvalidSemverOrdering",
+			dic: action.DiffIncludeConfig{
+				Packages: []action.DiffIncludePackage{
+					{
+						Name: "bar",
+					},
+				},
+			},
+			dc: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{
+						Name:           "bar",
+						DefaultChannel: "stable",
+					},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
+						{Name: "bar.v0.1.2", Replaces: "bar.v0.1.5"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.1",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.1"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.2",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.2"),
+						},
+					},
+				},
+			},
+			logCount:    0,
+			expErrorStr: "",
+			expErrReturned: `invalid index:
+└── invalid package "bar":
+    └── invalid channel "stable":
+        └── multiple channel heads found in graph: bar.v0.1.1, bar.v0.1.2`,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			o.verifyOperatorPkgFound(c.dic, c.dc)
-
-			assert.Equal(t, c.logCount, len(hook.AllEntries()))
-			if c.logCount > 0 && len(hook.Entries) > 0 {
-				assert.Contains(t, hook.LastEntry().Message, c.expErrorStr)
+			err := o.verifyDC(c.dic, c.dc)
+			if c.expErrReturned != "" {
+				require.EqualError(t, err, c.expErrReturned)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, c.logCount, len(hook.AllEntries()))
+				if c.logCount > 0 && len(hook.Entries) > 0 {
+					assert.Contains(t, hook.LastEntry().Message, c.expErrorStr)
+				}
 			}
 
 		})
