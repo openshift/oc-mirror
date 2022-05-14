@@ -83,9 +83,6 @@ func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.A
 				repoLoc = path.Join(o.UserNamespace, ref.AsRepository().String())
 			}
 
-			// A new digest must be parsed because there
-			// the original image location is kept as a private field
-			// after instantiation.
 			reposByManifest[imageAssoc.ID] = repoLoc
 		}
 	}
