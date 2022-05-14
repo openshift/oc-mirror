@@ -33,17 +33,16 @@ func (s *catalogStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig)
 	}
 	for _, mpkg := range inputModel {
 		icPkg := v1alpha2.IncludePackage{
-			Name:     mpkg.Name,
-			Channels: getFirstBundle(*mpkg),
+			Name: mpkg.Name,
 		}
-		sort.Slice(icPkg.Channels, func(i, j int) bool {
-			return icPkg.Channels[i].Name < icPkg.Channels[j].Name
-		})
+		// Pass in the empty includePackage here for
+		// catalog strategy as there is in incoming
+		// include config to process.
+		icPkg.Channels = getFirstChannelBundles(*mpkg, icPkg)
+		sortChannels(icPkg.Channels)
 		ic.Packages = append(ic.Packages, icPkg)
 	}
-	sort.Slice(ic.Packages, func(i, j int) bool {
-		return ic.Packages[i].Name < ic.Packages[j].Name
-	})
+	sortPackages(ic.Packages)
 	return ic, nil
 }
 
@@ -54,6 +53,7 @@ func (s *catalogStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, curr
 	if err != nil {
 		return ic, err
 	}
+
 	currPackages := make(map[string]v1alpha2.IncludePackage, len(curr.Packages))
 	for _, pkg := range curr.Packages {
 		currPackages[pkg.Name] = pkg
@@ -74,21 +74,20 @@ func (s *catalogStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, curr
 				return ic, err
 			}
 		} else {
-			ch, err := getCurrBundle(*mpkg, currPkg)
+			// Pass in the empty includePackage here for
+			// catalog strategy as there is in incoming
+			// include config to process.
+			ch, err := getCurrentChannelBundles(*mpkg, currPkg, icPkg)
 			if err != nil {
 				return ic, err
 			}
 			icPkg.Channels = ch
 		}
 
-		sort.Slice(icPkg.Channels, func(i, j int) bool {
-			return icPkg.Channels[i].Name < icPkg.Channels[j].Name
-		})
+		sortChannels(icPkg.Channels)
 		ic.Packages = append(ic.Packages, icPkg)
 	}
-	sort.Slice(ic.Packages, func(i, j int) bool {
-		return ic.Packages[i].Name < ic.Packages[j].Name
-	})
+	sortPackages(ic.Packages)
 	return ic, nil
 }
 
@@ -100,7 +99,7 @@ type packageStrategy struct {
 
 // NewPackageStrategy will return the package implementation for the IncludeConfigManager.
 // The current IncludeConfig specified through user-configuration is used to determine
-// what packages should be managed and what package have configuration information set.
+// what packages should be managed and what packages have configuration information set.
 func NewPackageStrategy(curr v1alpha2.IncludeConfig) IncludeConfigManager {
 	return &packageStrategy{curr}
 }
@@ -118,26 +117,25 @@ func (s *packageStrategy) ConvertDCToIncludeConfig(dc declcfg.DeclarativeConfig)
 		currPackages[pkg.Name] = pkg
 	}
 
+	// Check if the package is new or has
+	// version configuration set at the package level
+	// if not process at the channel level.
 	for _, mpkg := range inputModel {
 		icPkg, found := currPackages[mpkg.Name]
 		if !found || !includePackageVersionsSet(icPkg) {
 			icPkg = v1alpha2.IncludePackage{
 				Name:     mpkg.Name,
-				Channels: getFirstBundle(*mpkg),
+				Channels: getFirstChannelBundles(*mpkg, icPkg),
 			}
-			sort.Slice(icPkg.Channels, func(i, j int) bool {
-				return icPkg.Channels[i].Name < icPkg.Channels[j].Name
-			})
+			sortChannels(icPkg.Channels)
 		}
 		ic.Packages = append(ic.Packages, icPkg)
 	}
-	sort.Slice(ic.Packages, func(i, j int) bool {
-		return ic.Packages[i].Name < ic.Packages[j].Name
-	})
+	sortPackages(ic.Packages)
 	return ic, nil
 }
 
-// UpdateIncludeConfig will process the current IncludeConfig to add any new packages or channels. Starting versions are
+// UpdateIncludeConfig will process the currently managed IncludeConfig to add any new packages or channels. Starting versions are
 // also validated and incremented if the version no longer exists in the catalog.
 func (s *packageStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev v1alpha2.IncludeConfig) (ic v1alpha2.IncludeConfig, err error) {
 	inputModel, err := declcfg.ConvertToModel(dc)
@@ -145,11 +143,13 @@ func (s *packageStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev
 		return ic, err
 	}
 
+	// currPackages are the package from the user-defined IncludeConfig
 	currPackages := make(map[string]v1alpha2.IncludePackage, len(s.curr.Packages))
 	for _, pkg := range s.curr.Packages {
 		currPackages[pkg.Name] = pkg
 	}
 
+	// prevPackages is the most recent version of managed IncludeConfig values
 	prevPackages := make(map[string]v1alpha2.IncludePackage, len(prev.Packages))
 	for _, pkg := range prev.Packages {
 		prevPackages[pkg.Name] = pkg
@@ -159,122 +159,143 @@ func (s *packageStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev
 	// If existing validate the starting bundle is
 	// still in the catalog and iterate, if needed.
 	for _, mpkg := range inputModel {
+		// Check if the package is new or has
+		// version configuration set at the package level
+		// if not process at the channel level.
 		icPkg, found := currPackages[mpkg.Name]
 		if !found || !includePackageVersionsSet(icPkg) {
-			icPkg = v1alpha2.IncludePackage{
-				Name: mpkg.Name,
-			}
 			prevPkg, found := prevPackages[mpkg.Name]
 			if !found {
 				chWithHeads, err := getChannelHeads(*mpkg)
-				icPkg.Channels = chWithHeads
 				if err != nil {
 					return ic, err
+				}
+				icPkg = v1alpha2.IncludePackage{
+					Name:     mpkg.Name,
+					Channels: chWithHeads,
 				}
 			} else {
-				ch, err := getCurrBundle(*mpkg, prevPkg)
+				chs, err := getCurrentChannelBundles(*mpkg, prevPkg, icPkg)
 				if err != nil {
 					return ic, err
 				}
-				icPkg.Channels = ch
+				icPkg = v1alpha2.IncludePackage{
+					Name:     mpkg.Name,
+					Channels: chs,
+				}
 			}
-			sort.Slice(icPkg.Channels, func(i, j int) bool {
-				return icPkg.Channels[i].Name < icPkg.Channels[j].Name
-			})
+			sortChannels(icPkg.Channels)
 		}
 		ic.Packages = append(ic.Packages, icPkg)
 	}
-	sort.Slice(ic.Packages, func(i, j int) bool {
-		return ic.Packages[i].Name < ic.Packages[j].Name
-	})
+	sortPackages(ic.Packages)
 	return ic, nil
 }
 
-func getFirstBundle(mpkg model.Package) []v1alpha2.IncludeChannel {
+// getFirstBundleByChannel will get the first bundle available in the channel in semver order
+// for the model package for any channels that are not configured for the current
+// include config package.
+func getFirstChannelBundles(mpkg model.Package, icPkg v1alpha2.IncludePackage) []v1alpha2.IncludeChannel {
+	currIncludeChannels := make(map[string]v1alpha2.IncludeChannel, len(icPkg.Channels))
+	for _, ch := range icPkg.Channels {
+		currIncludeChannels[ch.Name] = ch
+	}
+
 	channels := []v1alpha2.IncludeChannel{}
-
 	for _, ch := range mpkg.Channels {
-		// initialize channel
-		c := v1alpha2.IncludeChannel{
-			Name: ch.Name,
-		}
+		newCh, found := currIncludeChannels[ch.Name]
+		if !found || !includeChannelVersionsSet(newCh) {
+			newCh = v1alpha2.IncludeChannel{
+				Name: ch.Name,
+			}
 
-		keys := make([]string, 0, len(ch.Bundles))
-		for k := range ch.Bundles {
-			keys = append(keys, k)
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			return ch.Bundles[keys[i]].Version.GT(ch.Bundles[keys[j]].Version)
-		})
+			keys := make([]string, 0, len(ch.Bundles))
+			for k := range ch.Bundles {
+				keys = append(keys, k)
+			}
+			sort.Slice(keys, func(i, j int) bool {
+				return ch.Bundles[keys[i]].Version.GT(ch.Bundles[keys[j]].Version)
+			})
 
-		firstBundle := ch.Bundles[keys[len(keys)-1]].Version
-		b := v1alpha2.IncludeBundle{
-			MinVersion: firstBundle.String(),
+			firstBundle := ch.Bundles[keys[len(keys)-1]].Version
+			b := v1alpha2.IncludeBundle{
+				MinVersion: firstBundle.String(),
+			}
+			newCh.IncludeBundle = b
+
 		}
-		c.IncludeBundle = b
-		channels = append(channels, c)
+		channels = append(channels, newCh)
 	}
 
 	return channels
 }
 
-// getCurrBundle will process the current package return the starting bundle based
-// on the previous IncludeConfig
-func getCurrBundle(mpkg model.Package, icPkg v1alpha2.IncludePackage) ([]v1alpha2.IncludeChannel, error) {
+// getCurrBundles will get the current bundle available in the channel in semver order
+// for the model package.
+// The channel heads are added for new channels
+// Configuration channels from the current are added as is
+// Channel bundles from the previously managed package are checked
+// against the bundles in the model package.
+func getCurrentChannelBundles(mpkg model.Package, prevPkg, currPkg v1alpha2.IncludePackage) ([]v1alpha2.IncludeChannel, error) {
 
 	// Add every bundle with a specified bundle name or
 	// directly satisfying a bundle version to bundles.
-	includeChannels := make(map[string]v1alpha2.IncludeBundle, len(icPkg.Channels))
-	for _, ch := range icPkg.Channels {
-		includeChannels[ch.Name] = ch.IncludeBundle
+	prevBundleByChannel := make(map[string]v1alpha2.IncludeBundle, len(prevPkg.Channels))
+	for _, ch := range prevPkg.Channels {
+		prevBundleByChannel[ch.Name] = ch.IncludeBundle
 	}
+
+	currIncludeChannels := make(map[string]v1alpha2.IncludeChannel, len(currPkg.Channels))
+	for _, ch := range currPkg.Channels {
+		currIncludeChannels[ch.Name] = ch
+	}
+
 	channels := []v1alpha2.IncludeChannel{}
 
 	for _, ch := range mpkg.Channels {
-		// initialize channel
-		c := v1alpha2.IncludeChannel{
-			Name: ch.Name,
-		}
 
-		bundleSet := make(map[string]struct{}, len(ch.Bundles))
-		versionsToInclude := []semver.Version{}
-		for _, b := range ch.Bundles {
-			bundleSet[b.Version.String()] = struct{}{}
-			versionsToInclude = append(versionsToInclude, b.Version)
-		}
+		c, found := currIncludeChannels[ch.Name]
+		if !found || !includeChannelVersionsSet(c) {
+			// initialize channel
+			c = v1alpha2.IncludeChannel{
+				Name: ch.Name,
+			}
 
-		var startingBundle v1alpha2.IncludeBundle
-		var err error
-		icBundle, found := includeChannels[ch.Name]
+			bundleSet := make(map[string]struct{}, len(ch.Bundles))
+			versionsToInclude := []semver.Version{}
+			for _, b := range ch.Bundles {
+				bundleSet[b.Version.String()] = struct{}{}
+				versionsToInclude = append(versionsToInclude, b.Version)
+			}
 
-		// If the channel is new, return the channel head.
-		// If the channel is found and the bundle is found,
-		// keep the current include bundle. If the target version
-		// does not exist in the bundle set, sort by version and
-		// find the next version using binary search.
-		if !found {
-			startingBundle, err = getHeadBundle(*ch)
+			var startingBundle v1alpha2.IncludeBundle
+			var err error
+
+			// If the channel is new, return the channel head.
+			// If the channel is found and the bundle is found,
+			// keep the current include bundle. If the target version
+			// does not exist in the bundle set, sort by version and
+			// find the next version using binary search.
+			icBundle, found := prevBundleByChannel[ch.Name]
+			if !found {
+				startingBundle, err = getHeadBundle(*ch)
+			} else if _, found = bundleSet[icBundle.MinVersion]; found {
+				startingBundle = icBundle
+			} else {
+				minVer, merr := semver.Parse(icBundle.MinVersion)
+				if merr != nil {
+					return nil, merr
+				}
+				startingBundle, err = findNextBundle(versionsToInclude, minVer)
+				if err != nil {
+					return nil, err
+				}
+			}
 			if err != nil {
 				return nil, err
 			}
 			c.IncludeBundle = startingBundle
-			channels = append(channels, c)
-			continue
-		} else if _, found = bundleSet[icBundle.MinVersion]; found {
-			startingBundle = icBundle
-		} else {
-			minVer, err := semver.Parse(icBundle.MinVersion)
-			if err != nil {
-				return nil, err
-			}
-			versionsToInclude = append(versionsToInclude, minVer)
-			startingBundle, err = findNextBundle(versionsToInclude, minVer)
-			if err != nil {
-				return nil, err
-			}
 		}
-
-		c.IncludeBundle = startingBundle
 		channels = append(channels, c)
 	}
 	return channels, nil
@@ -295,8 +316,12 @@ func findNextBundle(versions []semver.Version, target semver.Version) (v1alpha2.
 func search(versions []semver.Version, target semver.Version, low, high int) semver.Version {
 	// If the target is the highest version, there is no next
 	// version so return
-	if high < low || versions[len(versions)-1].EQ(target) {
+	if versions[len(versions)-1].EQ(target) {
 		return semver.Version{}
+	}
+
+	if high <= low {
+		return versions[low]
 	}
 
 	mid := low + (high-low)/2
@@ -343,7 +368,7 @@ func getHeadBundle(mch model.Channel) (v1alpha2.IncludeBundle, error) {
 }
 
 // includePackageVersionsSet will verify if user-set version
-// information is set on an Include Config.
+// information is set on an Include Config for an IncludePackage.
 func includePackageVersionsSet(pkg v1alpha2.IncludePackage) bool {
 	switch {
 	case pkg.MinVersion != "":
@@ -353,16 +378,31 @@ func includePackageVersionsSet(pkg v1alpha2.IncludePackage) bool {
 	case pkg.MaxVersion != "":
 		return true
 	}
+	return false
+}
 
-	for _, ch := range pkg.Channels {
-		switch {
-		case ch.MinVersion != "":
-			return true
-		case ch.MinBundle != "":
-			return true
-		case ch.MaxVersion != "":
-			return true
-		}
+// includeChannelVersionsSet will verify if user-set version
+// information is set on an Include Config in an IncludeChannel.
+func includeChannelVersionsSet(ch v1alpha2.IncludeChannel) bool {
+	switch {
+	case ch.MinVersion != "":
+		return true
+	case ch.MinBundle != "":
+		return true
+	case ch.MaxVersion != "":
+		return true
 	}
 	return false
+}
+
+func sortPackages(pkgs []v1alpha2.IncludePackage) {
+	sort.Slice(pkgs, func(i, j int) bool {
+		return pkgs[i].Name < pkgs[j].Name
+	})
+}
+
+func sortChannels(chs []v1alpha2.IncludeChannel) {
+	sort.Slice(chs, func(i, j int) bool {
+		return chs[i].Name < chs[j].Name
+	})
 }

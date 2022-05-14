@@ -97,6 +97,15 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 										MinVersion: "0.1.2",
 									},
 								},
+								{
+									Name: "alpha",
+								},
+							},
+						},
+						{
+							Name: "baz",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.1.2",
 							},
 						},
 						{
@@ -108,6 +117,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "baz", DefaultChannel: "stable"},
 					{Schema: "olm.package", Name: "foo", DefaultChannel: "stable"},
 				},
 				Channels: []declcfg.Channel{
@@ -115,6 +125,11 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 						{Name: "bar.v0.1.1", Skips: []string{"bar.v0.1.0"}},
 						{Name: "bar.v0.1.2", Skips: []string{"bar.v0.1.1"}},
 						{Name: "bar.v0.1.3", Skips: []string{"bar.v0.1.2"}},
+					}},
+					{Schema: "olm.channel", Name: "stable", Package: "baz", Entries: []declcfg.ChannelEntry{
+						{Name: "baz.v0.1.1", Skips: []string{"baz.v0.1.0"}},
+						{Name: "baz.v0.1.2", Skips: []string{"baz.v0.1.1"}},
+						{Name: "baz.v0.1.3", Skips: []string{"baz.v0.1.2"}},
 					}},
 					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.0.1"},
@@ -152,6 +167,36 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 						Properties: []property.Property{
 							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
 							property.MustBuildPackage("bar", "0.1.3"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "baz.v0.1.1",
+						Package: "baz",
+						Image:   "reg/baz:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("baz", "0.1.1"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "baz.v0.1.2",
+						Package: "baz",
+						Image:   "reg/baz:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("baz", "0.1.2"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "baz.v0.1.3",
+						Package: "baz",
+						Image:   "reg/baz:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("baz", "0.1.3"),
 						},
 					},
 					{
@@ -206,6 +251,12 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 						},
 					},
 					{
+						Name: "baz",
+						IncludeBundle: v1alpha2.IncludeBundle{
+							MinVersion: "0.1.2",
+						},
+					},
+					{
 						Name: "foo",
 						Channels: []v1alpha2.IncludeChannel{
 							{
@@ -230,7 +281,7 @@ func TestConvertDCToIncludeConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateIncludeConfig(t *testing.T) {
+func TestUpdateIncludeConfig_Catalog(t *testing.T) {
 	type spec struct {
 		name     string
 		cfg      declcfg.DeclarativeConfig
@@ -576,7 +627,362 @@ func TestUpdateIncludeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "Success/PruneChannelHeadWithPackages",
+			name:     "Success/NoNextBundle",
+			strategy: &catalogStrategy{},
+			cfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "foo", DefaultChannel: "stable"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.0.2", Skips: []string{"bar.v0.0.1"}},
+						{Name: "bar.v0.2.2", Skips: []string{"bar.v0.0.2"}},
+					}},
+					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.0.2"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.0.2",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.0.2"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.2.2",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.2.2"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "foo.v0.0.2",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.0.2"),
+						},
+					},
+				},
+			},
+			in: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+				},
+			},
+			exp: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.2.2",
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.0.2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, s := range specs {
+		t.Run(s.name, func(t *testing.T) {
+			ic, err := s.strategy.UpdateIncludeConfig(s.cfg, s.in)
+			if s.expErr != "" {
+				require.EqualError(t, err, s.expErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, s.exp, ic)
+			}
+		})
+	}
+}
+
+func TestUpdateIncludeConfig_Package(t *testing.T) {
+	type spec struct {
+		name     string
+		cfg      declcfg.DeclarativeConfig
+		strategy IncludeConfigManager
+		in       v1alpha2.IncludeConfig
+		exp      v1alpha2.IncludeConfig
+		expErr   string
+	}
+
+	specs := []spec{
+		{
+			name: "Success/NewPackages",
+			strategy: &packageStrategy{
+				curr: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "bar",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.1.0",
+							},
+						},
+						{
+							Name: "foo",
+						},
+					},
+				},
+			},
+			cfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "foo", DefaultChannel: "stable"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.0"},
+					}},
+					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.1.0"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.0",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.0"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "foo.v0.1.0",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.1.0"),
+						},
+					},
+				},
+			},
+			in: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+				},
+			},
+			exp: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						IncludeBundle: v1alpha2.IncludeBundle{
+							MinVersion: "0.1.0",
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Success/NewChannels",
+			strategy: &packageStrategy{
+				curr: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "bar",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable",
+									IncludeBundle: v1alpha2.IncludeBundle{
+										MinVersion: "0.1.0",
+									},
+								},
+								{
+									Name: "alpha",
+								},
+							},
+						},
+						{
+							Name: "foo",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "alpha",
+								},
+							},
+						},
+					},
+				},
+			},
+			cfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
+					{Schema: "olm.package", Name: "foo", DefaultChannel: "alpha"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: "olm.channel", Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.0"},
+						{Name: "bar.v0.1.1", Replaces: "bar.v0.1.0"},
+					}},
+					{Schema: "olm.channel", Name: "alpha", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.0"},
+					}},
+					{Schema: "olm.channel", Name: "alpha", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.1.0"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.1",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.1"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "bar.v0.1.0",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.0"),
+						},
+					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "foo.v0.1.0",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.1.0"),
+						},
+					},
+				},
+			},
+			in: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+				},
+			},
+			exp: v1alpha2.IncludeConfig{
+				Packages: []v1alpha2.IncludePackage{
+					{
+						Name: "bar",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "alpha",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+							{
+								Name: "stable",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+					{
+						Name: "foo",
+						Channels: []v1alpha2.IncludeChannel{
+							{
+								Name: "alpha",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.1.0",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Success/PruneChannelHead",
 			strategy: &packageStrategy{
 				curr: v1alpha2.IncludeConfig{
 					Packages: []v1alpha2.IncludePackage{
@@ -608,11 +1014,16 @@ func TestUpdateIncludeConfig(t *testing.T) {
 						{Name: "bar.v0.1.2", Skips: []string{"bar.v0.1.1"}},
 						{Name: "bar.v0.1.3", Skips: []string{"bar.v0.1.2"}},
 					}},
+					{Schema: "olm.channel", Name: "alpha", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.2.0", Skips: []string{"foo.v0.1.0"}},
+						{Name: "foo.v0.2.1", Skips: []string{"foo.v0.2.0"}},
+					}},
 					{Schema: "olm.channel", Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.0.1"},
 						{Name: "foo.v0.0.2", Replaces: "foo.v0.0.1"},
 						{Name: "foo.v0.0.3", Replaces: "foo.v0.0.2"},
 						{Name: "foo.v0.2.0", Replaces: "foo.v0.0.3"},
+						{Name: "foo.v0.2.1", Replaces: "foo.v0.2.0"},
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -682,6 +1093,15 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							property.MustBuildPackage("foo", "0.2.0"),
 						},
 					},
+					{
+						Schema:  "olm.bundle",
+						Name:    "foo.v0.2.1",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.2.1"),
+						},
+					},
 				},
 			},
 			in: v1alpha2.IncludeConfig{
@@ -727,6 +1147,12 @@ func TestUpdateIncludeConfig(t *testing.T) {
 						Name: "foo",
 						Channels: []v1alpha2.IncludeChannel{
 							{
+								Name: "alpha",
+								IncludeBundle: v1alpha2.IncludeBundle{
+									MinVersion: "0.2.1",
+								},
+							},
+							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
 									MinVersion: "0.2.0",
@@ -738,8 +1164,19 @@ func TestUpdateIncludeConfig(t *testing.T) {
 			},
 		},
 		{
-			name:     "Success/NoNextBundle",
-			strategy: &catalogStrategy{},
+			name: "Success/NoNextBundle",
+			strategy: &packageStrategy{
+				curr: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "bar",
+						},
+						{
+							Name: "foo",
+						},
+					},
+				},
+			},
 			cfg: declcfg.DeclarativeConfig{
 				Packages: []declcfg.Package{
 					{Schema: "olm.package", Name: "bar", DefaultChannel: "stable"},
@@ -809,7 +1246,7 @@ func TestUpdateIncludeConfig(t *testing.T) {
 							{
 								Name: "stable",
 								IncludeBundle: v1alpha2.IncludeBundle{
-									MinVersion: "0.0.0",
+									MinVersion: "0.0.2",
 								},
 							},
 						},
