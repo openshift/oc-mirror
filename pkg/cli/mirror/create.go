@@ -28,7 +28,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 	var err error
 	if !cfg.StorageConfig.IsSet() {
 		meta.SingleUse = true
-		klog.Warning("backend is not configured in %s, using stateless mode", o.ConfigPath)
+		klog.Warningf("backend is not configured in %s, using stateless mode", o.ConfigPath)
 		cfg.StorageConfig.Local = &v1alpha2.LocalConfig{Path: path}
 		backend, err = storage.ByConfig(path, cfg.StorageConfig)
 		if err != nil {
