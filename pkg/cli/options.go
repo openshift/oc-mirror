@@ -41,7 +41,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	checkErr(fsv2.Set("alsologtostderr", "false"))
 	checkErr(fsv2.Set("v", fmt.Sprintf("%d", o.LogLevel)))
 
-	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0600)
 	if err != nil {
 		klog.Fatal(err)
 	}
