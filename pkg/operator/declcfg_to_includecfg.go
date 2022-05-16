@@ -254,13 +254,15 @@ func getCurrentChannelBundles(mpkg model.Package, prevPkg, currPkg v1alpha2.Incl
 
 	for _, ch := range mpkg.Channels {
 
-		c, found := currIncludeChannels[ch.Name]
-		if !found || !includeChannelVersionsSet(c) {
-			// initialize channel
-			c = v1alpha2.IncludeChannel{
+		newCh, found := currIncludeChannels[ch.Name]
+		if !found || !includeChannelVersionsSet(newCh) {
+			newCh = v1alpha2.IncludeChannel{
 				Name: ch.Name,
 			}
 
+			// Gather bundle information from
+			// channel in declarative config to verify
+			// currently available bundles.
 			bundleSet := make(map[string]struct{}, len(ch.Bundles))
 			versionsToInclude := []semver.Version{}
 			for _, b := range ch.Bundles {
@@ -268,35 +270,37 @@ func getCurrentChannelBundles(mpkg model.Package, prevPkg, currPkg v1alpha2.Incl
 				versionsToInclude = append(versionsToInclude, b.Version)
 			}
 
-			var startingBundle v1alpha2.IncludeBundle
-			var err error
-
 			// If the channel is new, return the channel head.
 			// If the channel is found and the bundle is found,
 			// keep the current include bundle. If the target version
 			// does not exist in the bundle set, sort by version and
 			// find the next version using binary search.
+			existsInBundleSet := func(v string) bool {
+				_, found := bundleSet[v]
+				return found
+			}
+
+			var startingBundle v1alpha2.IncludeBundle
+			var err error
 			icBundle, found := prevBundleByChannel[ch.Name]
-			if !found {
+			switch {
+			case !found:
 				startingBundle, err = getHeadBundle(*ch)
-			} else if _, found = bundleSet[icBundle.MinVersion]; found {
+			case existsInBundleSet(icBundle.MinVersion):
 				startingBundle = icBundle
-			} else {
+			default:
 				minVer, merr := semver.Parse(icBundle.MinVersion)
 				if merr != nil {
 					return nil, merr
 				}
 				startingBundle, err = findNextBundle(versionsToInclude, minVer)
-				if err != nil {
-					return nil, err
-				}
 			}
 			if err != nil {
 				return nil, err
 			}
-			c.IncludeBundle = startingBundle
+			newCh.IncludeBundle = startingBundle
 		}
-		channels = append(channels, c)
+		channels = append(channels, newCh)
 	}
 	return channels, nil
 }
