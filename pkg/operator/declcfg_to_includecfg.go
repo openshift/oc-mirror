@@ -316,15 +316,20 @@ func findNextBundle(versions []semver.Version, target semver.Version) (v1alpha2.
 }
 
 // search perform a binary search to find the next highest version in relation
-// to the target.
+// to the target. Target can exist or not exist in versions.
 func search(versions []semver.Version, target semver.Version, low, high int) semver.Version {
-	// If the target is the highest version, there is no next
+	// Handle some base cases.
+	// If the target is the highest version or there are no bundles, there is no next
 	// version so return
-	if versions[len(versions)-1].EQ(target) {
+	if len(versions) == 0 || versions[len(versions)-1].EQ(target) {
 		return semver.Version{}
 	}
 
-	if high <= low {
+	if len(versions) == 1 {
+		return versions[0]
+	}
+
+	if high < low {
 		return versions[low]
 	}
 
@@ -340,7 +345,7 @@ func search(versions []semver.Version, target semver.Version, low, high int) sem
 	return search(versions, target, low, mid-1)
 }
 
-// getChannelHeads proccess each channel in package and sets the starting
+// getChannelHeads processes each channel in the package and sets the starting
 // bundle to the channel head.
 func getChannelHeads(mpkg model.Package) ([]v1alpha2.IncludeChannel, error) {
 	channels := []v1alpha2.IncludeChannel{}

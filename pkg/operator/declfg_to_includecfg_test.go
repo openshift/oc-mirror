@@ -3,6 +3,7 @@ package operator
 import (
 	"testing"
 
+	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
@@ -1278,4 +1279,82 @@ func TestUpdateIncludeConfig_Package(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSearch(t *testing.T) {
+	type spec struct {
+		name            string
+		versions        []semver.Version
+		target          semver.Version
+		expectedVersion semver.Version
+	}
+
+	cases := []spec{
+		{
+			name: "Valid/TargetExistsInVersions",
+			versions: []semver.Version{
+				semver.MustParse("0.0.1"),
+				semver.MustParse("0.0.2"),
+				semver.MustParse("0.1.0"),
+				semver.MustParse("0.2.0"),
+				semver.MustParse("0.3.0"),
+				semver.MustParse("0.4.0"),
+			},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.MustParse("0.2.0"),
+		},
+		{
+			name: "Valid/TargetDoesNotExistInVersions",
+			versions: []semver.Version{
+				semver.MustParse("0.0.1"),
+				semver.MustParse("0.0.2"),
+				semver.MustParse("0.2.0"),
+				semver.MustParse("0.3.0"),
+				semver.MustParse("0.4.0"),
+			},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.MustParse("0.2.0"),
+		},
+		{
+			name: "Valid/OneHigherAndOneLower",
+			versions: []semver.Version{
+				semver.MustParse("0.0.2"),
+				semver.MustParse("0.2.0"),
+			},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.MustParse("0.2.0"),
+		},
+		{
+			name: "Valid/TargetIsLatestVersion",
+			versions: []semver.Version{
+				semver.MustParse("0.0.1"),
+				semver.MustParse("0.0.2"),
+				semver.MustParse("0.1.0"),
+			},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.Version{},
+		},
+		{
+			name: "Valid/OneBundleInVersions",
+			versions: []semver.Version{
+				semver.MustParse("0.0.1"),
+			},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.MustParse("0.0.1"),
+		},
+		{
+			name:            "Valid/NoBundlesInVersions",
+			versions:        []semver.Version{},
+			target:          semver.MustParse("0.1.0"),
+			expectedVersion: semver.Version{},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			actual := search(c.versions, c.target, 0, len(c.versions)-1)
+			require.Equal(t, c.expectedVersion, actual)
+		})
+	}
+
 }
