@@ -277,7 +277,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no new images detected, process stopping")
+				klog.Infof("No new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -316,7 +316,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no updates detected, process stopping")
+				klog.Infof("No updates detected, process stopping")
 				return nil
 			}
 			return err
@@ -383,7 +383,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no new images detected, process stopping")
+				klog.Infof("No new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -515,9 +515,18 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) outputDryRunMapping(mapping image.TypedImageMapping) error {
-	mappingPath := filepath.Join(o.Dir, mappingFile)
-	klog.Infof("writing image mapping to %s", mappingPath)
-	if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
+	mappingPath := filepath.Join(filepath.Clean(o.Dir), mappingFile)
+	mappingFile, err := os.Create(mappingPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := mappingFile.Close(); err != nil {
+			klog.Error(err)
+		}
+	}()
+	klog.Infof("Writing image mapping to %s", mappingPath)
+	if err := image.WriteImageMapping(mapping, mappingFile); err != nil {
 		return err
 	}
 	return nil
@@ -546,7 +555,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 			continue
 		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
-			klog.V(2).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
+			klog.V(2).Infof("Skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
 			keep = append(keep, srcRef.Ref.String())
 		}
@@ -622,8 +631,18 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
-	mappingResultsPath := filepath.Join(dir, mappingFile)
-	if err := image.WriteImageMapping(mapping, mappingResultsPath); err != nil {
+	mappingResultsPath := filepath.Join(filepath.Clean(dir), mappingFile)
+	mappingFile, err := os.Create(mappingResultsPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := mappingFile.Close(); err != nil {
+			klog.Error(err)
+		}
+	}()
+	klog.Infof("Writing image mapping to %s", mappingResultsPath)
+	if err := image.WriteImageMapping(mapping, mappingFile); err != nil {
 		return err
 	}
 

@@ -1,6 +1,7 @@
 package image
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -274,6 +275,111 @@ func TestReadImageMapping(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, mapping)
+			}
+
+		})
+	}
+}
+
+func TestWriteImageMapping(t *testing.T) {
+	tests := []struct {
+		name     string
+		mapping  TypedImageMapping
+		expected string
+		err      string
+	}{
+		{
+			name: "Valid/NoIDInDestination",
+			mapping: TypedImageMapping{{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle}: {
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "disconn-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle},
+			},
+			expected: "some-registry.com/namespace/image:latest=disconn-registry.com/namespace/image:latest\n",
+		},
+		{
+			name: "Valid/PreferTagOverID",
+			mapping: TypedImageMapping{{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle}: {
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "disconn-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						Tag:       "latest",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle},
+			},
+			expected: "some-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84" +
+				"=disconn-registry.com/namespace/image:latest\n",
+		},
+		{
+			name: "Valid/NoTags",
+			mapping: TypedImageMapping{{
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle}: {
+				TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "disconn-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle},
+			},
+			expected: "some-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84" +
+				"=disconn-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output := new(strings.Builder)
+			err := WriteImageMapping(test.mapping, output)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.expected, output.String())
 			}
 
 		})

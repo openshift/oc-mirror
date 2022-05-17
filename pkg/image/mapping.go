@@ -3,6 +3,7 @@ package image
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -116,7 +117,11 @@ func ReadImageMapping(mappingsPath, separator string, typ v1alpha2.ImageType) (T
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			klog.Error(err)
+		}
+	}()
 
 	mappings := TypedImageMapping{}
 	scanner := bufio.NewScanner(f)
@@ -140,15 +145,15 @@ func ReadImageMapping(mappingsPath, separator string, typ v1alpha2.ImageType) (T
 	return mappings, scanner.Err()
 }
 
-// WriteImageMapping writes key map k/v to a mapping.txt file.
-func WriteImageMapping(m TypedImageMapping, mappingsPath string) error {
-	f, err := os.Create(filepath.Clean(mappingsPath))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+// WriteImageMapping writes key map k/v to an io.Writer.
+func WriteImageMapping(m TypedImageMapping, output io.Writer) error {
 	for fromStr, toStr := range m {
-		_, err := f.WriteString(fmt.Sprintf("%s=%s\n", fromStr.Ref.Exact(), toStr.Ref.Exact()))
+		// Prefer tag over id for mapping file for
+		// compatability with `oc image mirror`.
+		if toStr.Ref.Tag != "" {
+			toStr.Ref.ID = ""
+		}
+		_, err := output.Write([]byte(fmt.Sprintf("%s=%s\n", fromStr.Ref.Exact(), toStr.Ref.Exact())))
 		if err != nil {
 			return err
 		}
