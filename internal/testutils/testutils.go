@@ -37,7 +37,9 @@ func WriteTestImage(testServer *httptest.Server, dir string) (string, error) {
 		return "", err
 	}
 	i, _ := crane.Image(c)
-	crane.Push(i, tag.String())
+	if err := crane.Push(i, tag.String()); err != nil {
+		return "", err
+	}
 	if dir != "" {
 		lp, err := layout.Write(dir, empty.Index)
 		if err != nil {
