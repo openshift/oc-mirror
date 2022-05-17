@@ -1,14 +1,12 @@
 package initcmd
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
@@ -76,10 +74,6 @@ func (o *InitOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	customRegistry, err := o.promptCustomRegistry()
-	if err != nil {
-		return err
-	}
 
 	imageSetConfig := v1alpha2.ImageSetConfiguration{
 		TypeMeta: metav1.TypeMeta{
@@ -130,16 +124,6 @@ func (o *InitOptions) Run(ctx context.Context) error {
 				BlockedImages: nil,
 			},
 		},
-	}
-
-	if customRegistry != "" {
-		registry := &v1alpha2.RegistryConfig{
-			ImageURL: customRegistry,
-			SkipTLS:  false,
-		}
-		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Registry = registry
-		// Unset the local default backend
-		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Local = nil
 	}
 
 	switch o.Output {
@@ -201,17 +185,6 @@ func getCatalog(catalogBase string) (string, error) {
 	}
 	catalog := fmt.Sprintf("%s:%s", catalogBase, catalogLatestVersionString)
 	return catalog, nil
-}
-
-func (o *InitOptions) promptCustomRegistry() (string, error) {
-	fmt.Fprintln(o.ErrOut, "Enter custom registry image URL or blank for none.")
-	fmt.Fprintln(o.ErrOut, "Example: localhost:5000/test:latest") // Obvious placeholder to prevent using a bad default
-	customRegistry, err := bufio.NewReader(o.In).ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("error reading custom registry image URL: %w", err)
-	}
-	customRegistry = strings.TrimSpace(customRegistry)
-	return customRegistry, nil
 }
 
 // Key order doesn't matter to machines, but is nice for humans.

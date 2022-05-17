@@ -67,9 +67,6 @@ func TestInitOptions_Run(t *testing.T) {
 		expStdout string
 		expStderr string
 	}
-	promptStderr := `Enter custom registry image URL or blank for none.
-Example: localhost:5000/test:latest
-`
 	cases := []spec{
 		{
 			name: "Default yaml output",
@@ -78,7 +75,6 @@ Example: localhost:5000/test:latest
 				Output:      "yaml",
 			},
 			expError: "",
-			stdIn:    "\n",
 			expStdout: `kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v1alpha2
 storageConfig:
@@ -99,7 +95,6 @@ mirror:
   - name: registry.redhat.io/ubi8/ubi:latest
   helm: {}
 `,
-			expStderr: promptStderr,
 		},
 		{
 			name: "Default json output",
@@ -108,7 +103,6 @@ mirror:
 				Output:      "json",
 			},
 			expError: "",
-			stdIn:    "\n",
 			expStdout: `{
   "kind": "ImageSetConfiguration",
   "apiVersion": "mirror.openshift.io/v1alpha2",
@@ -150,90 +144,6 @@ mirror:
   }
 }
 `,
-			expStderr: promptStderr,
-		},
-		{
-			name: "Custom registry yaml output",
-			opts: &InitOptions{
-				RootOptions: &cli.RootOptions{},
-				Output:      "yaml",
-			},
-			expError: "",
-			stdIn:    "localhost:5000/test:latest\n",
-			expStdout: `kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v1alpha2
-storageConfig:
-  registry:
-    imageURL: localhost:5000/test:latest
-    skipTLS: false
-mirror:
-  platform:
-    channels:
-    - name: stable-0.0
-      type: ocp
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
-    packages:
-    - name: serverless-operator
-      channels:
-      - name: stable
-  additionalImages:
-  - name: registry.redhat.io/ubi8/ubi:latest
-  helm: {}
-`,
-			expStderr: promptStderr,
-		},
-		{
-			name: "Custom registry json output",
-			opts: &InitOptions{
-				RootOptions: &cli.RootOptions{},
-				Output:      "json",
-			},
-			expError: "",
-			stdIn:    "localhost:5000/test:latest\n",
-			expStdout: `{
-  "kind": "ImageSetConfiguration",
-  "apiVersion": "mirror.openshift.io/v1alpha2",
-  "mirror": {
-    "platform": {
-      "channels": [
-        {
-          "name": "stable-0.0",
-          "type": "ocp"
-        }
-      ]
-    },
-    "operators": [
-      {
-        "packages": [
-          {
-            "name": "serverless-operator",
-            "channels": [
-              {
-                "name": "stable"
-              }
-            ]
-          }
-        ],
-        "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.11"
-      }
-    ],
-    "additionalImages": [
-      {
-        "name": "registry.redhat.io/ubi8/ubi:latest"
-      }
-    ],
-    "helm": {}
-  },
-  "storageConfig": {
-    "registry": {
-      "imageURL": "localhost:5000/test:latest",
-      "skipTLS": false
-    }
-  }
-}
-`,
-			expStderr: promptStderr,
 		},
 	}
 
