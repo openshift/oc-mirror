@@ -515,8 +515,8 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) outputDryRunMapping(mapping image.TypedImageMapping) error {
-	mappingPath := filepath.Join(filepath.Clean(o.Dir), mappingFile)
-	mappingFile, err := os.Create(mappingPath)
+	mappingPath := filepath.Join(o.Dir, mappingFile)
+	mappingFile, err := os.Create(filepath.Clean(mappingPath))
 	if err != nil {
 		return err
 	}
@@ -631,8 +631,8 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
-	mappingResultsPath := filepath.Join(filepath.Clean(dir), mappingFile)
-	mappingFile, err := os.Create(mappingResultsPath)
+	mappingResultsPath := filepath.Join(dir, mappingFile)
+	mappingFile, err := os.Create(filepath.Clean(mappingResultsPath))
 	if err != nil {
 		return err
 	}
