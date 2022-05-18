@@ -1,14 +1,12 @@
 package initcmd
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
@@ -26,6 +24,7 @@ import (
 type InitOptions struct {
 	*cli.RootOptions
 	Output      string
+	Registry    string
 	catalogBase string
 }
 
@@ -41,6 +40,10 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 		Example: templates.Examples(`
 			# Get oc-mirror initial config template
 			oc-mirror init
+
+			# Get oc-mirror initial config template 
+			# with a registry storage backend
+			oc-mirror init --registry localhost:5000/test:latest
 			
 			# Save oc-mirror initial config to a file
 			oc-mirror init >imageset-config.yaml
@@ -53,6 +56,7 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
+	fs.StringVar(&o.Registry, "registry", o.Registry, "Registry location for storage backend, if using.")
 	o.BindFlags(cmd.PersistentFlags())
 
 	return cmd
@@ -73,10 +77,6 @@ func (o *InitOptions) Run(ctx context.Context) error {
 		return err
 	}
 	catalog, err := getCatalog(o.catalogBase)
-	if err != nil {
-		return err
-	}
-	customRegistry, err := o.promptCustomRegistry()
 	if err != nil {
 		return err
 	}
@@ -132,9 +132,9 @@ func (o *InitOptions) Run(ctx context.Context) error {
 		},
 	}
 
-	if customRegistry != "" {
+	if o.Registry != "" {
 		registry := &v1alpha2.RegistryConfig{
-			ImageURL: customRegistry,
+			ImageURL: o.Registry,
 			SkipTLS:  false,
 		}
 		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Registry = registry
@@ -203,17 +203,6 @@ func getCatalog(catalogBase string) (string, error) {
 	return catalog, nil
 }
 
-func (o *InitOptions) promptCustomRegistry() (string, error) {
-	fmt.Fprintln(o.ErrOut, "Enter custom registry image URL or blank for none.")
-	fmt.Fprintln(o.ErrOut, "Example: localhost:5000/test:latest") // Obvious placeholder to prevent using a bad default
-	customRegistry, err := bufio.NewReader(o.In).ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("error reading custom registry image URL: %w", err)
-	}
-	customRegistry = strings.TrimSpace(customRegistry)
-	return customRegistry, nil
-}
-
 // Key order doesn't matter to machines, but is nice for humans.
 // oc-mirror init output is for humans.
 // Issue with k8s yaml library: no support for MapSlice
@@ -237,6 +226,10 @@ func orderedYamlMarshal(obj interface{}) ([]byte, error) {
 			"apiVersion":    2,
 			"storageConfig": 3,
 			"mirror":        4,
+		},
+		"storageConfig": {
+			"imageURL": 1,
+			"skipTLS":  2,
 		},
 		"mirror": {
 			"platform":         1,

@@ -7,6 +7,7 @@
     - [Certificate Trust](#certificate-trust)
   - [Basic Usage](#basic-usage)
     - [oc-mirror vs oc mirror](#oc-mirror-vs-oc-mirror)
+  - [Create an initial oc-mirror imageset configuration](#create-an-initial-oc-mirror-imageset-configuration)
     - [Content Discovery](#content-discovery)
       - [Updates](#updates)
       - [Releases](#releases)
@@ -44,6 +45,13 @@ There are two ways to use oc-mirror, either standalone or part of the oc plugin 
 In short:
 - To use `oc-mirror` build this repo and use the binary produced. 
 - To use `oc mirror` build this repo and move the binary into a directory on the PATH.
+
+
+## Create an initial oc-mirror imageset configuration
+
+```sh
+oc-mirror init
+```
 
 ### Content Discovery
 
