@@ -24,6 +24,7 @@ import (
 type InitOptions struct {
 	*cli.RootOptions
 	Output      string
+	Registry    string
 	catalogBase string
 }
 
@@ -39,6 +40,10 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 		Example: templates.Examples(`
 			# Get oc-mirror initial config template
 			oc-mirror init
+
+			# Get oc-mirror initial config template 
+			# with a registry storage backend
+			oc-mirror init --registry localhost:5000/test:latest
 			
 			# Save oc-mirror initial config to a file
 			oc-mirror init >imageset-config.yaml
@@ -51,6 +56,7 @@ func NewInitCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
+	fs.StringVar(&o.Registry, "registry", o.Registry, "Registry location for storage backend, if using.")
 	o.BindFlags(cmd.PersistentFlags())
 
 	return cmd
@@ -124,6 +130,16 @@ func (o *InitOptions) Run(ctx context.Context) error {
 				BlockedImages: nil,
 			},
 		},
+	}
+
+	if o.Registry != "" {
+		registry := &v1alpha2.RegistryConfig{
+			ImageURL: o.Registry,
+			SkipTLS:  false,
+		}
+		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Registry = registry
+		// Unset the local default backend
+		imageSetConfig.ImageSetConfigurationSpec.StorageConfig.Local = nil
 	}
 
 	switch o.Output {
@@ -210,6 +226,10 @@ func orderedYamlMarshal(obj interface{}) ([]byte, error) {
 			"apiVersion":    2,
 			"storageConfig": 3,
 			"mirror":        4,
+		},
+		"storageConfig": {
+			"imageURL": 1,
+			"skipTLS":  2,
 		},
 		"mirror": {
 			"platform":         1,
