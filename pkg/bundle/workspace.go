@@ -16,6 +16,7 @@ func MakeWorkspaceDirs(rootDir string) error {
 		filepath.Join(config.SourceDir, config.PublishDir),
 		filepath.Join(config.SourceDir, config.V2Dir),
 		filepath.Join(config.SourceDir, config.HelmDir),
+		filepath.Join(config.SourceDir, config.ReleaseSignatureDir),
 	}
 	for _, p := range paths {
 		dir := filepath.Join(rootDir, p)

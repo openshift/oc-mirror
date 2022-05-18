@@ -58,7 +58,7 @@ func TestHandleMetadata(t *testing.T) {
 				DestSkipTLS: true,
 				From:        "testdata/artifacts/testbundle_seq2.tar",
 			},
-			want:    &SequenceError{1, 2},
+			want:    &ErrInvalidSequence{1, 2},
 			wantErr: true,
 		},
 		{
@@ -75,7 +75,7 @@ func TestHandleMetadata(t *testing.T) {
 				DestSkipTLS: true,
 				From:        "testdata/artifacts/testbundle_seq3.tar",
 			},
-			want:    &SequenceError{2, 3},
+			want:    &ErrInvalidSequence{2, 3},
 			wantErr: true,
 		},
 		{
