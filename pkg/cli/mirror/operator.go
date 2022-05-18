@@ -438,20 +438,20 @@ func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMappi
 		if err != nil {
 			return err
 		}
-		_, ok := mapping[ref]
-		if !ok {
+
+		if _, ok := mapping[ref]; !ok {
 			klog.Warningf("image %s is not included in mapping", img)
 		}
 		return nil
 	}
 	for _, b := range dc.Bundles {
 		if err := validateFunc(b.Image); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("bundle %q image %q: %v", b.Name, b.Image, err))
 			continue
 		}
 		for _, relatedImg := range b.RelatedImages {
 			if err := validateFunc(relatedImg.Image); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("bundle %q related image %q: %v", b.Name, relatedImg.Name, err))
 				continue
 			}
 		}
