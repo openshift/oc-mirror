@@ -113,6 +113,54 @@ func TestCheckSequence(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Valid/FirstRun",
+			opts: &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SkipMetadataCheck: true,
+			},
+			incoming: v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastMirror: v1alpha2.PastMirror{
+						Sequence: 2,
+					},
+				},
+			},
+			backendErr: storage.ErrMetadataNotExist,
+		},
+		{
+			name: "Valid/DifferentialRun",
+			opts: &MirrorOptions{
+				RootOptions: &cli.RootOptions{
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SkipMetadataCheck: true,
+			},
+			incoming: v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastMirror: v1alpha2.PastMirror{
+						Sequence: 2,
+					},
+				},
+			},
+			current: v1alpha2.Metadata{
+				MetadataSpec: v1alpha2.MetadataSpec{
+					PastMirror: v1alpha2.PastMirror{
+						Sequence: 1,
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
