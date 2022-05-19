@@ -29,12 +29,12 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
-	"k8s.io/klog/v2"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -120,7 +120,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		// Render the catalog to mirror into a declarative config.
 		dc, ic, err := renderDC(ctx, reg, ctlg)
 		if err != nil {
-			return nil, err
+			return nil, checkErr(err)
 		}
 
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
@@ -332,9 +332,6 @@ func (o *OperatorOptions) verifyDC(dic action.DiffIncludeConfig, dc *declcfg.Dec
 	// Converting the dc to the model results in running
 	// model validations. This checks default channels and
 	// replace chain.
-	// TODO(jpower432): Invalid replace chain may not appear very
-	// straight forward. Need a way to identify what bundle is missing
-	// from the replace chain.
 	if _, err := declcfg.ConvertToModel(*dc); err != nil {
 		return err
 	}
@@ -719,4 +716,26 @@ func validate(dc *declcfg.DeclarativeConfig) error {
 		return errors.New("bug: nil declarative config")
 	}
 	return nil
+}
+
+// checkError will check validation errors
+// from operator registry and return a modified
+// error messages for mirror usage
+// FIXME(jpower432): Checking against the errors string could be an issue since
+// this is depending on the strings returned from `opm validate`. It would be better to propose that
+// the validation error are exposed here https://github.com/operator-framework/operator-registry/blob/master/alpha/model/error.go
+// and adds structure errors that return package and channels information.
+func checkErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	// handle known error causes
+	switch {
+	case strings.Contains(err.Error(), "channel must contain at least one bundle"):
+		return fmt.Errorf("invalid catalog: check minVersion, maxVersion, and default channel on invalid packages\n%v", err)
+	case strings.Contains(err.Error(), "multiple channel heads found in graph"):
+		return fmt.Errorf("invalid catalog: check minVersion and maxVersion on invalid packages or channels\n%v", err)
+	default:
+		return err
+	}
 }
