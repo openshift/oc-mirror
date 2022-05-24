@@ -433,7 +433,7 @@ func TestAggregateImageInformation(t *testing.T) {
 			},
 		},
 		{
-			desc: "Success/FiveManifestSameRepos",
+			desc: "Success/FiveManifestSameRepo",
 			images: map[string]string{
 				"digest1": "repo1",
 				"digest2": "repo1",

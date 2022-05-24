@@ -160,7 +160,7 @@ type repository struct {
 	Manifests []string `json:"manifests,omitempty"`
 }
 
-// writePruneImagePlan will write a plan for pruning images to disk.
+// outputPruneImagePlan will write a plan for pruning images to disk.
 func (o *MirrorOptions) outputPruneImagePlan(ctx context.Context, prev, curr image.AssociationSet) error {
 	_, toRemove, err := o.planImagePruning(ctx, curr, prev)
 	if err != nil {
@@ -173,13 +173,13 @@ func (o *MirrorOptions) outputPruneImagePlan(ctx context.Context, prev, curr ima
 	planFilePath := filepath.Join(o.Dir, "pruning-plan.json")
 	cleanPlanFilePath := filepath.Clean(planFilePath)
 	klog.Infof("Writing image pruning plan to %s", planFilePath)
-	plan := aggregateImageInformation(o.ToMirror, toRemove)
-	// Process metadata for output
 	planFile, err := os.Create(cleanPlanFilePath)
 	if err != nil {
 		return err
 	}
 	defer planFile.Close()
+
+	plan := aggregateImageInformation(o.ToMirror, toRemove)
 
 	if err := writePruneImagePlan(planFile, plan); err != nil {
 		return err
@@ -188,6 +188,7 @@ func (o *MirrorOptions) outputPruneImagePlan(ctx context.Context, prev, curr ima
 	return planFile.Sync()
 }
 
+// writePruneImagePlan will write the prune image plan in JSON format.
 func writePruneImagePlan(w io.Writer, plan pruneImagePlan) error {
 	data, err := json.MarshalIndent(&plan, "", " ")
 	if err != nil {
@@ -197,7 +198,7 @@ func writePruneImagePlan(w io.Writer, plan pruneImagePlan) error {
 	return err
 }
 
-// aggregateImageInformation will create a prune image plan from information from registry
+// aggregateImageInformation will create a prune image plan from registry
 // and manifest information.
 func aggregateImageInformation(registry string, reposByManifest map[string]string) pruneImagePlan {
 	plan := pruneImagePlan{}
