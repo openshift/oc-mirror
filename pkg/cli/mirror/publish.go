@@ -119,18 +119,20 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 	allMappings.Merge(imgMappings)
 
+	currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
+	if err != nil {
+		return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+	}
+
 	if o.DryRun {
+		if err := o.outputPruneImagePlan(ctx, currentAssocs, incomingAssocs); err != nil {
+			return allMappings, err
+		}
 		return allMappings, nil
 	}
 
-	if len(currentMeta.PastAssociations) != 0 {
-		currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
-		if err != nil {
-			return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
-		}
-		if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
-			return allMappings, err
-		}
+	if err := o.pruneRegistry(ctx, currentAssocs, incomingAssocs); err != nil {
+		return allMappings, err
 	}
 
 	klog.V(1).Infof("unpack release signatures")
