@@ -61,7 +61,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
-	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 2, "Number of concurrent requests allowed per registry")
+	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 6, "Number of concurrent requests allowed per registry")
 }
 
 func (o *MirrorOptions) init() {
