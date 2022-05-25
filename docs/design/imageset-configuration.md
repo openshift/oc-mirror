@@ -27,6 +27,8 @@ to determine all bundle images and dependency images needed.
 A file-based catalog is stored in the imageset and used to build
 a custom catalog image in the target registry.
 
+> **WARNING**: When filtering operator package by version or channel, the default channel MUST not be filtered out. `oc-mirror` will error if this occurs.
+
 ## Additional Images
 
 Individual images can be specified in an imageset configuration. If no tag is specified, the "latest" tag will be assigned.
