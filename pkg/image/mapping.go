@@ -117,11 +117,7 @@ func ReadImageMapping(mappingsPath, separator string, typ v1alpha2.ImageType) (T
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			klog.Error(err)
-		}
-	}()
+	defer f.Close()
 
 	mappings := TypedImageMapping{}
 	scanner := bufio.NewScanner(f)
