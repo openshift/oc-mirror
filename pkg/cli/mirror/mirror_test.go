@@ -81,11 +81,62 @@ func TestMirrorComplete(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid/LocalhostRegDest",
+			args: []string{"docker://localhost"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror: "localhost",
+			},
+		},
+		{
+			name: "Valid/FqdnRegPortDest",
+			args: []string{"docker://reg.com:5000"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror: "reg.com:5000",
+			},
+		},
+		{
+			name: "Valid/LocalhostRegPortDest",
+			args: []string{"docker://localhost:5000"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror: "localhost:5000",
+			},
+		},
+		{
 			name: "Valid/RegNamespace",
 			args: []string{"docker://reg.com/foo/bar"},
 			opts: &MirrorOptions{},
 			expOpts: &MirrorOptions{
 				ToMirror:      "reg.com",
+				UserNamespace: "foo/bar",
+			},
+		},
+		{
+			name: "Valid/LocalhostRegNamespace",
+			args: []string{"docker://localhost/foo/bar"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror:      "localhost",
+				UserNamespace: "foo/bar",
+			},
+		},
+		{
+			name: "Valid/NonFqdnRegPortNamespace",
+			args: []string{"docker://reg:5000/foo"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror:      "reg:5000",
+				UserNamespace: "foo",
+			},
+		},
+		{
+			name: "Valid/NonFqdnRegPortNamespaceName",
+			args: []string{"docker://reg:5000/foo/bar"},
+			opts: &MirrorOptions{},
+			expOpts: &MirrorOptions{
+				ToMirror:      "reg:5000",
 				UserNamespace: "foo/bar",
 			},
 		},
@@ -105,10 +156,46 @@ func TestMirrorComplete(t *testing.T) {
 			},
 		},
 		{
+			name:     "Invalid/NonFqdnRegDest",
+			args:     []string{"docker://reg"}, // warning message for parsing
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
+			name:     "Invalid/NonFqdnRegPortDest",
+			args:     []string{"docker://reg:5000"}, // warning message for parsing
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
+			name:     "Invalid/NonFqdnRegNamespaceName",
+			args:     []string{"docker://reg/foo/bar"}, // warning message for parsing
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
+			name:     "Invalid/NonFqdnRegNamespace",
+			args:     []string{"docker://reg/foo"}, // warning message for parsing
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
 			name:     "Invalid/TaggedReg",
 			args:     []string{"docker://reg.com/foo/bar:latest"},
 			opts:     &MirrorOptions{},
-			expError: "destination registry must consist of registry host and namespace(s) only",
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
+			name:     "Invalid/TaggedNonFqdnReg",
+			args:     []string{"docker://reg/foo/bar:latest"}, // warning message for parsing
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
+		},
+		{
+			name:     "Invalid/TaggedNonFqdnRegPort",
+			args:     []string{"docker://reg:5000/foo/bar:latest"},
+			opts:     &MirrorOptions{},
+			expError: "destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID",
 		},
 		{
 			name:     "Invalid/EmptyRegistry",

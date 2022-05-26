@@ -11,3 +11,6 @@ When submitting bug reports, include the metadata.json from the problem generate
 
 ## Operator Installation
 To troubleshoot issues with the created file-based catalog, use the following command to get information about the problem package, ‘oc get packagemanifests -n openshift-marketplace <packagename> -o json | jq '.status.channels[]|{name: .name, currentCSV: .currentCSV}'
+
+## Destination Registry parsing
+For docker registry destinations, to preserve the same docker reference format across the ecosystem, `docker://registry` is not parsed as a registry hostname, but as an image or repository name. In order to specify a registry, qualify the hostname, or use an IP address. For example, use `docker://registry.localdomain`. `docker://localhost` works as expected, because localhost is generally treated as a special exception, not requiring a qualified domain to be parsed as a registry host.
