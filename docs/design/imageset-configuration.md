@@ -27,7 +27,7 @@ to determine all bundle images and dependency images needed.
 A file-based catalog is stored in the imageset and used to build
 a custom catalog image in the target registry.
 
-> **WARNING**: When filtering operator package by version or channel, the default channel MUST not be filtered out. `oc-mirror` will error if this occurs.
+> **WARNING**: When filtering an operator package by version or channel, the default channel MUST not be filtered out. There is currently no mechanism to reset the default channel and this is required to be in the package with at least one bundle attached for the catalog to be valid.`oc-mirror` will error if the catalog is invalid.
 
 ## Additional Images
 
