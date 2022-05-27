@@ -1,9 +1,15 @@
 package describe
 
 import (
+	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func TestDescribeComplete(t *testing.T) {
@@ -72,4 +78,36 @@ func TestDescribeValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDescribeRun(t *testing.T) {
+	expOutput := `{
+ "kind": "Metadata",
+ "apiVersion": "mirror.openshift.io/v1alpha2",
+ "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
+ "singleUse": false,
+ "pastMirror": {
+  "timestamp": 0,
+  "sequence": 0,
+  "mirror": {
+   "platform": {},
+   "helm": {}
+  }
+ }
+}
+`
+	outBuf := new(strings.Builder)
+	eOutBuf := new(strings.Builder)
+	rootOpts := &cli.RootOptions{
+		IOStreams: genericclioptions.IOStreams{
+			Out:    outBuf,
+			In:     os.Stdin,
+			ErrOut: eOutBuf,
+		},
+	}
+	opts := &DescribeOptions{RootOptions: rootOpts}
+	opts.From = "testdata"
+	require.NoError(t, opts.Run(context.TODO()))
+	require.Equal(t, expOutput, outBuf.String())
+	require.Equal(t, eOutBuf.Len(), 0)
 }

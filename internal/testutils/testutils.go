@@ -108,11 +108,15 @@ func LocalMirrorFromFiles(source string, destination string) error {
 		case m.IsDir():
 			return os.Mkdir(filepath.Join(destination, relPath), 0750)
 		default:
-			data, err := ioutil.ReadFile(filepath.Join(source, relPath))
+			newSource := filepath.Join(source, relPath)
+			cleanSource := filepath.Clean(newSource)
+			data, err := ioutil.ReadFile(cleanSource)
 			if err != nil {
 				return err
 			}
-			return ioutil.WriteFile(filepath.Join(destination, relPath), data, 0777)
+			newDest := filepath.Join(destination, relPath)
+			cleanDest := filepath.Clean(newDest)
+			return ioutil.WriteFile(cleanDest, data, 0600)
 		}
 		return nil
 	})

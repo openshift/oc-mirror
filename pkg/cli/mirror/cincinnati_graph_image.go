@@ -82,10 +82,7 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 	graphImage.Ref.Namespace = path.Join(o.UserNamespace, "openshift")
 	graphImage.Ref.Name = "graph-image"
 
-	imgBuilder := builder.ImageBuilder{
-		NameOpts:   nameOpts,
-		RemoteOpts: remoteOpts,
-	}
+	imgBuilder := builder.NewImageBuilder(nameOpts, remoteOpts)
 	layoutDir := filepath.Join(dstDir, "layout")
 
 	// unpack graph data archive and build image
@@ -128,7 +125,7 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 }
 
 // downloadsGraphData will download the current Cincinnati graph data
-func downloadGraphData(ctx context.Context, dir, url string) error {
+func downloadGraphData(ctx context.Context, dir string) error {
 	// TODO(jpower432): It would be helpful to validate
 	// the source of this downloaded file before processing
 	// it further

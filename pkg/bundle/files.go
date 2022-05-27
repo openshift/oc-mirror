@@ -192,7 +192,7 @@ func ReadMetadataFromFile(ctx context.Context, archivePath string) (v1alpha2.Met
 		return meta, err
 	}
 
-	if workspace.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
+	if err := workspace.ReadMetadata(ctx, &meta, config.MetadataBasePath); err != nil {
 		return meta, err
 	}
 
