@@ -19,7 +19,6 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
-	"github.com/docker/distribution/registry/client/transport"
 
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
@@ -51,7 +50,8 @@ type SecurityOptions struct {
 }
 
 func (o *SecurityOptions) Bind(flags *pflag.FlagSet) {
-	flags.StringVarP(&o.RegistryConfig, "registry-config", "a", o.RegistryConfig, "Path to your registry credentials (defaults to ~/.docker/config.json)")
+	// TODO: fix priority and deprecation notice in 4.12
+	flags.StringVarP(&o.RegistryConfig, "registry-config", "a", o.RegistryConfig, "Path to your registry credentials. Alternatively REGISTRY_AUTH_FILE env variable can be also specified. Defaults to  ~/.docker/config.json, ${XDG_RUNTIME_DIR}/containers/auth.json, ${XDG_CONFIG_HOME}/containers/auth.json, /run/containers/${UID}/auth.json, ${DOCKER_CONFIG}, ~/.dockercfg. The order can be changed via REGISTRY_AUTH_PREFERENCE env variable to docker (current default - deprecated) or podman (prioritizes podman credentials over docker).")
 	flags.BoolVar(&o.Insecure, "insecure", o.Insecure, "Allow push and pull operations to registries to be made over HTTP")
 	flags.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip verifying the integrity of the retrieved content. This is not recommended, but may be necessary when importing images from older image registries. Only bypass verification if the registry is known to be trustworthy.")
 }
@@ -106,34 +106,34 @@ func (o *SecurityOptions) Context() (*registryclient.Context, error) {
 	if o.CachedContext != nil {
 		return o.CachedContext, nil
 	}
-	context, err := o.NewContext()
+	ctx, err := o.NewContext()
 	if err == nil {
-		o.CachedContext = context
+		o.CachedContext = ctx
 		o.CachedContext.Retries = 3
 	}
-	return context, err
+	return ctx, err
 }
 
 func (o *SecurityOptions) NewContext() (*registryclient.Context, error) {
-	rt, err := rest.TransportFor(&rest.Config{})
+	userAgent := rest.DefaultKubernetesUserAgent()
+	rt, err := rest.TransportFor(&rest.Config{UserAgent: userAgent})
 	if err != nil {
 		return nil, err
 	}
-	insecureRT, err := rest.TransportFor(&rest.Config{TLSClientConfig: rest.TLSClientConfig{Insecure: true}})
+	insecureRT, err := rest.TransportFor(&rest.Config{TLSClientConfig: rest.TLSClientConfig{Insecure: true}, UserAgent: userAgent})
 	if err != nil {
 		return nil, err
 	}
-	creds := dockercredentials.NewLocal()
-	if len(o.RegistryConfig) > 0 {
-		creds, err = dockercredentials.NewFromFile(o.RegistryConfig)
-		if err != nil {
+	credStoreFactory, err := dockercredentials.NewCredentialStoreFactory(o.RegistryConfig)
+	if err != nil {
+		if len(o.RegistryConfig) > 0 {
 			return nil, fmt.Errorf("unable to load --registry-config: %v", err)
 		}
+		return nil, err
 	}
-	context := registryclient.NewContext(rt, insecureRT).WithCredentials(creds).
-		WithRequestModifiers(transport.NewHeaderRequestModifier(http.Header{http.CanonicalHeaderKey("User-Agent"): []string{rest.DefaultKubernetesUserAgent()}}))
-	context.DisableDigestVerification = o.SkipVerification
-	return context, nil
+	ctx := registryclient.NewContext(rt, insecureRT).WithCredentialsFactory(credStoreFactory)
+	ctx.DisableDigestVerification = o.SkipVerification
+	return ctx, nil
 }
 
 // FilterOptions assist in filtering out unneeded manifests from ManifestList objects.
@@ -510,8 +510,8 @@ func PutManifestInCompatibleSchema(
 	if !ok || len(errs) == 0 {
 		return toDigest, err
 	}
-	errcode, ok := errs[0].(errcode.Error)
-	if !ok || errcode.ErrorCode() != v2.ErrorCodeManifestInvalid {
+	errCode, ok := errs[0].(errcode.Error)
+	if !ok || errCode.ErrorCode() != v2.ErrorCodeManifestInvalid {
 		return toDigest, err
 	}
 	// try downconverting to v2-schema1

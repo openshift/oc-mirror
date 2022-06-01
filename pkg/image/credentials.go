@@ -41,11 +41,11 @@ func NewContext(skipVerification bool) (*registryclient.Context, error) {
 	}
 
 	if len(registryConfig) != 0 {
-		creds, err := dockercredentials.NewFromFile(registryConfig)
+		creds, err := dockercredentials.NewCredentialStoreFactory(registryConfig)
 		if err != nil {
 			return nil, err
 		}
-		ctx.WithCredentials(creds)
+		ctx.WithCredentialsFactory(creds)
 	}
 	ctx.Retries = 3
 	ctx.DisableDigestVerification = skipVerification
