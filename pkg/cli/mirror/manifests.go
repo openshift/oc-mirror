@@ -255,6 +255,8 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 		return nil
 	}
 
+	klog.Infof("Writing ICSP manifests to %s", dir)
+
 	// Stable ICSP generation.
 	sort.Slice(icsps, func(i, j int) bool {
 		return string(icsps[i].Name) < string(icsps[j].Name)
@@ -278,8 +280,6 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 		return fmt.Errorf("error writing ImageContentSourcePolicy: %v", err)
 	}
 
-	klog.Infof("Wrote ICSP manifests to %s", dir)
-
 	return nil
 }
 
@@ -289,6 +289,8 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		klog.V(2).Info("No catalogs found in mapping")
 		return nil
 	}
+
+	klog.Infof("Writing CatalogSource manifests to %s", dir)
 
 	// Keep track of the names and to make sure no
 	// manifest are overwritten.
@@ -314,12 +316,12 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 			return fmt.Errorf("error writing CatalogSource: %v", err)
 		}
 	}
-	klog.Infof("Wrote CatalogSource manifests to %s", dir)
 	return nil
 }
 
 // WriteUpdateService will generate an UpdateService object and write it to disk
 func WriteUpdateService(release, graph image.TypedImage, dir string) error {
+	klog.Infof("Writing UpdateService manifests to %s", dir)
 	updateService, err := generateUpdateService("update-service-oc-mirror", release.Ref, graph.Ref)
 	if err != nil {
 		return err
@@ -327,6 +329,5 @@ func WriteUpdateService(release, graph image.TypedImage, dir string) error {
 	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
 		return fmt.Errorf("error writing UpdateService: %v", err)
 	}
-	klog.Infof("Wrote UpdateService manifests to %s", dir)
 	return nil
 }

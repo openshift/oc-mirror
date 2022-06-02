@@ -236,6 +236,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	var mapping image.TypedImageMapping
 	var meta v1alpha2.Metadata
+	mappingPath := filepath.Join(o.Dir, mappingFile)
 
 	// Three mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
@@ -277,7 +278,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no new images detected, process stopping")
+				klog.Infof("No new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -288,7 +289,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			if err := o.outputDryRunMapping(mapping); err != nil {
+			if err := writeMappingFile(mappingPath, mapping); err != nil {
 				return err
 			}
 			return cleanup()
@@ -316,7 +317,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no updates detected, process stopping")
+				klog.Infof("No updates detected, process stopping")
 				return nil
 			}
 			return err
@@ -350,7 +351,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			if err := o.outputDryRunMapping(mapping); err != nil {
+			if err := writeMappingFile(mappingPath, mapping); err != nil {
 				return err
 			}
 			return cleanup()
@@ -383,7 +384,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("no new images detected, process stopping")
+				klog.Infof("No new images detected, process stopping")
 				return nil
 			}
 			return err
@@ -396,7 +397,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		if o.DryRun {
-			if err := o.outputDryRunMapping(mapping); err != nil {
+			if err := writeMappingFile(mappingPath, mapping); err != nil {
 				return err
 			}
 			return cleanup()
@@ -514,15 +515,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	return cleanup()
 }
 
-func (o *MirrorOptions) outputDryRunMapping(mapping image.TypedImageMapping) error {
-	mappingPath := filepath.Join(o.Dir, mappingFile)
-	klog.Infof("writing image mapping to %s", mappingPath)
-	if err := image.WriteImageMapping(mapping, mappingPath); err != nil {
-		return err
-	}
-	return nil
-}
-
 // removePreviouslyMirrored will check if an image has been previously mirrored
 // and remove it from the mapping if found. These images are added to the current AssociationSet
 // to maintain a history of images. Any images in the AssociationSet that was not requested in the mapping
@@ -546,7 +538,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 			continue
 		}
 		if found := prevDownloads.SetContainsKey(srcRef.Ref.String()); found {
-			klog.V(2).Infof("skipping previously mirrored image %s", srcRef.Ref.String())
+			klog.V(2).Infof("Skipping previously mirrored image %s", srcRef.Ref.String())
 			images.Remove(srcRef)
 			keep = append(keep, srcRef.Ref.String())
 		}
@@ -623,7 +615,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
 	mappingResultsPath := filepath.Join(dir, mappingFile)
-	if err := image.WriteImageMapping(mapping, mappingResultsPath); err != nil {
+	if err := writeMappingFile(mappingResultsPath, mapping); err != nil {
 		return err
 	}
 
@@ -703,4 +695,18 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	}
 
 	return nil
+}
+
+func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
+	path := filepath.Clean(mappingPath)
+	mappingFile, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer mappingFile.Close()
+	klog.Infof("Writing image mapping to %s", mappingPath)
+	if err := image.WriteImageMapping(mapping, mappingFile); err != nil {
+		return err
+	}
+	return mappingFile.Sync()
 }
