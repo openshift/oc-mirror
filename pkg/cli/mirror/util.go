@@ -85,7 +85,7 @@ func getTLSConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {
+func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool, logMessage func(error) string) error {
 
 	if err == nil {
 		return nil
@@ -97,12 +97,18 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) erro
 	} else {
 		skipAllTypes = true
 	}
+
+	message := err.Error()
+	if logMessage != nil {
+		message = logMessage(err)
+	}
+
 	// Instead of returning an error, just log it.
 	if o.ContinueOnError && (skip || skipAllTypes) {
-		klog.Errorf("error: %v", err)
+		klog.Errorf("error: %v", message)
 		o.continuedOnError = true
 	} else {
-		return err
+		return fmt.Errorf("%v", message)
 	}
 
 	return nil

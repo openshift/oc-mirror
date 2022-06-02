@@ -334,7 +334,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		if errs != nil {
 			for _, e := range errs.Errors() {
-				if err := o.checkErr(e, skipErr); err != nil {
+				if err := o.checkErr(e, skipErr, nil); err != nil {
 					return err
 				}
 			}
@@ -465,7 +465,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		if errs != nil {
 			for _, e := range errs.Errors() {
-				if err := o.checkErr(e, skipErr); err != nil {
+				if err := o.checkErr(e, skipErr, nil); err != nil {
 					return err
 				}
 			}
@@ -612,7 +612,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 	if err := opts.Validate(); err != nil {
 		return err
 	}
-	return o.checkErr(opts.Run(), nil)
+	return o.checkErr(opts.Run(), nil, nil)
 }
 
 func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImageOptions, error) {

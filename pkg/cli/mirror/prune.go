@@ -140,12 +140,29 @@ func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, reposByM
 	}()
 
 	var errs []error
-	var terr *transport.Error
+
 	skipErr := func(err error) bool {
+		var terr *transport.Error
 		return errors.As(err, &terr)
 	}
+
+	logMessage := func(err error) string {
+		var terr *transport.Error
+		if errors.As(err, &terr) {
+			switch terr.StatusCode {
+			case 405:
+				return fmt.Sprintf("image deletion is not permitted on registry %s: %v", o.ToMirror, err.Error())
+			case 401:
+				return fmt.Sprintf("unauthorized image deletion on registry %s: %v", o.ToMirror, err.Error())
+			default:
+				return err.Error()
+			}
+		}
+		return err.Error()
+	}
+
 	for err := range errorsCh {
-		errs = append(errs, o.checkErr(err, skipErr))
+		errs = append(errs, o.checkErr(err, skipErr, logMessage))
 	}
 
 	return utilerrors.NewAggregate(errs)
