@@ -28,7 +28,7 @@ func TestReleasesComplete(t *testing.T) {
 			expOpts: &ReleasesOptions{
 				Channel:       "stable-4.8",
 				Version:       "4.8",
-				FilterOptions: []string{"amd64"},
+				FilterByArchs: []string{"amd64"},
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
@@ -46,7 +46,7 @@ func TestReleasesComplete(t *testing.T) {
 			expOpts: &ReleasesOptions{
 				Channel:       "stable-4.9",
 				Version:       "4.9.10",
-				FilterOptions: []string{"amd64"},
+				FilterByArchs: []string{"amd64"},
 				RootOptions: &cli.RootOptions{
 					Dir: "bar",
 				},
@@ -111,7 +111,7 @@ func TestReleasesValidate(t *testing.T) {
 		{
 			name: "Invalid/UnsupportedArch",
 			opts: &ReleasesOptions{
-				FilterOptions: []string{"fake"},
+				FilterByArchs: []string{"fake"},
 			},
 			expError: "architecture \"fake\" is not a supported release architecture",
 		},
