@@ -25,7 +25,7 @@ type ReleasesOptions struct {
 	Channel       string
 	Channels      bool
 	Version       string
-	FilterOptions []string
+	FilterByArchs []string
 }
 
 // used to capture major.minor version from release tags
@@ -67,7 +67,7 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 	fs.StringVar(&o.Channel, "channel", o.Channel, "List information for a specified channel")
 	fs.BoolVar(&o.Channels, "channels", o.Channels, "List all channel information")
 	fs.StringVar(&o.Version, "version", o.Version, "Specify an OpenShift release version")
-	fs.StringSliceVar(&o.FilterOptions, "filter-options", o.FilterOptions, "An architecture list to control the release image "+
+	fs.StringSliceVar(&o.FilterByArchs, "filter-by-archs", o.FilterByArchs, "An architecture list to control the release image "+
 		"picked when multiple variants are available")
 
 	o.BindFlags(cmd.PersistentFlags())
@@ -85,8 +85,8 @@ func (o *ReleasesOptions) Complete() error {
 
 		o.Channel = fmt.Sprintf("stable-%s", r.String())
 	}
-	if len(o.FilterOptions) == 0 {
-		o.FilterOptions = []string{v1alpha2.DefaultPlatformArchitecture}
+	if len(o.FilterByArchs) == 0 {
+		o.FilterByArchs = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func (o *ReleasesOptions) Validate() error {
 	if o.Channel == "stable-" {
 		return errors.New("must specify --version or --channel")
 	}
-	for _, arch := range o.FilterOptions {
+	for _, arch := range o.FilterByArchs {
 		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
 			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
 		}
@@ -141,7 +141,7 @@ func listChannels(o *ReleasesOptions, w io.Writer, ctx context.Context, client c
 		}
 	}
 
-	for _, arch := range o.FilterOptions {
+	for _, arch := range o.FilterByArchs {
 		vers, err := cincinnati.GetVersions(ctx, client, arch, o.Channel)
 		if err != nil {
 			return err
