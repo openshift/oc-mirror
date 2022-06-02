@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -320,6 +321,7 @@ func TestPlanImagePruning(t *testing.T) {
 func TestPruneImages(t *testing.T) {
 	type spec struct {
 		desc          string
+		opts          *MirrorOptions
 		images        map[string]string
 		expInvocation int
 		exp           []string
@@ -355,7 +357,7 @@ func TestPruneImages(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			manifestDeleter := &fakeManifestDeleter{invocations: sets.NewString()}
-			err := pruneImages(manifestDeleter, c.images, 2)
+			err := c.opts.pruneImages(manifestDeleter, c.images, 2)
 			require.NoError(t, err)
 			require.Equal(t, c.expInvocation, manifestDeleter.invocations.Len())
 			t.Log(manifestDeleter.invocations.List())
@@ -496,4 +498,74 @@ func TestWritePruneImagePlan(t *testing.T) {
 	err := writePruneImagePlan(outBuf, plan)
 	require.NoError(t, err)
 	require.Equal(t, exp, outBuf.String())
+}
+
+func TestPruneImages_WithError(t *testing.T) {
+	type spec struct {
+		desc          string
+		opts          *MirrorOptions
+		images        map[string]string
+		expInvocation int
+		exp           []string
+		expError      error
+	}
+
+	cases := []spec{
+		{
+			desc:          "Success/ContinueOnError",
+			images:        map[string]string{"digest": "repo"},
+			expInvocation: 1,
+			exp:           []string{"repo|digest"},
+			opts: &MirrorOptions{
+				ContinueOnError: true,
+			},
+		},
+		{
+			desc: "Failure/NoContinueOnError",
+			opts: &MirrorOptions{
+				ContinueOnError: false,
+			},
+			images: map[string]string{
+				"digest1": "repo1",
+				"digest2": "repo2",
+				"digest3": "repo3",
+				"digest4": "repo4",
+				"digest5": "repo5",
+			},
+			expInvocation: 0,
+			exp:           []string{},
+			expError:      &transport.Error{},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			manifestDeleter := &failingManifestDeleter{invocations: sets.NewString()}
+			err := c.opts.pruneImages(manifestDeleter, c.images, 2)
+			if c.expError != nil {
+				require.ErrorAs(t, err, &c.expError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, c.expInvocation, manifestDeleter.invocations.Len())
+				t.Log(manifestDeleter.invocations.List())
+				require.True(t, manifestDeleter.invocations.HasAll(c.exp...))
+			}
+		})
+	}
+}
+
+type failingManifestDeleter struct {
+	mutex       sync.Mutex
+	invocations sets.String
+	err         error
+}
+
+var _ imageprune.ManifestDeleter = &failingManifestDeleter{}
+
+func (p *failingManifestDeleter) DeleteManifest(repo, manifest string) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.invocations.Insert(fmt.Sprintf("%s|%s", repo, manifest))
+	p.err = &transport.Error{StatusCode: 401}
+	return p.err
 }

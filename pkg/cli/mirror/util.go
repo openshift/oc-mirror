@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"k8s.io/klog/v2"
 )
 
 const mappingFile = "mapping.txt"
@@ -82,4 +83,27 @@ func getTLSConfig() (*tls.Config, error) {
 		MinVersion: tls.VersionTLS12,
 	}
 	return config, nil
+}
+
+func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {
+
+	if err == nil {
+		return nil
+	}
+
+	var skip, skipAllTypes bool
+	if acceptableErr != nil {
+		skip = acceptableErr(err)
+	} else {
+		skipAllTypes = true
+	}
+	// Instead of returning an error, just log it.
+	if o.ContinueOnError && (skip || skipAllTypes) {
+		klog.Errorf("error: %v", err)
+		o.continuedOnError = true
+	} else {
+		return err
+	}
+
+	return nil
 }

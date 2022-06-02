@@ -721,29 +721,6 @@ func (o *MirrorOptions) copyToResults(resultsDir string) error {
 	return nil
 }
 
-func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {
-
-	if err == nil {
-		return nil
-	}
-
-	var skip, skipAllTypes bool
-	if acceptableErr != nil {
-		skip = acceptableErr(err)
-	} else {
-		skipAllTypes = true
-	}
-	// Instead of returning an error, just log it.
-	if o.ContinueOnError && (skip || skipAllTypes) {
-		klog.Error(err)
-		o.continuedOnError = true
-	} else {
-		return err
-	}
-
-	return nil
-}
-
 func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
 	path := filepath.Clean(mappingPath)
 	mappingFile, err := os.Create(path)

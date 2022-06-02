@@ -31,7 +31,7 @@ func (o *MirrorOptions) pruneRegistry(ctx context.Context, prev, curr image.Asso
 	}
 	// We can use MaxPerRegistry for maxWorkers because
 	// we only prune from one registry
-	return pruneImages(deleter, toRemove, o.MaxPerRegistry)
+	return o.pruneImages(deleter, toRemove, o.MaxPerRegistry)
 }
 
 // planImagePruning creates a ManifestDeleter and map of manifests scheduled for deletetion.
@@ -94,7 +94,7 @@ func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.A
 }
 
 // pruneImages performs the image deletion based on the provided map of repos and manifests.
-func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]string, maxWorkers int) error {
+func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]string, maxWorkers int) error {
 	if len(reposByManifest) == 0 {
 		klog.V(2).Info("No images specified for pruning")
 		return nil
@@ -123,7 +123,7 @@ func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]
 
 				err := deleter.DeleteManifest(repo, k)
 				if err != nil {
-					err = fmt.Errorf("repo %q manifest %s: %v", repo, k, err)
+					err = fmt.Errorf("repo %q manifest %s: %w", repo, k, err)
 					errorsCh <- err
 				}
 			}
@@ -140,8 +140,12 @@ func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]
 	}()
 
 	var errs []error
+	var terr *transport.Error
+	skipErr := func(err error) bool {
+		return errors.As(err, &terr)
+	}
 	for err := range errorsCh {
-		errs = append(errs, err)
+		errs = append(errs, o.checkErr(err, skipErr))
 	}
 
 	return utilerrors.NewAggregate(errs)
@@ -257,7 +261,6 @@ func NewManifestDeleter(ctx context.Context, w, errOut io.Writer, registry strin
 
 // DeleteManifest deletes manifest from a repository.
 func (p *manifestDeleter) DeleteManifest(repo, manifest string) error {
-	var terr *transport.Error
 	fmt.Fprintf(p.w, "Deleting manifest %s from repo %s\n", manifest, repo)
 	ref := path.Join(p.registry, repo)
 	ref = fmt.Sprintf("%s@%s", ref, manifest)
@@ -267,10 +270,5 @@ func (p *manifestDeleter) DeleteManifest(repo, manifest string) error {
 		return fmt.Errorf("error parsing image reference %s: %v", ref, err)
 	}
 
-	err = remote.Delete(nameRef, p.ropts...)
-	if errors.As(err, &terr) {
-		fmt.Fprintf(p.w, "WARNING: Pruning failed for image %q with %d response code\n", ref, terr.StatusCode)
-		return nil
-	}
-	return err
+	return remote.Delete(nameRef, p.ropts...)
 }
