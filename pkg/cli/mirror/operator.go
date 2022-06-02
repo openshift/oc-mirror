@@ -29,12 +29,12 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
-	"k8s.io/klog/v2"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -120,7 +120,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		// Render the catalog to mirror into a declarative config.
 		dc, ic, err := renderDC(ctx, reg, ctlg)
 		if err != nil {
-			return nil, err
+			return nil, o.checkValidationErr(err)
 		}
 
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
@@ -211,7 +211,9 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 			return dc, ic, fmt.Errorf("error converting declarative config to include config: %v", err)
 		}
 
-		o.verifyOperatorPkgFound(dic, dc)
+		if err := o.verifyDC(dic, dc); err != nil {
+			return dc, ic, err
+		}
 	}
 
 	return dc, ic, nil
@@ -314,32 +316,42 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		}
 	}
 
-	o.verifyOperatorPkgFound(dic, dc)
+	if err := o.verifyDC(dic, dc); err != nil {
+		return dc, ic, err
+	}
 
 	return dc, ic, nil
 }
 
-// verifyOperatorPkgFound will verify that each of the requested operator packages were
+// verifyDC verifies the declarative config and that each of the requested operator packages were
 // found and added to the DeclarativeConfig.
-func (o *OperatorOptions) verifyOperatorPkgFound(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) {
+func (o *OperatorOptions) verifyDC(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
 	o.Logger.Debug("DiffIncludeConfig: ", dic)
 	o.Logger.Debug("DeclarativeConfig: ", dc)
 
-	dcMap := make(map[string]bool)
+	// Converting the dc to the model results in running
+	// model validations. This checks default channels and
+	// replace chain.
+	if _, err := declcfg.ConvertToModel(*dc); err != nil {
+		return err
+	}
 
+	dcMap := make(map[string]bool)
 	// Load the declarative config packages into a map
 	for _, dcpkg := range dc.Packages {
 		dcMap[dcpkg.Name] = true
 	}
 
 	for _, pkg := range dic.Packages {
-		klog.V(2).Infof("Checking for package: ", pkg)
+		klog.V(2).Infof("Checking for package: %s", pkg)
 
 		if !dcMap[pkg.Name] {
 			// The operator package wasn't found. Log the error and continue on.
 			o.Logger.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
 		}
 	}
+
+	return nil
 }
 
 func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {
@@ -704,4 +716,30 @@ func validate(dc *declcfg.DeclarativeConfig) error {
 		return errors.New("bug: nil declarative config")
 	}
 	return nil
+}
+
+// checkError will check validation errors
+// from operator registry and return a modified
+// error messages for mirror usage
+// FIXME(jpower432): Checking against the errors string could be an issue since
+// this is depending on the strings returned from `opm validate`. It would be better to propose that
+// the validation error are exposed here https://github.com/operator-framework/operator-registry/blob/master/alpha/model/error.go
+// and adds structure errors that return package and channels information.
+func (o *OperatorOptions) checkValidationErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	fmt.Fprintln(o.ErrOut, "\nThe rendered catalog is invalid.")
+	// handle known error causes
+	var validationMsg string
+	switch {
+	case strings.Contains(err.Error(), "channel must contain at least one bundle"):
+		validationMsg = "\nPlease check the minVersion, maxVersion, and default channel for each invalid package."
+	case strings.Contains(err.Error(), "multiple channel heads found in graph"):
+		validationMsg = "\nPlease check the minVersion and maxVersion for each invalid channel."
+	}
+	fmt.Fprintln(o.ErrOut, "\nRun \"oc-mirror list operators --catalog CATALOG-NAME --package PACKAGE-NAME\" for more information.")
+	fmt.Fprintln(o.ErrOut, validationMsg)
+	return err
 }
