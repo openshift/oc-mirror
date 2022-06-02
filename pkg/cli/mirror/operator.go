@@ -394,7 +394,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	opts.IndexPath = indexDir
 
 	opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
-
+	opts.MaxICSPSize = icspSizeLimit
 	opts.SourceRef = ctlgRef
 	opts.DestRef = imagesource.TypedImageReference{
 		Type: imagesource.DestinationFile,
