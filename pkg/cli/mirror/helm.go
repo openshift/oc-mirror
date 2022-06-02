@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"helm.sh/helm/v3/pkg/action"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	helmcli "helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
+	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/releaseutil"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 	"k8s.io/client-go/util/jsonpath"
 	"k8s.io/klog/v2"
@@ -162,24 +164,36 @@ func getImagesPath(paths ...string) []string {
 
 // render will return a templated chart
 // TODO: add input for client.APIVersion
-func render(chart *helmchart.Chart) (string, error) {
-
-	// Client setup
-	cfg := new(action.Configuration)
-	client := action.NewInstall(cfg)
-	client.DryRun = true
-	client.ReleaseName = "RELEASE-NAME"
-	client.Replace = true
-	client.ClientOnly = true
-	client.IncludeCRDs = true
-
-	// Create empty extra values options
+func render(ch *helmchart.Chart) (string, error) {
+	out := new(bytes.Buffer)
 	valueOpts := make(map[string]interface{})
-
-	// Run a relase dry run to get the manifest
-	rel, err := client.Run(chart, valueOpts)
-
-	return rel.Manifest, err
+	caps := &chartutil.Capabilities{
+		HelmVersion: chartutil.DefaultCapabilities.HelmVersion,
+	}
+	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
+	if err != nil {
+		return "", err
+	}
+	files, err := engine.Render(ch, valuesToRender)
+	if err != nil {
+		return "", err
+	}
+	_, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
+	if err != nil {
+		// We return the files as a big blob of data to help the user debug parser
+		// errors.
+		for name, content := range files {
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			fmt.Fprintf(out, "---\n# Source: %s\n%s\n", name, content)
+		}
+		return out.String(), err
+	}
+	for _, m := range manifests {
+		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", m.Name, m.Content)
+	}
+	return out.String(), nil
 }
 
 // repoAdd adds a Helm repo with given name and url
