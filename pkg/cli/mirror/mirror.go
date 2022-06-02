@@ -159,13 +159,40 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		}
 		o.ToMirror = mirror.Ref.Registry
 		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
-		if mirror.Ref.ID != "" || mirror.Ref.Tag != "" {
-			return fmt.Errorf("destination registry must consist of registry host and namespace(s) only")
+		err = checkDockerReference(mirror)
+		if err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unknown destination scheme %q", typStr)
 	}
 
+	return nil
+}
+
+// checkDockerReference prints warnings or returns an error if applicable.
+func checkDockerReference(mirror imagesource.TypedImageReference) error {
+	switch {
+	case mirror.Ref.Registry == "" && mirror.Ref.Namespace != "" && strings.Count(mirror.Ref.Name, "/") >= 1:
+		klog.V(0).Info("The docker reference was parsed as a namespace and a repository name, not including a registry.")
+		klog.V(0).Info("To specify a registry, use a qualified hostname.")
+		klog.V(0).Info("For example, instead of docker://registry/namespace/repository, use docker://registry.localdomain/namespace/repository")
+	case mirror.Ref.Registry == "" && mirror.Ref.Namespace != "" && mirror.Ref.Name != "":
+		klog.V(0).Info("The docker reference was parsed as a namespace and name, not including a registry.")
+		klog.V(0).Info("To specify a registry, use a qualified hostname.")
+		klog.V(0).Info("For example, instead of docker://registry/repository, use docker://registry.localdomain/repository")
+	case mirror.Ref.Registry == "" && mirror.Ref.Namespace == "" && mirror.Ref.Tag == "" && mirror.Ref.ID == "":
+		klog.V(0).Info("The docker reference was parsed as a repository (or image) name, not a registry.")
+		klog.V(0).Info("To specify a repository, use a qualified hostname.")
+		klog.V(0).Info("For example, instead of docker://registry, use docker://registry.localdomain")
+	case mirror.Ref.Registry == "" && (mirror.Ref.Tag != "" || mirror.Ref.ID != ""):
+		klog.V(0).Info("The docker reference was parsed as image:tag, not as hostname:port.")
+		klog.V(0).Info("To specify a registry, use a qualified hostname.")
+		klog.V(0).Info("For example, instead of docker://registry:5000, use docker://registry.localdomain:5000")
+	}
+	if mirror.Ref.Registry == "" || mirror.Ref.Tag != "" || mirror.Ref.ID != "" {
+		return fmt.Errorf("destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID")
+	}
 	return nil
 }
 
