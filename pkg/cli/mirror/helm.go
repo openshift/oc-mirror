@@ -18,6 +18,7 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/releaseutil"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
+	"k8s.io/client-go/util/homedir"
 	"k8s.io/client-go/util/jsonpath"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
@@ -25,6 +26,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/pkg/errors"
 )
 
 type HelmOptions struct {
@@ -62,9 +64,9 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 	// TODO: allow configuration of credentials
 	// and certs
 	c := downloader.ChartDownloader{
-		Out:     os.Stdout,
-		Keyring: "",
-		Verify:  downloader.VerifyIfPossible,
+		Out:     h.Out,
+		Keyring: defaultKeyring(),
+		Verify:  downloader.VerifyLater,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
 			getter.WithInsecureSkipVerifyTLS(h.insecure),
@@ -167,17 +169,39 @@ func getImagesPath(paths ...string) []string {
 func render(ch *helmchart.Chart) (string, error) {
 	out := new(bytes.Buffer)
 	valueOpts := make(map[string]interface{})
-	caps := &chartutil.Capabilities{
-		HelmVersion: chartutil.DefaultCapabilities.HelmVersion,
+	caps := chartutil.DefaultCapabilities
+
+	if ch.Metadata.KubeVersion != "" {
+		if !chartutil.IsCompatibleRange(ch.Metadata.KubeVersion, caps.KubeVersion.String()) {
+			return "", errors.Errorf("chart requires kubeVersion: %s which is incompatible with Kubernetes %s", ch.Metadata.KubeVersion, caps.KubeVersion.String())
+		}
 	}
-	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
+
+	relOps := chartutil.ReleaseOptions{
+		Name:      "NAME",
+		Namespace: "RELEASE-NAMESPACE",
+	}
+	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, relOps, caps)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error rendering values: %v", err)
 	}
+
 	files, err := engine.Render(ch, valuesToRender)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error rendering chart %s: %v", ch.Name(), err)
 	}
+
+	for k := range files {
+		if strings.HasSuffix(k, ".txt") {
+			delete(files, k)
+		}
+	}
+
+	// Add CRDs
+	for _, crd := range ch.CRDObjects() {
+		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", crd.Name, string(crd.File.Data[:]))
+	}
+
 	_, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
 	if err != nil {
 		// We return the files as a big blob of data to help the user debug parser
@@ -295,4 +319,12 @@ func mktempFile(dir string) (func(), string, error) {
 			klog.Fatal(err)
 		}
 	}, file.Name(), err
+}
+
+// defaultKeyring returns the expanded path to the default keyring.
+func defaultKeyring() string {
+	if v, ok := os.LookupEnv("GNUPGHOME"); ok {
+		return filepath.Join(v, "pubring.gpg")
+	}
+	return filepath.Join(homedir.HomeDir(), ".gnupg", "pubring.gpg")
 }
