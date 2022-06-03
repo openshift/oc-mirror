@@ -23,7 +23,6 @@ require (
 	github.com/openshift/library-go v0.0.0-20220315141154-40a8b89abdc2
 	github.com/openshift/oc v0.0.0-alpha.0.0.20220527211124-d91e0087a8a6
 	github.com/operator-framework/operator-registry v1.23.0
-	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.7.1
 	github.com/spf13/cobra v1.4.0
@@ -150,6 +149,7 @@ require (
 	github.com/otiai10/copy v1.2.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.0.3 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect

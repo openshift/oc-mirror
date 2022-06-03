@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/pkg/errors"
 )
 
 type HelmOptions struct {
@@ -60,9 +59,9 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 	h.settings.RepositoryConfig = file
 	defer cleanup()
 
-	// Configure downloader
-	// TODO: allow configuration of credentials
-	// and certs
+	// Using VerifyLater options to ensure
+	// any verification information is downloaded
+	// and can be used later.
 	c := downloader.ChartDownloader{
 		Out:     h.Out,
 		Keyring: defaultKeyring(),
@@ -88,14 +87,12 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 
 	for _, repo := range cfg.Mirror.Helm.Repositories {
 
-		// Add repo to temp file
 		if err := h.repoAdd(repo); err != nil {
 			return nil, err
 		}
 
 		for _, chart := range repo.Charts {
 			klog.Infof("Pulling chart %s", chart.Name)
-			// TODO: Do something with the returned verifications
 			ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
 			dest := filepath.Join(h.Dir, config.SourceDir, config.HelmDir)
 			path, _, err := c.DownloadTo(ref, chart.Version, dest)
@@ -164,19 +161,16 @@ func getImagesPath(paths ...string) []string {
 	return append(pathlist, paths...)
 }
 
-// render will return a templated chart
-// TODO: add input for client.APIVersion
+// render will return a templated chart based on default
+// values from the chart data and helm chartutils.
 func render(ch *helmchart.Chart) (string, error) {
 	out := new(bytes.Buffer)
 	valueOpts := make(map[string]interface{})
 	caps := chartutil.DefaultCapabilities
 
-	if ch.Metadata.KubeVersion != "" {
-		if !chartutil.IsCompatibleRange(ch.Metadata.KubeVersion, caps.KubeVersion.String()) {
-			return "", errors.Errorf("chart requires kubeVersion: %s which is incompatible with Kubernetes %s", ch.Metadata.KubeVersion, caps.KubeVersion.String())
-		}
-	}
-
+	// Using placeholders for the name
+	// and namespace since we are only rendering
+	// to obtain image information
 	relOps := chartutil.ReleaseOptions{
 		Name:      "NAME",
 		Namespace: "RELEASE-NAMESPACE",
@@ -191,13 +185,13 @@ func render(ch *helmchart.Chart) (string, error) {
 		return "", fmt.Errorf("error rendering chart %s: %v", ch.Name(), err)
 	}
 
+	// Skip the NOTES.txt files
 	for k := range files {
 		if strings.HasSuffix(k, ".txt") {
 			delete(files, k)
 		}
 	}
 
-	// Add CRDs
 	for _, crd := range ch.CRDObjects() {
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", crd.Name, string(crd.File.Data[:]))
 	}
