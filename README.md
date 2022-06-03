@@ -19,7 +19,7 @@
 `oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images for mirror registries that support OpenShift environments.
 
 ## Community
-Please join us for our oc-mirror weekly community meeting Thursdays at 12pm EST https://zoom.us/j/99871298397?pwd=eHYrYlQxTDJaOTQ2bDl3VXlRMjFpUT09 . Retrieve the meeting passcode from the first comment in the following issue: https://github.com/openshift/oc-mirror/issues/349 . 
+Please join us for our oc-mirror weekly community meeting fortnightly on Thursdays at 12pm EST https://zoom.us/meeting/tJ0lcOiqpzMpE9OQ8gwJktuKL7ZWAr3Ofe4s/ics?icsToken=98tyKuChpjwrGN2dsxCARox5Go_Cd-rxmFxej_pyrUfiFApYdhbdGrV4BZNtQ_fW .  
  
 ## Usage
 [![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
@@ -58,6 +58,12 @@ storageConfig:
     imageURL: localhost:5000/metadata:latest
     skipTLS: true
 ```
+### Lifecycle Management
+
+There is a common misconception that oc-mirror is only a container image mirroring utility. This is partially accurate. In addition to image mirroring, oc-mirror optionally performs content deletions from mirror registries. When content is added to an imageset configuration, that content is published to a mirror registry. When content is removed from an imageset configuration, that content is removed from the mirror registry. This ensures that content is safely removed from the mirror registry when the user specifies. 
+
+If a user does not desire content removal from a mirror registry, they can either not remove that content from their imageset configuration or they can publish using a registry account that does not have permissions to perform content deletions. 
+
 ### Content Discovery
 
 #### Updates
@@ -97,6 +103,8 @@ storageConfig:
     ./bin/oc-mirror list operators --catalog=catalog-name --package=package-name --channel=channel-name
     ```
 ### Mirroring
+
+**Note:** These workflows are compatible and can be used interchangeably for the same mirror registry. 
 
 #### Fully Disconnected
 - Create then publish to your mirror registry:
