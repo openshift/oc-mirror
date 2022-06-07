@@ -57,7 +57,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.SkipMetadataCheck, "skip-metadata-check", o.SkipMetadataCheck, "Skip metadata when publishing an imageset."+
 		"This is only recommended when the imageset was created --ignore-history")
 	fs.BoolVar(&o.ContinueOnError, "continue-on-error", o.ContinueOnError, "If an error occurs, keep going "+
-		"and attempt to mirror as much as possible")
+		"and attempt to complete operations if possible")
 	fs.BoolVar(&o.SkipMissing, "skip-missing", o.SkipMissing, "If an input image is not found, skip them. "+
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")

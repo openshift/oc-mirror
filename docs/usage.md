@@ -20,6 +20,7 @@
     - [Running `oc-mirror` For First Time](#running-oc-mirror-for-first-time)
     - [Running `oc-mirror` For Differential Updates](#running-oc-mirror-for-differential-updates)
   - [Notes about flag usage](#notes-about-flag-usage)
+  - [ImageSet Configuration](#imageset-configuration)
   - [Glossary](#glossary)
 
 ## Overview
@@ -34,7 +35,6 @@ oc-mirror currently retrieves registry credentials from `~/.docker/config.json` 
 ### Certificate Trust
 
 oc-mirror currently references the host system for certificate trust information. For now, you must [add all certificates (trust chain) to be trusted to the System-Wide Trust Store](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/sec-shared-system-certificates)
-
 
 ## Basic Usage
 
@@ -148,7 +148,50 @@ Once a full imageset has been created and published, differential imagesets that
 requests into digests before mirroring. There is an issue to capture improvements to the skip-missing functionality to allow support for digests in the library used for mirroring (https://github.com/openshift/oc/issues/1104).
 3. The `skip-cleanup` flag can be used to keep the workspace from being deleted after mirroring operations.
 > WARNING: Running oc-mirror against a workspace that has not been cleaned can result in unexpected behavior.
- 
+
+## ImageSet Configuration
+The imageset configuration is intended to reflect the current state of the registry mirroring. Any content types or images that are added to the 
+configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will return an error. the `--continue-on-error` flag can be used if desired to ignore pruning errors if the registry does not allow DELETE operations. If you are using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges.
+
+An example workflow is below:
+
+- Generate the initial configuration.
+    ```sh
+      apiVersion: mirror.openshift.io/v1alpha2
+      kind: ImageSetConfiguration
+      storageConfig:
+        local:
+          path: metadata
+      mirror:
+        additionalimages:
+          - name: registry.redhat.io/ubi7/ubi:latest
+    ```
+- Run first `oc-mirror` operation.
+- Generate a configuration for a differential run. 
+    ```sh
+      apiVersion: mirror.openshift.io/v1alpha2
+      kind: ImageSetConfiguration
+      storageConfig:
+        local:
+          path: metadata
+      mirror:
+        additionalimages:
+          - name: registry.redhat.io/ubi8/ubi:latest
+    ```
+- Run `oc-mirror` again.
+
+- The result on the second run of `oc-mirror` is that the `ubi8` image would be mirrored and the `ubi7` image would be removed. To keep the `ubi7` image, the configuration would be altered to the below configuration.
+    ```sh
+      apiVersion: mirror.openshift.io/v1alpha2
+      kind: ImageSetConfiguration
+      storageConfig:
+        local:
+          path: metadata
+      mirror:
+        additionalimages:
+          - name: registry.redhat.io/ubi7/ubi:latest
+          - name: registry.redhat.io/ubi8/ubi:latest
+    ```
 ## Glossary
 
 `imageset` - Refers to the artifact or collection of artifacts produced by `oc-mirror`.

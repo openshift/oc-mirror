@@ -95,7 +95,7 @@ During the “publish diff” phase for differential updates:
 ## Imageset Configuration
 
 The imageset configuration is intended to reflect the current state of the registry mirroring. Any content types or images that are added to the 
-configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will log the pruning attempt and continue. If you are using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges. 
+configuration will be added to the mirror and this is also applies to content types that are removed from the imageset configuration. Image pruning is done on a best-effort basis. `oc-mirror` will attempt image deletion and if a registry does not allow for this type of request,`oc-mirror` will return an error. the `--continue-on-error` flag can be used if desired to ignore pruning errors if the registry does not allow DELETE operations. If you are using the heads-only workflow option, `oc-mirror` will store starting versions from the initial run in the metadata and using this to maintain ranges. 
 
 More information on  the `oc-mirror` imageset configuration can be found [here](imageset-configuration.md).
 
