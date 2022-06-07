@@ -20,6 +20,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
@@ -34,76 +35,110 @@ func (o *MirrorOptions) pruneRegistry(ctx context.Context, prev, curr image.Asso
 	return o.pruneImages(deleter, toRemove, o.MaxPerRegistry)
 }
 
-// planImagePruning creates a ManifestDeleter and map of manifests scheduled for deletetion.
-func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.AssociationSet) (imageprune.ManifestDeleter, map[string]string, error) {
+// planImagePruning creates a ManifestDeleter and map of manifests scheduled for deletion.
+func (o *MirrorOptions) planImagePruning(ctx context.Context, curr, prev image.AssociationSet) (imageprune.ManifestDeleter, map[string][]string, error) {
 	var insecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		insecure = true
 	}
 	deleter := NewManifestDeleter(ctx, o.Out, o.ErrOut, o.ToMirror, insecure)
-	reposByManifest := map[string]string{}
+	manifestsByRepo := map[string][]string{}
 
-	var keep []string
-	// TODO(jpower432): Adds Associations for images that are referenced by tag
-	// but the manifests have been updated.
-	for _, key := range prev.Keys() {
-		if found := curr.SetContainsKey(key); !found {
-			keep = append(keep, key)
-		}
-	}
-
-	// Pruning any images still in use
-	// from the AssociationSet
-	outputSet, err := image.Prune(prev, keep)
-	if err != nil {
-		return deleter, reposByManifest, err
-	}
-
-	// We are only processing keys where we have
-	// access to the manifest digest. Associated
-	// tags will be deleted with the manifest.
-	for key, assocs := range outputSet {
-
-		imageAssoc, ok := assocs[key]
-		if !ok {
-			return deleter, reposByManifest, fmt.Errorf("invalid associations for image %s", key)
-		}
-
-		ref, err := reference.Parse(imageAssoc.Path)
+	// We compare repo locations to allow the translation between
+	// mirror-to-mirror and disk-to-mirror association paths.
+	getRepoLoc := func(assocPath string) (string, error) {
+		ref, err := reference.Parse(assocPath)
 		if err != nil {
-			return deleter, reposByManifest, fmt.Errorf("invalid association set")
+			return "", fmt.Errorf("invalid association set")
 		}
 
-		if imageAssoc.ID != "" {
-			var repoLoc string
+		var repoLoc string
+		// If the imageAssoc path is the location
+		// in the target registry (i.e. mirror to mirror), unset the
+		// registry information and use the repo location as is.
+		if ref.Registry != "" {
+			ref.Registry = ""
+			repoLoc = ref.AsRepository().String()
+		} else {
+			repoLoc = path.Join(o.UserNamespace, ref.AsRepository().String())
+		}
 
-			// If the imageAssoc path is the location
-			// in the target registry (i.e. mirror to mirror), unset the
-			// registry information and use the repo location as is.
-			if ref.Registry != "" {
-				ref.Registry = ""
-				repoLoc = ref.AsRepository().String()
-			} else {
-				repoLoc = path.Join(o.UserNamespace, ref.AsRepository().String())
+		return repoLoc, nil
+	}
+
+	keyforUniqueName := func(assoc v1alpha2.Association) (string, error) {
+		// Combine the source image or child manifest digest with the
+		// target location.
+		repoLoc, err := getRepoLoc(assoc.Path)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%v-%v", assoc.ID, repoLoc), nil
+	}
+
+	// Gather all manifests that exists
+	// current set.
+	currSet := map[string]v1alpha2.Association{}
+	for _, assocs := range curr {
+		for _, assoc := range assocs {
+			unique, err := keyforUniqueName(assoc)
+			if err != nil {
+				return deleter, manifestsByRepo, err
 			}
+			currSet[unique] = assoc
+		}
 
-			reposByManifest[imageAssoc.ID] = repoLoc
+	}
+
+	outputSet := map[string]v1alpha2.Association{}
+	for _, assocs := range prev {
+		for _, assoc := range assocs {
+			unique, err := keyforUniqueName(assoc)
+			if err != nil {
+				return deleter, manifestsByRepo, err
+			}
+			if _, exists := currSet[unique]; exists {
+				// Do not add to the output set if the manifest
+				// exists for the image in the current set
+				continue
+			}
+			outputSet[unique] = assoc
 		}
 	}
-	return deleter, reposByManifest, nil
+
+	for _, assoc := range outputSet {
+
+		// We are only processing keys where we have
+		// access to the manifest digest. Associated
+		// tags will be deleted with the manifest.
+		if assoc.ID == "" {
+			continue
+		}
+
+		repoLoc, err := getRepoLoc(assoc.Path)
+		if err != nil {
+			return deleter, manifestsByRepo, err
+		}
+
+		manifests := manifestsByRepo[repoLoc]
+		manifests = append(manifests, assoc.ID)
+		sortManifests(manifests)
+		manifestsByRepo[repoLoc] = manifests
+	}
+	return deleter, manifestsByRepo, nil
 }
 
 // pruneImages performs the image deletion based on the provided map of repos and manifests.
-func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]string, maxWorkers int) error {
-	if len(reposByManifest) == 0 {
+func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, manifestsByRepo map[string][]string, maxWorkers int) error {
+	if len(manifestsByRepo) == 0 {
 		klog.V(2).Info("No images specified for pruning")
 		return nil
 	}
 
-	klog.Infof("Pruning %d image(s) from registry", len(reposByManifest))
+	klog.Infof("Pruning %d image(s) from registry", len(manifestsByRepo))
 
 	var keys []string
-	for k := range reposByManifest {
+	for k := range manifestsByRepo {
 		keys = append(keys, k)
 	}
 
@@ -118,13 +153,15 @@ func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, reposByM
 			defer wg.Done()
 			for k := range workQueue {
 				mutex.Lock()
-				repo := reposByManifest[k]
+				manifests := manifestsByRepo[k]
 				mutex.Unlock()
 
-				err := deleter.DeleteManifest(repo, k)
-				if err != nil {
-					err = fmt.Errorf("repo %q manifest %s: %w", repo, k, err)
-					errorsCh <- err
+				for _, manifest := range manifests {
+					err := deleter.DeleteManifest(k, manifest)
+					if err != nil {
+						err = fmt.Errorf("repo %q manifest %s: %w", k, manifest, err)
+						errorsCh <- err
+					}
 				}
 			}
 		}()
@@ -218,13 +255,9 @@ func writePruneImagePlan(w io.Writer, plan pruneImagePlan) error {
 
 // aggregateImageInformation will create a prune image plan from registry
 // and manifest information.
-func aggregateImageInformation(registry string, reposByManifest map[string]string) pruneImagePlan {
+func aggregateImageInformation(registry string, manifestsByRepo map[string][]string) pruneImagePlan {
 	plan := pruneImagePlan{}
 	plan.Registry = registry
-	manifestsByRepo := map[string][]string{}
-	for manifest, repo := range reposByManifest {
-		manifestsByRepo[repo] = append(manifestsByRepo[repo], manifest)
-	}
 
 	for repo, manifests := range manifestsByRepo {
 		r := repository{
