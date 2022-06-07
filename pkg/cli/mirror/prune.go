@@ -2,10 +2,14 @@ package mirror
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path"
+	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -141,6 +145,88 @@ func pruneImages(deleter imageprune.ManifestDeleter, reposByManifest map[string]
 	}
 
 	return utilerrors.NewAggregate(errs)
+}
+
+type pruneImagePlan struct {
+	Registry     string       `json:"registry,omitempty"`
+	Repositories []repository `json:"repositories,omitempty"`
+}
+
+type repository struct {
+	Name      string   `json:"name,omitempty"`
+	Manifests []string `json:"manifests,omitempty"`
+}
+
+// outputPruneImagePlan will write a plan for pruning images to disk.
+func (o *MirrorOptions) outputPruneImagePlan(ctx context.Context, prev, curr image.AssociationSet) error {
+	_, toRemove, err := o.planImagePruning(ctx, curr, prev)
+	if err != nil {
+		return err
+	}
+	if len(toRemove) == 0 {
+		klog.V(2).Info("No images planned for pruning")
+		return nil
+	}
+	planFilePath := filepath.Join(o.Dir, "pruning-plan.json")
+	cleanPlanFilePath := filepath.Clean(planFilePath)
+	klog.Infof("Writing image pruning plan to %s", planFilePath)
+	planFile, err := os.Create(cleanPlanFilePath)
+	if err != nil {
+		return err
+	}
+	defer planFile.Close()
+
+	plan := aggregateImageInformation(o.ToMirror, toRemove)
+
+	if err := writePruneImagePlan(planFile, plan); err != nil {
+		return err
+	}
+
+	return planFile.Sync()
+}
+
+// writePruneImagePlan will write the prune image plan in JSON format.
+func writePruneImagePlan(w io.Writer, plan pruneImagePlan) error {
+	data, err := json.MarshalIndent(&plan, "", " ")
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// aggregateImageInformation will create a prune image plan from registry
+// and manifest information.
+func aggregateImageInformation(registry string, reposByManifest map[string]string) pruneImagePlan {
+	plan := pruneImagePlan{}
+	plan.Registry = registry
+	manifestsByRepo := map[string][]string{}
+	for manifest, repo := range reposByManifest {
+		manifestsByRepo[repo] = append(manifestsByRepo[repo], manifest)
+	}
+
+	for repo, manifests := range manifestsByRepo {
+		r := repository{
+			Name:      repo,
+			Manifests: manifests,
+		}
+		sortManifests(r.Manifests)
+		plan.Repositories = append(plan.Repositories, r)
+	}
+	sortRepos(plan.Repositories)
+	return plan
+}
+
+func sortRepos(repos []repository) {
+	sort.Slice(repos, func(i, j int) bool {
+		return repos[i].Name < repos[j].Name
+	})
+}
+
+func sortManifests(manifests []string) {
+	sort.Slice(manifests, func(i, j int) bool {
+		return manifests[i] < manifests[j]
+	})
 }
 
 // manifestDeleter prints information about each repo manifest being

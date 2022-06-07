@@ -228,6 +228,10 @@ func orderedYamlMarshal(obj interface{}) ([]byte, error) {
 			"mirror":        4,
 		},
 		"storageConfig": {
+			"registry": 1,
+			"local":    2,
+		},
+		"registry": {
 			"imageURL": 1,
 			"skipTLS":  2,
 		},

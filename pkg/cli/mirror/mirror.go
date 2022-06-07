@@ -441,8 +441,16 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
+		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+		if err != nil {
+			return err
+		}
+
 		if o.DryRun {
 			if err := writeMappingFile(mappingPath, mapping); err != nil {
+				return err
+			}
+			if err := o.outputPruneImagePlan(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
 				return err
 			}
 			return cleanup()
@@ -465,10 +473,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		// Prune the images that differ between the previous Associations and the
 		// pruned Associations.
-		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
-		if err != nil {
-			return err
-		}
 		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
 			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
 		}

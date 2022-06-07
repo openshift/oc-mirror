@@ -64,7 +64,7 @@ storageConfig:
 
 - List updates since the last `oc-mirror` run
   ```sh
-  ./bin/oc-mirror list updates --config imageset-config.yaml
+  ./bin/oc-mirror list updates imageset-config.yaml
   ```
 #### Releases
 1. List all available release payloads for a version of OpenShift (defaults to stable)

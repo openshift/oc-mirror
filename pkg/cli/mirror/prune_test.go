@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -376,4 +377,123 @@ func (p *fakeManifestDeleter) DeleteManifest(repo, manifest string) error {
 	defer p.mutex.Unlock()
 	p.invocations.Insert(fmt.Sprintf("%s|%s", repo, manifest))
 	return p.err
+}
+
+func TestAggregateImageInformation(t *testing.T) {
+	type spec struct {
+		desc     string
+		registry string
+		images   map[string]string
+		exp      pruneImagePlan
+	}
+
+	cases := []spec{
+		{
+			desc:     "Success/NoImagePruned",
+			images:   map[string]string{},
+			registry: "test-registry",
+			exp: pruneImagePlan{
+				Registry: "test-registry",
+			},
+		},
+		{
+			desc: "Success/FiveManifestDifferentRepos",
+			images: map[string]string{
+				"digest1": "repo1",
+				"digest2": "repo2",
+				"digest3": "repo3",
+				"digest4": "repo4",
+				"digest5": "repo5",
+			},
+			registry: "test-registry",
+			exp: pruneImagePlan{
+				Registry: "test-registry",
+				Repositories: []repository{
+					{
+						Name:      "repo1",
+						Manifests: []string{"digest1"},
+					},
+					{
+						Name:      "repo2",
+						Manifests: []string{"digest2"},
+					},
+					{
+						Name:      "repo3",
+						Manifests: []string{"digest3"},
+					},
+					{
+						Name:      "repo4",
+						Manifests: []string{"digest4"},
+					},
+					{
+						Name:      "repo5",
+						Manifests: []string{"digest5"},
+					},
+				},
+			},
+		},
+		{
+			desc: "Success/FiveManifestSameRepo",
+			images: map[string]string{
+				"digest1": "repo1",
+				"digest2": "repo1",
+				"digest3": "repo1",
+				"digest4": "repo1",
+				"digest5": "repo1",
+			},
+			registry: "test-registry",
+			exp: pruneImagePlan{
+				Registry: "test-registry",
+				Repositories: []repository{
+					{
+						Name: "repo1",
+						Manifests: []string{
+							"digest1",
+							"digest2",
+							"digest3",
+							"digest4",
+							"digest5",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			plan := aggregateImageInformation(c.registry, c.images)
+			require.Equal(t, c.exp, plan)
+		})
+	}
+}
+
+func TestWritePruneImagePlan(t *testing.T) {
+	exp := `{
+ "registry": "test-registry",
+ "repositories": [
+  {
+   "name": "repo",
+   "manifests": [
+    "digest1"
+   ]
+  }
+ ]
+}`
+
+	outBuf := new(strings.Builder)
+	plan := pruneImagePlan{
+		Registry: "test-registry",
+		Repositories: []repository{
+			{
+				Name: "repo",
+				Manifests: []string{
+					"digest1",
+				},
+			},
+		},
+	}
+	err := writePruneImagePlan(outBuf, plan)
+	require.NoError(t, err)
+	require.Equal(t, exp, outBuf.String())
 }
