@@ -366,7 +366,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// registry backends.
 		mapping, err = o.Publish(cmd.Context())
 		if err != nil {
-			serr := &SequenceError{}
+			serr := &ErrInvalidSequence{}
 			if errors.As(err, &serr) {
 				return fmt.Errorf(
 					"error occurred during publishing, expecting imageset with prefix mirror_seq%d: %v",
@@ -403,6 +403,24 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
+
+		// Imageset sequence check
+		metaImage := o.newMetadataImage(meta.Uid.String())
+		targetCfg := &v1alpha2.RegistryConfig{
+			ImageURL: metaImage,
+			SkipTLS:  destInsecure,
+		}
+
+		targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
+		if err != nil {
+			return err
+		}
+		var curr v1alpha2.Metadata
+		berr := targetBackend.ReadMetadata(cmd.Context(), &curr, config.MetadataBasePath)
+		if err := o.checkSequence(meta, curr, berr); err != nil {
+			return err
+		}
+
 		// Change the destination to registry
 		// TODO(jpower432): Investigate whether oc can produce
 		// registry to registry mapping
@@ -454,7 +472,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
 			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
 		}
-
 		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 		if err != nil {
 			return err
@@ -469,7 +486,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return err
 		}
-
 		// process catalog FBC images
 		if len(cfg.Mirror.Operators) > 0 {
 			ctlgRefs, err := o.rebuildCatalogs(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
@@ -480,14 +496,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		// process Cincinnati graph data image
 		if len(cfg.Mirror.Platform.Channels) > 0 {
-			// Move release signatures into results dir
-			srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
-			dstSignaturePath := filepath.Join(dir, config.ReleaseSignatureDir)
-			if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
-				return err
-			}
-			klog.V(1).Infof("Moved any release signatures to %s", dir)
-
 			if cfg.Mirror.Platform.Graph {
 				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
 				if err != nil {
@@ -496,35 +504,21 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				mapping.Merge(graphRef)
 			}
 		}
+
 		if err := o.generateResults(mapping, dir); err != nil {
 			return err
 		}
-		klog.V(1).Infof("Moved any release signatures to %s", dir)
 
-		// Move charts into results dir
-		srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
-		dstHelmPath := filepath.Join(dir, config.HelmDir)
-		if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
+		if err := o.copyToResults(dir); err != nil {
 			return err
 		}
-		klog.V(1).Infof("Moved any downloaded Helm charts to %s", dir)
+
 		// Sync metadata from disk to source and target backends
 		if cfg.StorageConfig.IsSet() {
 			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
 			if err != nil {
 				return err
 			}
-			metaImage := o.newMetadataImage(meta.Uid.String())
-			targetCfg := &v1alpha2.RegistryConfig{
-				ImageURL: metaImage,
-				SkipTLS:  destInsecure,
-			}
-
-			targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
-			if err != nil {
-				return err
-			}
-
 			workspace := filepath.Join(o.Dir, config.SourceDir)
 			if err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 				return err
@@ -699,6 +693,28 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	}
 
 	return WriteICSPs(dir, allICSPs)
+}
+
+func (o *MirrorOptions) copyToResults(resultsDir string) error {
+
+	resultsDir = filepath.Clean(resultsDir)
+
+	srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
+	dstSignaturePath := filepath.Join(resultsDir, config.ReleaseSignatureDir)
+	if err := os.Rename(srcSignaturePath, dstSignaturePath); err != nil {
+		return err
+	}
+	klog.V(1).Infof("Moved any release signatures to %s", resultsDir)
+
+	// Move charts into results dir
+	srcHelmPath := filepath.Join(o.Dir, config.SourceDir, config.HelmDir)
+	dstHelmPath := filepath.Join(resultsDir, config.HelmDir)
+	if err := os.Rename(srcHelmPath, dstHelmPath); err != nil {
+		return err
+	}
+	klog.V(1).Infof("Moved any downloaded Helm charts to %s", resultsDir)
+
+	return nil
 }
 
 func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool) error {

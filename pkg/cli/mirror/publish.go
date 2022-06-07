@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/library-go/pkg/image/registryclient"
@@ -27,24 +26,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
-
-type UuidError struct {
-	InUuid   uuid.UUID
-	CurrUuid uuid.UUID
-}
-
-func (u *UuidError) Error() string {
-	return fmt.Sprintf("mismatched uuids, want %v, got %v", u.CurrUuid, u.InUuid)
-}
-
-type SequenceError struct {
-	wantSeq int
-	gotSeq  int
-}
-
-func (s *SequenceError) Error() string {
-	return fmt.Sprintf("invalid mirror sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
-}
 
 type ErrArchiveFileNotFound struct {
 	filename string
@@ -199,32 +180,14 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 	}
 
 	// Read in current metadata, if present
-	switch err := backend.ReadMetadata(ctx, &curr, config.MetadataBasePath); {
-	case err != nil && !errors.Is(err, storage.ErrMetadataNotExist):
+	berr := backend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
+	if err := o.checkSequence(incoming, curr, berr); err != nil {
 		return backend, incoming, curr, err
-	case err != nil:
-		klog.Infof("No existing metadata found. Setting up new workspace")
-		// Check that this is the first imageset
-		incomingRun := incoming.PastMirror
-		if incomingRun.Sequence != 1 {
-			return backend, incoming, curr, &SequenceError{1, incomingRun.Sequence}
-		}
-	default:
-		// Complete metadata checks
-		// UUID mismatch will now be seen as a new workspace.
-		if !o.SkipMetadataCheck {
-			klog.V(3).Info("Checking metadata sequence number")
-			currRun := curr.PastMirror
-			incomingRun := incoming.PastMirror
-			if incomingRun.Sequence != (currRun.Sequence + 1) {
-				return backend, incoming, curr, &SequenceError{currRun.Sequence + 1, incomingRun.Sequence}
-			}
-		}
 	}
 	return backend, incoming, curr, nil
 }
 
-// proccessMirroredImages unpacks, reconstructs, and published all images in the provided imageset to the specified registry.
+// processMirroredImages unpacks, reconstructs, and published all images in the provided imageset to the specified registry.
 func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	var errs []error
@@ -360,7 +323,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 	return allMappings, utilerrors.NewAggregate(errs)
 }
 
-// proccessCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
+// processCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
 func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	// process catalogs
