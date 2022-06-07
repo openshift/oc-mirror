@@ -126,11 +126,21 @@ func (o *OperatorsOptions) Run(cmd *cobra.Command) error {
 			IndexReference: o.Catalog,
 			PackageName:    o.Package,
 		}
-		res, err := lc.Run(ctx)
+		chRes, err := lc.Run(ctx)
 		if err != nil {
 			return err
 		}
-		if err := res.WriteColumns(o.IOStreams.Out); err != nil {
+		if len(chRes.Channels) > 0 {
+			pkg := chRes.Channels[0].Package
+			pkgRes := action.ListPackagesResult{
+				Packages: []model.Package{*pkg},
+			}
+			if err := pkgRes.WriteColumns(w); err != nil {
+				return err
+			}
+			fmt.Fprintln(w, "")
+		}
+		if err := chRes.WriteColumns(w); err != nil {
 			return err
 		}
 	case len(o.Catalog) > 0:
