@@ -22,7 +22,7 @@ func TestPlanImagePruning(t *testing.T) {
 		opts       *MirrorOptions
 		curr       image.AssociationSet
 		prev       image.AssociationSet
-		expImages  map[string]string
+		expImages  map[string][]string
 		expError   string
 		assertFunc func(manifestDeleter) bool
 	}
@@ -55,7 +55,7 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 			},
 			},
-			expImages: map[string]string{},
+			expImages: map[string][]string{},
 			assertFunc: func(deleter manifestDeleter) bool {
 				return deleter.registry == "test-registry.com"
 			},
@@ -124,8 +124,8 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 			},
 			},
-			expImages: map[string]string{
-				"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": "namespace/single_manifest",
+			expImages: map[string][]string{
+				"namespace/single_manifest": {"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b"},
 			},
 			assertFunc: func(deleter manifestDeleter) bool {
 				return deleter.registry == "test-registry.com"
@@ -141,7 +141,7 @@ func TestPlanImagePruning(t *testing.T) {
 			prev: image.AssociationSet{
 				"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 					"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
-						Name:            "source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						Name:            "source-reg.com/test/imgname:latest",
 						Path:            "single_manifest",
 						TagSymlink:      "latest",
 						Type:            v1alpha2.TypeGeneric,
@@ -158,8 +158,8 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 				"source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": image.Associations{
 					"source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": {
-						Name:            "source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
-						Path:            "single_manifest",
+						Name:            "source-reg.com/test/imgname:latest",
+						Path:            "index_manifest",
 						TagSymlink:      "latest",
 						Type:            v1alpha2.TypeGeneric,
 						ManifestDigests: nil,
@@ -176,7 +176,7 @@ func TestPlanImagePruning(t *testing.T) {
 			},
 			curr: image.AssociationSet{"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 				"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
-					Name:            "source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+					Name:            "source-reg.com/test/imgname:latest",
 					Path:            "single_manifest",
 					TagSymlink:      "latest",
 					Type:            v1alpha2.TypeGeneric,
@@ -192,7 +192,7 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 			},
 			},
-			expImages: map[string]string{},
+			expImages: map[string][]string{},
 			assertFunc: func(deleter manifestDeleter) bool {
 				return deleter.registry == "test-registry.com"
 			},
@@ -245,7 +245,7 @@ func TestPlanImagePruning(t *testing.T) {
 			curr: image.AssociationSet{"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
 				"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
 					Name:            "source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
-					Path:            "test-registry.com/single_manifest:latest",
+					Path:            "test-registry.com/namespace/single_manifest:latest",
 					TagSymlink:      "latest",
 					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					Type:            v1alpha2.TypeGeneric,
@@ -261,8 +261,192 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 			},
 			},
-			expImages: map[string]string{
-				"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": "namespace/single_manifest",
+			expImages: map[string][]string{
+				"namespace/single_manifest": {"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b"},
+			},
+			assertFunc: func(deleter manifestDeleter) bool {
+				return deleter.registry == "test-registry.com"
+			},
+		},
+		{
+			desc: "Success/WorkflowChange",
+			opts: &MirrorOptions{
+				RootOptions:   &cli.RootOptions{},
+				ToMirror:      "test-registry.com",
+				UserNamespace: "namespace",
+			},
+			prev: image.AssociationSet{
+				"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
+					"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
+						Name:            "source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						Path:            "test-registry.com/namespace/single_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+				},
+				"source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": image.Associations{
+					"source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": {
+						Name:            "source-reg.com/test/imgname@sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Path:            "test-registry.com/namespace/single_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+				},
+			},
+			curr: image.AssociationSet{"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": image.Associations{
+				"source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19": {
+					Name:            "source-reg.com/test/imgname@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+					Path:            "single_manifest",
+					TagSymlink:      "latest",
+					ID:              "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+					Type:            v1alpha2.TypeGeneric,
+					ManifestDigests: nil,
+					LayerDigests: []string{
+						"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+						"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+						"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+						"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+						"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+					},
+				},
+			},
+			},
+			expImages: map[string][]string{
+				"namespace/single_manifest": {"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b"},
+			},
+			assertFunc: func(deleter manifestDeleter) bool {
+				return deleter.registry == "test-registry.com"
+			},
+		},
+		{
+			desc: "Success/OldChildManifests",
+			opts: &MirrorOptions{
+				RootOptions:   &cli.RootOptions{},
+				ToMirror:      "test-registry.com",
+				UserNamespace: "namespace",
+			},
+			prev: image.AssociationSet{
+				"source-reg.com/test/imgname:latest": image.Associations{
+					"source-reg.com/test/imgname:latest": {
+						Name:       "source-reg.com/test/imgname:latest",
+						Path:       "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink: "latest",
+						ID:         "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+						Type:       v1alpha2.TypeGeneric,
+						ManifestDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+						},
+						LayerDigests: nil,
+					},
+					"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": {
+						Name:            "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Path:            "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+					"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241": {
+						Name:            "sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+						Path:            "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+				},
+			},
+			curr: image.AssociationSet{
+				"source-reg.com/test/imgname:latest": image.Associations{
+					"source-reg.com/test/imgname:latest": {
+						Name:       "source-reg.com/test/imgname:latest",
+						Path:       "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink: "latest",
+						ID:         "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df20",
+						Type:       v1alpha2.TypeGeneric,
+						ManifestDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e242",
+						},
+						LayerDigests: nil,
+					},
+					"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b": {
+						Name:            "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Path:            "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+					"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e242": {
+						Name:            "sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e242",
+						Path:            "test-registry.com/namespace/index_manifest:latest",
+						TagSymlink:      "latest",
+						ID:              "sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e242",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests: []string{
+							"sha256:e8614d09b7bebabd9d8a450f44e88a8807c98a438a2ddd63146865286b132d1b",
+							"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+							"sha256:211941188a4f55ffc6bcefa4f69b69b32c13fafb65738075de05808bbfcec086",
+							"sha256:f0fd5be261dfd2e36d01069a387a3e5125f5fd5adfec90f3cb190d1d5f1d1ad9",
+							"sha256:0c0beb258254c0566315c641b4107b080a96fa78d4f96833453dd6c5b9edf2b7",
+							"sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031",
+						},
+					},
+				},
+			},
+			expImages: map[string][]string{
+				"namespace/index_manifest": {
+					"sha256:601401253d0aac2bc95cccea668761a6e69216468809d1cee837b2e8b398e241",
+					"sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
+				},
 			},
 			assertFunc: func(deleter manifestDeleter) bool {
 				return deleter.registry == "test-registry.com"
@@ -295,7 +479,7 @@ func TestPlanImagePruning(t *testing.T) {
 				},
 			},
 			},
-			expImages: map[string]string{},
+			expImages: map[string][]string{},
 			assertFunc: func(deleter manifestDeleter) bool {
 				return deleter.registry == "test-registry.com"
 			},
@@ -322,7 +506,7 @@ func TestPruneImages(t *testing.T) {
 	type spec struct {
 		desc          string
 		opts          *MirrorOptions
-		images        map[string]string
+		images        map[string][]string
 		expInvocation int
 		exp           []string
 	}
@@ -330,18 +514,18 @@ func TestPruneImages(t *testing.T) {
 	cases := []spec{
 		{
 			desc:          "Success/OneImagePruned",
-			images:        map[string]string{"digest": "repo"},
+			images:        map[string][]string{"repo": {"digest"}},
 			expInvocation: 1,
 			exp:           []string{"repo|digest"},
 		},
 		{
 			desc: "Success/FiveImagesPruned",
-			images: map[string]string{
-				"digest1": "repo1",
-				"digest2": "repo2",
-				"digest3": "repo3",
-				"digest4": "repo4",
-				"digest5": "repo5",
+			images: map[string][]string{
+				"repo1": {"digest1"},
+				"repo2": {"digest2"},
+				"repo3": {"digest3"},
+				"repo4": {"digest4"},
+				"repo5": {"digest5"},
 			},
 			expInvocation: 5,
 			exp: []string{
@@ -350,6 +534,20 @@ func TestPruneImages(t *testing.T) {
 				"repo3|digest3",
 				"repo4|digest4",
 				"repo5|digest5",
+			},
+		},
+		{
+			desc: "Success/FiveImagesPrunedSameRepo",
+			images: map[string][]string{
+				"repo1": {"digest1", "digest2", "digest3", "digest4", "digest5"},
+			},
+			expInvocation: 5,
+			exp: []string{
+				"repo1|digest1",
+				"repo1|digest2",
+				"repo1|digest3",
+				"repo1|digest4",
+				"repo1|digest5",
 			},
 		},
 	}
@@ -385,14 +583,14 @@ func TestAggregateImageInformation(t *testing.T) {
 	type spec struct {
 		desc     string
 		registry string
-		images   map[string]string
+		images   map[string][]string
 		exp      pruneImagePlan
 	}
 
 	cases := []spec{
 		{
 			desc:     "Success/NoImagePruned",
-			images:   map[string]string{},
+			images:   map[string][]string{},
 			registry: "test-registry",
 			exp: pruneImagePlan{
 				Registry: "test-registry",
@@ -400,12 +598,12 @@ func TestAggregateImageInformation(t *testing.T) {
 		},
 		{
 			desc: "Success/FiveManifestDifferentRepos",
-			images: map[string]string{
-				"digest1": "repo1",
-				"digest2": "repo2",
-				"digest3": "repo3",
-				"digest4": "repo4",
-				"digest5": "repo5",
+			images: map[string][]string{
+				"repo1": {"digest1"},
+				"repo2": {"digest2"},
+				"repo3": {"digest3"},
+				"repo4": {"digest4"},
+				"repo5": {"digest5"},
 			},
 			registry: "test-registry",
 			exp: pruneImagePlan{
@@ -436,12 +634,8 @@ func TestAggregateImageInformation(t *testing.T) {
 		},
 		{
 			desc: "Success/FiveManifestSameRepo",
-			images: map[string]string{
-				"digest1": "repo1",
-				"digest2": "repo1",
-				"digest3": "repo1",
-				"digest4": "repo1",
-				"digest5": "repo1",
+			images: map[string][]string{
+				"repo1": {"digest1", "digest2", "digest3", "digest4", "digest5"},
 			},
 			registry: "test-registry",
 			exp: pruneImagePlan{
@@ -504,7 +698,7 @@ func TestPruneImages_WithError(t *testing.T) {
 	type spec struct {
 		desc          string
 		opts          *MirrorOptions
-		images        map[string]string
+		images        map[string][]string
 		expInvocation int
 		exp           []string
 		expError      error
@@ -513,7 +707,7 @@ func TestPruneImages_WithError(t *testing.T) {
 	cases := []spec{
 		{
 			desc:          "Success/ContinueOnError",
-			images:        map[string]string{"digest": "repo"},
+			images:        map[string][]string{"repo": {"digest"}},
 			expInvocation: 1,
 			exp:           []string{"repo|digest"},
 			opts: &MirrorOptions{
@@ -525,12 +719,12 @@ func TestPruneImages_WithError(t *testing.T) {
 			opts: &MirrorOptions{
 				ContinueOnError: false,
 			},
-			images: map[string]string{
-				"digest1": "repo1",
-				"digest2": "repo2",
-				"digest3": "repo3",
-				"digest4": "repo4",
-				"digest5": "repo5",
+			images: map[string][]string{
+				"repo1": {"digest1"},
+				"repo2": {"digest2"},
+				"repo3": {"digest3"},
+				"repo4": {"digest4"},
+				"repo5": {"digest5"},
 			},
 			expInvocation: 0,
 			exp:           []string{},

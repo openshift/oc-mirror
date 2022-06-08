@@ -473,14 +473,16 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 		// Prune the images that differ between the previous Associations and the
 		// pruned Associations.
-		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
-			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
-		}
 		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
 		if err != nil {
 			return err
 		}
 		prunedAssociations.Merge(assocs)
+
+		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
+			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
+		}
+
 		meta.PastAssociations, err = image.ConvertFromAssociationSet(prunedAssociations)
 		if err != nil {
 			return err
@@ -557,7 +559,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	var keep []string
 	for srcRef := range images {
 		// All keys need to specify image with digest.
-		// Tagged images will need to be redownloaded to
+		// Tagged images will need to be re-downloaded to
 		// ensure their digests have not been updated.
 		if srcRef.Ref.ID == "" {
 			continue
