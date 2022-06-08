@@ -135,11 +135,10 @@ func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, manifest
 		return nil
 	}
 
-	klog.Infof("Pruning %d image(s) from registry", len(manifestsByRepo))
-
 	var keys []string
-	for k := range manifestsByRepo {
-		keys = append(keys, k)
+	for repo, manifests := range manifestsByRepo {
+		klog.Infof("Pruning %d manifest(s) from repository %s", len(manifests), repo)
+		keys = append(keys, repo)
 	}
 
 	var wg sync.WaitGroup
