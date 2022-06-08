@@ -364,6 +364,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
 		// registry backends.
+		dir, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		o.OutputDir = dir
+
 		mapping, err = o.Publish(cmd.Context())
 		if err != nil {
 			serr := &ErrInvalidSequence{}
@@ -384,11 +390,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return cleanup()
 		}
 
-		dir, err := o.createResultsDir()
-		if err != nil {
-			return err
-		}
-		if err := o.generateResults(mapping, dir); err != nil {
+		if err := o.generateResults(mapping, o.OutputDir); err != nil {
 			return err
 		}
 	case mirrorToMirror:
