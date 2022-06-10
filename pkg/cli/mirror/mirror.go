@@ -351,6 +351,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			}
 		}
 	case diskToMirror:
+		dir, err := o.createResultsDir()
+		if err != nil {
+			return err
+		}
+		o.OutputDir = dir
+
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
 		// registry backends.
@@ -358,11 +364,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			serr := &ErrInvalidSequence{}
 			if errors.As(err, &serr) {
-				return fmt.Errorf(
-					"error occurred during publishing, expecting imageset with prefix mirror_seq%d: %v",
-					serr.wantSeq,
-					err,
-				)
+				return fmt.Errorf("error during publishing, expecting imageset with prefix mirror_seq%d: %v", serr.wantSeq, err)
 			}
 			return err
 		}
@@ -374,11 +376,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return cleanup()
 		}
 
-		dir, err := o.createResultsDir()
-		if err != nil {
-			return err
-		}
-		if err := o.generateResults(mapping, dir); err != nil {
+		if err := o.generateResults(mapping, o.OutputDir); err != nil {
 			return err
 		}
 	case mirrorToMirror:
@@ -497,7 +495,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		if err := o.copyToResults(dir); err != nil {
+		if err := o.moveToResults(dir); err != nil {
 			return err
 		}
 
@@ -565,7 +563,7 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 	return prunedDownloads, prunedDownloads.Validate()
 }
 
-// mirrorMappings downloads individual images from an image mapping
+// mirrorMappings downloads individual images from an image mapping.
 func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 
 	opts, err := o.newMirrorImageOptions(insecure)
@@ -621,6 +619,8 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 	return opts, nil
 }
 
+// generateResults will generate a mapping.txt and allow applicable manifests and write
+// the data to files in the specified directory.
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
 	mappingResultsPath := filepath.Join(dir, mappingFile)
@@ -683,7 +683,10 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	return WriteICSPs(dir, allICSPs)
 }
 
-func (o *MirrorOptions) copyToResults(resultsDir string) error {
+// moveToResults will move release signatures and helm charts to
+// the specified results directory from the defined source directory
+// in the config package.
+func (o *MirrorOptions) moveToResults(resultsDir string) error {
 
 	resultsDir = filepath.Clean(resultsDir)
 
