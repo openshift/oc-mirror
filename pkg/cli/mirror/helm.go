@@ -9,13 +9,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"helm.sh/helm/v3/pkg/action"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	helmcli "helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
+	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/releaseutil"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
+	"k8s.io/client-go/util/homedir"
 	"k8s.io/client-go/util/jsonpath"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
@@ -56,13 +59,13 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 	h.settings.RepositoryConfig = file
 	defer cleanup()
 
-	// Configure downloader
-	// TODO: allow configuration of credentials
-	// and certs
+	// Using VerifyLater options to ensure
+	// any verification information is downloaded
+	// and can be used later.
 	c := downloader.ChartDownloader{
-		Out:     os.Stdout,
-		Keyring: "",
-		Verify:  downloader.VerifyIfPossible,
+		Out:     h.Out,
+		Keyring: defaultKeyring(),
+		Verify:  downloader.VerifyLater,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
 			getter.WithInsecureSkipVerifyTLS(h.insecure),
@@ -84,14 +87,12 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 
 	for _, repo := range cfg.Mirror.Helm.Repositories {
 
-		// Add repo to temp file
 		if err := h.repoAdd(repo); err != nil {
 			return nil, err
 		}
 
 		for _, chart := range repo.Charts {
 			klog.Infof("Pulling chart %s", chart.Name)
-			// TODO: Do something with the returned verifications
 			ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
 			dest := filepath.Join(h.Dir, config.SourceDir, config.HelmDir)
 			path, _, err := c.DownloadTo(ref, chart.Version, dest)
@@ -160,26 +161,57 @@ func getImagesPath(paths ...string) []string {
 	return append(pathlist, paths...)
 }
 
-// render will return a templated chart
-// TODO: add input for client.APIVersion
-func render(chart *helmchart.Chart) (string, error) {
-
-	// Client setup
-	cfg := new(action.Configuration)
-	client := action.NewInstall(cfg)
-	client.DryRun = true
-	client.ReleaseName = "RELEASE-NAME"
-	client.Replace = true
-	client.ClientOnly = true
-	client.IncludeCRDs = true
-
-	// Create empty extra values options
+// render will return a templated chart based on default
+// values from the chart data and helm chartutils.
+func render(ch *helmchart.Chart) (string, error) {
+	out := new(bytes.Buffer)
 	valueOpts := make(map[string]interface{})
+	caps := chartutil.DefaultCapabilities
 
-	// Run a relase dry run to get the manifest
-	rel, err := client.Run(chart, valueOpts)
+	// Using placeholders for the name
+	// and namespace since we are only rendering
+	// to obtain image information
+	relOps := chartutil.ReleaseOptions{
+		Name:      "NAME",
+		Namespace: "RELEASE-NAMESPACE",
+	}
+	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, relOps, caps)
+	if err != nil {
+		return "", fmt.Errorf("error rendering values: %v", err)
+	}
 
-	return rel.Manifest, err
+	files, err := engine.Render(ch, valuesToRender)
+	if err != nil {
+		return "", fmt.Errorf("error rendering chart %s: %v", ch.Name(), err)
+	}
+
+	// Skip the NOTES.txt files
+	for k := range files {
+		if strings.HasSuffix(k, ".txt") {
+			delete(files, k)
+		}
+	}
+
+	for _, crd := range ch.CRDObjects() {
+		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", crd.Name, string(crd.File.Data[:]))
+	}
+
+	_, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
+	if err != nil {
+		// We return the files as a big blob of data to help the user debug parser
+		// errors.
+		for name, content := range files {
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			fmt.Fprintf(out, "---\n# Source: %s\n%s\n", name, content)
+		}
+		return out.String(), err
+	}
+	for _, m := range manifests {
+		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", m.Name, m.Content)
+	}
+	return out.String(), nil
 }
 
 // repoAdd adds a Helm repo with given name and url
@@ -281,4 +313,12 @@ func mktempFile(dir string) (func(), string, error) {
 			klog.Fatal(err)
 		}
 	}, file.Name(), err
+}
+
+// defaultKeyring returns the expanded path to the default keyring.
+func defaultKeyring() string {
+	if v, ok := os.LookupEnv("GNUPGHOME"); ok {
+		return filepath.Join(v, "pubring.gpg")
+	}
+	return filepath.Join(homedir.HomeDir(), ".gnupg", "pubring.gpg")
 }

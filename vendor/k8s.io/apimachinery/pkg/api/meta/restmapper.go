@@ -118,7 +118,6 @@ func (m *DefaultRESTMapper) AddSpecific(kind schema.GroupVersionKind, plural, si
 // callers to use the RESTMapper they mean.
 var unpluralizedSuffixes = []string{
 	"endpoints",
-	"securitycontextconstraints",
 }
 
 // UnsafeGuessKindToResource converts Kind to a resource name.
@@ -519,4 +518,12 @@ func (m *DefaultRESTMapper) RESTMappings(gk schema.GroupKind, versions ...string
 		return nil, &NoResourceMatchError{PartialResource: schema.GroupVersionResource{Group: gk.Group, Resource: gk.Kind}}
 	}
 	return mappings, nil
+}
+
+// MaybeResetRESTMapper calls Reset() on the mapper if it is a ResettableRESTMapper.
+func MaybeResetRESTMapper(mapper RESTMapper) {
+	m, ok := mapper.(ResettableRESTMapper)
+	if ok {
+		m.Reset()
+	}
 }

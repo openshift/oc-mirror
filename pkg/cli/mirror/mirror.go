@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containerd/containerd/errdefs"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -325,18 +324,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Create and store associations
 		assocDir := filepath.Join(o.Dir, config.SourceDir)
 		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
-
-		skipErr := func(err error) bool {
-			ierr := &image.ErrInvalidImage{}
-			cerr := &image.ErrInvalidComponent{}
-			return errors.As(err, &ierr) || errors.As(err, &cerr)
-		}
-
 		if errs != nil {
-			for _, e := range errs.Errors() {
-				if err := o.checkErr(e, skipErr, nil); err != nil {
-					return err
-				}
+			if err := o.processAssociationErrors(errs.Errors()); err != nil {
+				return err
 			}
 		}
 
@@ -457,17 +447,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
-		skipErr := func(err error) bool {
-			ierr := &image.ErrInvalidImage{}
-			cerr := &image.ErrInvalidComponent{}
-			return errors.As(err, &ierr) || errors.As(err, &cerr) || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
-		}
-
 		if errs != nil {
-			for _, e := range errs.Errors() {
-				if err := o.checkErr(e, skipErr, nil); err != nil {
-					return err
-				}
+			if err := o.processAssociationErrors(errs.Errors()); err != nil {
+				return err
 			}
 		}
 
@@ -719,7 +701,28 @@ func (o *MirrorOptions) copyToResults(resultsDir string) error {
 		return err
 	}
 	klog.V(1).Infof("Moved any downloaded Helm charts to %s", resultsDir)
+	return nil
+}
 
+func (o *MirrorOptions) processAssociationErrors(errs []error) error {
+	if errs == nil {
+		return nil
+	}
+	skipErr := func(err error) bool {
+		ierr := &image.ErrInvalidImage{}
+		cerr := &image.ErrInvalidComponent{}
+		return errors.As(err, &ierr) || errors.As(err, &cerr)
+	}
+	ierr := &image.ErrInvalidImage{}
+	for _, e := range errs {
+		if o.SkipMissing && errors.As(e, &ierr) {
+			klog.V(1).Infof("warning: skipping image: %v", e)
+			continue
+		}
+		if err := o.checkErr(e, skipErr, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

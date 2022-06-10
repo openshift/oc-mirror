@@ -41,6 +41,16 @@ import (
 )
 
 var (
+	sqliteDeprecationNotice = `
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! DEPRECATION NOTICE:
+!!   Sqlite-based catalogs are deprecated. Support for them will be removed in a
+!!   future release. Please migrate your catalog workflows to the new file-based
+!!   catalog format.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+`
+
 	mirrorLong = templates.LongDesc(`
 		Mirrors the contents of a catalog into a registry.
 
@@ -55,7 +65,8 @@ var (
 
 		A mapping.txt file is also created that is compatible with "oc image mirror". This may be used to further
 		customize the mirroring configuration, but should not be needed in normal circumstances.
-	`)
+
+	` + prefixLines(sqliteDeprecationNotice, "\t\t\t"))
 	mirrorExample = templates.Examples(`
 		# Mirror an operator-registry image and its contents to a registry
 		oc adm catalog mirror quay.io/my/image:latest myregistry.com
@@ -82,6 +93,9 @@ var (
 const (
 	DatabaseLocationLabelKey = "operators.operatorframework.io.index.database.v1"
 	ConfigsLocationLabelKey  = "operators.operatorframework.io.index.configs.v1"
+	IndexLocationLabelKey    = "operators.operatorframework.io.index.database.v1"
+	minICSPSize              = 0
+	maxICSPSize              = 250000
 )
 
 func init() {
@@ -95,6 +109,7 @@ type MirrorCatalogOptions struct {
 	DryRun       bool
 	ManifestOnly bool
 	IndexPath    string
+	TempDir      bool
 
 	FromFileDir string
 	FileDir     string
@@ -157,7 +172,7 @@ func NewMirrorCatalog(f kcmdutil.Factory, streams genericclioptions.IOStreams) *
 	flags.StringVar(&o.FromFileDir, "from-dir", o.FromFileDir, "The directory on disk that file:// images will be read from. Overrides --dir")
 	flags.IntVar(&o.MaxPathComponents, "max-components", 2, "The maximum number of path components allowed in a destination mapping. Example: `quay.io/org/repo` has two path components.")
 	flags.StringVar(&o.IcspScope, "icsp-scope", o.IcspScope, "Scope of registry mirrors in imagecontentsourcepolicy file. Allowed values: repository, registry. Defaults to: repository")
-	flags.IntVar(&o.MaxICSPSize, "max-icsp-size", 250000, "The maximum number of bytes for the generated ICSP yaml(s). Defaults to 250000")
+	flags.IntVar(&o.MaxICSPSize, "max-icsp-size", maxICSPSize, "The maximum number of bytes for the generated ICSP yaml(s). Defaults to 250000")
 	return cmd
 }
 
@@ -211,7 +226,7 @@ func (o *MirrorCatalogOptions) Complete(cmd *cobra.Command, args []string) error
 		return err
 	}
 
-	// try to get the index db location label from src, from pkg/image/info
+	// try to get the catalog file location label from src, from pkg/image/info
 	var image *info.Image
 	retriever := &info.ImageRetriever{
 		FileDir:         o.FileDir,
@@ -259,6 +274,8 @@ func (o *MirrorCatalogOptions) Complete(cmd *cobra.Command, args []string) error
 		indexLocation = dcLocation
 		fmt.Fprintf(o.IOStreams.Out, "src image has index label for declarative configs path: %s\n", indexLocation)
 	} else if dbLocation, ok := image.Config.Config.Labels[DatabaseLocationLabelKey]; ok {
+		fmt.Fprint(o.IOStreams.ErrOut, sqliteDeprecationNotice)
+
 		indexLocation = dbLocation
 		fmt.Fprintf(o.IOStreams.Out, "src image has index label for database path: %s\n", indexLocation)
 	}
@@ -269,6 +286,7 @@ func (o *MirrorCatalogOptions) Complete(cmd *cobra.Command, args []string) error
 			return err
 		}
 		o.IndexPath = indexLocation + ":" + tmpdir
+		o.TempDir = true
 	} else {
 		dir := strings.Split(o.IndexPath, ":")
 		if len(dir) < 2 {
@@ -459,10 +477,14 @@ type declcfgRelatedImage struct {
 
 type declcfgRelatedImagesParser struct{}
 
+const (
+	indexIgnoreFilename = ".indexignore"
+)
+
 func (_ declcfgRelatedImagesParser) Parse(root string) (map[string]struct{}, error) {
 	rootFS := os.DirFS(root)
 
-	matcher, err := ignore.NewMatcher(rootFS, ".indexignore")
+	matcher, err := ignore.NewMatcher(rootFS, indexIgnoreFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +494,7 @@ func (_ declcfgRelatedImagesParser) Parse(root string) (map[string]struct{}, err
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || matcher.Match(path, false) {
+		if entry.IsDir() || entry.Name() == indexIgnoreFilename || matcher.Match(path, false) {
 			return nil
 		}
 		f, err := rootFS.Open(path)
@@ -514,10 +536,20 @@ func (o *MirrorCatalogOptions) Validate() error {
 	default:
 		return fmt.Errorf("invalid icsp-scope %s", o.IcspScope)
 	}
+	if o.MaxICSPSize <= minICSPSize || o.MaxICSPSize > maxICSPSize {
+		return fmt.Errorf("provided max-icsp-size of %d must be greater than %d and less than or equal to %d", o.MaxICSPSize, minICSPSize, maxICSPSize)
+	}
 	return nil
 }
 
 func (o *MirrorCatalogOptions) Run() error {
+	// Run postRun to clean up after the run
+	defer func() {
+		if err := o.postRun(); err != nil {
+			fmt.Fprintln(o.IOStreams.ErrOut, err.Error())
+		}
+	}()
+
 	indexMirrorer, err := NewIndexImageMirror(o.IndexImageMirrorerOptions.ToOption(),
 		WithSource(o.SourceRef),
 		WithDest(o.DestRef),
@@ -570,6 +602,27 @@ func aggregateICSPs(icsps [][]byte) []byte {
 		aggregation = append(aggregation, icsp...)
 	}
 	return aggregation
+}
+
+func (o *MirrorCatalogOptions) postRun() error {
+	// If we have NOT set --path, the TempDir is set to true and we will delete
+	// Temporary folder.
+	if !o.TempDir {
+		return nil
+	}
+
+	dir := strings.Split(o.IndexPath, ":")
+	if len(dir) < 2 {
+		return fmt.Errorf("error cleaning up temp dir: could not find dir")
+	}
+
+	if err := os.RemoveAll(dir[1]); err != nil {
+		return fmt.Errorf("error cleaning up temp dir %s: %w", dir[1], err)
+	}
+
+	fmt.Fprintf(o.IOStreams.Out, "deleted dir %s\n", dir[1])
+
+	return nil
 }
 
 func WriteManifests(out io.Writer, source, dest imagesource.TypedImageReference, dir, icspScope string, maxICSPSize int, mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
@@ -676,20 +729,22 @@ func generateICSP(out io.Writer, name string, byteLimit int, registryMapping map
 	}
 
 	for key := range registryMapping {
-		icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, operatorv1alpha1.RepositoryDigestMirrors{
+		repositoryDigestMirror := operatorv1alpha1.RepositoryDigestMirrors{
 			Source:  key,
 			Mirrors: []string{registryMapping[key]},
-		})
+		}
+		icsp.Spec.RepositoryDigestMirrors = append(icsp.Spec.RepositoryDigestMirrors, repositoryDigestMirror)
 		y, err := yaml.Marshal(icsp)
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal ImageContentSourcePolicy yaml: %v", err)
 		}
 
 		if len(y) > byteLimit {
-			if lenMirrors := len(icsp.Spec.RepositoryDigestMirrors); lenMirrors > 0 {
+			if lenMirrors := len(icsp.Spec.RepositoryDigestMirrors); lenMirrors > 1 {
 				icsp.Spec.RepositoryDigestMirrors = icsp.Spec.RepositoryDigestMirrors[:lenMirrors-1]
+				break
 			}
-			break
+			return nil, fmt.Errorf("unable to add mirror %v to ICSP with the max-icsp-size set to %d", repositoryDigestMirror, byteLimit)
 		}
 		delete(registryMapping, key)
 	}
@@ -709,4 +764,12 @@ func generateICSP(out io.Writer, name string, byteLimit int, registryMapping map
 	}
 
 	return icspExample, nil
+}
+
+func prefixLines(in string, prefix string) string {
+	lines := strings.Split(in, "\n")
+	for i := range lines {
+		lines[i] = fmt.Sprintf("%s%s", prefix, lines[i])
+	}
+	return strings.Join(lines, "\n")
 }

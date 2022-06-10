@@ -106,7 +106,7 @@ var (
 	## License
 
 	OpenShift is licensed under the Apache Public License 2.0. The source code for this
-	program is [located on github](https://github.com/openshift/origin).
+	program is [located on github](https://github.com/openshift/oc).
 	`)
 
 	readmeCLIWindows = heredoc.Doc(`
@@ -136,7 +136,7 @@ var (
 	## License
 
 	OpenShift is licensed under the Apache Public License 2.0. The source code for this
-	program is [located on github](https://github.com/openshift/origin).
+	program is [located on github](https://github.com/openshift/oc).
 	`)
 
 	// indicates that the architecture of the binary matches the release payload
@@ -160,6 +160,18 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			Readme:               readmeCLIUnix,
 			InjectReleaseVersion: true,
 			ArchiveFormat:        "openshift-client-mac-%s.tar.gz",
+		},
+		{
+			OS:      "darwin",
+			Arch:    "arm64",
+			Command: "oc",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "cli-artifacts", From: "usr/share/openshift/mac_arm64/oc"},
+
+			LinkTo:               []string{"kubectl"},
+			Readme:               readmeCLIUnix,
+			InjectReleaseVersion: true,
+			ArchiveFormat:        "openshift-client-mac-arm64-%s.tar.gz",
 		},
 		{
 			OS:      "linux",
@@ -204,6 +216,18 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			InjectReleaseImage:   true,
 			InjectReleaseVersion: true,
 			ArchiveFormat:        "openshift-install-mac-%s.tar.gz",
+		},
+		{
+			OS:      "darwin",
+			Arch:    "arm64",
+			Command: "openshift-install",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "installer-artifacts", From: "usr/share/openshift/mac_arm64/openshift-install"},
+
+			Readme:               readmeInstallUnix,
+			InjectReleaseImage:   true,
+			InjectReleaseVersion: true,
+			ArchiveFormat:        "openshift-install-mac-arm64-%s.tar.gz",
 		},
 		{
 			OS:      "linux",

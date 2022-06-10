@@ -25,10 +25,15 @@ import (
 
 type ErrInvalidImage struct {
 	image string
+	cause error
 }
 
 func (e *ErrInvalidImage) Error() string {
-	return fmt.Sprintf("image %q is invalid or does not exist", e.image)
+	message := fmt.Sprintf("image %q is invalid or does not exist", e.image)
+	if e.cause != nil {
+		message = fmt.Sprintf("%s: %v", message, e.cause)
+	}
+	return message
 }
 
 type ErrInvalidComponent struct {
@@ -62,7 +67,7 @@ func AssociateLocalImageLayers(rootDir string, imgMappings TypedImageMapping) (A
 
 		// Verify that the dirRef exists before proceeding
 		if _, err := os.Stat(imagePath); err != nil {
-			errs = append(errs, &ErrInvalidImage{image.String()})
+			errs = append(errs, &ErrInvalidImage{image.String(), nil})
 			continue
 		}
 
@@ -104,7 +109,7 @@ func associateLocalImageLayers(image, localRoot, dirRef, tagOrID, defaultTag str
 
 	info, err := os.Lstat(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, &ErrInvalidComponent{image, tagOrID}
+		return nil, &ErrInvalidImage{image, nil}
 	} else if err != nil {
 		return nil, err
 	}
@@ -207,8 +212,14 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 
 	resolver, err := containerdregistry.NewResolver("", skipTlS, plainHTTP, nil)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error creating image resolver: %v", err))
-		return bundleAssociations, utilerrors.NewAggregate(errs)
+		err = fmt.Errorf("error creating image resolver: %v", err)
+		return bundleAssociations, utilerrors.NewAggregate([]error{err})
+	}
+
+	regctx, err := NewContext(skipVerification)
+	if err != nil {
+		err = fmt.Errorf("error creating registry context: %v", err)
+		return bundleAssociations, utilerrors.NewAggregate([]error{err})
 	}
 
 	for srcImg, dstImg := range imgMappings {
@@ -224,7 +235,7 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 			}
 			imgWithID, err := ResolveToPin(ctx, resolver, srcImg.Ref.Exact())
 			if err != nil {
-				errs = append(errs, &ErrInvalidComponent{srcImg.String(), srcImg.Ref.Tag})
+				errs = append(errs, &ErrInvalidImage{srcImg.String(), err})
 				continue
 			}
 			pinnedRef, err := imagesource.ParseReference(imgWithID)
@@ -235,15 +246,9 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 			srcImg.Ref.ID = pinnedRef.Ref.ID
 		}
 
-		regctx, err := NewContext(skipVerification)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error creating registry context: %v", err))
-			continue
-		}
-
 		repo, err := regctx.RepositoryForRef(ctx, srcImg.Ref, insecure)
 		if err != nil {
-			errs = append(errs, &ErrInvalidImage{srcImg.Ref.Exact()})
+			errs = append(errs, &ErrInvalidImage{srcImg.Ref.Exact(), err})
 			continue
 		}
 
@@ -278,7 +283,7 @@ func associateRemoteImageLayers(ctx context.Context, srcImg, dstImg string, srcI
 	}
 	mn, err := ms.Get(ctx, dgst, preferManifestList)
 	if err != nil {
-		return nil, &ErrInvalidComponent{srcImg, dgst.String()}
+		return nil, &ErrInvalidImage{srcImg, err}
 	}
 	mt, payload, err := mn.Payload()
 	if err != nil {

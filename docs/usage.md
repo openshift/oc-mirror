@@ -144,8 +144,9 @@ Once a full imageset has been created and published, differential imagesets that
 ## Notes about flag usage
 
 1. The `max-per-registry` flag will control the number of concurrent request per registry. Setting this value can allow for faster image download speeds. The default is 6.
-2. The `continue-on-error` flag can be used to continue the mirroring process in the event that an image or images cannot be downloaded. The `skip-missing` flag will account for images that return a 404 status code specified with tags only. By default `oc-mirror` translates tagged image
-requests into digests before mirroring. There is an issue to capture improvements to the skip-missing functionality to allow support for digests in the library used for mirroring (https://github.com/openshift/oc/issues/1104).
+2. The `skip-missing` flag can be used to continue the mirroring process in the event that an image does not exist.
+3. Certain errors (e.g. invalid images digest or tags) can by bypassed with `--continue-on-error`. Use this flag will return an exit code of
+1, but the `oc-mirror` operations will continue.
 3. The `skip-cleanup` flag can be used to keep the workspace from being deleted after mirroring operations.
 > WARNING: Running oc-mirror against a workspace that has not been cleaned can result in unexpected behavior.
 
