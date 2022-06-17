@@ -44,10 +44,10 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	// Set target dir for resulting artifacts
 	if o.OutputDir == "" {
 		dir, err := o.createResultsDir()
-		o.OutputDir = dir
 		if err != nil {
 			return allMappings, err
 		}
+		o.OutputDir = dir
 	}
 
 	// Create workspace

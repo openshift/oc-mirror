@@ -9,10 +9,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
+	"github.com/docker/distribution/registry/client/auth"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -65,7 +68,6 @@ func NewRegistryBackend(cfg *v1alpha2.RegistryConfig, dir string) (Backend, erro
 // ReadMetadata unpacks the metadata image and read it from disk
 func (b *registryBackend) ReadMetadata(ctx context.Context, meta *v1alpha2.Metadata, path string) error {
 	klog.V(1).Infof("Checking for existing metadata image at %s", b.src)
-	// Check if image exists
 	if err := b.exists(ctx); err != nil {
 		return err
 	}
@@ -206,15 +208,24 @@ func (b *registryBackend) pushImage(ctx context.Context, data []byte, fpath stri
 
 // exists checks if the image exists
 func (b *registryBackend) exists(ctx context.Context) error {
+
+	var defaultScheme = "https://"
 	var terr *transport.Error
 	opts := b.getOpts(ctx)
 	_, err := crane.Manifest(b.src.Ref.Exact(), opts...)
-
 	switch {
 	case err == nil:
 		// fail fast
 		return nil
 	case errors.As(err, &terr) && terr.StatusCode == 404:
+		regLoc := defaultScheme + b.src.Ref.Registry
+		reg, err := url.Parse(regLoc)
+		if err != nil {
+			return err
+		}
+		if err := b.ping(ctx, *reg); err != nil {
+			return err
+		}
 		return ErrMetadataNotExist
 	case errors.As(err, &terr) && terr.StatusCode == 401:
 		var nameOpts []name.Option
@@ -270,4 +281,48 @@ func (b *registryBackend) getOpts(ctx context.Context) []crane.Option {
 		options = append(options, crane.Insecure)
 	}
 	return options
+}
+
+// ping checks the registry and ensures it responds to a v2 endpoint.
+func (b *registryBackend) ping(ctx context.Context, registry url.URL) error {
+	pingClient := &http.Client{
+		Transport: b.createRT(),
+	}
+
+	target := registry
+	target.Path = path.Join(target.Path, "v2") + "/"
+
+	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := pingClient.Do(req.WithContext(ctx))
+	if err != nil {
+		if b.insecure && registry.Scheme == "https" {
+			klog.V(5).Infof("Falling back to an HTTP check for an insecure registry %s: %v", registry.String(), err)
+			registry.Scheme = "http"
+			if iErr := b.ping(ctx, registry); err != nil {
+				return iErr
+			}
+			return nil
+		}
+		return err
+	}
+	defer resp.Body.Close()
+
+	versions := auth.APIVersions(resp, "Docker-Distribution-API-Version")
+	if len(versions) == 0 {
+		klog.V(5).Infof("Registry responded to v2 Docker endpoint, but has no header for Docker Distribution %s: %d, %#v", req.URL, resp.StatusCode, resp.Header)
+		switch {
+		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			// valid v2
+		case resp.StatusCode == http.StatusUnauthorized:
+			// valid v2
+		case resp.StatusCode == http.StatusForbidden:
+			// valid v2
+		default:
+			return fmt.Errorf("registry %q is not an accessible registry with a v2 Docker endpoint", registry.Hostname())
+		}
+	}
+	return nil
 }

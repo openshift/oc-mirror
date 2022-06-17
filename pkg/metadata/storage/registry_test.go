@@ -104,9 +104,20 @@ func TestRegistryBackend(t *testing.T) {
 			// Ensure when the server is close the metadata error is not thrown
 			if test.closeServer {
 				server.Close()
-				require.Error(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath))
-				require.NotErrorIs(t, backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath), ErrMetadataNotExist)
+				err := backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath)
+				require.Error(t, err)
+				require.NotErrorIs(t, err, ErrMetadataNotExist)
 			}
+
+			cfg = v1alpha2.RegistryConfig{
+				ImageURL: "fakehost:5000",
+				SkipTLS:  true,
+			}
+			backend, err = NewRegistryBackend(&cfg, filepath.Join("foo", config.SourceDir))
+			require.NoError(t, err)
+			err = backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath)
+			require.Error(t, err)
+			require.NotErrorIs(t, err, ErrMetadataNotExist)
 		})
 	}
 }

@@ -27,7 +27,7 @@ const (
 	// MetadataFile is the filename that contains
 	// the metadata.
 	MetadataFile = ".metadata.json"
-	// ReleaseSignaturesDir is the top-level
+	// ReleaseSignatureDir is the top-level
 	// directory where platform release-signature
 	// configmaps are stored.
 	ReleaseSignatureDir = "release-signatures"
@@ -44,7 +44,7 @@ const (
 	// IndexDir is the location of the
 	// file-based catalog json file.
 	IndexDir = "index"
-	// IncludeConfigPath is the file where
+	// IncludeConfigFile is the file where
 	// catalog include config data for incorporation
 	// into the metadata is located.
 	IncludeConfigFile = "include-config.gob"
