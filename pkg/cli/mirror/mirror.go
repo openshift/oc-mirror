@@ -215,7 +215,7 @@ func (o *MirrorOptions) Validate() error {
 	// Attempt to login to registry
 	// FIXME(jpower432): CheckPushPermissions is slated for deprecation
 	// must replace with its replacement
-	if len(o.ToMirror) > 0 {
+	if len(o.ToMirror) > 0 && !o.ManifestsOnly {
 		klog.Infof("Checking push permissions for %s", o.ToMirror)
 		ref := path.Join(o.ToMirror, o.UserNamespace, "oc-mirror")
 		klog.V(2).Infof("Using image %s to check permissions", ref)
