@@ -192,20 +192,22 @@ func (as *AssociationSet) GetDigests() []string {
 	return digests
 }
 
-// GetImageFromBlob will search the AssociationSet for a blob and return the first
-// found image it is associated to
-func GetImageFromBlob(as AssociationSet, digest string) string {
-	for imageName, assocs := range as {
+// ReposForBlobs returns a map with the first repos found
+// for each layer digest in the imageset. This can be used
+// to pull layers to reform images.
+func ReposForBlobs(as AssociationSet) map[string]string {
+	reposByBlob := map[string]string{}
+	for _, assocs := range as {
 		for _, assoc := range assocs {
 			for _, dgst := range assoc.LayerDigests {
-				if dgst == digest {
-					return imageName
+				if _, found := reposByBlob[dgst]; found {
+					continue
 				}
-
+				reposByBlob[dgst] = assoc.Path
 			}
 		}
 	}
-	return ""
+	return reposByBlob
 }
 
 // Prune will return a pruned AssociationSet containing provided keys

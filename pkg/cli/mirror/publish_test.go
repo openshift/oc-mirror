@@ -189,7 +189,7 @@ func TestFindBlobRepo(t *testing.T) {
 			assocs := image.AssociationSet{"registry.com/test3/baz": image.Associations{
 				"registry.com/test3/baz": {
 					Name:            "registry.com/test3/baz",
-					Path:            "single_manifest",
+					Path:            "test3/baz",
 					TagSymlink:      "latest",
 					ID:              "",
 					Type:            v1alpha2.TypeGeneric,
@@ -199,7 +199,9 @@ func TestFindBlobRepo(t *testing.T) {
 			},
 			}
 
-			ref, err := test.options.findBlobRepo(assocs, test.digest)
+			rByL := image.ReposForBlobs(assocs)
+
+			ref, err := test.options.findBlobRepo(rByL, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {

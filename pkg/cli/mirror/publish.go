@@ -394,8 +394,9 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, 
 	}
 
 	var errs []error
+	reposByLayer := image.ReposForBlobs(asSet)
 	for layerDigest, dstBlobPaths := range missingLayers {
-		imgRef, err := o.findBlobRepo(asSet, layerDigest)
+		imgRef, err := o.findBlobRepo(reposByLayer, layerDigest)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
 		}
@@ -506,16 +507,17 @@ func (o *MirrorOptions) publishImage(mappings []imgmirror.Mapping, fromDir strin
 	return nil
 }
 
-func (o *MirrorOptions) findBlobRepo(assocs image.AssociationSet, layerDigest string) (imagesource.TypedImageReference, error) {
+func (o *MirrorOptions) findBlobRepo(reposByLayer map[string]string, layerDigest string) (imagesource.TypedImageReference, error) {
 
-	srcRef := image.GetImageFromBlob(assocs, layerDigest)
-	if srcRef == "" {
+	srcRef, ok := reposByLayer[layerDigest]
+	if !ok {
 		return imagesource.TypedImageReference{}, fmt.Errorf("layer %q is not present in previous metadata", layerDigest)
 	}
 
-	dstRef, err := imagesource.ParseReference(srcRef)
+	dstRef, err := imagesource.ParseReference("file://" + srcRef)
 	dstRef.Ref.Registry = o.ToMirror
 	dstRef.Ref.Namespace = path.Join(o.UserNamespace, dstRef.Ref.Namespace)
+	dstRef.Type = imagesource.DestinationRegistry
 	return dstRef, err
 
 }
