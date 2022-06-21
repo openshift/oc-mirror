@@ -275,6 +275,15 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
+			name: "Valid/ManifestOnlyWithFakeMirror",
+			opts: &MirrorOptions{
+				ManifestsOnly: true,
+				From:          t.TempDir(),
+				ToMirror:      "test.mirror.com",
+			},
+			expError: "",
+		},
+		{
 			name: "Valid/MirrortoDisk",
 			opts: &MirrorOptions{
 				ConfigPath: "foo",
