@@ -110,7 +110,7 @@ func TestAdd(t *testing.T) {
 
 func TestReposForBlobs(t *testing.T) {
 	asSet := makeTestAssocationSet()
-	ref := ReposForBlobs(asSet)
+	ref := AssocPathsForBlobs(asSet)
 	exp := map[string]string{
 		"test-layer": "test",
 	}

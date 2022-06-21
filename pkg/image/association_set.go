@@ -192,10 +192,11 @@ func (as *AssociationSet) GetDigests() []string {
 	return digests
 }
 
-// ReposForBlobs returns a map with the first repos found
-// for each layer digest in the imageset. This can be used
-// to pull layers to reform images.
-func ReposForBlobs(as AssociationSet) map[string]string {
+// AssocPathsForBlobs returns a map with the first association path found
+// for each layer digest in the Association Set. This can be used
+// to pull layers to reform images. As defined in the Association spec,
+// the path can be a local or remote reference.
+func AssocPathsForBlobs(as AssociationSet) map[string]string {
 	reposByBlob := map[string]string{}
 	for _, assocs := range as {
 		for _, assoc := range assocs {
