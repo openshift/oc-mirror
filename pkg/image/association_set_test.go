@@ -108,12 +108,13 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, newAssoc, assoc)
 }
 
-func TestGetImageFromBlob(t *testing.T) {
+func TestReposForBlobs(t *testing.T) {
 	asSet := makeTestAssocationSet()
-	ref := GetImageFromBlob(asSet, "test-layer")
-	require.Equal(t, setTestKeyName, ref)
-	ref = GetImageFromBlob(asSet, "fake")
-	require.Equal(t, "", ref)
+	ref := AssocPathsForBlobs(asSet)
+	exp := map[string]string{
+		"test-layer": "test",
+	}
+	require.Equal(t, exp, ref)
 }
 
 func makeTestAssocationSet() AssociationSet {

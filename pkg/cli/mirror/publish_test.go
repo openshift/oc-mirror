@@ -146,60 +146,93 @@ func TestFindBlobRepo(t *testing.T) {
 		options  *MirrorOptions
 		expected imagesource.TypedImageReference
 		err      string
-	}{{
-		name:   "Valid/NoUserNamespace",
-		digest: "found",
-		options: &MirrorOptions{
-			ToMirror: "registry.com",
-		},
-		expected: imagesource.TypedImageReference{
-			Type: "docker",
-			Ref: reference.DockerImageReference{
-				Registry:  "registry.com",
-				Namespace: "test3",
-				Name:      "baz",
+	}{
+		{
+			name:   "Valid/NoUserNamespace",
+			digest: "found",
+			options: &MirrorOptions{
+				ToMirror: "registry.com",
+			},
+			expected: imagesource.TypedImageReference{
+				Type: "docker",
+				Ref: reference.DockerImageReference{
+					Registry:  "registry.com",
+					Namespace: "test3",
+					Name:      "baz",
+				},
 			},
 		},
-	}, {
-		name:   "Valid/UserNamespaceAdded",
-		digest: "found",
-		options: &MirrorOptions{
-			ToMirror:      "registry.com",
-			UserNamespace: "foo",
-		},
-		expected: imagesource.TypedImageReference{
-			Type: "docker",
-			Ref: reference.DockerImageReference{
-				Registry:  "registry.com",
-				Namespace: "foo/test3",
-				Name:      "baz",
+		{
+			name:   "Valid/UserNamespaceAdded",
+			digest: "found",
+			options: &MirrorOptions{
+				ToMirror:      "registry.com",
+				UserNamespace: "foo",
+			},
+			expected: imagesource.TypedImageReference{
+				Type: "docker",
+				Ref: reference.DockerImageReference{
+					Registry:  "registry.com",
+					Namespace: "foo/test3",
+					Name:      "baz",
+				},
 			},
 		},
-	}, {
-		name:   "Invalid/NoRefExisting",
-		digest: "notfound",
-		options: &MirrorOptions{
-			ToMirror: "registry.com",
+		{
+			name:   "Valid/AssocImagePath",
+			digest: "found2",
+			options: &MirrorOptions{
+				ToMirror:      "registry.com",
+				UserNamespace: "foo",
+			},
+			expected: imagesource.TypedImageReference{
+				Type: "docker",
+				Ref: reference.DockerImageReference{
+					Registry:  "registry.com",
+					Namespace: "foo",
+					Name:      "test2/baz",
+				},
+			},
 		},
-		err: "layer \"notfound\" is not present in previous metadata",
-	}}
+		{
+			name:   "Invalid/NoRefExisting",
+			digest: "notfound",
+			options: &MirrorOptions{
+				ToMirror: "registry.com",
+			},
+			err: "layer \"notfound\" is not present in previous metadata",
+		}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			assocs := image.AssociationSet{"registry.com/test3/baz": image.Associations{
-				"registry.com/test3/baz": {
-					Name:            "registry.com/test3/baz",
-					Path:            "single_manifest",
-					TagSymlink:      "latest",
-					ID:              "",
-					Type:            v1alpha2.TypeGeneric,
-					ManifestDigests: nil,
-					LayerDigests:    []string{"found"},
+			assocs := image.AssociationSet{
+				"registry.com/test3/baz": image.Associations{
+					"registry.com/test3/baz": {
+						Name:            "registry.com/test3/baz",
+						Path:            "test3/baz",
+						TagSymlink:      "latest",
+						ID:              "",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests:    []string{"found"},
+					},
 				},
-			},
+				"registry.com/test2/baz": image.Associations{
+					"registry.com/test3/baz": {
+						Name:            "registry.com/test2/baz",
+						Path:            "registry.com/foo/test2/baz",
+						TagSymlink:      "latest",
+						ID:              "",
+						Type:            v1alpha2.TypeGeneric,
+						ManifestDigests: nil,
+						LayerDigests:    []string{"found2"},
+					},
+				},
 			}
 
-			ref, err := test.options.findBlobRepo(assocs, test.digest)
+			aByL := image.AssocPathsForBlobs(assocs)
+
+			ref, err := test.options.findBlobRepo(aByL, test.digest)
 			if len(test.err) != 0 {
 				require.Equal(t, err.Error(), test.err)
 			} else {
