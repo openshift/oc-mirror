@@ -62,7 +62,7 @@ storageConfig:
 
 There is a common misconception that oc-mirror is only a container image mirroring utility. This is partially accurate. In addition to image mirroring, oc-mirror optionally performs content deletions from mirror registries. When content is added to an imageset configuration, that content is published to a mirror registry. When content is removed from an imageset configuration, that content is removed from the mirror registry. This ensures that content is safely removed from the mirror registry when the user specifies. 
 
-If a user does not desire content removal from a mirror registry, they can either not remove that content from their imageset configuration or they can publish using a registry account that does not have permissions to perform content deletions. 
+If a user does not desire content removal from a mirror registry, they can either not remove that content from their imageset configuration or they can publish using a registry account that does not have permissions to perform content deletions. If a user chooses to disallow pruning using an account without permission to perform deletions, the `--continue-on-error` flag must be used in conjunction with the publishing operation to the mirror registry.
 
 ### Content Discovery
 
@@ -104,7 +104,9 @@ If a user does not desire content removal from a mirror registry, they can eithe
     ```
 ### Mirroring
 
-**Note:** These workflows are compatible and can be used interchangeably for the same mirror registry. 
+**Note:** These workflows are compatible and can be used interchangeably for the same mirror registry.
+
+**Note:** oc-mirror metadata is always stored where specified by the user and in an expected location managed by oc-mirror (always "registry/namespace/oc-mirror:UUID). This allows a user to seamlessly switch between a fully-disconnected workflow and a partially disconnected workflow.
 
 #### Fully Disconnected
 - Create then publish to your mirror registry:
