@@ -1,8 +1,9 @@
 package v1alpha2
 
 import (
+	"encoding/json"
 	"fmt"
-
+	"github.com/blang/semver/v4"
 	"github.com/openshift/library-go/pkg/image/reference"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -81,6 +82,57 @@ type ReleaseChannel struct {
 	// first release in the channel and the MaxVersion
 	// to the last release in the channel.
 	Full bool `json:"full,omitempty"`
+}
+
+// UnmarshalJSON unmarshals a json string to a ReleaseChannel.
+// This is necessary to handle X.Y format minVersion and maxVersion:
+// When using yaml, json.Unmarshal sees an unquoted X.Y as a number instead of a string
+func (r *ReleaseChannel) UnmarshalJSON(data []byte) error {
+	var unparsed map[string]json.RawMessage
+	if err := json.Unmarshal(data, &unparsed); err != nil {
+		return err
+	}
+	for key, value := range unparsed {
+		switch key {
+		case "name":
+			if err := json.Unmarshal(value, &r.Name); err != nil {
+				return err
+			}
+		case "type":
+			if err := json.Unmarshal(value, &r.Type); err != nil {
+				return err
+			}
+		case "minVersion":
+			var minVersionString string
+			if err := json.Unmarshal(value, &minVersionString); err != nil {
+				minVersionString = string(value)
+			}
+			ver, err := semver.ParseTolerant(minVersionString)
+			if err != nil {
+				return fmt.Errorf("unable to parse config; minVersion must be a version if present: %w", err)
+			}
+			r.MinVersion = ver.String()
+		case "maxVersion":
+			var maxVersionString string
+			if err := json.Unmarshal(value, &maxVersionString); err != nil {
+				maxVersionString = string(value)
+			}
+			ver, err := semver.ParseTolerant(maxVersionString)
+			if err != nil {
+				return fmt.Errorf("unable to parse config; maxVersion must be a version if present: %w", err)
+			}
+			r.MaxVersion = ver.String()
+		case "shortestPath":
+			if err := json.Unmarshal(value, &r.ShortestPath); err != nil {
+				return err
+			}
+		case "full":
+			if err := json.Unmarshal(value, &r.Full); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // IsHeadsOnly determine if the mode set mirrors only channel head.
