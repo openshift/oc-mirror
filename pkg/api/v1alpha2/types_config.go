@@ -107,9 +107,9 @@ func (r *ReleaseChannel) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &minVersionString); err != nil {
 				minVersionString = string(value)
 			}
-			ver, err := semver.ParseTolerant(minVersionString)
+			ver, err := semver.Parse(minVersionString)
 			if err != nil {
-				return fmt.Errorf("unable to parse config; minVersion must be a version if present: %w", err)
+				return fmt.Errorf("unable to parse config; minVersion must be in valid semver format if present: %w", err)
 			}
 			r.MinVersion = ver.String()
 		case "maxVersion":
@@ -117,9 +117,9 @@ func (r *ReleaseChannel) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &maxVersionString); err != nil {
 				maxVersionString = string(value)
 			}
-			ver, err := semver.ParseTolerant(maxVersionString)
+			ver, err := semver.Parse(maxVersionString)
 			if err != nil {
-				return fmt.Errorf("unable to parse config; maxVersion must be a version if present: %w", err)
+				return fmt.Errorf("unable to parse config; maxVersion must be in valid semver format if present: %w", err)
 			}
 			r.MaxVersion = ver.String()
 		case "shortestPath":

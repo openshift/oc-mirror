@@ -42,37 +42,29 @@ full: true
 `)},
 		},
 		{
-			name: "Valid/SemverMajorMinor",
-			expected: ReleaseChannel{
-				Name:       "name",
-				MinVersion: "1.2.0",
-				MaxVersion: "4.5.0",
-			},
+			name:     "Invalid/MajorMinorVersionOnly",
+			expected: ReleaseChannel{},
 			args: args{data: []byte(`
-name: name
 minVersion: 1.2
 maxVersion: 4.5
 `)},
+			expectedErr: "error unmarshaling JSON: while decoding JSON: unable to parse config; maxVersion must be in valid semver format if present: No Major.Minor.Patch elements found",
 		},
 		{
-			name: "Valid/SemverMajor",
-			expected: ReleaseChannel{
-				Name:       "name",
-				MaxVersion: "1.0.0",
-			},
+			name:     "Invalid/MajorVersionOnly",
+			expected: ReleaseChannel{},
 			args: args{data: []byte(`
-name: name
 maxVersion: 1
 `)},
+			expectedErr: "error unmarshaling JSON: while decoding JSON: unable to parse config; maxVersion must be in valid semver format if present: No Major.Minor.Patch elements found",
 		},
 		{
 			name:     "Invalid/NonSemver",
 			expected: ReleaseChannel{},
 			args: args{data: []byte(`
-name: name
 minVersion: 1.2.3.4
 `)},
-			expectedErr: "error unmarshaling JSON: while decoding JSON: unable to parse config; minVersion must be a version if present: Invalid character(s) found in patch number \"3.4\"",
+			expectedErr: "error unmarshaling JSON: while decoding JSON: unable to parse config; minVersion must be in valid semver format if present: Invalid character(s) found in patch number \"3.4\"",
 		},
 	}
 	for _, tt := range tests {
