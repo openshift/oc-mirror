@@ -29,7 +29,7 @@ When interacting with `oc-mirror` in a connected environment, the imageset confi
 
 ### Ignore History
 
-By default, `oc-mirror` will not re-download images or blob detected in the past runs of the tools. If an image does not needs to be re-downloaded, the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
+By default, `oc-mirror` will not re-download images or blob detected in the past runs of the tools. If an image does not need to be re-downloaded, the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
 
 ### Skip Metadata Check
 
@@ -40,4 +40,4 @@ In disk to mirror workflows, the metadata sequence is checked against previously
 
 ### Why do we use a sequence number?
 
-`oc-mirror` performs deduplication at the image layer level when mirroring images. Instead of packing layers that have already been mirrored, the layers are retrieving from the managed registry during the publishing when needed to reconstitute an image. Ensuring the imagesets are published in order ensures that the expected layers were published to the registry.
+`oc-mirror` performs deduplication at the image layer level when mirroring images. Instead of packing layers that have already been mirrored, the layers are retrieved from the managed registry during the publishing when needed to reconstitute an image. Ensuring the imagesets are published in order ensures that the expected layers were published to the registry.
