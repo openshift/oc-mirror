@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/blang/semver/v4"
-	"github.com/operator-framework/operator-registry/alpha/action"
+	"github.com/openshift/oc-mirror/pkg/action"
 )
 
 // IncludeConfig defines a list of packages for
