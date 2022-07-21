@@ -10,6 +10,7 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
@@ -204,7 +205,7 @@ func setDefaultChannel(outputPkg *model.Package) {
 		for chname, channel := range outputPkg.Channels {
 			if chname == chosenChannelName {
 				outputPkg.DefaultChannel = channel
-				fmt.Printf("Newly assigned default channel from existing channels by %s is %s\n", criterium, chosenChannelName)
+				klog.V(0).Infof("Newly assigned default channel from existing channels by %s is %s\n", criterium, chosenChannelName)
 				return
 			}
 		}
@@ -226,15 +227,15 @@ func setDefaultChannel(outputPkg *model.Package) {
 	if i > 0 {
 		sort.Slice(p, func(j, k int) bool { return p[j].Priority < p[k].Priority })
 
-		fmt.Println("defaultChannel choices sorted by priority for package:", outputPkg.Name)
+		klog.V(1).Infof("defaultChannel choices sorted by priority for package: %s\n", outputPkg.Name)
 		for _, k := range p {
-			fmt.Printf("%v\t%v\n", k.ChannelName, k.Priority)
+			klog.V(1).Infof("%v\t%v\n", k.ChannelName, k.Priority)
 		}
 
 		// pick last channel as it is the one with the highest priority
 		setChannel(p[len(p)-1].ChannelName, "Priority")
 	} else {
-		fmt.Println("No remaining channels in filtered output have the priority property, use lexigraphical sort to choose for package:", outputPkg.Name)
+		klog.V(0).Infof("No remaining channels in filtered output have the priority property, use lexigraphical sort to choose for package: %s\n", outputPkg.Name)
 
 		var channelNames []string
 		for _, channel := range outputPkg.Channels {
@@ -245,9 +246,9 @@ func setDefaultChannel(outputPkg *model.Package) {
 			return channelNames[i] < channelNames[j]
 		})
 
-		fmt.Println("defaultChannel choices sorted by name:")
+		klog.V(1).Info("defaultChannel choices sorted by name:")
 		for _, k := range channelNames {
-			fmt.Printf("%s\n", k)
+			klog.V(1).Info(k)
 		}
 
 		// pick last channel name as it is the latest one based on lexigraphical sort results
