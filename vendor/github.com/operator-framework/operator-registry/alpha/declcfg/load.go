@@ -137,19 +137,19 @@ func readYAMLOrJSON(r io.Reader) (*DeclarativeConfig, error) {
 		}
 
 		switch in.Schema {
-		case SchemaPackage:
+		case schemaPackage:
 			var p Package
 			if err := json.Unmarshal(doc, &p); err != nil {
 				return nil, fmt.Errorf("parse package: %v", err)
 			}
 			cfg.Packages = append(cfg.Packages, p)
-		case SchemaChannel:
+		case schemaChannel:
 			var c Channel
 			if err := json.Unmarshal(doc, &c); err != nil {
 				return nil, fmt.Errorf("parse channel: %v", err)
 			}
 			cfg.Channels = append(cfg.Channels, c)
-		case SchemaBundle:
+		case schemaBundle:
 			var b Bundle
 			if err := json.Unmarshal(doc, &b); err != nil {
 				return nil, fmt.Errorf("parse bundle: %v", err)

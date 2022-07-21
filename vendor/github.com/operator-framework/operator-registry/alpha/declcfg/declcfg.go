@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	SchemaPackage = "olm.package"
-	SchemaChannel = "olm.channel"
-	SchemaBundle  = "olm.bundle"
+	schemaPackage = "olm.package"
+	schemaChannel = "olm.channel"
+	schemaBundle  = "olm.bundle"
 )
 
 type DeclarativeConfig struct {

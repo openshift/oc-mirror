@@ -12,7 +12,6 @@ func init() {
 		reflect.TypeOf(&GVK{}):             TypeGVK,
 		reflect.TypeOf(&GVKRequired{}):     TypeGVKRequired,
 		reflect.TypeOf(&BundleObject{}):    TypeBundleObject,
-		reflect.TypeOf(&Channel{}):         TypeChannel,
 	}
 }
 
