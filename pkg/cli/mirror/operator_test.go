@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openshift/oc-mirror/pkg/action"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 func TestPinImages(t *testing.T) {
@@ -167,7 +167,7 @@ func TestVerifyDC(t *testing.T) {
 
 	type testvopf struct {
 		desc           string
-		dic            action.DiffIncludeConfig
+		dic            diff.DiffIncludeConfig
 		dc             *declcfg.DeclarativeConfig
 		logCount       int
 		expErrorStr    string
@@ -177,8 +177,8 @@ func TestVerifyDC(t *testing.T) {
 	cases := []testvopf{
 		{
 			desc: "SuccessWithWarning/PackageNotFoundInDC",
-			dic: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			dic: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "foo",
 					},
@@ -214,8 +214,8 @@ func TestVerifyDC(t *testing.T) {
 		},
 		{
 			desc: "Success/PackageFoundInDC",
-			dic: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			dic: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
 					},
@@ -251,8 +251,8 @@ func TestVerifyDC(t *testing.T) {
 		},
 		{
 			desc: "Failure/DefaultChannelNotInDC",
-			dic: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			dic: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
 					},
@@ -292,8 +292,8 @@ func TestVerifyDC(t *testing.T) {
 		},
 		{
 			desc: "Failure/InvalidSemverOrdering",
-			dic: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			dic: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
 					},

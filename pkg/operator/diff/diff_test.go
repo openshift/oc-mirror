@@ -1,4 +1,4 @@
-package action
+package diff
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/pkg/diff"
+	diffInclude "github.com/openshift/oc-mirror/pkg/operator/diff/include"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -194,7 +194,7 @@ func TestLoadDiffIncludeConfig(t *testing.T) {
 		name             string
 		input            string
 		expectedCfg      DiffIncludeConfig
-		expectedIncluder diff.DiffIncluder
+		expectedIncluder diffInclude.DiffIncluder
 		assertion        require.ErrorAssertionFunc
 	}
 
@@ -208,8 +208,8 @@ packages:
 			expectedCfg: DiffIncludeConfig{
 				Packages: []DiffIncludePackage{{Name: "foo"}},
 			},
-			expectedIncluder: diff.DiffIncluder{
-				Packages: []diff.DiffIncludePackage{{Name: "foo"}},
+			expectedIncluder: diffInclude.DiffIncluder{
+				Packages: []diffInclude.DiffIncludePackage{{Name: "foo"}},
 			},
 			assertion: require.NoError,
 		},
@@ -262,29 +262,29 @@ packages:
 					},
 				},
 			},
-			expectedIncluder: diff.DiffIncluder{
-				Packages: []diff.DiffIncludePackage{
+			expectedIncluder: diffInclude.DiffIncluder{
+				Packages: []diffInclude.DiffIncludePackage{
 					{
 						Name: "foo",
-						Channels: []diff.DiffIncludeChannel{
+						Channels: []diffInclude.DiffIncludeChannel{
 							{
 								Name:     "stable",
 								Versions: []semver.Version{semver.MustParse("0.1.0"), semver.MustParse("0.2.0")},
 								Bundles:  []string{"foo.v0.3.0"},
 							},
 						},
-						AllChannels: diff.DiffIncludeChannel{
+						AllChannels: diffInclude.DiffIncludeChannel{
 							Versions: []semver.Version{semver.MustParse("1.0.0")},
 						},
 					},
 					{
 						Name: "bar",
-						Channels: []diff.DiffIncludeChannel{
+						Channels: []diffInclude.DiffIncludeChannel{
 							{Name: "stable", Versions: []semver.Version{
 								semver.MustParse("0.1.0"),
 							}},
 						},
-						AllChannels: diff.DiffIncludeChannel{
+						AllChannels: diffInclude.DiffIncludeChannel{
 							Versions: []semver.Version{semver.MustParse("1.0.0")},
 							Bundles:  []string{"bar.v1.2.0"},
 						},

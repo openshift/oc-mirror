@@ -1,4 +1,4 @@
-package diff
+package include
 
 import (
 	"encoding/json"

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/pkg/action"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 	"github.com/stretchr/testify/require"
 )
 
@@ -12,7 +12,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 	type spec struct {
 		name     string
 		cfg      IncludeConfig
-		exp      action.DiffIncludeConfig
+		exp      diff.DiffIncludeConfig
 		expError string
 	}
 
@@ -46,11 +46,11 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
-						Channels: []action.DiffIncludeChannel{
+						Channels: []diff.DiffIncludeChannel{
 							{
 								Name:  "stable",
 								Range: ">=0.1.0 <=0.2.0",
@@ -59,7 +59,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 					{
 						Name: "foo",
-						Channels: []action.DiffIncludeChannel{
+						Channels: []diff.DiffIncludeChannel{
 							{
 								Name: "stable",
 								Versions: []semver.Version{
@@ -90,8 +90,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name:  "bar",
 						Range: ">=0.1.0 <=0.2.0",
@@ -117,8 +117,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
 						Versions: []semver.Version{
@@ -151,15 +151,15 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name:  "bar",
 						Range: "<=1.0.0",
 					},
 					{
 						Name: "foo",
-						Channels: []action.DiffIncludeChannel{
+						Channels: []diff.DiffIncludeChannel{
 							{
 								Name:  "stable",
 								Range: "<=0.2.0",
@@ -182,8 +182,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name:  "bar",
 						Range: ">=0.1.0 <=0.2.0",
@@ -203,8 +203,8 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp: action.DiffIncludeConfig{
-				Packages: []action.DiffIncludePackage{
+			exp: diff.DiffIncludeConfig{
+				Packages: []diff.DiffIncludePackage{
 					{
 						Name: "bar",
 						Bundles: []string{
@@ -225,7 +225,7 @@ func TestConvertToDiffIncludeConfig(t *testing.T) {
 					},
 				},
 			},
-			exp:      action.DiffIncludeConfig{},
+			exp:      diff.DiffIncludeConfig{},
 			expError: "package 0 requires a name",
 		},
 	}

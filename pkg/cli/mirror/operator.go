@@ -23,7 +23,7 @@ import (
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/admin/catalog"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	operatorRegistryAction "github.com/operator-framework/operator-registry/alpha/action"
+	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
@@ -31,11 +31,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
 
-	"github.com/openshift/oc-mirror/pkg/action"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -174,7 +174,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 	if full {
 		// Mirror the entire catalog.
-		dc, err = operatorRegistryAction.Render{
+		dc, err = action.Render{
 			Registry: reg,
 			Refs:     []string{ctlg.Catalog},
 		}.Run(ctx)
@@ -187,7 +187,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		if derr != nil {
 			return dc, ic, derr
 		}
-		dc, err = action.Diff{
+		dc, err = diff.Diff{
 			Registry:         reg,
 			NewRefs:          []string{ctlg.Catalog},
 			Logger:           catLogger,
@@ -240,7 +240,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
-	a := action.Diff{
+	a := diff.Diff{
 		Registry:         reg,
 		NewRefs:          []string{ctlg.Catalog},
 		Logger:           catLogger,
@@ -257,7 +257,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	switch {
 	case full:
 		// Mirror the entire catalog.
-		dc, err = operatorRegistryAction.Render{
+		dc, err = action.Render{
 			Registry: reg,
 			Refs:     []string{ctlg.Catalog},
 		}.Run(ctx)
@@ -275,7 +275,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 			var icManager operator.IncludeConfigManager
 			if catalogHeadsOnly {
 				icManager = operator.NewCatalogStrategy()
-				dc, err = operatorRegistryAction.Render{
+				dc, err = action.Render{
 					Registry: reg,
 					Refs:     []string{ctlg.Catalog},
 				}.Run(ctx)
@@ -326,7 +326,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 
 // verifyDC verifies the declarative config and that each of the requested operator packages were
 // found and added to the DeclarativeConfig.
-func (o *OperatorOptions) verifyDC(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
+func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
 	o.Logger.Debug("DiffIncludeConfig: ", dic)
 	o.Logger.Debug("DeclarativeConfig: ", dc)
 

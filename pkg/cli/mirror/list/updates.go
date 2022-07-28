@@ -18,12 +18,12 @@ import (
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	"github.com/openshift/oc-mirror/pkg/action"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 type UpdatesOptions struct {
@@ -192,7 +192,7 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha2.ImageS
 		if err != nil {
 			return err
 		}
-		diff := action.Diff{
+		diff := diff.Diff{
 			Registry:      reg,
 			NewRefs:       []string{ctlg.Catalog},
 			Logger:        catLogger,
