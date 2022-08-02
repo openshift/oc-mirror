@@ -1,4 +1,4 @@
-package include
+package internal
 
 import (
 	"encoding/json"
@@ -190,8 +190,10 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 		outputPkg.DefaultChannel, outputHasDefault = outputPkg.Channels[newPkg.DefaultChannel.Name]
 		if !outputHasDefault {
 			// Set the defaultChannel using the priority of a channel when the default got filtered out
-			// If no channels with priority property, fall back to a lexigraphical sort by channelName
-			setDefaultChannel(outputPkg)
+			// If no channels with the Priority property, raise an error
+			if err := setDefaultChannel(outputPkg); err != nil {
+				return outputModel, err
+			}
 		}
 	}
 
@@ -200,17 +202,9 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 
 type ChannelPriorityPropList []property.Channel
 
-func setDefaultChannel(outputPkg *model.Package) {
-	setChannel := func(chosenChannelName string, criterium string) {
-		for chname, channel := range outputPkg.Channels {
-			if chname == chosenChannelName {
-				outputPkg.DefaultChannel = channel
-				klog.V(0).Infof("Newly assigned default channel from existing channels by %s is %s\n", criterium, chosenChannelName)
-				return
-			}
-		}
-	}
-
+// setDefaultChannel sets the new default channel of a package if the old default channel got filtered out.
+// Throws an error if there are no channels with the Priority property
+func setDefaultChannel(outputPkg *model.Package) error {
 	p := make(ChannelPriorityPropList, len(outputPkg.Channels))
 	i := 0
 	for _, channel := range outputPkg.Channels {
@@ -233,27 +227,18 @@ func setDefaultChannel(outputPkg *model.Package) {
 		}
 
 		// pick last channel as it is the one with the highest priority
-		setChannel(p[len(p)-1].ChannelName, "Priority")
-	} else {
-		klog.V(0).Infof("No remaining channels in filtered output have the priority property, use lexigraphical sort to choose for package: %s\n", outputPkg.Name)
-
-		var channelNames []string
-		for _, channel := range outputPkg.Channels {
-			channelNames = append(channelNames, channel.Name)
+		chosenChannelName := p[len(p)-1].ChannelName
+		for chname, channel := range outputPkg.Channels {
+			if chname == chosenChannelName {
+				outputPkg.DefaultChannel = channel
+				klog.V(0).Infof("Newly assigned default channel from existing channels by Priority is %s\n", chosenChannelName)
+			}
 		}
-
-		sort.Slice(channelNames, func(i, j int) bool {
-			return channelNames[i] < channelNames[j]
-		})
-
-		klog.V(1).Info("defaultChannel choices sorted by name:")
-		for _, k := range channelNames {
-			klog.V(1).Info(k)
-		}
-
-		// pick last channel name as it is the latest one based on lexigraphical sort results
-		setChannel(channelNames[len(channelNames)-1], "Name")
+		return nil
 	}
+
+	return fmt.Errorf("unable to set a default channel for package: %s - no remaining channels in the filtered output have the Priority property", outputPkg.Name)
+
 }
 
 // pruneOldFromNewPackage prune any bundles and channels from newPkg that

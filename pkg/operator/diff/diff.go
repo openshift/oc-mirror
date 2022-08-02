@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/blang/semver/v4"
-	diffInclude "github.com/openshift/oc-mirror/pkg/operator/diff/include"
+	diffInternal "github.com/openshift/oc-mirror/pkg/operator/diff/internal"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -74,7 +74,7 @@ func (diffIn Diff) Run(ctx context.Context) (*declcfg.DeclarativeConfig, error) 
 		return nil, fmt.Errorf("error converting new declarative config to model: %v", err)
 	}
 
-	g := &diffInclude.DiffGenerator{
+	g := &diffInternal.DiffGenerator{
 		Logger:            diffIn.Logger,
 		SkipDependencies:  diffIn.SkipDependencies,
 		Includer:          convertIncludeConfigToIncluder(diffIn.IncludeConfig),
@@ -97,7 +97,7 @@ func (p Diff) validate() error {
 	return nil
 }
 
-// DiffIncludeConfig configures diffInclude.Run() to include a set of packages,
+// DiffIncludeConfig configures diffInternal.Run() to include a set of packages,
 // channels, and/or bundles/versions in the output DeclarativeConfig.
 // These override other diff mechanisms. For example, if running in
 // heads-only mode but package "foo" channel "stable" is specified,
@@ -108,7 +108,7 @@ type DiffIncludeConfig struct {
 }
 
 // DiffIncludePackage contains a name (required) and channels and/or versions
-// (optional) to include in the diffInclude. The full package is only included if no channels
+// (optional) to include in the diffInternal. The full package is only included if no channels
 // or versions are specified.
 type DiffIncludePackage struct {
 	// Name of package.
@@ -131,7 +131,7 @@ type DiffIncludePackage struct {
 }
 
 // DiffIncludeChannel contains a name (required) and versions (optional)
-// to include in the diffInclude. The full channel is only included if no versions are specified.
+// to include in the diffInternal. The full channel is only included if no versions are specified.
 type DiffIncludeChannel struct {
 	// Name of channel.
 	Name string `json:"name" yaml:"name"`
@@ -196,8 +196,8 @@ func LoadDiffIncludeConfig(r io.Reader) (c DiffIncludeConfig, err error) {
 	return c, utilerrors.NewAggregate(errs)
 }
 
-func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInclude.DiffIncluder) {
-	includer.Packages = make([]diffInclude.DiffIncludePackage, len(c.Packages))
+func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInternal.DiffIncluder) {
+	includer.Packages = make([]diffInternal.DiffIncludePackage, len(c.Packages))
 	for pkgI, cpkg := range c.Packages {
 		pkg := &includer.Packages[pkgI]
 		pkg.Name = cpkg.Name
@@ -208,7 +208,7 @@ func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInclude.D
 		}
 
 		if len(cpkg.Channels) != 0 {
-			pkg.Channels = make([]diffInclude.DiffIncludeChannel, len(cpkg.Channels))
+			pkg.Channels = make([]diffInternal.DiffIncludeChannel, len(cpkg.Channels))
 			for chI, cch := range cpkg.Channels {
 				ch := &pkg.Channels[chI]
 				ch.Name = cch.Name

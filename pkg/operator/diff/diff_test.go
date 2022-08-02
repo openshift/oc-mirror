@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	diffInclude "github.com/openshift/oc-mirror/pkg/operator/diff/include"
+	diffInternal "github.com/openshift/oc-mirror/pkg/operator/diff/internal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	operatorRegistryAction "github.com/operator-framework/operator-registry/alpha/action"
+	action "github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image"
@@ -157,7 +157,7 @@ func TestDiff(t *testing.T) {
 				if !assert.Error(t, err) {
 					require.Fail(t, "expected an error")
 				}
-				if !errors.Is(err, operatorRegistryAction.ErrNotAllowed) {
+				if !errors.Is(err, action.ErrNotAllowed) {
 					require.Fail(t, "err is not ErrNotAllowed", err)
 				}
 			},
@@ -173,7 +173,7 @@ func TestDiff(t *testing.T) {
 				if !assert.Error(t, err) {
 					require.Fail(t, "expected an error")
 				}
-				if !errors.Is(err, operatorRegistryAction.ErrNotAllowed) {
+				if !errors.Is(err, action.ErrNotAllowed) {
 					require.Fail(t, "err is not ErrNotAllowed", err)
 				}
 			},
@@ -194,7 +194,7 @@ func TestLoadDiffIncludeConfig(t *testing.T) {
 		name             string
 		input            string
 		expectedCfg      DiffIncludeConfig
-		expectedIncluder diffInclude.DiffIncluder
+		expectedIncluder diffInternal.DiffIncluder
 		assertion        require.ErrorAssertionFunc
 	}
 
@@ -208,8 +208,8 @@ packages:
 			expectedCfg: DiffIncludeConfig{
 				Packages: []DiffIncludePackage{{Name: "foo"}},
 			},
-			expectedIncluder: diffInclude.DiffIncluder{
-				Packages: []diffInclude.DiffIncludePackage{{Name: "foo"}},
+			expectedIncluder: diffInternal.DiffIncluder{
+				Packages: []diffInternal.DiffIncludePackage{{Name: "foo"}},
 			},
 			assertion: require.NoError,
 		},
@@ -262,29 +262,29 @@ packages:
 					},
 				},
 			},
-			expectedIncluder: diffInclude.DiffIncluder{
-				Packages: []diffInclude.DiffIncludePackage{
+			expectedIncluder: diffInternal.DiffIncluder{
+				Packages: []diffInternal.DiffIncludePackage{
 					{
 						Name: "foo",
-						Channels: []diffInclude.DiffIncludeChannel{
+						Channels: []diffInternal.DiffIncludeChannel{
 							{
 								Name:     "stable",
 								Versions: []semver.Version{semver.MustParse("0.1.0"), semver.MustParse("0.2.0")},
 								Bundles:  []string{"foo.v0.3.0"},
 							},
 						},
-						AllChannels: diffInclude.DiffIncludeChannel{
+						AllChannels: diffInternal.DiffIncludeChannel{
 							Versions: []semver.Version{semver.MustParse("1.0.0")},
 						},
 					},
 					{
 						Name: "bar",
-						Channels: []diffInclude.DiffIncludeChannel{
+						Channels: []diffInternal.DiffIncludeChannel{
 							{Name: "stable", Versions: []semver.Version{
 								semver.MustParse("0.1.0"),
 							}},
 						},
-						AllChannels: diffInclude.DiffIncludeChannel{
+						AllChannels: diffInternal.DiffIncludeChannel{
 							Versions: []semver.Version{semver.MustParse("1.0.0")},
 							Bundles:  []string{"bar.v1.2.0"},
 						},

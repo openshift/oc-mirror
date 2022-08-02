@@ -1,4 +1,4 @@
-package include
+package internal
 
 import (
 	"fmt"
@@ -651,12 +651,18 @@ func TestDiffLatest(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "clusterwide", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0-clusterwide"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("clusterwide", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.1"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -699,9 +705,13 @@ func TestDiffLatest(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.1"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "clusterwide", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0-clusterwide"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("clusterwide", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -1171,10 +1181,14 @@ func TestDiffLatest(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
+					},
 					},
 					{Schema: declcfg.SchemaChannel, Name: "alpha", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.1.0-alpha.0"}, {Name: "foo.v0.2.0-alpha.0", Replaces: "foo.v0.1.0-alpha.0"}},
+						{Name: "foo.v0.1.0-alpha.0"}, {Name: "foo.v0.2.0-alpha.0", Replaces: "foo.v0.1.0-alpha.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("alpha", 2),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -1211,7 +1225,9 @@ func TestDiffLatest(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2453,9 +2469,15 @@ func TestDiffHeadsOnly(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("stable", 1),
+						},
 					},
 					{Schema: declcfg.SchemaChannel, Name: "alpha", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0-alpha.0"}, {Name: "foo.v0.2.0-alpha.0", Replaces: "foo.v0.1.0-alpha.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("alpha", 2),
+						},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2493,7 +2515,9 @@ func TestDiffHeadsOnly(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2518,9 +2542,14 @@ func TestDiffHeadsOnly(t *testing.T) {
 					{Schema: declcfg.SchemaPackage, Name: "bar", DefaultChannel: "stable"},
 				},
 				Channels: []declcfg.Channel{
-					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{{Name: "foo.v0.1.0"}}},
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{{Name: "foo.v0.1.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("stable", 1),
+						}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
 						{Name: "bar.v0.1.0"}, {Name: "bar.v0.2.0", Replaces: "bar.v0.1.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2554,6 +2583,8 @@ func TestDiffHeadsOnly(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
 						{Name: "bar.v0.2.0", Replaces: "bar.v0.1.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2573,10 +2604,14 @@ func TestDiffHeadsOnly(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						{Name: "foo.v0.1.0"}, {Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
+					},
 					},
 					{Schema: declcfg.SchemaChannel, Name: "alpha", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.1.0-alpha.0"}, {Name: "foo.v0.2.0-alpha.0", Replaces: "foo.v0.1.0-alpha.0"}},
+						{Name: "foo.v0.1.0-alpha.0"}, {Name: "foo.v0.2.0-alpha.0", Replaces: "foo.v0.1.0-alpha.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("alpha", 1),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2614,7 +2649,9 @@ func TestDiffHeadsOnly(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}},
+						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2635,7 +2672,9 @@ func TestDiffHeadsOnly(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"}, {Name: "foo.v0.1.1", Replaces: "foo.v0.1.0"},
-						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.1"}, {Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"}},
+						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.1"}, {Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2676,7 +2715,9 @@ func TestDiffHeadsOnly(t *testing.T) {
 				},
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
-						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.1"}, {Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"}},
+						{Name: "foo.v0.2.0", Replaces: "foo.v0.1.1"}, {Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"}}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
+					},
 					},
 				},
 				Bundles: []declcfg.Bundle{
@@ -2955,16 +2996,22 @@ func TestDiffRange(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 2),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "fast", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.2.0"},
 						{Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("fast", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -3055,9 +3102,13 @@ func TestDiffRange(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "fast", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("fast", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -3280,16 +3331,22 @@ func TestDiffRange(t *testing.T) {
 				Channels: []declcfg.Channel{
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "fast", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.2.0"},
 						{Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("fast", 2),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -3380,9 +3437,13 @@ func TestDiffRange(t *testing.T) {
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("stable", 1),
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "fast", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.3.0", Replaces: "foo.v0.2.0"},
+					}, Properties: []property.Property{
+						property.MustBuildChannelPriority("fast", 2),
 					}},
 				},
 				Bundles: []declcfg.Bundle{
@@ -3597,7 +3658,6 @@ func TestSetDefaultChannelRange(t *testing.T) {
 			}
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			fmt.Println(outputCfg)
 			require.EqualValues(t, s.expCfg, outputCfg)
 		})
 	}
@@ -3713,13 +3773,12 @@ func TestSetDefaultChannelRange2(t *testing.T) {
 			}
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			fmt.Println(outputCfg)
 			require.EqualValues(t, s.expCfg, outputCfg)
 		})
 	}
 }
 
-func TestSetDefaultChannelByName(t *testing.T) {
+func TestSetDefaultChannelError(t *testing.T) {
 	type spec struct {
 		name      string
 		g         *DiffGenerator
@@ -3741,9 +3800,6 @@ func TestSetDefaultChannelByName(t *testing.T) {
 
 					{Schema: declcfg.SchemaChannel, Name: "v1.8", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
 						{Name: "ibm-mq.v1.8.1"}},
-						Properties: []property.Property{
-							property.MustBuildChannelPriority("v1.8", 3),
-						},
 					},
 
 					{Schema: declcfg.SchemaChannel, Name: "v1.7", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
@@ -3856,17 +3912,8 @@ func TestSetDefaultChannelByName(t *testing.T) {
 			newModel, err := declcfg.ConvertToModel(s.newCfg)
 			require.NoError(t, err)
 
-			outputModel, err := s.g.Run(model.Model{}, newModel)
-			s.assertion(t, err)
-
-			if err := outputModel.Validate(); err != nil {
-				fmt.Println(err)
-				//return nil, err
-			}
-
-			outputCfg := declcfg.ConvertFromModel(outputModel)
-			fmt.Println(outputCfg)
-			//require.EqualValues(t, s.expCfg, outputCfg)
+			_, err = s.g.Run(model.Model{}, newModel)
+			require.Error(t, err)
 		})
 	}
 }
