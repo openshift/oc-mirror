@@ -18,6 +18,24 @@ type deprecated struct{}
 
 const deprecatedType = "olm.deprecated"
 
+func assertCfg(t *testing.T, outputCfg declcfg.DeclarativeConfig, expCfg declcfg.DeclarativeConfig) {
+	require.EqualValues(t, expCfg.Bundles, outputCfg.Bundles)
+	require.EqualValues(t, expCfg.Packages, outputCfg.Packages)
+	require.EqualValues(t, expCfg.Others, outputCfg.Others)
+	require.Len(t, outputCfg.Channels, len(expCfg.Channels))
+	for i, expectedChannel := range expCfg.Channels {
+		require.Equal(t, expectedChannel.Name, outputCfg.Channels[i].Name)
+		require.Equal(t, expectedChannel.Package, outputCfg.Channels[i].Package)
+		require.Equal(t, expectedChannel.Schema, outputCfg.Channels[i].Schema)
+		require.Equal(t, expectedChannel.Entries, outputCfg.Channels[i].Entries)
+		require.Len(t, outputCfg.Channels[i].Properties, len(expectedChannel.Properties))
+		for j, expectedProperty := range expectedChannel.Properties {
+			require.Equal(t, expectedProperty.Type, outputCfg.Channels[i].Properties[j].Type)
+			require.JSONEq(t, string(expectedProperty.Value), string(outputCfg.Channels[i].Properties[j].Value))
+		}
+	}
+}
+
 func init() {
 	property.AddToScheme(deprecatedType, &deprecated{})
 }
@@ -1340,7 +1358,7 @@ func TestDiffLatest(t *testing.T) {
 			s.assertion(t, err)
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			require.Equal(t, s.expCfg, outputCfg)
+			assertCfg(t, outputCfg, s.expCfg)
 		})
 	}
 }
@@ -2914,7 +2932,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 			s.assertion(t, err)
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			require.Equal(t, s.expCfg, outputCfg)
+			assertCfg(t, outputCfg, s.expCfg)
 		})
 	}
 }
@@ -3495,7 +3513,7 @@ func TestDiffRange(t *testing.T) {
 			s.assertion(t, err)
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			require.EqualValues(t, s.expCfg, outputCfg)
+			assertCfg(t, outputCfg, s.expCfg)
 		})
 	}
 }
@@ -3658,7 +3676,7 @@ func TestSetDefaultChannelRange(t *testing.T) {
 			}
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			require.EqualValues(t, s.expCfg, outputCfg)
+			assertCfg(t, outputCfg, s.expCfg)
 		})
 	}
 }
@@ -3773,7 +3791,7 @@ func TestSetDefaultChannelRange2(t *testing.T) {
 			}
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)
-			require.EqualValues(t, s.expCfg, outputCfg)
+			assertCfg(t, outputCfg, s.expCfg)
 		})
 	}
 }
@@ -3846,20 +3864,8 @@ func TestSetDefaultChannelError(t *testing.T) {
 				Includer: DiffIncluder{
 					Packages: []DiffIncludePackage{
 						{
-							//HeadsOnly: false,
-
 							Name:  "ibm-mq",
 							Range: semver.MustParseRange("<=1.7.0"),
-							//Channels: []DiffIncludeChannel{
-							//	//	{
-							//	//		Name:  "v1.7",
-							//	//		Range: semver.MustParseRange("<=1.7.0"),
-							//	//	},
-							//	{
-							//		Name:  "v1.6",
-							//		Range: semver.MustParseRange("<=1.6.0"),
-							//	},
-							//},
 						},
 					},
 				},
@@ -3905,9 +3911,6 @@ func TestSetDefaultChannelError(t *testing.T) {
 			if s.assertion == nil {
 				s.assertion = require.NoError
 			}
-
-			//oldModel, err := declcfg.ConvertToModel(s.oldCfg)
-			//require.NoError(t, err)
 
 			newModel, err := declcfg.ConvertToModel(s.newCfg)
 			require.NoError(t, err)
