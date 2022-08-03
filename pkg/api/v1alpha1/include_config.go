@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/blang/semver/v4"
-	"github.com/operator-framework/operator-registry/alpha/action"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 type IncludeConfig struct {
@@ -42,7 +42,7 @@ type IncludeBundle struct {
 	StartingBundle string `json:"startingBundle,omitempty" yaml:"startingBundle,omitempty"`
 }
 
-func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeConfig, err error) {
+func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfig, err error) {
 	if ic == nil {
 		return dic, nil
 	}
@@ -55,7 +55,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 		}
 
-		dpkg := action.DiffIncludePackage{Name: pkg.Name}
+		dpkg := diff.DiffIncludePackage{Name: pkg.Name}
 		switch {
 		case !pkg.StartingVersion.EQ(semver.Version{}):
 			dpkg.Versions = []semver.Version{pkg.StartingVersion}
@@ -72,7 +72,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 				return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
 			}
 
-			dch := action.DiffIncludeChannel{Name: ch.Name}
+			dch := diff.DiffIncludeChannel{Name: ch.Name}
 			switch {
 			case !ch.StartingVersion.EQ(semver.Version{}):
 				dch.Versions = []semver.Version{ch.StartingVersion}
