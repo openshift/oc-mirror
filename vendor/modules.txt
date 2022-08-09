@@ -151,7 +151,7 @@ github.com/chai2010/gettext-go/gettext/po
 # github.com/containerd/cgroups v1.0.3
 ## explicit; go 1.16
 github.com/containerd/cgroups/stats/v1
-# github.com/containerd/containerd v1.5.11
+# github.com/containerd/containerd v1.5.13
 ## explicit; go 1.17
 github.com/containerd/containerd/archive
 github.com/containerd/containerd/archive/compression
@@ -607,7 +607,7 @@ github.com/opencontainers/runc/libcontainer/user
 # github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
-# github.com/openshift/api v0.0.0-20220317153038-a2ca88c44400
+# github.com/openshift/api v0.0.0-20220525145417-ee5b62754c68
 ## explicit; go 1.16
 github.com/openshift/api/apps/v1
 github.com/openshift/api/build/v1
@@ -617,7 +617,7 @@ github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/image/v1
 github.com/openshift/api/operator/v1
 github.com/openshift/api/operator/v1alpha1
-# github.com/openshift/build-machinery-go v0.0.0-20220121085309-f94edc2d6874
+# github.com/openshift/build-machinery-go v0.0.0-20220429084610-baff9f8d23b3
 ## explicit; go 1.13
 github.com/openshift/build-machinery-go
 github.com/openshift/build-machinery-go/make
@@ -630,7 +630,7 @@ github.com/openshift/build-machinery-go/scripts
 # github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 ## explicit; go 1.16
 github.com/openshift/cincinnati-operator/api/v1
-# github.com/openshift/client-go v0.0.0-20220316161609-20d926360175
+# github.com/openshift/client-go v0.0.0-20220525160904-9e1acff93e4a
 ## explicit; go 1.16
 github.com/openshift/client-go/config/clientset/versioned
 github.com/openshift/client-go/config/clientset/versioned/scheme
@@ -642,7 +642,7 @@ github.com/openshift/client-go/operator/clientset/versioned/scheme
 # github.com/openshift/custom-resource-status v1.1.0
 ## explicit; go 1.12
 github.com/openshift/custom-resource-status/conditions/v1
-# github.com/openshift/library-go v0.0.0-20220315141154-40a8b89abdc2
+# github.com/openshift/library-go v0.0.0-20220525173854-9b950a41acdc => ../library-go
 ## explicit; go 1.17
 github.com/openshift/library-go/pkg/build/buildutil
 github.com/openshift/library-go/pkg/image/dockerv1client
@@ -660,7 +660,7 @@ github.com/openshift/library-go/pkg/verify/store/parallel
 github.com/openshift/library-go/pkg/verify/store/serial
 github.com/openshift/library-go/pkg/verify/store/sigstore
 github.com/openshift/library-go/pkg/verify/util
-# github.com/openshift/oc v0.0.0-alpha.0.0.20220527211124-d91e0087a8a6
+# github.com/openshift/oc v0.0.0-alpha.0.0.20220527211124-d91e0087a8a6 => ../oc
 ## explicit; go 1.18
 github.com/openshift/oc/pkg/cli/admin/catalog
 github.com/openshift/oc/pkg/cli/admin/prune/imageprune
@@ -693,8 +693,8 @@ github.com/operator-framework/api/pkg/validation
 github.com/operator-framework/api/pkg/validation/errors
 github.com/operator-framework/api/pkg/validation/interfaces
 github.com/operator-framework/api/pkg/validation/internal
-# github.com/operator-framework/operator-registry v1.23.0
-## explicit; go 1.17
+# github.com/operator-framework/operator-registry v1.23.0 => ../../operator-framework/operator-registry
+## explicit; go 1.18
 github.com/operator-framework/operator-registry/alpha/action
 github.com/operator-framework/operator-registry/alpha/declcfg
 github.com/operator-framework/operator-registry/alpha/model
@@ -917,7 +917,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
 golang.org/x/net/proxy
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
+# golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 ## explicit; go 1.11
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
@@ -925,7 +925,7 @@ golang.org/x/oauth2/internal
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f
+# golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -1091,7 +1091,7 @@ helm.sh/helm/v3/pkg/release
 helm.sh/helm/v3/pkg/releaseutil
 helm.sh/helm/v3/pkg/repo
 helm.sh/helm/v3/pkg/time
-# k8s.io/api v0.24.0
+# k8s.io/api v0.24.1
 ## explicit; go 1.16
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -1157,7 +1157,7 @@ k8s.io/apiextensions-apiserver/pkg/apiserver/schema/objectmeta
 k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning
 k8s.io/apiextensions-apiserver/pkg/apiserver/validation
 k8s.io/apiextensions-apiserver/third_party/forked/celopenapi/model
-# k8s.io/apimachinery v0.24.0
+# k8s.io/apimachinery v0.24.1
 ## explicit; go 1.16
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1210,7 +1210,7 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.24.0
+# k8s.io/apiserver v0.24.1
 ## explicit; go 1.16
 k8s.io/apiserver/pkg/apis/apiserver
 k8s.io/apiserver/pkg/apis/apiserver/install
@@ -1229,12 +1229,12 @@ k8s.io/apiserver/pkg/server/egressselector/metrics
 k8s.io/apiserver/pkg/util/feature
 k8s.io/apiserver/pkg/util/webhook
 k8s.io/apiserver/pkg/util/x509metrics
-# k8s.io/cli-runtime v0.24.0
+# k8s.io/cli-runtime v0.24.1
 ## explicit; go 1.16
 k8s.io/cli-runtime/pkg/genericclioptions
 k8s.io/cli-runtime/pkg/printers
 k8s.io/cli-runtime/pkg/resource
-# k8s.io/client-go v0.24.0
+# k8s.io/client-go v0.24.1
 ## explicit; go 1.16
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1beta1
@@ -1370,7 +1370,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.24.0
+# k8s.io/component-base v0.24.1
 ## explicit; go 1.16
 k8s.io/component-base/featuregate
 k8s.io/component-base/metrics
@@ -1401,7 +1401,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
 k8s.io/kube-openapi/pkg/validation/validate
-# k8s.io/kubectl v0.24.0
+# k8s.io/kubectl v0.24.1
 ## explicit; go 1.16
 k8s.io/kubectl/pkg/cmd/util
 k8s.io/kubectl/pkg/scheme

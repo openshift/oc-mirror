@@ -271,6 +271,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	switch {
 	case o.ManifestsOnly:
+		fmt.Printf("Manifest only")
 		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
 		if err != nil {
 			return fmt.Errorf("error retrieving metadata from %q: %v", o.From, err)
@@ -287,6 +288,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		return o.generateResults(mapping, results)
 	case mirrorToDisk:
+		fmt.Printf("mirrorToDisk")
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
@@ -351,6 +353,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			}
 		}
 	case diskToMirror:
+		fmt.Printf("DiskToMirror")
 		dir, err := o.createResultsDir()
 		if err != nil {
 			return err
@@ -380,6 +383,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 	case mirrorToMirror:
+		fmt.Printf("MirrorToMirror")
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err

@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/archive"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
+	"github.com/openshift/oc/pkg/cli/image/strategy"
 	"github.com/openshift/oc/pkg/cli/image/workqueue"
 )
 
@@ -130,13 +131,14 @@ type ExtractOptions struct {
 	Confirm bool
 	DryRun  bool
 
-	FileDir string
+	FileDir  string
+	ICSPFile string
 
 	genericclioptions.IOStreams
 
 	// ImageMetadataCallback is invoked once per image retrieved, and may be called in parallel if
 	// MaxPerRegistry is set higher than 1.
-	ImageMetadataCallback func(m *Mapping, dgst, contentDigest digest.Digest, imageConfig *dockerv1client.DockerImageConfig)
+	ImageMetadataCallback func(m *Mapping, dgst, contentDigest digest.Digest, imageConfig *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest)
 	// TarEntryCallback, if set, is passed each entry in the viewed layers. Entries will be filtered
 	// by name and only the entry in the highest layer will be passed to the callback. Returning false
 	// will halt processing of the image.
@@ -177,6 +179,8 @@ func NewExtract(streams genericclioptions.IOStreams) *cobra.Command {
 
 	flag.BoolVar(&o.Confirm, "confirm", o.Confirm, "Pass to allow extracting to non-empty directories.")
 	flag.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print the actions that would be taken and exit without writing any contents.")
+
+	flag.StringVar(&o.ICSPFile, "icsp-file", o.ICSPFile, "Path to an ImageContentSourcePolicy file. If set, data from this file will be used to find alternative locations for images.")
 
 	flag.StringSliceVar(&o.Files, "file", o.Files, "Extract the specified files to the current directory.")
 	flag.StringSliceVar(&o.Paths, "path", o.Paths, "Extract only part of an image, or, designate the directory on disk to extract image contents into. Must be SRC:DST where SRC is the path within the image and DST a local directory. If not specified the default is to extract everything to the current directory.")
@@ -341,6 +345,9 @@ func (o *ExtractOptions) Run() error {
 	if err != nil {
 		return err
 	}
+	if len(o.ICSPFile) > 0 {
+		fromContext = fromContext.WithAlternateBlobSourceStrategy(strategy.NewICSPOnErrorStrategy(o.ICSPFile))
+	}
 	fromOptions := &imagesource.Options{
 		FileDir:         o.FileDir,
 		Insecure:        o.SecurityOptions.Insecure,
@@ -351,9 +358,14 @@ func (o *ExtractOptions) Run() error {
 	defer close(stopCh)
 	q := workqueue.New(o.ParallelOptions.MaxPerRegistry, stopCh)
 	return q.Try(func(q workqueue.Try) {
+		icspWarned := false
 		for i := range o.Mappings {
 			mapping := o.Mappings[i]
 			from := mapping.ImageRef
+			if !icspWarned && len(o.ICSPFile) > 0 && len(from.Ref.Tag) > 0 {
+				fmt.Fprintf(o.ErrOut, "warning: --icsp-file only applies to images referenced by digest and will be ignored for tags\n")
+				icspWarned = true
+			}
 			q.Try(func() error {
 				repo, err := fromOptions.Repository(ctx, from)
 				if err != nil {
@@ -506,7 +518,7 @@ func (o *ExtractOptions) Run() error {
 				}
 
 				if o.ImageMetadataCallback != nil {
-					o.ImageMetadataCallback(&mapping, location.Manifest, contentDigest, imageConfig)
+					o.ImageMetadataCallback(&mapping, location.Manifest, contentDigest, imageConfig, location.ManifestListDigest())
 				}
 				return nil
 			})

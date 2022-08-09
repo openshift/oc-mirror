@@ -19,6 +19,7 @@ import (
 
 const (
 	indexIgnoreFilename = ".indexignore"
+	versionFilename     = "VERSION"
 )
 
 type WalkFunc func(path string, cfg *DeclarativeConfig, err error) error
@@ -37,13 +38,18 @@ func WalkFS(root fs.FS, walkFn WalkFunc) error {
 		return err
 	}
 
+	versionMatcher, err := ignore.NewMatcher(root, versionFilename)
+	if err != nil {
+		return err
+	}
+
 	return fs.WalkDir(root, ".", func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return walkFn(path, nil, err)
 		}
 		// avoid validating a directory, an .indexignore file, or any file that matches
 		// an ignore pattern outlined in a .indexignore file.
-		if info.IsDir() || info.Name() == indexIgnoreFilename || matcher.Match(path, false) {
+		if info.IsDir() || info.Name() == indexIgnoreFilename || info.Name() == versionFilename || matcher.Match(path, false) || versionMatcher.Match(path, false) {
 			return nil
 		}
 

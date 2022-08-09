@@ -139,6 +139,27 @@ var (
 	program is [located on github](https://github.com/openshift/oc).
 	`)
 
+	readmeCCOUnix = heredoc.Doc(`
+	# Cloud Credential Operator utility
+
+	The ccoctl tool provides various commands to assist with the creating and maintenance of
+	cloud credentials from outside the cluster (necessary when CCO is put in "Manual" mode).
+
+	To learn more about OpenShift, visit [docs.openshift.com](https://docs.openshift.com)
+	and select the version of OpenShift you are using.
+
+	## Installing the tools
+
+	After extracting this archive, move the \u0060ccoctl\u0060 binary to a location on your
+	PATH such as \u0060/usr/local/bin\u0060, or keep it in a temporary directory and
+	reference it via \u0060./ccoctl\u0060.
+
+	## License
+
+	OpenShift is licensed under the Apache Public License 2.0. The source code for this
+	program is [located on github](https://github.com/openshift/cloud-credential-operator).
+	`)
+
 	// indicates that the architecture of the binary matches the release payload
 	targetReleaseArch = "release-arch"
 )
@@ -264,6 +285,16 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			InjectReleaseVersion: true,
 			ArchiveFormat:        "openshift-baremetal-install-linux-%s.tar.gz",
 		},
+		{
+			OS:      "linux",
+			Arch:    targetReleaseArch,
+			Command: "ccoctl",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "cloud-credential-operator", From: "usr/bin/ccoctl"},
+
+			Readme:        readmeCCOUnix,
+			ArchiveFormat: "ccoctl-linux-%s.tar.gz",
+		},
 	}
 
 	currentArch := runtime.GOARCH
@@ -360,7 +391,9 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	dir := o.Directory
 	infoOptions := NewInfoOptions(o.IOStreams)
 	infoOptions.SecurityOptions = o.SecurityOptions
+	infoOptions.FilterOptions = o.FilterOptions
 	infoOptions.FileDir = o.FileDir
+	infoOptions.ICSPFile = o.ICSPFile
 	release, err := infoOptions.LoadReleaseInfo(o.From, false)
 	if err != nil {
 		return err
@@ -369,7 +402,14 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	releaseName := release.PreferredName()
 	refExact := release.ImageRef
 	refExact.Ref.Tag = ""
-	refExact.Ref.ID = release.Digest.String()
+	// if the release image is manifestlist image, we'll not change digest with
+	// arch based sha. Because we want that the extracted tool can be used for all archs.
+	if len(release.ManifestListDigest) == 0 {
+		refExact.Ref.ID = release.Digest.String()
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		refExact.Ref.ID = release.ManifestListDigest.String()
+	}
 	exactReleaseImage := refExact.String()
 
 	// resolve target image references to their pull specs
@@ -427,6 +467,8 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
+	opts.FilterOptions = o.FilterOptions
+	opts.ICSPFile = o.ICSPFile
 	opts.OnlyFiles = true
 
 	// create the mapping lookup of the valid targets

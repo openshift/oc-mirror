@@ -368,6 +368,15 @@ func (o *NewOptions) Run() error {
 		extractOpts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
 		extractOpts.ParallelOptions = o.ParallelOptions
 		extractOpts.SecurityOptions = o.SecurityOptions
+		if o.KeepManifestList {
+			// we'll always use manifests from the linux/amd64 image, since the manifests
+			// won't differ between architectures, at least for now
+			re, err := regexp.Compile("linux/amd64")
+			if err != nil {
+				return err
+			}
+			extractOpts.FilterOptions.OSFilter = re
+		}
 		extractOpts.OnlyFiles = true
 		extractOpts.Mappings = []extract.Mapping{
 			{
@@ -375,7 +384,7 @@ func (o *NewOptions) Run() error {
 				From:     "release-manifests/",
 			},
 		}
-		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 			verifier.Verify(dgst, contentDigest)
 			releaseDigest = contentDigest
 			if config.Config != nil {
@@ -436,7 +445,8 @@ func (o *NewOptions) Run() error {
 			ordered = append(ordered, tag.Name)
 		}
 
-		// default the base image to a matching release payload digest or error
+		// default the base image to a matching release payload base digest or
+		// if the base digest is invalid use release payload itself as base image.
 		if len(o.ToImageBase) == 0 && len(baseDigest) > 0 {
 			for _, tag := range is.Spec.Tags {
 				if tag.From == nil || tag.From.Kind != "DockerImage" {
@@ -452,7 +462,16 @@ func (o *NewOptions) Run() error {
 				}
 			}
 			if len(o.ToImageBase) == 0 {
-				return fmt.Errorf("unable to find an image within the release that matches the base image manifest %q, please specify --to-image-base", baseDigest)
+				if !o.KeepManifestList {
+					return fmt.Errorf("unable to find an image within the release that matches the base image manifest %q, please specify --to-image-base", baseDigest)
+				}
+
+				o.ToImageBase = o.FromReleaseImage
+				// ToImageBase is set and thereby, metadata is overridden.
+				// To skip verification, we need to set hasMetadataOverrides to true
+				// in order to behave similar when user passes --to-image-base flag.
+				hasMetadataOverrides = true
+				klog.V(2).Infof("unable to find an image within the release that matches the base image manifest %q, using --from-release %q as base image", baseDigest, o.FromReleaseImage)
 			}
 		}
 
@@ -918,15 +937,17 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
-	// we'll always use manifests from the linux/amd64 image, since the manifests
-	// won't differ between architectures, at least for now
-	re, err := regexp.Compile("linux/amd64")
-	if err != nil {
-		return err
+	if o.KeepManifestList {
+		// we'll always use manifests from the linux/amd64 image, since the manifests
+		// won't differ between architectures, at least for now
+		re, err := regexp.Compile("linux/amd64")
+		if err != nil {
+			return err
+		}
+		opts.FilterOptions.OSFilter = re
 	}
-	opts.FilterOptions.OSFilter = re
 	opts.OnlyFiles = true
-	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 		verifier.Verify(dgst, contentDigest)
 
 		lock.Lock()

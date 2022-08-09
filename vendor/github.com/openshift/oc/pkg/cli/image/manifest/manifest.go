@@ -253,6 +253,13 @@ func (m ManifestLocation) IsList() bool {
 	return len(m.ManifestList) > 0
 }
 
+func (m ManifestLocation) ManifestListDigest() digest.Digest {
+	if m.IsList() {
+		return m.ManifestList
+	}
+	return ""
+}
+
 func (m ManifestLocation) String() string {
 	if m.IsList() {
 		return fmt.Sprintf("manifest %s in manifest list %s", m.Manifest, m.ManifestList)
@@ -380,6 +387,8 @@ func ManifestToImageConfig(ctx context.Context, srcManifest distribution.Manifes
 
 		return base, layers, nil
 
+	case *manifestlist.DeserializedManifestList:
+		return nil, nil, fmt.Errorf("use --keep-manifest-list option for image manifest type %T from %s", srcManifest, location)
 	default:
 		return nil, nil, fmt.Errorf("unknown image manifest of type %T from %s", srcManifest, location)
 	}
@@ -439,7 +448,7 @@ func ProcessManifestList(ctx context.Context, srcDigest digest.Digest, srcManife
 			if err != nil {
 				return nil, nil, "", err
 			}
-			klog.Warningf("Chose %s/%s manifest from the manifest list.", t.Manifests[0].Platform.OS, t.Manifests[0].Platform.Architecture)
+			klog.V(2).Infof("Chose %s/%s manifest from the manifest list.", t.Manifests[0].Platform.OS, t.Manifests[0].Platform.Architecture)
 			return srcManifests, srcManifests[0], manifestDigest, nil
 		default:
 			return append(srcManifests, manifestList), manifestList, manifestDigest, nil

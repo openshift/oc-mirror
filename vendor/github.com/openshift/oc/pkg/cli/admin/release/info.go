@@ -133,6 +133,8 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 
 	flags.BoolVar(&o.Verify, "verify", o.Verify, "Generate bug listings from the changelogs in the git repositories extracted to this path.")
 
+	flags.StringVar(&o.ICSPFile, "icsp-file", o.ICSPFile, "Path to an ImageContentSourcePolicy file. If set, data from this file will be used to find alternative locations for images.")
+
 	flags.BoolVar(&o.ShowContents, "contents", o.ShowContents, "Display the contents of a release.")
 	flags.BoolVar(&o.ShowCommit, "commits", o.ShowCommit, "Display information about the source an image was created with.")
 	flags.BoolVar(&o.ShowCommitURL, "commit-urls", o.ShowCommitURL, "Display a link (if possible) to the source code.")
@@ -165,6 +167,7 @@ type InfoOptions struct {
 	ShowPullSpec  bool
 	ShowSize      bool
 	Verify        bool
+	ICSPFile      string
 
 	ChangelogDir string
 	BugsDir      string
@@ -413,8 +416,8 @@ func (o *InfoOptions) Validate() error {
 	if o.SkipBugCheck && len(o.BugsDir) == 0 {
 		return fmt.Errorf("--skip-bug-check requires --bugs")
 	}
-	if o.SkipBugCheck && o.Output != "name" {
-		return fmt.Errorf("--skip-bug-check requires --output to be set to 'name'")
+	if o.SkipBugCheck && o.Output != "name" && o.Output != "json" {
+		return fmt.Errorf("--skip-bug-check requires --output to be set to 'name' or 'json'")
 	}
 	if len(o.ChangelogDir) > 0 || len(o.BugsDir) > 0 {
 		if len(o.From) == 0 {
@@ -427,9 +430,9 @@ func (o *InfoOptions) Validate() error {
 	switch {
 	case len(o.BugsDir) > 0:
 		switch o.Output {
-		case "", "name":
+		case "", "name", "json":
 		default:
-			return fmt.Errorf("--output only supports 'name' for --bugs")
+			return fmt.Errorf("--output only supports 'name' or 'json' for --bugs")
 		}
 	case len(o.ChangelogDir) > 0:
 		if len(o.Output) > 0 {
@@ -689,15 +692,14 @@ type ReleaseManifestDiff struct {
 }
 
 type ReleaseInfo struct {
-	Image         string                          `json:"image"`
-	ImageRef      imagesource.TypedImageReference `json:"-"`
-	Digest        digest.Digest                   `json:"digest"`
-	ContentDigest digest.Digest                   `json:"contentDigest"`
-	// TODO: return the list digest in the future
-	// ListDigest    digest.Digest                       `json:"listDigest"`
-	Config     *dockerv1client.DockerImageConfig `json:"config"`
-	Metadata   *CincinnatiMetadata               `json:"metadata"`
-	References *imageapi.ImageStream             `json:"references"`
+	Image              string                            `json:"image"`
+	ImageRef           imagesource.TypedImageReference   `json:"-"`
+	Digest             digest.Digest                     `json:"digest"`
+	ContentDigest      digest.Digest                     `json:"contentDigest"`
+	ManifestListDigest digest.Digest                     `json:"listDigest"`
+	Config             *dockerv1client.DockerImageConfig `json:"config"`
+	Metadata           *CincinnatiMetadata               `json:"metadata"`
+	References         *imageapi.ImageStream             `json:"references"`
 
 	// This field is deprecated, does not contain display names. Is replaced by
 	// ComponentVersions.
@@ -756,6 +758,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	opts.SecurityOptions = o.SecurityOptions
 	opts.FilterOptions = o.FilterOptions
 	opts.FileDir = o.FileDir
+	opts.ICSPFile = o.ICSPFile
 
 	release := &ReleaseInfo{
 		Image:    image,
@@ -764,8 +767,9 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 		RawMetadata: make(map[string][]byte),
 	}
 
-	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 		verifier.Verify(dgst, contentDigest)
+		release.ManifestListDigest = manifestListDigest
 		release.Digest = dgst
 		release.ContentDigest = contentDigest
 		release.Config = config
@@ -1207,7 +1211,12 @@ func describeReleaseInfo(out io.Writer, release *ReleaseInfo, showCommit, showCo
 	defer w.Flush()
 	now := time.Now()
 	fmt.Fprintf(w, "Name:\t%s\n", release.PreferredName())
-	fmt.Fprintf(w, "Digest:\t%s\n", release.Digest)
+	if len(release.ManifestListDigest) == 0 {
+		fmt.Fprintf(w, "Digest:\t%s\n", release.Digest)
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		fmt.Fprintf(w, "Digest:\t%s\n", release.ManifestListDigest.String())
+	}
 	fmt.Fprintf(w, "Created:\t%s\n", release.Config.Created.UTC().Truncate(time.Second).Format(time.RFC3339))
 	fmt.Fprintf(w, "OS/Arch:\t%s/%s\n", release.Config.OS, release.Config.Architecture)
 	fmt.Fprintf(w, "Manifests:\t%d\n", len(release.ManifestFiles))
@@ -1218,7 +1227,12 @@ func describeReleaseInfo(out io.Writer, release *ReleaseInfo, showCommit, showCo
 	fmt.Fprintln(w)
 	refExact := release.ImageRef
 	refExact.Ref.Tag = ""
-	refExact.Ref.ID = release.Digest.String()
+	if len(release.ManifestListDigest) == 0 {
+		refExact.Ref.ID = release.Digest.String()
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		refExact.Ref.ID = release.ManifestListDigest.String()
+	}
 	fmt.Fprintf(w, "Pull From:\t%s\n", refExact)
 
 	if m := release.Metadata; m != nil {
@@ -1651,6 +1665,22 @@ func describeBugs(out, errOut io.Writer, diff *ReleaseDiff, dir string, format s
 			for _, b := range valid {
 				fmt.Fprintln(out, b.ID)
 			}
+		case "json":
+			var printedBugs []BugRemoteInfo
+			for _, v := range valid {
+				if skipBugCheck {
+					printedBugs = append(printedBugs, BugRemoteInfo{ID: v.ID, Source: v.Source})
+				} else {
+					if bug, ok := bugs[generateBugKey(v.Source, v.ID)]; ok {
+						printedBugs = append(printedBugs, bug)
+					}
+				}
+			}
+			data, err := json.MarshalIndent(printedBugs, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(out, string(data))
 		default:
 			tw := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 			fmt.Fprintln(tw, "ID\tSTATUS\tPRIORITY\tSUMMARY")

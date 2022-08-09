@@ -20,6 +20,7 @@ var (
 )
 
 func (t DestinationType) Prefix() string {
+	fmt.Println("I am in the oc")
 	switch t {
 	case DestinationFile:
 		return "file://"
@@ -105,6 +106,10 @@ func ParseReference(ref string) (TypedImageReference, error) {
 		if strings.HasPrefix(ref, "/") {
 			ref = ref[1:]
 		}
+	case strings.HasPrefix(ref, "oci:"):
+		dstType = DestinationFile
+		ref = strings.TrimPrefix(ref, "oci:")
+		ref = strings.TrimPrefix(ref, "/")
 	}
 	dst, err := reference.Parse(ref)
 	if err != nil {
