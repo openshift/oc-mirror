@@ -27,12 +27,6 @@ const (
 	OkdUpdateURL = "https://origin-release.ci.openshift.org/graph"
 )
 
-// SupportedArchs are architectures accepted when calculating
-// upgrades with Cincinnati.
-// TODO(jpower432): Validate this in all inclusive and applies to
-// OKD
-var SupportedArchs = map[string]struct{}{"amd64": {}, "ppc64le": {}, "s390x": {}}
-
 // Error is returned when are unable to get updates.
 type Error struct {
 	// Reason is the reason suggested for the Cincinnati calculation error.
