@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
-	github.com/containerd/containerd v1.5.11
+	github.com/containerd/containerd v1.5.13
 	github.com/containers/image/v5 v5.16.0
 	github.com/docker/cli v20.10.12+incompatible
 	github.com/docker/distribution v2.8.1+incompatible
@@ -22,7 +22,7 @@ require (
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 	github.com/openshift/library-go v0.0.0-20220315141154-40a8b89abdc2
 	github.com/openshift/oc v0.0.0-alpha.0.0.20220527211124-d91e0087a8a6
-	github.com/operator-framework/operator-registry v1.23.0
+	github.com/operator-framework/operator-registry v1.25.1-0.20220829190719-208775f5a9bf
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.7.1
 	github.com/spf13/cobra v1.4.0
@@ -41,7 +41,9 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
-require golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
+require golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
+
+require github.com/mitchellh/hashstructure/v2 v2.0.2
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -126,7 +128,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
-	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/locker v1.0.1 // indirect
