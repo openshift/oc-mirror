@@ -103,7 +103,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 	mmapping := image.TypedImageMapping{}
 	for _, ctlg := range cfg.Mirror.Operators {
 
-		ctlgRef, err := imagesource.ParseReference(ctlg.Catalog)
+		ctlgRef, err := image.ParseReference(ctlg.Catalog)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
