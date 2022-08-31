@@ -3,8 +3,9 @@ package list
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/pkg/cli"
 )
 
 func TestReleasesComplete(t *testing.T) {
@@ -107,13 +108,6 @@ func TestReleasesValidate(t *testing.T) {
 				Channels: true,
 			},
 			expError: `must specify --version`,
-		},
-		{
-			name: "Invalid/UnsupportedArch",
-			opts: &ReleasesOptions{
-				FilterByArchs: []string{"fake"},
-			},
-			expError: "architecture \"fake\" is not a supported release architecture",
 		},
 		{
 			name: "Valid/Channels",
