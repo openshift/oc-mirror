@@ -3920,3 +3920,96 @@ func TestSetDefaultChannelError(t *testing.T) {
 		})
 	}
 }
+
+func TestSetDefaultChannel(t *testing.T) {
+	type spec struct {
+		name                   string
+		pkg                    *model.Package
+		expectedError          bool
+		expectedDefaultChannel *model.Channel
+	}
+
+	specs := []spec{
+		{
+			name: "WithPriorities/TwoChannels",
+			pkg: &model.Package{
+				DefaultChannel: nil,
+				Channels: map[string]*model.Channel{
+					"stable": {
+						Name: "stable",
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("stable", 2),
+						}},
+					"fast": {
+						Name: "fast",
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("fast", 1),
+						}},
+				},
+			},
+			expectedError: false,
+			expectedDefaultChannel: &model.Channel{
+				Name: "stable",
+				Properties: []property.Property{
+					property.MustBuildChannelPriority("stable", 2),
+				}},
+		},
+		{
+			name: "WithPriorities/OnlyOneChannel",
+			pkg: &model.Package{
+				DefaultChannel: nil,
+				Channels: map[string]*model.Channel{
+					"stable": {
+						Name: "stable",
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("stable", 2),
+						}},
+				},
+			},
+			expectedError: false,
+			expectedDefaultChannel: &model.Channel{
+				Name: "stable",
+				Properties: []property.Property{
+					property.MustBuildChannelPriority("stable", 2),
+				}},
+		},
+		{
+			name: "NoPriorities",
+			pkg: &model.Package{
+				DefaultChannel: nil,
+				Channels: map[string]*model.Channel{
+					"stable": {
+						Name: "stable",
+					},
+					"fast": {
+						Name: "fast",
+					},
+				},
+			},
+			expectedError:          true,
+			expectedDefaultChannel: nil,
+		},
+		{
+			name: "NoChannels",
+			pkg: &model.Package{
+				DefaultChannel: nil,
+			},
+			expectedError:          true,
+			expectedDefaultChannel: nil,
+		},
+	}
+
+	for _, s := range specs {
+		t.Run(s.name, func(t *testing.T) {
+			pkg := s.pkg
+			err := setDefaultChannel(pkg)
+			if s.expectedError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.EqualValues(t, pkg.DefaultChannel.Name, s.expectedDefaultChannel.Name)
+				require.EqualValues(t, pkg.DefaultChannel.Properties, s.expectedDefaultChannel.Properties)
+			}
+		})
+	}
+}

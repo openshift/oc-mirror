@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/blang/semver/v4"
@@ -186,13 +187,16 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 	// Default channel may not have been copied, so set it to the new default channel here.
 	for _, outputPkg := range outputModel {
 		newPkg := newModel[outputPkg.Name]
+		if newPkg == nil {
+			return nil, fmt.Errorf("package %s not present in the diff new model", outputPkg.Name)
+		}
 		var outputHasDefault bool
 		outputPkg.DefaultChannel, outputHasDefault = outputPkg.Channels[newPkg.DefaultChannel.Name]
 		if !outputHasDefault {
 			// Set the defaultChannel using the priority of a channel when the default got filtered out
 			// If no channels with the Priority property, raise an error
 			if err := setDefaultChannel(outputPkg); err != nil {
-				return outputModel, err
+				return nil, err
 			}
 		}
 	}
@@ -200,34 +204,44 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 	return outputModel, nil
 }
 
-type ChannelPriorityPropList []property.Channel
+type channelPriorityPropList []property.Channel
 
 // setDefaultChannel sets the new default channel of a package if the old default channel got filtered out.
 // Throws an error if there are no channels with the Priority property
 func setDefaultChannel(outputPkg *model.Package) error {
-	p := make(ChannelPriorityPropList, len(outputPkg.Channels))
-	i := 0
+	priorities := channelPriorityPropList{}
+	priorityOccurrence := map[int][]string{}
+	var channelPriority property.Channel
+
 	for _, channel := range outputPkg.Channels {
-		var channelPriority property.Channel
 		for _, prop := range channel.Properties {
-			if prop.Type == "olm.channel" {
+			if prop.Type == property.TypeChannel {
 				json.Unmarshal(prop.Value, &channelPriority)
-				p[i] = channelPriority
-				i++
+
+				priorityValue := channelPriority.Priority
+				if len(priorityOccurrence[priorityValue]) > 0 {
+					klog.Warningf(
+						"Priority %d of channel %s has already been defined for channels: %s",
+						priorityValue, channelPriority.ChannelName, strings.Join(priorityOccurrence[priorityValue], ", "),
+					)
+				}
+				priorityOccurrence[priorityValue] = append(priorityOccurrence[priorityValue], channelPriority.ChannelName)
+
+				priorities = append(priorities, channelPriority)
 			}
 		}
 	}
 
-	if i > 0 {
-		sort.Slice(p, func(j, k int) bool { return p[j].Priority < p[k].Priority })
+	if len(priorities) > 0 {
+		sort.Slice(priorities, func(j, k int) bool { return priorities[j].Priority < priorities[k].Priority })
 
 		klog.V(1).Infof("defaultChannel choices sorted by priority for package: %s\n", outputPkg.Name)
-		for _, k := range p {
+		for _, k := range priorities {
 			klog.V(1).Infof("%v\t%v\n", k.ChannelName, k.Priority)
 		}
 
 		// pick last channel as it is the one with the highest priority
-		chosenChannelName := p[len(p)-1].ChannelName
+		chosenChannelName := priorities[len(priorities)-1].ChannelName
 		for chname, channel := range outputPkg.Channels {
 			if chname == chosenChannelName {
 				outputPkg.DefaultChannel = channel
