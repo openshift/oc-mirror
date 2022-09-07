@@ -186,8 +186,8 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 
 	// Default channel may not have been copied, so set it to the new default channel here.
 	for _, outputPkg := range outputModel {
-		newPkg := newModel[outputPkg.Name]
-		if newPkg == nil {
+		newPkg, found := newModel[outputPkg.Name]
+		if !found {
 			return nil, fmt.Errorf("package %s not present in the diff new model", outputPkg.Name)
 		}
 		var outputHasDefault bool
