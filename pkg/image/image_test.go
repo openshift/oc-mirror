@@ -8,6 +8,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//TODO: add preparation step that saves a catalog locally before testing
+// func TestGetManifestFromIndex(t *testing.T) {
+// 	type spec struct {
+// 		desc  string
+// 		inRef string
+// 		err   string
+// 	}
+
+// 	cases := []spec{
+// 		{
+// 			desc:  "Nominal case",
+// 			inRef: "oci:/home/skhoury/go/src/github.com/openshift/oc-mirror/rhop-ctlg-oci",
+// 			err:   "",
+// 		},
+// 	}
+// 	for _, c := range cases {
+// 		t.Run(c.desc, func(t *testing.T) {
+// 			manifest, err := GetConfigDirFromOCICatalog(context.TODO(), c.inRef)
+// 			if c.err != "" {
+// 				require.EqualError(t, err, c.err)
+// 			} else {
+// 				require.NoError(t, err)
+// 				fmt.Printf("manifest: %v\n", manifest)
+// 			}
+// 		})
+// 	}
+// }
+
 func TestParseReference(t *testing.T) {
 	type spec struct {
 		desc      string

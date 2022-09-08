@@ -84,7 +84,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			}
 			ctlgRef := image.TypedImage{}
 			ctlgRef.Type = imagesource.DestinationRegistry
-			sourceRef, err := imagesource.ParseReference(img)
+			sourceRef, err := image.ParseReference(img)
 			if err != nil {
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
 			}

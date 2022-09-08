@@ -130,7 +130,6 @@ func NewMirrorCmd() *cobra.Command {
 }
 
 func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
-
 	destination := args[0]
 	splitIdx := strings.Index(destination, "://")
 	if splitIdx == -1 {
@@ -152,7 +151,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		// parent dir for the workspace
 		o.Dir = filepath.Join(o.OutputDir, o.Dir)
 	case "docker":
-		mirror, err := imagesource.ParseReference(ref)
+		mirror, err := image.ParseReference(ref)
 		if err != nil {
 			return err
 		}
@@ -269,6 +268,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
+	fmt.Printf("mirrorToDisk %v, diskToMirror %v, mirrorToMirror %v", mirrorToDisk, diskToMirror, mirrorToMirror)
 	switch {
 	case o.ManifestsOnly:
 		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)

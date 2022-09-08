@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
@@ -44,7 +45,7 @@ func NewRegistryBackend(cfg *v1alpha2.RegistryConfig, dir string) (Backend, erro
 	b := registryBackend{}
 	b.insecure = cfg.SkipTLS
 
-	ref, err := imagesource.ParseReference(cfg.ImageURL)
+	ref, err := image.ParseReference(cfg.ImageURL)
 	if err != nil {
 		return nil, err
 	}

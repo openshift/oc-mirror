@@ -478,7 +478,7 @@ func listAuthsFromCredHelper(credHelper string) (map[string]string, error) {
 	return helperclient.List(p)
 }
 
-// getPathToAuth gets the path of the auth.json file used for reading and writing credentials
+// getPathToAuth gets the path of the auth.json file used for reading and writting credentials
 // returns the path, and a bool specifies whether the file is in legacy format
 func getPathToAuth(sys *types.SystemContext) (string, bool, error) {
 	return getPathToAuthWithOS(sys, runtime.GOOS)
@@ -601,18 +601,10 @@ func getAuthFromCredHelper(credHelper, registry string) (types.DockerAuthConfig,
 	if err != nil {
 		return types.DockerAuthConfig{}, err
 	}
-
-	switch creds.Username {
-	case "<token>":
-		return types.DockerAuthConfig{
-			IdentityToken: creds.Secret,
-		}, nil
-	default:
-		return types.DockerAuthConfig{
-			Username: creds.Username,
-			Password: creds.Secret,
-		}, nil
-	}
+	return types.DockerAuthConfig{
+		Username: creds.Username,
+		Password: creds.Secret,
+	}, nil
 }
 
 func setAuthToCredHelper(credHelper, registry, username, password string) error {

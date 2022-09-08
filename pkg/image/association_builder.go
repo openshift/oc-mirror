@@ -238,7 +238,7 @@ func AssociateRemoteImageLayers(ctx context.Context, imgMappings TypedImageMappi
 				errs = append(errs, &ErrInvalidImage{srcImg.String(), err})
 				continue
 			}
-			pinnedRef, err := imagesource.ParseReference(imgWithID)
+			pinnedRef, err := ParseReference(imgWithID)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error parsing source image %s: %v", imgWithID, err))
 				continue
