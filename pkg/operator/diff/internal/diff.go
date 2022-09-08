@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -204,50 +203,51 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 	return outputModel, nil
 }
 
-type channelPriorityPropList []property.Channel
+type channelPriority struct {
+	property property.Channel
+	channel  *model.Channel
+}
+
+type channelPriorityPropList []channelPriority
 
 // setDefaultChannel sets the new default channel of a package if the old default channel got filtered out.
 // Throws an error if there are no channels with the Priority property
 func setDefaultChannel(outputPkg *model.Package) error {
 	priorities := channelPriorityPropList{}
 	priorityOccurrence := map[int][]string{}
-	var channelPriority property.Channel
 
 	for _, channel := range outputPkg.Channels {
-		for _, prop := range channel.Properties {
-			if prop.Type == property.TypeChannel {
-				json.Unmarshal(prop.Value, &channelPriority)
-
-				priorityValue := channelPriority.Priority
-				if len(priorityOccurrence[priorityValue]) > 0 {
-					klog.Warningf(
-						"Priority %d of channel %s has already been defined for channels: %s",
-						priorityValue, channelPriority.ChannelName, strings.Join(priorityOccurrence[priorityValue], ", "),
-					)
-				}
-				priorityOccurrence[priorityValue] = append(priorityOccurrence[priorityValue], channelPriority.ChannelName)
-
-				priorities = append(priorities, channelPriority)
+		properties, err := property.Parse(channel.Properties)
+		if err != nil {
+			return err
+		}
+		for _, channelProperty := range properties.Channels {
+			priorityValue := channelProperty.Priority
+			if len(priorityOccurrence[priorityValue]) > 0 {
+				klog.Warningf(
+					"Priority %d of channel %s has already been defined for channels: %s",
+					priorityValue, channelProperty.ChannelName, strings.Join(priorityOccurrence[priorityValue], ", "),
+				)
 			}
+			priorityOccurrence[priorityValue] = append(priorityOccurrence[priorityValue], channelProperty.ChannelName)
+
+			priorities = append(priorities, channelPriority{
+				property: channelProperty,
+				channel:  channel,
+			})
 		}
 	}
 
 	if len(priorities) > 0 {
-		sort.Slice(priorities, func(j, k int) bool { return priorities[j].Priority < priorities[k].Priority })
+		sort.Slice(priorities, func(j, k int) bool { return priorities[j].property.Priority < priorities[k].property.Priority })
 
 		klog.V(1).Infof("defaultChannel choices sorted by priority for package: %s\n", outputPkg.Name)
-		for _, k := range priorities {
-			klog.V(1).Infof("%v\t%v\n", k.ChannelName, k.Priority)
+		for _, priority := range priorities {
+			klog.V(1).Infof("%v\t%v\n", priority.property.ChannelName, priority.property.Priority)
 		}
 
-		// pick last channel as it is the one with the highest priority
-		chosenChannelName := priorities[len(priorities)-1].ChannelName
-		for chname, channel := range outputPkg.Channels {
-			if chname == chosenChannelName {
-				outputPkg.DefaultChannel = channel
-				klog.V(0).Infof("Newly assigned default channel from existing channels by Priority is %s\n", chosenChannelName)
-			}
-		}
+		outputPkg.DefaultChannel = priorities[len(priorities)-1].channel
+		klog.V(0).Infof("Newly assigned default channel from existing channels by Priority is %s\n", outputPkg.DefaultChannel.Name)
 		return nil
 	}
 
