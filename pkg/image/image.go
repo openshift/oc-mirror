@@ -1,9 +1,20 @@
 package image
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"context"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/containers/image/v5/manifest"
+	oci "github.com/containers/image/v5/oci/layout"
+
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -40,8 +51,10 @@ func GetTagsFromImage(image string) ([]string, error) {
 	return tags, err
 }
 
-/* ParseReference is a wrapper function of imagesource.ParseReference
-   It provides support for oci: prefixes
+/*
+ParseReference is a wrapper function of imagesource.ParseReference
+
+	It provides support for oci: prefixes
 */
 func ParseReference(ref string) (imagesource.TypedImageReference, error) {
 	if !strings.HasPrefix(ref, "oci:") {
@@ -58,4 +71,138 @@ func ParseReference(ref string) (imagesource.TypedImageReference, error) {
 		return imagesource.TypedImageReference{Ref: dst, Type: dstType}, fmt.Errorf("%q is not a valid image reference: %v", ref, err)
 	}
 	return imagesource.TypedImageReference{Ref: dst, Type: dstType}, nil
+}
+
+/* GetConfigDirFromOCI verifies the ref is for an image of type OCI
+ * It then unpacks the layers, searches for the configs folder within
+ * the unpacked content and returns it
+ */
+func GetConfigDirFromOCICatalog(ctx context.Context, ref string) (string, error) {
+
+	ociImgSrc, path, err := getOCIImgSrcFromPath(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	defer ociImgSrc.Close()
+
+	manifest, err := getManifest(ctx, ociImgSrc)
+	if err != nil {
+		return "", err
+	}
+
+	untarredLayer := ""
+	for _, layer := range manifest.LayerInfos() {
+		if !layer.EmptyLayer {
+			tmpDir := "/tmp/oc-mirror/"
+			err := os.MkdirAll(tmpDir, 0755)
+			if err != nil {
+				return "", err
+			}
+			layerSha := layer.Digest.String()
+			layerDirName := layerSha[7:]
+			untarLocation := filepath.Join(tmpDir, layerDirName)
+			layerPath := filepath.Join(path, "blobs/sha256/", layerDirName)
+
+			reader, err := os.Open(layerPath)
+			if err != nil {
+				return "", err
+			}
+			untarredLayer, err = extractLayerWithConfigs(reader, untarLocation)
+			if err != nil {
+				return "", err
+			}
+			if untarredLayer != "" {
+				return untarredLayer, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("%s is not a valid OCI catalog", ref)
+}
+
+func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
+	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
+	if err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+func getOCIImgSrcFromPath(ctx context.Context, ref string) (types.ImageSource, string, error) {
+	imgRef, err := ParseReference(ref)
+	if err != nil {
+		return nil, "", err
+	}
+	if imgRef.Type != DestinationOCI {
+		return nil, "", fmt.Errorf("%s is not an OCI image", ref)
+	}
+	path := string(os.PathSeparator) + imgRef.Ref.Namespace + string(os.PathSeparator) + imgRef.Ref.Name
+	ociImgRef, err := oci.ParseReference(path)
+	if err != nil {
+		return nil, "", err
+	}
+	imgsrc, err := ociImgRef.NewImageSource(ctx, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return imgsrc, path, nil
+
+}
+
+// Extract
+func extractLayerWithConfigs(gzipStream io.Reader, file string) (string, error) {
+	var layerWithConfigs string
+
+	uncompressedStream, err := gzip.NewReader(gzipStream)
+	if err != nil {
+		log.Fatal("ExtractTarGz: NewReader failed")
+	}
+
+	tarReader := tar.NewReader(uncompressedStream)
+
+	for true {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return "", err
+		}
+
+		// #TODO : replace configs with value from config layer , label "operators.operatorframework.io.index.configs.v1"
+		if strings.Contains(header.Name, "configs") {
+			if len(layerWithConfigs) == 0 {
+				layerWithConfigs = filepath.Join(file, header.Name)
+			}
+
+			switch header.Typeflag {
+			case tar.TypeDir:
+				if header.Name != "./" {
+					if err := os.MkdirAll(file+"/"+header.Name, 0755); err != nil {
+						return "", err
+					}
+				}
+			case tar.TypeReg:
+				outFile, err := os.Create(file + "/" + header.Name)
+				if err != nil {
+					return "", err
+				}
+				if _, err := io.Copy(outFile, tarReader); err != nil {
+					return "", err
+				}
+				outFile.Close()
+
+			default:
+				fmt.Println(fmt.Errorf("ExtractTarGz: uknown type: %v in %s", header.Typeflag, header.Name))
+			}
+
+		}
+	}
+	return layerWithConfigs, nil
 }

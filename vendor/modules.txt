@@ -194,16 +194,27 @@ github.com/containerd/stargz-snapshotter/estargz/errorutil
 github.com/containerd/ttrpc
 # github.com/containers/image/v5 v5.16.0
 ## explicit; go 1.13
+github.com/containers/image/v5/directory/explicitfilepath
 github.com/containers/image/v5/docker/reference
+github.com/containers/image/v5/image
+github.com/containers/image/v5/internal/blobinfocache
+github.com/containers/image/v5/internal/iolimits
 github.com/containers/image/v5/internal/pkg/keyctl
 github.com/containers/image/v5/internal/pkg/platform
+github.com/containers/image/v5/internal/putblobdigest
 github.com/containers/image/v5/internal/rootless
 github.com/containers/image/v5/manifest
+github.com/containers/image/v5/oci/internal
+github.com/containers/image/v5/oci/layout
+github.com/containers/image/v5/pkg/blobinfocache/none
+github.com/containers/image/v5/pkg/compression
 github.com/containers/image/v5/pkg/compression/internal
 github.com/containers/image/v5/pkg/compression/types
 github.com/containers/image/v5/pkg/docker/config
 github.com/containers/image/v5/pkg/strslice
 github.com/containers/image/v5/pkg/sysregistriesv2
+github.com/containers/image/v5/pkg/tlsclientconfig
+github.com/containers/image/v5/transports
 github.com/containers/image/v5/types
 # github.com/containers/libtrust v0.0.0-20190913040956-14b96171aa3b
 ## explicit
@@ -213,9 +224,13 @@ github.com/containers/libtrust
 github.com/containers/ocicrypt/spec
 # github.com/containers/storage v1.35.0
 ## explicit; go 1.14
+github.com/containers/storage/pkg/chunked/compressor
+github.com/containers/storage/pkg/chunked/internal
 github.com/containers/storage/pkg/homedir
 github.com/containers/storage/pkg/idtools
+github.com/containers/storage/pkg/ioutils
 github.com/containers/storage/pkg/lockfile
+github.com/containers/storage/pkg/longpath
 github.com/containers/storage/pkg/mount
 github.com/containers/storage/pkg/reexec
 github.com/containers/storage/pkg/stringid
@@ -285,6 +300,7 @@ github.com/docker/docker-credential-helpers/credentials
 # github.com/docker/go-connections v0.4.0
 ## explicit
 github.com/docker/go-connections/nat
+github.com/docker/go-connections/sockets
 github.com/docker/go-connections/tlsconfig
 # github.com/docker/go-metrics v0.0.1
 ## explicit; go 1.11

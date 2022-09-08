@@ -113,7 +113,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		if err != nil {
 			return nil, err
 		}
-		targetCtlg, err := imagesource.ParseReference(targetName)
+		targetCtlg, err := image.ParseReference(targetName)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
@@ -187,9 +187,24 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		if derr != nil {
 			return dc, ic, derr
 		}
-		dc, err = diff.Diff{
+		ctlgRef, err := image.ParseReference(ctlg.Catalog)
+
+		if err != nil {
+			return nil, ic, fmt.Errorf("error parsing catalog: %v", err)
+		}
+		var ctlgRefStr string
+		if ctlgRef.Type == image.DestinationOCI {
+			// #TODO: treat case of relative path
+			ctlgRefStr, err = image.GetConfigDirFromOCICatalog(ctx, ctlg.Catalog)
+			if err != nil {
+				return nil, ic, fmt.Errorf("error locating Configs dir in the OCI image: %v", err)
+			}
+		} else {
+			ctlgRefStr = ctlg.Catalog
+		}
+		dc, err = action.Diff{
 			Registry:         reg,
-			NewRefs:          []string{ctlg.Catalog},
+			NewRefs:          []string{ctlgRefStr},
 			Logger:           catLogger,
 			IncludeConfig:    dic,
 			SkipDependencies: ctlg.SkipDependencies,

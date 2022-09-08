@@ -70,7 +70,7 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 
 	// The UBI image has been pulled and is expected to be available
 	// as a base for the graph image
-	ubiImage, err := imagesource.ParseReference(graphBaseImage)
+	ubiImage, err := image.ParseReference(graphBaseImage)
 	if err != nil {
 		return refs, fmt.Errorf("error parsing image %q: %v", graphBaseImage, err)
 	}

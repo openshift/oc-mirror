@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"fmt"
 	"path/filepath"
 
 	imgreference "github.com/openshift/library-go/pkg/image/reference"
@@ -14,7 +13,8 @@ func GenerateCatalogDir(ctlgRef imgreference.DockerImageReference) (string, erro
 		leafDir = ctlgRef.ID
 	}
 	if leafDir == "" {
-		return "", fmt.Errorf("catalog %q must have either a tag or digest", ctlgRef.Exact())
+		// return "", fmt.Errorf("catalog %q must have either a tag or digest", ctlgRef.Exact())
+		return filepath.Join(ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name), nil
 	}
 	return filepath.Join(ctlgRef.Registry, ctlgRef.Namespace, ctlgRef.Name, leafDir), nil
 }
