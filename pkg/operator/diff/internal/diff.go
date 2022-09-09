@@ -194,7 +194,7 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 		if !outputHasDefault {
 			// Set the defaultChannel using the priority of a channel when the default got filtered out
 			// If no channels with the Priority property, raise an error
-			if err := setDefaultChannel(outputPkg); err != nil {
+			if err := setDefaultChannel(outputPkg, newPkg.DefaultChannel.Name); err != nil {
 				return nil, err
 			}
 		}
@@ -212,7 +212,7 @@ type channelPriorityPropList []channelPriority
 
 // setDefaultChannel sets the new default channel of a package if the old default channel got filtered out.
 // Throws an error if there are no channels with the Priority property
-func setDefaultChannel(outputPkg *model.Package) error {
+func setDefaultChannel(outputPkg *model.Package, newPackageDefaultChannelName string) error {
 	priorities := channelPriorityPropList{}
 	priorityOccurrence := map[int][]string{}
 
@@ -251,8 +251,17 @@ func setDefaultChannel(outputPkg *model.Package) error {
 		return nil
 	}
 
-	return fmt.Errorf("unable to set a default channel for package: %s - no remaining channels in the filtered output have the Priority property", outputPkg.Name)
+	// include a verbose message in the log so someone can figure out what to do next
+	klog.V(0).Infof(`The current default channel was not valid, so an attempt was made to automatically assign a new default channel, which has failed.
+The failure occurred because none of the remaining channels contain a "olm.channel" priority property, so it was not possible to establish a channel to use as the default channel.
 
+This can be resolved by one of the following changes:
+1) assign a "olm.channel" property on the appropriate channels to establish a channel priority
+2) modify the default channel manually in the catalog
+3) by changing the ImageSetConfiguration to filter channels or packages in such as way that it will include a package version that exists in the current default channel`)
+
+	// include a short message that does not mention any of the above to keep things simple
+	return fmt.Errorf("the current default channel %q for package %q could not be determined... ensure that your ImageSetConfiguration filtering criteria results in a package version that exists in the current default channel", newPackageDefaultChannelName, outputPkg.Name)
 }
 
 // pruneOldFromNewPackage prune any bundles and channels from newPkg that

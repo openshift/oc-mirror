@@ -3933,6 +3933,7 @@ func TestSetDefaultChannel(t *testing.T) {
 		{
 			name: "WithPriorities/TwoChannels",
 			pkg: &model.Package{
+				Name:           "abc",
 				DefaultChannel: nil,
 				Channels: map[string]*model.Channel{
 					"stable": {
@@ -3957,6 +3958,7 @@ func TestSetDefaultChannel(t *testing.T) {
 		{
 			name: "WithPriorities/OnlyOneChannel",
 			pkg: &model.Package{
+				Name:           "abc",
 				DefaultChannel: nil,
 				Channels: map[string]*model.Channel{
 					"stable": {
@@ -3976,6 +3978,7 @@ func TestSetDefaultChannel(t *testing.T) {
 		{
 			name: "NoPriorities",
 			pkg: &model.Package{
+				Name:           "abc",
 				DefaultChannel: nil,
 				Channels: map[string]*model.Channel{
 					"stable": {
@@ -3992,6 +3995,7 @@ func TestSetDefaultChannel(t *testing.T) {
 		{
 			name: "NoChannels",
 			pkg: &model.Package{
+				Name:           "abc",
 				DefaultChannel: nil,
 			},
 			expectedError:          true,
@@ -4002,7 +4006,7 @@ func TestSetDefaultChannel(t *testing.T) {
 	for _, s := range specs {
 		t.Run(s.name, func(t *testing.T) {
 			pkg := s.pkg
-			err := setDefaultChannel(pkg)
+			err := setDefaultChannel(pkg, "dummyChannelName")
 			if s.expectedError {
 				require.Error(t, err)
 			} else {
