@@ -22,7 +22,7 @@ require (
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 	github.com/openshift/library-go v0.0.0-20220315141154-40a8b89abdc2
 	github.com/openshift/oc v0.0.0-alpha.0.0.20220527211124-d91e0087a8a6
-	github.com/operator-framework/operator-registry v1.25.1-0.20220829190719-208775f5a9bf
+	github.com/operator-framework/operator-registry v1.26.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.7.1
 	github.com/spf13/cobra v1.4.0
