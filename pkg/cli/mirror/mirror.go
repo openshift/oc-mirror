@@ -226,8 +226,17 @@ func (o *MirrorOptions) Validate() error {
 			return fmt.Errorf("error checking push permissions for %s: %v", o.ToMirror, err)
 		}
 	}
-
-	if len(o.From) > 0 {
+	if strings.HasPrefix(o.From, "oci") {
+		if len(strings.TrimPrefix(o.From, "oci://")) > 0 {
+			if _, err := os.Stat(strings.TrimPrefix(o.From, "oci://")); err != nil {
+				return err
+			}
+		} else if len(strings.TrimPrefix(o.From, "oci:")) > 0 {
+			if _, err := os.Stat(strings.TrimPrefix(o.From, "oci:")); err != nil {
+				return err
+			}
+		}
+	} else if o.From != "" {
 		if _, err := os.Stat(o.From); err != nil {
 			return err
 		}

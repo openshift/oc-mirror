@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -37,6 +38,7 @@ func (e *ErrArchiveFileNotFound) Error() string {
 
 // Publish will plan a mirroring operation based on provided imageset on disk
 func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, error) {
+	fmt.Printf("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 
 	klog.Infof("Publishing image set from archive %q to registry %q", o.From, o.ToMirror)
 	allMappings := image.TypedImageMapping{}
@@ -62,47 +64,58 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	klog.V(2).Infof("Unarchiving metadata into %s", tmpdir)
+	var backend storage.Backend
+	var incomingMeta, currentMeta v1alpha2.Metadata
+	var incomingAssocs, currentAssocs image.AssociationSet
+	if strings.HasPrefix(o.From, "oci") {
+		configsPath, err := image.GetConfigDirFromOCICatalog(ctx, o.From)
+		fmt.Printf(configsPath)
+		if err != nil {
+			return allMappings, err
+		}
+	} else {
+		// Get file information from the source archives
+		filesInArchive, err := bundle.ReadImageSet(archive.NewArchiver(), o.From)
+		if err != nil {
+			return allMappings, err
+		}
 
-	// Get file information from the source archives
-	filesInArchive, err := bundle.ReadImageSet(archive.NewArchiver(), o.From)
-	if err != nil {
-		return allMappings, err
-	}
+		backend, incomingMeta, currentMeta, err = o.handleMetadata(ctx, tmpdir, filesInArchive)
+		if err != nil {
+			return allMappings, err
+		}
 
-	backend, incomingMeta, currentMeta, err := o.handleMetadata(ctx, tmpdir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-	incomingAssocs, err := image.ConvertToAssociationSet(incomingMeta.PastAssociations)
-	if err != nil {
-		return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
-	}
+		incomingAssocs, err = image.ConvertToAssociationSet(incomingMeta.PastAssociations)
+		if err != nil {
+			return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+		}
 
-	// Unpack chart to user destination if it exists
-	klog.V(1).Infof("Unpacking any provided Helm charts to %s", o.OutputDir)
-	if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
-		return allMappings, err
-	}
+		// Unpack chart to user destination if it exists
+		klog.V(1).Infof("Unpacking any provided Helm charts to %s", o.OutputDir)
+		if err := unpack(config.HelmDir, o.OutputDir, filesInArchive); err != nil {
+			return allMappings, err
+		}
 
-	// Load image associations to find layers not present locally.
-	assocs, err := image.ConvertToAssociationSet(incomingMeta.PastMirror.Associations)
-	if err != nil {
-		return allMappings, err
-	}
-	if err := assocs.UpdatePath(); err != nil {
-		return allMappings, err
-	}
+		// Load image associations to find layers not present locally.
+		assocs, err := image.ConvertToAssociationSet(incomingMeta.PastMirror.Associations)
+		if err != nil {
+			return allMappings, err
+		}
+		if err := assocs.UpdatePath(); err != nil {
+			return allMappings, err
+		}
 
-	klog.V(3).Infof("Process all images in imageset")
-	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
-	if err != nil {
-		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
-	}
-	allMappings.Merge(imgMappings)
+		klog.V(3).Infof("Process all images in imageset")
+		imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
+		if err != nil {
+			return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
+		}
+		allMappings.Merge(imgMappings)
 
-	currentAssocs, err := image.ConvertToAssociationSet(currentMeta.PastAssociations)
-	if err != nil {
-		return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+		currentAssocs, err = image.ConvertToAssociationSet(currentMeta.PastAssociations)
+		if err != nil {
+			return allMappings, fmt.Errorf("error processing incoming past associations: %v", err)
+		}
 	}
 
 	if o.DryRun {
@@ -116,16 +129,16 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 		return allMappings, err
 	}
 
-	klog.V(1).Infof("Unpack release signatures")
-	if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
-		return allMappings, err
-	}
+	// klog.V(1).Infof("Unpack release signatures")
+	// if err = o.unpackReleaseSignatures(o.OutputDir, filesInArchive); err != nil {
+	// 	return allMappings, err
+	// }
 
-	customMappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
-	if err != nil {
-		return allMappings, err
-	}
-	allMappings.Merge(customMappings)
+	// customMappings, err := o.processCustomImages(ctx, tmpdir, filesInArchive)
+	// if err != nil {
+	// 	return allMappings, err
+	// }
+	// allMappings.Merge(customMappings)
 
 	// Replace old metadata with new metadata if metadata is not single use
 	if !incomingMeta.SingleUse {
@@ -193,7 +206,7 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
 	var errs []error
-	toMirrorRef, err := imagesource.ParseReference(o.ToMirror)
+	toMirrorRef, err := image.ParseReference(o.ToMirror)
 	if err != nil {
 		return allMappings, fmt.Errorf("error parsing mirror registry %q: %v", o.ToMirror, err)
 	}
@@ -268,7 +281,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 			}
 
 			m := imgmirror.Mapping{Name: assoc.Name}
-			if m.Source, err = imagesource.ParseReference("file://" + assoc.Path); err != nil {
+			if m.Source, err = image.ParseReference("file://" + assoc.Path); err != nil {
 				errs = append(errs, fmt.Errorf("error parsing source ref %q: %v", assoc.Path, err))
 				continue
 			}
@@ -293,7 +306,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 
 			// Add top level association to the ICSP mapping
 			if assoc.Name == imageName {
-				source, err := imagesource.ParseReference(imageName)
+				source, err := image.ParseReference(imageName)
 				if err != nil {
 					errs = append(errs, err)
 					continue
@@ -514,7 +527,7 @@ func (o *MirrorOptions) findBlobRepo(assocPathsByLayer map[string]string, layerD
 		return imagesource.TypedImageReference{}, fmt.Errorf("layer %q is not present in previous metadata", layerDigest)
 	}
 
-	dstRef, err := imagesource.ParseReference(srcRef)
+	dstRef, err := image.ParseReference(srcRef)
 	if err != nil {
 		return imagesource.TypedImageReference{}, err
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -424,7 +425,60 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, fmt.Errorf("error running catalog mirror: %v", err)
 	}
 
+	if ctlgRef.Type == image.DestinationOCI {
+		indexMirrorer, err := catalog.NewIndexImageMirror(opts.IndexImageMirrorerOptions.ToOption(),
+			catalog.WithSource(opts.SourceRef),
+			catalog.WithDest(opts.DestRef),
+		)
+		if err != nil {
+			return nil, err
+		}
+		ctlgPath, err := indexMirrorer.IndexExtractor.Extract(indexMirrorer.Source)
+		if err != nil {
+			return nil, err
+		}
+		imgList, err := indexMirrorer.RelatedImagesParser.Parse(ctlgPath)
+		if err != nil {
+			return nil, err
+		}
+		// #TODO copy all the images to the ctlgPath
+		for img := range imgList {
+			//TODO do not assume the image is always remote, use go routines
+			fmt.Printf("%s\n", img)
+			tmpRef, err := image.ParseReference(img)
+			if err != nil {
+				return nil, err
+			}
+			dst := ""
+			if tmpRef.Ref.ID != "" {
+				hasher := fnv.New32a()
+				// tag with hash of source ref if no tag given
+
+				hasher.Reset()
+				_, err = hasher.Write([]byte(tmpRef.Ref.String()))
+				if err != nil {
+					return nil, fmt.Errorf("couldn't generate tag for image (%s), skipping mirror", img)
+				}
+				hash := fmt.Sprintf("%x", hasher.Sum32())
+
+				dst = filepath.Join("/"+ctlgRef.Ref.Namespace, ctlgRef.Ref.Name, tmpRef.Ref.Namespace, tmpRef.Ref.Name, hash)
+			} else {
+				dst = filepath.Join("/"+ctlgRef.Ref.Namespace, ctlgRef.Ref.Name, tmpRef.Ref.Namespace, tmpRef.Ref.Name, tmpRef.Ref.Tag)
+			}
+			err = os.MkdirAll(dst, os.ModePerm)
+
+			if err != nil {
+				return nil, err
+			}
+			//TODO : Change to relative path
+			err = image.CopyFromRemote("docker://"+img, "oci:"+dst)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	mappingFile := filepath.Join(opts.ManifestDir, mappingFile)
+	// #TODO make sure the mapping is oci compliant.... => I dont know where the mappingfile is created....
 	mappings, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
 	if err != nil {
 		return nil, err
@@ -432,17 +486,21 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 	// Remove the catalog image from mappings we are going to transfer this
 	// using an OCI layout.
-	ctlgImg, err := image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
+	ctlgImg, err := image.ParseTypedImageRef(ctlgRef, v1alpha2.TypeOperatorBundle)
 	if err != nil {
 		return nil, err
 	}
 	mappings.Remove(ctlgImg)
-	if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
+	if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref, ctlgRef.Type); err != nil {
 		return nil, err
 	}
 
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
 	for srcRef, dstRef := range mappings {
+		if ctlgRef.Type == image.DestinationOCI {
+			mappings.Remove(srcRef)
+			srcRef.Type = imagesource.DestinationFile
+		}
 		newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
 		newRepoName = strings.TrimPrefix(newRepoName, "/")
 		tmpRef, err := imgreference.Parse(newRepoName)
@@ -541,7 +599,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg imgreference.DockerImageReference) error {
+func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg imgreference.DockerImageReference, typ imagesource.DestinationType) error {
 
 	// Write catalog OCI layout file to src so it is included in the archive
 	// at a path unique to the image.
@@ -556,36 +614,93 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg i
 
 	o.Logger.Debugf("writing catalog %q layout to %s", ctlgRef.Exact(), layoutDir)
 
-	ref, err := name.ParseReference(ctlgRef.Exact(), getNameOpts(o.insecure)...)
-	if err != nil {
-		return err
-	}
-	desc, err := remote.Get(ref, getRemoteOpts(ctx, o.insecure)...)
-	if err != nil {
-		return err
-	}
-
-	if desc.MediaType.IsImage() {
-		layoutPath, err := layout.Write(layoutDir, empty.Index)
-		if err != nil {
-			return fmt.Errorf("error creating OCI layout: %v", err)
-		}
-		img, err := desc.Image()
+	if typ != image.DestinationOCI {
+		ref, err := name.ParseReference(ctlgRef.Exact(), getNameOpts(o.insecure)...)
 		if err != nil {
 			return err
 		}
-		// Default to amd64 architecture with no multi-arch image
-		if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"})); err != nil {
+		desc, err := remote.Get(ref, getRemoteOpts(ctx, o.insecure)...)
+		if err != nil {
 			return err
 		}
 
+		if desc.MediaType.IsImage() {
+			layoutPath, err := layout.Write(layoutDir, empty.Index)
+			if err != nil {
+				return fmt.Errorf("error creating OCI layout: %v", err)
+			}
+			img, err := desc.Image()
+			if err != nil {
+				return err
+			}
+			// Default to amd64 architecture with no multi-arch image
+			if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"})); err != nil {
+				return err
+			}
+
+		} else {
+			idx, err := desc.ImageIndex()
+			if err != nil {
+				return err
+			}
+			if _, err = layout.Write(layoutDir, idx); err != nil {
+				return fmt.Errorf("error creating OCI layout: %v", err)
+			}
+		}
 	} else {
-		idx, err := desc.ImageIndex()
+		// In this case, the source is already in OCI format, and since it is on disk,
+		// we can just copy the files from source to destination location, without changing anything
+		srcPath := filepath.Join(string(os.PathSeparator)+ctlgRef.Namespace, ctlgRef.Name)
+		layoutPath := filepath.Join(srcPath, "oci-layout")
+		layoutStat, err := os.Stat(layoutPath)
 		if err != nil {
 			return err
 		}
-		if _, err = layout.Write(layoutDir, idx); err != nil {
-			return fmt.Errorf("error creating OCI layout: %v", err)
+		indexPath := filepath.Join(srcPath, "index.json")
+		indexStat, err := os.Stat(indexPath)
+		if err != nil {
+			return err
+		}
+
+		if !layoutStat.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", layoutPath)
+		}
+
+		layoutSource, err := os.Open(layoutPath)
+		if err != nil {
+			return err
+		}
+		defer layoutSource.Close()
+
+		if !indexStat.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", indexPath)
+		}
+
+		indexSource, err := os.Open(indexPath)
+		if err != nil {
+			return err
+		}
+		defer indexSource.Close()
+
+		idxDstPath := filepath.Join(layoutDir, "index.json")
+		layoutDstPath := filepath.Join(layoutDir, "oci-layout")
+
+		indexDest, err := os.Create(idxDstPath)
+		if err != nil {
+			return err
+		}
+		layoutDst, err := os.Create(layoutDstPath)
+		if err != nil {
+			return err
+		}
+		defer layoutDst.Close()
+		_, err = io.Copy(indexDest, indexSource)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(layoutDst, layoutSource)
+		if err != nil {
+			return err
 		}
 	}
 

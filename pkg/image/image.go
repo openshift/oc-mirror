@@ -11,10 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/manifest"
-	oci "github.com/containers/image/oci/layout"
-
-	"github.com/containers/image/types"
+	"github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/manifest"
+	oci "github.com/containers/image/v5/oci/layout"
+	"github.com/containers/image/v5/signature"
+	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -205,4 +207,51 @@ func extractLayerWithConfigs(gzipStream io.Reader, file string) (string, error) 
 		}
 	}
 	return layerWithConfigs, nil
+}
+
+func CopyFromRemote(src, dst string) error {
+
+	// srcRef, err := name.ParseReference(src)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to parse source image %s: %v", src, err)
+	// }
+
+	// dstRef, err := name.ParseReference(dst)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to parse source image %s: %v", dst, err)
+	// }
+
+	// srcImg, err := remote.Image(srcRef, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	// if err != nil {
+	// 	return fmt.Errorf("unable to get image from source ref %s: %v", srcRef, err)
+	// }
+
+	// err = remote.Write(dstRef, srcImg, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	// if err != nil {
+	// 	return fmt.Errorf("unable to copy image from source ref %s to %s: %v", srcRef, dst, err)
+	// }
+	systemCtx := &types.SystemContext{}
+	policy, _ := signature.DefaultPolicy(systemCtx)
+	policyCtx, _ := signature.NewPolicyContext(policy)
+
+	copyOptions := &copy.Options{
+		ReportWriter:     os.Stdout,
+		RemoveSignatures: true,
+	}
+	srcRef, err := alltransports.ParseImageName(src)
+	if err != nil {
+		return fmt.Errorf("unable to parse source image %s: %v", src, err)
+	}
+	dstRef, err := alltransports.ParseImageName(dst)
+	if err != nil {
+		return fmt.Errorf("unable to parse destination image %s: %v", dst, err)
+	}
+	manifest, err := copy.Image(context.Background(),
+		policyCtx,
+		dstRef,
+		srcRef,
+		copyOptions,
+	)
+	fmt.Printf("%s", manifest)
+	return err
 }

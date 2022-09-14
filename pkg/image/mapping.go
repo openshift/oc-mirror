@@ -27,7 +27,12 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	if err != nil {
 		return TypedImage{}, err
 	}
-	t := TypedImage{ref, typ}
+	return ParseTypedImageRef(ref, typ)
+}
+
+// ParseTypedImage will create a TypedImage from a string and type
+func ParseTypedImageRef(image imagesource.TypedImageReference, typ v1alpha2.ImageType) (TypedImage, error) {
+	t := TypedImage{image, typ}
 	return t.SetDefaults(), nil
 }
 

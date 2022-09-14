@@ -20,6 +20,53 @@ import (
 	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
+// func TestPlanFull(t *testing.T) {
+// 	mo := &MirrorOptions{
+// 		RootOptions: &cli.RootOptions{},
+// 	}
+// 	o := NewOperatorOptions(mo)
+// 	o.complete()
+// 	o.PlanFull(context.TODO(), v1alpha2.ImageSetConfiguration{
+// 		TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+// 		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+// 			Mirror: v1alpha2.Mirror{
+// 				Platform: v1alpha2.Platform{
+// 					Channels: []v1alpha2.ReleaseChannel{
+// 						{
+// 							Name: "stable-4.10",
+// 							Type: v1alpha2.TypeOCP,
+// 						},
+// 					},
+// 				},
+// 				Operators: []v1alpha2.Operator{
+// 					{
+// 						//Catalog: "file:///home/skhoury/go/src/github.com/openshift/oc-mirror/rhopid",
+// 						Catalog: "oci:/home/skhoury/go/src/github.com/openshift/oc-mirror/rhopid",
+// 						IncludeConfig: v1alpha2.IncludeConfig{
+
+// 							Packages: []v1alpha2.IncludePackage{
+// 								{
+// 									Name: "serverless-operator",
+// 									Channels: []v1alpha2.IncludeChannel{
+// 										{
+// 											Name: "stable",
+// 										},
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			StorageConfig: v1alpha2.StorageConfig{
+// 				Local: &v1alpha2.LocalConfig{
+// 					Path: "./dest",
+// 				},
+// 			},
+// 		},
+// 	})
+// }
+
 func TestPinImages(t *testing.T) {
 
 	type spec struct {
