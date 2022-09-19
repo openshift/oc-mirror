@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 // OperatorOptions configures either a Full or Diff mirror operation
@@ -186,7 +187,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		if derr != nil {
 			return dc, ic, derr
 		}
-		dc, err = action.Diff{
+		dc, err = diff.Diff{
 			Registry:         reg,
 			NewRefs:          []string{ctlg.Catalog},
 			Logger:           catLogger,
@@ -239,7 +240,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// Generate and mirror a heads-only diff using the catalog as a new ref,
 	// and an old ref found for this catalog in lastRun.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
-	a := action.Diff{
+	a := diff.Diff{
 		Registry:         reg,
 		NewRefs:          []string{ctlg.Catalog},
 		Logger:           catLogger,
@@ -325,7 +326,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 
 // verifyDC verifies the declarative config and that each of the requested operator packages were
 // found and added to the DeclarativeConfig.
-func (o *OperatorOptions) verifyDC(dic action.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
+func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.DeclarativeConfig) error {
 	o.Logger.Debug("DiffIncludeConfig: ", dic)
 	o.Logger.Debug("DeclarativeConfig: ", dc)
 

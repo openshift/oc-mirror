@@ -1,15 +1,18 @@
-package declcfg
+package internal
 
 import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/blang/semver/v4"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
@@ -182,16 +185,83 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 
 	// Default channel may not have been copied, so set it to the new default channel here.
 	for _, outputPkg := range outputModel {
-		newPkg := newModel[outputPkg.Name]
+		newPkg, found := newModel[outputPkg.Name]
+		if !found {
+			return nil, fmt.Errorf("package %s not present in the diff new model", outputPkg.Name)
+		}
 		var outputHasDefault bool
 		outputPkg.DefaultChannel, outputHasDefault = outputPkg.Channels[newPkg.DefaultChannel.Name]
 		if !outputHasDefault {
-			// Create a name-only channel since oldModel contains the channel already.
-			outputPkg.DefaultChannel = copyChannelNoBundles(newPkg.DefaultChannel, outputPkg)
+			// Set the defaultChannel using the priority of a channel when the default got filtered out
+			// If no channels with the Priority property, raise an error
+			if err := setDefaultChannel(outputPkg, newPkg.DefaultChannel.Name); err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	return outputModel, nil
+}
+
+type channelPriority struct {
+	property property.Channel
+	channel  *model.Channel
+}
+
+type channelPriorityPropList []channelPriority
+
+// setDefaultChannel sets the new default channel of a package if the old default channel got filtered out.
+// Throws an error if there are no channels with the Priority property
+func setDefaultChannel(outputPkg *model.Package, newPackageDefaultChannelName string) error {
+	priorities := channelPriorityPropList{}
+	priorityOccurrence := map[int][]string{}
+
+	for _, channel := range outputPkg.Channels {
+		properties, err := property.Parse(channel.Properties)
+		if err != nil {
+			return err
+		}
+		for _, channelProperty := range properties.Channels {
+			priorityValue := channelProperty.Priority
+			if len(priorityOccurrence[priorityValue]) > 0 {
+				klog.Warningf(
+					"Priority %d of channel %s has already been defined for channels: %s",
+					priorityValue, channelProperty.ChannelName, strings.Join(priorityOccurrence[priorityValue], ", "),
+				)
+			}
+			priorityOccurrence[priorityValue] = append(priorityOccurrence[priorityValue], channelProperty.ChannelName)
+
+			priorities = append(priorities, channelPriority{
+				property: channelProperty,
+				channel:  channel,
+			})
+		}
+	}
+
+	if len(priorities) > 0 {
+		sort.Slice(priorities, func(j, k int) bool { return priorities[j].property.Priority < priorities[k].property.Priority })
+
+		klog.V(1).Infof("defaultChannel choices sorted by priority for package: %s\n", outputPkg.Name)
+		for _, priority := range priorities {
+			klog.V(1).Infof("%v\t%v\n", priority.property.ChannelName, priority.property.Priority)
+		}
+
+		outputPkg.DefaultChannel = priorities[len(priorities)-1].channel
+		klog.V(0).Infof("Newly assigned default channel from existing channels by Priority is %s\n", outputPkg.DefaultChannel.Name)
+		return nil
+	}
+
+	// include a verbose message in the log so someone can figure out what to do next
+	klog.V(0).Infof(`The current default channel was not valid, so an attempt was made to automatically assign a new default channel, which has failed.
+The failure occurred because none of the remaining channels contain a "olm.channel" priority property, so it was not possible to establish a channel to use as the default channel.
+
+This can be resolved by one of the following changes:
+1) assign a "olm.channel" property on the appropriate channels to establish a channel priority
+2) modify the default channel manually in the catalog
+3) by changing the ImageSetConfiguration to filter channels or packages in such as way that it will include a package version that exists in the current default channel`)
+
+	// include a short message that does not mention any of the above to keep things simple
+	return fmt.Errorf("the current default channel %q for package %q could not be determined... ensure that your ImageSetConfiguration filtering criteria results in a package version that exists in the current default channel", newPackageDefaultChannelName, outputPkg.Name)
 }
 
 // pruneOldFromNewPackage prune any bundles and channels from newPkg that
@@ -492,13 +562,13 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 	return providingBundles
 }
 
-func convertFromModelBundle(b *model.Bundle) Bundle {
-	return Bundle{
-		Schema:        schemaBundle,
+func convertFromModelBundle(b *model.Bundle) declcfg.Bundle {
+	return declcfg.Bundle{
+		Schema:        declcfg.SchemaBundle,
 		Name:          b.Name,
 		Package:       b.Package.Name,
 		Image:         b.Image,
-		RelatedImages: modelRelatedImagesToRelatedImages(b.RelatedImages),
+		RelatedImages: declcfg.ModelRelatedImagesToRelatedImages(b.RelatedImages),
 		CsvJSON:       b.CsvJSON,
 		Objects:       b.Objects,
 		Properties:    b.Properties,
@@ -531,9 +601,10 @@ func copyPackage(in *model.Package) *model.Package {
 
 func copyChannelNoBundles(in *model.Channel, pkg *model.Package) *model.Channel {
 	cp := &model.Channel{
-		Name:    in.Name,
-		Package: pkg,
-		Bundles: make(map[string]*model.Bundle, len(in.Bundles)),
+		Name:       in.Name,
+		Package:    pkg,
+		Bundles:    make(map[string]*model.Bundle, len(in.Bundles)),
+		Properties: in.Properties,
 	}
 	return cp
 }

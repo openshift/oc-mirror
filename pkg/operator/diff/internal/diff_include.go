@@ -1,4 +1,4 @@
-package declcfg
+package internal
 
 import (
 	"fmt"
@@ -10,6 +10,16 @@ import (
 
 	"github.com/operator-framework/operator-registry/alpha/model"
 )
+
+// DiffIncludeConfig configures Diff.Run() to include a set of packages,
+// channels, and/or bundles/versions in the output DeclarativeConfig.
+// These override other diff mechanisms. For example, if running in
+// heads-only mode but package "foo" channel "stable" is specified,
+// the entire "stable" channel (all channel bundles) is added to the output.
+type DiffIncludeConfig struct {
+	// Packages to include.
+	Packages []DiffIncludePackage `json:"packages" yaml:"packages"`
+}
 
 // DiffIncluder knows how to add packages, channels, and bundles
 // from a source to a destination model.Model.
@@ -222,7 +232,7 @@ func (ipkg DiffIncludePackage) includeNewInOutputModel(newModel, outputModel mod
 			head, err = newCh.Head()
 			bundles = append(bundles, head)
 		case ich.Range != nil:
-			bundles, err = getBundlesForRange(newCh, ich.Range, chLog)
+			bundles, err = getBundlesForRange(newCh, ich.Range)
 		default:
 			bundles, err = getBundlesForVersions(newCh, ich.Versions, ich.Bundles, chLog, skipMissingBundleForChannels[newCh.Name])
 		}
@@ -306,7 +316,7 @@ func getBundlesForVersions(ch *model.Channel, vers []semver.Version, names []str
 
 // getBundlesForRange returns all bundles matching the version range in vers
 // If the range is nil, return all bundles in the channel
-func getBundlesForRange(ch *model.Channel, vers semver.Range, logger *logrus.Entry) (bundles []*model.Bundle, err error) {
+func getBundlesForRange(ch *model.Channel, vers semver.Range) (bundles []*model.Bundle, err error) {
 	// Short circuit when an empty range was specified, meaning "include the whole channel"
 	if vers == nil {
 		for _, b := range ch.Bundles {

@@ -1,4 +1,4 @@
-package action
+package diff
 
 import (
 	"context"
@@ -7,10 +7,12 @@ import (
 	"io"
 
 	"github.com/blang/semver/v4"
+	diffInternal "github.com/openshift/oc-mirror/pkg/operator/diff/internal"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
+	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/operator-framework/operator-registry/pkg/image"
@@ -34,21 +36,21 @@ type Diff struct {
 	Logger *logrus.Entry
 }
 
-func (diff Diff) Run(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
-	if err := diff.validate(); err != nil {
+func (diffIn Diff) Run(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
+	if err := diffIn.validate(); err != nil {
 		return nil, err
 	}
 
 	// Disallow bundle refs.
-	mask := RefDCDir | RefDCImage | RefSqliteFile | RefSqliteImage
+	mask := action.RefDCDir | action.RefDCImage | action.RefSqliteFile | action.RefSqliteImage
 
 	// Heads-only mode does not require an old ref, so there may be nothing to render.
 	var oldModel model.Model
-	if len(diff.OldRefs) != 0 {
-		oldRender := Render{Refs: diff.OldRefs, Registry: diff.Registry, AllowedRefMask: mask}
+	if len(diffIn.OldRefs) != 0 {
+		oldRender := action.Render{Refs: diffIn.OldRefs, Registry: diffIn.Registry, AllowedRefMask: mask}
 		oldCfg, err := oldRender.Run(ctx)
 		if err != nil {
-			if errors.Is(err, ErrNotAllowed) {
+			if errors.Is(err, action.ErrNotAllowed) {
 				return nil, fmt.Errorf("%w (diff does not permit direct bundle references)", err)
 			}
 			return nil, fmt.Errorf("error rendering old refs: %v", err)
@@ -59,10 +61,10 @@ func (diff Diff) Run(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 		}
 	}
 
-	newRender := Render{Refs: diff.NewRefs, Registry: diff.Registry, AllowedRefMask: mask}
+	newRender := action.Render{Refs: diffIn.NewRefs, Registry: diffIn.Registry, AllowedRefMask: mask}
 	newCfg, err := newRender.Run(ctx)
 	if err != nil {
-		if errors.Is(err, ErrNotAllowed) {
+		if errors.Is(err, action.ErrNotAllowed) {
 			return nil, fmt.Errorf("%w (diff does not permit direct bundle references)", err)
 		}
 		return nil, fmt.Errorf("error rendering new refs: %v", err)
@@ -72,12 +74,12 @@ func (diff Diff) Run(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 		return nil, fmt.Errorf("error converting new declarative config to model: %v", err)
 	}
 
-	g := &declcfg.DiffGenerator{
-		Logger:            diff.Logger,
-		SkipDependencies:  diff.SkipDependencies,
-		Includer:          convertIncludeConfigToIncluder(diff.IncludeConfig),
-		IncludeAdditively: diff.IncludeAdditively,
-		HeadsOnly:         diff.HeadsOnly,
+	g := &diffInternal.DiffGenerator{
+		Logger:            diffIn.Logger,
+		SkipDependencies:  diffIn.SkipDependencies,
+		Includer:          convertIncludeConfigToIncluder(diffIn.IncludeConfig),
+		IncludeAdditively: diffIn.IncludeAdditively,
+		HeadsOnly:         diffIn.HeadsOnly,
 	}
 	diffModel, err := g.Run(oldModel, newModel)
 	if err != nil {
@@ -95,7 +97,7 @@ func (p Diff) validate() error {
 	return nil
 }
 
-// DiffIncludeConfig configures Diff.Run() to include a set of packages,
+// DiffIncludeConfig configures diffInternal.Run() to include a set of packages,
 // channels, and/or bundles/versions in the output DeclarativeConfig.
 // These override other diff mechanisms. For example, if running in
 // heads-only mode but package "foo" channel "stable" is specified,
@@ -106,7 +108,7 @@ type DiffIncludeConfig struct {
 }
 
 // DiffIncludePackage contains a name (required) and channels and/or versions
-// (optional) to include in the diff. The full package is only included if no channels
+// (optional) to include in the diffInternal. The full package is only included if no channels
 // or versions are specified.
 type DiffIncludePackage struct {
 	// Name of package.
@@ -129,7 +131,7 @@ type DiffIncludePackage struct {
 }
 
 // DiffIncludeChannel contains a name (required) and versions (optional)
-// to include in the diff. The full channel is only included if no versions are specified.
+// to include in the diffInternal. The full channel is only included if no versions are specified.
 type DiffIncludeChannel struct {
 	// Name of channel.
 	Name string `json:"name" yaml:"name"`
@@ -194,8 +196,8 @@ func LoadDiffIncludeConfig(r io.Reader) (c DiffIncludeConfig, err error) {
 	return c, utilerrors.NewAggregate(errs)
 }
 
-func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer declcfg.DiffIncluder) {
-	includer.Packages = make([]declcfg.DiffIncludePackage, len(c.Packages))
+func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInternal.DiffIncluder) {
+	includer.Packages = make([]diffInternal.DiffIncludePackage, len(c.Packages))
 	for pkgI, cpkg := range c.Packages {
 		pkg := &includer.Packages[pkgI]
 		pkg.Name = cpkg.Name
@@ -206,7 +208,7 @@ func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer declcfg.DiffI
 		}
 
 		if len(cpkg.Channels) != 0 {
-			pkg.Channels = make([]declcfg.DiffIncludeChannel, len(cpkg.Channels))
+			pkg.Channels = make([]diffInternal.DiffIncludeChannel, len(cpkg.Channels))
 			for chI, cch := range cpkg.Channels {
 				ch := &pkg.Channels[chI]
 				ch.Name = cch.Name

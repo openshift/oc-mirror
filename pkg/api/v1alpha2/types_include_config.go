@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/blang/semver/v4"
-	"github.com/operator-framework/operator-registry/alpha/action"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 // IncludeConfig defines a list of packages for
@@ -53,7 +53,7 @@ type IncludeBundle struct {
 
 // ConvertToDiffIncludeConfig converts an IncludeConfig to a DiffIncludeConfig type to
 // interact with `operator-registry` libraries.
-func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeConfig, err error) {
+func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfig, err error) {
 	if ic == nil || len(ic.Packages) == 0 {
 		return dic, nil
 	}
@@ -66,7 +66,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 		}
 
-		dpkg := action.DiffIncludePackage{Name: pkg.Name}
+		dpkg := diff.DiffIncludePackage{Name: pkg.Name}
 		switch {
 		case pkg.MinVersion != "" && pkg.MaxVersion != "":
 			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
@@ -90,7 +90,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic action.DiffIncludeCon
 				return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
 			}
 
-			dch := action.DiffIncludeChannel{Name: ch.Name}
+			dch := diff.DiffIncludeChannel{Name: ch.Name}
 			switch {
 			case ch.MinVersion != "" && ch.MaxVersion != "":
 				dch.Range = fmt.Sprintf(">=%s <=%s", ch.MinVersion, ch.MaxVersion)

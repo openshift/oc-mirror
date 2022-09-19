@@ -10,7 +10,6 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
@@ -24,6 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 type UpdatesOptions struct {
@@ -192,7 +192,7 @@ func (o UpdatesOptions) operatorUpdates(ctx context.Context, cfg v1alpha2.ImageS
 		if err != nil {
 			return err
 		}
-		diff := action.Diff{
+		diff := diff.Diff{
 			Registry:      reg,
 			NewRefs:       []string{ctlg.Catalog},
 			Logger:        catLogger,

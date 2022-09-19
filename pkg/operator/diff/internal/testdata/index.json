@@ -1,0 +1,110 @@
+{
+  "schema": "olm.package",
+  "name": "ibm-mq",
+  "defaultChannel": "v1.8"
+}
+{
+  "schema": "olm.channel",
+  "name": "v1.6",
+  "package": "ibm-mq",
+  "entries": [
+      {
+          "name": "ibm-mq.v1.6.0",
+          "skipRange": ">=1.0.0 <1.6.0"
+      }
+  ],
+  "properties": [
+      {
+          "type": "olm.channel",
+          "value": {
+              "channelName": "v1.6",
+              "priority": 2
+          }
+      }
+  ]
+}
+{
+  "schema": "olm.channel",
+  "name": "v1.7",
+  "package": "ibm-mq",
+  "entries": [
+      {
+          "name": "ibm-mq.v1.7.0",
+          "skipRange": ">=1.0.0 <1.7.0"
+      }
+  ],
+  "properties": [
+      {
+          "type": "olm.channel",
+          "value": {
+              "channelName": "v1.7",
+              "priority": 3
+          }
+      }
+  ]
+}
+{
+  "schema": "olm.channel",
+  "name": "v1.8",
+  "package": "ibm-mq",
+  "entries": [
+      {
+          "name": "ibm-mq.v1.8.1",
+          "skipRange": ">=1.0.0 <1.8.1"
+      }
+  ],
+  "properties": [
+      {
+          "type": "olm.channel",
+          "value": {
+              "channelName": "v1.8",
+              "priority": 4
+          }
+      }
+  ]
+}
+{
+  "schema": "olm.bundle",
+  "name": "ibm-mq.v1.6.0",
+  "package": "ibm-mq",
+  "image": "reg/ibm-mq:latest",
+  "properties": [
+      {
+          "type": "olm.package",
+          "value": {
+              "packageName": "ibm-mq",
+              "version": "1.6.0"
+          }
+      }
+  ]
+}
+{
+  "schema": "olm.bundle",
+  "name": "ibm-mq.v1.7.0",
+  "package": "ibm-mq",
+  "image": "reg/ibm-mq:latest",
+  "properties": [
+      {
+          "type": "olm.package",
+          "value": {
+              "packageName": "ibm-mq",
+              "version": "1.7.0"
+          }
+      }
+  ]
+}
+{
+  "schema": "olm.bundle",
+  "name": "ibm-mq.v1.8.1",
+  "package": "ibm-mq",
+  "image": "reg/ibm-mq:latest",
+  "properties": [
+      {
+          "type": "olm.package",
+          "value": {
+              "packageName": "ibm-mq",
+              "version": "1.8.1"
+          }
+      }
+  ]
+}
