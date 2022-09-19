@@ -3,6 +3,7 @@ package mirror
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -268,6 +269,41 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+
+	if o.UseOCIFeature {
+		if o.OCIFeatureAction == "" {
+			return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
+		}
+		isc, err := o.getISConfig()
+		if err != nil {
+			return fmt.Errorf("reading imagesetconfig via command line %v", err)
+		}
+		if o.OCIFeatureAction == "copy" {
+			// download the catalog image
+			log.Println("INFO: downloading the catalog image")
+			err = copyImage(dockerProtocol+isc.Mirror.Operators[0].Catalog, ociProtocol+o.OutputDir)
+			if err != nil {
+				return fmt.Errorf("copying catalog image %v", err)
+			}
+			// find the layer with the FB config
+			log.Println("INFO: finding file based config (in catalog layers)")
+			err = o.FindFBCConfig(o.OutputDir)
+			err = bulkImageCopy(isc)
+			if err != nil {
+				return fmt.Errorf("copying images %v", err)
+			}
+			log.Println("INFO: completed catalog copy")
+			os.Exit(0)
+		} else if o.OCIFeatureAction == "mirror" {
+			log.Println("INFO: mirroring images to remote registry")
+			err = bulkImageMirror(isc, o.ToMirror, o.UserNamespace)
+			if err != nil {
+				return fmt.Errorf("mirroring images %v", err)
+			}
+			log.Println("INFO: completed catalog mirror")
+			os.Exit(0)
+		}
+	}
 
 	switch {
 	case o.ManifestsOnly:

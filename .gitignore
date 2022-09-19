@@ -40,3 +40,8 @@ test/integration/bin
 test/integration/output/*
 !test/integration/output/.gitkeep
 test/integration/ci
+
+# WRKLDS-536
+iscfg.yaml
+noo/
+tmp/
