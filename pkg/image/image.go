@@ -211,25 +211,6 @@ func extractLayerWithConfigs(gzipStream io.Reader, file string) (string, error) 
 
 func CopyFromRemote(src, dst string) error {
 
-	// srcRef, err := name.ParseReference(src)
-	// if err != nil {
-	// 	return fmt.Errorf("unable to parse source image %s: %v", src, err)
-	// }
-
-	// dstRef, err := name.ParseReference(dst)
-	// if err != nil {
-	// 	return fmt.Errorf("unable to parse source image %s: %v", dst, err)
-	// }
-
-	// srcImg, err := remote.Image(srcRef, remote.WithAuthFromKeychain(authn.DefaultKeychain))
-	// if err != nil {
-	// 	return fmt.Errorf("unable to get image from source ref %s: %v", srcRef, err)
-	// }
-
-	// err = remote.Write(dstRef, srcImg, remote.WithAuthFromKeychain(authn.DefaultKeychain))
-	// if err != nil {
-	// 	return fmt.Errorf("unable to copy image from source ref %s to %s: %v", srcRef, dst, err)
-	// }
 	systemCtx := &types.SystemContext{}
 	policy, _ := signature.DefaultPolicy(systemCtx)
 	policyCtx, _ := signature.NewPolicyContext(policy)
@@ -242,6 +223,7 @@ func CopyFromRemote(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse source image %s: %v", src, err)
 	}
+	fmt.Printf("dest is " + dst)
 	dstRef, err := alltransports.ParseImageName(dst)
 	if err != nil {
 		return fmt.Errorf("unable to parse destination image %s: %v", dst, err)

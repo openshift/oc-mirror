@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -118,7 +119,7 @@ func TestCopyFromRemote(t *testing.T) {
 			desc: "Nominal case",
 			src:  "docker://registry.redhat.io/noo/node-observability-operator-bundle-rhel8@sha256:25b8e1c8ed635364d4dcba7814ad504570b1c6053d287ab7e26c8d6a97ae3f6a",
 			// src: "registry.redhat.io/noo/node-observability-operator-bundle-rhel8@sha256:25b8e1c8ed635364d4dcba7814ad504570b1c6053d287ab7e26c8d6a97ae3f6a",
-			dst: "oci:/home/skhoury/go/src/github.com/openshift/oc-mirror/cmd/oc-mirror/oc-mirror-workspace/src/catalogs/home/skhoury/go/src/github.com/openshift/oc-mirror/rhop-ctlg-oci/index/noo/node-observability-operator-bundle-rhel8/sha256:25b8e1c8ed635364d4dcba7814ad504570b1c6053d287ab7e26c8d6a97ae3f6a",
+			dst: "oci://" + os.TempDir() + "/node-observability-operator-bundle-rhel8",
 			err: "",
 		},
 	}

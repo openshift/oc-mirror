@@ -10,6 +10,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	imgspec "github.com/opencontainers/image-spec/specs-go"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 // OCI1Index is just an alias for the OCI index type, but one which we can
@@ -43,26 +44,26 @@ func (index *OCI1Index) Instance(instanceDigest digest.Digest) (ListUpdate, erro
 			}, nil
 		}
 	}
-	return ListUpdate{}, fmt.Errorf("unable to find instance %s in OCI1Index", instanceDigest)
+	return ListUpdate{}, errors.Errorf("unable to find instance %s in OCI1Index", instanceDigest)
 }
 
 // UpdateInstances updates the sizes, digests, and media types of the manifests
 // which the list catalogs.
 func (index *OCI1Index) UpdateInstances(updates []ListUpdate) error {
 	if len(updates) != len(index.Manifests) {
-		return fmt.Errorf("incorrect number of update entries passed to OCI1Index.UpdateInstances: expected %d, got %d", len(index.Manifests), len(updates))
+		return errors.Errorf("incorrect number of update entries passed to OCI1Index.UpdateInstances: expected %d, got %d", len(index.Manifests), len(updates))
 	}
 	for i := range updates {
 		if err := updates[i].Digest.Validate(); err != nil {
-			return fmt.Errorf("update %d of %d passed to OCI1Index.UpdateInstances contained an invalid digest: %w", i+1, len(updates), err)
+			return errors.Wrapf(err, "update %d of %d passed to OCI1Index.UpdateInstances contained an invalid digest", i+1, len(updates))
 		}
 		index.Manifests[i].Digest = updates[i].Digest
 		if updates[i].Size < 0 {
-			return fmt.Errorf("update %d of %d passed to OCI1Index.UpdateInstances had an invalid size (%d)", i+1, len(updates), updates[i].Size)
+			return errors.Errorf("update %d of %d passed to OCI1Index.UpdateInstances had an invalid size (%d)", i+1, len(updates), updates[i].Size)
 		}
 		index.Manifests[i].Size = updates[i].Size
 		if updates[i].MediaType == "" {
-			return fmt.Errorf("update %d of %d passed to OCI1Index.UpdateInstances had no media type (was %q)", i+1, len(updates), index.Manifests[i].MediaType)
+			return errors.Errorf("update %d of %d passed to OCI1Index.UpdateInstances had no media type (was %q)", i+1, len(updates), index.Manifests[i].MediaType)
 		}
 		index.Manifests[i].MediaType = updates[i].MediaType
 	}
@@ -74,7 +75,7 @@ func (index *OCI1Index) UpdateInstances(updates []ListUpdate) error {
 func (index *OCI1Index) ChooseInstance(ctx *types.SystemContext) (digest.Digest, error) {
 	wantedPlatforms, err := platform.WantedPlatforms(ctx)
 	if err != nil {
-		return "", fmt.Errorf("getting platform information %#v: %w", ctx, err)
+		return "", errors.Wrapf(err, "getting platform information %#v", ctx)
 	}
 	for _, wantedPlatform := range wantedPlatforms {
 		for _, d := range index.Manifests {
@@ -107,7 +108,7 @@ func (index *OCI1Index) ChooseInstance(ctx *types.SystemContext) (digest.Digest,
 func (index *OCI1Index) Serialize() ([]byte, error) {
 	buf, err := json.Marshal(index)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling OCI1Index %#v: %w", index, err)
+		return nil, errors.Wrapf(err, "marshaling OCI1Index %#v", index)
 	}
 	return buf, nil
 }
@@ -118,7 +119,6 @@ func OCI1IndexFromComponents(components []imgspecv1.Descriptor, annotations map[
 	index := OCI1Index{
 		imgspecv1.Index{
 			Versioned:   imgspec.Versioned{SchemaVersion: 2},
-			MediaType:   imgspecv1.MediaTypeImageIndex,
 			Manifests:   make([]imgspecv1.Descriptor, len(components)),
 			Annotations: dupStringStringMap(annotations),
 		},
@@ -195,17 +195,12 @@ func OCI1IndexFromManifest(manifest []byte) (*OCI1Index, error) {
 	index := OCI1Index{
 		Index: imgspecv1.Index{
 			Versioned:   imgspec.Versioned{SchemaVersion: 2},
-			MediaType:   imgspecv1.MediaTypeImageIndex,
 			Manifests:   []imgspecv1.Descriptor{},
 			Annotations: make(map[string]string),
 		},
 	}
 	if err := json.Unmarshal(manifest, &index); err != nil {
-		return nil, fmt.Errorf("unmarshaling OCI1Index %q: %w", string(manifest), err)
-	}
-	if err := validateUnambiguousManifestFormat(manifest, imgspecv1.MediaTypeImageIndex,
-		allowedFieldManifests); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unmarshaling OCI1Index %q", string(manifest))
 	}
 	return &index, nil
 }

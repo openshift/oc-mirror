@@ -5,12 +5,11 @@ package signature
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 
-	"github.com/containers/image/v5/signature/internal"
-	"github.com/proglottis/gpgme"
+	"github.com/mtrmac/gpgme"
 )
 
 // A GPG/OpenPGP signing mechanism, implemented using gpgme.
@@ -21,7 +20,7 @@ type gpgmeSigningMechanism struct {
 
 // newGPGSigningMechanismInDirectory returns a new GPG/OpenPGP signing mechanism, using optionalDir if not empty.
 // The caller must call .Close() on the returned SigningMechanism.
-func newGPGSigningMechanismInDirectory(optionalDir string) (signingMechanismWithPassphrase, error) {
+func newGPGSigningMechanismInDirectory(optionalDir string) (SigningMechanism, error) {
 	ctx, err := newGPGMEContext(optionalDir)
 	if err != nil {
 		return nil, err
@@ -33,11 +32,11 @@ func newGPGSigningMechanismInDirectory(optionalDir string) (signingMechanismWith
 }
 
 // newEphemeralGPGSigningMechanism returns a new GPG/OpenPGP signing mechanism which
-// recognizes _only_ public keys from the supplied blobs, and returns the identities
+// recognizes _only_ public keys from the supplied blob, and returns the identities
 // of these keys.
 // The caller must call .Close() on the returned SigningMechanism.
-func newEphemeralGPGSigningMechanism(blobs [][]byte) (signingMechanismWithPassphrase, []string, error) {
-	dir, err := os.MkdirTemp("", "containers-ephemeral-gpg-")
+func newEphemeralGPGSigningMechanism(blob []byte) (SigningMechanism, []string, error) {
+	dir, err := ioutil.TempDir("", "containers-ephemeral-gpg-")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,13 +54,9 @@ func newEphemeralGPGSigningMechanism(blobs [][]byte) (signingMechanismWithPassph
 		ctx:          ctx,
 		ephemeralDir: dir,
 	}
-	keyIdentities := []string{}
-	for _, blob := range blobs {
-		ki, err := mech.importKeysFromBytes(blob)
-		if err != nil {
-			return nil, nil, err
-		}
-		keyIdentities = append(keyIdentities, ki...)
+	keyIdentities, err := mech.importKeysFromBytes(blob)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	removeDir = false
@@ -122,9 +117,9 @@ func (m *gpgmeSigningMechanism) SupportsSigning() error {
 	return nil
 }
 
-// Sign creates a (non-detached) signature of input using keyIdentity and passphrase.
+// Sign creates a (non-detached) signature of input using keyIdentity.
 // Fails with a SigningNotSupportedError if the mechanism does not support signing.
-func (m *gpgmeSigningMechanism) SignWithPassphrase(input []byte, keyIdentity string, passphrase string) ([]byte, error) {
+func (m *gpgmeSigningMechanism) Sign(input []byte, keyIdentity string) ([]byte, error) {
 	key, err := m.ctx.GetKey(keyIdentity, true)
 	if err != nil {
 		return nil, err
@@ -138,36 +133,10 @@ func (m *gpgmeSigningMechanism) SignWithPassphrase(input []byte, keyIdentity str
 	if err != nil {
 		return nil, err
 	}
-
-	if passphrase != "" {
-		// Callback to write the passphrase to the specified file descriptor.
-		callback := func(uidHint string, prevWasBad bool, gpgmeFD *os.File) error {
-			if prevWasBad {
-				return errors.New("bad passphrase")
-			}
-			_, err := gpgmeFD.WriteString(passphrase + "\n")
-			return err
-		}
-		if err := m.ctx.SetCallback(callback); err != nil {
-			return nil, fmt.Errorf("setting gpgme passphrase callback: %w", err)
-		}
-
-		// Loopback mode will use the callback instead of prompting the user.
-		if err := m.ctx.SetPinEntryMode(gpgme.PinEntryLoopback); err != nil {
-			return nil, fmt.Errorf("setting gpgme pinentry mode: %w", err)
-		}
-	}
-
 	if err = m.ctx.Sign([]*gpgme.Key{key}, inputData, sigData, gpgme.SigModeNormal); err != nil {
 		return nil, err
 	}
 	return sigBuffer.Bytes(), nil
-}
-
-// Sign creates a (non-detached) signature of input using keyIdentity.
-// Fails with a SigningNotSupportedError if the mechanism does not support signing.
-func (m *gpgmeSigningMechanism) Sign(input []byte, keyIdentity string) ([]byte, error) {
-	return m.SignWithPassphrase(input, keyIdentity, "")
 }
 
 // Verify parses unverifiedSignature and returns the content and the signer's identity
@@ -186,13 +155,13 @@ func (m *gpgmeSigningMechanism) Verify(unverifiedSignature []byte) (contents []b
 		return nil, "", err
 	}
 	if len(sigs) != 1 {
-		return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Unexpected GPG signature count %d", len(sigs)))
+		return nil, "", InvalidSignatureError{msg: fmt.Sprintf("Unexpected GPG signature count %d", len(sigs))}
 	}
 	sig := sigs[0]
 	// This is sig.Summary == gpgme.SigSumValid except for key trust, which we handle ourselves
 	if sig.Status != nil || sig.Validity == gpgme.ValidityNever || sig.ValidityReason != nil || sig.WrongKeyUsage {
 		// FIXME: Better error reporting eventually
-		return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Invalid GPG signature: %#v", sig))
+		return nil, "", InvalidSignatureError{msg: fmt.Sprintf("Invalid GPG signature: %#v", sig)}
 	}
 	return signedBuffer.Bytes(), sig.Fingerprint, nil
 }

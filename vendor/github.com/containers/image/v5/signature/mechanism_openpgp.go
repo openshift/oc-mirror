@@ -7,22 +7,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/containers/image/v5/signature/internal"
 	"github.com/containers/storage/pkg/homedir"
-	// This is a fallback code; the primary recommendation is to use the gpgme mechanism
-	// implementation, which is out-of-process and more appropriate for handling long-term private key material
-	// than any Go implementation.
-	// For this verify-only fallback, we haven't reviewed any of the
-	// existing alternatives to choose; so, for now, continue to
-	// use this frozen deprecated implementation.
-	//lint:ignore SA1019 See above
-	"golang.org/x/crypto/openpgp" //nolint:staticcheck
+	"golang.org/x/crypto/openpgp"
 )
 
 // A GPG/OpenPGP signing mechanism, implemented using x/crypto/openpgp.
@@ -32,7 +24,7 @@ type openpgpSigningMechanism struct {
 
 // newGPGSigningMechanismInDirectory returns a new GPG/OpenPGP signing mechanism, using optionalDir if not empty.
 // The caller must call .Close() on the returned SigningMechanism.
-func newGPGSigningMechanismInDirectory(optionalDir string) (signingMechanismWithPassphrase, error) {
+func newGPGSigningMechanismInDirectory(optionalDir string) (SigningMechanism, error) {
 	m := &openpgpSigningMechanism{
 		keyring: openpgp.EntityList{},
 	}
@@ -45,7 +37,7 @@ func newGPGSigningMechanismInDirectory(optionalDir string) (signingMechanismWith
 		}
 	}
 
-	pubring, err := os.ReadFile(path.Join(gpgHome, "pubring.gpg"))
+	pubring, err := ioutil.ReadFile(path.Join(gpgHome, "pubring.gpg"))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
@@ -63,19 +55,14 @@ func newGPGSigningMechanismInDirectory(optionalDir string) (signingMechanismWith
 // recognizes _only_ public keys from the supplied blob, and returns the identities
 // of these keys.
 // The caller must call .Close() on the returned SigningMechanism.
-func newEphemeralGPGSigningMechanism(blobs [][]byte) (signingMechanismWithPassphrase, []string, error) {
+func newEphemeralGPGSigningMechanism(blob []byte) (SigningMechanism, []string, error) {
 	m := &openpgpSigningMechanism{
 		keyring: openpgp.EntityList{},
 	}
-	keyIdentities := []string{}
-	for _, blob := range blobs {
-		ki, err := m.importKeysFromBytes(blob)
-		if err != nil {
-			return nil, nil, err
-		}
-		keyIdentities = append(keyIdentities, ki...)
+	keyIdentities, err := m.importKeysFromBytes(blob)
+	if err != nil {
+		return nil, nil, err
 	}
-
 	return m, keyIdentities, nil
 }
 
@@ -117,14 +104,8 @@ func (m *openpgpSigningMechanism) SupportsSigning() error {
 
 // Sign creates a (non-detached) signature of input using keyIdentity.
 // Fails with a SigningNotSupportedError if the mechanism does not support signing.
-func (m *openpgpSigningMechanism) SignWithPassphrase(input []byte, keyIdentity string, passphrase string) ([]byte, error) {
-	return nil, SigningNotSupportedError("signing is not supported in github.com/containers/image built with the containers_image_openpgp build tag")
-}
-
-// Sign creates a (non-detached) signature of input using keyIdentity.
-// Fails with a SigningNotSupportedError if the mechanism does not support signing.
 func (m *openpgpSigningMechanism) Sign(input []byte, keyIdentity string) ([]byte, error) {
-	return m.SignWithPassphrase(input, keyIdentity, "")
+	return nil, SigningNotSupportedError("signing is not supported in github.com/containers/image built with the containers_image_openpgp build tag")
 }
 
 // Verify parses unverifiedSignature and returns the content and the signer's identity
@@ -136,7 +117,7 @@ func (m *openpgpSigningMechanism) Verify(unverifiedSignature []byte) (contents [
 	if !md.IsSigned {
 		return nil, "", errors.New("not signed")
 	}
-	content, err := io.ReadAll(md.UnverifiedBody)
+	content, err := ioutil.ReadAll(md.UnverifiedBody)
 	if err != nil {
 		// Coverage: md.UnverifiedBody.Read only fails if the body is encrypted
 		// (and possibly also signed, but it _must_ be encrypted) and the signing
@@ -150,19 +131,19 @@ func (m *openpgpSigningMechanism) Verify(unverifiedSignature []byte) (contents [
 		return nil, "", fmt.Errorf("signature error: %v", md.SignatureError)
 	}
 	if md.SignedBy == nil {
-		return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Invalid GPG signature: %#v", md.Signature))
+		return nil, "", InvalidSignatureError{msg: fmt.Sprintf("Invalid GPG signature: %#v", md.Signature)}
 	}
 	if md.Signature != nil {
 		if md.Signature.SigLifetimeSecs != nil {
 			expiry := md.Signature.CreationTime.Add(time.Duration(*md.Signature.SigLifetimeSecs) * time.Second)
 			if time.Now().After(expiry) {
-				return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Signature expired on %s", expiry))
+				return nil, "", InvalidSignatureError{msg: fmt.Sprintf("Signature expired on %s", expiry)}
 			}
 		}
 	} else if md.SignatureV3 == nil {
 		// Coverage: If md.SignedBy != nil, the final md.UnverifiedBody.Read() either sets one of md.Signature or md.SignatureV3,
 		// or sets md.SignatureError.
-		return nil, "", internal.NewInvalidSignatureError("Unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set")
+		return nil, "", InvalidSignatureError{msg: "Unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set"}
 	}
 
 	// Uppercase the fingerprint to be compatible with gpgme
