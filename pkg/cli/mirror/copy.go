@@ -267,7 +267,7 @@ func bulkImageMirror(isc *ImageSetConfig, imgdest, namespace string) error {
 				img := strings.Split(tmp[2], ":")
 				nm := strings.Split(img[0], "@")
 				from := ociProtocol + tempPath + configPath + pkg.Name + "/" + folder
-				to := dockerProtocol + imgdest + "/" + tmp[1] + "/" + nm[0] + ":v0.0.1"
+				to := dockerProtocol + imgdest + "/" + namespace + "/" + tmp[1] + "/" + nm[0] + ":v0.0.1"
 				fmt.Println("copyImage(" + from + "," + to)
 				err := copyImage(from, to)
 				if err != nil {
@@ -354,6 +354,7 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 	}
 
 	// iterate through each layer
+
 	for _, layer := range oci.Layers {
 		fmt.Println(path + blobsPath + layer.Digest[7:])
 		r, err := os.Open(path + blobsPath + layer.Digest[7:])
