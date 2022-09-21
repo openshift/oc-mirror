@@ -85,14 +85,20 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 }
 
 // newSystemContext set the context for source & destination resources
-func newSystemContext() *types.SystemContext {
+func newSystemContext(skipTLS bool) *types.SystemContext {
+	var skipTLSVerify types.OptionalBool
+	if skipTLS {
+		skipTLSVerify = types.OptionalBoolTrue
+	} else {
+		skipTLSVerify = types.OptionalBoolFalse
+	}
 	ctx := &types.SystemContext{
 		RegistriesDirPath:           "",
 		ArchitectureChoice:          "",
 		OSChoice:                    "",
 		VariantChoice:               "",
 		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
-		DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
+		DockerInsecureSkipTLSVerify: skipTLSVerify,
 	}
 	return ctx
 }
@@ -115,7 +121,7 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 //•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 //•a•local directory in oci format↵
-func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration) error {
+func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
 
 	files, err := ioutil.ReadDir(tempPath + configPath)
 	if err != nil {
@@ -139,7 +145,7 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration) error {
 						if name == "" {
 							name = "bundle"
 						}
-						err := copyImage(dockerProtocol+i.Image, ociProtocol+tempPath+configPath+file.Name()+"/"+name)
+						err := copyImage(dockerProtocol+i.Image, ociProtocol+tempPath+configPath+file.Name()+"/"+name, srcSkipTLS, dstSkipTLS)
 						if err != nil {
 							log.Fatal(err)
 						}
@@ -155,7 +161,7 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration) error {
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string) error {
+func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string, srcSkipTLS, dstSkipTLS bool) error {
 
 	ch := make(chan byte, 1)
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
@@ -178,7 +184,7 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 				from := ociProtocol + tempPath + configPath + pkg.Name + "/" + folder
 				to := dockerProtocol + imgdest + "/" + namespace + "/" + tmp[1] + "/" + nm[0] + ":v0.0.1"
 				fmt.Println("copyImage(" + from + "," + to)
-				err := copyImage(from, to)
+				err := copyImage(from, to, srcSkipTLS, dstSkipTLS)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -193,10 +199,10 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 
 // copyImage function that sets the correct context and
 // calls the undrlying container copy library
-func copyImage(from, to string) error {
+func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 
-	sourceCtx := newSystemContext()
-	destinationCtx := newSystemContext()
+	sourceCtx := newSystemContext(srcSkipTLS)
+	destinationCtx := newSystemContext(dstSkipTLS)
 	ctx := context.Background()
 
 	// Pull the source image, and store it in the local storage, under the name main
