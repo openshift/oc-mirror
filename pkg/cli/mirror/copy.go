@@ -12,10 +12,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/operator-framework/operator-registry/alpha/model"
+
 	"github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -36,96 +40,6 @@ var globalArgs struct {
 	registriesConfPath *string
 }
 
-// Index struct used to decode index.json
-type Index struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Manifests     []struct {
-		MediaType string `json:"mediaType"`
-		Digest    string `json:"digest"`
-		Size      int    `json:"size"`
-	} `json:"manifests"`
-}
-
-// OCIImageManifest - oci image manifest
-type OCIImageManifest struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Config        struct {
-		MediaType string `json:"mediaType"`
-		Digest    string `json:"digest"`
-		Size      int    `json:"size"`
-	} `json:"config"`
-	Layers      []Layer `json:"layers"`
-	Annotations struct {
-		OrgOpencontainersImageBaseDigest string `json:"org.opencontainers.image.base.digest"`
-		OrgOpencontainersImageBaseName   string `json:"org.opencontainers.image.base.name"`
-	} `json:"annotations"`
-}
-
-// Layer schema used in OCIImageManifest
-type Layer struct {
-	MediaType string `json:"mediaType"`
-	Digest    string `json:"digest"`
-	Size      int    `json:"size"`
-}
-
-// ImageSetConfig used to decode command line 'imagesetconfig.yaml' file
-type ImageSetConfig struct {
-	Kind          string `yaml:"kind"`
-	APIVersion    string `yaml:"apiVersion"`
-	StorageConfig struct {
-		Registry struct {
-			ImageURL string `yaml:"imageURL"`
-			SkipTLS  bool   `yaml:"skipTLS"`
-		} `yaml:"registry"`
-		Local struct {
-			Path interface{} `yaml:"path"`
-		} `yaml:"local"`
-	} `yaml:"storageConfig"`
-	Mirror struct {
-		Platform struct {
-			Channels []struct {
-				Name string `yaml:"name"`
-				Type string `yaml:"type"`
-			} `yaml:"channels"`
-		} `yaml:"platform"`
-		Operators []struct {
-			Catalog  string `yaml:"catalog"`
-			Packages []struct {
-				Name     string `yaml:"name"`
-				Channels []struct {
-					Name string `yaml:"name"`
-				} `yaml:"channels"`
-			} `yaml:"packages"`
-		} `yaml:"operators"`
-		AdditionalImages []struct {
-			Name string `yaml:"name"`
-		} `yaml:"additionalImages"`
-		Helm struct {
-		} `yaml:"helm"`
-	} `yaml:"mirror"`
-}
-
-// ImageConfigJSON for each operator\the catalog or config json file
-// for FBC layout
-type ImageConfigJSON struct {
-	Schema     string `json:"schema"`
-	Name       string `json:"name"`
-	Package    string `json:"package"`
-	Image      string `json:"image"`
-	Properties []struct {
-		Type  string `json:"type"`
-		Value struct {
-			Group   string `json:"group"`
-			Kind    string `json:"kind"`
-			Version string `json:"version"`
-		} `json:"value,omitempty"`
-	} `json:"properties"`
-	RelatedImages []struct {
-		Name  string `json:"name"`
-		Image string `json:"image"`
-	} `json:"relatedImages"`
-}
-
 // UntarLayers simple function that untars the layer that
 // has the FB configuration
 func UntarLayers(gzipStream io.Reader, path string) error {
@@ -137,7 +51,7 @@ func UntarLayers(gzipStream io.Reader, path string) error {
 
 	tarReader := tar.NewReader(uncompressedStream)
 
-	for true {
+	for {
 		header, err := tarReader.Next()
 
 		if err == io.EOF {
@@ -190,8 +104,8 @@ func newSystemContext() *types.SystemContext {
 
 // getISConfig - simple function to read and unmarshal the imagesetconfig
 // set via the command line
-func (o *MirrorOptions) getISConfig() (*ImageSetConfig, error) {
-	var isc *ImageSetConfig
+func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
+	var isc *v1alpha2.ImageSetConfiguration
 	configData, err := ioutil.ReadFile(o.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -206,7 +120,7 @@ func (o *MirrorOptions) getISConfig() (*ImageSetConfig, error) {
 
 //•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 //•a•local directory in oci format↵
-func bulkImageCopy(isc *ImageSetConfig) error {
+func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration) error {
 
 	files, err := ioutil.ReadDir(tempPath + configPath)
 	if err != nil {
@@ -246,7 +160,7 @@ func bulkImageCopy(isc *ImageSetConfig) error {
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func bulkImageMirror(isc *ImageSetConfig, imgdest, namespace string) error {
+func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string) error {
 
 	ch := make(chan byte, 1)
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
@@ -329,35 +243,23 @@ func copyImage(from, to string) error {
 // FindFBCConfig function to find the layer from the catalog
 // that has the file based configuration
 func (o *MirrorOptions) FindFBCConfig(path string) error {
-	var index *Index
-
 	// read the index.json of the catalog
-	var oci *OCIImageManifest
-	indexData, err := ioutil.ReadFile(path + indexJSON)
+	srcImg, err := getOCIImgSrcFromPath(context.TODO(), path)
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(indexData, &index)
-	if err != nil {
-		return err
-	}
-
-	// find the layer that is designated as the manifest
-	manifestDigest := index.Manifests[0].Digest[7:]
-	data, err := ioutil.ReadFile(path + blobsPath + manifestDigest)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, &oci)
+	manifest, err := getManifest(context.TODO(), srcImg)
 	if err != nil {
 		return err
 	}
 
 	// iterate through each layer
 
-	for _, layer := range oci.Layers {
-		fmt.Println(path + blobsPath + layer.Digest[7:])
-		r, err := os.Open(path + blobsPath + layer.Digest[7:])
+	for _, layer := range manifest.LayerInfos() {
+		layerSha := layer.Digest.String()
+		layerDirName := layerSha[7:]
+		fmt.Println(path + blobsPath + layerDirName)
+		r, err := os.Open(path + blobsPath + layerDirName)
 		if err != nil {
 			return err
 		}
@@ -369,8 +271,8 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 
 // getRelatedImages this reads each catalog or config.json
 // file in a given operator in the FBC
-func getRelatedImages(path string) (*ImageConfigJSON, error) {
-	var icJSON *ImageConfigJSON
+func getRelatedImages(path string) (*model.Bundle, error) {
+	var icJSON *model.Bundle
 
 	// read the config.json to get releated images
 	icd, err := ioutil.ReadFile(path + catalogJSON)
@@ -386,4 +288,27 @@ func getRelatedImages(path string) (*ImageConfigJSON, error) {
 		return nil, fmt.Errorf("json unmarshal %v", err)
 	}
 	return icJSON, nil
+}
+
+func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
+	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
+	if err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
+	ociImgRef, err := alltransports.ParseImageName(path)
+	if err != nil {
+		return nil, err
+	}
+	imgsrc, err := ociImgRef.NewImageSource(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return imgsrc, nil
 }
