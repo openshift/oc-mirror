@@ -32,21 +32,15 @@ const (
 	configPath     string = "configs/"
 	catalogJSON    string = "/catalog.json"
 	relatedImages  string = "relatedImages"
+	configsLabel   string = "operators.operatorframework.io.index.configs.v1"
 )
-
-var globalArgs struct {
-	root               *string
-	cache              *string
-	registriesConfPath *string
-}
 
 // UntarLayers simple function that untars the layer that
 // has the FB configuration
 func UntarLayers(gzipStream io.Reader, path string) error {
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
-		log.Fatal("UntarLayers: NewReader failed")
-		return err
+		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
 	}
 
 	tarReader := tar.NewReader(uncompressedStream)
@@ -59,7 +53,7 @@ func UntarLayers(gzipStream io.Reader, path string) error {
 		}
 
 		if err != nil {
-			log.Fatalf("UntarLayers: Next() failed: %s", err.Error())
+			return fmt.Errorf("UntarLayers: Next() failed: %s", err.Error())
 		}
 
 		if strings.Contains(header.Name, "configs") {
@@ -82,7 +76,7 @@ func UntarLayers(gzipStream io.Reader, path string) error {
 
 			default:
 				// just ignore errors as we are only interested in the FB configs layer
-				fmt.Println(fmt.Printf("UntarLayers: uknown type: %v in %s", header.Typeflag, header.Name))
+				fmt.Println(fmt.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name))
 			}
 		}
 	}
@@ -206,8 +200,13 @@ func copyImage(from, to string) error {
 
 	// Pull the source image, and store it in the local storage, under the name main
 	policy, err := signature.DefaultPolicy(nil)
+	if err != nil {
+		return err
+	}
 	policyContext, err := signature.NewPolicyContext(policy)
-
+	if err != nil {
+		return err
+	}
 	// define the source context
 	srcRef, err := alltransports.ParseImageName(from)
 	if err != nil {
@@ -264,7 +263,10 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 			return err
 		}
 		// untar if it is the FBC
-		UntarLayers(r, tempPath)
+		err = UntarLayers(r, tempPath)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -293,22 +295,23 @@ func getRelatedImages(path string) (*model.Bundle, error) {
 func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
 	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
 	}
 	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
 	}
 	return manifest, nil
 }
+
 func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
-	ociImgRef, err := alltransports.ParseImageName(path)
+	ociImgRef, err := alltransports.ParseImageName(ociProtocol + path)
 	if err != nil {
 		return nil, err
 	}
 	imgsrc, err := ociImgRef.NewImageSource(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get OCI Image from %s: %w", path, err)
 	}
 	return imgsrc, nil
 }

@@ -35,6 +35,11 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+const (
+	OCIFeatureCopyAction   = "copy"
+	OCIFeatureMirrorAction = "mirror"
+)
+
 var (
 	mirrorlongDesc = templates.LongDesc(
 		` 
@@ -278,7 +283,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err != nil {
 			return fmt.Errorf("reading imagesetconfig via command line %v", err)
 		}
-		if o.OCIFeatureAction == "copy" {
+		if o.OCIFeatureAction == OCIFeatureCopyAction {
 			// download the catalog image
 			log.Println("INFO: downloading the catalog image")
 			err = copyImage(dockerProtocol+isc.Mirror.Operators[0].Catalog, ociProtocol+o.OutputDir)
@@ -288,13 +293,16 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			// find the layer with the FB config
 			log.Println("INFO: finding file based config (in catalog layers)")
 			err = o.FindFBCConfig(o.OutputDir)
+			if err != nil {
+				return fmt.Errorf("unable to find config in %s: %v", o.OutputDir, err)
+			}
 			err = bulkImageCopy(isc)
 			if err != nil {
 				return fmt.Errorf("copying images %v", err)
 			}
 			log.Println("INFO: completed catalog copy")
 			os.Exit(0)
-		} else if o.OCIFeatureAction == "mirror" {
+		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 			log.Println("INFO: mirroring images to remote registry")
 			err = bulkImageMirror(isc, o.ToMirror, o.UserNamespace)
 			if err != nil {
