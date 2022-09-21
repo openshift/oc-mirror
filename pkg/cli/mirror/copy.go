@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/operator-framework/operator-registry/alpha/model"
@@ -37,7 +38,7 @@ const (
 
 // UntarLayers simple function that untars the layer that
 // has the FB configuration
-func UntarLayers(gzipStream io.Reader, path string) error {
+func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
@@ -56,7 +57,7 @@ func UntarLayers(gzipStream io.Reader, path string) error {
 			return fmt.Errorf("UntarLayers: Next() failed: %s", err.Error())
 		}
 
-		if strings.Contains(header.Name, "configs") {
+		if strings.Contains(header.Name, cfgDirName) {
 			switch header.Typeflag {
 			case tar.TypeDir:
 				if header.Name != "./" {
@@ -252,6 +253,12 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 		return err
 	}
 
+	//Use the label in the config layer to determine the
+	//folder containing the related images, when untarring layers
+	cfgDirName, err := getConfigPathFromLabel(path, string(manifest.ConfigInfo().Digest))
+	if err != nil {
+		return err
+	}
 	// iterate through each layer
 
 	for _, layer := range manifest.LayerInfos() {
@@ -263,7 +270,7 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 			return err
 		}
 		// untar if it is the FBC
-		err = UntarLayers(r, tempPath)
+		err = UntarLayers(r, tempPath, cfgDirName)
 		if err != nil {
 			return err
 		}
@@ -314,4 +321,21 @@ func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, 
 		return nil, fmt.Errorf("unable to get OCI Image from %s: %w", path, err)
 	}
 	return imgsrc, nil
+}
+
+func getConfigPathFromLabel(imagePath, configSha string) (string, error) {
+	var cfg *manifest.Schema2V1Image
+	configLayerDir := configSha[7:]
+	cfgBlob, err := ioutil.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
+	if err != nil {
+		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
+	}
+	err = json.Unmarshal(cfgBlob, &cfg)
+	if err != nil {
+		return "", fmt.Errorf("problem unmarshaling config blob in %s: %w", configLayerDir, err)
+	}
+	if dirName, ok := cfg.Config.Labels[configsLabel]; ok {
+		return dirName, nil
+	}
+	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
 }

@@ -13,6 +13,7 @@ const (
 	testdata        = "testdata/artifacts/rhop-ctlg-oci"
 	rotten_manifest = "testdata/artifacts/rhop-rotten-manifest"
 	rotten_layer    = "testdata/artifacts/rhop-rotten-layer"
+	rotten_config   = "testdata/artifacts/rhop-rotten-cfg"
 )
 
 // TODO: add preparation step that saves a catalog locally before testing
@@ -166,6 +167,58 @@ func TestFindFBCConfig(t *testing.T) {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
+			}
+
+		})
+	}
+}
+
+func TestGetConfigPathFromLabel(t *testing.T) {
+	type spec struct {
+		desc            string
+		imagePath       string
+		configSha       string
+		expectedDirName string
+		err             string
+	}
+	cases := []spec{
+		{
+			desc:            "nominal case",
+			imagePath:       testdata,
+			configSha:       "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262",
+			expectedDirName: "/configs",
+			err:             "",
+		},
+		{
+			desc:            "sha doesnt exist fails",
+			imagePath:       testdata,
+			configSha:       "sha256:inexistingSha",
+			expectedDirName: "",
+			err:             "unable to read the config blob inexistingSha from the oci image: open testdata/artifacts/rhop-ctlg-oci/blobs/sha256/inexistingSha: no such file or directory",
+		},
+		{
+			desc:            "cfg layer json incorrect fails",
+			imagePath:       rotten_config,
+			configSha:       "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262",
+			expectedDirName: "",
+			err:             "problem unmarshaling config blob in c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262: unexpected end of JSON input",
+		},
+		{
+			desc:            "label doesnt exist fails",
+			imagePath:       rotten_config,
+			configSha:       "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae5782ff",
+			expectedDirName: "",
+			err:             "label " + configsLabel + " not found in config blob c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae5782ff",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			cfgDir, err := getConfigPathFromLabel(c.imagePath, c.configSha)
+			if c.err != "" {
+				require.EqualError(t, err, c.err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, c.expectedDirName, cfgDir)
 			}
 
 		})
