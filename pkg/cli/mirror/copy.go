@@ -39,13 +39,15 @@ const (
 // UntarLayers simple function that untars the layer that
 // has the FB configuration
 func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
+	//Remove any separators in cfgDirName as received from the label
+	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
+	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
 	}
 
 	tarReader := tar.NewReader(uncompressedStream)
-
 	for {
 		header, err := tarReader.Next()
 
@@ -135,11 +137,11 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS b
 			if strings.Contains(pkg.Name, file.Name()) {
 				fmt.Println(file.Name(), file.IsDir())
 				// read the config.json to get releated images
-				icJSON, err := getRelatedImages(tempPath + configPath + file.Name())
+				relatedImages, err := getRelatedImages(tempPath + configPath + file.Name())
 				if err != nil {
 					return err
 				}
-				for _, i := range icJSON.RelatedImages {
+				for _, i := range relatedImages {
 					go func() {
 						name := i.Name
 						if name == "" {
@@ -165,13 +167,13 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 
 	ch := make(chan byte, 1)
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
-		icJSON, err := getRelatedImages(tempPath + configPath + pkg.Name)
+		relatedImages, err := getRelatedImages(tempPath + configPath + pkg.Name)
 		if err != nil {
 			log.Fatal(err)
 			return err
 		}
 
-		for _, i := range icJSON.RelatedImages {
+		for _, i := range relatedImages {
 			go func() {
 				folder := i.Name
 				if folder == "" {
@@ -281,12 +283,23 @@ func (o *MirrorOptions) FindFBCConfig(path string) error {
 			return err
 		}
 	}
+	f, err := os.Open(filepath.Join(tempPath, cfgDirName))
+	if err != nil {
+		return fmt.Errorf("unable to open temp folder containing extracted catalogs %s: %w", filepath.Join(tempPath, cfgDirName), err)
+	}
+	contents, err := f.Readdir(0)
+	if err != nil {
+		return fmt.Errorf("unable to read temp folder containing extracted catalogs %s: %w", filepath.Join(tempPath, cfgDirName), err)
+	}
+	if len(contents) == 0 {
+		return fmt.Errorf("no packages found in catalog")
+	}
 	return nil
 }
 
 // getRelatedImages this reads each catalog or config.json
 // file in a given operator in the FBC
-func getRelatedImages(path string) (*model.Bundle, error) {
+func getRelatedImages(path string) ([]model.RelatedImage, error) {
 	var icJSON *model.Bundle
 
 	// read the config.json to get releated images
@@ -302,7 +315,7 @@ func getRelatedImages(path string) (*model.Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("json unmarshal %v", err)
 	}
-	return icJSON, nil
+	return icJSON.RelatedImages, nil
 }
 
 func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
