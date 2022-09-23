@@ -31,7 +31,9 @@ all: tidy test-unit build
 .PHONY: all
 
 cross-build-linux-amd64:
-	+@GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
+	@rm -rf vendor/github.com/containers/storage/drivers/register/register_btrfs.go
+	@rm -rf vendor/github.com/containers/storage/drivers/btrfs/btrfs.go
+	+@GOOS=linux GOARCH=amd64 $(MAKE) -tags "exclude_graphdriver_btrfs btrfs_noversion" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
 .PHONY: cross-build-linux-amd64
 
 cross-build: cross-build-linux-amd64
