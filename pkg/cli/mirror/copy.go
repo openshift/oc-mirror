@@ -13,16 +13,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
+
 	"github.com/operator-framework/operator-registry/alpha/model"
 
-	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"sigs.k8s.io/yaml"
 )
+
+type style string
 
 const (
 	blobsPath      string = "/blobs/sha256/"
@@ -34,6 +38,8 @@ const (
 	catalogJSON    string = "/catalog.json"
 	relatedImages  string = "relatedImages"
 	configsLabel   string = "operators.operatorframework.io.index.configs.v1"
+	ociStyle       style  = "oci"
+	originStyle    style  = "origin"
 )
 
 // UntarLayers simple function that untars the layer that
@@ -86,25 +92,6 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 	return nil
 }
 
-// newSystemContext set the context for source & destination resources
-func newSystemContext(skipTLS bool) *types.SystemContext {
-	var skipTLSVerify types.OptionalBool
-	if skipTLS {
-		skipTLSVerify = types.OptionalBoolTrue
-	} else {
-		skipTLSVerify = types.OptionalBoolFalse
-	}
-	ctx := &types.SystemContext{
-		RegistriesDirPath:           "",
-		ArchitectureChoice:          "",
-		OSChoice:                    "",
-		VariantChoice:               "",
-		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
-		DockerInsecureSkipTLSVerify: skipTLSVerify,
-	}
-	return ctx
-}
-
 // getISConfig - simple function to read and unmarshal the imagesetconfig
 // set via the command line
 func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
@@ -147,7 +134,7 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS b
 						if name == "" {
 							name = "bundle"
 						}
-						err := copyImage(dockerProtocol+i.Image, ociProtocol+tempPath+configPath+file.Name()+"/"+name, srcSkipTLS, dstSkipTLS)
+						err := pullImage(i.Image, tempPath+configPath+file.Name()+"/"+name, srcSkipTLS, originStyle)
 						if err != nil {
 							log.Fatal(err)
 						}
@@ -195,14 +182,14 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 					tag = img[1]
 				}
 
-				from := ociProtocol + tempPath + configPath + pkg.Name + "/" + folder
+				from := tempPath + configPath + pkg.Name + "/" + folder
 				if tag != "" {
-					to = dockerProtocol + strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
+					to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
 				} else {
-					to = dockerProtocol + strings.Join([]string{imgdest, namespace, subns, imgName}, "/") // + "@sha256:" + sha
+					to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") // + "@sha256:" + sha
 				}
-				fmt.Println("copyImage(" + from + "," + to)
-				err := copyImage(from, to, srcSkipTLS, dstSkipTLS)
+				fmt.Println("pushImage(" + from + "," + to)
+				err := pushImage(from, to, dstSkipTLS)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -215,52 +202,57 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 
 }
 
-// copyImage function that sets the correct context and
-// calls the undrlying container copy library
-func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
-
-	sourceCtx := newSystemContext(srcSkipTLS)
-	destinationCtx := newSystemContext(dstSkipTLS)
+func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
 	ctx := context.Background()
+	opts := []crane.Option{
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithContext(ctx),
+		crane.WithTransport(createRT(srcSkipTLS)),
+	}
+	if srcSkipTLS {
+		opts = append(opts, crane.Insecure)
+	}
+	img, err := crane.Pull(from, opts...)
+	if err != nil {
+		return err
+	}
+	if inStyle == ociStyle {
+		err = crane.SaveOCI(img, to)
+		if err != nil {
+			return fmt.Errorf("unable to save image %s in OCI format in %s: %w", from, to, err)
+		}
+	} else {
+		tags, err := image.GetTagsFromImage(from)
+		tag := "latest"
+		if err == nil || len(tags) > 0 {
+			tag = tags[0]
+		}
+		if err := crane.SaveLegacy(img, tag, to); err != nil {
+			return fmt.Errorf("unable to save image %s in its original format in %s: %w", from, to, err)
+		}
+	}
+	return nil
+}
 
-	// Pull the source image, and store it in the local storage, under the name main
-	policy, err := signature.DefaultPolicy(nil)
-	if err != nil {
-		return err
+func pushImage(from, to string, dstSkipTLS bool) error {
+	ctx := context.Background()
+	opts := []crane.Option{
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithContext(ctx),
+		crane.WithTransport(createRT(dstSkipTLS)),
 	}
-	policyContext, err := signature.NewPolicyContext(policy)
-	if err != nil {
-		return err
+	if dstSkipTLS {
+		opts = append(opts, crane.Insecure)
 	}
-	// define the source context
-	srcRef, err := alltransports.ParseImageName(from)
-	if err != nil {
-		return err
-	}
-
-	// define the destination context
-	destRef, err := alltransports.ParseImageName(to)
+	img, err := crane.Load(from, opts...)
 	if err != nil {
 		return err
 	}
 
-	// call the copy.Image function with the set options
-	_, err = copy.Image(ctx, policyContext, destRef, srcRef,
-		&copy.Options{
-			RemoveSignatures:      true,
-			SignBy:                "",
-			ReportWriter:          os.Stdout,
-			SourceCtx:             sourceCtx,
-			DestinationCtx:        destinationCtx,
-			ForceManifestMIMEType: "",
-			ImageListSelection:    copy.CopySystemImage,
-			OciDecryptConfig:      nil,
-			OciEncryptLayers:      nil,
-			OciEncryptConfig:      nil,
-		})
-	if err != nil {
-		return err
+	if err := crane.Push(img, to, opts...); err != nil {
+		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
 	}
+
 	return nil
 }
 

@@ -157,6 +157,19 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		// If the destination is on disk, made the output dir the
 		// parent dir for the workspace
 		o.Dir = filepath.Join(o.OutputDir, o.Dir)
+	case "oci":
+		if cmd.Flags().Changed("dir") {
+			return fmt.Errorf("--dir cannot be specified with file destination scheme")
+		}
+		ref = strings.Replace(ref, "oci", "file", 1)
+		ref = filepath.Clean(ref)
+		if ref == "" {
+			ref = "."
+		}
+		o.OutputDir = ref
+		// If the destination is on disk, made the output dir the
+		// parent dir for the workspace
+		o.Dir = filepath.Join(o.OutputDir, o.Dir)
 	case "docker":
 		mirror, err := imagesource.ParseReference(ref)
 		if err != nil {
@@ -286,7 +299,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if o.OCIFeatureAction == OCIFeatureCopyAction {
 			// download the catalog image
 			log.Println("INFO: downloading the catalog image")
-			err = copyImage(dockerProtocol+isc.Mirror.Operators[0].Catalog, ociProtocol+o.OutputDir, o.SourceSkipTLS, o.DestSkipTLS)
+			err = pullImage(isc.Mirror.Operators[0].Catalog, o.OutputDir, o.SourceSkipTLS, ociStyle)
 			if err != nil {
 				return fmt.Errorf("copying catalog image %v", err)
 			}
