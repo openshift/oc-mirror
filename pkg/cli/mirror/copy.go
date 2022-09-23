@@ -135,7 +135,7 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS b
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
 		for _, file := range files {
 			if strings.Contains(pkg.Name, file.Name()) {
-				fmt.Println(file.Name(), file.IsDir())
+				fmt.Println(file.Name())
 				// read the config.json to get releated images
 				relatedImages, err := getRelatedImages(tempPath + configPath + file.Name())
 				if err != nil {
@@ -179,12 +179,28 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 				if folder == "" {
 					folder = "bundle"
 				}
+				to, subns, imgName, tag := "", "", "", ""
 				tmp := strings.Split(i.Image, "/")
 				fmt.Println("DEBUG LMZ ", tmp)
-				img := strings.Split(tmp[2], ":")
-				nm := strings.Split(img[0], "@")
+				img := strings.Split(tmp[len(tmp)-1], ":")
+				if len(tmp) > 2 {
+					subns = strings.Join(tmp[1:len(tmp)-1], "/")
+				}
+				if strings.Contains(img[0], "@") {
+					nm := strings.Split(img[0], "@")
+					imgName = nm[0]
+					//sha = img[1]
+				} else {
+					imgName = img[0]
+					tag = img[1]
+				}
+
 				from := ociProtocol + tempPath + configPath + pkg.Name + "/" + folder
-				to := dockerProtocol + imgdest + "/" + namespace + "/" + tmp[1] + "/" + nm[0] + ":v0.0.1"
+				if tag != "" {
+					to = dockerProtocol + strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
+				} else {
+					to = dockerProtocol + strings.Join([]string{imgdest, namespace, subns, imgName}, "/") // + "@sha256:" + sha
+				}
 				fmt.Println("copyImage(" + from + "," + to)
 				err := copyImage(from, to, srcSkipTLS, dstSkipTLS)
 				if err != nil {
