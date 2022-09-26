@@ -15,13 +15,13 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
-
 	"github.com/operator-framework/operator-registry/alpha/model"
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"sigs.k8s.io/yaml"
 )
@@ -109,8 +109,8 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 }
 
 //•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
-//•a•local directory in oci format↵
-func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
+//•a•local directory↵
+func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
 
 	files, err := ioutil.ReadDir(tempPath + configPath)
 	if err != nil {
@@ -118,7 +118,7 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS b
 		return err
 	}
 
-	ch := make(chan byte, 1)
+	mapping := image.TypedImageMapping{}
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
 		for _, file := range files {
 			if strings.Contains(pkg.Name, file.Name()) {
@@ -129,30 +129,46 @@ func bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS b
 					return err
 				}
 				for _, i := range relatedImages {
-					go func() {
-						name := i.Name
-						if name == "" {
-							name = "bundle"
-						}
-						err := pullImage(i.Image, tempPath+configPath+file.Name()+"/"+name, srcSkipTLS, originStyle)
-						if err != nil {
-							log.Fatal(err)
-						}
-						ch <- 1
-					}()
-					<-ch
+					name := i.Name
+					if name == "" {
+						name = "bundle"
+					}
+					srcTIR, err := image.ParseReference(i.Image)
+					if err != nil {
+						return err
+					}
+					srcTI := image.TypedImage{
+						TypedImageReference: srcTIR,
+						Category:            v1alpha2.TypeOperatorRelatedImage,
+					}
+					dstTIR, err := image.ParseReference("file://" + file.Name() + "/" + name)
+					if err != nil {
+						return err
+					}
+					dstTI := image.TypedImage{
+						TypedImageReference: dstTIR,
+						Category:            v1alpha2.TypeOperatorRelatedImage,
+					}
+					mapping[srcTI] = dstTI
 				}
 			}
 		}
 	}
+	//to prepare for next
+	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
+	err = o.mirrorMappings(*isc, mapping, srcSkipTLS)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string, srcSkipTLS, dstSkipTLS bool) error {
-
-	ch := make(chan byte, 1)
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string, srcSkipTLS, dstSkipTLS bool) error {
+	mapping := image.TypedImageMapping{}
+	fmt.Println(os.Getwd())
 	for _, pkg := range isc.Mirror.Operators[0].Packages {
 		relatedImages, err := getRelatedImages(tempPath + configPath + pkg.Name)
 		if err != nil {
@@ -161,99 +177,70 @@ func bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace str
 		}
 
 		for _, i := range relatedImages {
-			go func() {
-				folder := i.Name
-				if folder == "" {
-					folder = "bundle"
-				}
-				to, subns, imgName, tag := "", "", "", ""
-				tmp := strings.Split(i.Image, "/")
-				fmt.Println("DEBUG LMZ ", tmp)
-				img := strings.Split(tmp[len(tmp)-1], ":")
-				if len(tmp) > 2 {
-					subns = strings.Join(tmp[1:len(tmp)-1], "/")
-				}
-				if strings.Contains(img[0], "@") {
-					nm := strings.Split(img[0], "@")
-					imgName = nm[0]
-					//sha = img[1]
-				} else {
-					imgName = img[0]
-					tag = img[1]
-				}
+			folder := i.Name
+			if folder == "" {
+				folder = "bundle"
+			}
+			from, to, subns, imgName, tag, sha := "", "", "", "", "", ""
+			tmp := strings.Split(i.Image, "/")
+			fmt.Println("DEBUG LMZ ", tmp)
+			img := strings.Split(tmp[len(tmp)-1], ":")
+			if len(tmp) > 2 {
+				subns = strings.Join(tmp[1:len(tmp)-1], "/")
+			}
+			if strings.Contains(img[0], "@") {
+				nm := strings.Split(img[0], "@")
+				imgName = nm[0]
+				sha = img[1]
+			} else {
+				imgName = img[0]
+				tag = img[1]
+			}
 
-				from := tempPath + configPath + pkg.Name + "/" + folder
-				if tag != "" {
-					to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
-				} else {
-					to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") // + "@sha256:" + sha
-				}
-				fmt.Println("pushImage(" + from + "," + to)
-				err := pushImage(from, to, dstSkipTLS)
-				if err != nil {
-					log.Fatal(err)
-				}
-				ch <- 1
-			}()
-			<-ch
+			from = pkg.Name + "/" + folder
+			if tag != "" {
+				to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
+			} else {
+				to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + "@sha256:" + sha
+			}
+			srcTIR, err := image.ParseReference("file://" + from)
+			if err != nil {
+				return err
+			}
+			if sha != "" && srcTIR.Ref.ID == "" {
+				srcTIR.Ref.ID = "sha256:" + sha
+			}
+
+			srcTI := image.TypedImage{
+				TypedImageReference: srcTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
+			}
+			dstTIR, err := image.ParseReference(to)
+			if err != nil {
+				return err
+			}
+			if sha != "" && dstTIR.Ref.ID == "" {
+				dstTIR.Ref.ID = "sha256:" + sha
+			}
+			dstTI := image.TypedImage{
+				TypedImageReference: dstTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
+			}
+			mapping[srcTI] = dstTI
 		}
-	}
-	return nil
-
-}
-
-func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
-	ctx := context.Background()
-	opts := []crane.Option{
-		crane.WithAuthFromKeychain(authn.DefaultKeychain),
-		crane.WithContext(ctx),
-		crane.WithTransport(createRT(srcSkipTLS)),
-	}
-	if srcSkipTLS {
-		opts = append(opts, crane.Insecure)
-	}
-	img, err := crane.Pull(from, opts...)
-	if err != nil {
-		return err
-	}
-	if inStyle == ociStyle {
-		err = crane.SaveOCI(img, to)
+		ctlgImg, err := o.rebuildCatalogs(context.TODO(), filepath.Join(o.Dir, config.SourceDir))
 		if err != nil {
-			return fmt.Errorf("unable to save image %s in OCI format in %s: %w", from, to, err)
+			return err
 		}
-	} else {
-		tags, err := image.GetTagsFromImage(from)
-		tag := "latest"
-		if err == nil || len(tags) > 0 {
-			tag = tags[0]
-		}
-		if err := crane.SaveLegacy(img, tag, to); err != nil {
-			return fmt.Errorf("unable to save image %s in its original format in %s: %w", from, to, err)
-		}
+		mapping.Merge(ctlgImg)
 	}
-	return nil
-}
-
-func pushImage(from, to string, dstSkipTLS bool) error {
-	ctx := context.Background()
-	opts := []crane.Option{
-		crane.WithAuthFromKeychain(authn.DefaultKeychain),
-		crane.WithContext(ctx),
-		crane.WithTransport(createRT(dstSkipTLS)),
-	}
-	if dstSkipTLS {
-		opts = append(opts, crane.Insecure)
-	}
-	img, err := crane.Load(from, opts...)
+	err := o.mirrorMappings(*isc, mapping, dstSkipTLS)
 	if err != nil {
 		return err
 	}
 
-	if err := crane.Push(img, to, opts...); err != nil {
-		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
-	}
-
 	return nil
+
 }
 
 // FindFBCConfig function to find the layer from the catalog
@@ -323,7 +310,23 @@ func getRelatedImages(path string) ([]model.RelatedImage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("json unmarshal %v", err)
 	}
-	return icJSON.RelatedImages, nil
+	//unique images - remove duplicate values
+	images := []model.RelatedImage{}
+
+	for _, v := range icJSON.RelatedImages {
+		found := false
+		for _, w := range images {
+			if w.Image == v.Image {
+				found = true
+				break
+			}
+		}
+		if !found {
+			images = append(images, v)
+		}
+	}
+
+	return images, nil
 }
 
 func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
@@ -366,3 +369,58 @@ func getConfigPathFromLabel(imagePath, configSha string) (string, error) {
 	}
 	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
 }
+
+func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
+	ctx := context.Background()
+	opts := []crane.Option{
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithContext(ctx),
+		crane.WithTransport(createRT(srcSkipTLS)),
+	}
+	if srcSkipTLS {
+		opts = append(opts, crane.Insecure)
+	}
+	img, err := crane.Pull(from, opts...)
+	if err != nil {
+		return err
+	}
+	if inStyle == ociStyle {
+		err = crane.SaveOCI(img, to)
+		if err != nil {
+			return fmt.Errorf("unable to save image %s in OCI format in %s: %w", from, to, err)
+		}
+	} else {
+		tags, err := image.GetTagsFromImage(from)
+		tag := "latest"
+		if err == nil || len(tags) > 0 {
+			tag = tags[0]
+		}
+		if err := crane.SaveLegacy(img, tag, to); err != nil {
+			return fmt.Errorf("unable to save image %s in its original format in %s: %w", from, to, err)
+		}
+	}
+	return nil
+}
+
+// func pushImage(from, to string, dstSkipTLS bool) error {
+// 	ctx := context.Background()
+// 	opts := []crane.Option{
+// 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+// 		crane.WithContext(ctx),
+// 		crane.WithTransport(createRT(dstSkipTLS)),
+// 	}
+// 	if dstSkipTLS {
+// 		opts = append(opts, crane.Insecure)
+// 	}
+// 	img, err := crane.Load(from, opts...)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if err := crane.Push(img, to, opts...); err != nil {
+// 		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
+// 	}
+
+// 	return nil
+
+// }

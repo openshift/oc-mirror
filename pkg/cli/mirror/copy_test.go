@@ -2,10 +2,13 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/stretchr/testify/require"
 )
@@ -17,6 +20,20 @@ const (
 	rotten_config   = "testdata/artifacts/rhop-rotten-cfg"
 	other_layer     = "testdata/artifacts/rhop-not-catalog"
 )
+
+func TestParse(t *testing.T) {
+	toTest := "quay.io/skhoury/ocmir/albo/aws-load-balancer-controller-rhel8@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece"
+	s, err := reference.Parse(toTest)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	rf, err := image.ParseReference(toTest)
+
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	fmt.Printf("%s - %s\n", s, rf)
+}
 
 // TODO: add preparation step that saves a catalog locally before testing
 // see maybe contents of pkg/image/testdata
@@ -253,10 +270,10 @@ func TestGetRelatedImages(t *testing.T) {
 					Name:  "node-observability-rhel8-operator-0040925e971e4bb3ac34278c3fb5c1325367fe41ad73641e6502ec2104bc4e19-annotation",
 					Image: "registry.redhat.io/noo/node-observability-rhel8-operator@sha256:0040925e971e4bb3ac34278c3fb5c1325367fe41ad73641e6502ec2104bc4e19",
 				},
-				{
-					Name:  "manager",
-					Image: "registry.redhat.io/noo/node-observability-rhel8-operator@sha256:0040925e971e4bb3ac34278c3fb5c1325367fe41ad73641e6502ec2104bc4e19",
-				},
+				// {
+				// 	Name:  "manager",
+				// 	Image: "registry.redhat.io/noo/node-observability-rhel8-operator@sha256:0040925e971e4bb3ac34278c3fb5c1325367fe41ad73641e6502ec2104bc4e19",
+				// },
 				{
 					Name:  "kube-rbac-proxy",
 					Image: "registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:bb54bc66185afa09853744545d52ea22f88b67756233a47b9f808fe59cda925e",

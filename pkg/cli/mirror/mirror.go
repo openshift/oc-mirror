@@ -309,7 +309,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err != nil {
 				return fmt.Errorf("unable to find config in %s: %v", o.OutputDir, err)
 			}
-			err = bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS)
+			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS)
 			if err != nil {
 				return fmt.Errorf("copying images %v", err)
 			}
@@ -317,7 +317,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			os.Exit(0)
 		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 			log.Println("INFO: mirroring images to remote registry")
-			err = bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS)
+			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS)
 			if err != nil {
 				return fmt.Errorf("mirroring images %v", err)
 			}
