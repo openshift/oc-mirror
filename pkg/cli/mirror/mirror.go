@@ -159,7 +159,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		o.Dir = filepath.Join(o.OutputDir, o.Dir)
 	case "oci":
 		if cmd.Flags().Changed("dir") {
-			return fmt.Errorf("--dir cannot be specified with file destination scheme")
+			return fmt.Errorf("--dir cannot be specified with oci destination scheme")
 		}
 		ref = strings.Replace(ref, "oci", "file", 1)
 		ref = filepath.Clean(ref)

@@ -32,8 +32,7 @@ ifeq ($(DISABLE_CGO), 1)
 	override BTRFS_BUILD_TAG = exclude_graphdriver_devicemapper exclude_graphdriver_btrfs containers_image_openpgp
 endif
 
-GO_BUILD_FLAGS = -tags "json1
-GO_BUILD_FLAGS += $(BTRFS_BUILD_TAG) $(LIBDM_BUILD_TAG) $(LIBSUBID_BUILD_TAG)"
+GO_BUILD_FLAGS = -tags "json1 $(BTRFS_BUILD_TAG) $(LIBDM_BUILD_TAG) $(LIBSUBID_BUILD_TAG)"
 GO_BUILD_BINDIR :=./bin
 
 all: tidy test-unit build
