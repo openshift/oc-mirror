@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -337,9 +339,24 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 	}
 
 	// Find the all versions within the graph.
+	var versionMatcher *regexp.Regexp
+	if versionFilter := os.Getenv("VERSION_FILTER"); len(versionFilter) != 0 {
+		klog.Info("Usage of the VERSION_FILTER environment variable is unsupported")
+		versionMatcher, err = regexp.Compile(versionFilter)
+		if err != nil {
+			return semver.Version{}, &Error{
+				Reason:  "InvalidVersionFilter",
+				Message: fmt.Sprintf("Version filter '%s' is not a valid regular expression", versionFilter),
+				cause:   err,
+			}
+		}
+	}
+
 	var Vers []semver.Version
 	for _, node := range graph.Nodes {
-		Vers = append(Vers, node.Version)
+		if versionMatcher == nil || versionMatcher.MatchString(node.Version.String()) {
+			Vers = append(Vers, node.Version)
+		}
 	}
 
 	semver.Sort(Vers)
