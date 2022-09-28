@@ -225,6 +225,9 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				if sha != "" && dstTIR.Ref.ID == "" {
 					dstTIR.Ref.ID = "sha256:" + sha
 				}
+				if sha != "" && dstTIR.Ref.Tag == "" {
+					dstTIR.Ref.Tag = sha[0:6]
+				}
 				dstTI := image.TypedImage{
 					TypedImageReference: dstTIR,
 					Category:            v1alpha2.TypeOperatorRelatedImage,
@@ -233,7 +236,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			}
 
 		}
-		to := "docker://" + destRepo
+		to := "docker://" + destRepo + "/" + namespace
 		if operator.TargetName != "" {
 			to += "/" + operator.TargetName
 		} else {
@@ -435,7 +438,8 @@ func newSystemContext(skipTLS bool) *types.SystemContext {
 	return ctx
 }
 
-// calls the undrlying container copy library
+// calls the underlying containers/image copy library
+// PS: we could have used crane here is well. Up for reviews
 func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 
 	sourceCtx := newSystemContext(srcSkipTLS)
