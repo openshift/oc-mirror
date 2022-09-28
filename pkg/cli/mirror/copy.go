@@ -13,16 +13,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/operator-framework/operator-registry/alpha/model"
-
+	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/operator-framework/operator-registry/alpha/model"
 	"sigs.k8s.io/yaml"
 )
 
@@ -119,37 +119,39 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 	}
 
 	mapping := image.TypedImageMapping{}
-	for _, pkg := range isc.Mirror.Operators[0].Packages {
-		for _, file := range files {
-			if strings.Contains(pkg.Name, file.Name()) {
-				fmt.Println(file.Name())
-				// read the config.json to get releated images
-				relatedImages, err := getRelatedImages(tempPath + configPath + file.Name())
-				if err != nil {
-					return err
-				}
-				for _, i := range relatedImages {
-					name := i.Name
-					if name == "" {
-						name = "bundle"
-					}
-					srcTIR, err := image.ParseReference(i.Image)
+	for _, operator := range isc.Mirror.Operators {
+		for _, pkg := range operator.Packages {
+			for _, file := range files {
+				if strings.Contains(pkg.Name, file.Name()) {
+					fmt.Println(file.Name())
+					// read the config.json to get releated images
+					relatedImages, err := getRelatedImages(tempPath + configPath + file.Name())
 					if err != nil {
 						return err
 					}
-					srcTI := image.TypedImage{
-						TypedImageReference: srcTIR,
-						Category:            v1alpha2.TypeOperatorRelatedImage,
+					for _, i := range relatedImages {
+						name := i.Name
+						if name == "" {
+							name = "bundle"
+						}
+						srcTIR, err := image.ParseReference(i.Image)
+						if err != nil {
+							return err
+						}
+						srcTI := image.TypedImage{
+							TypedImageReference: srcTIR,
+							Category:            v1alpha2.TypeOperatorRelatedImage,
+						}
+						dstTIR, err := image.ParseReference("file://" + file.Name() + "/" + name)
+						if err != nil {
+							return err
+						}
+						dstTI := image.TypedImage{
+							TypedImageReference: dstTIR,
+							Category:            v1alpha2.TypeOperatorRelatedImage,
+						}
+						mapping[srcTI] = dstTI
 					}
-					dstTIR, err := image.ParseReference("file://" + file.Name() + "/" + name)
-					if err != nil {
-						return err
-					}
-					dstTI := image.TypedImage{
-						TypedImageReference: dstTIR,
-						Category:            v1alpha2.TypeOperatorRelatedImage,
-					}
-					mapping[srcTI] = dstTI
 				}
 			}
 		}
@@ -166,74 +168,86 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, imgdest, namespace string, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool) error {
 	mapping := image.TypedImageMapping{}
 	fmt.Println(os.Getwd())
-	for _, pkg := range isc.Mirror.Operators[0].Packages {
-		relatedImages, err := getRelatedImages(tempPath + configPath + pkg.Name)
-		if err != nil {
-			log.Fatal(err)
-			return err
-		}
-
-		for _, i := range relatedImages {
-			folder := i.Name
-			if folder == "" {
-				folder = "bundle"
-			}
-			from, to, subns, imgName, tag, sha := "", "", "", "", "", ""
-			tmp := strings.Split(i.Image, "/")
-			fmt.Println("DEBUG LMZ ", tmp)
-			img := strings.Split(tmp[len(tmp)-1], ":")
-			if len(tmp) > 2 {
-				subns = strings.Join(tmp[1:len(tmp)-1], "/")
-			}
-			if strings.Contains(img[0], "@") {
-				nm := strings.Split(img[0], "@")
-				imgName = nm[0]
-				sha = img[1]
-			} else {
-				imgName = img[0]
-				tag = img[1]
-			}
-
-			from = pkg.Name + "/" + folder
-			if tag != "" {
-				to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + ":" + tag
-			} else {
-				to = strings.Join([]string{imgdest, namespace, subns, imgName}, "/") + "@sha256:" + sha
-			}
-			srcTIR, err := image.ParseReference("file://" + from)
+	for _, operator := range isc.Mirror.Operators {
+		for _, pkg := range operator.Packages {
+			relatedImages, err := getRelatedImages(tempPath + configPath + pkg.Name)
 			if err != nil {
+				log.Fatal(err)
 				return err
 			}
-			if sha != "" && srcTIR.Ref.ID == "" {
-				srcTIR.Ref.ID = "sha256:" + sha
+
+			for _, i := range relatedImages {
+				folder := i.Name
+				if folder == "" {
+					folder = "bundle"
+				}
+				from, to, subns, imgName, tag, sha := "", "", "", "", "", ""
+				tmp := strings.Split(i.Image, "/")
+				fmt.Println("DEBUG LMZ ", tmp)
+				img := strings.Split(tmp[len(tmp)-1], ":")
+				if len(tmp) > 2 {
+					subns = strings.Join(tmp[1:len(tmp)-1], "/")
+				}
+				if strings.Contains(img[0], "@") {
+					nm := strings.Split(img[0], "@")
+					imgName = nm[0]
+					sha = img[1]
+				} else {
+					imgName = img[0]
+					tag = img[1]
+				}
+
+				from = pkg.Name + "/" + folder
+				if tag != "" {
+					to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + ":" + tag
+				} else {
+					to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + "@sha256:" + sha
+				}
+				srcTIR, err := image.ParseReference("file://" + from)
+				if err != nil {
+					return err
+				}
+				if sha != "" && srcTIR.Ref.ID == "" {
+					srcTIR.Ref.ID = "sha256:" + sha
+				}
+
+				srcTI := image.TypedImage{
+					TypedImageReference: srcTIR,
+					Category:            v1alpha2.TypeOperatorRelatedImage,
+				}
+				dstTIR, err := image.ParseReference(to)
+				if err != nil {
+					return err
+				}
+				if sha != "" && dstTIR.Ref.ID == "" {
+					dstTIR.Ref.ID = "sha256:" + sha
+				}
+				dstTI := image.TypedImage{
+					TypedImageReference: dstTIR,
+					Category:            v1alpha2.TypeOperatorRelatedImage,
+				}
+				mapping[srcTI] = dstTI
 			}
 
-			srcTI := image.TypedImage{
-				TypedImageReference: srcTIR,
-				Category:            v1alpha2.TypeOperatorRelatedImage,
-			}
-			dstTIR, err := image.ParseReference(to)
-			if err != nil {
-				return err
-			}
-			if sha != "" && dstTIR.Ref.ID == "" {
-				dstTIR.Ref.ID = "sha256:" + sha
-			}
-			dstTI := image.TypedImage{
-				TypedImageReference: dstTIR,
-				Category:            v1alpha2.TypeOperatorRelatedImage,
-			}
-			mapping[srcTI] = dstTI
 		}
-		ctlgImg, err := o.rebuildCatalogs(context.TODO(), filepath.Join(o.Dir, config.SourceDir))
+		to := "docker://" + destRepo
+		if operator.TargetName != "" {
+			to += "/" + operator.TargetName
+		} else {
+			to += "/" + filepath.Base(operator.Catalog)
+		}
+		if operator.TargetTag != "" {
+			to += ":" + operator.TargetTag
+		}
+		err := copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS)
 		if err != nil {
 			return err
 		}
-		mapping.Merge(ctlgImg)
 	}
+
 	err := o.mirrorMappings(*isc, mapping, dstSkipTLS)
 	if err != nil {
 		return err
@@ -402,25 +416,67 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
 	return nil
 }
 
-// func pushImage(from, to string, dstSkipTLS bool) error {
-// 	ctx := context.Background()
-// 	opts := []crane.Option{
-// 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
-// 		crane.WithContext(ctx),
-// 		crane.WithTransport(createRT(dstSkipTLS)),
-// 	}
-// 	if dstSkipTLS {
-// 		opts = append(opts, crane.Insecure)
-// 	}
-// 	img, err := crane.Load(from, opts...)
-// 	if err != nil {
-// 		return err
-// 	}
+// newSystemContext set the context for source & destination resources
+func newSystemContext(skipTLS bool) *types.SystemContext {
+	var skipTLSVerify types.OptionalBool
+	if skipTLS {
+		skipTLSVerify = types.OptionalBoolTrue
+	} else {
+		skipTLSVerify = types.OptionalBoolFalse
+	}
+	ctx := &types.SystemContext{
+		RegistriesDirPath:           "",
+		ArchitectureChoice:          "",
+		OSChoice:                    "",
+		VariantChoice:               "",
+		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
+		DockerInsecureSkipTLSVerify: skipTLSVerify,
+	}
+	return ctx
+}
 
-// 	if err := crane.Push(img, to, opts...); err != nil {
-// 		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
-// 	}
+// calls the undrlying container copy library
+func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 
-// 	return nil
+	sourceCtx := newSystemContext(srcSkipTLS)
+	destinationCtx := newSystemContext(dstSkipTLS)
+	ctx := context.Background()
 
-// }
+	// Pull the source image, and store it in the local storage, under the name main
+	policy, err := signature.DefaultPolicy(nil)
+	if err != nil {
+		return err
+	}
+	policyContext, err := signature.NewPolicyContext(policy)
+	if err != nil {
+		return err
+	}
+	// define the source context
+	srcRef, err := alltransports.ParseImageName(from)
+	if err != nil {
+		return err
+	}
+	// define the destination context
+	destRef, err := alltransports.ParseImageName(to)
+	if err != nil {
+		return err
+	}
+
+	// call the copy.Image function with the set options
+	_, err = copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
+		RemoveSignatures:      true,
+		SignBy:                "",
+		ReportWriter:          os.Stdout,
+		SourceCtx:             sourceCtx,
+		DestinationCtx:        destinationCtx,
+		ForceManifestMIMEType: "",
+		ImageListSelection:    copy.CopySystemImage,
+		OciDecryptConfig:      nil,
+		OciEncryptLayers:      nil,
+		OciEncryptConfig:      nil,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
