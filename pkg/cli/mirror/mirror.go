@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containers/image/v5/copy"
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -289,6 +291,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
 	if o.UseOCIFeature {
+		remoteRegFuncs := RemoteRegFuncs{
+			pull:       crane.Pull,
+			saveOCI:    crane.SaveOCI,
+			saveLegacy: crane.SaveLegacy,
+			push:       copy.Image,
+		}
 		if o.OCIFeatureAction == "" {
 			return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
 		}
@@ -298,7 +306,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		if o.OCIFeatureAction == OCIFeatureCopyAction {
 
-			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS)
+			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
 			if err != nil {
 				return fmt.Errorf("copying images %v", err)
 			}
@@ -306,7 +314,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			os.Exit(0)
 		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 			log.Println("INFO: mirroring images to remote registry")
-			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS)
+			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
 			if err != nil {
 				return fmt.Errorf("mirroring images %v", err)
 			}

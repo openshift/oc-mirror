@@ -20,6 +20,7 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
+	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/model"
@@ -42,54 +43,14 @@ const (
 	originStyle    style  = "origin"
 )
 
-// UntarLayers simple function that untars the layer that
-// has the FB configuration
-func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
-	//Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
-	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
-	uncompressedStream, err := gzip.NewReader(gzipStream)
-	if err != nil {
-		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
-	}
-
-	tarReader := tar.NewReader(uncompressedStream)
-	for {
-		header, err := tarReader.Next()
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return fmt.Errorf("UntarLayers: Next() failed: %s", err.Error())
-		}
-
-		if strings.Contains(header.Name, cfgDirName) {
-			switch header.Typeflag {
-			case tar.TypeDir:
-				if header.Name != "./" {
-					if err := os.MkdirAll(path+"/"+header.Name, 0755); err != nil {
-						return fmt.Errorf("UntarLayers: Mkdir() failed: %v", err)
-					}
-				}
-			case tar.TypeReg:
-				outFile, err := os.Create(path + "/" + header.Name)
-				if err != nil {
-					return fmt.Errorf("UntarLayers: Create() failed: %v", err)
-				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					return fmt.Errorf("UntarLayers: Copy() failed: %v", err)
-				}
-				outFile.Close()
-
-			default:
-				// just ignore errors as we are only interested in the FB configs layer
-				log.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
-			}
-		}
-	}
-	return nil
+// RemoteRegFuncs contains the functions to be used for working with remote registries
+// In order to be able to mock these external packages,
+// we pass them as parameters of bulkImageCopy and bulkImageMirror
+type RemoteRegFuncs struct {
+	pull       func(src string, opt ...crane.Option) (gocontreg.Image, error)
+	saveOCI    func(img gocontreg.Image, path string) error
+	saveLegacy func(img gocontreg.Image, src, path string) error
+	push       func(ctx context.Context, policyContext *signature.PolicyContext, destRef, srcRef types.ImageReference, options *copy.Options) (copiedManifest []byte, retErr error)
 }
 
 // getISConfig - simple function to read and unmarshal the imagesetconfig
@@ -110,14 +71,14 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 //•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 //•a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
 
 		log.Printf("INFO: downloading the catalog image %s\n", operator.Catalog)
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
 		localOperatorDir := filepath.Join(o.OutputDir, repo)
-		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle)
+		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle, remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -199,7 +160,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
@@ -296,7 +257,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS)
+		err = copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
@@ -309,26 +270,6 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 
 	return nil
 
-}
-
-func (o *MirrorOptions) getCatalogConfigPath(imagePath string) (string, error) {
-	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
-	if err != nil {
-		return "", err
-	}
-	manifest, err := getManifest(context.TODO(), srcImg)
-	if err != nil {
-		return "", err
-	}
-
-	//Use the label in the config layer to determine the
-	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromLabel(imagePath, string(manifest.ConfigInfo().Digest))
-	if err != nil {
-		return "", err
-	}
-	return cfgDirName, nil
 }
 
 // findFBCConfig function to find the layer from the catalog
@@ -346,7 +287,7 @@ func (o *MirrorOptions) findFBCConfig(imagePath, catalogContentsPath string) (st
 
 	//Use the label in the config layer to determine the
 	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromLabel(imagePath, string(manifest.ConfigInfo().Digest))
+	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
 	if err != nil {
 		return "", err
 	}
@@ -380,8 +321,51 @@ func (o *MirrorOptions) findFBCConfig(imagePath, catalogContentsPath string) (st
 	return cfgContentsPath, nil
 }
 
+// getCatalogConfigPath takes an OCI FBC image as an input,
+// it reads the manifest, then the config layer,
+// more specifically the label `configLabel`
+// and returns the value of that label
+// The function fails if more than one manifest exist in the image
+func (o *MirrorOptions) getCatalogConfigPath(imagePath string) (string, error) {
+	// read the index.json of the catalog
+	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
+	if err != nil {
+		return "", err
+	}
+	manifest, err := getManifest(context.TODO(), srcImg)
+	if err != nil {
+		return "", err
+	}
+
+	//Use the label in the config layer to determine the
+	//folder containing the related images, when untarring layers
+	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
+	if err != nil {
+		return "", err
+	}
+	return cfgDirName, nil
+}
+
+func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
+	var cfg *manifest.Schema2V1Image
+	configLayerDir := configSha[7:]
+	cfgBlob, err := ioutil.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
+	if err != nil {
+		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
+	}
+	err = json.Unmarshal(cfgBlob, &cfg)
+	if err != nil {
+		return "", fmt.Errorf("problem unmarshaling config blob in %s: %w", configLayerDir, err)
+	}
+	if dirName, ok := cfg.Config.Labels[configsLabel]; ok {
+		return dirName, nil
+	}
+	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
+}
+
 // getRelatedImages this reads each catalog or config.json
 // file in a given operator in the FBC
+// and returns the list of relatedImages found in the CSV
 func getRelatedImages(path string) ([]model.RelatedImage, error) {
 	var icJSON *model.Bundle
 
@@ -417,6 +401,8 @@ func getRelatedImages(path string) ([]model.RelatedImage, error) {
 	return images, nil
 }
 
+// getManifest reads the manifest of the OCI FBC image
+// and returns it as a go structure of type manifest.Manifest
 func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
 	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
 	if err != nil {
@@ -429,6 +415,9 @@ func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manife
 	return manifest, nil
 }
 
+// getOCIImgSrcFromPath tries to "load" the OCI FBC image in the path
+// for further processing.
+// It supports path strings with or without the protocol (oci:) prefix
 func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
 	if !strings.HasPrefix(path, "oci") {
 		path = ociProtocol + path
@@ -444,24 +433,104 @@ func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, 
 	return imgsrc, nil
 }
 
-func getConfigPathFromLabel(imagePath, configSha string) (string, error) {
-	var cfg *manifest.Schema2V1Image
-	configLayerDir := configSha[7:]
-	cfgBlob, err := ioutil.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
-	if err != nil {
-		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
+// parseImageName returns the registry, organisation, repository, tag and digest
+// from the imageName.
+// It can handle both remote and local images.
+func parseImageName(imageName string) (string, string, string, string, string) {
+	registry, org, repo, tag, sha := "", "", "", "", ""
+	imageName = trimProtocol(imageName)
+	imageName = strings.TrimPrefix(imageName, "/")
+	imageName = strings.TrimSuffix(imageName, "/")
+	tmp := strings.Split(imageName, "/")
+
+	registry = tmp[0]
+	img := strings.Split(tmp[len(tmp)-1], ":")
+	if len(tmp) > 2 {
+		org = strings.Join(tmp[1:len(tmp)-1], "/")
 	}
-	err = json.Unmarshal(cfgBlob, &cfg)
-	if err != nil {
-		return "", fmt.Errorf("problem unmarshaling config blob in %s: %w", configLayerDir, err)
+	if len(img) > 1 {
+		if strings.Contains(img[0], "@") {
+			nm := strings.Split(img[0], "@")
+			repo = nm[0]
+			sha = img[1]
+		} else {
+			repo = img[0]
+		}
+	} else {
+		repo = img[0]
 	}
-	if dirName, ok := cfg.Config.Labels[configsLabel]; ok {
-		return dirName, nil
-	}
-	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
+
+	return registry, org, repo, tag, sha
 }
 
-func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
+// trimProtocol removes oci://, file:// or docker:// from
+// the parameter imageName
+func trimProtocol(imageName string) string {
+	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, "file:")
+	imageName = strings.TrimPrefix(imageName, "docker:")
+	imageName = strings.TrimPrefix(imageName, "//")
+
+	return imageName
+}
+
+// UntarLayers simple function that untars the layer that
+// has the FB configuration
+func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
+	//Remove any separators in cfgDirName as received from the label
+	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
+	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
+	uncompressedStream, err := gzip.NewReader(gzipStream)
+	if err != nil {
+		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
+	}
+
+	tarReader := tar.NewReader(uncompressedStream)
+	for {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return fmt.Errorf("UntarLayers: Next() failed: %s", err.Error())
+		}
+
+		if strings.Contains(header.Name, cfgDirName) {
+			switch header.Typeflag {
+			case tar.TypeDir:
+				if header.Name != "./" {
+					if err := os.MkdirAll(path+"/"+header.Name, 0755); err != nil {
+						return fmt.Errorf("UntarLayers: Mkdir() failed: %v", err)
+					}
+				}
+			case tar.TypeReg:
+				outFile, err := os.Create(path + "/" + header.Name)
+				if err != nil {
+					return fmt.Errorf("UntarLayers: Create() failed: %v", err)
+				}
+				if _, err := io.Copy(outFile, tarReader); err != nil {
+					return fmt.Errorf("UntarLayers: Copy() failed: %v", err)
+				}
+				outFile.Close()
+
+			default:
+				// just ignore errors as we are only interested in the FB configs layer
+				log.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// pullImage uses crane (and NOT containers/image) to pull images
+// from the remote registry.
+// Crane preserves the image format (OCI or docker.v2).
+// This method supports 2 options:
+// * pull as OCI image (used for catalogs ONLY)
+// * pull as is (used for all related images)
+func pullImage(from, to string, srcSkipTLS bool, inStyle style, funcs RemoteRegFuncs) error {
 	ctx := context.Background()
 	opts := []crane.Option{
 		crane.WithAuthFromKeychain(authn.DefaultKeychain),
@@ -471,12 +540,12 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
 	if srcSkipTLS {
 		opts = append(opts, crane.Insecure)
 	}
-	img, err := crane.Pull(from, opts...)
+	img, err := funcs.pull(from, opts...)
 	if err != nil {
 		return err
 	}
 	if inStyle == ociStyle {
-		err = crane.SaveOCI(img, to)
+		err = funcs.saveOCI(img, to)
 		if err != nil {
 			return fmt.Errorf("unable to save image %s in OCI format in %s: %w", from, to, err)
 		}
@@ -486,7 +555,7 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style) error {
 		if err == nil || len(tags) > 0 {
 			tag = tags[0]
 		}
-		if err := crane.SaveLegacy(img, tag, to); err != nil {
+		if err := funcs.saveLegacy(img, tag, to); err != nil {
 			return fmt.Errorf("unable to save image %s in its original format in %s: %w", from, to, err)
 		}
 	}
@@ -512,9 +581,10 @@ func newSystemContext(skipTLS bool) *types.SystemContext {
 	return ctx
 }
 
+// copyImage is here used only to push images to the remote registry
 // calls the underlying containers/image copy library
 // PS: we could have used crane here is well. Up for reviews
-func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
+func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, funcs RemoteRegFuncs) error {
 
 	sourceCtx := newSystemContext(srcSkipTLS)
 	destinationCtx := newSystemContext(dstSkipTLS)
@@ -541,7 +611,7 @@ func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 	}
 
 	// call the copy.Image function with the set options
-	_, err = copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
+	_, err = funcs.push(ctx, policyContext, destRef, srcRef, &copy.Options{
 		RemoveSignatures:      true,
 		SignBy:                "",
 		ReportWriter:          os.Stdout,
@@ -557,38 +627,4 @@ func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 		return err
 	}
 	return nil
-}
-func trimProtocol(imageName string) string {
-	imageName = strings.TrimPrefix(imageName, "oci:")
-	imageName = strings.TrimPrefix(imageName, "file:")
-	imageName = strings.TrimPrefix(imageName, "docker:")
-	imageName = strings.TrimPrefix(imageName, "//")
-
-	return imageName
-}
-func parseImageName(imageName string) (string, string, string, string, string) {
-	registry, org, repo, tag, sha := "", "", "", "", ""
-	imageName = trimProtocol(imageName)
-	imageName = strings.TrimPrefix(imageName, "/")
-	imageName = strings.TrimSuffix(imageName, "/")
-	tmp := strings.Split(imageName, "/")
-
-	registry = tmp[0]
-	img := strings.Split(tmp[len(tmp)-1], ":")
-	if len(tmp) > 2 {
-		org = strings.Join(tmp[1:len(tmp)-1], "/")
-	}
-	if len(img) > 1 {
-		if strings.Contains(img[0], "@") {
-			nm := strings.Split(img[0], "@")
-			repo = nm[0]
-			sha = img[1]
-		} else {
-			repo = img[0]
-		}
-	} else {
-		repo = img[0]
-	}
-
-	return registry, org, repo, tag, sha
 }

@@ -168,7 +168,7 @@ func TestGetConfigPathFromLabel(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			cfgDir, err := getConfigPathFromLabel(c.imagePath, c.configSha)
+			cfgDir, err := getConfigPathFromConfigLayer(c.imagePath, c.configSha)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
