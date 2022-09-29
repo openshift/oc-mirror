@@ -297,18 +297,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return fmt.Errorf("reading imagesetconfig via command line %v", err)
 		}
 		if o.OCIFeatureAction == OCIFeatureCopyAction {
-			// download the catalog image
-			log.Println("INFO: downloading the catalog image")
-			err = pullImage(isc.Mirror.Operators[0].Catalog, o.OutputDir, o.SourceSkipTLS, ociStyle)
-			if err != nil {
-				return fmt.Errorf("copying catalog image %v", err)
-			}
-			// find the layer with the FB config
-			log.Println("INFO: finding file based config (in catalog layers)")
-			err = o.FindFBCConfig(o.OutputDir)
-			if err != nil {
-				return fmt.Errorf("unable to find config in %s: %v", o.OutputDir, err)
-			}
+
 			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS)
 			if err != nil {
 				return fmt.Errorf("copying images %v", err)

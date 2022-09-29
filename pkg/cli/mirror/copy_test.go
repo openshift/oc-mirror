@@ -61,12 +61,12 @@ func TestGetOCIImgSrcFromPath(t *testing.T) {
 		{
 			desc:  "inexisting path should fail",
 			inRef: "/inexisting",
-			err:   "unable to get OCI Image from /inexisting: open /inexisting/index.json: no such file or directory",
+			err:   "unable to get OCI Image from oci:/inexisting: open /inexisting/index.json: no such file or directory",
 		},
 		{
 			desc:  "path not containing oci structure should fail",
 			inRef: "/tmp",
-			err:   "unable to get OCI Image from /tmp: open /tmp/index.json: no such file or directory",
+			err:   "unable to get OCI Image from oci:/tmp: open /tmp/index.json: no such file or directory",
 		},
 	}
 	for _, c := range cases {
@@ -207,7 +207,7 @@ func TestFindFBCConfig(t *testing.T) {
 				OCIFeatureAction: OCIFeatureCopyAction,
 				OutputDir:        "/tmp",
 			},
-			err: "unable to get OCI Image from /tmp: open /tmp/index.json: no such file or directory",
+			err: "unable to get OCI Image from oci:/tmp: open /tmp/index.json: no such file or directory",
 		},
 		{
 			desc: "corrupted manifest fails",
@@ -234,7 +234,7 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := c.options.FindFBCConfig(c.options.OutputDir)
+			_, err := c.options.findFBCConfig(c.options.OutputDir, "tmp")
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {

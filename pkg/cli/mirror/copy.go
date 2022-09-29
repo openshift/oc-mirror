@@ -85,7 +85,7 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 
 			default:
 				// just ignore errors as we are only interested in the FB configs layer
-				fmt.Println(fmt.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name))
+				log.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
 			}
 		}
 	}
@@ -111,21 +111,51 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 //•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 //•a•local directory↵
 func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
-
-	files, err := ioutil.ReadDir(tempPath + configPath)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
-
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
-		for _, pkg := range operator.Packages {
+
+		log.Printf("INFO: downloading the catalog image %s\n", operator.Catalog)
+		_, _, repo, _, _ := parseImageName(operator.Catalog)
+		localOperatorDir := filepath.Join(o.OutputDir, repo)
+		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle)
+		if err != nil {
+			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
+		}
+
+		// find the layer with the FB config
+		catalogContentsDir := filepath.Join(tempPath, repo)
+		log.Printf("INFO: finding file based config for %s (in catalog layers)\n", operator.Catalog)
+		ctlgConfigsDir, err := o.findFBCConfig(localOperatorDir, catalogContentsDir)
+		if err != nil {
+			return fmt.Errorf("unable to find config in %s: %v", localOperatorDir, err)
+		}
+
+		log.Printf("INFO: Filtering on selected packages for %s \n", operator.Catalog)
+		files, err := ioutil.ReadDir(ctlgConfigsDir)
+		if err != nil {
+			log.Fatalf("unable to read catalog contents %v", err)
+			return err
+		}
+		pkgList := []v1alpha2.IncludePackage{}
+		if len(operator.Packages) > 0 {
+			pkgList = operator.Packages
+		} else {
+			// take all packages found in catalog
+			for _, file := range files {
+				pkgList = append(pkgList, v1alpha2.IncludePackage{
+					Name: file.Name(),
+				})
+			}
+		}
+		log.Printf("INFO: List of packages selected for copy :\n %v \n", pkgList)
+
+		for _, pkg := range pkgList {
+
+			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
 			for _, file := range files {
 				if strings.Contains(pkg.Name, file.Name()) {
-					fmt.Println(file.Name())
 					// read the config.json to get releated images
-					relatedImages, err := getRelatedImages(tempPath + configPath + file.Name())
+					relatedImages, err := getRelatedImages(filepath.Join(ctlgConfigsDir, file.Name()))
 					if err != nil {
 						return err
 					}
@@ -152,13 +182,14 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 						}
 						mapping[srcTI] = dstTI
 					}
+					break
 				}
 			}
 		}
 	}
-	//to prepare for next
+
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
-	err = o.mirrorMappings(*isc, mapping, srcSkipTLS)
+	err := o.mirrorMappings(*isc, mapping, srcSkipTLS)
 	if err != nil {
 		return err
 	}
@@ -170,10 +201,38 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 // a remote registry in oci format
 func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool) error {
 	mapping := image.TypedImageMapping{}
-	fmt.Println(os.Getwd())
 	for _, operator := range isc.Mirror.Operators {
+		_, _, repo, _, _ := parseImageName(operator.Catalog)
+		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
+
+		configsLabel, err := o.getCatalogConfigPath(trimProtocol(operator.Catalog))
+		if err != nil {
+			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
+			return err
+		}
+		catalogContentsDir := filepath.Join(tempPath, repo, configsLabel)
+		files, err := ioutil.ReadDir(catalogContentsDir)
+		if err != nil {
+			log.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
+			return err
+		}
+		pkgList := []v1alpha2.IncludePackage{}
+		if len(operator.Packages) > 0 {
+			pkgList = operator.Packages
+		} else {
+			// take all packages found in catalog
+			for _, file := range files {
+				pkgList = append(pkgList, v1alpha2.IncludePackage{
+					Name: file.Name(),
+				})
+			}
+		}
+		log.Printf("INFO: List of packages selected for copy :\n %v \n", pkgList)
+
 		for _, pkg := range operator.Packages {
-			relatedImages, err := getRelatedImages(tempPath + configPath + pkg.Name)
+			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
+
+			relatedImages, err := getRelatedImages(filepath.Join(catalogContentsDir, pkg.Name))
 			if err != nil {
 				log.Fatal(err)
 				return err
@@ -184,21 +243,8 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				if folder == "" {
 					folder = "bundle"
 				}
-				from, to, subns, imgName, tag, sha := "", "", "", "", "", ""
-				tmp := strings.Split(i.Image, "/")
-				fmt.Println("DEBUG LMZ ", tmp)
-				img := strings.Split(tmp[len(tmp)-1], ":")
-				if len(tmp) > 2 {
-					subns = strings.Join(tmp[1:len(tmp)-1], "/")
-				}
-				if strings.Contains(img[0], "@") {
-					nm := strings.Split(img[0], "@")
-					imgName = nm[0]
-					sha = img[1]
-				} else {
-					imgName = img[0]
-					tag = img[1]
-				}
+				from, to := "", ""
+				_, subns, imgName, tag, sha := parseImageName(i.Image)
 
 				from = pkg.Name + "/" + folder
 				if tag != "" {
@@ -213,11 +259,11 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				if sha != "" && srcTIR.Ref.ID == "" {
 					srcTIR.Ref.ID = "sha256:" + sha
 				}
-
 				srcTI := image.TypedImage{
 					TypedImageReference: srcTIR,
 					Category:            v1alpha2.TypeOperatorRelatedImage,
 				}
+
 				dstTIR, err := image.ParseReference(to)
 				if err != nil {
 					return err
@@ -225,6 +271,9 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				if sha != "" && dstTIR.Ref.ID == "" {
 					dstTIR.Ref.ID = "sha256:" + sha
 				}
+				//If there is no tag mirrorMapping is unable to push the image
+				//It would push manifests and layers, but image would not appear
+				//in registry
 				if sha != "" && dstTIR.Ref.Tag == "" {
 					dstTIR.Ref.Tag = sha[0:6]
 				}
@@ -236,16 +285,18 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			}
 
 		}
-		to := "docker://" + destRepo + "/" + namespace
+		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
+		log.Printf("INFO: pushing catalog %s to %s \n", operator.Catalog, to)
+
 		if operator.TargetName != "" {
-			to += "/" + operator.TargetName
+			to = strings.Join([]string{to, operator.TargetName}, "/")
 		} else {
-			to += "/" + filepath.Base(operator.Catalog)
+			to = strings.Join([]string{to, repo}, "/")
 		}
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err := copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS)
+		err = copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS)
 		if err != nil {
 			return err
 		}
@@ -260,53 +311,73 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 
 }
 
-// FindFBCConfig function to find the layer from the catalog
-// that has the file based configuration
-func (o *MirrorOptions) FindFBCConfig(path string) error {
+func (o *MirrorOptions) getCatalogConfigPath(imagePath string) (string, error) {
 	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(context.TODO(), path)
+	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	manifest, err := getManifest(context.TODO(), srcImg)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	//Use the label in the config layer to determine the
 	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromLabel(path, string(manifest.ConfigInfo().Digest))
+	cfgDirName, err := getConfigPathFromLabel(imagePath, string(manifest.ConfigInfo().Digest))
 	if err != nil {
-		return err
+		return "", err
+	}
+	return cfgDirName, nil
+}
+
+// findFBCConfig function to find the layer from the catalog
+// that has the file based configuration
+func (o *MirrorOptions) findFBCConfig(imagePath, catalogContentsPath string) (string, error) {
+	// read the index.json of the catalog
+	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
+	if err != nil {
+		return "", err
+	}
+	manifest, err := getManifest(context.TODO(), srcImg)
+	if err != nil {
+		return "", err
+	}
+
+	//Use the label in the config layer to determine the
+	//folder containing the related images, when untarring layers
+	cfgDirName, err := getConfigPathFromLabel(imagePath, string(manifest.ConfigInfo().Digest))
+	if err != nil {
+		return "", err
 	}
 	// iterate through each layer
 
 	for _, layer := range manifest.LayerInfos() {
 		layerSha := layer.Digest.String()
 		layerDirName := layerSha[7:]
-		fmt.Println(path + blobsPath + layerDirName)
-		r, err := os.Open(path + blobsPath + layerDirName)
+		r, err := os.Open(imagePath + blobsPath + layerDirName)
 		if err != nil {
-			return err
+			return "", err
 		}
 		// untar if it is the FBC
-		err = UntarLayers(r, tempPath, cfgDirName)
+		err = UntarLayers(r, catalogContentsPath, cfgDirName)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
-	f, err := os.Open(filepath.Join(tempPath, cfgDirName))
+	cfgContentsPath := filepath.Join(catalogContentsPath, cfgDirName)
+	f, err := os.Open(cfgContentsPath)
 	if err != nil {
-		return fmt.Errorf("unable to open temp folder containing extracted catalogs %s: %w", filepath.Join(tempPath, cfgDirName), err)
+		return "", fmt.Errorf("unable to open temp folder containing extracted catalogs %s: %w", cfgContentsPath, err)
 	}
 	contents, err := f.Readdir(0)
 	if err != nil {
-		return fmt.Errorf("unable to read temp folder containing extracted catalogs %s: %w", filepath.Join(tempPath, cfgDirName), err)
+		return "", fmt.Errorf("unable to read temp folder containing extracted catalogs %s: %w", cfgContentsPath, err)
 	}
 	if len(contents) == 0 {
-		return fmt.Errorf("no packages found in catalog")
+		return "", fmt.Errorf("no packages found in catalog")
 	}
-	return nil
+	return cfgContentsPath, nil
 }
 
 // getRelatedImages this reads each catalog or config.json
@@ -359,7 +430,10 @@ func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manife
 }
 
 func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
-	ociImgRef, err := alltransports.ParseImageName(ociProtocol + path)
+	if !strings.HasPrefix(path, "oci") {
+		path = ociProtocol + path
+	}
+	ociImgRef, err := alltransports.ParseImageName(path)
 	if err != nil {
 		return nil, err
 	}
@@ -483,4 +557,38 @@ func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool) error {
 		return err
 	}
 	return nil
+}
+func trimProtocol(imageName string) string {
+	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, "file:")
+	imageName = strings.TrimPrefix(imageName, "docker:")
+	imageName = strings.TrimPrefix(imageName, "//")
+
+	return imageName
+}
+func parseImageName(imageName string) (string, string, string, string, string) {
+	registry, org, repo, tag, sha := "", "", "", "", ""
+	imageName = trimProtocol(imageName)
+	imageName = strings.TrimPrefix(imageName, "/")
+	imageName = strings.TrimSuffix(imageName, "/")
+	tmp := strings.Split(imageName, "/")
+
+	registry = tmp[0]
+	img := strings.Split(tmp[len(tmp)-1], ":")
+	if len(tmp) > 2 {
+		org = strings.Join(tmp[1:len(tmp)-1], "/")
+	}
+	if len(img) > 1 {
+		if strings.Contains(img[0], "@") {
+			nm := strings.Split(img[0], "@")
+			repo = nm[0]
+			sha = img[1]
+		} else {
+			repo = img[0]
+		}
+	} else {
+		repo = img[0]
+	}
+
+	return registry, org, repo, tag, sha
 }
