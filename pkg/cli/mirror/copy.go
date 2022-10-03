@@ -13,9 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -47,10 +45,12 @@ const (
 // In order to be able to mock these external packages,
 // we pass them as parameters of bulkImageCopy and bulkImageMirror
 type RemoteRegFuncs struct {
-	pull       func(src string, opt ...crane.Option) (gocontreg.Image, error)
-	saveOCI    func(img gocontreg.Image, path string) error
-	saveLegacy func(img gocontreg.Image, src, path string) error
-	push       func(ctx context.Context, policyContext *signature.PolicyContext, destRef, srcRef types.ImageReference, options *copy.Options) (copiedManifest []byte, retErr error)
+	pull           func(src string, opt ...crane.Option) (gocontreg.Image, error)
+	saveOCI        func(img gocontreg.Image, path string) error
+	saveLegacy     func(img gocontreg.Image, src, path string) error
+	load           func(path string, opt ...crane.Option) (gocontreg.Image, error)
+	push           func(img gocontreg.Image, dst string, opt ...crane.Option) error
+	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
 }
 
 // getISConfig - simple function to read and unmarshal the imagesetconfig
@@ -150,7 +150,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 	}
 
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
-	err := o.mirrorMappings(*isc, mapping, srcSkipTLS)
+	err := remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		}
 		log.Printf("INFO: List of packages selected for copy :\n %v \n", pkgList)
 
-		for _, pkg := range operator.Packages {
+		for _, pkg := range pkgList {
 			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
 
 			relatedImages, err := getRelatedImages(filepath.Join(catalogContentsDir, pkg.Name))
@@ -257,13 +257,13 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = copyImage(operator.Catalog, to, srcSkipTLS, dstSkipTLS, remoteRegFuncs)
+		err = pushImage(operator.Catalog, to, srcSkipTLS, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
 	}
 
-	err := o.mirrorMappings(*isc, mapping, dstSkipTLS)
+	err := remoteRegFuncs.mirrorMappings(*isc, mapping, dstSkipTLS)
 	if err != nil {
 		return err
 	}
@@ -562,69 +562,26 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style, funcs RemoteRegF
 	return nil
 }
 
-// newSystemContext set the context for source & destination resources
-func newSystemContext(skipTLS bool) *types.SystemContext {
-	var skipTLSVerify types.OptionalBool
-	if skipTLS {
-		skipTLSVerify = types.OptionalBoolTrue
-	} else {
-		skipTLSVerify = types.OptionalBoolFalse
-	}
-	ctx := &types.SystemContext{
-		RegistriesDirPath:           "",
-		ArchitectureChoice:          "",
-		OSChoice:                    "",
-		VariantChoice:               "",
-		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
-		DockerInsecureSkipTLSVerify: skipTLSVerify,
-	}
-	return ctx
-}
-
-// copyImage is here used only to push images to the remote registry
-// calls the underlying containers/image copy library
-// PS: we could have used crane here is well. Up for reviews
-func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, funcs RemoteRegFuncs) error {
-
-	sourceCtx := newSystemContext(srcSkipTLS)
-	destinationCtx := newSystemContext(dstSkipTLS)
+// pushImage is here used only to push images to the remote registry
+// calls crane
+func pushImage(from, to string, dstSkipTLS bool, funcs RemoteRegFuncs) error {
 	ctx := context.Background()
-
-	// Pull the source image, and store it in the local storage, under the name main
-	policy, err := signature.DefaultPolicy(nil)
-	if err != nil {
-		return err
+	opts := []crane.Option{
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithContext(ctx),
+		crane.WithTransport(createRT(dstSkipTLS)),
 	}
-	policyContext, err := signature.NewPolicyContext(policy)
-	if err != nil {
-		return err
+	if dstSkipTLS {
+		opts = append(opts, crane.Insecure)
 	}
-	// define the source context
-	srcRef, err := alltransports.ParseImageName(from)
-	if err != nil {
-		return err
-	}
-	// define the destination context
-	destRef, err := alltransports.ParseImageName(to)
+	img, err := funcs.load(from, opts...)
 	if err != nil {
 		return err
 	}
 
-	// call the copy.Image function with the set options
-	_, err = funcs.push(ctx, policyContext, destRef, srcRef, &copy.Options{
-		RemoveSignatures:      true,
-		SignBy:                "",
-		ReportWriter:          os.Stdout,
-		SourceCtx:             sourceCtx,
-		DestinationCtx:        destinationCtx,
-		ForceManifestMIMEType: "",
-		ImageListSelection:    copy.CopySystemImage,
-		OciDecryptConfig:      nil,
-		OciEncryptLayers:      nil,
-		OciEncryptConfig:      nil,
-	})
-	if err != nil {
-		return err
+	if err := funcs.push(img, to, opts...); err != nil {
+		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
 	}
+
 	return nil
 }

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/copy"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -292,10 +291,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	if o.UseOCIFeature {
 		remoteRegFuncs := RemoteRegFuncs{
-			pull:       crane.Pull,
-			saveOCI:    crane.SaveOCI,
-			saveLegacy: crane.SaveLegacy,
-			push:       copy.Image,
+			pull:           crane.Pull,
+			saveOCI:        crane.SaveOCI,
+			saveLegacy:     crane.SaveLegacy,
+			push:           crane.Push,
+			load:           crane.Load,
+			mirrorMappings: o.mirrorMappings,
 		}
 		if o.OCIFeatureAction == "" {
 			return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")

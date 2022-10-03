@@ -7,10 +7,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/crane"
+	gocontreg "github.com/google/go-containerregistry/pkg/v1"
+	gocontregtypes "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/model"
+	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/require"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 const (
@@ -306,9 +313,157 @@ func TestGetRelatedImages(t *testing.T) {
 	}
 }
 
-func TestCopyImage(t *testing.T)       {}
+func TestPullImage(t *testing.T) {
+	type spec struct {
+		desc        string
+		from        string
+		to          string
+		stl         style
+		funcs       RemoteRegFuncs
+		expectedErr string
+	}
+	cases := []spec{
+		{
+			desc:        "nominal oci case passes",
+			to:          ociProtocol + testdata,
+			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
+			stl:         ociStyle,
+			funcs:       createMockFunctions(),
+			expectedErr: "",
+		},
+		{
+			desc:        "nominal non-oci case passes",
+			to:          ociProtocol + testdata,
+			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
+			stl:         originStyle,
+			funcs:       createMockFunctions(),
+			expectedErr: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			err := pullImage(c.from, c.to, false, c.stl, c.funcs)
+			if c.expectedErr != "" {
+				require.EqualError(t, err, c.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+		})
+	}
+}
+
+func TestPushImage(t *testing.T) {
+	type spec struct {
+		desc        string
+		from        string
+		to          string
+		funcs       RemoteRegFuncs
+		expectedErr string
+	}
+	cases := []spec{
+		{
+			desc:        "nominal case passes",
+			from:        ociProtocol + testdata,
+			to:          "docker://localhost:5000/ocmir",
+			funcs:       createMockFunctions(),
+			expectedErr: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			err := pushImage(c.from, c.to, false, c.funcs)
+			if c.expectedErr != "" {
+				require.EqualError(t, err, c.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+		})
+	}
+}
 func TestBulkImageMirror(t *testing.T) {}
-func TestBulkImageCopy(t *testing.T)   {}
+func TestBulkImageCopy(t *testing.T) {
+	type spec struct {
+		desc               string
+		isc                *v1alpha2.ImageSetConfiguration
+		expectedSubFolders []string
+		options            *MirrorOptions
+		funcs              RemoteRegFuncs
+
+		err string
+	}
+
+	cases := []spec{
+		{
+			desc: "Nominal case passes",
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog: "docker://registry.redhat.io/openshift/fakecatalog:latest",
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					// StorageConfig: v1alpha2.StorageConfig{
+					// 	Local: &v1alpha2.LocalConfig{
+					// 		Path: "./dest",
+					// 	},
+					// },
+				},
+			},
+			options: &MirrorOptions{
+				From:             "test.registry.io",
+				ToMirror:         "",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureCopyAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS: true,
+				DestSkipTLS:   true,
+			},
+			funcs:              createMockFunctions(),
+			err:                "",
+			expectedSubFolders: []string{"aws-load-balancer-operator"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			c.options.OutputDir = tmpDir
+			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
+			err := c.options.bulkImageCopy(c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS, c.funcs)
+			if c.err != "" {
+				require.EqualError(t, err, c.err)
+			} else {
+				require.NoError(t, err)
+
+			}
+		})
+	}
+}
 func TestUntarLayers(t *testing.T) {
 	type spec struct {
 		desc               string
@@ -368,5 +523,68 @@ func TestUntarLayers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+//////////////////////   Fakes &  mocks ///////////////////////
+type fakeCraneImg struct{}
+
+func (f fakeCraneImg) Layers() ([]gocontreg.Layer, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) MediaType() (gocontregtypes.MediaType, error) {
+	return "", nil
+}
+func (f fakeCraneImg) Size() (int64, error) {
+	return 0, nil
+}
+func (f fakeCraneImg) ConfigName() (gocontreg.Hash, error) {
+	return gocontreg.Hash{}, nil
+}
+func (f fakeCraneImg) ConfigFile() (*gocontreg.ConfigFile, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) RawConfigFile() ([]byte, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) Digest() (gocontreg.Hash, error) {
+	return gocontreg.Hash{}, nil
+}
+func (f fakeCraneImg) Manifest() (*gocontreg.Manifest, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) RawManifest() ([]byte, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) LayerByDigest(gocontreg.Hash) (gocontreg.Layer, error) {
+	return nil, nil
+}
+func (f fakeCraneImg) LayerByDiffID(gocontreg.Hash) (gocontreg.Layer, error) {
+	return nil, nil
+}
+
+func createMockFunctions() RemoteRegFuncs {
+	return RemoteRegFuncs{
+		push: func(img gocontreg.Image, dst string, opt ...crane.Option) error {
+			return nil
+		},
+		load: func(path string, opt ...crane.Option) (gocontreg.Image, error) {
+			return nil, nil
+		},
+		pull: func(src string, opt ...crane.Option) (gocontreg.Image, error) {
+			img := fakeCraneImg{}
+			return img, nil
+		},
+		saveOCI: func(img gocontreg.Image, path string) error {
+			// copy testData to the path selected
+			err := copy.Copy(testdata, path)
+			return err
+		},
+		saveLegacy: func(img gocontreg.Image, src, path string) error {
+			return nil
+		},
+		mirrorMappings: func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
+			return nil
+		},
 	}
 }
