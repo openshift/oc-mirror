@@ -325,7 +325,7 @@ func TestPullImage(t *testing.T) {
 	cases := []spec{
 		{
 			desc:        "nominal oci case passes",
-			to:          ociProtocol + testdata,
+			to:          ociProtocol + t.TempDir(),
 			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
 			stl:         ociStyle,
 			funcs:       createMockFunctions(),
@@ -333,7 +333,7 @@ func TestPullImage(t *testing.T) {
 		},
 		{
 			desc:        "nominal non-oci case passes",
-			to:          ociProtocol + testdata,
+			to:          ociProtocol + t.TempDir(),
 			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
 			stl:         originStyle,
 			funcs:       createMockFunctions(),
@@ -382,7 +382,43 @@ func TestPushImage(t *testing.T) {
 		})
 	}
 }
-func TestBulkImageMirror(t *testing.T) {}
+
+func TestGetISConfig(t *testing.T) {
+	type spec struct {
+		desc        string
+		isc         *v1alpha2.ImageSetConfiguration
+		options     *MirrorOptions
+		err         string
+		expectedErr string
+	}
+	c := spec{
+		desc: "nominal case passes",
+		options: &MirrorOptions{
+			UseOCIFeature:    true,
+			OCIFeatureAction: OCIFeatureCopyAction,
+			RootOptions: &cli.RootOptions{
+				Dir: "",
+				IOStreams: genericclioptions.IOStreams{
+					In:     os.Stdin,
+					Out:    os.Stdout,
+					ErrOut: os.Stderr,
+				},
+			},
+			ConfigPath: "testdata/configs/iscfg.yaml",
+		},
+		expectedErr: "",
+	}
+	t.Run(c.desc, func(t *testing.T) {
+		_, err := c.options.getISConfig()
+
+		if c.expectedErr != "" {
+			require.EqualError(t, err, c.err)
+		} else {
+			require.NoError(t, err)
+		}
+	})
+}
+
 func TestBulkImageCopy(t *testing.T) {
 	type spec struct {
 		desc               string
@@ -420,11 +456,6 @@ func TestBulkImageCopy(t *testing.T) {
 							},
 						},
 					},
-					// StorageConfig: v1alpha2.StorageConfig{
-					// 	Local: &v1alpha2.LocalConfig{
-					// 		Path: "./dest",
-					// 	},
-					// },
 				},
 			},
 			options: &MirrorOptions{
@@ -464,6 +495,85 @@ func TestBulkImageCopy(t *testing.T) {
 		})
 	}
 }
+
+func TestBulkImageMirror(t *testing.T) {
+	type spec struct {
+		desc               string
+		isc                *v1alpha2.ImageSetConfiguration
+		expectedSubFolders []string
+		options            *MirrorOptions
+		funcs              RemoteRegFuncs
+
+		err string
+	}
+
+	cases := []spec{
+		{
+			desc: "Nominal case passes",
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog: "file://" + testdata,
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			options: &MirrorOptions{
+				From:             testdata,
+				ToMirror:         "localhost.localdomain:5000",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureMirrorAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS: true,
+				DestSkipTLS:   true,
+			},
+			funcs:              createMockFunctions(),
+			err:                "",
+			expectedSubFolders: []string{"aws-load-balancer-operator"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			c.options.OutputDir = tmpDir
+			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
+			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.options.SourceSkipTLS, c.options.DestSkipTLS, c.funcs)
+			if c.err != "" {
+				require.EqualError(t, err, c.err)
+			} else {
+				require.NoError(t, err)
+
+			}
+		})
+	}
+}
+
 func TestUntarLayers(t *testing.T) {
 	type spec struct {
 		desc               string
@@ -577,7 +687,7 @@ func createMockFunctions() RemoteRegFuncs {
 		},
 		saveOCI: func(img gocontreg.Image, path string) error {
 			// copy testData to the path selected
-			err := copy.Copy(testdata, path)
+			err := copy.Copy(trimProtocol(testdata), trimProtocol(path))
 			return err
 		},
 		saveLegacy: func(img gocontreg.Image, src, path string) error {

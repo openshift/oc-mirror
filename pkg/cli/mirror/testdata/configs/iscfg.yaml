@@ -1,0 +1,26 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v1alpha2
+#storageConfig:
+#  local:
+#    path: ./output
+storageConfig:
+  registry:
+    imageURL: localhost:5000/ocmirror
+    skipTLS: true
+  local:
+    path:
+mirror:
+  platform:
+    channels:
+    - name: stable-4.10
+      type: ocp
+  operators:
+    #- catalog: oci:///home/lzuccarelli/rhopi
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
+    packages:
+    - name: node-observability-operator
+      channels:
+      - name: stable
+  additionalImages:
+  - name: registry.redhat.io/ubi8/ubi:latest
+  helm: {}
