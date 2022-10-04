@@ -5,8 +5,10 @@ import (
 	"crypto/x509"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/google/uuid"
+	"k8s.io/klog/v2"
 )
 
 // Client is a Cincinnati client which can be used to fetch update graphs from
@@ -28,7 +30,14 @@ type ocpClient struct {
 
 // NewOCPClient creates a new OCP Cincinnati client with the given client identifier.
 func NewOCPClient(id uuid.UUID) (Client, error) {
-	upstream, err := url.Parse(UpdateURL)
+	var updateGraphURL string
+	if updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE"); len(updateURLOverride) != 0 {
+		klog.Info("Usage of the UPDATE_URL_OVERRIDE environment variable is unsupported")
+		updateGraphURL = updateURLOverride
+	} else {
+		updateGraphURL = UpdateURL
+	}
+	upstream, err := url.Parse(updateGraphURL)
 	if err != nil {
 		return &ocpClient{}, err
 	}
