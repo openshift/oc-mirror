@@ -8,7 +8,7 @@ Design: oc-mirror Metadata Management
     - [Ignore History](#ignore-history)
     - [Skip Metadata Check](#skip-metadata-check)
     - [Why do we use a sequence number?](#why-do-we-use-a-sequence-number)
-  
+
 ## Overview
 oc-mirror depends on a metadata file to perform differentials operations such as upgrade graph calculations, layer deduplication, image download tracking, and pruning.
 
@@ -29,17 +29,15 @@ When interacting with `oc-mirror` in a connected environment, the imageset confi
 
 ### Ignore History
 
-By default, `oc-mirror` will not redownload images or blob detected in the past runs of the tools. If an image does not need to be redownloaded the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
+By default, `oc-mirror` will not re-download images or blob detected in the past runs of the tools. If an image does not need to be re-downloaded, the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
 
 ### Skip Metadata Check
 
 In disk to mirror workflows, the metadata sequence is checked against previously mirrored imagesets to ensure no erros occur when reconstituting images before publishing. In the event that a sequence archived is lost, the `skip-metadata-check` flag can be used. To get the workspace back into a healthy state, perform the following tasks:
 
 - Create a new imageset with `--ignore-history` to ensure all images and blob are packed into the archive
-- Publish the imageset with `---skip-metadata-check` to allow the imageset to overwrite the sequence number
+- Publish the imageset with `--skip-metadata-check` to allow the imageset to overwrite the sequence number
 
 ### Why do we use a sequence number?
 
-`oc-mirror` performs deduplication at the image layer level when mirroring images. Instead of packing layers that have already been mirrored, the 
-layers are retrieving from the managed registry during the publishing when needed to reconstitute an image. Ensuring the imagesets are published in order ensures that the expected layers were published to the registry.
-
+`oc-mirror` performs deduplication at the image layer level when mirroring images. Instead of packing layers that have already been mirrored, the layers are retrieved from the managed registry during the publishing when needed to reconstitute an image. Ensuring the imagesets are published in order ensures that the expected layers were published to the registry.
