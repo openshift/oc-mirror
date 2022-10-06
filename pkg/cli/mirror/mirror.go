@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containers/image/v5/copy"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -294,7 +295,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			pull:           crane.Pull,
 			saveOCI:        crane.SaveOCI,
 			saveLegacy:     crane.SaveLegacy,
-			push:           crane.Push,
+			push:           copy.Image,
 			load:           crane.Load,
 			mirrorMappings: o.mirrorMappings,
 		}
@@ -315,7 +316,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			os.Exit(0)
 		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 			log.Println("INFO: mirroring images to remote registry")
-			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
+			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
 			if err != nil {
 				return fmt.Errorf("mirroring images %v", err)
 			}

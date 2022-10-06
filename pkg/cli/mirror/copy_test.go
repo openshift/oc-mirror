@@ -7,9 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/signature"
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	gocontregtypes "github.com/google/go-containerregistry/pkg/v1/types"
+
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
@@ -372,7 +376,7 @@ func TestPushImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pushImage(c.from, c.to, false, c.funcs)
+			err := pushImage(c.from, c.to, true, true, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -517,7 +521,7 @@ func TestBulkImageMirror(t *testing.T) {
 
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "file://" + testdata,
+								Catalog: "oci://" + testdata,
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -563,7 +567,7 @@ func TestBulkImageMirror(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.options.SourceSkipTLS, c.options.DestSkipTLS, c.funcs)
+			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.options.SourceSkipTLS, c.options.DestSkipTLS, true, c.funcs)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -636,7 +640,7 @@ func TestUntarLayers(t *testing.T) {
 	}
 }
 
-//////////////////////   Fakes &  mocks ///////////////////////
+// ////////////////////   Fakes &  mocks ///////////////////////
 type fakeCraneImg struct{}
 
 func (f fakeCraneImg) Layers() ([]gocontreg.Layer, error) {
@@ -675,8 +679,8 @@ func (f fakeCraneImg) LayerByDiffID(gocontreg.Hash) (gocontreg.Layer, error) {
 
 func createMockFunctions() RemoteRegFuncs {
 	return RemoteRegFuncs{
-		push: func(img gocontreg.Image, dst string, opt ...crane.Option) error {
-			return nil
+		push: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
+			return nil, nil
 		},
 		load: func(path string, opt ...crane.Option) (gocontreg.Image, error) {
 			return nil, nil

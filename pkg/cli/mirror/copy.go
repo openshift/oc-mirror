@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -49,7 +51,7 @@ type RemoteRegFuncs struct {
 	saveOCI        func(img gocontreg.Image, path string) error
 	saveLegacy     func(img gocontreg.Image, src, path string) error
 	load           func(path string, opt ...crane.Option) (gocontreg.Image, error)
-	push           func(img gocontreg.Image, dst string, opt ...crane.Option) error
+	push           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
 	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
 }
 
@@ -69,8 +71,8 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 	return isc, nil
 }
 
-//•bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
-//•a•local directory↵
+// •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
+// •a•local directory↵
 func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
@@ -160,7 +162,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool, insecureSigPolicy bool, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
@@ -257,7 +259,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = pushImage(operator.Catalog, to, srcSkipTLS, remoteRegFuncs)
+		err = pushImage(operator.Catalog, to, dstSkipTLS, insecureSigPolicy, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
@@ -563,25 +565,82 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style, funcs RemoteRegF
 }
 
 // pushImage is here used only to push images to the remote registry
-// calls crane
-func pushImage(from, to string, dstSkipTLS bool, funcs RemoteRegFuncs) error {
+// calls the underlying containers/image copy library
+func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) error {
+
+	// find absolute path if from is a relative path
+	fromPath := trimProtocol(from)
+	if !strings.HasPrefix(fromPath, "/") {
+		absolutePath, err := filepath.Abs(fromPath)
+		if err != nil {
+			return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+		}
+		from = "oci://" + absolutePath
+	}
+	sourceCtx := newSystemContext(dstSkipTLS)
+	destinationCtx := newSystemContext(dstSkipTLS)
 	ctx := context.Background()
-	opts := []crane.Option{
-		crane.WithAuthFromKeychain(authn.DefaultKeychain),
-		crane.WithContext(ctx),
-		crane.WithTransport(createRT(dstSkipTLS)),
+
+	// Pull the source image, and store it in the local storage, under the name main
+	var sigPolicy *signature.Policy
+	var err error
+	if insecurePolicy {
+		sigPolicy = &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
+	} else {
+		sigPolicy, err = signature.DefaultPolicy(nil)
+		if err != nil {
+			return err
+		}
 	}
-	if dstSkipTLS {
-		opts = append(opts, crane.Insecure)
+	policyContext, err := signature.NewPolicyContext(sigPolicy)
+	if err != nil {
+		return err
 	}
-	img, err := funcs.load(from, opts...)
+	// define the source context
+	srcRef, err := alltransports.ParseImageName(from)
+	if err != nil {
+		return err
+	}
+	// define the destination context
+	destRef, err := alltransports.ParseImageName(to)
 	if err != nil {
 		return err
 	}
 
-	if err := funcs.push(img, to, opts...); err != nil {
-		return fmt.Errorf("unable to push image %s in its original format to %s: %w", from, to, err)
+	// call the copy.Image function with the set options
+	_, err = funcs.push(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
+		RemoveSignatures:      true,
+		SignBy:                "",
+		ReportWriter:          os.Stdout,
+		SourceCtx:             sourceCtx,
+		DestinationCtx:        destinationCtx,
+		ForceManifestMIMEType: "",
+		ImageListSelection:    imagecopy.CopySystemImage,
+		OciDecryptConfig:      nil,
+		OciEncryptLayers:      nil,
+		OciEncryptConfig:      nil,
+	})
+	if err != nil {
+		return err
 	}
-
 	return nil
+}
+
+// newSystemContext set the context for source & destination resources
+func newSystemContext(skipTLS bool) *types.SystemContext {
+	var skipTLSVerify types.OptionalBool
+	if skipTLS {
+		skipTLSVerify = types.OptionalBoolTrue
+	} else {
+		skipTLSVerify = types.OptionalBoolFalse
+	}
+	ctx := &types.SystemContext{
+		RegistriesDirPath:           "",
+		ArchitectureChoice:          "",
+		OSChoice:                    "",
+		VariantChoice:               "",
+		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
+		DockerInsecureSkipTLSVerify: skipTLSVerify,
+	}
+	return ctx
 }
