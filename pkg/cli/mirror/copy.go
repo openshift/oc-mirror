@@ -2,11 +2,13 @@ package mirror
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,12 +20,13 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	goyaml "github.com/go-yaml/yaml"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/operator-framework/operator-registry/alpha/model"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"sigs.k8s.io/yaml"
 )
 
@@ -116,45 +119,48 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
 			for _, file := range files {
-				if strings.Contains(pkg.Name, file.Name()) {
-					// read the config.json to get releated images
-					relatedImages, err := getRelatedImages(filepath.Join(ctlgConfigsDir, file.Name()))
+				log.Printf("file :%s\n", file.Name())
+				// read the config.json to get releated images
+				relatedImages, err := getRelatedImages(ctlgConfigsDir, []v1alpha2.IncludePackage{pkg})
+				if err != nil {
+					return err
+				}
+				for _, i := range relatedImages {
+					name := i.Name
+					if name == "" {
+						name = "bundle"
+					}
+					srcTIR, err := image.ParseReference(i.Image)
 					if err != nil {
 						return err
 					}
-					for _, i := range relatedImages {
-						name := i.Name
-						if name == "" {
-							name = "bundle"
-						}
-						srcTIR, err := image.ParseReference(i.Image)
-						if err != nil {
-							return err
-						}
-						srcTI := image.TypedImage{
-							TypedImageReference: srcTIR,
-							Category:            v1alpha2.TypeOperatorRelatedImage,
-						}
-						dstTIR, err := image.ParseReference("file://" + file.Name() + "/" + name)
-						if err != nil {
-							return err
-						}
-						dstTI := image.TypedImage{
-							TypedImageReference: dstTIR,
-							Category:            v1alpha2.TypeOperatorRelatedImage,
-						}
-						mapping[srcTI] = dstTI
+					srcTI := image.TypedImage{
+						TypedImageReference: srcTIR,
+						Category:            v1alpha2.TypeOperatorRelatedImage,
+					} //pkg.Name + "/" + folder
+					dstTIR, err := image.ParseReference("file://" + pkg.Name + "/" + name)
+					if err != nil {
+						return err
 					}
-					break
+					dstTI := image.TypedImage{
+						TypedImageReference: dstTIR,
+						Category:            v1alpha2.TypeOperatorRelatedImage,
+					}
+					mapping[srcTI] = dstTI
 				}
+				break
 			}
 		}
 	}
 
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
-	err := remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
-	if err != nil {
-		return err
+	if len(mapping) > 0 {
+		err := remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Println("no images to copy")
 	}
 
 	return nil
@@ -195,7 +201,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		for _, pkg := range pkgList {
 			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
 
-			relatedImages, err := getRelatedImages(filepath.Join(catalogContentsDir, pkg.Name))
+			relatedImages, err := getRelatedImages(catalogContentsDir, []v1alpha2.IncludePackage{pkg})
 			if err != nil {
 				log.Fatal(err)
 				return err
@@ -364,43 +370,163 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 	}
 	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
 }
+func getRelatedImagesFromBundle(bundle declcfg.Bundle, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
+	images := []declcfg.RelatedImage{}
+	uniqueImages := []declcfg.RelatedImage{}
 
-// getRelatedImages this reads each catalog or config.json
-// file in a given operator in the FBC
-// and returns the list of relatedImages found in the CSV
-func getRelatedImages(path string) ([]model.RelatedImage, error) {
-	var icJSON *model.Bundle
-
-	// read the config.json to get releated images
-	icd, err := ioutil.ReadFile(path + catalogJSON)
-	if err != nil {
-		return nil, err
-	}
-	// we are only interested in the related images section
-	tmp := string(icd)
-	i := strings.Index(tmp, relatedImages)
-	newJson := "{\"" + tmp[i:]
-	err = json.Unmarshal([]byte(newJson), &icJSON)
-	if err != nil {
-		return nil, fmt.Errorf("json unmarshal %v", err)
-	}
-	//unique images - remove duplicate values
-	images := []model.RelatedImage{}
-
-	for _, v := range icJSON.RelatedImages {
+	for _, v := range bundle.RelatedImages {
 		found := false
-		for _, w := range images {
+		for _, w := range uniqueImages {
 			if w.Image == v.Image {
 				found = true
 				break
 			}
 		}
 		if !found {
-			images = append(images, v)
+			uniqueImages = append(uniqueImages, v)
 		}
 	}
 
+	if len(packages) > 0 {
+		for _, pkg := range packages {
+			if bundle.Package == pkg.Name {
+				images = append(images, uniqueImages...)
+			}
+		}
+	} else {
+		images = append(images, uniqueImages...)
+	}
 	return images, nil
+}
+
+// getRelatedImages this reads each catalog or config.json
+// file in a given operator in the FBC
+// and returns the list of relatedImages found in the CSV
+func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
+	images := []declcfg.RelatedImage{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		fmt.Println("DEBUG : root=" + root + " path=" + path)
+		fmt.Println("DEBUG : " + d.Name())
+		if d.IsDir() {
+			return nil
+		} else if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+			// read the yaml file
+			icd, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			dec := goyaml.NewDecoder(bytes.NewReader(icd))
+			var res [][]byte
+			for {
+				var value interface{}
+				err := dec.Decode(&value)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					//skipping
+					log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+				} else {
+					filteredBundle := make(map[interface{}]interface{})
+					v, ok := value.(map[interface{}]interface{})
+					if ok {
+						if v["schema"] == "olm.bundle" {
+							for k, v := range v {
+								if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
+									filteredBundle[k] = v
+								}
+							}
+							valueBytes, err := goyaml.Marshal(filteredBundle)
+							if err != nil {
+								//skipping
+								log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+							} else {
+								res = append(res, valueBytes)
+
+							}
+						}
+					}
+
+				}
+			}
+			for _, object := range res {
+				var bundle declcfg.Bundle
+				if strings.Contains(string(object), "olm.bundle") {
+					err = yaml.Unmarshal(object, &bundle)
+					if err != nil {
+						//skipping
+						log.Printf("WARNING: error during unmarshalling %s: %v", string(object), err)
+					}
+					// TODO : check this is in the list of packages
+					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
+					if err != nil {
+						return fmt.Errorf("unable to retrieve relatedImages for %s: %v"+bundle.Name, err)
+					}
+					images = append(images, tmpArray...)
+				}
+			}
+		} else if strings.HasSuffix(path, ".json") {
+			// read the json file
+			jsonByteArray, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			dec := json.NewDecoder(bytes.NewReader(jsonByteArray))
+			var res [][]byte
+			for {
+				var value interface{}
+				err := dec.Decode(&value)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					//skipping
+					log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+				} else {
+					filteredBundle := make(map[string]interface{})
+					v, ok := value.(map[string]interface{})
+					if ok {
+						if v["schema"] == "olm.bundle" {
+							for k, v := range v {
+								if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
+									filteredBundle[k] = v
+								}
+							}
+							valueBytes, err := goyaml.Marshal(filteredBundle)
+							if err != nil {
+								//skipping
+								log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+							} else {
+								res = append(res, valueBytes)
+
+							}
+						}
+					}
+
+				}
+			}
+			for _, object := range res {
+				var bundle declcfg.Bundle
+				if strings.Contains(string(object), "olm.bundle") {
+					err = yaml.Unmarshal(object, &bundle)
+					if err != nil {
+						//skipping
+						log.Printf("WARNING: error during unmarshalling %s: %v", string(object), err)
+					}
+					// TODO : check this is in the list of packages
+					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
+					if err != nil {
+						return fmt.Errorf("unable to retrieve relatedImages for %s: %v"+bundle.Name, err)
+					}
+					images = append(images, tmpArray...)
+				}
+			}
+		}
+
+		return nil
+	})
+	return images, err
 }
 
 // getManifest reads the manifest of the OCI FBC image

@@ -44,6 +44,7 @@ require (
 require golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 
 require (
+	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/otiai10/copy v1.2.0
 )

@@ -18,7 +18,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/operator-framework/operator-registry/alpha/model"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -26,6 +26,7 @@ import (
 
 const (
 	testdata        = "testdata/artifacts/rhop-ctlg-oci"
+	testdata_mashed = "testdata/artifacts/rhop-ctlg-oci-mashed"
 	rotten_manifest = "testdata/artifacts/rhop-rotten-manifest"
 	rotten_layer    = "testdata/artifacts/rhop-rotten-layer"
 	rotten_config   = "testdata/artifacts/rhop-rotten-cfg"
@@ -260,7 +261,8 @@ func TestGetRelatedImages(t *testing.T) {
 	type spec struct {
 		desc                  string
 		configsPath           string
-		expectedRelatedImages []model.RelatedImage
+		expectedRelatedImages []declcfg.RelatedImage
+		packages              []v1alpha2.IncludePackage
 		err                   string
 	}
 	tmpdir := t.TempDir()
@@ -268,7 +270,12 @@ func TestGetRelatedImages(t *testing.T) {
 		{
 			desc:        "nominal case",
 			configsPath: filepath.Join(testdata, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
-			expectedRelatedImages: []model.RelatedImage{
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "node-observability-operator",
+				},
+			},
+			expectedRelatedImages: []declcfg.RelatedImage{
 				{
 					Image: "registry.redhat.io/noo/node-observability-agent-rhel8@sha256:59bd5b8cefae5d5769d33dafcaff083b583a552e1df61194a3cc078b75cb1fdc",
 					Name:  "agent",
@@ -288,6 +295,33 @@ func TestGetRelatedImages(t *testing.T) {
 			},
 			err: "",
 		},
+		{
+			desc:        "nominal mashed case",
+			configsPath: filepath.Join(testdata_mashed, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+				},
+			},
+			expectedRelatedImages: []declcfg.RelatedImage{
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:7d6bfc2e0450e0fe7a469884e5078b95c44ef84843e66bbf4ae0b3db17eeae84",
+					Name:  "operator",
+				},
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:4daee43355c22f037602e266f012c158fd567050ad6c9dc36e49a45012196d62",
+					Name:  "operator",
+				},
+				{
+					Name:  "operator",
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+				},
+				{Name: "operator",
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+				},
+			},
+			err: "",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
@@ -300,7 +334,7 @@ func TestGetRelatedImages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to untar %s: %v", c.configsPath, err)
 			}
-			relatedImages, err := getRelatedImages(filepath.Join(tmpdir, "configs", "node-observability-operator"))
+			relatedImages, err := getRelatedImages(filepath.Join(tmpdir, "configs"), c.packages)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
