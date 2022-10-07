@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -258,6 +259,8 @@ func (o *MirrorOptions) Validate() error {
 	return nil
 }
 
+type cleanupFunc func() error
+
 func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) {
 	if o.OutputDir != "" {
 		if err := os.MkdirAll(o.OutputDir, 0750); err != nil {
@@ -265,6 +268,20 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 	}
 
+	cleanup := func() error {
+		if !o.SkipCleanup {
+			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
+		}
+		return nil
+	}
+
+	if o.UseOCIFeature {
+		return o.mirrorOCIImages(cleanup)
+	}
+	return o.mirrorImages(cmd.Context(), cleanup)
+}
+
+func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
 	var sourceInsecure bool
 	if o.SourcePlainHTTP || o.SourceSkipTLS {
 		sourceInsecure = true
@@ -272,13 +289,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	var destInsecure bool
 	if o.DestPlainHTTP || o.DestSkipTLS {
 		destInsecure = true
-	}
-
-	cleanup := func() error {
-		if !o.SkipCleanup {
-			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
-		}
-		return nil
 	}
 
 	var mapping image.TypedImageMapping
@@ -290,44 +300,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
-	if o.UseOCIFeature {
-		remoteRegFuncs := RemoteRegFuncs{
-			pull:           crane.Pull,
-			saveOCI:        crane.SaveOCI,
-			saveLegacy:     crane.SaveLegacy,
-			push:           copy.Image,
-			load:           crane.Load,
-			mirrorMappings: o.mirrorMappings,
-		}
-		if o.OCIFeatureAction == "" {
-			return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
-		}
-		isc, err := o.getISConfig()
-		if err != nil {
-			return fmt.Errorf("reading imagesetconfig via command line %v", err)
-		}
-		if o.OCIFeatureAction == OCIFeatureCopyAction {
-
-			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
-			if err != nil {
-				return fmt.Errorf("copying images %v", err)
-			}
-			log.Println("INFO: completed catalog copy")
-			return nil
-		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
-			log.Println("INFO: mirroring images to remote registry")
-			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
-			if err != nil {
-				return fmt.Errorf("mirroring images %v", err)
-			}
-			log.Println("INFO: completed catalog mirror")
-			return nil
-		}
-	}
-
 	switch {
 	case o.ManifestsOnly:
-		meta, err := bundle.ReadMetadataFromFile(cmd.Context(), o.From)
+		meta, err := bundle.ReadMetadataFromFile(ctx, o.From)
 		if err != nil {
 			return fmt.Errorf("error retrieving metadata from %q: %v", o.From, err)
 		}
@@ -352,7 +327,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 
-		meta, mapping, err = o.Create(cmd.Context(), cfg)
+		meta, mapping, err = o.Create(ctx, cfg)
 		if err != nil {
 			return err
 		}
@@ -387,7 +362,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 
 		// Pack the images set
-		tmpBackend, err := o.Pack(cmd.Context(), prunedAssociations, assocs, &meta, cfg.ArchiveSize)
+		tmpBackend, err := o.Pack(ctx, prunedAssociations, assocs, &meta, cfg.ArchiveSize)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
 				klog.Infof("No updates detected, process stopping")
@@ -402,7 +377,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err != nil {
 				return err
 			}
-			if err := metadata.SyncMetadata(cmd.Context(), tmpBackend, targetBackend); err != nil {
+			if err := metadata.SyncMetadata(ctx, tmpBackend, targetBackend); err != nil {
 				return err
 			}
 		}
@@ -416,7 +391,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// Publish from disk to registry
 		// this takes care of syncing the metadata to the
 		// registry backends.
-		mapping, err = o.Publish(cmd.Context())
+		mapping, err = o.Publish(ctx)
 		if err != nil {
 			serr := &ErrInvalidSequence{}
 			if errors.As(err, &serr) {
@@ -443,7 +418,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
-		meta, mapping, err = o.Create(cmd.Context(), cfg)
+		meta, mapping, err = o.Create(ctx, cfg)
 		if err != nil {
 			return err
 		}
@@ -460,7 +435,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			return err
 		}
 		var curr v1alpha2.Metadata
-		berr := targetBackend.ReadMetadata(cmd.Context(), &curr, config.MetadataBasePath)
+		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
 		if err := o.checkSequence(meta, curr, berr); err != nil {
 			return err
 		}
@@ -494,13 +469,13 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 			if err := writeMappingFile(mappingPath, mapping); err != nil {
 				return err
 			}
-			if err := o.outputPruneImagePlan(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
+			if err := o.outputPruneImagePlan(ctx, prevAssociations, prunedAssociations); err != nil {
 				return err
 			}
 			return cleanup()
 		}
 
-		assocs, errs := image.AssociateRemoteImageLayers(cmd.Context(), mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
+		assocs, errs := image.AssociateRemoteImageLayers(ctx, mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
 		if errs != nil {
 			if err := o.processAssociationErrors(errs.Errors()); err != nil {
 				return err
@@ -515,7 +490,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		prunedAssociations.Merge(assocs)
 
-		if err := o.pruneRegistry(cmd.Context(), prevAssociations, prunedAssociations); err != nil {
+		if err := o.pruneRegistry(ctx, prevAssociations, prunedAssociations); err != nil {
 			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
 		}
 
@@ -530,7 +505,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		}
 		// process catalog FBC images
 		if len(cfg.Mirror.Operators) > 0 {
-			ctlgRefs, err := o.rebuildCatalogs(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
+			ctlgRefs, err := o.rebuildCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
 			if err != nil {
 				return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 			}
@@ -539,7 +514,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 		// process Cincinnati graph data image
 		if len(cfg.Mirror.Platform.Channels) > 0 {
 			if cfg.Mirror.Platform.Graph {
-				graphRef, err := o.buildGraphImage(cmd.Context(), filepath.Join(o.Dir, config.SourceDir))
+				graphRef, err := o.buildGraphImage(ctx, filepath.Join(o.Dir, config.SourceDir))
 				if err != nil {
 					return fmt.Errorf("error building cincinnati graph image: %v", err)
 				}
@@ -562,15 +537,53 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return err
 			}
 			workspace := filepath.Join(o.Dir, config.SourceDir)
-			if err = metadata.UpdateMetadata(cmd.Context(), sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+			if err = metadata.UpdateMetadata(ctx, sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
 				return err
 			}
-			if err := metadata.SyncMetadata(cmd.Context(), sourceBackend, targetBackend); err != nil {
+			if err := metadata.SyncMetadata(ctx, sourceBackend, targetBackend); err != nil {
 				return err
 			}
 		}
 	}
+	if o.continuedOnError {
+		return fmt.Errorf("one or more errors occurred")
+	}
 
+	return cleanup()
+}
+func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
+	remoteRegFuncs := RemoteRegFuncs{
+		pull:           crane.Pull,
+		saveOCI:        crane.SaveOCI,
+		saveLegacy:     crane.SaveLegacy,
+		push:           copy.Image,
+		load:           crane.Load,
+		mirrorMappings: o.mirrorMappings,
+	}
+	if o.OCIFeatureAction == "" {
+		return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
+	}
+	isc, err := o.getISConfig()
+	if err != nil {
+		return fmt.Errorf("reading imagesetconfig via command line %v", err)
+	}
+	if o.OCIFeatureAction == OCIFeatureCopyAction {
+
+		err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
+		if err != nil {
+			return fmt.Errorf("copying images %v", err)
+		}
+		log.Println("INFO: completed catalog copy")
+		return nil
+	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
+		log.Println("INFO: mirroring images to remote registry")
+		err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
+		if err != nil {
+			return fmt.Errorf("mirroring images %v", err)
+		}
+		log.Println("INFO: completed catalog mirror")
+		return nil
+	}
 	if o.continuedOnError {
 		return fmt.Errorf("one or more errors occurred")
 	}
