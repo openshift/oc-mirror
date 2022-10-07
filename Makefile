@@ -24,14 +24,22 @@ GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="1" \
                    -X k8s.io/client-go/pkg/version.buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')" \
                    -X k8s.io/client-go/pkg/version.gitTreeState="$(SOURCE_GIT_TREE_STATE)"
 
-GO_BUILD_FLAGS :=-tags 'json1'
+LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
+LIBSUBID_BUILD_TAG = $(shell hack/libsubid_tag.sh)
+BTRFS_BUILD_TAG = $(shell hack/btrfs_tag.sh) $(shell hack/btrfs_installed_tag.sh)
+
+ifeq ($(DISABLE_CGO), 1)
+	override BTRFS_BUILD_TAG = exclude_graphdriver_devicemapper exclude_graphdriver_btrfs containers_image_openpgp
+endif
+
+GO_BUILD_FLAGS = -tags "json1 $(BTRFS_BUILD_TAG) $(LIBDM_BUILD_TAG) $(LIBSUBID_BUILD_TAG)"
 GO_BUILD_BINDIR :=./bin
 
 all: tidy test-unit build
 .PHONY: all
 
 cross-build-linux-amd64:
-	+@GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
+	+@GOOS=linux GOARCH=amd64 $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
 .PHONY: cross-build-linux-amd64
 
 cross-build: cross-build-linux-amd64
@@ -80,6 +88,6 @@ format:
 .PHONY: format
 
 vet: 
-	$(GO) vet ./pkg/...
-	$(GO) vet ./cmd/...
+	$(GO) vet $(GO_BUILD_FLAGS) ./pkg/... 
+	$(GO) vet $(GO_BUILD_FLAGS) ./cmd/...  
 .PHONY: vet

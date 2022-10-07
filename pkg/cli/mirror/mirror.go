@@ -3,12 +3,15 @@ package mirror
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/containers/image/v5/copy"
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -32,6 +35,11 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+)
+
+const (
+	OCIFeatureCopyAction   = "copy"
+	OCIFeatureMirrorAction = "mirror"
 )
 
 var (
@@ -143,6 +151,19 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("dir") {
 			return fmt.Errorf("--dir cannot be specified with file destination scheme")
 		}
+		ref = filepath.Clean(ref)
+		if ref == "" {
+			ref = "."
+		}
+		o.OutputDir = ref
+		// If the destination is on disk, made the output dir the
+		// parent dir for the workspace
+		o.Dir = filepath.Join(o.OutputDir, o.Dir)
+	case "oci":
+		if cmd.Flags().Changed("dir") {
+			return fmt.Errorf("--dir cannot be specified with oci destination scheme")
+		}
+		ref = strings.Replace(ref, "oci", "file", 1)
 		ref = filepath.Clean(ref)
 		if ref == "" {
 			ref = "."
@@ -268,6 +289,41 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+
+	if o.UseOCIFeature {
+		remoteRegFuncs := RemoteRegFuncs{
+			pull:           crane.Pull,
+			saveOCI:        crane.SaveOCI,
+			saveLegacy:     crane.SaveLegacy,
+			push:           copy.Image,
+			load:           crane.Load,
+			mirrorMappings: o.mirrorMappings,
+		}
+		if o.OCIFeatureAction == "" {
+			return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
+		}
+		isc, err := o.getISConfig()
+		if err != nil {
+			return fmt.Errorf("reading imagesetconfig via command line %v", err)
+		}
+		if o.OCIFeatureAction == OCIFeatureCopyAction {
+
+			err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
+			if err != nil {
+				return fmt.Errorf("copying images %v", err)
+			}
+			log.Println("INFO: completed catalog copy")
+			os.Exit(0)
+		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
+			log.Println("INFO: mirroring images to remote registry")
+			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
+			if err != nil {
+				return fmt.Errorf("mirroring images %v", err)
+			}
+			log.Println("INFO: completed catalog mirror")
+			os.Exit(0)
+		}
+	}
 
 	switch {
 	case o.ManifestsOnly:

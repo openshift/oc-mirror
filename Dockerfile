@@ -19,10 +19,7 @@ ARG DNF_LIST="\
 RUN set -ex \
      && dnf install -y --nodocs --setopt=install_weak_deps=false ${DNF_LIST}    \
      && dnf clean all -y                                                        \
-     && GO_VERSION=$(curl -sL https://golang.org/dl/?mode=json                  \
-                     | jq -r '.[].files[] | select(.os == "linux").version'     \
-                     | grep -v -E 'go[0-9\.]+(beta|rc)'                         \
-                     | sort -V | tail -1)                                       \
+     && GO_VERSION=go1.18.6                                       \
      && curl -sL https://golang.org/dl/${GO_VERSION}.linux-amd64.tar.gz         \
         | tar xzvf - --directory /usr/local/                                    \
      && /usr/local/go/bin/go version                                            \

@@ -33,6 +33,8 @@ type MirrorOptions struct {
 	ContinueOnError   bool
 	IgnoreHistory     bool
 	MaxPerRegistry    int
+	UseOCIFeature     bool
+	OCIFeatureAction  string
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
 	once             sync.Once
@@ -62,6 +64,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
 	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 6, "Number of concurrent requests allowed per registry")
+	fs.BoolVar(&o.UseOCIFeature, "use-oci-feature", o.UseOCIFeature, "Use the new oci feature for oc mirror (oci formatted copy")
+	fs.StringVar(&o.OCIFeatureAction, "oci-feature-action", o.OCIFeatureAction, "One of copy or mirror")
 }
 
 func (o *MirrorOptions) init() {
