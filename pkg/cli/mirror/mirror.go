@@ -313,7 +313,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return fmt.Errorf("copying images %v", err)
 			}
 			log.Println("INFO: completed catalog copy")
-			os.Exit(0)
+			return nil
 		} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 			log.Println("INFO: mirroring images to remote registry")
 			err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
@@ -321,7 +321,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 				return fmt.Errorf("mirroring images %v", err)
 			}
 			log.Println("INFO: completed catalog mirror")
-			os.Exit(0)
+			return nil
 		}
 	}
 
