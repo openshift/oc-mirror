@@ -628,11 +628,9 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 
 // newSystemContext set the context for source & destination resources
 func newSystemContext(skipTLS bool) *types.SystemContext {
-	var skipTLSVerify types.OptionalBool
+	skipTLSVerify := types.OptionalBoolFalse
 	if skipTLS {
 		skipTLSVerify = types.OptionalBoolTrue
-	} else {
-		skipTLSVerify = types.OptionalBoolFalse
 	}
 	ctx := &types.SystemContext{
 		RegistriesDirPath:           "",
