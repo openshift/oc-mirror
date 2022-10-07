@@ -3,24 +3,26 @@
 # These are used to define all testcase
 # run during end to end test
 declare -a TESTCASES
-TESTCASES[1]="full_catalog"
-TESTCASES[2]="full_catalog_with_digest"
-TESTCASES[3]="headsonly_diff"
-TESTCASES[4]="pruned_catalogs"
-TESTCASES[5]="pruned_catalogs_mirror_to_mirror"
-TESTCASES[6]="pruned_catalogs_with_target"
-TESTCASES[7]="pruned_catalogs_with_include"
-TESTCASES[8]="registry_backend"
-TESTCASES[9]="mirror_to_mirror"
-TESTCASES[10]="mirror_to_mirror_nostorage"
-TESTCASES[11]="custom_namespace"
-TESTCASES[12]="package_filtering"
-TESTCASES[13]="single_version"
-TESTCASES[14]="version_range"
-TESTCASES[15]="max_version"
-TESTCASES[16]="skip_deps"
-TESTCASES[17]="helm_local"
-TESTCASES[18]="no_updates_exist"
+# TESTCASES[1]="full_catalog"
+# TESTCASES[2]="full_catalog_with_digest"
+# TESTCASES[3]="headsonly_diff"
+# TESTCASES[4]="pruned_catalogs"
+# TESTCASES[5]="pruned_catalogs_mirror_to_mirror"
+# TESTCASES[6]="pruned_catalogs_with_target"
+# TESTCASES[7]="pruned_catalogs_with_include"
+# TESTCASES[8]="registry_backend"
+# TESTCASES[9]="mirror_to_mirror"
+# TESTCASES[10]="mirror_to_mirror_nostorage"
+# TESTCASES[11]="custom_namespace"
+# TESTCASES[12]="package_filtering"
+# TESTCASES[13]="single_version"
+# TESTCASES[14]="version_range"
+# TESTCASES[15]="max_version"
+# TESTCASES[16]="skip_deps"
+# TESTCASES[17]="helm_local"
+# TESTCASES[18]="no_updates_exist"
+# TESTCASES[19]="oci_local"
+TESTCASES[1]="oci_local"
 
 # Test full catalog mode.
 function full_catalog() {
@@ -223,4 +225,13 @@ function no_updates_exist {
         exit 1
     fi
     check_sequence_number 1
+}
+
+# Test OCI local catalog
+function oci_local {
+    workflow_oci_copy imageset-config-oci-copy.yaml "test-catalog-latest" "oci:///home/skhoury/go/src/github.com/openshift/oc-mirror/wrklds-536" -c="--use-oci-feature --oci-feature-action=copy --source-skip-tls"
+    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--use-oci-feature --oci-feature-action=mirror --dest-skip-tls"
+    #check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+     #   "aws-load-balancer-operator.v1.0.1" \
+      #  localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
