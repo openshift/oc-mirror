@@ -6,9 +6,9 @@
 function run_cmd() {
   local test_flags="--verbose=4 --dest-use-http --skip-cleanup"
 
-  echo "$CMD" $test_flags "$@" 
+  echo "$CMD" "$@" $test_flags
   echo
-  "$CMD" $test_flags "$@" 
+  "$CMD" "$@" $test_flags
 }
 
 # cleanup_all will kill any running registry processes
@@ -127,7 +127,6 @@ function setup_operator_testdata() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
-  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_OCI_CATALOG@'"$METADATA_OCI_CATALOG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_DIGEST@'"$CATALOG_DIGEST"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_NAME@'"$TARGET_CATALOG_NAME"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
