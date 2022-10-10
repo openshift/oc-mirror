@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -80,7 +80,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
 
-		log.Printf("INFO: downloading the catalog image %s\n", operator.Catalog)
+		klog.Infof("downloading the catalog image %s\n", operator.Catalog)
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
 		localOperatorDir := filepath.Join(o.OutputDir, repo)
 		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle, remoteRegFuncs)
@@ -90,16 +90,16 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 		// find the layer with the FB config
 		catalogContentsDir := filepath.Join(tempPath, repo)
-		log.Printf("INFO: finding file based config for %s (in catalog layers)\n", operator.Catalog)
+		klog.Infof("Finding file based config for %s (in catalog layers)\n", operator.Catalog)
 		ctlgConfigsDir, err := o.findFBCConfig(localOperatorDir, catalogContentsDir)
 		if err != nil {
 			return fmt.Errorf("unable to find config in %s: %v", localOperatorDir, err)
 		}
 
-		log.Printf("INFO: Filtering on selected packages for %s \n", operator.Catalog)
+		klog.Infof("Filtering on selected packages for %s \n", operator.Catalog)
 		files, err := ioutil.ReadDir(ctlgConfigsDir)
 		if err != nil {
-			log.Fatalf("unable to read catalog contents %v", err)
+			klog.Fatalf("unable to read catalog contents %v", err)
 			return err
 		}
 		pkgList := []v1alpha2.IncludePackage{}
@@ -113,13 +113,13 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 				})
 			}
 		}
-		log.Printf("INFO: List of packages selected for copy :\n %v \n", pkgList)
+		klog.Infof("List of packages selected for copy :\n %v \n", pkgList)
 
 		for _, pkg := range pkgList {
 
-			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
+			klog.Infof("Collecting all related images for %s \n", pkg.Name)
 			for _, file := range files {
-				log.Printf("file :%s\n", file.Name())
+				klog.V(2).Infof("File :%s\n", file.Name())
 				// read the config.json to get releated images
 				relatedImages, err := getRelatedImages(ctlgConfigsDir, []v1alpha2.IncludePackage{pkg})
 				if err != nil {
@@ -160,7 +160,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 			return err
 		}
 	} else {
-		log.Println("no images to copy")
+		klog.Infof("no images to copy")
 	}
 
 	return nil
@@ -172,17 +172,17 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 	mapping := image.TypedImageMapping{}
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
-		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
+		klog.Infof("Processing contents of local catalog %s\n", operator.Catalog)
 
 		configsLabel, err := o.getCatalogConfigPath(trimProtocol(operator.Catalog))
 		if err != nil {
-			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
+			klog.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
 			return err
 		}
 		catalogContentsDir := filepath.Join(tempPath, repo, configsLabel)
 		files, err := ioutil.ReadDir(catalogContentsDir)
 		if err != nil {
-			log.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
+			klog.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
 			return err
 		}
 		pkgList := []v1alpha2.IncludePackage{}
@@ -196,14 +196,14 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				})
 			}
 		}
-		log.Printf("INFO: List of packages selected for copy :\n %v \n", pkgList)
+		klog.Infof("List of packages selected for copy :\n %v \n", pkgList)
 
 		for _, pkg := range pkgList {
-			log.Printf("INFO: collecting all related images for %s \n", pkg.Name)
+			klog.Infof("Collecting all related images for %s \n", pkg.Name)
 
 			relatedImages, err := getRelatedImages(catalogContentsDir, []v1alpha2.IncludePackage{pkg})
 			if err != nil {
-				log.Fatal(err)
+				klog.Fatal(err)
 				return err
 			}
 
@@ -255,7 +255,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 
 		}
 		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
-		log.Printf("INFO: pushing catalog %s to %s \n", operator.Catalog, to)
+		klog.Infof("Pushing catalog %s to %s \n", operator.Catalog, to)
 
 		if operator.TargetName != "" {
 			to = strings.Join([]string{to, operator.TargetName}, "/")
@@ -426,7 +426,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 				}
 				if err != nil {
 					//skipping
-					log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
 				} else {
 					filteredBundle := make(map[interface{}]interface{})
 					v, ok := value.(map[interface{}]interface{})
@@ -440,7 +440,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 							valueBytes, err := goyaml.Marshal(filteredBundle)
 							if err != nil {
 								//skipping
-								log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+								klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
 							} else {
 								res = append(res, valueBytes)
 
@@ -456,7 +456,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 					err = yaml.Unmarshal(object, &bundle)
 					if err != nil {
 						//skipping
-						log.Printf("WARNING: error during unmarshalling %s: %v", string(object), err)
+						klog.Warningf("Error during unmarshalling %s, skipping: %v", string(object), err)
 					}
 					// TODO : check this is in the list of packages
 					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
@@ -482,7 +482,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 				}
 				if err != nil {
 					//skipping
-					log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
 				} else {
 					filteredBundle := make(map[string]interface{})
 					v, ok := value.(map[string]interface{})
@@ -496,7 +496,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 							valueBytes, err := goyaml.Marshal(filteredBundle)
 							if err != nil {
 								//skipping
-								log.Printf("WARNING: error during unmarshalling %s: %v", path, err)
+								klog.Warningf("Error during unmarshalling %s: %v", path, err)
 							} else {
 								res = append(res, valueBytes)
 
@@ -512,7 +512,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 					err = yaml.Unmarshal(object, &bundle)
 					if err != nil {
 						//skipping
-						log.Printf("WARNING: error during unmarshalling %s: %v", string(object), err)
+						klog.Warningf("Error during unmarshalling %s: %v", string(object), err)
 					}
 					// TODO : check this is in the list of packages
 					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
@@ -645,7 +645,7 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 
 			default:
 				// just ignore errors as we are only interested in the FB configs layer
-				log.Printf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
+				klog.Warningf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
 			}
 		}
 	}
