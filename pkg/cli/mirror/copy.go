@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,17 +34,17 @@ import (
 type style string
 
 const (
-	blobsPath      string = "/blobs/sha256/"
-	tempPath       string = "tmp/"
-	indexJSON      string = "/index.json"
-	dockerProtocol string = "docker://"
-	ociProtocol    string = "oci:"
-	configPath     string = "configs/"
-	catalogJSON    string = "/catalog.json"
-	relatedImages  string = "relatedImages"
-	configsLabel   string = "operators.operatorframework.io.index.configs.v1"
-	ociStyle       style  = "oci"
-	originStyle    style  = "origin"
+	blobsPath           string = "/blobs/sha256/"
+	indexJSON           string = "/index.json"
+	dockerProtocol      string = "docker://"
+	ociProtocol         string = "oci:"
+	configPath          string = "configs/"
+	catalogJSON         string = "/catalog.json"
+	relatedImages       string = "relatedImages"
+	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
+	ociStyle            style  = "oci"
+	originStyle         style  = "origin"
+	artifactsFolderName string = "olm_artifacts"
 )
 
 // RemoteRegFuncs contains the functions to be used for working with remote registries
@@ -77,7 +78,14 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 // •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 // •a•local directory↵
 func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
+
 	mapping := image.TypedImageMapping{}
+
+	// artifactsPath is a folder within the destination folder used for copying.
+	// It is used to untar the catalog contents, in order to process it and prepare copy.
+	// For each operator, a folder with the name of the operator will be created under artifactsPath (ctlcConfigsDir)
+	artifactsPath := filepath.Join(o.OutputDir, artifactsFolderName)
+
 	for _, operator := range isc.Mirror.Operators {
 
 		klog.Infof("downloading the catalog image %s\n", operator.Catalog)
@@ -89,7 +97,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 		}
 
 		// find the layer with the FB config
-		catalogContentsDir := filepath.Join(tempPath, repo)
+		catalogContentsDir := filepath.Join(artifactsPath, repo)
 		klog.Infof("Finding file based config for %s (in catalog layers)\n", operator.Catalog)
 		ctlgConfigsDir, err := o.findFBCConfig(localOperatorDir, catalogContentsDir)
 		if err != nil {
@@ -99,7 +107,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 		klog.Infof("Filtering on selected packages for %s \n", operator.Catalog)
 		files, err := ioutil.ReadDir(ctlgConfigsDir)
 		if err != nil {
-			klog.Fatalf("unable to read catalog contents %v", err)
+			log.Fatalf("unable to read catalog contents %v", err)
 			return err
 		}
 		pkgList := []v1alpha2.IncludePackage{}
@@ -170,19 +178,32 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 // a remote registry in oci format
 func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool, insecureSigPolicy bool, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
+
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
+
+		// Mirroring workflow assumes a Copy workflow has been executed before.
+		// In this case, the copy workflow has untarred the contents of the catalog to
+		// an artifacts subfolder under the destination directory previously set for the copy.
+		// Example:
+		// Copy workflow used oci://mydir as the destination folder to copy catalog mycatalog.
+		// The OCI image for mycatalog will be in mydir/mycatalog.
+		// The untarred contents of mycatalog will be in mydir/olm_artifacts/operator1..n
+		// Here we reconstruct the artifacts subfolder for each operator for the operator oci://mydir/mycatalog
+		// artifactsPath represents in this example mydir/olm_artifacts
+		artifactsPath := filepath.Join(filepath.Dir(trimProtocol(operator.Catalog)), artifactsFolderName)
+
 		klog.Infof("Processing contents of local catalog %s\n", operator.Catalog)
 
 		configsLabel, err := o.getCatalogConfigPath(trimProtocol(operator.Catalog))
 		if err != nil {
-			klog.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
+			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
 			return err
 		}
-		catalogContentsDir := filepath.Join(tempPath, repo, configsLabel)
+		catalogContentsDir := filepath.Join(artifactsPath, repo, configsLabel)
 		files, err := ioutil.ReadDir(catalogContentsDir)
 		if err != nil {
-			klog.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
+			log.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
 			return err
 		}
 		pkgList := []v1alpha2.IncludePackage{}

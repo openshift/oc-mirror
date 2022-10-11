@@ -246,7 +246,7 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			_, err := c.options.findFBCConfig(c.options.OutputDir, "tmp")
+			_, err := c.options.findFBCConfig(c.options.OutputDir, filepath.Join(c.options.OutputDir, artifactsFolderName))
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
