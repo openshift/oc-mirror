@@ -176,7 +176,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, srcSkipTLS, dstSkipTLS bool, insecureSigPolicy bool, remoteRegFuncs RemoteRegFuncs) error {
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
@@ -286,13 +286,13 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = pushImage(operator.Catalog, to, dstSkipTLS, insecureSigPolicy, remoteRegFuncs)
+		err = pushImage(operator.Catalog, to, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
 	}
 
-	err := remoteRegFuncs.mirrorMappings(*isc, mapping, dstSkipTLS)
+	err := remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
 	}

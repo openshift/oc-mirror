@@ -583,8 +583,9 @@ func TestBulkImageMirror(t *testing.T) {
 						ErrOut: os.Stderr,
 					},
 				},
-				SourceSkipTLS: true,
-				DestSkipTLS:   true,
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				OCIInsecureSignaturePolicy: true,
 			},
 			funcs:              createMockFunctions(),
 			err:                "",
@@ -597,7 +598,7 @@ func TestBulkImageMirror(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.options.SourceSkipTLS, c.options.DestSkipTLS, true, c.funcs)
+			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.funcs)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
