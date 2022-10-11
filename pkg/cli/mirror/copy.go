@@ -448,27 +448,26 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 				if err != nil {
 					//skipping
 					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-				} else {
-					filteredBundle := make(map[interface{}]interface{})
-					v, ok := value.(map[interface{}]interface{})
-					if ok {
-						if v["schema"] == "olm.bundle" {
-							for k, v := range v {
-								if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
-									filteredBundle[k] = v
-								}
-							}
-							valueBytes, err := goyaml.Marshal(filteredBundle)
-							if err != nil {
-								//skipping
-								klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-							} else {
-								res = append(res, valueBytes)
-
+					continue
+				}
+				filteredBundle := make(map[interface{}]interface{})
+				v, ok := value.(map[interface{}]interface{})
+				if ok {
+					if v["schema"] == "olm.bundle" {
+						for k, v := range v {
+							if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
+								filteredBundle[k] = v
 							}
 						}
-					}
+						valueBytes, err := goyaml.Marshal(filteredBundle)
+						if err != nil {
+							//skipping
+							klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
+						} else {
+							res = append(res, valueBytes)
 
+						}
+					}
 				}
 			}
 			for _, object := range res {
@@ -478,6 +477,7 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 					if err != nil {
 						//skipping
 						klog.Warningf("Error during unmarshalling %s, skipping: %v", string(object), err)
+						continue
 					}
 					// TODO : check this is in the list of packages
 					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
@@ -504,27 +504,25 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 				if err != nil {
 					//skipping
 					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-				} else {
-					filteredBundle := make(map[string]interface{})
-					v, ok := value.(map[string]interface{})
-					if ok {
-						if v["schema"] == "olm.bundle" {
-							for k, v := range v {
-								if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
-									filteredBundle[k] = v
-								}
-							}
-							valueBytes, err := goyaml.Marshal(filteredBundle)
-							if err != nil {
-								//skipping
-								klog.Warningf("Error during unmarshalling %s: %v", path, err)
-							} else {
-								res = append(res, valueBytes)
-
+					continue
+				}
+				filteredBundle := make(map[string]interface{})
+				v, ok := value.(map[string]interface{})
+				if ok {
+					if v["schema"] == "olm.bundle" {
+						for k, v := range v {
+							if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
+								filteredBundle[k] = v
 							}
 						}
+						valueBytes, err := goyaml.Marshal(filteredBundle)
+						if err != nil {
+							//skipping
+							klog.Warningf("Error during unmarshalling %s: %v", path, err)
+							continue
+						}
+						res = append(res, valueBytes)
 					}
-
 				}
 			}
 			for _, object := range res {
@@ -534,8 +532,8 @@ func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcf
 					if err != nil {
 						//skipping
 						klog.Warningf("Error during unmarshalling %s: %v", string(object), err)
+						continue
 					}
-					// TODO : check this is in the list of packages
 					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
 					if err != nil {
 						return fmt.Errorf("unable to retrieve relatedImages for %s: %v"+bundle.Name, err)
