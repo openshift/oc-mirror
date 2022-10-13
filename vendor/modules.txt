@@ -457,9 +457,6 @@ github.com/go-openapi/jsonreference
 # github.com/go-openapi/swag v0.19.14
 ## explicit; go 1.11
 github.com/go-openapi/swag
-# github.com/go-yaml/yaml v2.1.0+incompatible
-## explicit
-github.com/go-yaml/yaml
 # github.com/gobwas/glob v0.2.3
 ## explicit
 github.com/gobwas/glob

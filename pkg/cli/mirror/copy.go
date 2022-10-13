@@ -2,31 +2,31 @@ package mirror
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
-	goyaml "github.com/go-yaml/yaml"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -121,8 +121,6 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 				})
 			}
 		}
-		klog.Infof("List of packages selected for copy :\n %v \n", pkgList)
-
 		for _, pkg := range pkgList {
 
 			klog.Infof("Collecting all related images for %s \n", pkg.Name)
@@ -146,9 +144,18 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 						TypedImageReference: srcTIR,
 						Category:            v1alpha2.TypeOperatorRelatedImage,
 					} //pkg.Name + "/" + folder
-					dstTIR, err := image.ParseReference("file://" + pkg.Name + "/" + name)
+					dstPath := "file://" + pkg.Name + "/" + name
+					if srcTIR.Ref.ID != "" {
+						dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
+					} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
+						dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
+					}
+					dstTIR, err := image.ParseReference(dstPath)
 					if err != nil {
 						return err
+					}
+					if srcTI.Ref.Tag != "" {
+						dstTIR.Ref.Tag = srcTI.Ref.Tag
 					}
 					dstTI := image.TypedImage{
 						TypedImageReference: dstTIR,
@@ -217,7 +224,6 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				})
 			}
 		}
-		klog.Infof("List of packages selected for copy :\n %v \n", pkgList)
 
 		for _, pkg := range pkgList {
 			klog.Infof("Collecting all related images for %s \n", pkg.Name)
@@ -237,6 +243,11 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				_, subns, imgName, tag, sha := parseImageName(i.Image)
 
 				from = pkg.Name + "/" + folder
+				if sha != "" {
+					from = from + "/" + strings.TrimPrefix(sha, "sha256:")
+				} else if sha == "" && tag != "" {
+					from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
+				}
 				if tag != "" {
 					to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + ":" + tag
 				} else {
@@ -248,6 +259,9 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 				}
 				if sha != "" && srcTIR.Ref.ID == "" {
 					srcTIR.Ref.ID = "sha256:" + sha
+				}
+				if tag != "" && srcTIR.Ref.Tag == "" {
+					srcTIR.Ref.Tag = tag
 				}
 				srcTI := image.TypedImage{
 					TypedImageReference: srcTIR,
@@ -391,161 +405,99 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 	}
 	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
 }
-func getRelatedImagesFromBundle(bundle declcfg.Bundle, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
-	images := []declcfg.RelatedImage{}
-	uniqueImages := []declcfg.RelatedImage{}
 
-	for _, v := range bundle.RelatedImages {
+func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
+	allImages := []declcfg.RelatedImage{}
+	// load the declarative config from the provided directory (if possible)
+	cfg, err := declcfg.LoadFS(os.DirFS(directory))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, bundle := range cfg.Bundles {
+		isSelected, err := isPackageSelected(bundle, cfg.Channels, packages)
+		if err != nil {
+			return nil, err
+		}
+		if isSelected {
+			allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
+			allImages = append(allImages, bundle.RelatedImages...)
+		}
+	}
+	//make sure there are no duplicates in the list with same image:
+	finalList := []declcfg.RelatedImage{}
+	for _, i := range allImages {
 		found := false
-		for _, w := range uniqueImages {
-			if w.Image == v.Image {
+		for _, j := range finalList {
+			if i.Image == j.Image {
 				found = true
 				break
 			}
 		}
 		if !found {
-			uniqueImages = append(uniqueImages, v)
+			finalList = append(finalList, i)
 		}
 	}
-
-	if len(packages) > 0 {
-		for _, pkg := range packages {
-			if bundle.Package == pkg.Name {
-				images = append(images, uniqueImages...)
-			}
-		}
-	} else {
-		images = append(images, uniqueImages...)
-	}
-	return images, nil
+	return finalList, nil
 }
 
-// getRelatedImages this reads each catalog or config.json
-// file in a given operator in the FBC
-// and returns the list of relatedImages found in the CSV
-func getRelatedImages(root string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
-	images := []declcfg.RelatedImage{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		fmt.Println("DEBUG : root=" + root + " path=" + path)
-		fmt.Println("DEBUG : " + d.Name())
-		if d.IsDir() {
-			return nil
-		} else if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
-			// read the yaml file
-			icd, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			dec := goyaml.NewDecoder(bytes.NewReader(icd))
-			var res [][]byte
-			for {
-				var value interface{}
-				err := dec.Decode(&value)
-				if err == io.EOF {
-					break
+func isPackageSelected(bundle declcfg.Bundle, channels []declcfg.Channel, packages []v1alpha2.IncludePackage) (bool, error) {
+	isSelected := false
+	for _, pkg := range packages {
+		if pkg.Name == bundle.Package {
+			var min, max semver.Version
+			if pkg.MinVersion != "" || pkg.MaxVersion != "" {
+				version_string, err := bundleVersion(bundle)
+				if err != nil {
+					return isSelected, err
+				}
+				pkgVer, err := semver.Make(version_string)
+				if err != nil {
+					return isSelected, err
 				}
 				if err != nil {
-					//skipping
-					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-					continue
+					return isSelected, err
 				}
-				filteredBundle := make(map[interface{}]interface{})
-				v, ok := value.(map[interface{}]interface{})
-				if ok {
-					if v["schema"] == "olm.bundle" {
-						for k, v := range v {
-							if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
-								filteredBundle[k] = v
-							}
-						}
-						valueBytes, err := goyaml.Marshal(filteredBundle)
-						if err != nil {
-							//skipping
-							klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-						} else {
-							res = append(res, valueBytes)
+				if pkg.MinVersion != "" {
+					min, err = semver.Make(pkg.MinVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
+				if pkg.MaxVersion != "" {
+					max, err = semver.Make(pkg.MaxVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
 
-						}
-					}
+				if (pkg.MinVersion != "" && pkg.MaxVersion != "") && pkgVer.Compare(min) >= 0 && pkgVer.Compare(max) <= 0 {
+					isSelected = true
+				} else if pkg.MinVersion != "" && pkg.MaxVersion == "" && pkgVer.Compare(min) >= 0 {
+					isSelected = true
+				} else if pkg.MaxVersion != "" && pkg.MinVersion == "" && pkgVer.Compare(max) <= 0 {
+					isSelected = true
 				}
-			}
-			for _, object := range res {
-				var bundle declcfg.Bundle
-				if strings.Contains(string(object), "olm.bundle") {
-					err = yaml.Unmarshal(object, &bundle)
-					if err != nil {
-						//skipping
-						klog.Warningf("Error during unmarshalling %s, skipping: %v", string(object), err)
-						continue
-					}
-					// TODO : check this is in the list of packages
-					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
-					if err != nil {
-						return fmt.Errorf("unable to retrieve relatedImages for %s: %v"+bundle.Name, err)
-					}
-					images = append(images, tmpArray...)
-				}
-			}
-		} else if strings.HasSuffix(path, ".json") {
-			// read the json file
-			jsonByteArray, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			dec := json.NewDecoder(bytes.NewReader(jsonByteArray))
-			var res [][]byte
-			for {
-				var value interface{}
-				err := dec.Decode(&value)
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					//skipping
-					klog.Warningf("Error during unmarshalling %s, skipping: %v", path, err)
-					continue
-				}
-				filteredBundle := make(map[string]interface{})
-				v, ok := value.(map[string]interface{})
-				if ok {
-					if v["schema"] == "olm.bundle" {
-						for k, v := range v {
-							if k == "schema" || k == "name" || k == "package" || k == "image" || k == "relatedImages" {
-								filteredBundle[k] = v
-							}
-						}
-						valueBytes, err := goyaml.Marshal(filteredBundle)
-						if err != nil {
-							//skipping
-							klog.Warningf("Error during unmarshalling %s: %v", path, err)
-							continue
-						}
-						res = append(res, valueBytes)
-					}
-				}
-			}
-			for _, object := range res {
-				var bundle declcfg.Bundle
-				if strings.Contains(string(object), "olm.bundle") {
-					err = yaml.Unmarshal(object, &bundle)
-					if err != nil {
-						//skipping
-						klog.Warningf("Error during unmarshalling %s: %v", string(object), err)
-						continue
-					}
-					tmpArray, err := getRelatedImagesFromBundle(bundle, packages)
-					if err != nil {
-						return fmt.Errorf("unable to retrieve relatedImages for %s: %v"+bundle.Name, err)
-					}
-					images = append(images, tmpArray...)
-				}
+
+			} else { // no filtering required
+				isSelected = true
 			}
 		}
+	}
+	return isSelected, nil
+}
 
-		return nil
-	})
-	return images, err
+func bundleVersion(bundle declcfg.Bundle) (string, error) {
+	for _, prop := range bundle.Properties {
+		if prop.Type == property.TypePackage {
+			var p property.Package
+			if err := json.Unmarshal(prop.Value, &p); err != nil {
+				return "", err
+			}
+			return p.Version, nil
+		}
+	}
+	return "", fmt.Errorf("unable to find bundle version")
 }
 
 // getManifest reads the manifest of the OCI FBC image
@@ -602,6 +554,7 @@ func parseImageName(imageName string) (string, string, string, string, string) {
 			sha = img[1]
 		} else {
 			repo = img[0]
+			tag = img[1]
 		}
 	} else {
 		repo = img[0]
