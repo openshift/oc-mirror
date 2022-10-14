@@ -16,6 +16,8 @@ import (
 
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/otiai10/copy"
+
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -35,8 +37,6 @@ type style string
 
 const (
 	blobsPath           string = "/blobs/sha256/"
-	indexJSON           string = "/index.json"
-	dockerProtocol      string = "docker://"
 	ociProtocol         string = "oci:"
 	configPath          string = "configs/"
 	catalogJSON         string = "/catalog.json"
@@ -91,9 +91,22 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 		klog.Infof("downloading the catalog image %s\n", operator.Catalog)
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
 		localOperatorDir := filepath.Join(o.OutputDir, repo)
-		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle, remoteRegFuncs)
-		if err != nil {
-			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
+		if err := os.RemoveAll(localOperatorDir); err != nil {
+			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
+		}
+		//Check if this is an OCI FBC catalog
+		if strings.HasPrefix(operator.Catalog, ociProtocol) {
+			// OCI catalog is already on disk. using it
+			catalogPath := trimProtocol(operator.Catalog)
+			err := copy.Copy(catalogPath, localOperatorDir)
+			if err != nil {
+				return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
+			}
+		} else {
+			err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle, remoteRegFuncs)
+			if err != nil {
+				return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
+			}
 		}
 
 		// find the layer with the FB config
@@ -132,9 +145,14 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 					return err
 				}
 				for _, i := range relatedImages {
+					if i.Image == "" {
+						klog.Warningf("invalid related image %s: reference empty", i.Name)
+						continue
+					}
 					name := i.Name
 					if name == "" {
-						name = "bundle"
+						//Creating a unique name for this image, that doesnt have a name
+						name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
 					}
 					srcTIR, err := image.ParseReference(i.Image)
 					if err != nil {
@@ -143,11 +161,14 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 					srcTI := image.TypedImage{
 						TypedImageReference: srcTIR,
 						Category:            v1alpha2.TypeOperatorRelatedImage,
-					} //pkg.Name + "/" + folder
+					}
 					dstPath := "file://" + pkg.Name + "/" + name
 					if srcTIR.Ref.ID != "" {
 						dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
 					} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
+						//recreating a fake digest to copy image into
+						//this is because dclcfg.LoadFS will create a symlink to this folder
+						//from the tag
 						dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
 					}
 					dstTIR, err := image.ParseReference(dstPath)
@@ -155,6 +176,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 						return err
 					}
 					if srcTI.Ref.Tag != "" {
+						//put the tag back because it's needed to follow symlinks by LoadFS
 						dstTIR.Ref.Tag = srcTI.Ref.Tag
 					}
 					dstTI := image.TypedImage{
@@ -235,9 +257,14 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			}
 
 			for _, i := range relatedImages {
+				if i.Image == "" {
+					klog.Warningf("invalid related image %s: reference empty", i.Name)
+					continue
+				}
 				folder := i.Name
 				if folder == "" {
-					folder = "bundle"
+					//Regenerating the unique name for this image, that doesnt have a name
+					folder = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
 				}
 				from, to := "", ""
 				_, subns, imgName, tag, sha := parseImageName(i.Image)
