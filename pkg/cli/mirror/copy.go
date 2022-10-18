@@ -118,76 +118,54 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 		}
 
 		klog.Infof("Filtering on selected packages for %s \n", operator.Catalog)
-		files, err := ioutil.ReadDir(ctlgConfigsDir)
+
+		relatedImages, err := getRelatedImages(ctlgConfigsDir, operator.Packages)
 		if err != nil {
-			log.Fatalf("unable to read catalog contents %v", err)
 			return err
 		}
-		pkgList := []v1alpha2.IncludePackage{}
-		if len(operator.Packages) > 0 {
-			pkgList = operator.Packages
-		} else {
-			// take all packages found in catalog
-			for _, file := range files {
-				pkgList = append(pkgList, v1alpha2.IncludePackage{
-					Name: file.Name(),
-				})
-			}
-		}
-		for _, pkg := range pkgList {
 
-			klog.Infof("Collecting all related images for %s \n", pkg.Name)
-			for _, file := range files {
-				klog.V(2).Infof("File :%s\n", file.Name())
-				// read the config.json to get releated images
-				relatedImages, err := getRelatedImages(ctlgConfigsDir, []v1alpha2.IncludePackage{pkg})
-				if err != nil {
-					return err
-				}
-				for _, i := range relatedImages {
-					if i.Image == "" {
-						klog.Warningf("invalid related image %s: reference empty", i.Name)
-						continue
-					}
-					name := i.Name
-					if name == "" {
-						//Creating a unique name for this image, that doesnt have a name
-						name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-					}
-					srcTIR, err := image.ParseReference(i.Image)
-					if err != nil {
-						return err
-					}
-					srcTI := image.TypedImage{
-						TypedImageReference: srcTIR,
-						Category:            v1alpha2.TypeOperatorRelatedImage,
-					}
-					dstPath := "file://" + pkg.Name + "/" + name
-					if srcTIR.Ref.ID != "" {
-						dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
-					} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
-						//recreating a fake digest to copy image into
-						//this is because dclcfg.LoadFS will create a symlink to this folder
-						//from the tag
-						dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
-					}
-					dstTIR, err := image.ParseReference(dstPath)
-					if err != nil {
-						return err
-					}
-					if srcTI.Ref.Tag != "" {
-						//put the tag back because it's needed to follow symlinks by LoadFS
-						dstTIR.Ref.Tag = srcTI.Ref.Tag
-					}
-					dstTI := image.TypedImage{
-						TypedImageReference: dstTIR,
-						Category:            v1alpha2.TypeOperatorRelatedImage,
-					}
-					mapping[srcTI] = dstTI
-				}
-				break
+		for _, i := range relatedImages {
+			if i.Image == "" {
+				klog.Warningf("invalid related image %s: reference empty", i.Name)
+				continue
 			}
+			name := i.Name
+			if name == "" {
+				//Creating a unique name for this image, that doesnt have a name
+				name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
+			}
+			srcTIR, err := image.ParseReference(i.Image)
+			if err != nil {
+				return err
+			}
+			srcTI := image.TypedImage{
+				TypedImageReference: srcTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
+			}
+			dstPath := "file://" + name
+			if srcTIR.Ref.ID != "" {
+				dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
+			} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
+				//recreating a fake digest to copy image into
+				//this is because dclcfg.LoadFS will create a symlink to this folder
+				//from the tag
+				dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
+			}
+			dstTIR, err := image.ParseReference(strings.ToLower(dstPath))
+			if err != nil {
+				return err
+			}
+			if srcTI.Ref.Tag != "" {
+				//put the tag back because it's needed to follow symlinks by LoadFS
+				dstTIR.Ref.Tag = srcTI.Ref.Tag
+			}
+			dstTI := image.TypedImage{
+				TypedImageReference: dstTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
+			}
+			mapping[srcTI] = dstTI
 		}
+		break
 	}
 
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
@@ -230,92 +208,72 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			return err
 		}
 		catalogContentsDir := filepath.Join(artifactsPath, repo, configsLabel)
-		files, err := ioutil.ReadDir(catalogContentsDir)
+
+		relatedImages, err := getRelatedImages(catalogContentsDir, operator.Packages)
 		if err != nil {
-			log.Fatalf("unable to read catalog contents for %s: %v", operator.Catalog, err)
+			klog.Fatal(err)
 			return err
 		}
-		pkgList := []v1alpha2.IncludePackage{}
-		if len(operator.Packages) > 0 {
-			pkgList = operator.Packages
-		} else {
-			// take all packages found in catalog
-			for _, file := range files {
-				pkgList = append(pkgList, v1alpha2.IncludePackage{
-					Name: file.Name(),
-				})
+
+		for _, i := range relatedImages {
+			if i.Image == "" {
+				klog.Warningf("invalid related image %s: reference empty", i.Name)
+				continue
 			}
-		}
+			folder := i.Name
+			if folder == "" {
+				//Regenerating the unique name for this image, that doesnt have a name
+				folder = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
+			}
+			from, to := "", ""
+			_, subns, imgName, tag, sha := parseImageName(i.Image)
 
-		for _, pkg := range pkgList {
-			klog.Infof("Collecting all related images for %s \n", pkg.Name)
-
-			relatedImages, err := getRelatedImages(catalogContentsDir, []v1alpha2.IncludePackage{pkg})
+			from = folder
+			if sha != "" {
+				from = from + "/" + strings.TrimPrefix(sha, "sha256:")
+			} else if sha == "" && tag != "" {
+				from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
+			}
+			if tag != "" {
+				to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + ":" + tag
+			} else {
+				to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + "@sha256:" + sha
+			}
+			srcTIR, err := image.ParseReference("file://" + strings.ToLower(from))
 			if err != nil {
-				klog.Fatal(err)
 				return err
 			}
-
-			for _, i := range relatedImages {
-				if i.Image == "" {
-					klog.Warningf("invalid related image %s: reference empty", i.Name)
-					continue
-				}
-				folder := i.Name
-				if folder == "" {
-					//Regenerating the unique name for this image, that doesnt have a name
-					folder = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-				}
-				from, to := "", ""
-				_, subns, imgName, tag, sha := parseImageName(i.Image)
-
-				from = pkg.Name + "/" + folder
-				if sha != "" {
-					from = from + "/" + strings.TrimPrefix(sha, "sha256:")
-				} else if sha == "" && tag != "" {
-					from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
-				}
-				if tag != "" {
-					to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + ":" + tag
-				} else {
-					to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + "@sha256:" + sha
-				}
-				srcTIR, err := image.ParseReference("file://" + from)
-				if err != nil {
-					return err
-				}
-				if sha != "" && srcTIR.Ref.ID == "" {
-					srcTIR.Ref.ID = "sha256:" + sha
-				}
-				if tag != "" && srcTIR.Ref.Tag == "" {
-					srcTIR.Ref.Tag = tag
-				}
-				srcTI := image.TypedImage{
-					TypedImageReference: srcTIR,
-					Category:            v1alpha2.TypeOperatorRelatedImage,
-				}
-
-				dstTIR, err := image.ParseReference(to)
-				if err != nil {
-					return err
-				}
-				if sha != "" && dstTIR.Ref.ID == "" {
-					dstTIR.Ref.ID = "sha256:" + sha
-				}
-				//If there is no tag mirrorMapping is unable to push the image
-				//It would push manifests and layers, but image would not appear
-				//in registry
-				if sha != "" && dstTIR.Ref.Tag == "" {
-					dstTIR.Ref.Tag = sha[0:6]
-				}
-				dstTI := image.TypedImage{
-					TypedImageReference: dstTIR,
-					Category:            v1alpha2.TypeOperatorRelatedImage,
-				}
-				mapping[srcTI] = dstTI
+			if sha != "" && srcTIR.Ref.ID == "" {
+				srcTIR.Ref.ID = "sha256:" + sha
+			}
+			if tag != "" && srcTIR.Ref.Tag == "" {
+				srcTIR.Ref.Tag = tag
+			}
+			srcTI := image.TypedImage{
+				TypedImageReference: srcTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
 			}
 
+			dstTIR, err := image.ParseReference(to)
+			if err != nil {
+				return err
+			}
+			if sha != "" && dstTIR.Ref.ID == "" {
+				dstTIR.Ref.ID = "sha256:" + sha
+			}
+			//If there is no tag mirrorMapping is unable to push the image
+			//It would push manifests and layers, but image would not appear
+			//in registry
+			if sha != "" && dstTIR.Ref.Tag == "" {
+				dstTIR.Ref.Tag = sha[0:6]
+			}
+			dstTI := image.TypedImage{
+				TypedImageReference: dstTIR,
+				Category:            v1alpha2.TypeOperatorRelatedImage,
+			}
+			mapping[srcTI] = dstTI
 		}
+
 		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
 		klog.Infof("Pushing catalog %s to %s \n", operator.Catalog, to)
 
@@ -332,7 +290,6 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			return err
 		}
 	}
-
 	err := remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
@@ -433,12 +390,25 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
 }
 
+// getRelatedImages reads a directory containing an FBC catalog () unpacked contents
+// and returns the list of relatedImages found in the CSVs of bundles
+// filtering by the list of packages provided in imageSetConfig for the catalog
 func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
 	allImages := []declcfg.RelatedImage{}
 	// load the declarative config from the provided directory (if possible)
 	cfg, err := declcfg.LoadFS(os.DirFS(directory))
 	if err != nil {
 		return nil, err
+	}
+
+	// if packages is empty, this means that no filtering was requested on the catalog
+	// in ImageSetConfig, and that we can take all packages
+	if len(packages) == 0 {
+		for _, bundle := range cfg.Bundles {
+			packages = append(packages, v1alpha2.IncludePackage{
+				Name: bundle.Package,
+			})
+		}
 	}
 
 	for _, bundle := range cfg.Bundles {
