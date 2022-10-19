@@ -277,6 +277,10 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	if o.UseOCIFeature {
 		return o.mirrorOCIImages(cleanup)
+	} else {
+		if len(o.OCIRegistriesConfig) > 0 {
+			return fmt.Errorf("this flag can only be used with the --use-oci-feature flag")
+		}
 	}
 	return o.mirrorImages(cmd.Context(), cleanup)
 }
@@ -560,6 +564,7 @@ func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
 		load:           crane.Load,
 		mirrorMappings: o.mirrorMappings,
 	}
+
 	if o.OCIFeatureAction == "" {
 		return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
 	}

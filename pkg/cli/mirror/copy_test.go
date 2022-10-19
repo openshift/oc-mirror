@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	testdata        = "testdata/artifacts/rhop-ctlg-oci"
-	rotten_manifest = "testdata/artifacts/rhop-rotten-manifest"
-	rotten_layer    = "testdata/artifacts/rhop-rotten-layer"
-	rotten_config   = "testdata/artifacts/rhop-rotten-cfg"
-	other_layer     = "testdata/artifacts/rhop-not-catalog"
+	testdata         = "testdata/artifacts/rhop-ctlg-oci"
+	rotten_manifest  = "testdata/artifacts/rhop-rotten-manifest"
+	rotten_layer     = "testdata/artifacts/rhop-rotten-layer"
+	rotten_config    = "testdata/artifacts/rhop-rotten-cfg"
+	other_layer      = "testdata/artifacts/rhop-not-catalog"
+	registriesConfig = "testdata/configs/registries.conf"
 )
 
 func TestParse(t *testing.T) {
@@ -499,6 +500,7 @@ func TestBulkImageCopy(t *testing.T) {
 func TestBulkImageMirror(t *testing.T) {
 	type spec struct {
 		desc               string
+		sequence           int
 		isc                *v1alpha2.ImageSetConfiguration
 		expectedSubFolders []string
 		options            *MirrorOptions
@@ -509,7 +511,8 @@ func TestBulkImageMirror(t *testing.T) {
 
 	cases := []spec{
 		{
-			desc: "Nominal case passes",
+			desc:     "Nominal case passes",
+			sequence: 1,
 			isc: &v1alpha2.ImageSetConfiguration{
 				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -556,6 +559,56 @@ func TestBulkImageMirror(t *testing.T) {
 			err:                "",
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
+		{
+			desc:     "Using registries.conf override case passes",
+			sequence: 2,
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog: "oci://" + testdata,
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			options: &MirrorOptions{
+				From:                testdata,
+				ToMirror:            "localhost.localdomain:5000",
+				UseOCIFeature:       true,
+				OCIFeatureAction:    OCIFeatureMirrorAction,
+				OCIRegistriesConfig: registriesConfig,
+				OutputDir:           "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS: true,
+				DestSkipTLS:   true,
+			},
+			funcs:              createMockFunctions(),
+			err:                "",
+			expectedSubFolders: []string{"aws-load-balancer-operator"},
+		},
 	}
 
 	for _, c := range cases {
@@ -568,7 +621,10 @@ func TestBulkImageMirror(t *testing.T) {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-
+				// check the test using registries.conf for an updated location
+				if c.sequence == 2 {
+					require.Equal(t, c.options.ToMirror, "preprodlocation/test")
+				}
 			}
 		})
 	}

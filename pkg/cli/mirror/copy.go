@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
@@ -55,7 +56,36 @@ type RemoteRegFuncs struct {
 	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
 }
 
-// getISConfig - simple function to read and unmarshal the imagesetconfig
+// RegistriesConfig info from config file
+type RegistriesConf struct {
+	Registry []struct {
+		Location           string `toml:"location"`
+		Insecure           bool   `toml:"insecure"`
+		Blocked            bool   `toml:"blocked"`
+		MirrorByDigestOnly bool   `toml:"mirror-by-digest-only"`
+		Prefix             string `toml:"prefix"`
+		Mirror             []struct {
+			Location string `toml:"location"`
+			Insecure bool   `toml:"insecure"`
+		} `toml:"mirror"`
+	} `toml:"registry"`
+}
+
+// ReadegistriesConfig reads and parses info from registries.conf file
+func ReadRegistriesConfig(file string) (RegistriesConf, error) {
+	_, err := os.Stat(file)
+	if err != nil {
+		return RegistriesConf{}, err
+	}
+
+	var regConfig RegistriesConf
+	if _, err := toml.DecodeFile(file, &regConfig); err != nil {
+		return RegistriesConf{}, err
+	}
+	return regConfig, nil
+}
+
+// getISConfig simple function to read and unmarshal the imagesetconfig
 // set via the command line
 func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 	var isc *v1alpha2.ImageSetConfiguration
@@ -248,7 +278,25 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			}
 
 		}
-		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
+		var to string
+		to = strings.Join([]string{"docker://" + destRepo, namespace}, "/")
+		if len(o.OCIRegistriesConfig) > 0 {
+			regConf, err := ReadRegistriesConfig(o.OCIRegistriesConfig)
+			if err != nil {
+				log.Fatalf("reading registries.conf file %v", err)
+			} else {
+				// this is very basic, it satifies the requirement for WRKLDS-468
+				// it's also pointless changing the 'to' destination if there are no relevant entries
+				if len(regConf.Registry) > 0 && destRepo == regConf.Registry[0].Location && len(regConf.Registry[0].Mirror) > 0 {
+					tmpTo := o.ToMirror
+					to = strings.Replace(to, destRepo, regConf.Registry[0].Mirror[0].Location, -1)
+					o.ToMirror = regConf.Registry[0].Mirror[0].Location
+					dstSkipTLS = regConf.Registry[0].Mirror[0].Insecure
+					log.Printf("INFO applied registries.conf mirror location from %s to %s \n", tmpTo, regConf.Registry[0].Mirror[0].Location)
+				}
+			}
+		}
+
 		log.Printf("INFO: pushing catalog %s to %s \n", operator.Catalog, to)
 
 		if operator.TargetName != "" {
@@ -271,7 +319,6 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 	}
 
 	return nil
-
 }
 
 // findFBCConfig function to find the layer from the catalog

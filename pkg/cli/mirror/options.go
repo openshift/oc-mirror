@@ -14,27 +14,28 @@ import (
 
 type MirrorOptions struct {
 	*cli.RootOptions
-	OutputDir         string
-	ConfigPath        string
-	SkipImagePin      bool
-	ManifestsOnly     bool
-	From              string
-	ToMirror          string
-	UserNamespace     string
-	DryRun            bool
-	SourceSkipTLS     bool
-	DestSkipTLS       bool
-	SourcePlainHTTP   bool
-	DestPlainHTTP     bool
-	SkipVerification  bool
-	SkipCleanup       bool
-	SkipMissing       bool
-	SkipMetadataCheck bool
-	ContinueOnError   bool
-	IgnoreHistory     bool
-	MaxPerRegistry    int
-	UseOCIFeature     bool
-	OCIFeatureAction  string
+	OutputDir           string
+	ConfigPath          string
+	SkipImagePin        bool
+	ManifestsOnly       bool
+	From                string
+	ToMirror            string
+	UserNamespace       string
+	DryRun              bool
+	SourceSkipTLS       bool
+	DestSkipTLS         bool
+	SourcePlainHTTP     bool
+	DestPlainHTTP       bool
+	SkipVerification    bool
+	SkipCleanup         bool
+	SkipMissing         bool
+	SkipMetadataCheck   bool
+	ContinueOnError     bool
+	IgnoreHistory       bool
+	MaxPerRegistry      int
+	UseOCIFeature       bool
+	OCIFeatureAction    string
+	OCIRegistriesConfig string
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
 	once             sync.Once
@@ -66,6 +67,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 6, "Number of concurrent requests allowed per registry")
 	fs.BoolVar(&o.UseOCIFeature, "use-oci-feature", o.UseOCIFeature, "Use the new oci feature for oc mirror (oci formatted copy")
 	fs.StringVar(&o.OCIFeatureAction, "oci-feature-action", o.OCIFeatureAction, "One of copy or mirror")
+	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --use-oci-feature flag)")
 }
 
 func (o *MirrorOptions) init() {
