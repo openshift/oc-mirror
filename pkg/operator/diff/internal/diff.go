@@ -53,6 +53,7 @@ func (g *DiffGenerator) init() {
 //     depending on the mode.
 //   - If g.IncludeAdditionally is true, the diff will contain included objects,
 //     plus those added by the mode.
+//
 // - If in heads-only mode (oldModel == nil), then the heads of channels are added to the output.
 // - If in latest mode, a diff between old and new Models is added to the output.
 // - Dependencies are added in all modes if g.SkipDependencies is false.

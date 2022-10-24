@@ -84,3 +84,28 @@ function workflow_helm() {
   popd
 }
 
+function workflow_oci_copy() {
+  parse_args "$@" 
+  local config="${1:?config required}"
+  local catalog_tag="${2:?catalog_tag required}"
+  local oci_fbc="${3:?oci_fbc required}"
+  # Prepare test data
+  setup_operator_testdata "${DATA_TMP}" "${MIRROR_OCI_DIR}" "${config}" false 
+  
+  # setup_reg already called in e2e-simple.sh
+  # Copy the test catalog to a local connected registry
+  prep_registry "${catalog_tag}" #catalog image quay.io/redhatgov/oc-mirror-dev:<tag>
+  # call oc-mirror
+  run_cmd --config "${MIRROR_OCI_DIR}/${config}" $CREATE_FLAGS "${oci_fbc}"
+}
+
+function workflow_oci_mirror() {
+  parse_args "$@" 
+  local config="${1:?config required}"
+  local remote_image="${2:?remote_image required}"
+  echo $config $remote_image 
+  prepare_mirror_testdata "${DATA_TMP}" "${MIRROR_OCI_DIR}" "${config}" false 
+
+  # call oc-mirror
+  run_cmd --config "${MIRROR_OCI_DIR}/${config}" $CREATE_FLAGS "${remote_image}"
+}

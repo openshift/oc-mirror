@@ -14,28 +14,29 @@ import (
 
 type MirrorOptions struct {
 	*cli.RootOptions
-	OutputDir           string
-	ConfigPath          string
-	SkipImagePin        bool
-	ManifestsOnly       bool
-	From                string
-	ToMirror            string
-	UserNamespace       string
-	DryRun              bool
-	SourceSkipTLS       bool
-	DestSkipTLS         bool
-	SourcePlainHTTP     bool
-	DestPlainHTTP       bool
-	SkipVerification    bool
-	SkipCleanup         bool
-	SkipMissing         bool
-	SkipMetadataCheck   bool
-	ContinueOnError     bool
-	IgnoreHistory       bool
-	MaxPerRegistry      int
-	UseOCIFeature       bool
-	OCIFeatureAction    string
-	OCIRegistriesConfig string
+	OutputDir                  string
+	ConfigPath                 string
+	SkipImagePin               bool
+	ManifestsOnly              bool
+	From                       string
+	ToMirror                   string
+	UserNamespace              string
+	DryRun                     bool
+	SourceSkipTLS              bool
+	DestSkipTLS                bool
+	SourcePlainHTTP            bool
+	DestPlainHTTP              bool
+	SkipVerification           bool
+	SkipCleanup                bool
+	SkipMissing                bool
+	SkipMetadataCheck          bool
+	ContinueOnError            bool
+	IgnoreHistory              bool
+	MaxPerRegistry             int
+	UseOCIFeature              bool
+	OCIFeatureAction           string
+	OCIRegistriesConfig        string
+	OCIInsecureSignaturePolicy bool
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
 	once             sync.Once
@@ -68,6 +69,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.UseOCIFeature, "use-oci-feature", o.UseOCIFeature, "Use the new oci feature for oc mirror (oci formatted copy")
 	fs.StringVar(&o.OCIFeatureAction, "oci-feature-action", o.OCIFeatureAction, "One of copy or mirror")
 	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --use-oci-feature flag)")
+	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
 }
 
 func (o *MirrorOptions) init() {

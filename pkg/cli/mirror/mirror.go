@@ -582,7 +582,7 @@ func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
 		return nil
 	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 		log.Println("INFO: mirroring images to remote registry")
-		err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, o.SourceSkipTLS, o.DestSkipTLS, false, remoteRegFuncs)
+		err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("mirroring images %v", err)
 		}

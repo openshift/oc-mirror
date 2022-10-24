@@ -40,8 +40,10 @@ func GetTagsFromImage(image string) ([]string, error) {
 	return tags, err
 }
 
-/* ParseReference is a wrapper function of imagesource.ParseReference
-   It provides support for oci: prefixes
+/*
+ParseReference is a wrapper function of imagesource.ParseReference
+
+	It provides support for oci: prefixes
 */
 func ParseReference(ref string) (imagesource.TypedImageReference, error) {
 	if !strings.HasPrefix(ref, "oci:") {
