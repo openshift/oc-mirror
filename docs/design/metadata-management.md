@@ -29,11 +29,11 @@ When interacting with `oc-mirror` in a connected environment, the imageset confi
 
 ### Ignore History
 
-By default, `oc-mirror` will not re-download images or blob detected in the past runs of the tools. If an image does not need to be re-downloaded, the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
+By default, `oc-mirror` will not re-download images or blob detected in the past runs of the tools. If an image needs to be re-downloaded, the `--ignore-history` flag can be used to ignore the metadata in the mirror planning phase.
 
 ### Skip Metadata Check
 
-In disk to mirror workflows, the metadata sequence is checked against previously mirrored imagesets to ensure no erros occur when reconstituting images before publishing. In the event that a sequence archived is lost, the `skip-metadata-check` flag can be used. To get the workspace back into a healthy state, perform the following tasks:
+In disk-to-mirror and mirror-to-mirror workflows, the metadata sequence is checked against previously mirrored imagesets to ensure no erros occur when reconstituting images before publishing. In the event that a sequenced archive is lost, the `skip-metadata-check` flag can be used. To get the workspace back into a healthy state, perform the following tasks:
 
 - Create a new imageset with `--ignore-history` to ensure all images and blob are packed into the archive
 - Publish the imageset with `--skip-metadata-check` to allow the imageset to overwrite the sequence number
