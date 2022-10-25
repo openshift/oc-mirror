@@ -283,7 +283,7 @@ func sortManifests(manifests []string) {
 }
 
 // manifestDeleter prints information about each repo manifest being
-// deleted. Implement the ManifestDeleter interface for `oc adm prune images``.
+// deleted. Implement the ManifestDeleter interface for `oc adm prune images“.
 // TODO(jpower432): Factor out go-containerregistry in favor of the concrete types
 // defined in this imageprune package.
 type manifestDeleter struct {

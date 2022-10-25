@@ -21,6 +21,7 @@ TESTCASES[15]="max_version"
 TESTCASES[16]="skip_deps"
 TESTCASES[17]="helm_local"
 TESTCASES[18]="no_updates_exist"
+TESTCASES[19]="oci_local"
 
 # Test full catalog mode.
 function full_catalog() {
@@ -223,4 +224,20 @@ function no_updates_exist {
         exit 1
     fi
     check_sequence_number 1
+}
+
+# Test OCI local catalog
+function oci_local {
+    workflow_oci_copy imageset-config-oci-copy.yaml "test-catalog-latest" "oci://${MIRROR_OCI_DIR}" -c="--use-oci-feature --oci-feature-action=copy --source-skip-tls"
+    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--use-oci-feature --oci-feature-action=mirror --dest-skip-tls --oci-insecure-signature-policy"
+    # podman pull docker://localhost.localdomain:5001/test/redhatgov/oc-mirror-dev:test-catalog-latest --tls-verify=false
+    # baz.v1.0.0 
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f5bf1128937e7486764341e7bfdce15150f70d0e48c57de1386602c7b25ad7b4
+    # baz.v1.0.1 
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f1f6dabc6d05ae1d6e1b729d8ed80edb6b99fce8a6459c60a595945479e6f4ce
+    # baz.v1.1.0
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}:baz-bundle-v1.0.1
+    # catalog : original is in docker-v2 format, so digest changes after transformation to oci
+    #crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f74bd3f08c971fafd64c9c95fe9839f54bf776d00ac363f2c3882c0e37c946ef
+    #check_bundles cannot be used for now, tags not set in disconnected registry
 }

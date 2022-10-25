@@ -127,10 +127,12 @@ function setup_operator_testdata() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_OCI_CATALOG@'"$METADATA_OCI_CATALOG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_DIGEST@'"$CATALOG_DIGEST"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_NAME@'"$TARGET_CATALOG_NAME"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
 }
 
 # setup_helm_testdata will move required
@@ -145,4 +147,24 @@ function setup_helm_testdata() {
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   cp "${DIR}/artifacts/${CHART_PATH}" "${DATA_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+}
+
+# setup_operator_testdata will move required
+# files in place to do operator testing
+function prepare_mirror_testdata() {
+  local DATA_DIR="${1:?DATA_DIR required}"
+  local OUTPUT_DIR="${2:?OUTPUT_DIR required}"
+  local CONFIG_PATH="${3:?CONFIG_PATH required}"
+  local DIFF="${4:?DIFF bool required}"
+  local CATALOG_DIGEST="${5:-""}"
+
+  echo -e "\nSetting up test directory in $DATA_DIR"
+  cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
+  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_CATALOGNAMESPACE@'"$METADATA_CATALOGNAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_OCI_CATALOG@'"$METADATA_OCI_CATALOG"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_DIGEST@'"$CATALOG_DIGEST"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_NAME@'"$TARGET_CATALOG_NAME"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
 }
