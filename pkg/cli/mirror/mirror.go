@@ -12,7 +12,6 @@ import (
 
 	"github.com/containers/image/v5/copy"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -557,11 +556,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 }
 func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
 	remoteRegFuncs := RemoteRegFuncs{
-		pull:           crane.Pull,
-		saveOCI:        crane.SaveOCI,
-		saveLegacy:     crane.SaveLegacy,
-		push:           copy.Image,
-		load:           crane.Load,
+		copy:           copy.Image,
 		mirrorMappings: o.mirrorMappings,
 	}
 
