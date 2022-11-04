@@ -14,12 +14,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/pkg/cli/environment"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
@@ -34,6 +35,7 @@ import (
 const (
 	blobsPath           string = "/blobs/sha256/"
 	ociProtocol         string = "oci:"
+	dockerProtocol      string = "docker://"
 	configPath          string = "configs/"
 	catalogJSON         string = "/catalog.json"
 	relatedImages       string = "relatedImages"
@@ -47,35 +49,8 @@ const (
 type RemoteRegFuncs struct {
 	copy           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
 	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
-}
-
-// RegistriesConfig info from config file
-type RegistriesConf struct {
-	Registry []struct {
-		Location           string `toml:"location"`
-		Insecure           bool   `toml:"insecure"`
-		Blocked            bool   `toml:"blocked"`
-		MirrorByDigestOnly bool   `toml:"mirror-by-digest-only"`
-		Prefix             string `toml:"prefix"`
-		Mirror             []struct {
-			Location string `toml:"location"`
-			Insecure bool   `toml:"insecure"`
-		} `toml:"mirror"`
-	} `toml:"registry"`
-}
-
-// ReadegistriesConfig reads and parses info from registries.conf file
-func ReadRegistriesConfig(file string) (RegistriesConf, error) {
-	_, err := os.Stat(file)
-	if err != nil {
-		return RegistriesConf{}, err
-	}
-
-	var regConfig RegistriesConf
-	if _, err := toml.DecodeFile(file, &regConfig); err != nil {
-		return RegistriesConf{}, err
-	}
-	return regConfig, nil
+	newImageSource func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
+	getManifest    func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
 }
 
 // getISConfig simple function to read and unmarshal the imagesetconfig
@@ -96,7 +71,7 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 // •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 // •a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, remoteRegFuncs RemoteRegFuncs) error {
+func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
 
 	mapping := image.TypedImageMapping{}
 
@@ -114,7 +89,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		err := copyImage(operator.Catalog, ociProtocol+localOperatorDir, o.SourceSkipTLS, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
+		err := o.copyImage(dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -143,7 +118,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
 	if len(mapping) > 0 {
-		err := remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
+		err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
 		if err != nil {
 			return err
 		}
@@ -154,65 +129,9 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 	return nil
 }
 
-func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
-	mapping := image.TypedImageMapping{}
-	for _, i := range relatedImages {
-		if i.Image == "" {
-			klog.Warningf("invalid related image %s: reference empty", i.Name)
-			continue
-		}
-		name := i.Name
-		if name == "" {
-			//Creating a unique name for this image, that doesnt have a name
-			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-		}
-
-		reg, err := sysregistriesv2.FindRegistry(newSystemContext(false), i.Image)
-		if err != nil {
-			klog.Warningf("Cannot find registry for %s", i.Image)
-		}
-		if reg != nil && len(reg.Mirrors) > 0 && reg.Mirrors[0].Location != "" {
-			mirroredImage := strings.Replace(i.Image, reg.Prefix, reg.Mirrors[0].Location, 1)
-			i.Image = mirroredImage
-		}
-
-		srcTIR, err := image.ParseReference(i.Image)
-		if err != nil {
-			return nil, err
-		}
-		srcTI := image.TypedImage{
-			TypedImageReference: srcTIR,
-			Category:            v1alpha2.TypeOperatorRelatedImage,
-		}
-		dstPath := "file://" + name
-		if srcTIR.Ref.ID != "" {
-			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
-		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
-			//recreating a fake digest to copy image into
-			//this is because dclcfg.LoadFS will create a symlink to this folder
-			//from the tag
-			dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
-		}
-		dstTIR, err := image.ParseReference(strings.ToLower(dstPath))
-		if err != nil {
-			return nil, err
-		}
-		if srcTI.Ref.Tag != "" {
-			//put the tag back because it's needed to follow symlinks by LoadFS
-			dstTIR.Ref.Tag = srcTI.Ref.Tag
-		}
-		dstTI := image.TypedImage{
-			TypedImageReference: dstTIR,
-			Category:            v1alpha2.TypeOperatorRelatedImage,
-		}
-		mapping[srcTI] = dstTI
-	}
-	return mapping, nil
-}
-
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, remoteRegFuncs RemoteRegFuncs) error {
+func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string) error {
 	mapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
@@ -270,7 +189,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			return err
 		}
 		if len(result) > 0 {
-			err := remoteRegFuncs.mirrorMappings(*isc, result, o.SourceSkipTLS)
+			err := o.remoteRegFuncs.mirrorMappings(*isc, result, o.SourceSkipTLS)
 			if err != nil {
 				return err
 			}
@@ -338,24 +257,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			mapping[srcTI] = dstTI
 		}
 
-		var to string
-		to = strings.Join([]string{"docker://" + destRepo, namespace}, "/")
-		if len(o.OCIRegistriesConfig) > 0 {
-			regConf, err := ReadRegistriesConfig(o.OCIRegistriesConfig)
-			if err != nil {
-				klog.Fatalf("reading registries.conf file %v", err)
-			} else {
-				// this is very basic, it satifies the requirement for WRKLDS-468
-				// it's also pointless changing the 'to' destination if there are no relevant entries
-				if len(regConf.Registry) > 0 && destRepo == regConf.Registry[0].Location && len(regConf.Registry[0].Mirror) > 0 {
-					tmpTo := o.ToMirror
-					to = strings.Replace(to, destRepo, regConf.Registry[0].Mirror[0].Location, -1)
-					o.ToMirror = regConf.Registry[0].Mirror[0].Location
-					o.DestSkipTLS = regConf.Registry[0].Mirror[0].Insecure
-					klog.Infof("applied registries.conf mirror location from %s to %s \n", tmpTo, regConf.Registry[0].Mirror[0].Location)
-				}
-			}
-		}
+		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
 
 		klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
 
@@ -367,18 +269,77 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = copyImage(operator.Catalog, to, o.DestSkipTLS, o.SourceSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
+		err = o.copyImage(operator.Catalog, to, o.remoteRegFuncs)
 		if err != nil {
 			return err
 		}
 	}
-	err := remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
+	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
 	}
 
 	return nil
 
+}
+
+func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
+	mapping := image.TypedImageMapping{}
+	for _, i := range relatedImages {
+		if i.Image == "" {
+			klog.Warningf("invalid related image %s: reference empty", i.Name)
+			continue
+		}
+		name := i.Name
+		if name == "" {
+			//Creating a unique name for this image, that doesnt have a name
+			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
+		}
+
+		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
+		if err != nil {
+			klog.Warningf("Cannot find registry for %s", i.Image)
+		}
+		if reg != nil && len(reg.Mirrors) > 0 {
+			// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
+			mirroredImage, err := findFirstAvailableMirror(reg.Mirrors, dockerProtocol+i.Image, reg.Prefix, o.remoteRegFuncs)
+			if err == nil {
+				i.Image = mirroredImage
+			}
+		}
+
+		srcTIR, err := image.ParseReference(i.Image)
+		if err != nil {
+			return nil, err
+		}
+		srcTI := image.TypedImage{
+			TypedImageReference: srcTIR,
+			Category:            v1alpha2.TypeOperatorRelatedImage,
+		}
+		dstPath := "file://" + name
+		if srcTIR.Ref.ID != "" {
+			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
+		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
+			//recreating a fake digest to copy image into
+			//this is because dclcfg.LoadFS will create a symlink to this folder
+			//from the tag
+			dstPath = dstPath + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(srcTIR.Ref.Tag)))[0:6]
+		}
+		dstTIR, err := image.ParseReference(strings.ToLower(dstPath))
+		if err != nil {
+			return nil, err
+		}
+		if srcTI.Ref.Tag != "" {
+			//put the tag back because it's needed to follow symlinks by LoadFS
+			dstTIR.Ref.Tag = srcTI.Ref.Tag
+		}
+		dstTI := image.TypedImage{
+			TypedImageReference: dstTIR,
+			Category:            v1alpha2.TypeOperatorRelatedImage,
+		}
+		mapping[srcTI] = dstTI
+	}
+	return mapping, nil
 }
 
 // findFBCConfig function to find the layer from the catalog
@@ -577,6 +538,46 @@ func bundleVersion(bundle declcfg.Bundle) (string, error) {
 	return "", fmt.Errorf("unable to find bundle version")
 }
 
+func findFirstAvailableMirror(mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
+	finalError := fmt.Errorf("could not find a valid mirror for %s", imageName)
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	for _, mirror := range mirrors {
+		if !strings.HasSuffix(mirror.Location, "/") {
+			mirror.Location += "/"
+		}
+		mirroredImage := strings.Replace(imageName, prefix, mirror.Location, 1)
+		imgRef, err := alltransports.ParseImageName(mirroredImage)
+		if err != nil {
+			finalError = fmt.Errorf("%w: unable to parse reference %s: %v", finalError, mirroredImage, err)
+			continue
+		}
+		ctx := context.TODO()
+		imgsrc, err := regFuncs.newImageSource(ctx, nil, imgRef)
+		defer func() {
+			if imgsrc != nil {
+				err = imgsrc.Close()
+				if err != nil {
+					klog.V(3).Infof("%s is not closed", imgsrc)
+				}
+			}
+		}()
+		if err != nil {
+			finalError = fmt.Errorf("%w: unable to create ImageSource for %s: %v", finalError, mirroredImage, err)
+			continue
+		}
+		_, _, err = regFuncs.getManifest(ctx, nil, imgsrc)
+		if err != nil {
+			finalError = fmt.Errorf("%w: unable to get Manifest for %s: %v", finalError, mirroredImage, err)
+			continue
+		} else {
+			return trimProtocol(mirroredImage), nil
+		}
+	}
+	return "", finalError
+}
+
 // getManifest reads the manifest of the OCI FBC image
 // and returns it as a go structure of type manifest.Manifest
 func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
@@ -701,9 +702,11 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 	return nil
 }
 
-// copyImage is here used only to push images to the remote registry
-// calls the underlying containers/image copy library
-func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) error {
+// copyImage is used both for pulling catalog images from the remote registry
+// as well as pushing these catalog images to the remote registry.
+// It calls the underlying containers/image copy library, which looks out for registries.conf
+// file if any, when copying images around.
+func (o *MirrorOptions) copyImage(from, to string, funcs RemoteRegFuncs) error {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
 		fromPath := trimProtocol(from)
@@ -716,14 +719,14 @@ func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, insecurePolicy
 		}
 	}
 
-	sourceCtx := newSystemContext(srcSkipTLS)
-	destinationCtx := newSystemContext(dstSkipTLS)
+	sourceCtx := newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig)
+	destinationCtx := newSystemContext(o.DestSkipTLS, "")
 	ctx := context.Background()
 
 	// Pull the source image, and store it in the local storage, under the name main
 	var sigPolicy *signature.Policy
 	var err error
-	if insecurePolicy {
+	if o.OCIInsecureSignaturePolicy {
 		sigPolicy = &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
 	} else {
 		sigPolicy, err = signature.DefaultPolicy(nil)
@@ -766,7 +769,7 @@ func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, insecurePolicy
 }
 
 // newSystemContext set the context for source & destination resources
-func newSystemContext(skipTLS bool) *types.SystemContext {
+func newSystemContext(skipTLS bool, registriesConfigPath string) *types.SystemContext {
 	skipTLSVerify := types.OptionalBoolFalse
 	if skipTLS {
 		skipTLSVerify = types.OptionalBoolTrue
@@ -778,7 +781,16 @@ func newSystemContext(skipTLS bool) *types.SystemContext {
 		VariantChoice:               "",
 		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
 		DockerInsecureSkipTLSVerify: skipTLSVerify,
-		SystemRegistriesConfPath:    "/home/skhoury/go/src/github.com/openshift/oc-mirror/registries.conf",
+	}
+	if registriesConfigPath != "" {
+		ctx.SystemRegistriesConfPath = registriesConfigPath
+	} else {
+		err := environment.UpdateRegistriesConf(ctx)
+		if err != nil {
+			// log and ignore
+			klog.Warningf("unable to load registries.conf from environment variables: %v", err)
+
+		}
 	}
 	return ctx
 }
