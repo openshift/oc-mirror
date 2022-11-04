@@ -17,6 +17,7 @@ import (
 	"github.com/BurntSushi/toml"
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
@@ -176,6 +177,16 @@ func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.Related
 			//Creating a unique name for this image, that doesnt have a name
 			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
 		}
+
+		reg, err := sysregistriesv2.FindRegistry(newSystemContext(false), i.Image)
+		if err != nil {
+			klog.Warningf("Cannot find registry for %s", i.Image)
+		}
+		if len(reg.Mirrors) > 0 && reg.Mirrors[0].Location != "" {
+			mirroredImage := strings.Replace(i.Image, reg.Prefix, reg.Mirrors[0].Location, 1)
+			i.Image = mirroredImage
+		}
+
 		srcTIR, err := image.ParseReference(i.Image)
 		if err != nil {
 			return nil, err
@@ -814,6 +825,7 @@ func newSystemContext(skipTLS bool) *types.SystemContext {
 		VariantChoice:               "",
 		BigFilesTemporaryDir:        "", //*globalArgs.cache + "/tmp",
 		DockerInsecureSkipTLSVerify: skipTLSVerify,
+		SystemRegistriesConfPath:    "/home/skhoury/go/src/github.com/openshift/oc-mirror/registries.conf",
 	}
 	return ctx
 }
