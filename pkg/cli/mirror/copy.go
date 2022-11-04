@@ -23,9 +23,6 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/crane"
-	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -34,8 +31,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-type style string
-
 const (
 	blobsPath           string = "/blobs/sha256/"
 	ociProtocol         string = "oci:"
@@ -43,8 +38,6 @@ const (
 	catalogJSON         string = "/catalog.json"
 	relatedImages       string = "relatedImages"
 	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
-	ociStyle            style  = "oci"
-	originStyle         style  = "origin"
 	artifactsFolderName string = "olm_artifacts"
 )
 
@@ -52,11 +45,7 @@ const (
 // In order to be able to mock these external packages,
 // we pass them as parameters of bulkImageCopy and bulkImageMirror
 type RemoteRegFuncs struct {
-	pull           func(src string, opt ...crane.Option) (gocontreg.Image, error)
-	saveOCI        func(img gocontreg.Image, path string) error
-	saveLegacy     func(img gocontreg.Image, src, path string) error
-	load           func(path string, opt ...crane.Option) (gocontreg.Image, error)
-	push           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
+	copy           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
 	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
 }
 
@@ -125,7 +114,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		err := pullImage(operator.Catalog, localOperatorDir, o.SourceSkipTLS, ociStyle, remoteRegFuncs)
+		err := copyImage(operator.Catalog, ociProtocol+localOperatorDir, o.SourceSkipTLS, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -182,7 +171,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.Related
 		if err != nil {
 			klog.Warningf("Cannot find registry for %s", i.Image)
 		}
-		if len(reg.Mirrors) > 0 && reg.Mirrors[0].Location != "" {
+		if reg != nil && len(reg.Mirrors) > 0 && reg.Mirrors[0].Location != "" {
 			mirroredImage := strings.Replace(i.Image, reg.Prefix, reg.Mirrors[0].Location, 1)
 			i.Image = mirroredImage
 		}
@@ -378,7 +367,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = pushImage(operator.Catalog, to, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
+		err = copyImage(operator.Catalog, to, o.DestSkipTLS, o.SourceSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
@@ -712,58 +701,22 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 	return nil
 }
 
-// pullImage uses crane (and NOT containers/image) to pull images
-// from the remote registry.
-// Crane preserves the image format (OCI or docker.v2).
-// This method supports 2 options:
-// * pull as OCI image (used for catalogs ONLY)
-// * pull as is (used for all related images)
-func pullImage(from, to string, srcSkipTLS bool, inStyle style, funcs RemoteRegFuncs) error {
-	ctx := context.Background()
-	opts := []crane.Option{
-		crane.WithAuthFromKeychain(authn.DefaultKeychain),
-		crane.WithContext(ctx),
-		crane.WithTransport(createRT(srcSkipTLS)),
-	}
-	if srcSkipTLS {
-		opts = append(opts, crane.Insecure)
-	}
-	img, err := funcs.pull(from, opts...)
-	if err != nil {
-		return err
-	}
-	if inStyle == ociStyle {
-		err = funcs.saveOCI(img, to)
-		if err != nil {
-			return fmt.Errorf("unable to save image %s in OCI format in %s: %w", from, to, err)
-		}
-	} else {
-		tags, err := image.GetTagsFromImage(from)
-		tag := "latest"
-		if err == nil || len(tags) > 0 {
-			tag = tags[0]
-		}
-		if err := funcs.saveLegacy(img, tag, to); err != nil {
-			return fmt.Errorf("unable to save image %s in its original format in %s: %w", from, to, err)
-		}
-	}
-	return nil
-}
-
-// pushImage is here used only to push images to the remote registry
+// copyImage is here used only to push images to the remote registry
 // calls the underlying containers/image copy library
-func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) error {
-
-	// find absolute path if from is a relative path
-	fromPath := trimProtocol(from)
-	if !strings.HasPrefix(fromPath, "/") {
-		absolutePath, err := filepath.Abs(fromPath)
-		if err != nil {
-			return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+func copyImage(from, to string, srcSkipTLS bool, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) error {
+	if !strings.HasPrefix(from, "docker") {
+		// find absolute path if from is a relative path
+		fromPath := trimProtocol(from)
+		if !strings.HasPrefix(fromPath, "/") {
+			absolutePath, err := filepath.Abs(fromPath)
+			if err != nil {
+				return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+			}
+			from = "oci://" + absolutePath
 		}
-		from = "oci://" + absolutePath
 	}
-	sourceCtx := newSystemContext(dstSkipTLS)
+
+	sourceCtx := newSystemContext(srcSkipTLS)
 	destinationCtx := newSystemContext(dstSkipTLS)
 	ctx := context.Background()
 
@@ -794,7 +747,7 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 	}
 
 	// call the copy.Image function with the set options
-	_, err = funcs.push(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
+	_, err = funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
 		RemoveSignatures:      true,
 		SignBy:                "",
 		ReportWriter:          os.Stdout,

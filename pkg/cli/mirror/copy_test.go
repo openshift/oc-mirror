@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
-	"github.com/google/go-containerregistry/pkg/crane"
-	gocontreg "github.com/google/go-containerregistry/pkg/v1"
-	gocontregtypes "github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/otiai10/copy"
 
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -20,7 +19,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
-	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -641,7 +639,6 @@ func TestPullImage(t *testing.T) {
 		desc        string
 		from        string
 		to          string
-		stl         style
 		funcs       RemoteRegFuncs
 		expectedErr string
 	}
@@ -650,22 +647,13 @@ func TestPullImage(t *testing.T) {
 			desc:        "nominal oci case passes",
 			to:          ociProtocol + t.TempDir(),
 			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
-			stl:         ociStyle,
-			funcs:       createMockFunctions(),
-			expectedErr: "",
-		},
-		{
-			desc:        "nominal non-oci case passes",
-			to:          ociProtocol + t.TempDir(),
-			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
-			stl:         originStyle,
 			funcs:       createMockFunctions(),
 			expectedErr: "",
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pullImage(c.from, c.to, false, c.stl, c.funcs)
+			err := copyImage(c.from, c.to, false, false, false, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -695,7 +683,7 @@ func TestPushImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pushImage(c.from, c.to, true, true, c.funcs)
+			err := copyImage(c.from, c.to, true, true, true, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -813,7 +801,6 @@ func TestBulkImageCopy(t *testing.T) {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-
 			}
 		})
 	}
@@ -1112,61 +1099,15 @@ func TestParseImageName(t *testing.T) {
 }
 
 // ////////////////////   Fakes &  mocks ///////////////////////
-type fakeCraneImg struct{}
-
-func (f fakeCraneImg) Layers() ([]gocontreg.Layer, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) MediaType() (gocontregtypes.MediaType, error) {
-	return "", nil
-}
-func (f fakeCraneImg) Size() (int64, error) {
-	return 0, nil
-}
-func (f fakeCraneImg) ConfigName() (gocontreg.Hash, error) {
-	return gocontreg.Hash{}, nil
-}
-func (f fakeCraneImg) ConfigFile() (*gocontreg.ConfigFile, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) RawConfigFile() ([]byte, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) Digest() (gocontreg.Hash, error) {
-	return gocontreg.Hash{}, nil
-}
-func (f fakeCraneImg) Manifest() (*gocontreg.Manifest, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) RawManifest() ([]byte, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) LayerByDigest(gocontreg.Hash) (gocontreg.Layer, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) LayerByDiffID(gocontreg.Hash) (gocontreg.Layer, error) {
-	return nil, nil
-}
 
 func createMockFunctions() RemoteRegFuncs {
 	return RemoteRegFuncs{
-		push: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
+		copy: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
+			// case of pulling, or saving from remote to local, fake pull
+			if destRef.Transport().Name() != "docker" {
+				return nil, copy.Copy(testdata, strings.TrimSuffix(destRef.StringWithinTransport(), ":"))
+			}
 			return nil, nil
-		},
-		load: func(path string, opt ...crane.Option) (gocontreg.Image, error) {
-			return nil, nil
-		},
-		pull: func(src string, opt ...crane.Option) (gocontreg.Image, error) {
-			img := fakeCraneImg{}
-			return img, nil
-		},
-		saveOCI: func(img gocontreg.Image, path string) error {
-			// copy testData to the path selected
-			err := copy.Copy(trimProtocol(testdata), trimProtocol(path))
-			return err
-		},
-		saveLegacy: func(img gocontreg.Image, src, path string) error {
-			return nil
 		},
 		mirrorMappings: func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
 			return nil
