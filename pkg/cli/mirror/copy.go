@@ -804,7 +804,7 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 	if !strings.HasPrefix(fromPath, "/") {
 		absolutePath, err := filepath.Abs(fromPath)
 		if err != nil {
-			return "", fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+			return digest.Digest(""), fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
 		}
 		from = "oci://" + absolutePath
 	}
@@ -820,22 +820,22 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 	} else {
 		sigPolicy, err = signature.DefaultPolicy(nil)
 		if err != nil {
-			return "", err
+			return digest.Digest(""), err
 		}
 	}
 	policyContext, err := signature.NewPolicyContext(sigPolicy)
 	if err != nil {
-		return "", err
+		return digest.Digest(""), err
 	}
 	// define the source context
 	srcRef, err := alltransports.ParseImageName(from)
 	if err != nil {
-		return "", err
+		return digest.Digest(""), err
 	}
 	// define the destination context
 	destRef, err := alltransports.ParseImageName(to)
 	if err != nil {
-		return "", err
+		return digest.Digest(""), err
 	}
 
 	// call the copy.Image function with the set options
@@ -852,7 +852,7 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 		OciEncryptConfig:      nil,
 	})
 	if err != nil {
-		return "", err
+		return digest.Digest(""), err
 	}
 
 	return manifest.Digest(manifestBytes)
