@@ -17,6 +17,7 @@ import (
 	"github.com/BurntSushi/toml"
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
@@ -25,8 +26,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	gocontreg "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
@@ -215,6 +218,9 @@ func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.Related
 func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string, remoteRegFuncs RemoteRegFuncs) error {
 	mapping := image.TypedImageMapping{}
 
+	// temporary mapping to hold the results of any operators that were pushed and their resulting digests
+	catalogMapping := image.TypedImageMapping{}
+
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
 		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
@@ -338,6 +344,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			mapping[srcTI] = dstTI
 		}
 
+		// docker destination reference
 		var to string
 		to = strings.Join([]string{"docker://" + destRepo, namespace}, "/")
 		if len(o.OCIRegistriesConfig) > 0 {
@@ -357,23 +364,72 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 			}
 		}
 
-		klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
-
+		var toName string
 		if operator.TargetName != "" {
-			to = strings.Join([]string{to, operator.TargetName}, "/")
+			toName = operator.TargetName
 		} else {
-			to = strings.Join([]string{to, repo}, "/")
+			toName = repo
 		}
+
+		// docker destination reference, possibly with with tag
+		var toWithPossibleTag string
 		if operator.TargetTag != "" {
-			to += ":" + operator.TargetTag
+			// we have a tag, so use it
+			toWithPossibleTag += fmt.Sprintf("%s/%s:%s", to, toName, operator.TargetTag)
+		} else {
+			// no tag provided, use to as-is
+			toWithPossibleTag = fmt.Sprintf("%s/%s", to, toName)
 		}
-		err = pushImage(operator.Catalog, to, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
+
+		klog.Infof("pushing catalog %s to %s \n", operator.Catalog, toWithPossibleTag)
+
+		digest, err := pushImage(operator.Catalog, toWithPossibleTag, o.DestSkipTLS, o.OCIInsecureSignaturePolicy, remoteRegFuncs)
 		if err != nil {
 			return err
 		}
+
+		catalogMapping[image.TypedImage{
+			// src
+			TypedImageReference: imagesource.TypedImageReference{
+				Type: imagesource.DestinationFile,
+				Ref: reference.DockerImageReference{
+					Registry:  "", // local file system, so registry is empty string
+					Namespace: namespace,
+					Name:      toName,
+					Tag:       operator.TargetTag,
+				},
+			},
+			Category: v1alpha2.TypeOperatorCatalog,
+		}] = image.TypedImage{
+			// dest
+			TypedImageReference: imagesource.TypedImageReference{
+				Type: imagesource.DestinationFile,
+				Ref: reference.DockerImageReference{
+					Registry:  destRepo,
+					Namespace: namespace,
+					Name:      toName,
+					ID:        string(digest),
+				},
+			},
+			Category: v1alpha2.TypeOperatorCatalog,
+		}
 	}
+
+	// push all mappings (other than catalogs)
 	err := remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
+		return err
+	}
+
+	dir, err := o.createResultsDir()
+	if err != nil {
+		return err
+	}
+	// add the catalogs to the mapping so we can generate the results correctly
+	// even though we did not push the catalog images using remoteRegFuncs.mirrorMappings(...)
+	mapping.Merge(catalogMapping)
+
+	if err := o.generateResults(mapping, dir); err != nil {
 		return err
 	}
 
@@ -741,14 +797,14 @@ func pullImage(from, to string, srcSkipTLS bool, inStyle style, funcs RemoteRegF
 
 // pushImage is here used only to push images to the remote registry
 // calls the underlying containers/image copy library
-func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) error {
+func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs RemoteRegFuncs) (digest.Digest, error) {
 
 	// find absolute path if from is a relative path
 	fromPath := trimProtocol(from)
 	if !strings.HasPrefix(fromPath, "/") {
 		absolutePath, err := filepath.Abs(fromPath)
 		if err != nil {
-			return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+			return "", fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
 		}
 		from = "oci://" + absolutePath
 	}
@@ -764,26 +820,26 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 	} else {
 		sigPolicy, err = signature.DefaultPolicy(nil)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	policyContext, err := signature.NewPolicyContext(sigPolicy)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// define the source context
 	srcRef, err := alltransports.ParseImageName(from)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// define the destination context
 	destRef, err := alltransports.ParseImageName(to)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// call the copy.Image function with the set options
-	_, err = funcs.push(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
+	manifestBytes, err := funcs.push(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
 		RemoveSignatures:      true,
 		SignBy:                "",
 		ReportWriter:          os.Stdout,
@@ -796,9 +852,10 @@ func pushImage(from, to string, dstSkipTLS bool, insecurePolicy bool, funcs Remo
 		OciEncryptConfig:      nil,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+
+	return manifest.Digest(manifestBytes)
 }
 
 // newSystemContext set the context for source & destination resources

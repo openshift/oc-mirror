@@ -695,7 +695,7 @@ func TestPushImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pushImage(c.from, c.to, true, true, c.funcs)
+			_, err := pushImage(c.from, c.to, true, true, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
