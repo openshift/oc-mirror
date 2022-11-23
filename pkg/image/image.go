@@ -46,6 +46,9 @@ ParseReference is a wrapper function of imagesource.ParseReference
 	It provides support for oci: prefixes
 */
 func ParseReference(ref string) (imagesource.TypedImageReference, error) {
+
+	ref = strings.TrimPrefix(ref, "docker://")
+
 	if !strings.HasPrefix(ref, "oci:") {
 		return imagesource.ParseReference(ref)
 	}
@@ -60,4 +63,16 @@ func ParseReference(ref string) (imagesource.TypedImageReference, error) {
 		return imagesource.TypedImageReference{Ref: dst, Type: dstType}, fmt.Errorf("%q is not a valid image reference: %v", ref, err)
 	}
 	return imagesource.TypedImageReference{Ref: dst, Type: dstType}, nil
+}
+
+func IsDocker(ref string) bool {
+	return strings.HasPrefix(ref, "docker")
+}
+
+func IsOCI(ref string) bool {
+	return strings.HasPrefix(ref, "oci")
+}
+
+func IsFile(ref string) bool {
+	return strings.HasPrefix(ref, "file")
 }

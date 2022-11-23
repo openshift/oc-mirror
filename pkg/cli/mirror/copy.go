@@ -14,16 +14,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/pkg/sysregistriesv2"
-	"github.com/opencontainers/go-digest"
 
 	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/pkg/cli/environment"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
+	gocontreg "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -31,6 +32,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
+
+type style string
 
 const (
 	blobsPath           string = "/blobs/sha256/"
@@ -40,6 +43,8 @@ const (
 	catalogJSON         string = "/catalog.json"
 	relatedImages       string = "relatedImages"
 	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
+	ociStyle            style  = "oci"
+	originStyle         style  = "origin"
 	artifactsFolderName string = "olm_artifacts"
 )
 
@@ -117,6 +122,15 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 	}
 
 	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
+
+	// Add any additional images to the mapping
+	ao := NewAdditionalOptions(o)
+	mapAdditionalImages, err := ao.Plan(context.TODO(), isc.Mirror.AdditionalImages)
+	if err != nil {
+		return err
+	}
+	mapping.Merge(mapAdditionalImages)
+
 	if len(mapping) > 0 {
 		err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
 		if err != nil {
@@ -287,7 +301,16 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			return err
 		}
 	}
-	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
+
+	// Add any additional images to the mapping
+	ao := NewAdditionalOptions(o)
+	mapAdditionalImages, err := ao.PlanToMirror(context.TODO(), isc.Mirror.AdditionalImages, destRepo, namespace)
+	if err != nil {
+		return err
+	}
+	mapping.Merge(mapAdditionalImages)
+
+	err = remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
 	}
