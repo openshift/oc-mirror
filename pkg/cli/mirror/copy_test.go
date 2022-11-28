@@ -252,7 +252,7 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			_, err := c.options.findFBCConfig(c.options.OutputDir, filepath.Join(c.options.OutputDir, artifactsFolderName))
+			_, err := c.options.findFBCConfig(context.TODO(), c.options.OutputDir, filepath.Join(c.options.OutputDir, artifactsFolderName))
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -665,7 +665,7 @@ func TestPullImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := c.opts.copyImage(c.from, c.to, c.funcs)
+			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -701,7 +701,7 @@ func TestPushImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := c.opts.copyImage(c.from, c.to, c.funcs)
+			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -813,7 +813,7 @@ func TestBulkImageCopy(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageCopy(c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS)
+			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -944,7 +944,7 @@ func TestBulkImageMirror(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace")
+			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace")
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -1145,7 +1145,7 @@ func TestFirstAvailableMirror(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			mirror, err := findFirstAvailableMirror(c.mirrors, c.imageName, c.prefix, c.regFuncs)
+			mirror, err := findFirstAvailableMirror(context.TODO(), c.mirrors, c.imageName, c.prefix, c.regFuncs)
 
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)
@@ -1347,7 +1347,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			mapping, err := c.options.generateSrcToFileMapping(c.relatedImages)
+			mapping, err := c.options.generateSrcToFileMapping(context.TODO(), c.relatedImages)
 
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)

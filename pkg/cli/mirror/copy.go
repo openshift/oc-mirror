@@ -71,7 +71,7 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 // •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 // •a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
 
 	mapping := image.TypedImageMapping{}
 
@@ -89,7 +89,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		err := o.copyImage(dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
+		err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -97,7 +97,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 		// find the layer with the FB config
 		catalogContentsDir := filepath.Join(artifactsPath, repo)
 		klog.Infof("Finding file based config for %s (in catalog layers)\n", operator.Catalog)
-		ctlgConfigsDir, err := o.findFBCConfig(localOperatorDir, catalogContentsDir)
+		ctlgConfigsDir, err := o.findFBCConfig(ctx, localOperatorDir, catalogContentsDir)
 		if err != nil {
 			return fmt.Errorf("unable to find config in %s: %v", localOperatorDir, err)
 		}
@@ -109,7 +109,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 			return err
 		}
 
-		result, err := o.generateSrcToFileMapping(relatedImages)
+		result, err := o.generateSrcToFileMapping(ctx, relatedImages)
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func (o *MirrorOptions) bulkImageCopy(isc *v1alpha2.ImageSetConfiguration, srcSk
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string) error {
+func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string) error {
 	mapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
@@ -150,7 +150,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		operatorCatalog := trimProtocol(operator.Catalog)
 
 		// check for the valid config label to use
-		configsLabel, err := o.getCatalogConfigPath(operatorCatalog)
+		configsLabel, err := o.getCatalogConfigPath(ctx, operatorCatalog)
 		if err != nil {
 			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
 			return err
@@ -163,7 +163,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if _, err := os.Stat(catalogConfigsDir); os.IsNotExist(err) {
 			// get the FBC, and obtain its config directory
 			// example: <current working directory>/olm_artifacts/<repo>/<config folder>
-			ctlgConfigsDir, err := o.findFBCConfig(operatorCatalog, catalogContentsDir)
+			ctlgConfigsDir, err := o.findFBCConfig(ctx, operatorCatalog, catalogContentsDir)
 			if err != nil {
 				return fmt.Errorf("unable to find config in %s: %v", artifactsPath, err)
 			}
@@ -184,7 +184,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		}
 
 		// place related images into the workspace
-		result, err := o.generateSrcToFileMapping(relatedImages)
+		result, err := o.generateSrcToFileMapping(ctx, relatedImages)
 		if err != nil {
 			return err
 		}
@@ -269,7 +269,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = o.copyImage(operator.Catalog, to, o.remoteRegFuncs)
+		err = o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
 		if err != nil {
 			return err
 		}
@@ -283,7 +283,7 @@ func (o *MirrorOptions) bulkImageMirror(isc *v1alpha2.ImageSetConfiguration, des
 
 }
 
-func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
+func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
 	mapping := image.TypedImageMapping{}
 	for _, i := range relatedImages {
 		if i.Image == "" {
@@ -302,7 +302,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.Related
 		}
 		if reg != nil && len(reg.Mirrors) > 0 {
 			// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
-			mirroredImage, err := findFirstAvailableMirror(reg.Mirrors, dockerProtocol+i.Image, reg.Prefix, o.remoteRegFuncs)
+			mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerProtocol+i.Image, reg.Prefix, o.remoteRegFuncs)
 			if err == nil {
 				i.Image = mirroredImage
 			}
@@ -344,13 +344,13 @@ func (o *MirrorOptions) generateSrcToFileMapping(relatedImages []declcfg.Related
 
 // findFBCConfig function to find the layer from the catalog
 // that has the file based configuration
-func (o *MirrorOptions) findFBCConfig(imagePath, catalogContentsPath string) (string, error) {
+func (o *MirrorOptions) findFBCConfig(ctx context.Context, imagePath, catalogContentsPath string) (string, error) {
 	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
+	srcImg, err := getOCIImgSrcFromPath(ctx, imagePath)
 	if err != nil {
 		return "", err
 	}
-	manifest, err := getManifest(context.TODO(), srcImg)
+	manifest, err := getManifest(ctx, srcImg)
 	if err != nil {
 		return "", err
 	}
@@ -396,13 +396,13 @@ func (o *MirrorOptions) findFBCConfig(imagePath, catalogContentsPath string) (st
 // more specifically the label `configLabel`
 // and returns the value of that label
 // The function fails if more than one manifest exist in the image
-func (o *MirrorOptions) getCatalogConfigPath(imagePath string) (string, error) {
+func (o *MirrorOptions) getCatalogConfigPath(ctx context.Context, imagePath string) (string, error) {
 	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(context.TODO(), imagePath)
+	srcImg, err := getOCIImgSrcFromPath(ctx, imagePath)
 	if err != nil {
 		return "", err
 	}
-	manifest, err := getManifest(context.TODO(), srcImg)
+	manifest, err := getManifest(ctx, srcImg)
 	if err != nil {
 		return "", err
 	}
@@ -538,7 +538,7 @@ func bundleVersion(bundle declcfg.Bundle) (string, error) {
 	return "", fmt.Errorf("unable to find bundle version")
 }
 
-func findFirstAvailableMirror(mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
+func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
 	finalError := fmt.Errorf("could not find a valid mirror for %s", imageName)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
@@ -553,7 +553,6 @@ func findFirstAvailableMirror(mirrors []sysregistriesv2.Endpoint, imageName stri
 			finalError = fmt.Errorf("%w: unable to parse reference %s: %v", finalError, mirroredImage, err)
 			continue
 		}
-		ctx := context.TODO()
 		imgsrc, err := regFuncs.newImageSource(ctx, nil, imgRef)
 		defer func() {
 			if imgsrc != nil {
@@ -706,7 +705,7 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 // as well as pushing these catalog images to the remote registry.
 // It calls the underlying containers/image copy library, which looks out for registries.conf
 // file if any, when copying images around.
-func (o *MirrorOptions) copyImage(from, to string, funcs RemoteRegFuncs) error {
+func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) error {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
 		fromPath := trimProtocol(from)
@@ -721,7 +720,6 @@ func (o *MirrorOptions) copyImage(from, to string, funcs RemoteRegFuncs) error {
 
 	sourceCtx := newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig)
 	destinationCtx := newSystemContext(o.DestSkipTLS, "")
-	ctx := context.Background()
 
 	// Pull the source image, and store it in the local storage, under the name main
 	var sigPolicy *signature.Policy
