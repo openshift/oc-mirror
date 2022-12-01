@@ -11,10 +11,11 @@ import (
 	"strings"
 
 	"github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/opencontainers/go-digest"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
@@ -276,7 +277,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	}
 
 	if o.UseOCIFeature {
-		return o.mirrorOCIImages(cleanup)
+		return o.mirrorOCIImages(cmd.Context(), cleanup)
 	} else {
 		if len(o.OCIRegistriesConfig) > 0 {
 			return fmt.Errorf("this flag can only be used with the --use-oci-feature flag")
@@ -555,14 +556,16 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 
 	return cleanup()
 }
-func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
-	remoteRegFuncs := RemoteRegFuncs{
-		pull:           crane.Pull,
-		saveOCI:        crane.SaveOCI,
-		saveLegacy:     crane.SaveLegacy,
-		push:           copy.Image,
-		load:           crane.Load,
+func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc) error {
+	o.remoteRegFuncs = RemoteRegFuncs{
+		copy:           copy.Image,
 		mirrorMappings: o.mirrorMappings,
+		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
+			return imgRef.NewImageSource(ctx, sys)
+		},
+		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
+			return imgSrc.GetManifest(ctx, instanceDigest)
+		},
 	}
 
 	if o.OCIFeatureAction == "" {
@@ -574,7 +577,7 @@ func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
 	}
 	if o.OCIFeatureAction == OCIFeatureCopyAction {
 
-		err = o.bulkImageCopy(isc, o.SourceSkipTLS, o.DestSkipTLS, remoteRegFuncs)
+		err = o.bulkImageCopy(ctx, isc, o.SourceSkipTLS, o.DestSkipTLS)
 		if err != nil {
 			return fmt.Errorf("copying images %v", err)
 		}
@@ -582,7 +585,7 @@ func (o *MirrorOptions) mirrorOCIImages(cleanup cleanupFunc) error {
 		return nil
 	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
 		log.Println("INFO: mirroring images to remote registry")
-		err = o.bulkImageMirror(isc, o.ToMirror, o.UserNamespace, remoteRegFuncs)
+		err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace)
 		if err != nil {
 			return fmt.Errorf("mirroring images %v", err)
 		}

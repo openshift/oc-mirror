@@ -2,25 +2,29 @@ package mirror
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
-	"github.com/google/go-containerregistry/pkg/crane"
-	gocontreg "github.com/google/go-containerregistry/pkg/v1"
-	gocontregtypes "github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/opencontainers/go-digest"
+	"github.com/otiai10/copy"
 
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
-	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -248,7 +252,7 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			_, err := c.options.findFBCConfig(c.options.OutputDir, filepath.Join(c.options.OutputDir, artifactsFolderName))
+			_, err := c.options.findFBCConfig(context.TODO(), c.options.OutputDir, filepath.Join(c.options.OutputDir, artifactsFolderName))
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -641,31 +645,27 @@ func TestPullImage(t *testing.T) {
 		desc        string
 		from        string
 		to          string
-		stl         style
+		opts        *MirrorOptions
 		funcs       RemoteRegFuncs
 		expectedErr string
 	}
 	cases := []spec{
 		{
-			desc:        "nominal oci case passes",
-			to:          ociProtocol + t.TempDir(),
-			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
-			stl:         ociStyle,
-			funcs:       createMockFunctions(),
-			expectedErr: "",
-		},
-		{
-			desc:        "nominal non-oci case passes",
-			to:          ociProtocol + t.TempDir(),
-			from:        "docker://localhost:5000/ocmir/a-fake-image:latest",
-			stl:         originStyle,
-			funcs:       createMockFunctions(),
+			desc: "nominal oci case passes",
+			to:   ociProtocol + t.TempDir(),
+			from: "docker://localhost:5000/ocmir/a-fake-image:latest",
+			opts: &MirrorOptions{
+				DestSkipTLS:                false,
+				SourceSkipTLS:              false,
+				OCIInsecureSignaturePolicy: true,
+			},
+			funcs:       createMockFunctions(0),
 			expectedErr: "",
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pullImage(c.from, c.to, false, c.stl, c.funcs)
+			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -681,21 +681,27 @@ func TestPushImage(t *testing.T) {
 		desc        string
 		from        string
 		to          string
+		opts        *MirrorOptions
 		funcs       RemoteRegFuncs
 		expectedErr string
 	}
 	cases := []spec{
 		{
-			desc:        "nominal case passes",
-			from:        ociProtocol + testdata,
-			to:          "docker://localhost:5000/ocmir",
-			funcs:       createMockFunctions(),
+			desc: "nominal case passes",
+			from: ociProtocol + testdata,
+			to:   "docker://localhost:5000/ocmir",
+			opts: &MirrorOptions{
+				DestSkipTLS:                false,
+				SourceSkipTLS:              false,
+				OCIInsecureSignaturePolicy: true,
+			},
+			funcs:       createMockFunctions(0),
 			expectedErr: "",
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := pushImage(c.from, c.to, true, true, c.funcs)
+			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -748,9 +754,7 @@ func TestBulkImageCopy(t *testing.T) {
 		isc                *v1alpha2.ImageSetConfiguration
 		expectedSubFolders []string
 		options            *MirrorOptions
-		funcs              RemoteRegFuncs
-
-		err string
+		err                string
 	}
 
 	cases := []spec{
@@ -763,7 +767,7 @@ func TestBulkImageCopy(t *testing.T) {
 
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "docker://registry.redhat.io/openshift/fakecatalog:latest",
+								Catalog: "registry.redhat.io/openshift/fakecatalog:latest",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -795,10 +799,11 @@ func TestBulkImageCopy(t *testing.T) {
 						ErrOut: os.Stderr,
 					},
 				},
-				SourceSkipTLS: true,
-				DestSkipTLS:   true,
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				remoteRegFuncs:             createMockFunctions(0),
+				OCIInsecureSignaturePolicy: true,
 			},
-			funcs:              createMockFunctions(),
 			err:                "",
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
@@ -808,12 +813,11 @@ func TestBulkImageCopy(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageCopy(c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS, c.funcs)
+			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-
 			}
 		})
 	}
@@ -830,9 +834,7 @@ func TestBulkImageMirror(t *testing.T) {
 		isc                *v1alpha2.ImageSetConfiguration
 		expectedSubFolders []string
 		options            *MirrorOptions
-		funcs              RemoteRegFuncs
-
-		err string
+		err                string
 	}
 
 	cases := []spec{
@@ -880,59 +882,8 @@ func TestBulkImageMirror(t *testing.T) {
 				SourceSkipTLS:              true,
 				DestSkipTLS:                true,
 				OCIInsecureSignaturePolicy: true,
+				remoteRegFuncs:             createMockFunctions(0),
 			},
-			funcs:              createMockFunctions(),
-			err:                "",
-			expectedSubFolders: []string{"aws-load-balancer-operator"},
-		},
-		{
-			desc:     "Using registries.conf override case passes",
-			sequence: 2,
-			isc: &v1alpha2.ImageSetConfiguration{
-				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-
-						Operators: []v1alpha2.Operator{
-							{
-								Catalog: "oci://" + testdata,
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{
-										{
-											Name: "aws-load-balancer-operator",
-											Channels: []v1alpha2.IncludeChannel{
-												{
-													Name: "stable-v0.1",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			options: &MirrorOptions{
-				From:                testdata,
-				ToMirror:            "localhost.localdomain:5000",
-				UseOCIFeature:       true,
-				OCIFeatureAction:    OCIFeatureMirrorAction,
-				OCIRegistriesConfig: registriesConfig,
-				OutputDir:           "",
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-				SourceSkipTLS:              true,
-				DestSkipTLS:                true,
-				OCIInsecureSignaturePolicy: true,
-			},
-			funcs:              createMockFunctions(),
 			err:                "",
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
@@ -981,8 +932,8 @@ func TestBulkImageMirror(t *testing.T) {
 				SourceSkipTLS:              true,
 				DestSkipTLS:                true,
 				OCIInsecureSignaturePolicy: true,
+				remoteRegFuncs:             createMockFunctions(0),
 			},
-			funcs:              createMockFunctions(),
 			err:                "",
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
@@ -993,15 +944,15 @@ func TestBulkImageMirror(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(c.isc, c.options.ToMirror, "testnamespace", c.funcs)
+			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace")
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-				// check the test using registries.conf for an updated location
-				if c.sequence == 2 {
-					require.Equal(t, c.options.ToMirror, "preprodlocation/test")
-				}
+				// // check the test using registries.conf for an updated location
+				// if c.sequence == 2 {
+				// 	require.Equal(t, c.options.ToMirror, "preprodlocation/test")
+				// }
 			}
 		})
 	}
@@ -1111,65 +1062,384 @@ func TestParseImageName(t *testing.T) {
 	}
 }
 
-// ////////////////////   Fakes &  mocks ///////////////////////
-type fakeCraneImg struct{}
+func TestFirstAvailableMirror(t *testing.T) {
+	type spec struct {
+		desc      string
+		imageName string
+		prefix    string
+		mirrors   []sysregistriesv2.Endpoint
+		expErr    string
+		expMirror string
+		regFuncs  RemoteRegFuncs
+	}
+	cases := []spec{
+		{
+			desc:      "list of endpoints is empty, returns an error",
+			imageName: "docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+			prefix:    "quay.io/redhatgov/",
+			mirrors:   []sysregistriesv2.Endpoint{},
+			expErr:    "could not find a valid mirror for docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+			expMirror: "",
+			regFuncs:  createMockFunctions(0),
+		},
+		{
+			desc:      "mirror is unreachable, returns an error",
+			imageName: "docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+			prefix:    "quay.io/redhatgov/",
+			mirrors: []sysregistriesv2.Endpoint{
+				{
+					Location: "my.mirror.io/redhatgov",
+					Insecure: false,
+				},
+			},
+			expErr:    "could not find a valid mirror for docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1: unable to create ImageSource for docker://my.mirror.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1: pinging container registry my.mirror.io: Get \"https://my.mirror.io/v2/\": dial tcp: lookup my.mirror.io: no such host",
+			expMirror: "",
+			regFuncs:  createMockFunctions(1),
+		},
+		{
+			desc:      "image name unparsable, returns an error",
+			imageName: "docker://quay.io/redhatgov/oc#mirror-dev:foo-bundle-v0.3.1",
+			prefix:    "quay.io/redhatgov/",
+			mirrors: []sysregistriesv2.Endpoint{
+				{
+					Location: "quay.io/redhatgov",
+					Insecure: false,
+				},
+			},
+			expErr:    "could not find a valid mirror for docker://quay.io/redhatgov/oc#mirror-dev:foo-bundle-v0.3.1: unable to parse reference docker://quay.io/redhatgov/oc#mirror-dev:foo-bundle-v0.3.1: invalid reference format",
+			expMirror: "",
+			regFuncs:  createMockFunctions(0),
+		},
+		{
+			desc:      "error on getManifest, returns an error",
+			imageName: "docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+			prefix:    "quay.io/redhatgov/",
+			mirrors: []sysregistriesv2.Endpoint{
+				{
+					Location: "quay.io/redhatgov",
+					Insecure: false,
+				},
+			},
+			expErr:    "could not find a valid mirror for docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1: unable to get Manifest for docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1: error getting manifest",
+			expMirror: "",
+			regFuncs:  createMockFunctions(2),
+		},
+		// {
+		// 	desc:      "1/2 mirrors reachable, returns a mirror",
+		// 	imageName: "docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+		// 	prefix:    "quay.io/redhatgov/",
+		// 	mirrors: []sysregistriesv2.Endpoint{
+		// 		{
+		// 			Location: "my.mirror.io/redhatgov",
+		// 			Insecure: true,
+		// 		},
+		// 		{
+		// 			Location: "quay.io/redhatgov",
+		// 			Insecure: false,
+		// 		},
+		// 	},
+		// 	expErr:    "",
+		// 	expMirror: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+		// 	regFuncs:  createMockFunctions(),
+		// },
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			mirror, err := findFirstAvailableMirror(context.TODO(), c.mirrors, c.imageName, c.prefix, c.regFuncs)
 
-func (f fakeCraneImg) Layers() ([]gocontreg.Layer, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) MediaType() (gocontregtypes.MediaType, error) {
-	return "", nil
-}
-func (f fakeCraneImg) Size() (int64, error) {
-	return 0, nil
-}
-func (f fakeCraneImg) ConfigName() (gocontreg.Hash, error) {
-	return gocontreg.Hash{}, nil
-}
-func (f fakeCraneImg) ConfigFile() (*gocontreg.ConfigFile, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) RawConfigFile() ([]byte, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) Digest() (gocontreg.Hash, error) {
-	return gocontreg.Hash{}, nil
-}
-func (f fakeCraneImg) Manifest() (*gocontreg.Manifest, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) RawManifest() ([]byte, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) LayerByDigest(gocontreg.Hash) (gocontreg.Layer, error) {
-	return nil, nil
-}
-func (f fakeCraneImg) LayerByDiffID(gocontreg.Hash) (gocontreg.Layer, error) {
-	return nil, nil
+			if c.expErr != "" {
+				require.EqualError(t, err, c.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, c.expMirror, mirror)
+		})
+	}
 }
 
-func createMockFunctions() RemoteRegFuncs {
-	return RemoteRegFuncs{
-		push: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
-			return nil, nil
+func TestGenerateSrcToFileMapping(t *testing.T) {
+	type spec struct {
+		desc          string
+		relatedImages []declcfg.RelatedImage
+		expErr        string
+		expMapping    image.TypedImageMapping
+		options       *MirrorOptions
+	}
+	cases := []spec{
+		{
+			desc: "Nominal case",
+			relatedImages: []declcfg.RelatedImage{
+				{
+					Image: "",
+					Name:  "imageWithoutRef",
+				},
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0",
+					Name:  "",
+				},
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.0",
+					Name:  "foo",
+				},
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+					Name:  "operator",
+				},
+			},
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "quay.io",
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev",
+							Tag:       "",
+							ID:        "sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "operator",
+							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Tag:       "",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "quay.io",
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev",
+							Tag:       "foo-bundle-v0.3.0",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "foo",
+							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("foo-bundle-v0.3.0")))[0:6],
+							Tag:       "foo-bundle-v0.3.0",
+							ID:        "",
+						},
+					}, Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "quay.io",
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev",
+							Tag:       "no-name-v0.3.0",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: fmt.Sprintf("%x", sha256.Sum256([]byte("quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0")))[0:6],
+							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("no-name-v0.3.0")))[0:6],
+							Tag:       "no-name-v0.3.0",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+
+			options: &MirrorOptions{
+				From:             "test.registry.io",
+				ToMirror:         "",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureCopyAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				remoteRegFuncs:             createMockFunctions(0),
+				OCIInsecureSignaturePolicy: true,
+			},
 		},
-		load: func(path string, opt ...crane.Option) (gocontreg.Image, error) {
-			return nil, nil
-		},
-		pull: func(src string, opt ...crane.Option) (gocontreg.Image, error) {
-			img := fakeCraneImg{}
-			return img, nil
-		},
-		saveOCI: func(img gocontreg.Image, path string) error {
-			// copy testData to the path selected
-			err := copy.Copy(trimProtocol(testdata), trimProtocol(path))
-			return err
-		},
-		saveLegacy: func(img gocontreg.Image, src, path string) error {
-			return nil
-		},
-		mirrorMappings: func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
-			return nil
+		{
+			desc: "Nominal case with registries.conf",
+			relatedImages: []declcfg.RelatedImage{
+				{
+					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+					Name:  "operator",
+				},
+			},
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "preprodlocation.in",
+							Namespace: "test",
+							Name:      "oc-mirror-dev",
+							Tag:       "",
+							ID:        "sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "operator",
+							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Tag:       "",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+
+			options: &MirrorOptions{
+				From:             "test.registry.io",
+				ToMirror:         "",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureCopyAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				OCIRegistriesConfig:        "testdata/configs/registries.conf",
+				OCIInsecureSignaturePolicy: true,
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				remoteRegFuncs:             createMockFunctions(0),
+			},
 		},
 	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			mapping, err := c.options.generateSrcToFileMapping(context.TODO(), c.relatedImages)
+
+			if c.expErr != "" {
+				require.EqualError(t, err, c.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, c.expMapping, mapping)
+		})
+	}
+}
+
+// ////////////////////   Fakes &  mocks ///////////////////////
+const (
+	imgSrcErr   int = 1
+	getMnfstErr int = 2
+)
+
+func createMockFunctions(errorType int) RemoteRegFuncs {
+	theMock := RemoteRegFuncs{}
+	imgSrcFnc := func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
+		return MockImageSource{}, nil
+	}
+	getManifestFnc := func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
+		return []byte("fake content"), "v2s1.manifest.json", nil
+	}
+	if errorType == imgSrcErr {
+		imgSrcFnc = func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
+			return nil, errors.New("pinging container registry my.mirror.io: Get \"https://my.mirror.io/v2/\": dial tcp: lookup my.mirror.io: no such host")
+		}
+	}
+	if errorType == getMnfstErr {
+		getManifestFnc = func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
+			return nil, "", errors.New("error getting manifest")
+		}
+	}
+	theMock.copy = func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
+		// case of pulling, or saving from remote to local, fake pull
+		if destRef.Transport().Name() != "docker" {
+			return nil, copy.Copy(testdata, strings.TrimSuffix(destRef.StringWithinTransport(), ":"))
+		}
+		return nil, nil
+	}
+
+	theMock.mirrorMappings = func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
+		return nil
+	}
+	theMock.newImageSource = imgSrcFnc
+
+	theMock.getManifest = getManifestFnc
+	return theMock
+}
+
+// MockImageSource is used when we don't expect the ImageSource to be used in our tests.
+type MockImageSource struct {
+	errorType int
+}
+
+// Reference is a mock that panics.
+func (f MockImageSource) Reference() types.ImageReference {
+	panic("Unexpected call to a mock function")
+}
+
+// Close is a mock that panics.
+func (f MockImageSource) Close() error {
+	fmt.Println("Do nothing")
+	return nil
+}
+
+// GetManifest is a mock that panics.
+func (f MockImageSource) GetManifest(context.Context, *digest.Digest) ([]byte, string, error) {
+	if f.errorType > 0 {
+		return nil, "", errors.New("error getting manifest")
+	}
+	return []byte("fake content"), "v2s1.manifest.json", nil
+}
+
+// GetBlob is a mock that panics.
+func (f MockImageSource) GetBlob(context.Context, types.BlobInfo, types.BlobInfoCache) (io.ReadCloser, int64, error) {
+	panic("Unexpected call to a mock function")
+}
+
+// HasThreadSafeGetBlob is a mock that panics.
+func (f MockImageSource) HasThreadSafeGetBlob() bool {
+	panic("Unexpected call to a mock function")
+}
+
+// GetSignatures is a mock that panics.
+func (f MockImageSource) GetSignatures(context.Context, *digest.Digest) ([][]byte, error) {
+	panic("Unexpected call to a mock function")
+}
+
+// LayerInfosForCopy is a mock that panics.
+func (f MockImageSource) LayerInfosForCopy(context.Context, *digest.Digest) ([]types.BlobInfo, error) {
+	panic("Unexpected call to a mock function")
 }

@@ -228,7 +228,7 @@ function no_updates_exist {
 
 # Test OCI local catalog
 function oci_local {
-    workflow_oci_copy imageset-config-oci-copy.yaml "test-catalog-latest" "oci://${MIRROR_OCI_DIR}" -c="--use-oci-feature --oci-feature-action=copy --source-skip-tls"
+    workflow_oci_copy imageset-config-oci-copy.yaml "test-catalog-latest" "oci://${MIRROR_OCI_DIR}" -c="--use-oci-feature --oci-feature-action=copy --source-skip-tls --oci-insecure-signature-policy"
     workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--use-oci-feature --oci-feature-action=mirror --dest-skip-tls --oci-insecure-signature-policy"
     # podman pull docker://localhost.localdomain:5001/test/redhatgov/oc-mirror-dev:test-catalog-latest --tls-verify=false
     # baz.v1.0.0 
