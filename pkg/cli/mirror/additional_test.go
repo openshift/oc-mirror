@@ -92,7 +92,7 @@ func TestPlan_Additional(t *testing.T) {
 			}
 			opts := NewAdditionalOptions(&mo)
 
-			mappings, err := opts.Plan(context.TODO(), test.cfg.Mirror.AdditionalImages)
+			mappings, err := opts.Plan(context.TODO(), test.cfg.Mirror.AdditionalImages, MirrorToDiskScenario)
 			if test.wantErr {
 				testErr := test.want
 				require.ErrorAs(t, err, &testErr)

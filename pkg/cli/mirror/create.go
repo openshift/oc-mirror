@@ -18,7 +18,7 @@ import (
 )
 
 // Create will plan a mirroring operation based on provided configuration
-func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (v1alpha2.Metadata, image.TypedImageMapping, error) {
+func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, scn scenario) (v1alpha2.Metadata, image.TypedImageMapping, error) {
 	// Determine stateless or stateful mode.
 	// Empty storage configuration will trigger a metadata cleanup
 	// action and labels metadata as single use
@@ -70,7 +70,7 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 			}
 			return image.TypedImageMapping{}, nil
 		}
-		mmapping, err := o.run(ctx, &cfg, meta, f)
+		mmapping, err := o.run(ctx, &cfg, meta, f, scn)
 		meta.PastMirror = thisRun
 		return meta, mmapping, err
 	default:
@@ -85,13 +85,13 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 			}
 			return image.TypedImageMapping{}, nil
 		}
-		mmapping, err := o.run(ctx, &cfg, meta, f)
+		mmapping, err := o.run(ctx, &cfg, meta, f, scn)
 		meta.PastMirror = thisRun
 		return meta, mmapping, err
 	}
 }
 
-func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata, operatorPlan operatorFunc) (image.TypedImageMapping, error) {
+func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata, operatorPlan operatorFunc, scn scenario) (image.TypedImageMapping, error) {
 
 	mmappings := image.TypedImageMapping{}
 
@@ -127,7 +127,7 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 
 	if len(cfg.Mirror.AdditionalImages) != 0 {
 		additional := NewAdditionalOptions(o)
-		mappings, err := additional.Plan(ctx, cfg.Mirror.AdditionalImages)
+		mappings, err := additional.Plan(ctx, cfg.Mirror.AdditionalImages, scn)
 		if err != nil {
 			return mmappings, err
 		}

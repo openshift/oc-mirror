@@ -186,7 +186,8 @@ type Chart struct {
 type Image struct {
 	// Name of the image. This should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Source string `json:"source,omitempty"`
 }
 
 // SampleImages define the configuration

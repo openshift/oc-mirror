@@ -39,9 +39,14 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
+type scenario string
+
 const (
 	OCIFeatureCopyAction   = "copy"
 	OCIFeatureMirrorAction = "mirror"
+	MirrorToMirrorScenario = scenario("M2M")
+	MirrorToDiskScenario   = scenario("M2D")
+	DiskToMirrorScenario   = scenario("D2M")
 )
 
 var (
@@ -323,6 +328,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		}
 		return o.generateResults(mapping, results)
 	case mirrorToDisk:
+		scn := MirrorToDiskScenario
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
@@ -332,7 +338,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 			return err
 		}
 
-		meta, mapping, err = o.Create(ctx, cfg)
+		meta, mapping, err = o.Create(ctx, cfg, scn)
 		if err != nil {
 			return err
 		}
@@ -416,6 +422,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 			return err
 		}
 	case mirrorToMirror:
+		scn := MirrorToMirrorScenario
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
@@ -423,7 +430,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 			return err
 		}
-		meta, mapping, err = o.Create(ctx, cfg)
+		meta, mapping, err = o.Create(ctx, cfg, scn)
 		if err != nil {
 			return err
 		}

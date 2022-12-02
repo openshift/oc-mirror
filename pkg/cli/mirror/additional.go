@@ -27,23 +27,27 @@ func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 }
 
 // Plan provides an image mapping with source and destination for provided AdditionalImages
-func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image) (image.TypedImageMapping, error) {
+func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image, scn scenario) (image.TypedImageMapping, error) {
 	mmappings := make(image.TypedImageMapping, len(imageList))
 	// Instead of returning an error, just log it.
 	isSkipErr := func(err error) bool {
 		return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
 	}
 	for _, img := range imageList {
-		if !image.IsDocker(img.Name) && !image.IsOCI(img.Name) && !image.IsFile(img.Name) {
-			img.Name = "docker://" + img.Name
+		theRef := img.Name
+		if img.Source != "" {
+			theRef = img.Source
+		}
+		if !image.IsDocker(theRef) && !image.IsOCI(theRef) && !image.IsFile(theRef) {
+			img.Name = "docker://" + theRef
 		}
 		// Get source image information
-		srcRef, err := image.ParseReference(img.Name) //docker:// or oci://fbc
+		srcRef, err := image.ParseReference(theRef) //docker:// or oci://fbc
 		if err != nil {
 			if !isSkipErr(err) {
-				return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
+				return mmappings, fmt.Errorf("error parsing source image %s: %v", theRef, err)
 			}
-			klog.Warning(fmt.Errorf("error parsing source image %s: %v", img.Name, err))
+			klog.Warning(fmt.Errorf("error parsing source image %s: %v", theRef, err))
 			continue
 		}
 
@@ -51,15 +55,15 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 		if srcRef.Ref.Tag == "" {
 			srcRef.Ref.Tag = "latest"
 		}
-		ref := img.Name
-		if image.IsDocker(img.Name) && srcRef.Ref.Registry == "" {
+		ref := theRef
+		if image.IsDocker(theRef) && srcRef.Ref.Registry == "" {
 			srcRef.Ref = srcRef.Ref.DockerClientDefaults() // set default registry to docker.io
 			ref = srcRef.Ref.Exact()                       // image repo, the tag and the digest
 		}
 		if !image.IsImagePinned(ref) {
 			digest := srcRef.Ref.ID
 			if digest == "" {
-				digest, err = getImgDigest(img.Name)
+				digest, err = getImgDigest(theRef)
 				klog.Infof("digest is :%s", digest)
 				if err != nil {
 					if !isSkipErr(err) {
@@ -72,15 +76,39 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 			}
 		}
 
-		// Temporary :if source is oci, set the src image type to file
+		// Temporary :if source is oci, set the src image type to file (oc doesnt understand otherwise)
 		if srcRef.Type == image.DestinationOCI {
 			srcRef.Type = imagesource.DestinationFile
 		}
 		// Set destination image information as file by default
 		dstRef := srcRef
-		dstRef.Type = imagesource.DestinationFile
-		// The registry component is not included in the final path.
-		dstRef.Ref.Registry = ""
+		if scn == MirrorToDiskScenario {
+			dstRef.Type = imagesource.DestinationFile
+			// The registry component is not included in the final path.
+			dstRef.Ref.Registry = ""
+		} else {
+
+			dstRef, err = image.ParseReference(img.Name)
+
+			if err != nil {
+				if !isSkipErr(err) {
+					return mmappings, fmt.Errorf("error parsing source image - setting dstRef %s: %v", img.Name, err)
+				}
+				klog.Warning(fmt.Errorf("error parsing source image - setting dstRef %s: %v", img.Name, err))
+				continue
+			}
+			//make name just the name of the image (not full path of source)
+			// this is used when creating the oc mapping object
+			// and later used when copying to oc-mirror-workspace
+			// srcRef.Ref.Name = dstRef.Ref.Name
+
+			if dstRef.Ref.ID == "" {
+				dstRef.Ref.ID = srcRef.Ref.ID
+			}
+			if dstRef.Ref.Tag == "" {
+				dstRef.Ref.Tag = srcRef.Ref.Tag
+			}
+		}
 
 		mmappings.Add(srcRef, dstRef, v1alpha2.TypeGeneric)
 	}
@@ -91,6 +119,10 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 func getImgDigest(imageName string) (string, error) {
 	if strings.HasPrefix(imageName, "file") {
 		imageName = strings.Replace(imageName, "file", "dir", 1) // containers/image uses dir:// as a prefix for on disk dockerv2 images. file:// not recognized
+	}
+	if !strings.Contains(imageName, "://") { //imageName doesnt start with the transport prefix
+		//assume a remote image
+		imageName = dockerProtocol + imageName
 	}
 	_, _, _, _, digest := parseImageName(imageName)
 	if digest != "" {

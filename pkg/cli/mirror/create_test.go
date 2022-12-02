@@ -33,7 +33,7 @@ func TestCreate(t *testing.T) {
 		},
 		OutputDir: path,
 	}
-	_, mappings, err := opts.Create(ctx, cfg)
+	_, mappings, err := opts.Create(ctx, cfg, MirrorToDiskScenario)
 	require.NoError(t, err)
 	require.Len(t, mappings, 1)
 }
