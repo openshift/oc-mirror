@@ -131,7 +131,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destRepo, namespace string) error {
+func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string) error {
 	mapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
@@ -210,6 +210,9 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			}
 			from, to := "", ""
 			_, subns, imgName, tag, sha := parseImageName(i.Image)
+			if imgName == "" {
+				return fmt.Errorf("invalid related image %s: repository name empty", i.Image)
+			}
 
 			from = folder
 			if sha != "" {
@@ -217,10 +220,18 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			} else if sha == "" && tag != "" {
 				from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
 			}
+			to = destReg
+			if namespace != "" {
+				to = strings.Join([]string{to, namespace}, "/")
+			}
+			if subns != "" {
+				to = strings.Join([]string{to, subns}, "/")
+			}
+			to = strings.Join([]string{to, imgName}, "/")
 			if tag != "" {
-				to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + ":" + tag
+				to = to + ":" + tag
 			} else {
-				to = strings.Join([]string{destRepo, namespace, subns, imgName}, "/") + "@sha256:" + sha
+				to = to + "@sha256:" + sha
 			}
 			srcTIR, err := image.ParseReference("file://" + strings.ToLower(from))
 			if err != nil {
@@ -256,8 +267,10 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			}
 			mapping[srcTI] = dstTI
 		}
-
-		to := strings.Join([]string{"docker://" + destRepo, namespace}, "/")
+		to := "docker://" + destReg
+		if namespace != "" {
+			to = strings.Join([]string{to, namespace}, "/")
+		}
 
 		klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
 
