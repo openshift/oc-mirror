@@ -89,7 +89,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
+		_, err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -133,6 +133,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 // a remote registry in oci format
 func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string) error {
 	mapping := image.TypedImageMapping{}
+	catalogMapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
@@ -282,13 +283,57 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		if operator.TargetTag != "" {
 			to += ":" + operator.TargetTag
 		}
-		err = o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
+		digest, err := o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
 		if err != nil {
 			return err
 		}
+		srcCtlgRef := ""
+		if strings.HasPrefix(operator.Catalog, ociProtocol) {
+			if operator.OriginalRepo == "" {
+				return fmt.Errorf("%s is FBC OCI and OriginalRepo field is mandatory", operator.Catalog)
+			} else {
+				srcCtlgRef = operator.OriginalRepo
+			}
+		} else {
+			srcCtlgRef = operator.Catalog
+		}
+		ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
+		if err != nil {
+			return err
+		}
+
+		ctlgDstTIR, err := image.ParseReference(trimProtocol(to))
+		if err != nil {
+			return err
+		}
+		if digest != "" && ctlgDstTIR.Ref.ID == "" {
+			ctlgDstTIR.Ref.ID = string(digest)
+		}
+		if digest != "" && ctlgSrcTIR.Ref.ID == "" {
+			ctlgSrcTIR.Ref.ID = string(digest)
+		}
+		if ctlgSrcTIR.Ref.Tag != "" && ctlgDstTIR.Ref.Tag == "" {
+			ctlgDstTIR.Ref.Tag = ctlgSrcTIR.Ref.Tag
+		}
+
+		catalogMapping.Add(ctlgSrcTIR, ctlgDstTIR, v1alpha2.TypeOperatorCatalog)
+
 	}
 	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
+		return err
+	}
+
+	dir, err := o.createResultsDir()
+	if err != nil {
+		return err
+	}
+
+	// add the catalogs to the mapping so we can generate the results correctly
+	// even though we did not push the catalog images using remoteRegFuncs.mirrorMappings(...)
+	mapping.Merge(catalogMapping)
+
+	if err := o.generateResults(mapping, dir); err != nil {
 		return err
 	}
 
@@ -718,14 +763,14 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 // as well as pushing these catalog images to the remote registry.
 // It calls the underlying containers/image copy library, which looks out for registries.conf
 // file if any, when copying images around.
-func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) error {
+func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) (digest.Digest, error) {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
 		fromPath := trimProtocol(from)
 		if !strings.HasPrefix(fromPath, "/") {
 			absolutePath, err := filepath.Abs(fromPath)
 			if err != nil {
-				return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+				return digest.Digest(""), fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
 			}
 			from = "oci://" + absolutePath
 		}
@@ -742,26 +787,26 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 	} else {
 		sigPolicy, err = signature.DefaultPolicy(nil)
 		if err != nil {
-			return err
+			return digest.Digest(""), err
 		}
 	}
 	policyContext, err := signature.NewPolicyContext(sigPolicy)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 	// define the source context
 	srcRef, err := alltransports.ParseImageName(from)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 	// define the destination context
 	destRef, err := alltransports.ParseImageName(to)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 
 	// call the copy.Image function with the set options
-	_, err = funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
+	manifestBytes, err := funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
 		RemoveSignatures:      true,
 		SignBy:                "",
 		ReportWriter:          os.Stdout,
@@ -774,9 +819,9 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 		OciEncryptConfig:      nil,
 	})
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
-	return nil
+	return manifest.Digest(manifestBytes)
 }
 
 // newSystemContext set the context for source & destination resources

@@ -665,7 +665,7 @@ func TestPullImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
+			_, err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
@@ -701,7 +701,7 @@ func TestPushImage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
+			_, err := c.opts.copyImage(context.TODO(), c.from, c.to, c.funcs)
 			if c.expectedErr != "" {
 				require.EqualError(t, err, c.expectedErr)
 			} else {
