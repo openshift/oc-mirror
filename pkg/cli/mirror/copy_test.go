@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -829,12 +830,12 @@ func TestBulkImageMirror(t *testing.T) {
 	os.RemoveAll("olm_artifacts")
 
 	type spec struct {
-		desc               string
-		sequence           int
-		isc                *v1alpha2.ImageSetConfiguration
-		expectedSubFolders []string
-		options            *MirrorOptions
-		err                string
+		desc        string
+		sequence    int
+		isc         *v1alpha2.ImageSetConfiguration
+		catalogName string
+		options     *MirrorOptions
+		err         string
 	}
 
 	cases := []spec{
@@ -847,7 +848,8 @@ func TestBulkImageMirror(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "oci://" + testdata,
+								Catalog:     "oci://" + testdata,
+								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -865,6 +867,7 @@ func TestBulkImageMirror(t *testing.T) {
 					},
 				},
 			},
+			catalogName: "redhat-operator-index",
 			options: &MirrorOptions{
 				From:             testdata,
 				ToMirror:         "localhost.localdomain:5000",
@@ -884,11 +887,61 @@ func TestBulkImageMirror(t *testing.T) {
 				OCIInsecureSignaturePolicy: true,
 				remoteRegFuncs:             createMockFunctions(0),
 			},
-			err:                "",
-			expectedSubFolders: []string{"aws-load-balancer-operator"},
+			err: "",
 		},
 		{
 			desc:     "No base olm_artifacts directory case passes",
+			sequence: 3,
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:     "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			catalogName: "redhat-operator-index",
+			options: &MirrorOptions{
+				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:         "localhost.localdomain:5000",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureMirrorAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				OCIInsecureSignaturePolicy: true,
+				remoteRegFuncs:             createMockFunctions(0),
+			},
+			err: "",
+		},
+		{
+			desc:     "Missing OriginalRef fails",
 			sequence: 3,
 			isc: &v1alpha2.ImageSetConfiguration{
 				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
@@ -915,6 +968,7 @@ func TestBulkImageMirror(t *testing.T) {
 					},
 				},
 			},
+			catalogName: "rhop-ctlg-oci-mashed",
 			options: &MirrorOptions{
 				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
 				ToMirror:         "localhost.localdomain:5000",
@@ -934,14 +988,15 @@ func TestBulkImageMirror(t *testing.T) {
 				OCIInsecureSignaturePolicy: true,
 				remoteRegFuncs:             createMockFunctions(0),
 			},
-			err:                "",
-			expectedSubFolders: []string{"aws-load-balancer-operator"},
+			err: "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed is an OCI File Based Container: OriginalRef field is mandatory",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
+			ctlgSrcGenerated := false
+			icspGenerated := false
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
 			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace")
@@ -949,11 +1004,24 @@ func TestBulkImageMirror(t *testing.T) {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-				// // check the test using registries.conf for an updated location
-				// if c.sequence == 2 {
-				// 	require.Equal(t, c.options.ToMirror, "preprodlocation/test")
-				// }
+				err = filepath.WalkDir(c.options.Dir, func(path string, d fs.DirEntry, err error) error {
+					if d.IsDir() {
+						return nil
+					}
+
+					if strings.Contains(path, "catalogSource-"+c.catalogName+".yaml") {
+						ctlgSrcGenerated = true
+					}
+					if strings.Contains(path, "imageContentSourcePolicy.yaml") {
+						icspGenerated = true
+					}
+					return nil
+				})
+				require.NoError(t, err, "Unable to recursively look into oc-mirror-workspace")
+				require.True(t, icspGenerated)
+				require.True(t, ctlgSrcGenerated)
 			}
+
 		})
 	}
 }
@@ -1348,6 +1416,479 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			mapping, err := c.options.generateSrcToFileMapping(context.TODO(), c.relatedImages)
+
+			if c.expErr != "" {
+				require.EqualError(t, err, c.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, c.expMapping, mapping)
+		})
+	}
+}
+func TestPrepareDestCatalogRef(t *testing.T) {
+	type spec struct {
+		desc        string
+		operator    v1alpha2.Operator
+		destReg     string
+		namespace   string
+		expectedRef string
+		expectedErr string
+	}
+	cases := []spec{
+		{
+			desc: "no targetName, targetTag",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "disconnected_ocp",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci",
+			expectedErr: "",
+		},
+		{
+			desc: "with targetName, no targetTag",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				TargetName:  "rhopi",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "disconnected_ocp",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi",
+			expectedErr: "",
+		},
+		{
+			desc: "with targetTag and no targetName",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				TargetTag:   "v12",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "disconnected_ocp",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci:v12",
+			expectedErr: "",
+		},
+		{
+			desc: "with targetTag and targetName",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				TargetTag:   "v12",
+				TargetName:  "rhopi",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "disconnected_ocp",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi:v12",
+			expectedErr: "",
+		},
+		{
+			desc: "destReg empty",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			destReg:     "",
+			namespace:   "disconnected_ocp",
+			expectedRef: "",
+			expectedErr: "destination registry may not be empty",
+		},
+		{
+			desc: "namespace empty",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "",
+			expectedRef: "docker://localhost:5000/rhop-ctlg-oci",
+			expectedErr: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			to, err := prepareDestCatalogRef(c.operator, c.destReg, c.namespace)
+			if c.expectedErr != "" {
+				require.EqualError(t, err, c.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, c.expectedRef, to)
+		})
+	}
+}
+
+func TestAddCatalogToMapping(t *testing.T) {
+	type spec struct {
+		desc        string
+		operator    v1alpha2.Operator
+		digest      digest.Digest
+		destRef     string
+		expMapping  image.TypedImageMapping
+		expectedErr string
+	}
+	cases := []spec{
+		{
+			desc: "originalRef has no digest, and digest provided",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			digest:  digest.FromString("just for testing"),
+			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:4.12",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: imagesource.DestinationRegistry,
+						Ref: reference.DockerImageReference{
+							Registry:  "registry.redhat.io",
+							Namespace: "redhat",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        digest.FromString("just for testing").String(),
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected_ocp",
+							Name:      "redhat-operator-index",
+							Tag:       "4.12",
+							ID:        digest.FromString("just for testing").String(),
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				},
+			},
+			expectedErr: "",
+		},
+		{
+			desc: "digest is empty, originalRef has digest",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+			},
+			digest:  "",
+			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: imagesource.DestinationRegistry,
+						Ref: reference.DockerImageReference{
+							Registry:  "registry.redhat.io",
+							Namespace: "redhat",
+							Name:      "redhat-operator-index",
+							Tag:       "",
+							ID:        "sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece"},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected_ocp",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        "sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				},
+			},
+			expectedErr: "",
+		},
+		{
+			desc: "originalRef has no digest, and digest not provided",
+			operator: v1alpha2.Operator{
+				Catalog:     "oci://" + testdata,
+				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			digest:  "",
+			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: imagesource.DestinationRegistry,
+						Ref: reference.DockerImageReference{
+							Registry:  "registry.redhat.io",
+							Namespace: "redhat",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        ""},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected_ocp",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				},
+			},
+			expectedErr: "",
+		},
+		{
+			desc: "catalog is FBC OCI and originalRef is empty",
+			operator: v1alpha2.Operator{
+				Catalog: "oci://" + testdata,
+			},
+			digest:      digest.FromString("just for testing"),
+			destRef:     "docker://localhost:5000/disconnected_ocp/redhat-operator-index:4.12",
+			expMapping:  image.TypedImageMapping{},
+			expectedErr: "oci://" + testdata + " is an OCI File Based Container: OriginalRef field is mandatory",
+		},
+		{
+			desc: "catalog is on registry and originalRef is empty",
+
+			operator: v1alpha2.Operator{
+				Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+			},
+			digest:  digest.FromString("just for testing"),
+			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: imagesource.DestinationRegistry,
+						Ref: reference.DockerImageReference{
+							Registry:  "registry.redhat.io",
+							Namespace: "redhat",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        digest.FromString("just for testing").String(),
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected_ocp",
+							Name:      "redhat-operator-index",
+							Tag:       "v4.12",
+							ID:        digest.FromString("just for testing").String(),
+						},
+					},
+					Category: v1alpha2.TypeOperatorCatalog,
+				},
+			},
+			expectedErr: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			mapping := image.TypedImageMapping{}
+			err := addCatalogToMapping(mapping, c.operator, c.digest, c.destRef)
+			if c.expectedErr != "" {
+				require.EqualError(t, err, c.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, c.expMapping, mapping)
+		})
+	}
+}
+func TestAddRelatedImageToMapping(t *testing.T) {
+	type spec struct {
+		desc       string
+		img        declcfg.RelatedImage
+		destReg    string
+		namespace  string
+		expErr     string
+		expMapping image.TypedImageMapping
+	}
+	cases := []spec{
+		{
+			desc:       "empty image ref is ignored",
+			expErr:     "",
+			expMapping: image.TypedImageMapping{},
+			img: declcfg.RelatedImage{
+				Name:  "noRef",
+				Image: "",
+			},
+			destReg:   "localhost:5000",
+			namespace: "disconnectedOCP",
+		},
+		{
+			desc:       "destination namespace is uppercase fails",
+			expErr:     "\"localhost:5000/disconnectedOCP/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding\" is not a valid image reference: repository name must be lowercase",
+			expMapping: image.TypedImageMapping{},
+			img: declcfg.RelatedImage{
+				Name:  "scos-content",
+				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+			},
+			destReg:   "localhost:5000",
+			namespace: "disconnectedOCP",
+		},
+		{
+			desc:   "relatedImage name empty uses a sha as source folder",
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "6234aa",
+							Name:      "0aa078",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected-ocp",
+							Name:      "okd/scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+			img: declcfg.RelatedImage{
+				Name:  "",
+				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+			},
+			destReg:   "localhost:5000",
+			namespace: "disconnected-ocp",
+		},
+		{
+			desc:   "nominal case passes",
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "scos-content",
+							Name:      "0aa078",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected-ocp",
+							Name:      "okd/scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+			img: declcfg.RelatedImage{
+				Name:  "scos-content",
+				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+			},
+			destReg:   "localhost:5000",
+			namespace: "disconnected-ocp",
+		},
+		{
+			desc:   "destination namespace is empty passes",
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "scos-content",
+							Name:      "0aa078",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "okd",
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+			img: declcfg.RelatedImage{
+				Name:  "scos-content",
+				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+			},
+			destReg:   "localhost:5000",
+			namespace: "",
+		},
+		{
+			desc:   "source namespace is empty passes",
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "scos-content",
+							Name:      "0aa078",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: imagesource.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "disconnected_ocp",
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        "",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+			img: declcfg.RelatedImage{
+				Name:  "scos-content",
+				Image: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+			},
+			destReg:   "localhost:5000",
+			namespace: "disconnected_ocp",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			mapping := image.TypedImageMapping{}
+			err := addRelatedImageToMapping(mapping, c.img, c.destReg, c.namespace)
 
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)
