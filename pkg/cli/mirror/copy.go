@@ -26,6 +26,7 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
@@ -55,10 +56,12 @@ const (
 // In order to be able to mock these external packages,
 // we pass them as parameters of bulkImageCopy and bulkImageMirror
 type RemoteRegFuncs struct {
-	copy           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
-	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
-	newImageSource func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
-	getManifest    func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
+	copy                  func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
+	mirrorMappings        func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
+	newImageSource        func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
+	getManifest           func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
+	handleMetadata        func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error)
+	processMirroredImages func(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error)
 }
 
 // getISConfig simple function to read and unmarshal the imagesetconfig
@@ -305,9 +308,8 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		return err
 	}
 
+	// no use to mirror if source (tar file) is not specified
 	if len(o.From) > 0 {
-		// set operators to nil as they have been
-		// processed in the previous section
 		return o.diskToMirrorWrapper(ctx, cleanup)
 	}
 

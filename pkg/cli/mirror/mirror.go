@@ -487,6 +487,8 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
 			return imgSrc.GetManifest(ctx, instanceDigest)
 		},
+		handleMetadata:        o.handleMetadata,
+		processMirroredImages: o.processMirroredImages,
 	}
 
 	if o.OCIFeatureAction == "" {
