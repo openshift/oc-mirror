@@ -41,6 +41,14 @@ const (
 	relatedImages       string = "relatedImages"
 	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
 	artifactsFolderName string = "olm_artifacts"
+	ocpRelease          string = "release"
+	ocpReleaseImages    string = "release-images"
+	dockerPrefix        string = "docker://"
+	filePrefix          string = "file://"
+	sha256Tag           string = "sha256"
+	manifests           string = "manifests"
+	openshift           string = "openshift"
+	source              string = "src/v2"
 )
 
 // RemoteRegFuncs contains the functions to be used for working with remote registries
@@ -71,7 +79,7 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 // •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 // •a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, cleanup cleanupFunc) error {
 
 	mapping := image.TypedImageMapping{}
 
@@ -123,20 +131,23 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 			return err
 		}
 	} else {
-		klog.Infof("no images to copy")
+		klog.Infof("no catalog images to copy")
 	}
 
-	return nil
+	// implement release and additionalImages also set
+	// operators catalog section to nil
+	isc.Mirror.Operators = nil
+	return o.mirrorToDiskWrapper(ctx, *isc, srcSkipTLS, cleanup)
 }
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string) error {
+func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string, cleanup cleanupFunc) error {
 	mapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
-		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
+		klog.Infof("processing contents of local catalog %s\n", operator.Catalog)
 
 		// assume that the artifacts are placed in the <current working directory>/olm_artifacts
 		artifactsPath := artifactsFolderName
@@ -188,6 +199,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		if err != nil {
 			return err
 		}
+
 		if len(result) > 0 {
 			err := o.remoteRegFuncs.mirrorMappings(*isc, result, o.SourceSkipTLS)
 			if err != nil {
@@ -287,13 +299,19 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			return err
 		}
 	}
+
 	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	if len(o.From) > 0 {
+		// set operators to nil as they have been
+		// processed in the previous section
+		return o.diskToMirrorWrapper(ctx, cleanup)
+	}
 
+	return nil
 }
 
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {

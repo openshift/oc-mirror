@@ -808,12 +808,17 @@ func TestBulkImageCopy(t *testing.T) {
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
 	}
+
+	cleanup := func() error {
+		return nil
+	}
+
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS)
+			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS, cleanup)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -889,7 +894,7 @@ func TestBulkImageMirror(t *testing.T) {
 		},
 		{
 			desc:     "No base olm_artifacts directory case passes",
-			sequence: 3,
+			sequence: 2,
 			isc: &v1alpha2.ImageSetConfiguration{
 				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -939,20 +944,25 @@ func TestBulkImageMirror(t *testing.T) {
 		},
 	}
 
+	cleanup := func() error {
+		return nil
+	}
+
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
+			// for the publish test to pass we need to create this diretory
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace")
+			os.MkdirAll(c.options.Dir, 0755)
+			defer os.RemoveAll(c.options.Dir) // clean up
+			// for now we skip the metadata check
+			c.options.SkipMetadataCheck = true
+			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace", cleanup)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-				// // check the test using registries.conf for an updated location
-				// if c.sequence == 2 {
-				// 	require.Equal(t, c.options.ToMirror, "preprodlocation/test")
-				// }
 			}
 		})
 	}
@@ -1124,24 +1134,6 @@ func TestFirstAvailableMirror(t *testing.T) {
 			expMirror: "",
 			regFuncs:  createMockFunctions(2),
 		},
-		// {
-		// 	desc:      "1/2 mirrors reachable, returns a mirror",
-		// 	imageName: "docker://quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-		// 	prefix:    "quay.io/redhatgov/",
-		// 	mirrors: []sysregistriesv2.Endpoint{
-		// 		{
-		// 			Location: "my.mirror.io/redhatgov",
-		// 			Insecure: true,
-		// 		},
-		// 		{
-		// 			Location: "quay.io/redhatgov",
-		// 			Insecure: false,
-		// 		},
-		// 	},
-		// 	expErr:    "",
-		// 	expMirror: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-		// 	regFuncs:  createMockFunctions(),
-		// },
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
