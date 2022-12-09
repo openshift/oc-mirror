@@ -285,6 +285,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
+
+	o.remoteRegFuncs = RemoteRegFuncs{
+		handleMetadata:        o.handleMetadata,
+		processMirroredImages: o.processMirroredImages,
+	}
+
 	var sourceInsecure bool
 	if o.SourcePlainHTTP || o.SourceSkipTLS {
 		sourceInsecure = true
