@@ -637,7 +637,7 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	releases := image.ByCategory(mapping, v1alpha2.TypeOCPRelease, v1alpha2.TypeOCPReleaseContent)
 	graphs := image.ByCategory(mapping, v1alpha2.TypeCincinnatiGraph)
 	generic := image.ByCategory(mapping, v1alpha2.TypeGeneric)
-	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorCatalog)
+	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorCatalog, v1alpha2.TypeOperatorRelatedImage)
 
 	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
 		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)

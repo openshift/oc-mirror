@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -100,7 +101,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
+		_, err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -147,6 +148,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 // a remote registry in oci format
 func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string, cleanup cleanupFunc) error {
 	mapping := image.TypedImageMapping{}
+	catalogMapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
 		_, _, repo, _, _ := parseImageName(operator.Catalog)
@@ -197,7 +199,8 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 			return err
 		}
 
-		// place related images into the workspace
+		// place related images into the workspace - aka mirrorToDisk
+		// TODO this should probably be done only if artifacts have not been copied
 		result, err := o.generateSrcToFileMapping(ctx, relatedImages)
 		if err != nil {
 			return err
@@ -211,96 +214,33 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		} else {
 			klog.Infof("no images to copy")
 		}
+		// end of mirrorToDisk
 
 		// create mappings for the related images that will moved from the workspace to the final destination
 		for _, i := range relatedImages {
-			if i.Image == "" {
-				klog.Warningf("invalid related image %s: reference empty", i.Name)
-				continue
-			}
-			folder := i.Name
-			if folder == "" {
-				//Regenerating the unique name for this image, that doesnt have a name
-				folder = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-			}
-			from, to := "", ""
-			_, subns, imgName, tag, sha := parseImageName(i.Image)
-			if imgName == "" {
-				return fmt.Errorf("invalid related image %s: repository name empty", i.Image)
-			}
-
-			from = folder
-			if sha != "" {
-				from = from + "/" + strings.TrimPrefix(sha, "sha256:")
-			} else if sha == "" && tag != "" {
-				from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
-			}
-			to = destReg
-			if namespace != "" {
-				to = strings.Join([]string{to, namespace}, "/")
-			}
-			if subns != "" {
-				to = strings.Join([]string{to, subns}, "/")
-			}
-			to = strings.Join([]string{to, imgName}, "/")
-			if tag != "" {
-				to = to + ":" + tag
-			} else {
-				to = to + "@sha256:" + sha
-			}
-			srcTIR, err := image.ParseReference("file://" + strings.ToLower(from))
+			err := addRelatedImageToMapping(mapping, i, destReg, namespace)
 			if err != nil {
 				return err
 			}
-			if sha != "" && srcTIR.Ref.ID == "" {
-				srcTIR.Ref.ID = "sha256:" + sha
-			}
-			if tag != "" && srcTIR.Ref.Tag == "" {
-				srcTIR.Ref.Tag = tag
-			}
-			srcTI := image.TypedImage{
-				TypedImageReference: srcTIR,
-				Category:            v1alpha2.TypeOperatorRelatedImage,
-			}
 
-			dstTIR, err := image.ParseReference(to)
-			if err != nil {
-				return err
-			}
-			if sha != "" && dstTIR.Ref.ID == "" {
-				dstTIR.Ref.ID = "sha256:" + sha
-			}
-			//If there is no tag mirrorMapping is unable to push the image
-			//It would push manifests and layers, but image would not appear
-			//in registry
-			if sha != "" && dstTIR.Ref.Tag == "" {
-				dstTIR.Ref.Tag = sha[0:6]
-			}
-			dstTI := image.TypedImage{
-				TypedImageReference: dstTIR,
-				Category:            v1alpha2.TypeOperatorRelatedImage,
-			}
-			mapping[srcTI] = dstTI
 		}
-		to := "docker://" + destReg
-		if namespace != "" {
-			to = strings.Join([]string{to, namespace}, "/")
+		to, err := prepareDestCatalogRef(operator, destReg, namespace)
+		if err != nil {
+			return fmt.Errorf("unable to generate destination reference for catalog %s: %v", operatorCatalog, err)
 		}
-
-		klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
-
-		if operator.TargetName != "" {
-			to = strings.Join([]string{to, operator.TargetName}, "/")
-		} else {
-			to = strings.Join([]string{to, repo}, "/")
-		}
-		if operator.TargetTag != "" {
-			to += ":" + operator.TargetTag
-		}
-		err = o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
+		digest, err := o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
 		if err != nil {
 			return err
 		}
+
+		// Add the Operator Catalog image to the CatalogMapping for generating ICSP
+		// and CatalogSource later , for each operator catalog in ImageSetConfig.
+		// This needs to use the catalog's original reference (not FBC)
+		err = addCatalogToMapping(catalogMapping, operator, digest, to)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
@@ -311,6 +251,19 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 	// no use to mirror if source (tar file) is not specified
 	if len(o.From) > 0 {
 		return o.diskToMirrorWrapper(ctx, cleanup)
+	}
+
+	dir, err := o.createResultsDir()
+	if err != nil {
+		return err
+	}
+
+	// add the catalogs to the mapping so we can generate the results correctly
+	// even though we did not push the catalog images using remoteRegFuncs.mirrorMappings(...)
+	mapping.Merge(catalogMapping)
+
+	if err := o.generateResults(mapping, dir); err != nil {
+		return err
 	}
 
 	return nil
@@ -373,6 +326,137 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		mapping[srcTI] = dstTI
 	}
 	return mapping, nil
+}
+
+func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.RelatedImage, destReg, namespace string) error {
+	if img.Image == "" {
+		klog.Warningf("invalid related image %s: reference empty", img.Name)
+		return nil
+	}
+	folder := img.Name
+	if folder == "" {
+		//Regenerating the unique name for this image, that doesnt have a name
+		folder = fmt.Sprintf("%x", sha256.Sum256([]byte(img.Image)))[0:6]
+	}
+	from, to := "", ""
+	_, subns, imgName, tag, sha := parseImageName(img.Image)
+	if imgName == "" {
+		return fmt.Errorf("invalid related image %s: repository name empty", img.Image)
+	}
+
+	from = folder
+	if sha != "" {
+		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
+	} else if sha == "" && tag != "" {
+		from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
+	}
+	to = destReg
+	if namespace != "" {
+		to = strings.Join([]string{to, namespace}, "/")
+	}
+	if subns != "" {
+		to = strings.Join([]string{to, subns}, "/")
+	}
+	to = strings.Join([]string{to, imgName}, "/")
+	if tag != "" {
+		to = to + ":" + tag
+	} else {
+		to = to + "@sha256:" + sha
+	}
+	srcTIR, err := image.ParseReference("file://" + strings.ToLower(from))
+	if err != nil {
+		return err
+	}
+	if sha != "" && srcTIR.Ref.ID == "" {
+		srcTIR.Ref.ID = "sha256:" + sha
+	}
+	if tag != "" && srcTIR.Ref.Tag == "" {
+		srcTIR.Ref.Tag = tag
+	}
+	srcTI := image.TypedImage{
+		TypedImageReference: srcTIR,
+		Category:            v1alpha2.TypeOperatorRelatedImage,
+	}
+
+	dstTIR, err := image.ParseReference(to)
+	if err != nil {
+		return err
+	}
+	if sha != "" && dstTIR.Ref.ID == "" {
+		dstTIR.Ref.ID = "sha256:" + sha
+	}
+	//If there is no tag mirrorMapping is unable to push the image
+	//It would push manifests and layers, but image would not appear
+	//in registry
+	if sha != "" && dstTIR.Ref.Tag == "" {
+		dstTIR.Ref.Tag = sha[0:6]
+	}
+	dstTI := image.TypedImage{
+		TypedImageReference: dstTIR,
+		Category:            v1alpha2.TypeOperatorRelatedImage,
+	}
+	mapping[srcTI] = dstTI
+	return nil
+}
+
+func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string) (string, error) {
+	if destReg == "" {
+		return "", errors.New("destination registry may not be empty")
+	}
+	to := "docker://" + destReg
+	if namespace != "" {
+		to = strings.Join([]string{to, namespace}, "/")
+	}
+
+	klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
+
+	if operator.TargetName != "" {
+		to = strings.Join([]string{to, operator.TargetName}, "/")
+	} else {
+		_, _, repo, _, _ := parseImageName(operator.Catalog)
+		to = strings.Join([]string{to, repo}, "/")
+	}
+	if operator.TargetTag != "" {
+		to += ":" + operator.TargetTag
+	}
+	//check if this is a valid reference
+	_, err := image.ParseReference(trimProtocol(to))
+	return to, err
+}
+
+func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1alpha2.Operator, digest digest.Digest, destRef string) error {
+	srcCtlgRef := ""
+	if strings.HasPrefix(srcOperator.Catalog, ociProtocol) {
+		if srcOperator.OriginalRef == "" {
+			return fmt.Errorf("%s is an OCI File Based Container: OriginalRef field is mandatory", srcOperator.Catalog)
+		} else {
+			srcCtlgRef = srcOperator.OriginalRef
+		}
+	} else {
+		srcCtlgRef = srcOperator.Catalog
+	}
+	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
+	if err != nil {
+		return err
+	}
+
+	ctlgDstTIR, err := image.ParseReference(trimProtocol(destRef))
+	if err != nil {
+		return err
+	}
+
+	if digest != "" && ctlgSrcTIR.Ref.ID == "" {
+		ctlgSrcTIR.Ref.ID = string(digest)
+	}
+	if ctlgSrcTIR.Ref.ID != "" && ctlgDstTIR.Ref.ID == "" {
+		ctlgDstTIR.Ref.ID = ctlgSrcTIR.Ref.ID
+	}
+	if ctlgSrcTIR.Ref.Tag != "" && ctlgDstTIR.Ref.Tag == "" {
+		ctlgDstTIR.Ref.Tag = ctlgSrcTIR.Ref.Tag
+	}
+
+	catalogMapping.Add(ctlgSrcTIR, ctlgDstTIR, v1alpha2.TypeOperatorCatalog)
+	return nil
 }
 
 // findFBCConfig function to find the layer from the catalog
@@ -738,14 +822,14 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 // as well as pushing these catalog images to the remote registry.
 // It calls the underlying containers/image copy library, which looks out for registries.conf
 // file if any, when copying images around.
-func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) error {
+func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) (digest.Digest, error) {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
 		fromPath := trimProtocol(from)
 		if !strings.HasPrefix(fromPath, "/") {
 			absolutePath, err := filepath.Abs(fromPath)
 			if err != nil {
-				return fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
+				return digest.Digest(""), fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
 			}
 			from = "oci://" + absolutePath
 		}
@@ -762,26 +846,26 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 	} else {
 		sigPolicy, err = signature.DefaultPolicy(nil)
 		if err != nil {
-			return err
+			return digest.Digest(""), err
 		}
 	}
 	policyContext, err := signature.NewPolicyContext(sigPolicy)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 	// define the source context
 	srcRef, err := alltransports.ParseImageName(from)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 	// define the destination context
 	destRef, err := alltransports.ParseImageName(to)
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
 
 	// call the copy.Image function with the set options
-	_, err = funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
+	manifestBytes, err := funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
 		RemoveSignatures:      true,
 		SignBy:                "",
 		ReportWriter:          os.Stdout,
@@ -794,9 +878,9 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 		OciEncryptConfig:      nil,
 	})
 	if err != nil {
-		return err
+		return digest.Digest(""), err
 	}
-	return nil
+	return manifest.Digest(manifestBytes)
 }
 
 // newSystemContext set the context for source & destination resources

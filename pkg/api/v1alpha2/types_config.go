@@ -114,6 +114,9 @@ type Operator struct {
 	// SkipDependencies will not include dependencies
 	// of bundles included in the diff if true.
 	SkipDependencies bool `json:"skipDependencies,omitempty"`
+	// OriginalRef is used when the Catalog is an OCI FBC (File Based Catalog) location.
+	// It contains the reference to the original repo on a remote registry
+	OriginalRef string `json:"originalRef,omitempty"`
 }
 
 // GetUniqueName determines the catalog name that will
