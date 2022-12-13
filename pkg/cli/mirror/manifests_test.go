@@ -499,6 +499,36 @@ func TestWriteCatalogSource(t *testing.T) {
 			name:   "Success/EmptyMapping",
 			images: nil,
 		},
+		{
+			name: "Success/CatalogNameContainingPathComponents",
+			images: image.TypedImageMapping{
+				{TypedImageReference: imagesource.TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "foo.com",
+						Namespace: "cp",
+						Name:      "test/common-services",
+						Tag:       "",
+						ID:        "sha256:ef64abd2c4c9acdc433ed4454b008d90891fe18fe33d3a53e7d6104a4a8bf5c5",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+					Category: v1alpha2.TypeOperatorCatalog}: {
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry:  "localhost:5000",
+							Namespace: "cp",
+							Name:      "test/common-services",
+							Tag:       "",
+							ID:        "sha256:ef64abd2c4c9acdc433ed4454b008d90891fe18fe33d3a53e7d6104a4a8bf5c5",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorCatalog},
+			},
+			expectedFiles: []string{
+				"catalogSource-test-common-services.yaml",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
