@@ -1393,7 +1393,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhop-ctlg-oci:v4.12",
 			expectedErr: "",
 		},
 		{
@@ -1405,7 +1405,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhopi:v4.12",
 			expectedErr: "",
 		},
 		{
@@ -1417,7 +1417,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhop-ctlg-oci:v12",
 			expectedErr: "",
 		},
 		{
@@ -1430,7 +1430,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhopi:v12",
 			expectedErr: "",
 		},
 		{
@@ -1452,7 +1452,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "",
-			expectedRef: "docker://localhost:5000/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/redhat/rhop-ctlg-oci:v4.12",
 			expectedErr: "",
 		},
 	}
@@ -1722,7 +1722,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						},
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1761,7 +1761,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						},
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1800,7 +1800,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						},
 					},
 					OriginalRef: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{
