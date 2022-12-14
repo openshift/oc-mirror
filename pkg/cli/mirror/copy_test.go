@@ -1214,10 +1214,10 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "operator",
-							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 							Tag:       "",
-							ID:        "",
+							ID:        "", // is this correct??
 						},
 					},
 					OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
@@ -1242,8 +1242,8 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "foo",
-							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("foo-bundle-v0.3.0")))[0:6],
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/" + fmt.Sprintf("%x", sha256.Sum256([]byte("foo-bundle-v0.3.0")))[0:6],
 							Tag:       "foo-bundle-v0.3.0",
 							ID:        "",
 						},
@@ -1270,8 +1270,8 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: fmt.Sprintf("%x", sha256.Sum256([]byte("quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0")))[0:6],
-							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("no-name-v0.3.0")))[0:6],
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/" + fmt.Sprintf("%x", sha256.Sum256([]byte("no-name-v0.3.0")))[0:6],
 							Tag:       "no-name-v0.3.0",
 							ID:        "",
 						},
@@ -1329,8 +1329,8 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "operator",
-							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Namespace: "test",
+							Name:      "oc-mirror-dev/7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 							Tag:       "",
 							ID:        "",
 						},
@@ -1703,8 +1703,8 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "scos-content",
-							Name:       fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
+							Namespace: "okd",
+							Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
@@ -1742,8 +1742,8 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "scos-content",
-							Name:      "0aa078",
+							Namespace: "okd",
+							Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
@@ -1782,7 +1782,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Ref: reference.DockerImageReference{
 							Registry:  "",
 							Namespace: "scos-content",
-							Name:      "0aa078",
+							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
