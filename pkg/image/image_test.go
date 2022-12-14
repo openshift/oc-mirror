@@ -73,3 +73,45 @@ func TestParseReference(t *testing.T) {
 		})
 	}
 }
+
+func TestParseImageName(t *testing.T) {
+	type spec struct {
+		desc      string
+		imageName string
+		expReg    string
+		expOrg    string
+		expRepo   string
+		expTag    string
+		expDigest string
+	}
+	cases := []spec{
+		{
+			desc:      "remote image with tag",
+			imageName: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+			expReg:    "quay.io",
+			expOrg:    "redhatgov",
+			expRepo:   "oc-mirror-dev",
+			expDigest: "",
+			expTag:    "foo-bundle-v0.3.1",
+		},
+		{
+			desc:      "remote image with digest",
+			imageName: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+			expReg:    "quay.io",
+			expOrg:    "redhatgov",
+			expRepo:   "oc-mirror-dev",
+			expDigest: "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+			expTag:    "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			registry, org, repo, tag, sha := ParseImageReference(c.imageName)
+			require.Equal(t, c.expReg, registry)
+			require.Equal(t, c.expOrg, org)
+			require.Equal(t, c.expRepo, repo)
+			require.Equal(t, c.expDigest, sha)
+			require.Equal(t, c.expTag, tag)
+		})
+	}
+}
