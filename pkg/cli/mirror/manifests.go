@@ -192,6 +192,12 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 		case icspScope == namespaceICSPScope:
 			source := path.Join(imgRegistry, imgNamespace)
 			dest := path.Join(v.Ref.Registry, v.Ref.Namespace)
+			if k.OriginalRef != "" { //do this only for TypedImages that have a OriginalRef
+				// Keeping risks at minimum for other functions using this function
+				reg, namespace, _, _, _ := image.ParseImageReference(path.Join(v.Ref.Registry, v.Ref.Namespace, v.Ref.Name))
+				dest = path.Join(reg, namespace)
+			}
+
 			registryMapping[source] = dest
 		default:
 			return registryMapping, fmt.Errorf("invalid ICSP scope %s", icspScope)
