@@ -256,11 +256,6 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			klog.Warningf("invalid related image %s: reference empty", i.Name)
 			continue
 		}
-		name := i.Name
-		if name == "" {
-			//Creating a unique name for this image, that doesnt have a name
-			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-		}
 		originalRef := i.Image
 		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
 		if err != nil {
@@ -282,7 +277,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			TypedImageReference: srcTIR,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
-		dstPath := "file://" + name
+		dstPath := "file://" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
 		if srcTIR.Ref.ID != "" {
 			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
 		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
@@ -314,18 +309,18 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
 	}
-	folder := img.Name
-	if folder == "" {
-		//Regenerating the unique name for this image, that doesnt have a name
-		folder = fmt.Sprintf("%x", sha256.Sum256([]byte(img.Image)))[0:6]
-	}
+
 	from, to := "", ""
 	_, subns, imgName, tag, sha := image.ParseImageReference(img.Image)
 	if imgName == "" {
 		return fmt.Errorf("invalid related image %s: repository name empty", img.Image)
 	}
 
-	from = folder
+	tmpIR, err := image.ParseReference(img.Image)
+	if err != nil {
+		return err
+	}
+	from = tmpIR.Ref.Namespace + "/" + tmpIR.Ref.Name
 	if sha != "" {
 		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
 	} else if sha == "" && tag != "" {
