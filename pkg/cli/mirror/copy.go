@@ -261,7 +261,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			//Creating a unique name for this image, that doesnt have a name
 			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
 		}
-
+		originalRef := i.Image
 		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
 		if err != nil {
 			klog.Warningf("Cannot find registry for %s", i.Image)
@@ -301,6 +301,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		}
 		dstTI := image.TypedImage{
 			TypedImageReference: dstTIR,
+			OriginalRef:         originalRef,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
 		mapping[srcTI] = dstTI
@@ -355,6 +356,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	srcTI := image.TypedImage{
 		TypedImageReference: srcTIR,
+		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 
@@ -373,6 +375,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	dstTI := image.TypedImage{
 		TypedImageReference: dstTIR,
+		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 	mapping[srcTI] = dstTI
@@ -435,7 +438,18 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		ctlgDstTIR.Ref.Tag = ctlgSrcTIR.Ref.Tag
 	}
 
-	catalogMapping.Add(ctlgSrcTIR, ctlgDstTIR, v1alpha2.TypeOperatorCatalog)
+	ctlgSrcTI := image.TypedImage{
+		TypedImageReference: ctlgSrcTIR,
+		OriginalRef:         srcOperator.OriginalRef,
+		Category:            v1alpha2.TypeOperatorCatalog,
+	}
+
+	ctlgDstTI := image.TypedImage{
+		TypedImageReference: ctlgDstTIR,
+		OriginalRef:         srcOperator.OriginalRef,
+		Category:            v1alpha2.TypeOperatorCatalog,
+	}
+	catalogMapping[ctlgSrcTI] = ctlgDstTI
 	return nil
 }
 
