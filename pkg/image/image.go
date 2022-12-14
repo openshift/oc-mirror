@@ -61,3 +61,45 @@ func ParseReference(ref string) (imagesource.TypedImageReference, error) {
 	}
 	return imagesource.TypedImageReference{Ref: dst, Type: dstType}, nil
 }
+
+// parseImageName returns the registry, organisation, repository, tag and digest
+// from the imageName.
+// It can handle both remote and local images.
+func ParseImageReference(imageName string) (string, string, string, string, string) {
+	registry, org, repo, tag, sha := "", "", "", "", ""
+	imageName = TrimProtocol(imageName)
+	imageName = strings.TrimPrefix(imageName, "/")
+	imageName = strings.TrimSuffix(imageName, "/")
+	tmp := strings.Split(imageName, "/")
+
+	registry = tmp[0]
+	img := strings.Split(tmp[len(tmp)-1], ":")
+	if len(tmp) > 2 {
+		org = strings.Join(tmp[1:len(tmp)-1], "/")
+	}
+	if len(img) > 1 {
+		if strings.Contains(img[0], "@") {
+			nm := strings.Split(img[0], "@")
+			repo = nm[0]
+			sha = img[1]
+		} else {
+			repo = img[0]
+			tag = img[1]
+		}
+	} else {
+		repo = img[0]
+	}
+
+	return registry, org, repo, tag, sha
+}
+
+// trimProtocol removes oci://, file:// or docker:// from
+// the parameter imageName
+func TrimProtocol(imageName string) string {
+	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, "file:")
+	imageName = strings.TrimPrefix(imageName, "docker:")
+	imageName = strings.TrimPrefix(imageName, "//")
+
+	return imageName
+}
