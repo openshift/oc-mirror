@@ -167,15 +167,30 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 			klog.Warningf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue
 		}
+		imgRegistry, imgNamespace, imgName := "", "", ""
+		if k.OriginalRef != "" {
+			imgRegistry, imgNamespace, imgName, _, _ = image.ParseImageReference(k.OriginalRef)
+		} else {
+			imgRegistry = k.Ref.Registry
+			imgNamespace = k.Ref.Namespace
+			imgName = k.Ref.Name
+		}
+
 		switch {
 		case icspScope == registryICSPScope:
-			registryMapping[k.Ref.Registry] = v.Ref.Registry
+			registryMapping[imgRegistry] = v.Ref.Registry
 		case icspScope == namespaceICSPScope && k.Ref.Namespace == "":
 			fallthrough
 		case icspScope == repositoryICSPScope:
-			registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
+			if k.OriginalRef != "" {
+				source := path.Join(imgRegistry, imgNamespace, imgName)
+				dest := path.Join(v.Ref.Registry, v.Ref.Namespace, v.Ref.Name)
+				registryMapping[source] = dest
+			} else {
+				registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
+			}
 		case icspScope == namespaceICSPScope:
-			source := path.Join(k.Ref.Registry, k.Ref.Namespace)
+			source := path.Join(imgRegistry, imgNamespace)
 			dest := path.Join(v.Ref.Registry, v.Ref.Namespace)
 			registryMapping[source] = dest
 		default:

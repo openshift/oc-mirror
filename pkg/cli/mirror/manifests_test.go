@@ -366,18 +366,19 @@ func TestICSPGeneration(t *testing.T) {
 		},
 		{
 			name: "Valid/OperatorTypeWithRelatedImgs",
-			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
-					Ref: reference.DockerImageReference{
-						Registry:  "some-registry-bundle",
-						Namespace: "namespace-bundle",
-						Name:      "image-bundle",
-						ID:        "digest-bundle",
+			sourceImages: []image.TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry:  "some-registry-bundle",
+							Namespace: "namespace-bundle",
+							Name:      "image-bundle",
+							ID:        "digest-bundle",
+						},
+						Type: imagesource.DestinationRegistry,
 					},
-					Type: imagesource.DestinationRegistry,
+					Category: v1alpha2.TypeOperatorBundle,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
-			},
 				{
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
@@ -390,18 +391,19 @@ func TestICSPGeneration(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}},
-			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
-					Ref: reference.DockerImageReference{
-						Registry:  "disconn-registry",
-						Namespace: "namespace-bundle",
-						Name:      "image-bundle",
-						ID:        "digest-bundle",
+			destImages: []image.TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry:  "disconn-registry",
+							Namespace: "namespace-bundle",
+							Name:      "image-bundle",
+							ID:        "digest-bundle",
+						},
+						Type: imagesource.DestinationRegistry,
 					},
-					Type: imagesource.DestinationRegistry,
+					Category: v1alpha2.TypeOperatorBundle,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
-			},
 				{
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
