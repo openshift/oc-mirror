@@ -17,6 +17,7 @@ import (
 // TypedImage defines an a image with the destination and content type
 type TypedImage struct {
 	imagesource.TypedImageReference
+	OriginalRef string
 	// Category adds image category type to TypedImageReference
 	Category v1alpha2.ImageType
 }
@@ -27,7 +28,7 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	if err != nil {
 		return TypedImage{}, err
 	}
-	t := TypedImage{ref, typ}
+	t := TypedImage{ref, image, typ}
 	return t.SetDefaults(), nil
 }
 
