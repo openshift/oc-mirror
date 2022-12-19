@@ -1102,48 +1102,6 @@ func TestUntarLayers(t *testing.T) {
 	}
 }
 
-func TestParseImageName(t *testing.T) {
-	type spec struct {
-		desc      string
-		imageName string
-		expReg    string
-		expOrg    string
-		expRepo   string
-		expTag    string
-		expDigest string
-	}
-	cases := []spec{
-		{
-			desc:      "remote image with tag",
-			imageName: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-			expReg:    "quay.io",
-			expOrg:    "redhatgov",
-			expRepo:   "oc-mirror-dev",
-			expDigest: "",
-			expTag:    "foo-bundle-v0.3.1",
-		},
-		{
-			desc:      "remote image with digest",
-			imageName: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
-			expReg:    "quay.io",
-			expOrg:    "redhatgov",
-			expRepo:   "oc-mirror-dev",
-			expDigest: "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
-			expTag:    "",
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			registry, org, repo, tag, sha := parseImageName(c.imageName)
-			require.Equal(t, c.expReg, registry)
-			require.Equal(t, c.expOrg, org)
-			require.Equal(t, c.expRepo, repo)
-			require.Equal(t, c.expDigest, sha)
-			require.Equal(t, c.expTag, tag)
-		})
-	}
-}
-
 func TestFirstAvailableMirror(t *testing.T) {
 	type spec struct {
 		desc      string
@@ -1263,19 +1221,21 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 							ID:        "sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "operator",
-							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 							Tag:       "",
-							ID:        "",
+							ID:        "", // is this correct??
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 
 				image.TypedImage{
@@ -1289,18 +1249,21 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "foo",
-							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("foo-bundle-v0.3.0")))[0:6],
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/" + fmt.Sprintf("%x", sha256.Sum256([]byte("foo-bundle-v0.3.0")))[0:6],
 							Tag:       "foo-bundle-v0.3.0",
 							ID:        "",
 						},
-					}, Category: v1alpha2.TypeOperatorRelatedImage,
+					},
+					Category:    v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.0",
 				},
 
 				image.TypedImage{
@@ -1314,19 +1277,21 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: fmt.Sprintf("%x", sha256.Sum256([]byte("quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0")))[0:6],
-							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("no-name-v0.3.0")))[0:6],
+							Namespace: "redhatgov",
+							Name:      "oc-mirror-dev/" + fmt.Sprintf("%x", sha256.Sum256([]byte("no-name-v0.3.0")))[0:6],
 							Tag:       "no-name-v0.3.0",
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0",
 				},
 			},
 
@@ -1371,19 +1336,21 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 							ID:        "sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "operator",
-							Name:      "7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+							Namespace: "test",
+							Name:      "oc-mirror-dev/7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 							Tag:       "",
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					Category:    v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 				},
 			},
 
@@ -1440,7 +1407,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhop-ctlg-oci:v4.12",
 			expectedErr: "",
 		},
 		{
@@ -1452,7 +1419,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhopi:v4.12",
 			expectedErr: "",
 		},
 		{
@@ -1464,7 +1431,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhop-ctlg-oci:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhop-ctlg-oci:v12",
 			expectedErr: "",
 		},
 		{
@@ -1477,7 +1444,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/rhopi:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/redhat/rhopi:v12",
 			expectedErr: "",
 		},
 		{
@@ -1499,7 +1466,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "",
-			expectedRef: "docker://localhost:5000/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/redhat/rhop-ctlg-oci:v4.12",
 			expectedErr: "",
 		},
 	}
@@ -1547,7 +1514,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        digest.FromString("just for testing").String(),
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+					Category:    v1alpha2.TypeOperatorCatalog,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1559,7 +1527,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        digest.FromString("just for testing").String(),
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+					Category:    v1alpha2.TypeOperatorCatalog,
 				},
 			},
 			expectedErr: "",
@@ -1584,7 +1553,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Tag:       "",
 							ID:        "sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece"},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					Category:    v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1596,7 +1566,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        "sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+					Category:    v1alpha2.TypeOperatorCatalog,
 				},
 			},
 			expectedErr: "",
@@ -1621,7 +1592,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Tag:       "v4.12",
 							ID:        ""},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+					Category:    v1alpha2.TypeOperatorCatalog,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1633,7 +1605,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+					Category:    v1alpha2.TypeOperatorCatalog,
 				},
 			},
 			expectedErr: "",
@@ -1669,7 +1642,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        digest.FromString("just for testing").String(),
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					Category:    v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1681,7 +1655,8 @@ func TestAddCatalogToMapping(t *testing.T) {
 							ID:        digest.FromString("just for testing").String(),
 						},
 					},
-					Category: v1alpha2.TypeOperatorCatalog,
+					Category:    v1alpha2.TypeOperatorCatalog,
+					OriginalRef: "",
 				},
 			},
 			expectedErr: "",
@@ -1733,43 +1708,6 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			namespace: "disconnectedOCP",
 		},
 		{
-			desc:   "relatedImage name empty uses a sha as source folder",
-			expErr: "",
-			expMapping: image.TypedImageMapping{
-
-				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
-						Type: "file",
-						Ref: reference.DockerImageReference{
-							Registry:  "",
-							Namespace: "6234aa",
-							Name:      "0aa078",
-							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:        ""},
-					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
-				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
-						Type: "docker",
-						Ref: reference.DockerImageReference{
-							Registry:  "localhost:5000",
-							Namespace: "disconnected-ocp",
-							Name:      "okd/scos-content",
-							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:        "",
-						},
-					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
-				},
-			},
-			img: declcfg.RelatedImage{
-				Name:  "",
-				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
-			},
-			destReg:   "localhost:5000",
-			namespace: "disconnected-ocp",
-		},
-		{
 			desc:   "nominal case passes",
 			expErr: "",
 			expMapping: image.TypedImageMapping{
@@ -1779,12 +1717,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "scos-content",
-							Name:      "0aa078",
+							Namespace: "okd",
+							Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1796,7 +1735,8 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1816,12 +1756,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "",
-							Namespace: "scos-content",
-							Name:      "0aa078",
+							Namespace: "okd",
+							Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1833,7 +1774,8 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1854,11 +1796,12 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 						Ref: reference.DockerImageReference{
 							Registry:  "",
 							Namespace: "scos-content",
-							Name:      "0aa078",
+							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
 							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
 							ID:        ""},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1870,7 +1813,8 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 							ID:        "",
 						},
 					},
-					Category: v1alpha2.TypeOperatorRelatedImage,
+					OriginalRef: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
+					Category:    v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
 			img: declcfg.RelatedImage{

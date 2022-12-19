@@ -366,49 +366,51 @@ func TestICSPGeneration(t *testing.T) {
 		},
 		{
 			name: "Valid/OperatorTypeWithRelatedImgs",
-			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
-					Ref: reference.DockerImageReference{
-						Registry:  "some-registry",
-						Namespace: "namespace",
-						Name:      "image",
-						ID:        "digest",
+			sourceImages: []image.TypedImage{
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry:  "some-registry-bundle",
+							Namespace: "namespace-bundle",
+							Name:      "image-bundle",
+							ID:        "digest-bundle",
+						},
+						Type: imagesource.DestinationRegistry,
 					},
-					Type: imagesource.DestinationRegistry,
+					Category: v1alpha2.TypeOperatorBundle,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
-			},
 				{
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "some-registry-for-related",
-							Namespace: "namespace",
-							Name:      "related-image",
-							ID:        "digest",
+							Namespace: "namespace-related",
+							Name:      "image-related",
+							ID:        "digest-related",
 						},
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}},
-			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
-					Ref: reference.DockerImageReference{
-						Registry:  "disconn-registry",
-						Namespace: "namespace",
-						Name:      "image",
-						ID:        "digest",
-					},
-					Type: imagesource.DestinationRegistry,
-				},
-				Category: v1alpha2.TypeOperatorBundle,
-			},
+			destImages: []image.TypedImage{
 				{
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "disconn-registry",
-							Namespace: "namespace",
-							Name:      "related-image",
-							ID:        "digest",
+							Namespace: "namespace-bundle",
+							Name:      "image-bundle",
+							ID:        "digest-bundle",
+						},
+						Type: imagesource.DestinationRegistry,
+					},
+					Category: v1alpha2.TypeOperatorBundle,
+				},
+				{
+					TypedImageReference: imagesource.TypedImageReference{
+						Ref: reference.DockerImageReference{
+							Registry:  "disconn-registry",
+							Namespace: "namespace-related",
+							Name:      "image-related",
+							ID:        "digest-related",
 						},
 						Type: imagesource.DestinationRegistry,
 					},
@@ -428,12 +430,12 @@ func TestICSPGeneration(t *testing.T) {
 				Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
 					RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
 						{
-							Source:  "some-registry/namespace",
-							Mirrors: []string{"disconn-registry/namespace"},
+							Source:  "some-registry-bundle/namespace-bundle",
+							Mirrors: []string{"disconn-registry/namespace-bundle"},
 						},
 						{
-							Source:  "some-registry-for-related/namespace",
-							Mirrors: []string{"disconn-registry/namespace"},
+							Source:  "some-registry-for-related/namespace-related",
+							Mirrors: []string{"disconn-registry/namespace-related"},
 						},
 					},
 				},
