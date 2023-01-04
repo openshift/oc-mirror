@@ -248,11 +248,6 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		return err
 	}
 
-	// no use to mirror if source (tar file) is not specified
-	if len(o.From) > 0 {
-		return o.diskToMirrorWrapper(ctx, cleanup)
-	}
-
 	dir, err := o.createResultsDir()
 	if err != nil {
 		return err
@@ -264,6 +259,11 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 
 	if err := o.generateResults(mapping, dir); err != nil {
 		return err
+	}
+
+	// no use to mirror if source (tar file) is not specified
+	if len(o.From) > 0 {
+		return o.diskToMirrorWrapper(ctx, cleanup)
 	}
 
 	return nil
