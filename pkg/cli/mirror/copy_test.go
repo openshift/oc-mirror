@@ -956,6 +956,57 @@ func TestBulkImageMirror(t *testing.T) {
 
 						Operators: []v1alpha2.Operator{
 							{
+								Catalog:     "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			catalogName: "redhat-operator-index",
+			options: &MirrorOptions{
+				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:         "localhost.localdomain:5000",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureMirrorAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				OCIInsecureSignaturePolicy: true,
+				remoteRegFuncs:             createMockFunctions(0),
+			},
+			err: "",
+		},
+		{
+			desc:     "Missing OriginalRef fails",
+			sequence: 3,
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
 								Catalog: "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
@@ -1005,7 +1056,6 @@ func TestBulkImageMirror(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			// for the publish test to pass we need to create this diretory
 			ctlgSrcGenerated := false
 			icspGenerated := false
 			c.options.OutputDir = tmpDir
@@ -1036,6 +1086,7 @@ func TestBulkImageMirror(t *testing.T) {
 				require.True(t, icspGenerated)
 				require.True(t, ctlgSrcGenerated)
 			}
+
 		})
 	}
 }
