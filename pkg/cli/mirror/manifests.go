@@ -299,6 +299,14 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 	for source, dest := range mapping {
 		name := source.Ref.Name
 
+		// In case the source ref has multiple path components (organization, namespace + subnamespace):
+		// Ex: foo.com/cp/test/common-services@sha256:ef64abd2c4c9acdc433ed4454b008d90891fe18fe33d3a53e7d6104a4a8bf5c5
+		// In this case, the `source.Ref.Name`` will contain some path-components, in addition to the image name, separated by `/`
+		// For the above example: name = `test/common-services`
+		// Since name is used to generate the file name, `os.WriteFile` will fail in this case, as subdir test
+		// doesn't exist. Therefore we replace `/` with `-`
+		name = strings.ReplaceAll(name, "/", "-")
+
 		value, found := names[name]
 		if found {
 			value++
@@ -312,7 +320,7 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("catalogSource-%s.yaml", name)), catalogSource, os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("catalogSource-%s.yaml", name)), catalogSource, os.ModePerm); err != nil {
 			return fmt.Errorf("error writing CatalogSource: %v", err)
 		}
 	}
