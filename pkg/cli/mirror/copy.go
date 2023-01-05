@@ -84,7 +84,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 	for _, operator := range isc.Mirror.Operators {
 
 		klog.Infof("downloading the catalog image %s\n", operator.Catalog)
-		_, _, repo, _, _ := parseImageName(operator.Catalog)
+		_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
 		localOperatorDir := filepath.Join(o.OutputDir, repo)
 		if err := os.RemoveAll(localOperatorDir); err != nil {
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
@@ -137,7 +137,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 	catalogMapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
-		_, _, repo, _, _ := parseImageName(operator.Catalog)
+		_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
 		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
 
 		// assume that the artifacts are placed in the <current working directory>/olm_artifacts
@@ -149,7 +149,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		// if it does not exist the function findFBCConfig needs to be called to setup the appropriate directory structures
 		// and the directory names need to change
 
-		operatorCatalog := trimProtocol(operator.Catalog)
+		operatorCatalog := image.TrimProtocol(operator.Catalog)
 
 		// check for the valid config label to use
 		configsLabel, err := o.getCatalogConfigPath(ctx, operatorCatalog)
@@ -256,12 +256,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			klog.Warningf("invalid related image %s: reference empty", i.Name)
 			continue
 		}
-		name := i.Name
-		if name == "" {
-			//Creating a unique name for this image, that doesnt have a name
-			name = fmt.Sprintf("%x", sha256.Sum256([]byte(i.Image)))[0:6]
-		}
-
+		originalRef := i.Image
 		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
 		if err != nil {
 			klog.Warningf("Cannot find registry for %s", i.Image)
@@ -282,7 +277,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			TypedImageReference: srcTIR,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
-		dstPath := "file://" + name
+		dstPath := "file://" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
 		if srcTIR.Ref.ID != "" {
 			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
 		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
@@ -301,6 +296,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		}
 		dstTI := image.TypedImage{
 			TypedImageReference: dstTIR,
+			OriginalRef:         originalRef,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
 		mapping[srcTI] = dstTI
@@ -313,18 +309,18 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
 	}
-	folder := img.Name
-	if folder == "" {
-		//Regenerating the unique name for this image, that doesnt have a name
-		folder = fmt.Sprintf("%x", sha256.Sum256([]byte(img.Image)))[0:6]
-	}
+
 	from, to := "", ""
-	_, subns, imgName, tag, sha := parseImageName(img.Image)
+	_, subns, imgName, tag, sha := image.ParseImageReference(img.Image)
 	if imgName == "" {
 		return fmt.Errorf("invalid related image %s: repository name empty", img.Image)
 	}
 
-	from = folder
+	tmpIR, err := image.ParseReference(img.Image)
+	if err != nil {
+		return err
+	}
+	from = tmpIR.Ref.Namespace + "/" + tmpIR.Ref.Name
 	if sha != "" {
 		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
 	} else if sha == "" && tag != "" {
@@ -355,6 +351,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	srcTI := image.TypedImage{
 		TypedImageReference: srcTIR,
+		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 
@@ -373,6 +370,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	dstTI := image.TypedImage{
 		TypedImageReference: dstTIR,
+		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 	mapping[srcTI] = dstTI
@@ -383,9 +381,15 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 	if destReg == "" {
 		return "", errors.New("destination registry may not be empty")
 	}
+	_, subNamespace, _, tag, _ := image.ParseImageReference(operator.OriginalRef)
+	_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
+
 	to := "docker://" + destReg
 	if namespace != "" {
 		to = strings.Join([]string{to, namespace}, "/")
+	}
+	if subNamespace != "" {
+		to = strings.Join([]string{to, subNamespace}, "/")
 	}
 
 	klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
@@ -393,14 +397,15 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 	if operator.TargetName != "" {
 		to = strings.Join([]string{to, operator.TargetName}, "/")
 	} else {
-		_, _, repo, _, _ := parseImageName(operator.Catalog)
 		to = strings.Join([]string{to, repo}, "/")
 	}
 	if operator.TargetTag != "" {
 		to += ":" + operator.TargetTag
+	} else if tag != "" {
+		to += ":" + tag
 	}
 	//check if this is a valid reference
-	_, err := image.ParseReference(trimProtocol(to))
+	_, err := image.ParseReference(image.TrimProtocol(to))
 	return to, err
 }
 
@@ -420,7 +425,7 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		return err
 	}
 
-	ctlgDstTIR, err := image.ParseReference(trimProtocol(destRef))
+	ctlgDstTIR, err := image.ParseReference(image.TrimProtocol(destRef))
 	if err != nil {
 		return err
 	}
@@ -435,7 +440,18 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		ctlgDstTIR.Ref.Tag = ctlgSrcTIR.Ref.Tag
 	}
 
-	catalogMapping.Add(ctlgSrcTIR, ctlgDstTIR, v1alpha2.TypeOperatorCatalog)
+	ctlgSrcTI := image.TypedImage{
+		TypedImageReference: ctlgSrcTIR,
+		OriginalRef:         srcOperator.OriginalRef,
+		Category:            v1alpha2.TypeOperatorCatalog,
+	}
+
+	ctlgDstTI := image.TypedImage{
+		TypedImageReference: ctlgDstTIR,
+		OriginalRef:         srcOperator.OriginalRef,
+		Category:            v1alpha2.TypeOperatorCatalog,
+	}
+	catalogMapping[ctlgSrcTI] = ctlgDstTI
 	return nil
 }
 
@@ -668,7 +684,7 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 			finalError = fmt.Errorf("%w: unable to get Manifest for %s: %v", finalError, mirroredImage, err)
 			continue
 		} else {
-			return trimProtocol(mirroredImage), nil
+			return image.TrimProtocol(mirroredImage), nil
 		}
 	}
 	return "", finalError
@@ -704,48 +720,6 @@ func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, 
 		return nil, fmt.Errorf("unable to get OCI Image from %s: %w", path, err)
 	}
 	return imgsrc, nil
-}
-
-// parseImageName returns the registry, organisation, repository, tag and digest
-// from the imageName.
-// It can handle both remote and local images.
-func parseImageName(imageName string) (string, string, string, string, string) {
-	registry, org, repo, tag, sha := "", "", "", "", ""
-	imageName = trimProtocol(imageName)
-	imageName = strings.TrimPrefix(imageName, "/")
-	imageName = strings.TrimSuffix(imageName, "/")
-	tmp := strings.Split(imageName, "/")
-
-	registry = tmp[0]
-	img := strings.Split(tmp[len(tmp)-1], ":")
-	if len(tmp) > 2 {
-		org = strings.Join(tmp[1:len(tmp)-1], "/")
-	}
-	if len(img) > 1 {
-		if strings.Contains(img[0], "@") {
-			nm := strings.Split(img[0], "@")
-			repo = nm[0]
-			sha = img[1]
-		} else {
-			repo = img[0]
-			tag = img[1]
-		}
-	} else {
-		repo = img[0]
-	}
-
-	return registry, org, repo, tag, sha
-}
-
-// trimProtocol removes oci://, file:// or docker:// from
-// the parameter imageName
-func trimProtocol(imageName string) string {
-	imageName = strings.TrimPrefix(imageName, "oci:")
-	imageName = strings.TrimPrefix(imageName, "file:")
-	imageName = strings.TrimPrefix(imageName, "docker:")
-	imageName = strings.TrimPrefix(imageName, "//")
-
-	return imageName
 }
 
 // UntarLayers simple function that untars the layer that
@@ -805,7 +779,7 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) (digest.Digest, error) {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
-		fromPath := trimProtocol(from)
+		fromPath := image.TrimProtocol(from)
 		if !strings.HasPrefix(fromPath, "/") {
 			absolutePath, err := filepath.Abs(fromPath)
 			if err != nil {
