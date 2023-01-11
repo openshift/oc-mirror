@@ -9,11 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/opencontainers/go-digest"
@@ -27,13 +27,14 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
 const (
 	blobsPath           string = "/blobs/sha256/"
-	dockerProtocol      string = "docker://"
+	dockerPrefix        string = "docker://"
 	configPath          string = "configs/"
 	catalogJSON         string = "/catalog.json"
 	relatedImages       string = "relatedImages"
@@ -41,9 +42,8 @@ const (
 	artifactsFolderName string = "olm_artifacts"
 	ocpRelease          string = "release"
 	ocpReleaseImages    string = "release-images"
-	dockerPrefix        string = "docker://"
 	filePrefix          string = "file://"
-	sha256Tag           string = "sha256"
+	sha256Tag           string = "sha256:"
 	manifests           string = "manifests"
 	openshift           string = "openshift"
 	source              string = "src/v2"
@@ -77,225 +77,6 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 	return isc, nil
 }
 
-// •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
-// •a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, cleanup cleanupFunc) error {
-
-	mapping := image.TypedImageMapping{}
-
-	// artifactsPath is a folder  used to untar the catalog contents, in order to process it and prepare copy.
-	// For each operator, a folder with the name of the operator will be created under artifactsPath (ctlcConfigsDir)
-	// For the moment, it is created under the working directory, like oc-mirror-workspace
-	artifactsPath := artifactsFolderName
-
-	for _, operator := range isc.Mirror.Operators {
-
-		klog.Infof("downloading the catalog image %s\n", operator.Catalog)
-		_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
-		localOperatorDir := filepath.Join(o.OutputDir, repo)
-		if err := os.RemoveAll(localOperatorDir); err != nil {
-			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
-		}
-
-		_, err := o.copyImage(ctx, dockerProtocol+operator.Catalog, v1alpha2.OCITransportPrefix+localOperatorDir, o.remoteRegFuncs)
-		if err != nil {
-			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
-		}
-
-		// find the layer with the FB config
-		catalogContentsDir := filepath.Join(artifactsPath, repo)
-		klog.Infof("Finding file based config for %s (in catalog layers)\n", operator.Catalog)
-		_, err = o.findFBCConfig(ctx, localOperatorDir, catalogContentsDir)
-		if err != nil {
-			return fmt.Errorf("unable to find config in %s: %v", localOperatorDir, err)
-		}
-
-		klog.Infof("Filtering on selected packages for %s \n", operator.Catalog)
-
-		cfg, err := o.getFilteredDeclarativeConfig(ctx, operator, catalogContentsDir)
-		if err != nil {
-			return err
-		}
-
-		relatedImages, err := getRelatedImages(cfg, operator.Packages)
-		if err != nil {
-			return err
-		}
-
-		result, err := o.generateSrcToFileMapping(ctx, relatedImages)
-		if err != nil {
-			return err
-		}
-		mapping.Merge(result)
-	}
-
-	o.Dir = strings.TrimPrefix(o.Dir, o.OutputDir+"/")
-	if len(mapping) > 0 {
-		err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, srcSkipTLS)
-		if err != nil {
-			return err
-		}
-	} else {
-		klog.Infof("no catalog images to copy")
-	}
-
-	// implement release and additionalImages also set
-	// operators catalog section to nil
-	isc.Mirror.Operators = nil
-	return o.mirrorToDiskWrapper(ctx, *isc, cleanup)
-}
-
-// bulkImageMirror used to mirror the relevant images (push from a directory) to
-// a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string, cleanup cleanupFunc) error {
-	mapping := image.TypedImageMapping{}
-	catalogMapping := image.TypedImageMapping{}
-
-	for _, operator := range isc.Mirror.Operators {
-		if !operator.IsFBCOCI() {
-			continue
-		}
-		_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
-		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
-
-		// assume that the artifacts are placed in the <current working directory>/olm_artifacts
-		artifactsPath := artifactsFolderName
-
-		// This allows for the use case where oc-mirror copy (with the use-oci-feature flag) was not used
-		// check to see if the artifactsPath exists
-		// if it does it means that oc-mirror copy with the use-oci-feature flag was used and continue normally
-		// if it does not exist the function findFBCConfig needs to be called to setup the appropriate directory structures
-		// and the directory names need to change
-
-		operatorCatalog := image.TrimProtocol(operator.Catalog)
-
-		// check for the valid config label to use
-		configsLabel, err := o.getCatalogConfigPath(ctx, operatorCatalog)
-		if err != nil {
-			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operator.Catalog, err)
-			return err
-		}
-		// initialize path starting with <current working directory>/olm_artifacts/<repo>
-		catalogContentsDir := filepath.Join(artifactsPath, repo)
-		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-		catalogConfigsDir := filepath.Join(catalogContentsDir, configsLabel)
-
-		if _, err := os.Stat(catalogConfigsDir); os.IsNotExist(err) {
-			// get the FBC, and obtain its config directory
-			// example: <current working directory>/olm_artifacts/<repo>/<config folder>
-			ctlgConfigsDir, err := o.findFBCConfig(ctx, operatorCatalog, catalogContentsDir)
-			if err != nil {
-				return fmt.Errorf("unable to find config in %s: %v", artifactsPath, err)
-			}
-			// if we get here, we've established that the config folder exists, so use it
-			catalogContentsDir = ctlgConfigsDir
-			klog.Infof("Catalog configs dir %s\n", catalogContentsDir)
-		} else {
-			// folder exists, so use as-is
-			klog.Infof("Catalog configs dir %s\n", catalogContentsDir)
-		}
-
-		klog.Infof("Processing contents of local catalog %s\n", operator.Catalog)
-
-		cfg, err := o.getFilteredDeclarativeConfig(ctx, operator, catalogContentsDir)
-		if err != nil {
-			klog.Errorf("getFilteredDeclarativeConfig error: %s", err.Error())
-			if strings.Contains(err.Error(), "package does not exist in new model") {
-				continue
-			}
-			return err
-		}
-
-		relatedImages, err := getRelatedImages(cfg, operator.Packages)
-		if err != nil {
-			klog.Fatal(err)
-			return err
-		}
-
-		// place related images into the workspace - aka mirrorToDisk
-		// TODO this should probably be done only if artifacts have not been copied
-		result, err := o.generateSrcToFileMapping(ctx, relatedImages)
-		if err != nil {
-			return err
-		}
-
-		if len(result) > 0 {
-			err := o.remoteRegFuncs.mirrorMappings(*isc, result, o.SourceSkipTLS)
-			if err != nil {
-				return err
-			}
-		} else {
-			klog.Infof("no images to copy")
-		}
-		// end of mirrorToDisk
-
-		// create mappings for the related images that will moved from the workspace to the final destination
-		for _, i := range relatedImages {
-			err := addRelatedImageToMapping(mapping, i, destReg, namespace)
-			if err != nil {
-				return err
-			}
-
-		}
-		to, err := prepareDestCatalogRef(operator, destReg, namespace)
-		if err != nil {
-			return fmt.Errorf("unable to generate destination reference for catalog %s: %v", operatorCatalog, err)
-		}
-		digest, err := o.copyImage(ctx, operator.Catalog, to, o.remoteRegFuncs)
-		if err != nil {
-			return err
-		}
-
-		// Add the Operator Catalog image to the CatalogMapping for generating ICSP
-		// and CatalogSource later , for each operator catalog in ImageSetConfig.
-		// This needs to use the catalog's original reference (not FBC)
-		err = addCatalogToMapping(catalogMapping, operator, digest, to)
-		if err != nil {
-			return err
-		}
-
-	}
-
-	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
-	if err != nil {
-		return err
-	}
-
-	dir, err := o.createResultsDir()
-	if err != nil {
-		return err
-	}
-
-	// add the catalogs to the mapping so we can generate the results correctly
-	// even though we did not push the catalog images using remoteRegFuncs.mirrorMappings(...)
-	mapping.Merge(catalogMapping)
-
-	if err := o.generateResults(mapping, dir); err != nil {
-		return err
-	}
-
-	return o.remoteRegFuncs.m2mWorkflowWrapper(ctx, *isc, cleanup)
-}
-
-// getFilteredDeclarativeConfig returns a filtered declarative config based on the image set config filtering in the operator level
-func (o *MirrorOptions) getFilteredDeclarativeConfig(ctx context.Context, operator v1alpha2.Operator, catalogContentsDir string) (declcfg.DeclarativeConfig, error) {
-	oo := NewOperatorOptions(o)
-	oo.complete()
-	reg, err := oo.createRegistry()
-	if err != nil {
-		return declcfg.DeclarativeConfig{}, fmt.Errorf("error creating container registry: %v", err)
-	}
-	defer reg.Destroy()
-	opForRenderer := operator
-	opForRenderer.Catalog = catalogContentsDir
-	dc, _, err := oo.renderDCDiff(ctx, reg, opForRenderer, v1alpha2.PastMirror{})
-	if err != nil {
-		return declcfg.DeclarativeConfig{}, oo.checkValidationErr(err)
-	}
-
-	return *dc, nil
-}
-
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
 	mapping := image.TypedImageMapping{}
 	for _, i := range relatedImages {
@@ -309,7 +90,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		}
 		if reg != nil && len(reg.Mirrors) > 0 {
 			// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
-			mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerProtocol+i.Image, reg.Prefix, o.remoteRegFuncs)
+			mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+i.Image, reg.Prefix, o.remoteRegFuncs)
 			if err == nil {
 				i.Image = mirroredImage
 			}
@@ -324,9 +105,9 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
 		// The registry is needed in from, as this will be used to generate ICSP from mapping
-		dstPath := "file://" + srcTIR.Ref.Registry + "/" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
+		dstPath := filePrefix + srcTIR.Ref.Registry + "/" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
 		if srcTIR.Ref.ID != "" {
-			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
+			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, sha256Tag)
 		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
 			//recreating a fake digest to copy image into
 			//this is because dclcfg.LoadFS will create a symlink to this folder
@@ -357,7 +138,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 
 	from, to := "", ""
-	_, subns, imgName, tag, sha := image.ParseImageReference(img.Image)
+	_, subns, imgName, tag, sha := v1alpha2.ParseImageReference(img.Image)
 	if imgName == "" {
 		return fmt.Errorf("invalid related image %s: repository name empty", img.Image)
 	}
@@ -374,11 +155,6 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 		}
 	}
 	from = strings.Join(parts, "/")
-	if sha != "" {
-		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
-	} else if sha == "" && tag != "" {
-		from = from + "/" + fmt.Sprintf("%x", sha256.Sum256([]byte(tag)))[0:6]
-	}
 	to = destReg
 	if namespace != "" {
 		to = strings.Join([]string{to, namespace}, "/")
@@ -390,14 +166,16 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	if tag != "" {
 		to = to + ":" + tag
 	} else {
-		to = to + "@sha256:" + sha
+		to = to + "@" + sha256Tag + sha
 	}
-	srcTIR, err := image.ParseReference("file://" + strings.ToLower(from))
+
+	// TODO : why file:// ? can we be more smart about setting the transport protocol
+	srcTIR, err := image.ParseReference(filePrefix + strings.ToLower(from))
 	if err != nil {
 		return err
 	}
 	if sha != "" && srcTIR.Ref.ID == "" {
-		srcTIR.Ref.ID = "sha256:" + sha
+		srcTIR.Ref.ID = sha256Tag + sha
 	}
 	if tag != "" && srcTIR.Ref.Tag == "" {
 		srcTIR.Ref.Tag = tag
@@ -412,7 +190,7 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 		return err
 	}
 	if sha != "" && dstTIR.Ref.ID == "" {
-		dstTIR.Ref.ID = "sha256:" + sha
+		dstTIR.Ref.ID = sha256Tag + sha
 	}
 	//If there is no tag mirrorMapping is unable to push the image
 	//It would push manifests and layers, but image would not appear
@@ -432,9 +210,9 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 	if destReg == "" {
 		return "", errors.New("destination registry may not be empty")
 	}
-	_, subNamespace, repo, tag, _ := image.ParseImageReference(operator.Catalog)
+	_, subNamespace, repo, tag, _ := v1alpha2.ParseImageReference(operator.Catalog)
 
-	to := "docker://" + destReg
+	to := dockerPrefix + destReg
 	if namespace != "" {
 		to = strings.Join([]string{to, namespace}, "/")
 	}
@@ -455,7 +233,7 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 		to += ":" + tag
 	}
 	//check if this is a valid reference
-	_, err := image.ParseReference(image.TrimProtocol(to))
+	_, err := image.ParseReference(v1alpha2.TrimProtocol(to))
 	return to, err
 }
 
@@ -471,7 +249,9 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		return err
 	}
 	if srcOperator.IsFBCOCI() {
-		srcCtlgRef = v1alpha2.OCITransportPrefix + "//" + srcCtlgRef
+		if !strings.Contains(srcCtlgRef, v1alpha2.OCITransportPrefix) {
+			srcCtlgRef = v1alpha2.OCITransportPrefix + "//" + srcCtlgRef
+		}
 	}
 
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
@@ -479,7 +259,7 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		return err
 	}
 
-	ctlgDstTIR, err := image.ParseReference(image.TrimProtocol(destRef))
+	ctlgDstTIR, err := image.ParseReference(v1alpha2.TrimProtocol(destRef))
 	if err != nil {
 		return err
 	}
@@ -511,7 +291,7 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		Category:            v1alpha2.TypeOperatorCatalog,
 	}
 
-	if image.IsFBCOCI(srcCtlgRef) {
+	if srcOperator.IsFBCOCI() {
 		ctlgSrcTI.ImageFormat = image.OCIFormat
 		ctlgDstTI.ImageFormat = image.OCIFormat
 	}
@@ -574,7 +354,7 @@ func (o *MirrorOptions) findFBCConfig(ctx context.Context, imagePath, catalogCon
 // more specifically the label `configLabel`
 // and returns the value of that label
 // The function fails if more than one manifest exist in the image
-func (o *MirrorOptions) getCatalogConfigPath(ctx context.Context, imagePath string) (string, error) {
+func (o *MirrorOptions) GetCatalogConfigPath(ctx context.Context, imagePath string) (string, error) {
 	// read the index.json of the catalog
 	srcImg, err := getOCIImgSrcFromPath(ctx, imagePath)
 	if err != nil {
@@ -597,7 +377,7 @@ func (o *MirrorOptions) getCatalogConfigPath(ctx context.Context, imagePath stri
 func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 	var cfg *manifest.Schema2V1Image
 	configLayerDir := configSha[7:]
-	cfgBlob, err := os.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
+	cfgBlob, err := os.ReadFile(filepath.Join(v1alpha2.TrimProtocol(imagePath), blobsPath, configLayerDir))
 	if err != nil {
 		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
 	}
@@ -614,8 +394,13 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 // getRelatedImages reads a directory containing an FBC catalog () unpacked contents
 // and returns the list of relatedImages found in the CSVs of bundles
 // filtering by the list of packages provided in imageSetConfig for the catalog
-func getRelatedImages(cfg declcfg.DeclarativeConfig, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
+func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
 	allImages := []declcfg.RelatedImage{}
+	// load the declarative config from the provided directory (if possible)
+	cfg, err := declcfg.LoadFS(os.DirFS(directory))
+	if err != nil {
+		return nil, err
+	}
 
 	if len(packages) == 0 {
 		for _, aPackage := range cfg.Packages {
@@ -626,8 +411,14 @@ func getRelatedImages(cfg declcfg.DeclarativeConfig, packages []v1alpha2.Include
 	}
 
 	for _, bundle := range cfg.Bundles {
-		allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
-		allImages = append(allImages, bundle.RelatedImages...)
+		isSelected, err := isPackageSelected(bundle, cfg.Channels, packages)
+		if err != nil {
+			return nil, err
+		}
+		if isSelected {
+			allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
+			allImages = append(allImages, bundle.RelatedImages...)
+		}
 	}
 	//make sure there are no duplicates in the list with same image:
 	finalList := []declcfg.RelatedImage{}
@@ -644,6 +435,66 @@ func getRelatedImages(cfg declcfg.DeclarativeConfig, packages []v1alpha2.Include
 		}
 	}
 	return finalList, nil
+}
+
+// is isPackageSelected -  iterate through bundles, channels and packages to check if a package is selected s
+func isPackageSelected(bundle declcfg.Bundle, channels []declcfg.Channel, packages []v1alpha2.IncludePackage) (bool, error) {
+	isSelected := false
+	for _, pkg := range packages {
+		if pkg.Name == bundle.Package {
+			var min, max semver.Version
+			if pkg.MinVersion != "" || pkg.MaxVersion != "" {
+				version_string, err := bundleVersion(bundle)
+				if err != nil {
+					return isSelected, err
+				}
+				pkgVer, err := semver.Make(version_string)
+				if err != nil {
+					return isSelected, err
+				}
+				if err != nil {
+					return isSelected, err
+				}
+				if pkg.MinVersion != "" {
+					min, err = semver.Make(pkg.MinVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
+				if pkg.MaxVersion != "" {
+					max, err = semver.Make(pkg.MaxVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
+
+				if (pkg.MinVersion != "" && pkg.MaxVersion != "") && pkgVer.Compare(min) >= 0 && pkgVer.Compare(max) <= 0 {
+					isSelected = true
+				} else if pkg.MinVersion != "" && pkg.MaxVersion == "" && pkgVer.Compare(min) >= 0 {
+					isSelected = true
+				} else if pkg.MaxVersion != "" && pkg.MinVersion == "" && pkgVer.Compare(max) <= 0 {
+					isSelected = true
+				}
+
+			} else { // no filtering required
+				isSelected = true
+			}
+		}
+	}
+	return isSelected, nil
+}
+
+func bundleVersion(bundle declcfg.Bundle) (string, error) {
+	for _, prop := range bundle.Properties {
+		if prop.Type == property.TypePackage {
+			var p property.Package
+			if err := json.Unmarshal(prop.Value, &p); err != nil {
+				return "", err
+			}
+			return p.Version, nil
+		}
+	}
+	return "", fmt.Errorf("unable to find bundle version")
 }
 
 func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
@@ -679,7 +530,7 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 			finalError = fmt.Errorf("%w: unable to get Manifest for %s: %v", finalError, mirroredImage, err)
 			continue
 		} else {
-			return image.TrimProtocol(mirroredImage), nil
+			return v1alpha2.TrimProtocol(mirroredImage), nil
 		}
 	}
 	return "", finalError
@@ -774,7 +625,7 @@ func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
 func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs RemoteRegFuncs) (digest.Digest, error) {
 	if !strings.HasPrefix(from, "docker") {
 		// find absolute path if from is a relative path
-		fromPath := image.TrimProtocol(from)
+		fromPath := v1alpha2.TrimProtocol(from)
 		if !strings.HasPrefix(fromPath, "/") {
 			absolutePath, err := filepath.Abs(fromPath)
 			if err != nil {

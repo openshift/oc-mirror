@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/containerd/remotes"
-	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -133,14 +132,24 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 
 	// Stick to Catalog here because we
 	// are referencing the source
-	ctlgPin := ctlg.Catalog
 	if !image.IsImagePinned(ctlg.Catalog) {
-		ctlgPin, err = image.ResolveToPin(ctx, resolver, ctlg.Catalog)
-		if err != nil {
-			return v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
+		if ctlg.IsFBCOCI() {
+			ref, err := image.ParseReference(ctlg.Catalog)
+			if err != nil {
+				return v1alpha2.OperatorMetadata{}, err
+			}
+			operatorMeta.ImagePin = ref.String()
+		} else {
+			ctlgPin := ctlg.Catalog
+			ctlgPin, err := image.ResolveToPin(ctx, resolver, ctlg.Catalog)
+			if err != nil {
+				return v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
+			}
+			operatorMeta.ImagePin = ctlgPin // registry.redhat.io/redhat/redhat-operator-registry@sha256:sdfhgsdfsdhfgd
+
 		}
+
 	}
-	operatorMeta.ImagePin = ctlgPin
 
 	var ic v1alpha2.IncludeConfig
 	// Only collect the information
@@ -149,10 +158,11 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 	if ctlg.IsHeadsOnly() {
 
 		// Determine the location of the created FBC
-		ctlgRef, err := imgreference.Parse(ctlgName)
+		tir, err := image.ParseReference(ctlgName)
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err
 		}
+		ctlgRef := tir.Ref
 		ctlgLoc, err := operator.GenerateCatalogDir(ctlgRef)
 		if err != nil {
 			return v1alpha2.OperatorMetadata{}, err

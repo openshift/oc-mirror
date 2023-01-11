@@ -20,7 +20,7 @@ func TestByCategory(t *testing.T) {
 	}{{
 		name: "Valid/OneType",
 		input: TypedImageMapping{
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -30,7 +30,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -40,7 +40,7 @@ func TestByCategory(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle},
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -50,7 +50,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOCPRelease}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -63,7 +63,7 @@ func TestByCategory(t *testing.T) {
 		},
 		typ: []v1alpha2.ImageType{v1alpha2.TypeOperatorBundle},
 		expected: TypedImageMapping{{
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -73,7 +73,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 			Category: v1alpha2.TypeOperatorBundle}: {
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry",
 					Namespace: "namespace",
@@ -87,7 +87,7 @@ func TestByCategory(t *testing.T) {
 	}, {
 		name: "Valid/PruneAllTypes",
 		input: TypedImageMapping{{
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -97,7 +97,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 			Category: v1alpha2.TypeOperatorBundle}: {
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry",
 					Namespace: "namespace",
@@ -113,7 +113,7 @@ func TestByCategory(t *testing.T) {
 	}, {
 		name: "Valid/MultipleTypes",
 		input: TypedImageMapping{
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -123,7 +123,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -133,7 +133,7 @@ func TestByCategory(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle},
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -143,7 +143,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOperatorCatalog}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -153,7 +153,7 @@ func TestByCategory(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorCatalog},
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -163,7 +163,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeGeneric}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -176,7 +176,7 @@ func TestByCategory(t *testing.T) {
 		},
 		typ: []v1alpha2.ImageType{v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorCatalog},
 		expected: TypedImageMapping{
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -186,7 +186,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -196,7 +196,7 @@ func TestByCategory(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle},
-			{TypedImageReference: imagesource.TypedImageReference{
+			{TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -206,7 +206,7 @@ func TestByCategory(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 				Category: v1alpha2.TypeOperatorCatalog}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -240,7 +240,7 @@ func TestReadImageMapping(t *testing.T) {
 		seperator: "=",
 		typ:       v1alpha2.TypeOperatorBundle,
 		expected: TypedImageMapping{{
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry.com",
 					Namespace: "namespace",
@@ -250,7 +250,7 @@ func TestReadImageMapping(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 			Category: v1alpha2.TypeOperatorBundle}: {
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry.com",
 					Namespace: "namespace",
@@ -291,7 +291,7 @@ func TestWriteImageMapping(t *testing.T) {
 		{
 			name: "Valid/NoIDInDestination",
 			mapping: TypedImageMapping{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -301,7 +301,7 @@ func TestWriteImageMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry.com",
 						Namespace: "namespace",
@@ -317,7 +317,7 @@ func TestWriteImageMapping(t *testing.T) {
 		{
 			name: "Valid/PreferTagOverID",
 			mapping: TypedImageMapping{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -328,7 +328,7 @@ func TestWriteImageMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry.com",
 						Namespace: "namespace",
@@ -346,7 +346,7 @@ func TestWriteImageMapping(t *testing.T) {
 		{
 			name: "Valid/NoTags",
 			mapping: TypedImageMapping{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -356,7 +356,7 @@ func TestWriteImageMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 				Category: v1alpha2.TypeOperatorBundle}: {
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry.com",
 						Namespace: "namespace",
@@ -395,7 +395,7 @@ func TestSetDefaults(t *testing.T) {
 		{
 			name: "Valid/NoChanges",
 			mapping: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -407,7 +407,7 @@ func TestSetDefaults(t *testing.T) {
 				Category: v1alpha2.TypeOperatorBundle,
 			},
 			expected: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -422,7 +422,7 @@ func TestSetDefaults(t *testing.T) {
 		{
 			name: "Valid/SetLatest",
 			mapping: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -433,7 +433,7 @@ func TestSetDefaults(t *testing.T) {
 				Category: v1alpha2.TypeOperatorBundle,
 			},
 			expected: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -448,7 +448,7 @@ func TestSetDefaults(t *testing.T) {
 		{
 			name: "Valid/SetWithPartialDigest",
 			mapping: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -460,7 +460,7 @@ func TestSetDefaults(t *testing.T) {
 				Category: v1alpha2.TypeOperatorBundle,
 			},
 			expected: TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry.com",
 						Namespace: "namespace",
@@ -485,7 +485,7 @@ func TestSetDefaults(t *testing.T) {
 func TestToRegistry(t *testing.T) {
 	toMirror := "test.registry"
 	inputMapping := TypedImageMapping{
-		{TypedImageReference: imagesource.TypedImageReference{
+		{TypedImageReference: TypedImageReference{
 			Ref: reference.DockerImageReference{
 				Registry:  "some-registry",
 				Namespace: "namespace",
@@ -495,7 +495,7 @@ func TestToRegistry(t *testing.T) {
 			Type: imagesource.DestinationRegistry,
 		},
 			Category: v1alpha2.TypeOperatorBundle}: {
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry",
 					Namespace: "namespace",
@@ -507,7 +507,7 @@ func TestToRegistry(t *testing.T) {
 			Category: v1alpha2.TypeOperatorBundle}}
 
 	expMapping := TypedImageMapping{
-		{TypedImageReference: imagesource.TypedImageReference{
+		{TypedImageReference: TypedImageReference{
 			Ref: reference.DockerImageReference{
 				Registry:  "some-registry",
 				Namespace: "namespace",
@@ -517,7 +517,7 @@ func TestToRegistry(t *testing.T) {
 			Type: imagesource.DestinationRegistry,
 		},
 			Category: v1alpha2.TypeOperatorBundle}: {
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "test.registry",
 					Namespace: "namespace",

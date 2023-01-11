@@ -292,12 +292,16 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 
 			// Add top level association to the ICSP mapping
 			if assoc.Name == imageName {
-				source, err := imagesource.ParseReference(imageName)
+				source, err := image.ParseReference(imageName)
 				if err != nil {
 					errs = append(errs, err)
 					continue
 				}
-				allMappings.Add(source, m.Destination, assoc.Type)
+				dst := image.TypedImageReference{
+					Ref:  m.Destination.Ref,
+					Type: m.Destination.Type,
+				}
+				allMappings.Add(source, dst, assoc.Type)
 			}
 
 			if len(missingLayers) != 0 {

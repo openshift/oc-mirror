@@ -385,7 +385,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 				},
 			}},
 			images: image.TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "imgname",
@@ -394,7 +394,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOCPRelease}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "imgname",
@@ -403,7 +403,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeOCPRelease},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "imgname",
@@ -412,7 +412,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOCPRelease}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "imgname",
@@ -455,7 +455,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 			expSet:   image.AssociationSet{},
 			expError: ErrNoUpdatesExist.Error(),
 			images: image.TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "imgname",
@@ -464,7 +464,7 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOCPRelease}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "imgname",

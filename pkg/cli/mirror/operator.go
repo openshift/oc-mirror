@@ -25,6 +25,7 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/action"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
+	"github.com/otiai10/copy"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -102,38 +103,31 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 
 	mmapping := image.TypedImageMapping{}
 	for _, ctlg := range cfg.Mirror.Operators {
-		// Exclude catalog images with "oci://" from renderDC and plan
-		// These catalogs will be handled with bulkImageMirror instead
-		// TODO: we should be able to use renderDC still for these images
-		// so that the catalog image (filtered) gets recreated (and written
-		// to disk) for the OCI catalogs as well
-		if !image.IsFBCOCI(ctlg.Catalog) {
-			ctlgRef, err := image.ParseReference(ctlg.Catalog)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing catalog: %v", err)
-			}
-
-			targetName, err := ctlg.GetUniqueName()
-			if err != nil {
-				return nil, err
-			}
-			targetCtlg, err := imagesource.ParseReference(targetName)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing catalog: %v", err)
-			}
-
-			// Render the catalog to mirror into a declarative config.
-			dc, ic, err := renderDC(ctx, reg, ctlg)
-			if err != nil {
-				return nil, o.checkValidationErr(err)
-			}
-
-			mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
-			if err != nil {
-				return nil, err
-			}
-			mmapping.Merge(mappings)
+		ctlgRef, err := image.ParseReference(ctlg.Catalog)
+		if err != nil {
+			return nil, err
 		}
+		targetName, err := ctlg.GetUniqueName()
+		if err != nil {
+			return nil, err
+		}
+		targetCtlg, err := image.ParseReference(targetName)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing catalog: %v", err)
+		}
+
+		// Render the catalog to mirror into a declarative config.
+		dc, ic, err := renderDC(ctx, reg, ctlg)
+		if err != nil {
+			return nil, o.checkValidationErr(err)
+		}
+
+		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
+		if err != nil {
+			return nil, err
+		}
+		mmapping.Merge(mappings)
+
 	}
 
 	return mmapping, nil
@@ -177,11 +171,19 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 	full := !ctlg.IsHeadsOnly() && !hasInclude
 
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+	ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
+	if ctlg.IsFBCOCI() {
+		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
+		ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
+		if err != nil {
+			return dc, ic, err
+		}
+	}
 	if full {
 		// Mirror the entire catalog.
 		dc, err = action.Render{
 			Registry: reg,
-			Refs:     []string{ctlg.Catalog},
+			Refs:     []string{ctlgRef}, // /home/skhoury/oc-catalog2 => configs dir olm_artifacts/oci-catalog2/configs
 		}.Run(ctx)
 		if err != nil {
 			return dc, ic, err
@@ -194,7 +196,7 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 		}
 		dc, err = diff.Diff{
 			Registry:         reg,
-			NewRefs:          []string{ctlg.Catalog},
+			NewRefs:          []string{ctlgRef},
 			Logger:           catLogger,
 			IncludeConfig:    dic,
 			SkipDependencies: ctlg.SkipDependencies,
@@ -254,9 +256,17 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 
 	// Generate a heads-only diff using the catalog as a new ref and previous bundle information.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
+
+	ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
+	if ctlg.IsFBCOCI() {
+		ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
+		if err != nil {
+			return dc, ic, err
+		}
+	}
 	a := diff.Diff{
 		Registry:         reg,
-		NewRefs:          []string{ctlg.Catalog},
+		NewRefs:          []string{ctlgRef},
 		Logger:           catLogger,
 		SkipDependencies: ctlg.SkipDependencies,
 	}
@@ -272,7 +282,7 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		icManager = operator.NewCatalogStrategy()
 		dc, err = action.Render{
 			Registry: reg,
-			Refs:     []string{ctlg.Catalog},
+			Refs:     []string{ctlgRef},
 		}.Run(ctx)
 		if err != nil {
 			return dc, ic, err
@@ -352,8 +362,7 @@ func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.Decla
 	return nil
 }
 
-func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg imagesource.TypedImageReference) (image.TypedImageMapping, error) {
-
+func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg image.TypedImageReference) (image.TypedImageMapping, error) {
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
 	opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir))
@@ -376,37 +385,80 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, err
 	}
 
-	// Create the mapping file, but don't mirror quite yet.
-	// Since the file-based catalog (declarative config) needs to be rebuilt
-	// after rendering with the existing image in the publishing step,
-	// we can just build the new image once then.
-	opts.ManifestOnly = true
-	opts.ImageMirrorer = catalog.ImageMirrorerFunc(func(mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
-		return nil
-	})
+	mappingFile := filepath.Join(opts.ManifestDir, mappingFile) // re-read mappung from disk
 
-	opts.IndexExtractor = catalog.IndexExtractorFunc(func(imagesource.TypedImageReference) (string, error) {
-		o.Logger.Debugf("returning index dir in extractor: %s", indexDir)
-		return indexDir, nil
-	})
-	opts.IndexPath = indexDir
+	if ctlgRef.Type != image.DestinationOCI {
+		// Create the mapping file, but don't mirror quite yet.
+		// Since the file-based catalog (declarative config) needs to be rebuilt
+		// after rendering with the existing image in the publishing step,
+		// we can just build the new image once then.
+		opts.ManifestOnly = true
+		opts.ImageMirrorer = catalog.ImageMirrorerFunc(func(mapping map[imagesource.TypedImageReference]imagesource.TypedImageReference) error {
+			return nil
+		})
+		opts.IndexPath = indexDir
 
-	opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
-	opts.MaxICSPSize = icspSizeLimit
-	opts.SourceRef = ctlgRef
-	opts.DestRef = imagesource.TypedImageReference{
-		Type: imagesource.DestinationFile,
+		opts.IndexExtractor = catalog.IndexExtractorFunc(func(imagesource.TypedImageReference) (string, error) {
+			o.Logger.Debugf("returning index dir in extractor: %s", opts.IndexPath)
+			return opts.IndexPath, nil
+		})
+
+		opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
+
+		opts.MaxICSPSize = icspSizeLimit
+		opts.SourceRef = imagesource.TypedImageReference{
+			Ref:  ctlgRef.Ref,
+			Type: ctlgRef.Type,
+		}
+		opts.DestRef = imagesource.TypedImageReference{
+			Type: imagesource.DestinationFile,
+		}
+
+		if err := opts.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid catalog mirror options: %v", err)
+		}
+
+		if err := opts.Run(); err != nil { // mappings.txt
+			return nil, fmt.Errorf("error running catalog mirror: %v", err)
+		}
+	} else {
+		repo := ctlgRef.Ref.Name
+
+		artifactsPath := artifactsFolderName
+
+		operatorCatalog := v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath)
+
+		// check for the valid config label to use
+		configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
+		if err != nil {
+
+			return nil, fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operatorCatalog, err)
+		}
+		// initialize path starting with <current working directory>/olm_artifacts/<repo>
+		catalogContentsDir := filepath.Join(artifactsPath, repo)
+		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
+		ctlgConfigDir := filepath.Join(catalogContentsDir, configsLabel)
+		relatedImages, err := getRelatedImages(ctlgConfigDir, ic.Packages)
+		if err != nil {
+			return nil, err
+		}
+
+		// place related images into the workspace - aka mirrorToDisk
+		// TODO this should probably be done only if artifacts have not been copied
+		result := image.TypedImageMapping{}
+		// create mappings for the related images that will moved from the workspace to the final destination
+		for _, i := range relatedImages {
+			// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
+			err := addRelatedImageToMapping(result, i, o.ToMirror, "")
+			if err != nil {
+				return nil, err
+			}
+
+		}
+		if err := writeMappingFile(mappingFile, result); err != nil {
+			return nil, err
+		}
 	}
-
-	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid catalog mirror options: %v", err)
-	}
-
-	if err := opts.Run(); err != nil {
-		return nil, fmt.Errorf("error running catalog mirror: %v", err)
-	}
-
-	mappingFile := filepath.Join(opts.ManifestDir, mappingFile)
 	mappings, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
 	if err != nil {
 		return nil, err
@@ -419,8 +471,24 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, err
 	}
 	mappings.Remove(ctlgImg)
-	if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
-		return nil, err
+	// Write catalog OCI layout file to src so it is included in the archive
+	// at a path unique to the image.
+	if ctlgRef.Type != image.DestinationOCI {
+		if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
+			return nil, err
+		}
+	} else {
+		ctlgDir, err := operator.GenerateCatalogDir(targetCtlg.Ref)
+		if err != nil {
+			return nil, err
+		}
+		layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
+		if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("error catalog layout dir: %v", err)
+		}
+		if err := copy.Copy(v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath), layoutDir); err != nil {
+			return nil, fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
+		}
 	}
 
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
@@ -709,6 +777,7 @@ func parseRelatedImages(root string) (map[string]struct{}, error) {
 	return relatedImages, nil
 }
 
+// validate declarative config
 func validate(dc *declcfg.DeclarativeConfig) error {
 	if dc == nil {
 		return errors.New("bug: nil declarative config")
@@ -740,4 +809,20 @@ func (o *OperatorOptions) checkValidationErr(err error) error {
 	fmt.Fprintln(o.ErrOut, "\nRun \"oc-mirror list operators --catalog CATALOG-NAME --package PACKAGE-NAME\" for more information.")
 	fmt.Fprintln(o.ErrOut, validationMsg)
 	return err
+}
+
+func (o OperatorOptions) getOperatorCatalogRef(ctx context.Context, ref string) (string, error) {
+	_, _, repo, _, _ := v1alpha2.ParseImageReference(ref)
+	artifactsPath := artifactsFolderName
+	operatorCatalog := v1alpha2.TrimProtocol(ref)
+	// check for the valid config label to use
+	configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", ref, err)
+	}
+	// initialize path starting with <current working directory>/olm_artifacts/<repo>
+	catalogContentsDir := filepath.Join(artifactsPath, repo)
+	// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
+	ctlgRef := filepath.Join(catalogContentsDir, configsLabel)
+	return ctlgRef, nil
 }

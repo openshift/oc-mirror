@@ -1,20 +1,52 @@
 package image
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/openshift/library-go/pkg/image/reference"
 	libgoref "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"k8s.io/klog/v2"
 )
 
 var (
 	DestinationOCI imagesource.DestinationType = "oci"
 )
+
+// type ImageReferenceInterface interface {
+// 	String() string
+// 	Equal(other ImageReferenceInterface) bool
+// 	DockerClientDefaults() ImageReferenceInterface
+// 	AsV2() ImageReferenceInterface
+// 	Exact() string
+// }
+
+type TypedImageReference struct {
+	Type       imagesource.DestinationType
+	Ref        reference.DockerImageReference
+	OCIFBCPath string
+}
+
+func (t TypedImageReference) String() string {
+	switch t.Type {
+	case imagesource.DestinationFile:
+		return fmt.Sprintf("file://%s", t.Ref.Exact())
+	case imagesource.DestinationS3:
+		return fmt.Sprintf("s3://%s", t.Ref.Exact())
+	case DestinationOCI:
+		return fmt.Sprintf("oci://%s", t.Ref.Exact())
+	default:
+		return t.Ref.Exact()
+	}
+}
 
 // GetVersionsFromImage gets the set of versions after stripping a dash-suffix,
 // effectively stripping out timestamps. Example: tag "v4.11-1648566121" becomes version "v4.11"
@@ -46,65 +78,67 @@ ParseReference is a wrapper function of imagesource.ParseReference
 
 	It provides support for oci: prefixes
 */
-func ParseReference(ref string) (imagesource.TypedImageReference, error) {
+func ParseReference(ref string) (TypedImageReference, error) {
 	if !strings.HasPrefix(ref, v1alpha2.OCITransportPrefix) {
-		return imagesource.ParseReference(ref)
+		orig, err := imagesource.ParseReference(ref)
+		if err != nil {
+			return TypedImageReference{}, err
+		}
+		return TypedImageReference{
+			Ref:  orig.Ref,
+			Type: orig.Type,
+		}, nil
 	}
 
 	dstType := DestinationOCI
-	ref = strings.TrimPrefix(ref, v1alpha2.OCITransportPrefix)
-	ref = strings.TrimPrefix(ref, "//") //it could be that there is none
-	ref = strings.TrimPrefix(ref, "/")  // case of full path
 
-	dst, err := libgoref.Parse(ref)
+	reg, ns, name, tag, id := v1alpha2.ParseImageReference(ref)
+	dst := libgoref.DockerImageReference{
+		Registry:  reg,
+		Namespace: ns,
+		Name:      name,
+		Tag:       tag,
+		ID:        id,
+	}
+
+	// TODO if manifest does not exist , just do nothing
+	// in case of TargetName and TargetTag replacing the original name ,
+	// the returned path will not exist on disk
+	manifest, err := getManifest(context.Background(), ref)
 	if err != nil {
-		return imagesource.TypedImageReference{Ref: dst, Type: dstType}, fmt.Errorf("%q is not a valid image reference: %v", ref, err)
-	}
-	return imagesource.TypedImageReference{Ref: dst, Type: dstType}, nil
-}
-
-// parseImageName returns the registry, organisation, repository, tag and digest
-// from the imageName.
-// It can handle both remote and local images.
-func ParseImageReference(imageName string) (string, string, string, string, string) {
-	registry, org, repo, tag, sha := "", "", "", "", ""
-	imageName = TrimProtocol(imageName)
-	imageName = strings.TrimPrefix(imageName, "/")
-	imageName = strings.TrimSuffix(imageName, "/")
-	tmp := strings.Split(imageName, "/")
-
-	registry = tmp[0]
-	img := strings.Split(tmp[len(tmp)-1], ":")
-	if len(tmp) > 2 {
-		org = strings.Join(tmp[1:len(tmp)-1], "/")
-	}
-	if len(img) > 1 {
-		if strings.Contains(img[0], "@") {
-			nm := strings.Split(img[0], "@")
-			repo = nm[0]
-			sha = img[1]
-		} else {
-			repo = img[0]
-			tag = img[1]
-		}
+		fmt.Printf("%v", err)
 	} else {
-		repo = img[0]
+		dst.ID = string(manifest.ConfigInfo().Digest)
 	}
-
-	return registry, org, repo, tag, sha
+	return TypedImageReference{Ref: dst, Type: dstType, OCIFBCPath: ref}, nil
 }
 
-// trimProtocol removes oci://, file:// or docker:// from
-// the parameter imageName
-func TrimProtocol(imageName string) string {
-	imageName = strings.TrimPrefix(imageName, v1alpha2.OCITransportPrefix)
-	imageName = strings.TrimPrefix(imageName, "file:")
-	imageName = strings.TrimPrefix(imageName, "docker:")
-	imageName = strings.TrimPrefix(imageName, "//")
-
-	return imageName
-}
-
-func IsFBCOCI(imageRef string) bool {
-	return strings.HasPrefix(imageRef, v1alpha2.OCITransportPrefix)
+// getManifest reads the manifest of the OCI FBC image
+// and returns it as a go structure of type manifest.Manifest
+func getManifest(ctx context.Context, imgPath string) (manifest.Manifest, error) {
+	imgRef, err := alltransports.ParseImageName(imgPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse reference %s: %v", imgPath, err)
+	}
+	imgsrc, err := imgRef.NewImageSource(ctx, nil)
+	defer func() {
+		if imgsrc != nil {
+			err = imgsrc.Close()
+			if err != nil {
+				klog.V(3).Infof("%s is not closed", imgsrc)
+			}
+		}
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create ImageSource for %s: %v", err, imgPath)
+	}
+	manifestBlob, manifestType, err := imgsrc.GetManifest(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
+	}
+	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
+	}
+	return manifest, nil
 }

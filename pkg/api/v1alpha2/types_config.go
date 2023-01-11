@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ImageSetConfiguration object kind.
 const (
+	// ImageSetConfiguration object kind.
 	ImageSetConfigurationKind = "ImageSetConfiguration"
 	OCITransportPrefix        = "oci:"
 )
@@ -129,28 +129,91 @@ type Operator struct {
 // are set between Catalog, TargetName, and TargetTag.
 func (o Operator) GetUniqueName() (string, error) {
 	ctlgRef := o.Catalog
-	if o.IsFBCOCI() {
-		ctlgRef = strings.TrimPrefix(ctlgRef, OCITransportPrefix)
-		ctlgRef = strings.TrimPrefix(ctlgRef, "//") //it could be that there is none
-		ctlgRef = strings.TrimPrefix(ctlgRef, "/")  // case of full path
-	}
 	if o.TargetName == "" && o.TargetTag == "" {
 		return ctlgRef, nil
 	}
+	if o.IsFBCOCI() {
+		reg, ns, name, tag, id := ParseImageReference(ctlgRef)
+		if o.TargetName != "" {
+			name = o.TargetName
+		}
+		if o.TargetTag != "" {
+			tag = o.TargetTag
+			id = ""
+		}
+		uniqueName := "oci://"
+		if reg != "" {
+			uniqueName = reg
+		}
+		if ns != "" {
+			uniqueName = strings.Join([]string{uniqueName, ns}, "/")
+		}
 
-	catalogRef, err := reference.Parse(ctlgRef)
-	if err != nil {
-		return "", fmt.Errorf("error parsing source catalog %s: %v", catalogRef, err)
-	}
-	if o.TargetName != "" {
-		catalogRef.Name = o.TargetName
-	}
-	if o.TargetTag != "" {
-		catalogRef.ID = ""
-		catalogRef.Tag = o.TargetTag
+		uniqueName = strings.Join([]string{uniqueName, name}, "/")
+		if tag != "" {
+			uniqueName = uniqueName + ":" + tag
+		} else {
+			uniqueName = uniqueName + "@sha256:" + id
+		}
+		return uniqueName, nil
+	} else {
+		catalogRef, err := reference.Parse(ctlgRef)
+		if err != nil {
+			return "", fmt.Errorf("error parsing source catalog %s: %v", catalogRef, err)
+		}
+		if o.TargetName != "" {
+			catalogRef.Name = o.TargetName
+		}
+		if o.TargetTag != "" {
+			catalogRef.ID = ""
+			catalogRef.Tag = o.TargetTag
+		}
+
+		return catalogRef.Exact(), nil
 	}
 
-	return catalogRef.Exact(), nil
+}
+
+// parseImageName returns the registry, organisation, repository, tag and digest
+// from the imageName.
+// It can handle both remote and local images.
+func ParseImageReference(imageName string) (string, string, string, string, string) {
+	registry, org, repo, tag, sha := "", "", "", "", ""
+	imageName = TrimProtocol(imageName)
+	imageName = strings.TrimPrefix(imageName, "/")
+	imageName = strings.TrimSuffix(imageName, "/")
+	tmp := strings.Split(imageName, "/")
+
+	registry = tmp[0]
+	img := strings.Split(tmp[len(tmp)-1], ":")
+	if len(tmp) > 2 {
+		org = strings.Join(tmp[1:len(tmp)-1], "/")
+	}
+	if len(img) > 1 {
+		if strings.Contains(img[0], "@") {
+			nm := strings.Split(img[0], "@")
+			repo = nm[0]
+			sha = img[1]
+		} else {
+			repo = img[0]
+			tag = img[1]
+		}
+	} else {
+		repo = img[0]
+	}
+
+	return registry, org, repo, tag, sha
+}
+
+// trimProtocol removes oci://, file:// or docker:// from
+// the parameter imageName
+func TrimProtocol(imageName string) string {
+	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, "file:")
+	imageName = strings.TrimPrefix(imageName, "docker:")
+	imageName = strings.TrimPrefix(imageName, "//")
+
+	return imageName
 }
 
 // IsHeadsOnly determine if the mode set mirrors only channel heads of all packages in the catalog.

@@ -39,7 +39,7 @@ func TestPlan_Additional(t *testing.T) {
 				},
 			},
 			wantImage: image.TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Name:      "oc-mirror-dev",
 						ID:        "sha256:ee09cc8be7dd2b7a163e37f3e4dcdb7dbf474e15bbae557249cf648da0c7559f",
@@ -64,7 +64,7 @@ func TestPlan_Additional(t *testing.T) {
 				},
 			},
 			wantImage: image.TypedImage{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "quay.io",
 						Name:      "oc-mirror-dev",
