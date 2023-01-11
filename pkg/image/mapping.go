@@ -14,10 +14,25 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Format refers to the container image format.
+// It defines the structure of the image, and can be
+// * [Docker Image Manifest V2, Schema 1](https://docs.docker.com/registry/spec/manifest-v2-1/)
+// * [Docker Image Manifest V2, Schema 2](https://docs.docker.com/registry/spec/manifest-v2-2/)
+// * [OCI](https://github.com/opencontainers/image-spec)
+type Format string
+
+const (
+	OCIFormat      Format = "oci"
+	DockerV2Format Format = "docker-v2"
+	// OtherFormat is used when no analysis into the image is done to determine its format
+	OtherFormat Format = "other"
+)
+
 // TypedImage defines an a image with the destination and content type
 type TypedImage struct {
 	imagesource.TypedImageReference
 	OriginalRef string
+	ImageFormat Format
 	// Category adds image category type to TypedImageReference
 	Category v1alpha2.ImageType
 }
@@ -28,12 +43,19 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	if err != nil {
 		return TypedImage{}, err
 	}
-	t := TypedImage{ref, image, typ}
+	t := TypedImage{
+		TypedImageReference: ref,
+		OriginalRef:         image,
+		Category:            typ,
+	}
 	return t.SetDefaults(), nil
 }
 
 // SetDefaults sets the default values for TypedImage fields
 func (t TypedImage) SetDefaults() TypedImage {
+	if t.ImageFormat == "" {
+		t.ImageFormat = OtherFormat
+	}
 	if len(t.Ref.Tag) == 0 {
 		partial, err := getPartialDigest(t.Ref.ID)
 		// If unable to get a partial digest
@@ -79,10 +101,14 @@ func (m TypedImageMapping) Merge(in TypedImageMapping) {
 func (m TypedImageMapping) Add(srcRef, dstRef imagesource.TypedImageReference, typ v1alpha2.ImageType) {
 	srcTypedRef := TypedImage{
 		TypedImageReference: srcRef,
+		OriginalRef:         srcRef.Ref.Exact(), //to be verified
+		ImageFormat:         OtherFormat,
 		Category:            typ,
 	}
 	dstTypedRef := TypedImage{
 		TypedImageReference: dstRef,
+		OriginalRef:         dstRef.Ref.Exact(), //to be verified
+		ImageFormat:         OtherFormat,
 		Category:            typ,
 	}
 	m[srcTypedRef] = dstTypedRef

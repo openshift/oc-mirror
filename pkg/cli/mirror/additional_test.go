@@ -49,7 +49,9 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeGeneric,
+				OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:ee09cc8be7dd2b7a163e37f3e4dcdb7dbf474e15bbae557249cf648da0c7559f",
+				Category:    v1alpha2.TypeGeneric,
+				ImageFormat: image.OtherFormat,
 			},
 		},
 		{
@@ -74,7 +76,9 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeGeneric,
+				OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:ee09cc8be7dd2b7a163e37f3e4dcdb7dbf474e15bbae557249cf648da0c7559f",
+				Category:    v1alpha2.TypeGeneric,
+				ImageFormat: image.OtherFormat,
 			},
 		},
 	}

@@ -250,6 +250,7 @@ func TestReadImageMapping(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 			OriginalRef: "some-registry.com/namespace/image:latest",
+			ImageFormat: OtherFormat,
 			Category:    v1alpha2.TypeOperatorBundle}: {
 			TypedImageReference: imagesource.TypedImageReference{
 				Ref: reference.DockerImageReference{
@@ -261,6 +262,7 @@ func TestReadImageMapping(t *testing.T) {
 				Type: imagesource.DestinationRegistry,
 			},
 			OriginalRef: "disconn-registry.com/namespace/image:latest",
+			ImageFormat: OtherFormat,
 			Category:    v1alpha2.TypeOperatorBundle},
 		},
 	}, {
@@ -406,7 +408,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 			expected: TypedImage{
 				TypedImageReference: imagesource.TypedImageReference{
@@ -418,7 +421,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 		},
 		{
@@ -432,7 +436,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 			expected: TypedImage{
 				TypedImageReference: imagesource.TypedImageReference{
@@ -444,7 +449,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 		},
 		{
@@ -459,7 +465,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 			expected: TypedImage{
 				TypedImageReference: imagesource.TypedImageReference{
@@ -472,7 +479,8 @@ func TestSetDefaults(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category: v1alpha2.TypeOperatorBundle,
+				Category:    v1alpha2.TypeOperatorBundle,
+				ImageFormat: OtherFormat,
 			},
 		},
 	}
@@ -496,7 +504,8 @@ func TestToRegistry(t *testing.T) {
 			},
 			Type: imagesource.DestinationRegistry,
 		},
-			Category: v1alpha2.TypeOperatorBundle}: {
+			ImageFormat: OtherFormat,
+			Category:    v1alpha2.TypeOperatorBundle}: {
 			TypedImageReference: imagesource.TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry",
@@ -506,7 +515,8 @@ func TestToRegistry(t *testing.T) {
 				},
 				Type: imagesource.DestinationFile,
 			},
-			Category: v1alpha2.TypeOperatorBundle}}
+			Category:    v1alpha2.TypeOperatorBundle,
+			ImageFormat: OtherFormat}}
 
 	expMapping := TypedImageMapping{
 		{TypedImageReference: imagesource.TypedImageReference{
@@ -518,7 +528,8 @@ func TestToRegistry(t *testing.T) {
 			},
 			Type: imagesource.DestinationRegistry,
 		},
-			Category: v1alpha2.TypeOperatorBundle}: {
+			Category:    v1alpha2.TypeOperatorBundle,
+			ImageFormat: OtherFormat}: {
 			TypedImageReference: imagesource.TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "test.registry",
@@ -529,7 +540,8 @@ func TestToRegistry(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			Category: v1alpha2.TypeOperatorBundle}}
+			Category:    v1alpha2.TypeOperatorBundle,
+			ImageFormat: OtherFormat}}
 
 	inputMapping.ToRegistry(toMirror, "")
 	require.Equal(t, expMapping, inputMapping)
