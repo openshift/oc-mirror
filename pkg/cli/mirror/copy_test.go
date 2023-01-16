@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
@@ -809,12 +810,17 @@ func TestBulkImageCopy(t *testing.T) {
 			expectedSubFolders: []string{"aws-load-balancer-operator"},
 		},
 	}
+
+	cleanup := func() error {
+		return nil
+	}
+
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS)
+			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS, cleanup)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -891,6 +897,57 @@ func TestBulkImageMirror(t *testing.T) {
 		},
 		{
 			desc:     "No base olm_artifacts directory case passes",
+			sequence: 2,
+			isc: &v1alpha2.ImageSetConfiguration{
+				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:     "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								IncludeConfig: v1alpha2.IncludeConfig{
+									Packages: []v1alpha2.IncludePackage{
+										{
+											Name: "aws-load-balancer-operator",
+											Channels: []v1alpha2.IncludeChannel{
+												{
+													Name: "stable-v0.1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			catalogName: "redhat-operator-index",
+			options: &MirrorOptions{
+				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:         "localhost.localdomain:5000",
+				UseOCIFeature:    true,
+				OCIFeatureAction: OCIFeatureMirrorAction,
+				OutputDir:        "",
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+				SourceSkipTLS:              true,
+				DestSkipTLS:                true,
+				OCIInsecureSignaturePolicy: true,
+				remoteRegFuncs:             createMockFunctions(0),
+			},
+			err: "",
+		},
+		{
+			desc:     "Missing OriginalRef fails",
 			sequence: 3,
 			isc: &v1alpha2.ImageSetConfiguration{
 				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
@@ -992,6 +1049,10 @@ func TestBulkImageMirror(t *testing.T) {
 		},
 	}
 
+	cleanup := func() error {
+		return nil
+	}
+
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			tmpDir := t.TempDir()
@@ -999,7 +1060,11 @@ func TestBulkImageMirror(t *testing.T) {
 			icspGenerated := false
 			c.options.OutputDir = tmpDir
 			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace")
+			os.MkdirAll(c.options.Dir, 0755)
+			defer os.RemoveAll(c.options.Dir) // clean up
+			// for now we skip the metadata check
+			c.options.SkipMetadataCheck = true
+			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace", cleanup)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -1862,6 +1927,16 @@ func createMockFunctions(errorType int) RemoteRegFuncs {
 		return nil
 	}
 	theMock.newImageSource = imgSrcFnc
+
+	theMock.processMirroredImages = func(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
+		return image.TypedImageMapping{}, nil
+	}
+
+	theMock.handleMetadata = func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error) {
+		md := v1alpha2.NewMetadata()
+		md.SingleUse = true
+		return nil, md, v1alpha2.NewMetadata(), nil
+	}
 
 	theMock.getManifest = getManifestFnc
 	return theMock

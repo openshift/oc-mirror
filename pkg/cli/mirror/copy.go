@@ -27,6 +27,7 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
@@ -42,16 +43,26 @@ const (
 	relatedImages       string = "relatedImages"
 	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
 	artifactsFolderName string = "olm_artifacts"
+	ocpRelease          string = "release"
+	ocpReleaseImages    string = "release-images"
+	dockerPrefix        string = "docker://"
+	filePrefix          string = "file://"
+	sha256Tag           string = "sha256"
+	manifests           string = "manifests"
+	openshift           string = "openshift"
+	source              string = "src/v2"
 )
 
 // RemoteRegFuncs contains the functions to be used for working with remote registries
 // In order to be able to mock these external packages,
 // we pass them as parameters of bulkImageCopy and bulkImageMirror
 type RemoteRegFuncs struct {
-	copy           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
-	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
-	newImageSource func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
-	getManifest    func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
+	copy                  func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
+	mirrorMappings        func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
+	newImageSource        func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
+	getManifest           func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
+	handleMetadata        func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error)
+	processMirroredImages func(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error)
 }
 
 // getISConfig simple function to read and unmarshal the imagesetconfig
@@ -72,7 +83,7 @@ func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 
 // •bulkImageCopy•used•to•copy the•relevant•images•(pull•from•a•registry)•to
 // •a•local directory↵
-func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool) error {
+func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, srcSkipTLS, dstSkipTLS bool, cleanup cleanupFunc) error {
 
 	mapping := image.TypedImageMapping{}
 
@@ -124,15 +135,18 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 			return err
 		}
 	} else {
-		klog.Infof("no images to copy")
+		klog.Infof("no catalog images to copy")
 	}
 
-	return nil
+	// implement release and additionalImages also set
+	// operators catalog section to nil
+	isc.Mirror.Operators = nil
+	return o.mirrorToDiskWrapper(ctx, *isc, srcSkipTLS, cleanup)
 }
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
 // a remote registry in oci format
-func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string) error {
+func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.ImageSetConfiguration, destReg, namespace string, cleanup cleanupFunc) error {
 	mapping := image.TypedImageMapping{}
 	catalogMapping := image.TypedImageMapping{}
 
@@ -191,6 +205,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		if err != nil {
 			return err
 		}
+
 		if len(result) > 0 {
 			err := o.remoteRegFuncs.mirrorMappings(*isc, result, o.SourceSkipTLS)
 			if err != nil {
@@ -227,6 +242,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		}
 
 	}
+
 	err := o.remoteRegFuncs.mirrorMappings(*isc, mapping, o.DestSkipTLS)
 	if err != nil {
 		return err
@@ -245,8 +261,12 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		return err
 	}
 
-	return nil
+	// no use to mirror if source (tar file) is not specified
+	if len(o.From) > 0 {
+		return o.diskToMirrorWrapper(ctx, cleanup)
+	}
 
+	return nil
 }
 
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {

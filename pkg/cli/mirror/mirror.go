@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -286,6 +285,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
+
+	o.remoteRegFuncs = RemoteRegFuncs{
+		handleMetadata:        o.handleMetadata,
+		processMirroredImages: o.processMirroredImages,
+	}
+
 	var sourceInsecure bool
 	if o.SourcePlainHTTP || o.SourceSkipTLS {
 		sourceInsecure = true
@@ -327,93 +332,16 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 			return err
 		}
 
-		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
-			return err
-		}
+		return o.mirrorToDiskWrapper(ctx, cfg, sourceInsecure, cleanup)
 
-		meta, mapping, err = o.Create(ctx, cfg)
-		if err != nil {
-			return err
-		}
-
-		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
-		if err != nil {
-			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("No new images detected, process stopping")
-				return nil
-			}
-			return err
-		}
-
-		if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
-			return err
-		}
-
-		if o.DryRun {
-			if err := writeMappingFile(mappingPath, mapping); err != nil {
-				return err
-			}
-			return cleanup()
-		}
-
-		// Create and store associations
-		assocDir := filepath.Join(o.Dir, config.SourceDir)
-		assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
-		if errs != nil {
-			if err := o.processAssociationErrors(errs.Errors()); err != nil {
-				return err
-			}
-		}
-
-		// Pack the images set
-		tmpBackend, err := o.Pack(ctx, prunedAssociations, assocs, &meta, cfg.ArchiveSize)
-		if err != nil {
-			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("No updates detected, process stopping")
-				return nil
-			}
-			return err
-		}
-
-		// Sync metadata from temporary backend to target backend
-		if cfg.StorageConfig.IsSet() {
-			targetBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
-			if err != nil {
-				return err
-			}
-			if err := metadata.SyncMetadata(ctx, tmpBackend, targetBackend); err != nil {
-				return err
-			}
-		}
 	case diskToMirror:
 		dir, err := o.createResultsDir()
 		if err != nil {
 			return err
 		}
 		o.OutputDir = dir
+		return o.diskToMirrorWrapper(ctx, cleanup)
 
-		// Publish from disk to registry
-		// this takes care of syncing the metadata to the
-		// registry backends.
-		mapping, err = o.Publish(ctx)
-		if err != nil {
-			serr := &ErrInvalidSequence{}
-			if errors.As(err, &serr) {
-				return fmt.Errorf("error during publishing, expecting imageset with prefix mirror_seq%d: %v", serr.wantSeq, err)
-			}
-			return err
-		}
-
-		if o.DryRun {
-			if err := writeMappingFile(mappingPath, mapping); err != nil {
-				return err
-			}
-			return cleanup()
-		}
-
-		if err := o.generateResults(mapping, o.OutputDir); err != nil {
-			return err
-		}
 	case mirrorToMirror:
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
@@ -565,6 +493,8 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
 			return imgSrc.GetManifest(ctx, instanceDigest)
 		},
+		handleMetadata:        o.handleMetadata,
+		processMirroredImages: o.processMirroredImages,
 	}
 
 	if o.OCIFeatureAction == "" {
@@ -575,20 +505,19 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		return fmt.Errorf("reading imagesetconfig via command line %v", err)
 	}
 	if o.OCIFeatureAction == OCIFeatureCopyAction {
-
-		err = o.bulkImageCopy(ctx, isc, o.SourceSkipTLS, o.DestSkipTLS)
+		err = o.bulkImageCopy(ctx, isc, o.SourceSkipTLS, o.DestSkipTLS, cleanup)
 		if err != nil {
 			return fmt.Errorf("copying images %v", err)
 		}
-		log.Println("INFO: completed catalog copy")
+		klog.Infof("completed catalog copy")
 		return nil
 	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
-		log.Println("INFO: mirroring images to remote registry")
-		err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace)
+		klog.Infof("mirroring images to remote registry")
+		err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace, cleanup)
 		if err != nil {
 			return fmt.Errorf("mirroring images %v", err)
 		}
-		log.Println("INFO: completed catalog mirror")
+		klog.Infof("completed catalog mirror")
 		return nil
 	}
 	if o.continuedOnError {
@@ -817,4 +746,96 @@ func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error
 		return err
 	}
 	return mappingFile.Sync()
+}
+
+// mirrorToDiskWrapper
+func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, sourceInsecure bool, cleanup cleanupFunc) error {
+
+	if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
+		return err
+	}
+
+	meta, mapping, err := o.Create(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+	if err != nil {
+		if errors.Is(err, ErrNoUpdatesExist) {
+			klog.Infof("No new images detected, process stopping")
+			return nil
+		}
+		return err
+	}
+
+	if err := o.mirrorMappings(cfg, mapping, sourceInsecure); err != nil {
+		return err
+	}
+
+	mappingPath := filepath.Join(o.Dir, mappingFile)
+	if o.DryRun {
+		if err := writeMappingFile(mappingPath, mapping); err != nil {
+			return err
+		}
+		return cleanup()
+	}
+
+	// Create and store associations
+	assocDir := filepath.Join(o.Dir, config.SourceDir)
+	assocs, errs := image.AssociateLocalImageLayers(assocDir, mapping)
+	if errs != nil {
+		if err := o.processAssociationErrors(errs.Errors()); err != nil {
+			return err
+		}
+	}
+
+	// Pack the images set
+	tmpBackend, err := o.Pack(ctx, prunedAssociations, assocs, &meta, cfg.ArchiveSize)
+	if err != nil {
+		if errors.Is(err, ErrNoUpdatesExist) {
+			klog.Infof("No updates detected, process stopping")
+			return nil
+		}
+		return err
+	}
+
+	// Sync metadata from temporary backend to target backend
+	if cfg.StorageConfig.IsSet() {
+		targetBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
+		if err != nil {
+			return err
+		}
+		if err := metadata.SyncMetadata(ctx, tmpBackend, targetBackend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanupFunc) error {
+	// Publish from disk to registry
+	// this takes care of syncing the metadata to the
+	// registry backends.
+	mapping, err := o.Publish(ctx)
+	if err != nil {
+		serr := &ErrInvalidSequence{}
+		if errors.As(err, &serr) {
+			return fmt.Errorf("error during publishing, expecting imageset with prefix mirror_seq%d: %v", serr.wantSeq, err)
+		}
+		return err
+	}
+
+	mappingPath := filepath.Join(o.Dir, mappingFile)
+	if o.DryRun {
+		if err := writeMappingFile(mappingPath, mapping); err != nil {
+			return err
+		}
+		return cleanup()
+	}
+
+	if err := o.generateResults(mapping, o.OutputDir); err != nil {
+		return err
+	}
+	return nil
 }
