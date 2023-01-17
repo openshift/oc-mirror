@@ -225,8 +225,20 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 // differential images
 func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
-	for _, ctlg := range lastRun.Operators {
-		prevCatalog[ctlg.Catalog] = ctlg
+	for _, pastCtlg := range lastRun.Operators {
+		prevCatalog[pastCtlg.Catalog] = pastCtlg
+	}
+
+	uniqueName, err := ctlg.GetUniqueName()
+	if err != nil {
+		return dc, ic, err
+	}
+	prev, found := prevCatalog[uniqueName]
+
+	// The catalog is new or just need to mirror the full
+	// catalog or channels.
+	if !found || !ctlg.IsHeadsOnly() {
+		return o.renderDCFull(ctx, reg, ctlg)
 	}
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
@@ -234,11 +246,8 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 	// packages at heads-only
 	catalogHeadsOnly := ctlg.IsHeadsOnly() && !hasInclude
 	includeWithHeadsOnly := ctlg.IsHeadsOnly() && hasInclude
-	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
-	full := !ctlg.IsHeadsOnly() && !hasInclude
 
-	// Generate and mirror a heads-only diff using the catalog as a new ref,
-	// and an old ref found for this catalog in lastRun.
+	// Generate a heads-only diff using the catalog as a new ref and previous bundle information.
 	catLogger := o.Logger.WithField("catalog", ctlg.Catalog)
 	a := diff.Diff{
 		Registry:         reg,
@@ -247,16 +256,15 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		SkipDependencies: ctlg.SkipDependencies,
 	}
 
-	// Instead of creating a partial FBC with diff
-	// generate the current FBC according to the previous
-	// include config or just render the full catalog again
-	dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
-	if err != nil {
-		return dc, ic, err
-	}
+	// If a previous catalog is found, reconcile the
+	// previously stored IncludeConfig with the current catalog information
+	// to make sure the bundles still exist. This causes the declarative config
+	// to be rendered once to get the full information and then a second time to
+	// get the final copy. This will help determine what bundles have been pruned.
+	var icManager operator.IncludeConfigManager
 	switch {
-	case full:
-		// Mirror the entire catalog.
+	case catalogHeadsOnly:
+		icManager = operator.NewCatalogStrategy()
 		dc, err = action.Render{
 			Registry: reg,
 			Refs:     []string{ctlg.Catalog},
@@ -264,57 +272,41 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 		if err != nil {
 			return dc, ic, err
 		}
-	case catalogHeadsOnly || includeWithHeadsOnly:
-		// If a previous catalog is found, reconcile the
-		// previously stored IncludeConfig with the current catalog information
-		// to make sure the bundles still exist. This causes the declarative config
-		// to be rendered once to get the full information and then a second time to
-		// get the final copy.
-		prev, found := prevCatalog[ctlg.Catalog]
-		if found {
-			var icManager operator.IncludeConfigManager
-			if catalogHeadsOnly {
-				icManager = operator.NewCatalogStrategy()
-				dc, err = action.Render{
-					Registry: reg,
-					Refs:     []string{ctlg.Catalog},
-				}.Run(ctx)
-				if err != nil {
-					return dc, ic, err
-				}
-			} else {
-				icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
-				// Must set the current
-				// diff include configuration to get the full
-				// channels before recalculating.
-				a.IncludeConfig = dic
-				a.HeadsOnly = false
-				dc, err = a.Run(ctx)
-				if err != nil {
-					return dc, ic, err
-				}
-			}
 
-			ic, err = icManager.UpdateIncludeConfig(*dc, prev.IncludeConfig)
-			if err != nil {
-				return dc, ic, fmt.Errorf("error updating include config: %v", err)
-			}
-			dic, err = ic.ConvertToDiffIncludeConfig()
-			if err != nil {
-				return dc, ic, fmt.Errorf("error during include config conversion to declarative config: %v", err)
-			}
-
-			a.HeadsOnly = true
+	case includeWithHeadsOnly:
+		icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
+		// Must set the current
+		// diff include configuration to get the full
+		// channels before recalculating.
+		dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+		if err != nil {
+			return dc, ic, err
 		}
-		fallthrough
-	default:
-		// Default case is include
-		// config will full channels
 		a.IncludeConfig = dic
+		a.HeadsOnly = false
 		dc, err = a.Run(ctx)
 		if err != nil {
 			return dc, ic, err
 		}
+	}
+
+	// Update the IncludeConfig and diff include configuration based on previous mirrored bundles
+	// and the current catalog.
+	ic, err = icManager.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+	if err != nil {
+		return dc, ic, fmt.Errorf("error updating include config: %v", err)
+	}
+	dic, err := ic.ConvertToDiffIncludeConfig()
+	if err != nil {
+		return dc, ic, fmt.Errorf("error during include config conversion to declarative config: %v", err)
+	}
+
+	// Set up action diff for final declarative config rendering
+	a.HeadsOnly = true
+	a.IncludeConfig = dic
+	dc, err = a.Run(ctx)
+	if err != nil {
+		return dc, ic, err
 	}
 
 	if err := o.verifyDC(dic, dc); err != nil {
