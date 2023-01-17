@@ -22,6 +22,7 @@ TESTCASES[16]="skip_deps"
 TESTCASES[17]="helm_local"
 TESTCASES[18]="no_updates_exist"
 TESTCASES[19]="oci_local"
+TESTCASES[20]="headsonly_diff_with_target"
 
 # Test full catalog mode.
 function full_catalog() {
@@ -53,6 +54,20 @@ function headsonly_diff () {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
+}
+
+# Test heads-only mode with target
+function headsonly_diff_with_target () {
+    workflow_full imageset-config-headsonly-newtarget.yaml "test-catalog-latest" --diff -c="--source-use-http"
+    # shellcheck disable=SC2086
+    check_bundles localhost.localdomain:"${REGISTRY_DISCONN_PORT}"/"${CATALOGORG}"/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
+
+    workflow_diff imageset-config-headsonly-newtarget.yaml "test-catalog-diff" -c="--source-use-http"
+    check_bundles localhost.localdomain:"${REGISTRY_DISCONN_PORT}"/"${CATALOGORG}"/"${TARGET_CATALOG_NAME}":"${TARGET_CATALOG_TAG}" \
+    "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.1.0 foo.v0.3.0 foo.v0.3.1 foo.v0.3.2" \
+    localhost.localdomain:"${REGISTRY_DISCONN_PORT}"
 }
 
 # Test heads-only mode with catalogs that prune bundles
