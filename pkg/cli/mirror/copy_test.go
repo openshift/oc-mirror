@@ -210,44 +210,36 @@ func TestFindFBCConfig(t *testing.T) {
 		{
 			desc: "nominal case",
 			options: &MirrorOptions{
-				From:             ociProtocol + testdata,
-				ToMirror:         "test.registry.io",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        testdata,
+				From:      ociProtocol + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
 			},
 			err: "",
 		},
 		{
 			desc: "not a FBC image fails",
 			options: &MirrorOptions{
-				From:             ociProtocol + testdata,
-				ToMirror:         "test.registry.io",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        "/tmp",
+				From:      ociProtocol + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: "/tmp",
 			},
 			err: "unable to get OCI Image from oci:/tmp: open /tmp/index.json: no such file or directory",
 		},
 		{
 			desc: "corrupted manifest fails",
 			options: &MirrorOptions{
-				From:             ociProtocol + testdata,
-				ToMirror:         "test.registry.io",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        rottenManifest,
+				From:      ociProtocol + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: rottenManifest,
 			},
 			err: "unable to unmarshall manifest of image : unexpected end of JSON input",
 		},
 		{
 			desc: "corrupted layer fails",
 			options: &MirrorOptions{
-				From:             ociProtocol + testdata,
-				ToMirror:         "test.registry.io",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        rottenLayer,
+				From:      ociProtocol + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: rottenLayer,
 			},
 			err: "UntarLayers: NewReader failed - gzip: invalid header",
 		},
@@ -725,8 +717,6 @@ func TestGetISConfig(t *testing.T) {
 	c := spec{
 		desc: "nominal case passes",
 		options: &MirrorOptions{
-			UseOCIFeature:    true,
-			OCIFeatureAction: OCIFeatureCopyAction,
 			RootOptions: &cli.RootOptions{
 				Dir: "",
 				IOStreams: genericclioptions.IOStreams{
@@ -788,11 +778,9 @@ func TestBulkImageCopy(t *testing.T) {
 				},
 			},
 			options: &MirrorOptions{
-				From:             "test.registry.io",
-				ToMirror:         "",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        "",
+				From:      "test.registry.io",
+				ToMirror:  "",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -875,11 +863,9 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "redhat-operator-index",
 			options: &MirrorOptions{
-				From:             testdata,
-				ToMirror:         "localhost.localdomain:5000",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureMirrorAction,
-				OutputDir:        "",
+				From:      testdata,
+				ToMirror:  "localhost.localdomain:5000",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -926,11 +912,9 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "redhat-operator-index",
 			options: &MirrorOptions{
-				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-				ToMirror:         "localhost.localdomain:5000",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureMirrorAction,
-				OutputDir:        "",
+				From:      "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:  "localhost.localdomain:5000",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -977,11 +961,9 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "redhat-operator-index",
 			options: &MirrorOptions{
-				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-				ToMirror:         "localhost.localdomain:5000",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureMirrorAction,
-				OutputDir:        "",
+				From:      "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:  "localhost.localdomain:5000",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -1027,11 +1009,9 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "rhop-ctlg-oci-mashed",
 			options: &MirrorOptions{
-				From:             "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-				ToMirror:         "localhost.localdomain:5000",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureMirrorAction,
-				OutputDir:        "",
+				From:      "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
+				ToMirror:  "localhost.localdomain:5000",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -1274,6 +1254,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					OriginalRef: "",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
@@ -1287,6 +1268,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				},
 
 				image.TypedImage{
@@ -1302,6 +1284,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					OriginalRef: "",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
@@ -1315,6 +1298,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorRelatedImage,
 					OriginalRef: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.0",
+					ImageFormat: "",
 				},
 
 				image.TypedImage{
@@ -1330,6 +1314,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorRelatedImage,
 					OriginalRef: "",
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
@@ -1343,15 +1328,14 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorRelatedImage,
 					OriginalRef: "quay.io/redhatgov/oc-mirror-dev:no-name-v0.3.0",
+					ImageFormat: "",
 				},
 			},
 
 			options: &MirrorOptions{
-				From:             "test.registry.io",
-				ToMirror:         "",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        "",
+				From:      "test.registry.io",
+				ToMirror:  "",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -1389,6 +1373,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorRelatedImage,
 					OriginalRef: "",
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "file",
@@ -1402,15 +1387,14 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorRelatedImage,
 					OriginalRef: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
+					ImageFormat: "",
 				},
 			},
 
 			options: &MirrorOptions{
-				From:             "test.registry.io",
-				ToMirror:         "",
-				UseOCIFeature:    true,
-				OCIFeatureAction: OCIFeatureCopyAction,
-				OutputDir:        "",
+				From:      "test.registry.io",
+				ToMirror:  "",
+				OutputDir: "",
 				RootOptions: &cli.RootOptions{
 					Dir: "",
 					IOStreams: genericclioptions.IOStreams{
@@ -1567,6 +1551,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
 					Category:    v1alpha2.TypeOperatorCatalog,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1580,6 +1565,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
 					Category:    v1alpha2.TypeOperatorCatalog,
+					ImageFormat: "",
 				},
 			},
 			expectedErr: "",
@@ -1606,6 +1592,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorCatalog,
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1619,6 +1606,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
 					Category:    v1alpha2.TypeOperatorCatalog,
+					ImageFormat: "",
 				},
 			},
 			expectedErr: "",
@@ -1645,6 +1633,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
 					Category:    v1alpha2.TypeOperatorCatalog,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1658,6 +1647,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
 					Category:    v1alpha2.TypeOperatorCatalog,
+					ImageFormat: "",
 				},
 			},
 			expectedErr: "",
@@ -1695,6 +1685,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorCatalog,
 					OriginalRef: "",
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1708,6 +1699,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 					},
 					Category:    v1alpha2.TypeOperatorCatalog,
 					OriginalRef: "",
+					ImageFormat: "",
 				},
 			},
 			expectedErr: "",
@@ -1775,6 +1767,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1788,6 +1781,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1814,6 +1808,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1827,6 +1822,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				},
 			},
 			img: declcfg.RelatedImage{
@@ -1853,6 +1849,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				}: image.TypedImage{
 					TypedImageReference: imagesource.TypedImageReference{
 						Type: "docker",
@@ -1866,6 +1863,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					OriginalRef: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 					Category:    v1alpha2.TypeOperatorRelatedImage,
+					ImageFormat: "",
 				},
 			},
 			img: declcfg.RelatedImage{
