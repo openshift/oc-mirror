@@ -3,7 +3,6 @@ package mirror
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -458,36 +457,15 @@ func TestICSPGeneration(t *testing.T) {
 				require.NoError(t, err)
 				// for loop replaces require.Equal(test.expected, icsps): order elements in Spec.RepositoryDigestMirrors
 				// was making the test fail
-				for ind, icsp := range test.expected {
 
-					//isExpectedFound is only valid for the test
-					if test.name == "Valid/OperatorTypeWithRelatedImgs" {
-						require.Equal(t, icsp.Labels, icsps[ind].Labels)
-						require.Equal(t, icsp.Name, icsps[ind].Name)
-						require.Equal(t, true, isExpectedFound(icsp.Spec.RepositoryDigestMirrors, icsps[ind].Spec.RepositoryDigestMirrors))
-					} else {
-						require.Equal(t, icsp.Spec.RepositoryDigestMirrors, icsps[ind].Spec.RepositoryDigestMirrors)
-						require.Equal(t, icsp.Labels, icsps[ind].Labels)
-						require.Equal(t, icsp.Name, icsps[ind].Name)
-					}
+				for ind, icsp := range test.expected {
+					require.ElementsMatch(t, icsp.Spec.RepositoryDigestMirrors, icsps[ind].Spec.RepositoryDigestMirrors)
+					require.Equal(t, icsp.Labels, icsps[ind].Labels)
+					require.Equal(t, icsp.Name, icsps[ind].Name)
 				}
 			}
 		})
 	}
-}
-
-// isExpectedFound was necessary because the actual array order was not guaranteed
-func isExpectedFound(expected, actual []operatorv1alpha1.RepositoryDigestMirrors) bool {
-	for _, exp := range expected {
-		for _, act := range actual {
-			if exp.Source == act.Source {
-				if reflect.DeepEqual(exp.Mirrors, act.Mirrors) {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 func TestWriteCatalogSource(t *testing.T) {
