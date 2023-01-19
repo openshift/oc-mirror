@@ -402,7 +402,7 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 		return "", errors.New("destination registry may not be empty")
 	}
 	_, subNamespace, _, tag, _ := image.ParseImageReference(operator.OriginalRef)
-	_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
+	_, _, repo, tag, _ := image.ParseImageReference(operator.Catalog)
 
 	to := "docker://" + destReg
 	if namespace != "" {
@@ -430,16 +430,8 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 }
 
 func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1alpha2.Operator, digest digest.Digest, destRef string) error {
-	srcCtlgRef := ""
-	if strings.HasPrefix(srcOperator.Catalog, ociProtocol) {
-		if srcOperator.OriginalRef == "" {
-			return fmt.Errorf("%s is an OCI File Based Container: OriginalRef field is mandatory", srcOperator.Catalog)
-		} else {
-			srcCtlgRef = srcOperator.OriginalRef
-		}
-	} else {
-		srcCtlgRef = srcOperator.Catalog
-	}
+	srcCtlgRef := srcOperator.Catalog
+
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
 	if err != nil {
 		return err
@@ -462,14 +454,20 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 
 	ctlgSrcTI := image.TypedImage{
 		TypedImageReference: ctlgSrcTIR,
-		OriginalRef:         srcOperator.OriginalRef,
 		Category:            v1alpha2.TypeOperatorCatalog,
 	}
 
 	ctlgDstTI := image.TypedImage{
 		TypedImageReference: ctlgDstTIR,
-		OriginalRef:         srcOperator.OriginalRef,
 		Category:            v1alpha2.TypeOperatorCatalog,
+	}
+
+	if image.IsOCI(srcCtlgRef) {
+		ctlgSrcTI.ImageFormat = image.OCIFormat
+		ctlgDstTI.ImageFormat = image.OCIFormat
+	} else {
+		ctlgSrcTI.ImageFormat = image.OtherFormat
+		ctlgDstTI.ImageFormat = image.OtherFormat
 	}
 	catalogMapping[ctlgSrcTI] = ctlgDstTI
 	return nil

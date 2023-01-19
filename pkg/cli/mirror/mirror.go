@@ -9,9 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/opencontainers/go-digest"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
@@ -277,6 +280,14 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
 
 	o.remoteRegFuncs = RemoteRegFuncs{
+		copy:           copy.Image,
+		mirrorMappings: o.mirrorMappings,
+		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
+			return imgRef.NewImageSource(ctx, sys)
+		},
+		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
+			return imgSrc.GetManifest(ctx, instanceDigest)
+		},
 		handleMetadata:        o.handleMetadata,
 		processMirroredImages: o.processMirroredImages,
 	}

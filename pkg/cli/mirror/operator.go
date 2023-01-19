@@ -101,34 +101,60 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 	}
 	defer reg.Destroy()
 
+	// The fbcOnlyISC is a ImageSetConfiguration structure that will contain
+	// the FBC OCI operators that we cannot handle with plan, and need bulkImageMirror
+	// instead.
+	fbcOnlyISC := v1alpha2.ImageSetConfiguration{}
+
 	mmapping := image.TypedImageMapping{}
 	for _, ctlg := range cfg.Mirror.Operators {
 
-		ctlgRef, err := image.ParseReference(ctlg.Catalog)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
+		// Exclude catalog images with "oci://" from renderDC and plan
+		// These catalogs will be handled with bulkImageMirror instead
+		// TODO: we should be able to use renderDC still for these images
+		// so that the catalog image (filtered) gets recreated (and written
+		// to disk) for the OCI catalogs as well
+		if image.IsOCI(ctlg.Catalog) {
+			fbcOnlyISC.Mirror.Operators = append(fbcOnlyISC.Mirror.Operators, ctlg)
+		} else {
+			ctlgRef, err := image.ParseReference(ctlg.Catalog)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing catalog: %v", err)
+			}
 
-		targetName, err := ctlg.GetUniqueName()
-		if err != nil {
-			return nil, err
-		}
-		targetCtlg, err := imagesource.ParseReference(targetName)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
+			targetName, err := ctlg.GetUniqueName()
+			if err != nil {
+				return nil, err
+			}
+			targetCtlg, err := imagesource.ParseReference(targetName)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing catalog: %v", err)
+			}
 
-		// Render the catalog to mirror into a declarative config.
-		dc, ic, err := renderDC(ctx, reg, ctlg)
-		if err != nil {
-			return nil, o.checkValidationErr(err)
-		}
+			// Render the catalog to mirror into a declarative config.
+			dc, ic, err := renderDC(ctx, reg, ctlg)
+			if err != nil {
+				return nil, o.checkValidationErr(err)
+			}
 
-		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
-		if err != nil {
-			return nil, err
+			mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
+			if err != nil {
+				return nil, err
+			}
+			mmapping.Merge(mappings)
 		}
-		mmapping.Merge(mappings)
+	}
+
+	//TODO: cleanup could be passed in opts?
+	cleanupFunc := func() error {
+		if !o.SkipCleanup {
+			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
+		}
+		return nil
+	}
+	err = o.bulkImageMirror(ctx, &fbcOnlyISC, o.ToMirror, o.UserNamespace, cleanupFunc)
+	if err != nil {
+		return nil, err
 	}
 
 	return mmapping, nil

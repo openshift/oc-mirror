@@ -842,8 +842,7 @@ func TestBulkImageMirror(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog:     "oci://" + testdata,
-								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								Catalog: "oci://" + testdata,
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -891,8 +890,7 @@ func TestBulkImageMirror(t *testing.T) {
 
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog:     "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								Catalog: "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -940,8 +938,7 @@ func TestBulkImageMirror(t *testing.T) {
 
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog:     "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-								OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+								Catalog: "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
 								IncludeConfig: v1alpha2.IncludeConfig{
 									Packages: []v1alpha2.IncludePackage{
 										{
@@ -1437,8 +1434,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "no targetName, targetTag",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				Catalog: "oci://" + testdata,
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
@@ -1448,9 +1444,8 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "with targetName, no targetTag",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
-				TargetName:  "rhopi",
+				Catalog:    "oci://" + testdata,
+				TargetName: "rhopi",
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
@@ -1460,9 +1455,8 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "with targetTag and no targetName",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
-				TargetTag:   "v12",
+				Catalog:   "oci://" + testdata,
+				TargetTag: "v12",
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
@@ -1472,10 +1466,9 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "with targetTag and targetName",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
-				TargetTag:   "v12",
-				TargetName:  "rhopi",
+				Catalog:    "oci://" + testdata,
+				TargetTag:  "v12",
+				TargetName: "rhopi",
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
@@ -1485,8 +1478,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "destReg empty",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				Catalog: "oci://" + testdata,
 			},
 			destReg:     "",
 			namespace:   "disconnected_ocp",
@@ -1496,8 +1488,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 		{
 			desc: "namespace empty",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				Catalog: "oci://" + testdata,
 			},
 			destReg:     "localhost:5000",
 			namespace:   "",
@@ -1531,8 +1522,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 		{
 			desc: "originalRef has no digest, and digest provided",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				Catalog: "oci://" + testdata,
 			},
 			digest:  digest.FromString("just for testing"),
 			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:4.12",
@@ -1573,8 +1563,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 		{
 			desc: "digest is empty, originalRef has digest",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+				Catalog: "oci://" + testdata,
 			},
 			digest:  "",
 			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",
@@ -1614,8 +1603,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 		{
 			desc: "originalRef has no digest, and digest not provided",
 			operator: v1alpha2.Operator{
-				Catalog:     "oci://" + testdata,
-				OriginalRef: "registry.redhat.io/redhat/redhat-operator-index:v4.12",
+				Catalog: "oci://" + testdata,
 			},
 			digest:  "",
 			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",

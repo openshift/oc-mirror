@@ -14,6 +14,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -163,6 +164,10 @@ func aggregateICSPs(icsps [][]byte) []byte {
 func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
+		if k.ImageFormat == image.OCIFormat && k.Category == v1alpha2.TypeOperatorCatalog { // for the moment this means FBC OCI, the ref for this image is a local folder and there is no need adding it to ICSP
+			klog.Warningf("FBC catalog %s: skip writing to ImageContentSourcePolicy", k)
+			continue
+		}
 		if len(v.Ref.ID) == 0 {
 			klog.Warningf("no digest mapping available for %s, skip writing to ImageContentSourcePolicy", k)
 			continue

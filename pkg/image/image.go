@@ -103,3 +103,7 @@ func TrimProtocol(imageName string) string {
 
 	return imageName
 }
+
+func IsOCI(imageRef string) bool {
+	return strings.HasPrefix(imageRef, "oci:")
+}
