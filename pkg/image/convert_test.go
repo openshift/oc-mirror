@@ -690,7 +690,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					OriginalRef: "test-registry.com/foo@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					ImageFormat: OtherFormat,
 					Category:    v1alpha2.TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
@@ -702,7 +701,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/foo@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					ImageFormat: OtherFormat,
 				},
 			},
@@ -737,7 +735,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/foo@sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
 					ImageFormat: OtherFormat}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
@@ -748,7 +745,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/foo@sha256:d15a206e4ee462e82ab722ed84dfa514ab9ed8d85100d591c04314ae7c2162ee",
 					ImageFormat: OtherFormat},
 				{TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
@@ -759,7 +755,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category:    v1alpha2.TypeOperatorBundle,
-					OriginalRef: "test-registry.com/bar:latest",
 					ImageFormat: OtherFormat}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
@@ -770,7 +765,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category:    v1alpha2.TypeOperatorBundle,
-					OriginalRef: "test-registry.com/bar:latest",
 					ImageFormat: OtherFormat},
 			},
 			input: []v1alpha2.Association{
@@ -949,7 +943,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/foo@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					ImageFormat: OtherFormat}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
@@ -960,7 +953,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/foo@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 					ImageFormat: OtherFormat},
 				{TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
@@ -971,7 +963,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/bar:latest",
 					ImageFormat: OtherFormat}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
@@ -982,7 +973,6 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category:    v1alpha2.TypeGeneric,
-					OriginalRef: "test-registry.com/bar:latest",
 					ImageFormat: OtherFormat},
 			},
 			input: []v1alpha2.Association{

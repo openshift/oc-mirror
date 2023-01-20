@@ -25,7 +25,6 @@ const (
 // TypedImage defines an a image with the destination and content type
 type TypedImage struct {
 	imagesource.TypedImageReference
-	OriginalRef string
 	ImageFormat Format
 	// Category adds image category type to TypedImageReference
 	Category v1alpha2.ImageType
@@ -39,7 +38,6 @@ func ParseTypedImage(image string, typ v1alpha2.ImageType) (TypedImage, error) {
 	}
 	t := TypedImage{
 		TypedImageReference: ref,
-		OriginalRef:         image,
 		Category:            typ,
 	}
 	return t.SetDefaults(), nil
@@ -95,13 +93,11 @@ func (m TypedImageMapping) Merge(in TypedImageMapping) {
 func (m TypedImageMapping) Add(srcRef, dstRef imagesource.TypedImageReference, typ v1alpha2.ImageType) {
 	srcTypedRef := TypedImage{
 		TypedImageReference: srcRef,
-		OriginalRef:         srcRef.Ref.Exact(), //to be verified
 		ImageFormat:         OtherFormat,
 		Category:            typ,
 	}
 	dstTypedRef := TypedImage{
 		TypedImageReference: dstRef,
-		OriginalRef:         dstRef.Ref.Exact(), //to be verified
 		ImageFormat:         OtherFormat,
 		Category:            typ,
 	}
