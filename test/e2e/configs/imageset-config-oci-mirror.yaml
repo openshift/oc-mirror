@@ -7,7 +7,6 @@ storageConfig:
 mirror:
   operators:
   - catalog: oci://DATA_TMP/mirror_oci/oc-mirror-dev
-    originalRef: METADATA_CATALOGNAMESPACE:test-catalog-latest
     packages:
       - name: baz
         minVersion: 1.0.1

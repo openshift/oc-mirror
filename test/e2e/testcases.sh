@@ -21,7 +21,7 @@ TESTCASES[15]="max_version"
 TESTCASES[16]="skip_deps"
 TESTCASES[17]="helm_local"
 TESTCASES[18]="no_updates_exist"
-TESTCASES[19]="oci_local"
+TESTCASES[19]="oci_catalog"
 TESTCASES[20]="headsonly_diff_with_target"
 
 # Test full catalog mode.
@@ -242,9 +242,8 @@ function no_updates_exist {
 }
 
 # Test OCI local catalog
-function oci_local {
-    workflow_oci_copy imageset-config-oci-copy.yaml "test-catalog-latest" "oci://${MIRROR_OCI_DIR}" -c="--use-oci-feature --oci-feature-action=copy --source-skip-tls --oci-insecure-signature-policy"
-    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--use-oci-feature --oci-feature-action=mirror --dest-skip-tls --oci-insecure-signature-policy"
+function oci_catalog {
+    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--dest-skip-tls --oci-insecure-signature-policy"
     # podman pull docker://localhost.localdomain:5001/test/redhatgov/oc-mirror-dev:test-catalog-latest --tls-verify=false
     # baz.v1.0.0 
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f5bf1128937e7486764341e7bfdce15150f70d0e48c57de1386602c7b25ad7b4
