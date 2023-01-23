@@ -1,6 +1,7 @@
 module github.com/openshift/oc-mirror
 
 go 1.19
+
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
