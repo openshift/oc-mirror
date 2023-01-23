@@ -11,7 +11,7 @@ source "$DIR/testcases.sh"
 CMD="${1:?cmd bin path is required}"
 CMD="$(cd "$(dirname "$CMD")" && pwd)/$(basename "$CMD")"
 
-DATA_TMP=$(mktemp -d "${DIR}/operator-test.XXXXX")
+DATA_TMP="${DIR}/operator-test.${RANDOM}"
 CREATE_FULL_DIR="${DATA_TMP}/create_full"
 CREATE_DIFF_DIR="${DATA_TMP}/create_diff"
 PUBLISH_FULL_DIR="${DATA_TMP}/publish_full"
@@ -19,6 +19,7 @@ PUBLISH_DIFF_DIR="${DATA_TMP}/publish_diff"
 REGISTRY_CONN_DIR="${DATA_TMP}/conn"
 REGISTRY_DISCONN_DIR="${DATA_TMP}/disconn"
 MIRROR_OCI_DIR="${DATA_TMP}/mirror_oci"
+OCI_CTLG_PATH="oc-mirror-dev.tgz"
 WORKSPACE="oc-mirror-workspace"
 CATALOGREGISTRY="quay.io"
 CATALOGORG="redhatgov"
@@ -34,6 +35,8 @@ TARGET_CATALOG_TAG="target-tag"
 
 GOBIN=$HOME/go/bin
 PATH=$PATH:$GOBIN
+
+mkdir -p $DATA_TMP
 
 trap cleanup_all EXIT
 

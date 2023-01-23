@@ -170,3 +170,9 @@ function prepare_mirror_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
 }
+
+function prepare_oci_testdata() {
+  local DATA_DIR="${1:?DATA_DIR required}"
+  mkdir -p "${DATA_DIR}/mirror_oci"
+  tar xfz "${DIR}/artifacts/${OCI_CTLG_PATH}" -C "${DATA_DIR}/mirror_oci"
+}
