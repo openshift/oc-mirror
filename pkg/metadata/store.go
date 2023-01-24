@@ -126,7 +126,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 
 func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
 	// TODO handle resolving operator metadata for oci fbc catalogs
-	if image.IsOCI(ctlg.Catalog) { // for the moment this means FBC OCI, for which we are skipping metadata update for the moment
+	if image.IsFBCOCI(ctlg.Catalog) { // for the moment this means FBC OCI, for which we are skipping metadata update for the moment
 
 		klog.Warningf("FBC catalog %s: skip resolving Operator Metadata", ctlg.Catalog)
 		return v1alpha2.OperatorMetadata{}, nil

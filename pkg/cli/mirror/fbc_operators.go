@@ -166,7 +166,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		// check for the valid config label to use
 		configsLabel, err := o.getCatalogConfigPath(ctx, operatorCatalog)
 		if err != nil {
-			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
+			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operator.Catalog, err)
 			return err
 		}
 		// initialize path starting with <current working directory>/olm_artifacts/<repo>
@@ -332,8 +332,16 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	if err != nil {
 		return err
 	}
+
 	// The registry is needed in from, as this will be used to generate ICSP from mapping
-	from = tmpIR.Ref.Registry + "/" + tmpIR.Ref.Namespace + "/" + tmpIR.Ref.Name
+	var parts []string
+	for _, s := range []string{tmpIR.Ref.Registry, tmpIR.Ref.Namespace, tmpIR.Ref.Name} {
+		if strings.TrimSpace(s) != "" {
+			parts = append(parts, s)
+		}
+	}
+	from = strings.Join(parts, "/")
+
 	if sha != "" {
 		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
 	} else if sha == "" && tag != "" {
@@ -431,6 +439,11 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 	if err != nil {
 		return err
 	}
+	// digest is returned from the result of copy to the disconnected registry, and unless there is
+	// an error during copy, this digest will be provided.
+	// ctlgSrcTIR.Ref.ID will not be empty for the case of a remote registry, but for oci FBC catalogs,
+	// this will always be empty.
+	// if both digest and ctlgSrcTIR.Ref.ID are empty, then there is no way of creating a accurate mapping source.
 	if digest == "" && ctlgSrcTIR.Ref.ID == "" {
 		return fmt.Errorf("unable to add catalog %s to mirror mapping: no digest found", srcOperator.Catalog)
 	}
@@ -454,7 +467,7 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		Category:            v1alpha2.TypeOperatorCatalog,
 	}
 
-	if image.IsOCI(srcCtlgRef) {
+	if image.IsFBCOCI(srcCtlgRef) {
 		ctlgSrcTI.ImageFormat = image.OCIFormat
 		ctlgDstTI.ImageFormat = image.OCIFormat
 	} else {

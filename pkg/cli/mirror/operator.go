@@ -114,7 +114,7 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		// TODO: we should be able to use renderDC still for these images
 		// so that the catalog image (filtered) gets recreated (and written
 		// to disk) for the OCI catalogs as well
-		if image.IsOCI(ctlg.Catalog) {
+		if image.IsFBCOCI(ctlg.Catalog) {
 			fbcOnlyISC.Mirror.Operators = append(fbcOnlyISC.Mirror.Operators, ctlg)
 		} else {
 			ctlgRef, err := image.ParseReference(ctlg.Catalog)
@@ -152,6 +152,8 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		}
 		return nil
 	}
+
+	// For FBC OCI operator catalogs, call bulkImageMirror
 	err = o.bulkImageMirror(ctx, &fbcOnlyISC, o.ToMirror, o.UserNamespace, cleanupFunc)
 	if err != nil {
 		return nil, err

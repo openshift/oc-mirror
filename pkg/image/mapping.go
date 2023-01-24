@@ -24,8 +24,8 @@ const (
 
 // TypedImage defines an a image with the destination and content type
 type TypedImage struct {
-	imagesource.TypedImageReference
-	ImageFormat Format
+	imagesource.TypedImageReference //oc code ==> render, plan, ...
+	ImageFormat                     Format
 	// Category adds image category type to TypedImageReference
 	Category v1alpha2.ImageType
 }
