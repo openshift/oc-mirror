@@ -485,50 +485,6 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 	return cleanup()
 }
 
-// func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc) error {
-// 	o.remoteRegFuncs = RemoteRegFuncs{
-// 		copy:           copy.Image,
-// 		mirrorMappings: o.mirrorMappings,
-// 		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
-// 			return imgRef.NewImageSource(ctx, sys)
-// 		},
-// 		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
-// 			return imgSrc.GetManifest(ctx, instanceDigest)
-// 		},
-// 		handleMetadata:        o.handleMetadata,
-// 		processMirroredImages: o.processMirroredImages,
-// 	}
-
-// 	if o.OCIFeatureAction == "" {
-// 		return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
-// 	}
-// 	isc, err := o.getISConfig()
-// 	if err != nil {
-// 		return fmt.Errorf("reading imagesetconfig via command line %v", err)
-// 	}
-// 	if o.OCIFeatureAction == OCIFeatureCopyAction {
-// 		err = o.bulkImageCopy(ctx, isc, o.SourceSkipTLS, o.DestSkipTLS, cleanup)
-// 		if err != nil {
-// 			return fmt.Errorf("copying images %v", err)
-// 		}
-// 		klog.Infof("completed catalog copy")
-// 		return nil
-// 	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
-// 		klog.Infof("mirroring images to remote registry")
-// 		err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace, cleanup)
-// 		if err != nil {
-// 			return fmt.Errorf("mirroring images %v", err)
-// 		}
-// 		klog.Infof("completed catalog mirror")
-// 		return nil
-// 	}
-// 	if o.continuedOnError {
-// 		return fmt.Errorf("one or more errors occurred")
-// 	}
-
-// 	return cleanup()
-// }
-
 // removePreviouslyMirrored will check if an image has been previously mirrored
 // and remove it from the mapping if found. These images are added to the current AssociationSet
 // to maintain a history of images. Any images in the AssociationSet that was not requested in the mapping
