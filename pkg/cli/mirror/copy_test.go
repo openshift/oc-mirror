@@ -434,13 +434,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -462,13 +455,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -490,13 +476,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -518,13 +497,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -547,13 +519,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -576,13 +541,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -601,13 +559,6 @@ func TestIsPackageSelected(t *testing.T) {
 			bundle: declcfg.Bundle{
 				Name:    "foo.v0.3.1",
 				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
 				Properties: []property.Property{
 					property.MustBuildPackage("foo", "0.3.1"),
 				},
@@ -625,11 +576,346 @@ func TestIsPackageSelected(t *testing.T) {
 			expectedResult: false,
 			err:            "",
 		},
+		{
+			desc: "package should not be included (invalid version on IncludedPackage)",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "03.0",
+					},
+				},
+			},
+			err: "No Major.Minor.Patch elements found",
+		},
+		{
+			desc: "bundle channel should be included",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+						},
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle channel should not be included",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.2",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+						},
+					},
+				},
+			},
+			expectedResult: false,
+			err:            "",
+		},
+		{
+			desc: "bundle channel specific min version should be included",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.3.1",
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle channel specific max version should be included",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MaxVersion: "1.0.0",
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle channel specific min and max version should be included",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.3.0",
+								MaxVersion: "1.0.0",
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle channel specific min and max version should not be included (invalid bundle version)",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "03.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.3.0",
+								MaxVersion: "1.0.0",
+							},
+						},
+					},
+				},
+			},
+			err: "No Major.Minor.Patch elements found",
+		},
+		{
+			desc: "bundle channel specific min and max version should not be included (bundle without olm.package property)",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.3.0",
+								MaxVersion: "1.0.0",
+							},
+						},
+					},
+				},
+			},
+			err: "unable to find bundle version",
+		},
+		{
+			desc: "bundle channel specific min and max version should not be included (invalid min version)",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "03.0",
+								MaxVersion: "1.0.0",
+							},
+						},
+					},
+				},
+			},
+			err: "No Major.Minor.Patch elements found",
+		},
+		{
+			desc: "bundle channel specific min and max version should not be included (invalid max version)",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{
+				{
+					Name:    "test",
+					Package: "foo",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name: "foo.v0.3.1",
+						},
+					},
+				},
+			},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					Channels: []v1alpha2.IncludeChannel{
+						{
+							Name: "test",
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.3.0",
+								MaxVersion: "10.0",
+							},
+						},
+					},
+				},
+			},
+			err: "No Major.Minor.Patch elements found",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-
-			isSelected, err := isPackageSelected(c.bundle, c.channels, c.packages)
+			isSelected, err := isBundleSelected(c.bundle, c.channels, c.packages)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {

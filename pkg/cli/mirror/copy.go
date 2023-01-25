@@ -586,7 +586,7 @@ func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]d
 	}
 
 	for _, bundle := range cfg.Bundles {
-		isSelected, err := isPackageSelected(bundle, cfg.Channels, packages)
+		isSelected, err := isBundleSelected(bundle, cfg.Channels, packages)
 		if err != nil {
 			return nil, err
 		}
@@ -612,44 +612,38 @@ func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]d
 	return finalList, nil
 }
 
-func isPackageSelected(bundle declcfg.Bundle, channels []declcfg.Channel, packages []v1alpha2.IncludePackage) (bool, error) {
-	isSelected := false
-	for _, pkg := range packages {
-		if pkg.Name == bundle.Package {
-			var min, max semver.Version
-			if pkg.MinVersion != "" || pkg.MaxVersion != "" {
-				version_string, err := bundleVersion(bundle)
+func isBundleSelected(bundle declcfg.Bundle, catalogChannels []declcfg.Channel, catalogFilters []v1alpha2.IncludePackage) (bool, error) {
+	var isSelected bool
+	for _, catalogFilter := range catalogFilters {
+		if catalogFilter.Name == bundle.Package {
+			if catalogFilter.MinVersion != "" || catalogFilter.MaxVersion != "" {
+				var err error
+				isSelected, err = isBundleVerSelected(catalogFilter.MinVersion, catalogFilter.MaxVersion, bundle)
 				if err != nil {
 					return isSelected, err
 				}
-				pkgVer, err := semver.Make(version_string)
-				if err != nil {
-					return isSelected, err
-				}
-				if err != nil {
-					return isSelected, err
-				}
-				if pkg.MinVersion != "" {
-					min, err = semver.Make(pkg.MinVersion)
-					if err != nil {
-						return isSelected, err
+			} else if len(catalogFilter.Channels) > 0 {
+				for _, channelFilter := range catalogFilter.Channels {
+					for _, catalogChannel := range catalogChannels {
+						if bundle.Package == catalogChannel.Package {
+							if catalogChannel.Name == channelFilter.Name {
+								for _, entry := range catalogChannel.Entries {
+									if entry.Name == bundle.Name {
+										if channelFilter.MinVersion != "" || channelFilter.MaxVersion != "" {
+											var err error
+											isSelected, err = isBundleVerSelected(channelFilter.MinVersion, channelFilter.MaxVersion, bundle)
+											if err != nil {
+												return isSelected, err
+											}
+										} else {
+											isSelected = true
+										}
+									}
+								}
+							}
+						}
 					}
 				}
-				if pkg.MaxVersion != "" {
-					max, err = semver.Make(pkg.MaxVersion)
-					if err != nil {
-						return isSelected, err
-					}
-				}
-
-				if (pkg.MinVersion != "" && pkg.MaxVersion != "") && pkgVer.Compare(min) >= 0 && pkgVer.Compare(max) <= 0 {
-					isSelected = true
-				} else if pkg.MinVersion != "" && pkg.MaxVersion == "" && pkgVer.Compare(min) >= 0 {
-					isSelected = true
-				} else if pkg.MaxVersion != "" && pkg.MinVersion == "" && pkgVer.Compare(max) <= 0 {
-					isSelected = true
-				}
-
 			} else { // no filtering required
 				isSelected = true
 			}
@@ -669,6 +663,42 @@ func bundleVersion(bundle declcfg.Bundle) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unable to find bundle version")
+}
+
+func isBundleVerSelected(minVer, maxVer string, bundle declcfg.Bundle) (bool, error) {
+	var min, max semver.Version
+
+	version, err := bundleVersion(bundle)
+	if err != nil {
+		return false, err
+	}
+	bundleVer, err := semver.Make(version)
+	if err != nil {
+		return false, err
+	}
+
+	if minVer != "" {
+		min, err = semver.Make(minVer)
+		if err != nil {
+			return false, err
+		}
+	}
+	if maxVer != "" {
+		max, err = semver.Make(maxVer)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if (minVer != "" && maxVer != "") && bundleVer.Compare(min) >= 0 && bundleVer.Compare(max) <= 0 {
+		return true, nil
+	} else if minVer != "" && maxVer == "" && bundleVer.Compare(min) >= 0 {
+		return true, nil
+	} else if maxVer != "" && minVer == "" && bundleVer.Compare(max) <= 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
