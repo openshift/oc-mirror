@@ -12,6 +12,7 @@ import (
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	archiver "github.com/mholt/archiver/v3"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
@@ -28,10 +29,11 @@ import (
 
 const (
 	// Base image to use when build graph image
-	graphBaseImage = "registry.access.redhat.com/ubi8/ubi:latest"
+	graphBaseImage = "registry.access.redhat.com/ubi8/ubi-micro:latest"
 	// URL where graph archive is stored
 	graphURL       = "https://api.openshift.com/api/upgrades_info/graph-data"
 	outputFile     = "cincinnati-graph-data.tar.gz"
+	graphDataDir   = "/var/lib/cincinnati/graph-data/"
 	getDataTimeout = time.Minute * 60
 )
 
@@ -87,13 +89,20 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 
 	// unpack graph data archive and build image
 	graphToFile := filepath.Join(dstDir, config.GraphDataDir, outputFile)
-	add, err := builder.LayerFromPath(".", graphToFile)
+	graphDataFolder := filepath.Join(dstDir, config.GraphDataDir, "/graph-data")
+
+	err = archiver.Unarchive(graphToFile, graphDataFolder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract tarball %v", err)
+	}
+
+	add, err := builder.LayerFromPath(graphDataDir, graphDataFolder)
 	if err != nil {
 		return refs, fmt.Errorf("error creating add layer: %v", err)
 	}
-	untarCmd := fmt.Sprintf("tar xvzf %s -C /var/lib/cincinnati/graph-data/ --strip-components=1", outputFile)
+
 	update := func(cfg *v1.ConfigFile) {
-		cfg.Config.Cmd = []string{"/bin/bash", "-c", untarCmd}
+		cfg.Author = "oc-mirror"
 	}
 	layoutPath, err := imgBuilder.CreateLayout(ubiImage.Ref.Exact(), layoutDir)
 	if err != nil {
