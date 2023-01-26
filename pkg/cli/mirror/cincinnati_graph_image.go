@@ -30,7 +30,7 @@ const (
 	// Base image to use when build graph image
 	graphBaseImage = "registry.access.redhat.com/ubi8/ubi:latest"
 	// URL where graph archive is stored
-	graphURL       = "https://github.com/openshift/cincinnati-graph-data/archive/master.tar.gz"
+	graphURL       = "https://api.openshift.com/api/upgrades_info/graph-data"
 	outputFile     = "cincinnati-graph-data.tar.gz"
 	getDataTimeout = time.Minute * 60
 )
