@@ -34,6 +34,8 @@ function install_deps() {
   tar xvf opm.tar bin/opm
   mv bin/opm $GOBIN
   rm -f registry2.tar opm.tar
+  wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+  chmod +x $GOBIN/jq
 }
 
 # setup_reg will configure and start registry2 processes
