@@ -9,19 +9,25 @@ mirror:
     architectures:
       - "s390x" # Architectures to mirror for the collection of release versions (defaults to amd64)
     channels:
-      - name: stable-4.9 # References latest stable release
+      - name: stable-4.9 # References the latest stable release
       - name: stable-4.7 # Annotation references min and max version. 
         minVersion: '4.6.13'
         maxVersion: '4.7.18'
-    graph: true # Include Cincinnati upgrade graph image in imageset
+    graph: true # Include Cincinnati upgrade graph image in imageset (defaults to false)
   operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.8 # References entire catalog
-      full: true # full can be set to pull a full catalog and must be set to filter packages
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12 # References entire catalog
+      full: false # full set to false pull the latest version for all package channels with no versions set (default to false)
       packages:
-        - name: rhacs-operator
-          minVersion: '3.67.0'
+        - name: elasticsearch-operator
           channels:
-            - name: 'latest'
+            - name: 'stable-v0' # Mirrors a single channel
+        - name: rhacs-operator
+          minVersion: '3.67.0' # Mirrors all version from the minimum version to the latest in the package
+        - name: mtc-operator
+          channels:
+            - name: release-1.7  # Mirrors all versions in a single channel from the min version to the max version.
+              minVersion: '1.7.0'
+              maxVersion: '1.7.5'
   additionalImages: # List of additional images to be included in imageset
     - name: registry.redhat.io/ubi8/ubi:latest
   blockedImages: # Image to block by name or regular expression
