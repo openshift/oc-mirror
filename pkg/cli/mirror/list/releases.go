@@ -98,11 +98,6 @@ func (o *ReleasesOptions) Validate() error {
 	if o.Channel == "stable-" {
 		return errors.New("must specify --version or --channel")
 	}
-	for _, arch := range o.FilterByArchs {
-		if _, ok := cincinnati.SupportedArchs[arch]; !ok {
-			return fmt.Errorf("architecture %q is not a supported release architecture", arch)
-		}
-	}
 	return nil
 }
 
