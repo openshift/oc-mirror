@@ -152,11 +152,15 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		}
 		return nil
 	}
-
-	// For FBC OCI operator catalogs, call bulkImageMirror
-	err = o.bulkImageMirror(ctx, &fbcOnlyISC, o.ToMirror, o.UserNamespace, cleanupFunc)
-	if err != nil {
-		return nil, err
+	if len(fbcOnlyISC.Mirror.Operators) > 0 {
+		if o.ToMirror == "" || o.UserNamespace == "" {
+			return nil, fmt.Errorf("unable to mirror OCI FBC catalogs: destination registry and/or namespace not provided. (registry=%s,namespace=%s", o.ToMirror, o.UserNamespace)
+		}
+		// For FBC OCI operator catalogs, call bulkImageMirror
+		err = o.bulkImageMirror(ctx, &fbcOnlyISC, o.ToMirror, o.UserNamespace, cleanupFunc)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return mmapping, nil

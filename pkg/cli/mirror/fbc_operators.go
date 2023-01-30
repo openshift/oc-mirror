@@ -349,8 +349,19 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 }
 
 func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1alpha2.Operator, digest digest.Digest, destRef string) error {
-	srcCtlgRef := srcOperator.Catalog
-
+	if digest == "" {
+		return fmt.Errorf("no digest provided for OCI catalog %s after copying it to the disconnected registry. This usually indicates an error in the catalog copy", srcOperator.Catalog)
+	}
+	// need to use GetUniqueName, because JUST for the catalogSource
+	// generation, we need the srcOperator reference to be based on
+	// targetName and targetTag if they exist
+	srcCtlgRef, err := srcOperator.GetUniqueName()
+	if err != nil {
+		return err
+	}
+	if srcOperator.IsFBCOCI() {
+		srcCtlgRef = ociProtocol + "//" + srcCtlgRef
+	}
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
 	if err != nil {
 		return err

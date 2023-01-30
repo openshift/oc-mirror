@@ -14,12 +14,18 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Format refers to the container image format.
+// It defines the structure of the image, and can be
+// * [Docker Image Manifest V2, Schema 1](https://docs.docker.com/registry/spec/manifest-v2-1/)
+// * [Docker Image Manifest V2, Schema 2](https://docs.docker.com/registry/spec/manifest-v2-2/)
+// * [OCI](https://github.com/opencontainers/image-spec)
 type Format string
 
 const (
 	OCIFormat      Format = "oci"
 	DockerV2Format Format = "docker-v2"
-	OtherFormat    Format = "other"
+	// OtherFormat is used when no analysis into the image is done to determine its format
+	OtherFormat Format = "other"
 )
 
 // TypedImage defines an a image with the destination and content type

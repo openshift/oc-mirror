@@ -1345,7 +1345,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 			digest:      "",
 			destRef:     "docker://localhost:5000/disconnected_ocp/redhat-operator-index:v4.12",
 			expMapping:  image.TypedImageMapping{},
-			expectedErr: "unable to add catalog oci://" + testdata + " to mirror mapping: no digest found",
+			expectedErr: "no digest provided for OCI catalog oci://" + testdata + " after copying it to the disconnected registry. This usually indicates an error in the catalog copy",
 		},
 		{
 			desc: "catalog is on registry",
