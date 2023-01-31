@@ -1,6 +1,9 @@
 # This config uses the headsOnly feature which will mirror the 
 # latest version of each channel within each package contained 
-# within a specified operator catalog
+# within a specified operator catalog.
+
+# IMPORTANT: This is only true if metadata for this catalog in unestablished.
+# Minimum bundle versions are managed in the metadata and the latest differential bundles will be included additively.
 ---
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration

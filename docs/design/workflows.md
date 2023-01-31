@@ -13,7 +13,10 @@ Design: oc-mirror Workflows Overview
 
 ### Heads-Only
 
-The heads-only workflow is the default for both catalog and platform content types. This workflow, when initially publishing an imageset, will only mirror the channel heads for each content type. On the subsequent runs, the latest versions will be mirrored.
+The heads-only workflow is the default for both catalog and platform content types. 
+This workflow, when initially publishing an imageset, will only mirror the channel heads for each content type. 
+On the subsequent runs, the latest differential versions will be mirrored. 
+In other words, the `minVersion` is stored and managed in the metadata, and later versions are mirrored in an additive way.
 
 Heads-only is the default workflow and is controlled by the `full` key, which is set to false by default.
 
