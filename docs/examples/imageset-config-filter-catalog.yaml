@@ -1,10 +1,11 @@
-# This config demonstrates how to mirror a single operator. 
+# This config demonstrates how to mirror a single operator.
 
-# If a package is specified with no minVersion/maxVersion or channel, each channel's latest
-# version in the specified package will be mirrored.
+# IMPORTANT: When using headsOnly mode, the latest (HEAD) version is mirrored for each channel
+# when metadata is first written for the operator package channel. On subsequent runs of oc-mirror, the channel bundles are mirrored
+# from the previous channel head to the current channel head
 
-# IMPORTANT: This is only true if metadata for this package in unestablished.
-# Minimum bundle versions are managed in the metadata and the latest differential bundles will be included additively.
+# Heads Only: If a package is specified without minVersion/maxVersion constraints or channel filter, each channel's latest
+# (HEAD) bundle version in the specified package will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
@@ -13,11 +14,8 @@ mirror:
       packages:
         - name: elasticsearch-operator
 ---
-# If a package is specified with a channel with no minVersion/maxVersion, only the channel's latest
-# version will be mirrored.
-
-# IMPORTANT: This is only true if metadata for this package in unestablished.
-# Minimum bundle versions are managed in the metadata and the latest differential bundles will be included additively.
+# Heads Only: If a package is specified with a channel filter without minVersion/maxVersion constraints, only the channel's latest (HEAD)
+# bundle version will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
@@ -28,8 +26,8 @@ mirror:
           channels:
             - name: 'stable-v0'
 ---
-# If a package is specified with no minVersion/maxVersion or channel and full is set to true,
-# all versions in each channel will be mirrored.
+# Full: If a package is specified without minVersion/maxVersion constraints or channel filter and full is set to true,
+# all bundle versions in each channel will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
@@ -39,8 +37,8 @@ mirror:
       packages:
         - name: elasticsearch-operator
 ---
-# If a package is specified with a channel with no minVersion/maxVersion and full is set to true,
-# all version in that channel will be mirrored.
+# Full: If a package is specified with channel filter without minVersion/maxVersion constraints and full is set to true,
+# all bundle versions in that channel will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
@@ -52,14 +50,13 @@ mirror:
           channels:
             - name: 'stable-v0'
 ---
-#minVersion and maxVersion can be set that the channel level OR the package level. If set at the package level, all channels
+# minVersion and maxVersion constraints can be set at the channel level OR the package level. If set at the package level, all channels
 # containing that version range with be included in the catalog.
 
 # WARNING: Any specified channel information will override this setting. Setting versions by
 # package or channel are mutually exclusive.
 
-
-# By specifying a minVersion, that version and every version to the
+# Version Constraints: By specifying a minVersion, that version and every version to the
 # specified channel's latest (HEAD) version will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
@@ -70,9 +67,8 @@ mirror:
         - name: elasticsearch-operator
           minVersion: '5.3.2-20'
 ---
-# If the package is specified with a minVersion and maxVersion, all bundles within that range
-# will be mirrored.
-
+# Version Constraints: If the package is specified with a minVersion and maxVersion constraints, all bundles within that range
+# will be mirrored including all channels that contain any of those versions if a channel filter is not specified.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:

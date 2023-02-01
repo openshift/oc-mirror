@@ -2,8 +2,9 @@
 # latest version of each channel within each package contained 
 # within a specified operator catalog.
 
-# IMPORTANT: This is only true if metadata for this catalog in unestablished.
-# Minimum bundle versions are managed in the metadata and the latest differential bundles will be included additively.
+# IMPORTANT: When using headsOnly mode, the latest (HEAD) version is mirrored for each channel in each operator package
+# when metadata is first written. On subsequent runs, the operator package channel bundles are mirrored
+# from the previous channel head to the current channel head.
 ---
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration

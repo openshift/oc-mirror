@@ -20,9 +20,9 @@ mirror:
       packages:
         - name: elasticsearch-operator
           channels:
-            - name: 'stable-v0' # Mirrors a single channel
+            - name: 'stable-v0' # Mirrors a single channel from the previous channel head to the current channel head
         - name: rhacs-operator
-          minVersion: '3.67.0' # Mirrors all version from the minimum version to the latest in the package
+          minVersion: '3.67.0' # Mirrors all versions from the minimum version to the latest in the package, including all channels that contain any of those versions.
         - name: mtc-operator
           channels:
             - name: release-1.7  # Mirrors all versions in a single channel from the min version to the max version.
