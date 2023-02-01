@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/openshift/library-go/pkg/image/reference"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,6 +117,7 @@ type Operator struct {
 	SkipDependencies bool `json:"skipDependencies,omitempty"`
 	// OriginalRef is used when the Catalog is an OCI FBC (File Based Catalog) location.
 	// It contains the reference to the original repo on a remote registry
+	// Deprecated in oc-mirror 4.13, and will no longer be used.
 	OriginalRef string `json:"originalRef,omitempty"`
 }
 
@@ -123,11 +125,17 @@ type Operator struct {
 // be tracked in the metadata and built. This depends on what fields
 // are set between Catalog, TargetName, and TargetTag.
 func (o Operator) GetUniqueName() (string, error) {
+	ctlgRef := o.Catalog
+	if o.IsFBCOCI() {
+		ctlgRef = strings.TrimPrefix(ctlgRef, "oci:")
+		ctlgRef = strings.TrimPrefix(ctlgRef, "//") //it could be that there is none
+		ctlgRef = strings.TrimPrefix(ctlgRef, "/")  // case of full path
+	}
 	if o.TargetName == "" && o.TargetTag == "" {
-		return o.Catalog, nil
+		return ctlgRef, nil
 	}
 
-	catalogRef, err := reference.Parse(o.Catalog)
+	catalogRef, err := reference.Parse(ctlgRef)
 	if err != nil {
 		return "", fmt.Errorf("error parsing source catalog %s: %v", catalogRef, err)
 	}
@@ -147,6 +155,10 @@ func (o Operator) GetUniqueName() (string, error) {
 // heads will still be included, but prior versions may also be included.
 func (o Operator) IsHeadsOnly() bool {
 	return !o.Full
+}
+
+func (o Operator) IsFBCOCI() bool {
+	return strings.HasPrefix(o.Catalog, "oci:")
 }
 
 // Helm defines the configuration for Helm chart download

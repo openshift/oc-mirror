@@ -249,7 +249,6 @@ func TestReadImageMapping(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			OriginalRef: "some-registry.com/namespace/image:latest",
 			ImageFormat: OtherFormat,
 			Category:    v1alpha2.TypeOperatorBundle}: {
 			TypedImageReference: imagesource.TypedImageReference{
@@ -261,7 +260,6 @@ func TestReadImageMapping(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			OriginalRef: "disconn-registry.com/namespace/image:latest",
 			ImageFormat: OtherFormat,
 			Category:    v1alpha2.TypeOperatorBundle},
 		},

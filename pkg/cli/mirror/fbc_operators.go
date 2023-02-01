@@ -168,7 +168,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		// check for the valid config label to use
 		configsLabel, err := o.getCatalogConfigPath(ctx, operatorCatalog)
 		if err != nil {
-			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure you run oc-mirror with --use-oci-feature and --oci-feature-action=copy prior to executing this step", operator.Catalog, err)
+			log.Fatalf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operator.Catalog, err)
 			return err
 		}
 		// initialize path starting with <current working directory>/olm_artifacts/<repo>
@@ -276,7 +276,6 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			klog.Warningf("invalid related image %s: reference empty", i.Name)
 			continue
 		}
-		originalRef := i.Image
 		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
 		if err != nil {
 			klog.Warningf("Cannot find registry for %s", i.Image)
@@ -297,7 +296,8 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			TypedImageReference: srcTIR,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
-		dstPath := "file://" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
+		// The registry is needed in from, as this will be used to generate ICSP from mapping
+		dstPath := "file://" + srcTIR.Ref.Registry + "/" + srcTIR.Ref.Namespace + "/" + srcTIR.Ref.Name
 		if srcTIR.Ref.ID != "" {
 			dstPath = dstPath + "/" + strings.TrimPrefix(srcTI.Ref.ID, "sha256:")
 		} else if srcTIR.Ref.ID == "" && srcTIR.Ref.Tag != "" {
@@ -316,7 +316,6 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		}
 		dstTI := image.TypedImage{
 			TypedImageReference: dstTIR,
-			OriginalRef:         originalRef,
 			Category:            v1alpha2.TypeOperatorRelatedImage,
 		}
 		mapping[srcTI] = dstTI
@@ -340,7 +339,14 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	if err != nil {
 		return err
 	}
-	from = tmpIR.Ref.Namespace + "/" + tmpIR.Ref.Name
+	// The registry is needed in from, as this will be used to generate ICSP from mapping
+	var parts []string
+	for _, s := range []string{tmpIR.Ref.Registry, tmpIR.Ref.Namespace, tmpIR.Ref.Name} {
+		if strings.TrimSpace(s) != "" {
+			parts = append(parts, s)
+		}
+	}
+	from = strings.Join(parts, "/")
 	if sha != "" {
 		from = from + "/" + strings.TrimPrefix(sha, "sha256:")
 	} else if sha == "" && tag != "" {
@@ -371,7 +377,6 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	srcTI := image.TypedImage{
 		TypedImageReference: srcTIR,
-		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 
@@ -390,7 +395,6 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 	}
 	dstTI := image.TypedImage{
 		TypedImageReference: dstTIR,
-		OriginalRef:         img.Image,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
 	mapping[srcTI] = dstTI
@@ -401,8 +405,7 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 	if destReg == "" {
 		return "", errors.New("destination registry may not be empty")
 	}
-	_, subNamespace, _, tag, _ := image.ParseImageReference(operator.OriginalRef)
-	_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
+	_, subNamespace, repo, tag, _ := image.ParseImageReference(operator.Catalog)
 
 	to := "docker://" + destReg
 	if namespace != "" {
@@ -430,16 +433,20 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 }
 
 func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1alpha2.Operator, digest digest.Digest, destRef string) error {
-	srcCtlgRef := ""
-	if strings.HasPrefix(srcOperator.Catalog, ociProtocol) {
-		if srcOperator.OriginalRef == "" {
-			return fmt.Errorf("%s is an OCI File Based Container: OriginalRef field is mandatory", srcOperator.Catalog)
-		} else {
-			srcCtlgRef = srcOperator.OriginalRef
-		}
-	} else {
-		srcCtlgRef = srcOperator.Catalog
+	if digest == "" {
+		return fmt.Errorf("no digest provided for OCI catalog %s after copying it to the disconnected registry. This usually indicates an error in the catalog copy", srcOperator.Catalog)
 	}
+	// need to use GetUniqueName, because JUST for the catalogSource
+	// generation, we need the srcOperator reference to be based on
+	// targetName and targetTag if they exist
+	srcCtlgRef, err := srcOperator.GetUniqueName()
+	if err != nil {
+		return err
+	}
+	if srcOperator.IsFBCOCI() {
+		srcCtlgRef = ociProtocol + "//" + srcCtlgRef
+	}
+
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
 	if err != nil {
 		return err
@@ -449,7 +456,14 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 	if err != nil {
 		return err
 	}
-
+	// digest is returned from the result of copy to the disconnected registry, and unless there is
+	// an error during copy, this digest will be provided.
+	// ctlgSrcTIR.Ref.ID will not be empty for the case of a remote registry, but for oci FBC catalogs,
+	// this will always be empty.
+	// if both digest and ctlgSrcTIR.Ref.ID are empty, then there is no way of creating a accurate mapping source.
+	if digest == "" && ctlgSrcTIR.Ref.ID == "" {
+		return fmt.Errorf("unable to add catalog %s to mirror mapping: no digest found", srcOperator.Catalog)
+	}
 	if digest != "" && ctlgSrcTIR.Ref.ID == "" {
 		ctlgSrcTIR.Ref.ID = string(digest)
 	}
@@ -462,15 +476,22 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 
 	ctlgSrcTI := image.TypedImage{
 		TypedImageReference: ctlgSrcTIR,
-		OriginalRef:         srcOperator.OriginalRef,
 		Category:            v1alpha2.TypeOperatorCatalog,
 	}
 
 	ctlgDstTI := image.TypedImage{
 		TypedImageReference: ctlgDstTIR,
-		OriginalRef:         srcOperator.OriginalRef,
 		Category:            v1alpha2.TypeOperatorCatalog,
 	}
+
+	if image.IsFBCOCI(srcCtlgRef) {
+		ctlgSrcTI.ImageFormat = image.OCIFormat
+		ctlgDstTI.ImageFormat = image.OCIFormat
+	} else {
+		ctlgSrcTI.ImageFormat = image.OtherFormat
+		ctlgDstTI.ImageFormat = image.OtherFormat
+	}
+
 	catalogMapping[ctlgSrcTI] = ctlgDstTI
 	return nil
 }
@@ -552,7 +573,7 @@ func (o *MirrorOptions) getCatalogConfigPath(ctx context.Context, imagePath stri
 func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 	var cfg *manifest.Schema2V1Image
 	configLayerDir := configSha[7:]
-	cfgBlob, err := ioutil.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
+	cfgBlob, err := os.ReadFile(filepath.Join(imagePath, blobsPath, configLayerDir))
 	if err != nil {
 		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
 	}
