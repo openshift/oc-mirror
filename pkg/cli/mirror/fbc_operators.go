@@ -141,7 +141,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 	// implement release and additionalImages also set
 	// operators catalog section to nil
 	isc.Mirror.Operators = nil
-	return o.mirrorToDiskWrapper(ctx, *isc, srcSkipTLS, cleanup)
+	return o.mirrorToDiskWrapper(ctx, *isc, cleanup)
 }
 
 // bulkImageMirror used to mirror the relevant images (push from a directory) to
@@ -261,12 +261,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		return err
 	}
 
-	// no use to mirror if source (tar file) is not specified
-	if len(o.From) > 0 {
-		return o.diskToMirrorWrapper(ctx, cleanup)
-	}
-
-	return nil
+	return o.mirrorToMirrorWrapper(ctx, *isc, cleanup)
 }
 
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {

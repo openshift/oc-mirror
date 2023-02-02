@@ -103,32 +103,40 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 
 	mmapping := image.TypedImageMapping{}
 	for _, ctlg := range cfg.Mirror.Operators {
+		// Exclude catalog images with "oci://" from renderDC and plan
+		// These catalogs will be handled with bulkImageMirror instead
+		// TODO: we should be able to use renderDC still for these images
+		// so that the catalog image (filtered) gets recreated (and written
+		// to disk) for the OCI catalogs as well
+		if image.IsFBCOCI(ctlg.Catalog) {
+			continue
+		} else {
+			ctlgRef, err := image.ParseReference(ctlg.Catalog)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing catalog: %v", err)
+			}
 
-		ctlgRef, err := image.ParseReference(ctlg.Catalog)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
+			targetName, err := ctlg.GetUniqueName()
+			if err != nil {
+				return nil, err
+			}
+			targetCtlg, err := imagesource.ParseReference(targetName)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing catalog: %v", err)
+			}
 
-		targetName, err := ctlg.GetUniqueName()
-		if err != nil {
-			return nil, err
-		}
-		targetCtlg, err := imagesource.ParseReference(targetName)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing catalog: %v", err)
-		}
+			// Render the catalog to mirror into a declarative config.
+			dc, ic, err := renderDC(ctx, reg, ctlg)
+			if err != nil {
+				return nil, o.checkValidationErr(err)
+			}
 
-		// Render the catalog to mirror into a declarative config.
-		dc, ic, err := renderDC(ctx, reg, ctlg)
-		if err != nil {
-			return nil, o.checkValidationErr(err)
+			mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
+			if err != nil {
+				return nil, err
+			}
+			mmapping.Merge(mappings)
 		}
-
-		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
-		if err != nil {
-			return nil, err
-		}
-		mmapping.Merge(mappings)
 	}
 
 	return mmapping, nil

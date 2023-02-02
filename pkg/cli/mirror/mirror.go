@@ -291,19 +291,6 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		processMirroredImages: o.processMirroredImages,
 	}
 
-	var sourceInsecure bool
-	if o.SourcePlainHTTP || o.SourceSkipTLS {
-		sourceInsecure = true
-	}
-	var destInsecure bool
-	if o.DestPlainHTTP || o.DestSkipTLS {
-		destInsecure = true
-	}
-
-	var mapping image.TypedImageMapping
-	var meta v1alpha2.Metadata
-	mappingPath := filepath.Join(o.Dir, mappingFile)
-
 	// Three mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
@@ -332,7 +319,7 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 			return err
 		}
 
-		return o.mirrorToDiskWrapper(ctx, cfg, sourceInsecure, cleanup)
+		return o.mirrorToDiskWrapper(ctx, cfg, cleanup)
 
 	case diskToMirror:
 		dir, err := o.createResultsDir()
@@ -343,139 +330,13 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		return o.diskToMirrorWrapper(ctx, cleanup)
 
 	case mirrorToMirror:
+
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return err
 		}
-		if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
-			return err
-		}
-		meta, mapping, err = o.Create(ctx, cfg)
-		if err != nil {
-			return err
-		}
+		return o.mirrorToMirrorWrapper(ctx, cfg, cleanup)
 
-		// Imageset sequence check
-		metaImage := o.newMetadataImage(meta.Uid.String())
-		targetCfg := &v1alpha2.RegistryConfig{
-			ImageURL: metaImage,
-			SkipTLS:  destInsecure,
-		}
-
-		targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
-		if err != nil {
-			return err
-		}
-		var curr v1alpha2.Metadata
-		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
-		if err := o.checkSequence(meta, curr, berr); err != nil {
-			return err
-		}
-
-		// Change the destination to registry
-		// TODO(jpower432): Investigate whether oc can produce
-		// registry to registry mapping
-		mapping.ToRegistry(o.ToMirror, o.UserNamespace)
-
-		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
-		if err != nil {
-			if errors.Is(err, ErrNoUpdatesExist) {
-				klog.Infof("No new images detected, process stopping")
-				return nil
-			}
-			return err
-		}
-
-		// QUESTION(jpower432): Can you specify different TLS configuration for source
-		// and destination with `oc image mirror`?
-		if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
-			return err
-		}
-
-		prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
-		if err != nil {
-			return err
-		}
-
-		if o.DryRun {
-			if err := writeMappingFile(mappingPath, mapping); err != nil {
-				return err
-			}
-			if err := o.outputPruneImagePlan(ctx, prevAssociations, prunedAssociations); err != nil {
-				return err
-			}
-			return cleanup()
-		}
-
-		assocs, errs := image.AssociateRemoteImageLayers(ctx, mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
-		if errs != nil {
-			if err := o.processAssociationErrors(errs.Errors()); err != nil {
-				return err
-			}
-		}
-
-		// Prune the images that differ between the previous Associations and the
-		// pruned Associations.
-		meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
-		if err != nil {
-			return err
-		}
-		prunedAssociations.Merge(assocs)
-
-		if err := o.pruneRegistry(ctx, prevAssociations, prunedAssociations); err != nil {
-			return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
-		}
-
-		meta.PastAssociations, err = image.ConvertFromAssociationSet(prunedAssociations)
-		if err != nil {
-			return err
-		}
-
-		dir, err := o.createResultsDir()
-		if err != nil {
-			return err
-		}
-		// process catalog FBC images
-		if len(cfg.Mirror.Operators) > 0 {
-			ctlgRefs, err := o.rebuildCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
-			if err != nil {
-				return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
-			}
-			mapping.Merge(ctlgRefs)
-		}
-		// process Cincinnati graph data image
-		if len(cfg.Mirror.Platform.Channels) > 0 {
-			if cfg.Mirror.Platform.Graph {
-				graphRef, err := o.buildGraphImage(ctx, filepath.Join(o.Dir, config.SourceDir))
-				if err != nil {
-					return fmt.Errorf("error building cincinnati graph image: %v", err)
-				}
-				mapping.Merge(graphRef)
-			}
-		}
-
-		if err := o.generateResults(mapping, dir); err != nil {
-			return err
-		}
-
-		if err := o.moveToResults(dir); err != nil {
-			return err
-		}
-
-		// Sync metadata from disk to source and target backends
-		if cfg.StorageConfig.IsSet() {
-			sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
-			if err != nil {
-				return err
-			}
-			workspace := filepath.Join(o.Dir, config.SourceDir)
-			if err = metadata.UpdateMetadata(ctx, sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
-				return err
-			}
-			if err := metadata.SyncMetadata(ctx, sourceBackend, targetBackend); err != nil {
-				return err
-			}
-		}
 	}
 	if o.continuedOnError {
 		return fmt.Errorf("one or more errors occurred")
@@ -497,29 +358,18 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		processMirroredImages: o.processMirroredImages,
 	}
 
-	if o.OCIFeatureAction == "" {
-		return fmt.Errorf("must specify --oci-feature-action  (select either copy or mirror)")
-	}
 	isc, err := o.getISConfig()
 	if err != nil {
 		return fmt.Errorf("reading imagesetconfig via command line %v", err)
 	}
-	if o.OCIFeatureAction == OCIFeatureCopyAction {
-		err = o.bulkImageCopy(ctx, isc, o.SourceSkipTLS, o.DestSkipTLS, cleanup)
-		if err != nil {
-			return fmt.Errorf("copying images %v", err)
-		}
-		klog.Infof("completed catalog copy")
-		return nil
-	} else if o.OCIFeatureAction == OCIFeatureMirrorAction {
-		klog.Infof("mirroring images to remote registry")
-		err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace, cleanup)
-		if err != nil {
-			return fmt.Errorf("mirroring images %v", err)
-		}
-		klog.Infof("completed catalog mirror")
-		return nil
+
+	klog.Infof("mirroring images to remote registry")
+	err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace, cleanup)
+	if err != nil {
+		return fmt.Errorf("mirroring images %v", err)
 	}
+	klog.Infof("completed catalog mirror")
+
 	if o.continuedOnError {
 		return fmt.Errorf("one or more errors occurred")
 	}
@@ -748,8 +598,146 @@ func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error
 	return mappingFile.Sync()
 }
 
+func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
+	destInsecure := o.DestPlainHTTP || o.DestSkipTLS
+
+	mappingPath := filepath.Join(o.Dir, mappingFile)
+
+	if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
+		return err
+	}
+	meta, mapping, err := o.Create(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	// Imageset sequence check
+	metaImage := o.newMetadataImage(meta.Uid.String())
+	targetCfg := &v1alpha2.RegistryConfig{
+		ImageURL: metaImage,
+		SkipTLS:  destInsecure,
+	}
+
+	targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
+	if err != nil {
+		return err
+	}
+	var curr v1alpha2.Metadata
+	berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
+	if err := o.checkSequence(meta, curr, berr); err != nil {
+		return err
+	}
+
+	// Change the destination to registry
+	// TODO(jpower432): Investigate whether oc can produce
+	// registry to registry mapping
+	mapping.ToRegistry(o.ToMirror, o.UserNamespace)
+
+	prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
+	if err != nil {
+		if errors.Is(err, ErrNoUpdatesExist) {
+			klog.Infof("No new images detected, process stopping")
+			return nil
+		}
+		return err
+	}
+
+	// QUESTION(jpower432): Can you specify different TLS configuration for source
+	// and destination with `oc image mirror`?
+	if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
+		return err
+	}
+
+	prevAssociations, err := image.ConvertToAssociationSet(meta.PastAssociations)
+	if err != nil {
+		return err
+	}
+
+	if o.DryRun {
+		if err := writeMappingFile(mappingPath, mapping); err != nil {
+			return err
+		}
+		if err := o.outputPruneImagePlan(ctx, prevAssociations, prunedAssociations); err != nil {
+			return err
+		}
+		return cleanup()
+	}
+
+	assocs, errs := image.AssociateRemoteImageLayers(ctx, mapping, o.SourceSkipTLS, o.SourcePlainHTTP, o.SkipVerification)
+	if errs != nil {
+		if err := o.processAssociationErrors(errs.Errors()); err != nil {
+			return err
+		}
+	}
+
+	// Prune the images that differ between the previous Associations and the
+	// pruned Associations.
+	meta.PastMirror.Associations, err = image.ConvertFromAssociationSet(assocs)
+	if err != nil {
+		return err
+	}
+	prunedAssociations.Merge(assocs)
+
+	if err := o.pruneRegistry(ctx, prevAssociations, prunedAssociations); err != nil {
+		return fmt.Errorf("error pruning from registry %q: %v", o.ToMirror, err)
+	}
+
+	meta.PastAssociations, err = image.ConvertFromAssociationSet(prunedAssociations)
+	if err != nil {
+		return err
+	}
+
+	dir, err := o.createResultsDir()
+	if err != nil {
+		return err
+	}
+	// process catalog FBC images
+	if len(cfg.Mirror.Operators) > 0 {
+		ctlgRefs, err := o.rebuildCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
+		if err != nil {
+			return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
+		}
+		mapping.Merge(ctlgRefs)
+	}
+	// process Cincinnati graph data image
+	if len(cfg.Mirror.Platform.Channels) > 0 {
+		if cfg.Mirror.Platform.Graph {
+			graphRef, err := o.buildGraphImage(ctx, filepath.Join(o.Dir, config.SourceDir))
+			if err != nil {
+				return fmt.Errorf("error building cincinnati graph image: %v", err)
+			}
+			mapping.Merge(graphRef)
+		}
+	}
+
+	if err := o.generateResults(mapping, dir); err != nil {
+		return err
+	}
+
+	if err := o.moveToResults(dir); err != nil {
+		return err
+	}
+
+	// Sync metadata from disk to source and target backends
+	if cfg.StorageConfig.IsSet() {
+		sourceBackend, err := storage.ByConfig(o.Dir, cfg.StorageConfig)
+		if err != nil {
+			return err
+		}
+		workspace := filepath.Join(o.Dir, config.SourceDir)
+		if err = metadata.UpdateMetadata(ctx, sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+			return err
+		}
+		if err := metadata.SyncMetadata(ctx, sourceBackend, targetBackend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // mirrorToDiskWrapper
-func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, sourceInsecure bool, cleanup cleanupFunc) error {
+func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
+	sourceInsecure := o.SourcePlainHTTP || o.SourceSkipTLS
 
 	if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 		return err
