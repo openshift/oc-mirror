@@ -3,7 +3,6 @@ package mirror
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -280,7 +279,7 @@ func WriteICSPs(dir string, icsps []operatorv1alpha1.ImageContentSourcePolicy) e
 		}
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icspBytes), os.ModePerm); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icspBytes), os.ModePerm); err != nil {
 		return fmt.Errorf("error writing ImageContentSourcePolicy: %v", err)
 	}
 
@@ -338,7 +337,7 @@ func WriteUpdateService(release, graph image.TypedImage, dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "updateService.yaml"), updateService, os.ModePerm); err != nil {
 		return fmt.Errorf("error writing UpdateService: %v", err)
 	}
 	return nil

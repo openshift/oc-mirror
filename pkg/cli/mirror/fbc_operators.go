@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -69,7 +68,7 @@ type RemoteRegFuncs struct {
 // set via the command line
 func (o *MirrorOptions) getISConfig() (*v1alpha2.ImageSetConfiguration, error) {
 	var isc *v1alpha2.ImageSetConfiguration
-	configData, err := ioutil.ReadFile(o.ConfigPath)
+	configData, err := os.ReadFile(o.ConfigPath)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -457,7 +456,7 @@ func unpack(archiveFilePath, dest string, filesInArchive map[string]string) erro
 }
 
 func mktempDir(dir string) (func(), string, error) {
-	dir, err := ioutil.TempDir(dir, "images.*")
+	dir, err := os.MkdirTemp(dir, "images.*")
 	return func() {
 		if err := os.RemoveAll(dir); err != nil {
 			klog.Fatal(err)

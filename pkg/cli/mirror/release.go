@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -460,7 +459,7 @@ func (o *ReleaseOptions) generateReleaseSignatures(ctx context.Context, releaseD
 
 		signaturePath := filepath.Join(signatureBasePath, fileName)
 
-		if err := ioutil.WriteFile(signaturePath, cmDataBytes, 0640); err != nil {
+		if err := os.WriteFile(signaturePath, cmDataBytes, 0640); err != nil {
 			return err
 		}
 
