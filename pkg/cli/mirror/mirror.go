@@ -287,8 +287,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
 
 	o.remoteRegFuncs = RemoteRegFuncs{
-		handleMetadata:        o.handleMetadata,
-		processMirroredImages: o.processMirroredImages,
+		handleMetadata: o.handleMetadata,
 	}
 
 	// Three mode options
@@ -354,8 +353,8 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
 			return imgSrc.GetManifest(ctx, instanceDigest)
 		},
-		handleMetadata:        o.handleMetadata,
-		processMirroredImages: o.processMirroredImages,
+		handleMetadata: o.handleMetadata,
+		mirrorToMirror: o.mirrorToMirrorWrapper,
 	}
 
 	isc, err := o.getISConfig()

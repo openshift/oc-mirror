@@ -93,7 +93,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	klog.V(3).Infof("Process all images in imageset")
-	imgMappings, err := o.remoteRegFuncs.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
+	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
 	if err != nil {
 		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
 	}

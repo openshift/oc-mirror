@@ -1713,8 +1713,8 @@ func createMockFunctions(errorType int) RemoteRegFuncs {
 	}
 	theMock.newImageSource = imgSrcFnc
 
-	theMock.processMirroredImages = func(ctx context.Context, assocs image.AssociationSet, filesInArchive map[string]string, currentMeta v1alpha2.Metadata) (image.TypedImageMapping, error) {
-		return image.TypedImageMapping{}, nil
+	theMock.mirrorToMirror = func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
+		return nil
 	}
 
 	theMock.handleMetadata = func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error) {
