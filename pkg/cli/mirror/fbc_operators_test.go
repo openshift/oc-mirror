@@ -860,7 +860,6 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "artifacts-rhop-ctlg-oci",
 			options: &MirrorOptions{
-				From:      testdata,
 				ToMirror:  "localhost.localdomain:5000",
 				OutputDir: "",
 				RootOptions: &cli.RootOptions{
@@ -903,7 +902,6 @@ func TestBulkImageMirror(t *testing.T) {
 			},
 			catalogName: "artifacts-ibm-use-case-rhop-ctlg-oci-mashed",
 			options: &MirrorOptions{
-				From:      "testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
 				ToMirror:  "localhost.localdomain:5000",
 				OutputDir: "",
 				RootOptions: &cli.RootOptions{
@@ -1713,7 +1711,7 @@ func createMockFunctions(errorType int) RemoteRegFuncs {
 	}
 	theMock.newImageSource = imgSrcFnc
 
-	theMock.mirrorToMirror = func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
+	theMock.m2mWorkflowWrapper = func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
 		return nil
 	}
 

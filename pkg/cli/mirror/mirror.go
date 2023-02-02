@@ -255,6 +255,32 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
+	// Three mode options
+	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
+	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
+	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+
+	// mirrorToDisk workflow is not supported with the oci feature
+	if o.UseOCIFeature && mirrorToDisk {
+		return fmt.Errorf("oci feature cannot be used when mirroring to local archive")
+	}
+	// diskToMirror workflow is not supported with the oci feature
+	if o.UseOCIFeature && diskToMirror {
+		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
+	}
+	// when oci flag is not set, ImageSetConfig should not contain any operators with oci:// prefix
+	if !o.UseOCIFeature && mirrorToMirror {
+		cfg, err := config.ReadConfig(o.ConfigPath)
+		if err != nil {
+			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
+		}
+		for _, op := range cfg.Mirror.Operators {
+			if op.IsFBCOCI() {
+				return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature")
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -353,8 +379,8 @@ func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc
 		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
 			return imgSrc.GetManifest(ctx, instanceDigest)
 		},
-		handleMetadata: o.handleMetadata,
-		mirrorToMirror: o.mirrorToMirrorWrapper,
+		handleMetadata:     o.handleMetadata,
+		m2mWorkflowWrapper: o.mirrorToMirrorWrapper,
 	}
 
 	isc, err := o.getISConfig()

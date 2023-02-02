@@ -275,6 +275,33 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
+			name: "Invalid/MirrortoDisk/OCIFlag",
+			opts: &MirrorOptions{
+				OutputDir:     t.TempDir(),
+				ConfigPath:    "foo",
+				UseOCIFeature: true,
+			},
+			expError: "oci feature cannot be used when mirroring to local archive",
+		},
+		{
+			name: "Invalid/DisktoMirror/OCIFlag",
+			opts: &MirrorOptions{
+				From:          t.TempDir(),
+				ToMirror:      u.Host,
+				UseOCIFeature: true,
+			},
+			expError: "oci feature cannot be used when publishing from a local archive to a registry",
+		},
+		{
+			name: "Invalid/MirrorToMirror/ImageSetConfigWithOCI",
+			opts: &MirrorOptions{
+				ConfigPath:    "testdata/configs/iscfg_oci_ops.yaml",
+				ToMirror:      u.Host,
+				UseOCIFeature: false,
+			},
+			expError: "use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature",
+		},
+		{
 			name: "Valid/ManifestOnlyWithFakeMirror",
 			opts: &MirrorOptions{
 				ManifestsOnly: true,
@@ -286,8 +313,8 @@ func TestMirrorValidate(t *testing.T) {
 		{
 			name: "Valid/MirrortoDisk",
 			opts: &MirrorOptions{
+				OutputDir:  t.TempDir(),
 				ConfigPath: "foo",
-				ToMirror:   u.Host,
 			},
 			expError: "",
 		},
@@ -302,7 +329,7 @@ func TestMirrorValidate(t *testing.T) {
 		{
 			name: "Valid/MirrorToMirror",
 			opts: &MirrorOptions{
-				ConfigPath: "foo",
+				ConfigPath: "testdata/configs/iscfg.yaml",
 				ToMirror:   u.Host,
 			},
 			expError: "",

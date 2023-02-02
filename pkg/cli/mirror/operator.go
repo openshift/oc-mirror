@@ -101,14 +101,14 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 	defer reg.Destroy()
 
 	mmapping := image.TypedImageMapping{}
-	for _, ctlg := range cfg.Mirror.Operators {
+	for i, ctlg := range cfg.Mirror.Operators {
 		// Exclude catalog images with "oci://" from renderDC and plan
 		// These catalogs will be handled with bulkImageMirror instead
 		// TODO: we should be able to use renderDC still for these images
 		// so that the catalog image (filtered) gets recreated (and written
 		// to disk) for the OCI catalogs as well
 		if image.IsFBCOCI(ctlg.Catalog) {
-			continue
+			cfg.Mirror.Operators = append(cfg.Mirror.Operators[:i], cfg.Mirror.Operators[i+1:]...)
 		} else {
 			ctlgRef, err := image.ParseReference(ctlg.Catalog)
 			if err != nil {

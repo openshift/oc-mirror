@@ -56,12 +56,12 @@ const (
 // In order to be able to mock these external packages,
 // we pass them as parameters of bulkImageCopy and bulkImageMirror
 type RemoteRegFuncs struct {
-	copy           func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
-	mirrorMappings func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
-	newImageSource func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
-	getManifest    func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
-	handleMetadata func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error)
-	mirrorToMirror func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error
+	copy               func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error)
+	mirrorMappings     func(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error
+	newImageSource     func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error)
+	getManifest        func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error)
+	handleMetadata     func(ctx context.Context, tmpdir string, filesInArchive map[string]string) (backend storage.Backend, incoming, curr v1alpha2.Metadata, err error)
+	m2mWorkflowWrapper func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error
 }
 
 // getISConfig simple function to read and unmarshal the imagesetconfig
@@ -150,6 +150,9 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 	catalogMapping := image.TypedImageMapping{}
 
 	for _, operator := range isc.Mirror.Operators {
+		if !operator.IsFBCOCI() {
+			continue
+		}
 		_, _, repo, _, _ := image.ParseImageReference(operator.Catalog)
 		log.Printf("INFO: processing contents of local catalog %s\n", operator.Catalog)
 
@@ -260,7 +263,7 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 		return err
 	}
 
-	return o.remoteRegFuncs.mirrorToMirror(ctx, *isc, cleanup)
+	return o.remoteRegFuncs.m2mWorkflowWrapper(ctx, *isc, cleanup)
 }
 
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
