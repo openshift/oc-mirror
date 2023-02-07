@@ -11,6 +11,7 @@ sha256sum.txt
 **/.metadata.json
 oc-mirror-workspace/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
+olm_artifacts/
 
 # Logs.
 **/.oc-mirror.log
