@@ -254,12 +254,12 @@ func setDefaultChannel(outputPkg *model.Package, newPackageDefaultChannelName st
 
 	// include a verbose message in the log so someone can figure out what to do next
 	klog.V(0).Infof(`The current default channel was not valid, so an attempt was made to automatically assign a new default channel, which has failed.
-The failure occurred because none of the remaining channels contain a "olm.channel" priority property, so it was not possible to establish a channel to use as the default channel.
+The failure occurred because none of the remaining channels contain an "olm.channel" priority property, so it was not possible to establish a channel to use as the default channel.
 
 This can be resolved by one of the following changes:
-1) assign a "olm.channel" property on the appropriate channels to establish a channel priority
+1) assign an "olm.channel" property on the appropriate channels to establish a channel priority
 2) modify the default channel manually in the catalog
-3) by changing the ImageSetConfiguration to filter channels or packages in such as way that it will include a package version that exists in the current default channel`)
+3) by changing the ImageSetConfiguration to filter channels or packages in such a way that it will include a package version that exists in the current default channel`)
 
 	// include a short message that does not mention any of the above to keep things simple
 	return fmt.Errorf("the current default channel %q for package %q could not be determined... ensure that your ImageSetConfiguration filtering criteria results in a package version that exists in the current default channel", newPackageDefaultChannelName, outputPkg.Name)
