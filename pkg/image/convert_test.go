@@ -690,8 +690,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					ImageFormat: OtherFormat,
-					Category:    v1alpha2.TypeGeneric}: {
+					Category: v1alpha2.TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
@@ -700,8 +699,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat,
+					Category: v1alpha2.TypeGeneric,
 				},
 			},
 			input: []v1alpha2.Association{
@@ -734,8 +732,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat}: {
+					Category: v1alpha2.TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
@@ -744,8 +741,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat},
+					Category: v1alpha2.TypeGeneric},
 				{TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
@@ -754,8 +750,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					Category:    v1alpha2.TypeOperatorBundle,
-					ImageFormat: OtherFormat}: {
+					Category: v1alpha2.TypeOperatorBundle}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
@@ -764,8 +759,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category:    v1alpha2.TypeOperatorBundle,
-					ImageFormat: OtherFormat},
+					Category: v1alpha2.TypeOperatorBundle},
 			},
 			input: []v1alpha2.Association{
 				{
@@ -942,8 +936,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat}: {
+					Category: v1alpha2.TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
@@ -952,8 +945,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat},
+					Category: v1alpha2.TypeGeneric},
 				{TypedImageReference: imagesource.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
@@ -962,8 +954,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat}: {
+					Category: v1alpha2.TypeGeneric}: {
 					TypedImageReference: imagesource.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
@@ -972,8 +963,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category:    v1alpha2.TypeGeneric,
-					ImageFormat: OtherFormat},
+					Category: v1alpha2.TypeGeneric},
 			},
 			input: []v1alpha2.Association{
 				{

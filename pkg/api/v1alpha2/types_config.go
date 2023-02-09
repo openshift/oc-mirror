@@ -9,7 +9,10 @@ import (
 )
 
 // ImageSetConfiguration object kind.
-const ImageSetConfigurationKind = "ImageSetConfiguration"
+const (
+	ImageSetConfigurationKind = "ImageSetConfiguration"
+	OCITransportPrefix        = "oci:"
+)
 
 // ImageSetConfiguration configures image set creation.
 type ImageSetConfiguration struct {
@@ -127,7 +130,7 @@ type Operator struct {
 func (o Operator) GetUniqueName() (string, error) {
 	ctlgRef := o.Catalog
 	if o.IsFBCOCI() {
-		ctlgRef = strings.TrimPrefix(ctlgRef, "oci:")
+		ctlgRef = strings.TrimPrefix(ctlgRef, OCITransportPrefix)
 		ctlgRef = strings.TrimPrefix(ctlgRef, "//") //it could be that there is none
 		ctlgRef = strings.TrimPrefix(ctlgRef, "/")  // case of full path
 	}
@@ -158,7 +161,7 @@ func (o Operator) IsHeadsOnly() bool {
 }
 
 func (o Operator) IsFBCOCI() bool {
-	return strings.HasPrefix(o.Catalog, "oci:")
+	return strings.HasPrefix(o.Catalog, OCITransportPrefix)
 }
 
 // Helm defines the configuration for Helm chart download

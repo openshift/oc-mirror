@@ -35,7 +35,6 @@ import (
 
 const (
 	blobsPath           string = "/blobs/sha256/"
-	ociProtocol         string = "oci:"
 	dockerProtocol      string = "docker://"
 	configPath          string = "configs/"
 	catalogJSON         string = "/catalog.json"
@@ -100,7 +99,7 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 			klog.Warningf("unable to clear contents of %s: %v", localOperatorDir, err)
 		}
 
-		_, err := o.copyImage(ctx, dockerProtocol+operator.Catalog, ociProtocol+localOperatorDir, o.remoteRegFuncs)
+		_, err := o.copyImage(ctx, dockerProtocol+operator.Catalog, v1alpha2.OCITransportPrefix+localOperatorDir, o.remoteRegFuncs)
 		if err != nil {
 			return fmt.Errorf("copying catalog image %s : %v", operator.Catalog, err)
 		}
@@ -441,7 +440,7 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 		return err
 	}
 	if srcOperator.IsFBCOCI() {
-		srcCtlgRef = ociProtocol + "//" + srcCtlgRef
+		srcCtlgRef = v1alpha2.OCITransportPrefix + "//" + srcCtlgRef
 	}
 
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
@@ -484,9 +483,6 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 	if image.IsFBCOCI(srcCtlgRef) {
 		ctlgSrcTI.ImageFormat = image.OCIFormat
 		ctlgDstTI.ImageFormat = image.OCIFormat
-	} else {
-		ctlgSrcTI.ImageFormat = image.OtherFormat
-		ctlgDstTI.ImageFormat = image.OtherFormat
 	}
 
 	catalogMapping[ctlgSrcTI] = ctlgDstTI
@@ -747,7 +743,7 @@ func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manife
 // It supports path strings with or without the protocol (oci:) prefix
 func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
 	if !strings.HasPrefix(path, "oci") {
-		path = ociProtocol + path
+		path = v1alpha2.OCITransportPrefix + path
 	}
 	ociImgRef, err := alltransports.ParseImageName(path)
 	if err != nil {

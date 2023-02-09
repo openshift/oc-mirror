@@ -49,8 +49,7 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category:    v1alpha2.TypeGeneric,
-				ImageFormat: image.OtherFormat,
+				Category: v1alpha2.TypeGeneric,
 			},
 		},
 		{
@@ -75,8 +74,7 @@ func TestPlan_Additional(t *testing.T) {
 					},
 					Type: imagesource.DestinationRegistry,
 				},
-				Category:    v1alpha2.TypeGeneric,
-				ImageFormat: image.OtherFormat,
+				Category: v1alpha2.TypeGeneric,
 			},
 		},
 	}
