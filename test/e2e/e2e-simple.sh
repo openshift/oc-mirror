@@ -46,7 +46,7 @@ install_deps
 echo "INFO: Running ${#TESTCASES[@]} test cases"
 
 for i in "${!TESTCASES[@]}"; do
-    echo "INFO: Running ${TESTCASES[$i]}"
+    echo -e "INFO: Running ${TESTCASES[$i]}\n"
     mkdir -p "$DATA_TMP"
     setup_reg 
     ${TESTCASES[$i]}

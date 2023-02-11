@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "version": "0.1.0",
+      "payload": "if selected will fail",
+      "metadata": {
+        "io.openshift.upgrades.graph.release.channels": "stable-0.1",
+        "io.openshift.upgrades.graph.release.manifestref": "sha256:XXX"
+      }
+    },
+    {
+      "version": "0.1.1",
+      "payload": "if selected will fail",
+      "metadata": {
+        "io.openshift.upgrades.graph.release.channels": "stable-0.1",
+        "io.openshift.upgrades.graph.release.manifestref": "sha256:XXX"
+      }
+    },
+    {
+      "version": "0.2.0",
+      "payload": "quay.io/luzuccar/e2e-release@sha256:a5be0b5297398cfcc4d0663c64ff32bd087f38bf5c474ed998decd72a5b01cd4",
+      "metadata": {
+        "io.openshift.upgrades.graph.release.channels": "stable-0.1",
+        "io.openshift.upgrades.graph.release.manifestref": "sha256:45bd855587ffd7777810ef126e7b46fc164bcd90cf1b989bbeb6c266a7949079"
+      }
+    },
+    {
+      "version": "0.3.2",
+      "payload": "if selected will fail",
+      "metadata": {
+        "io.openshift.upgrades.graph.release.channels": "stable-0.1",
+        "io.openshift.upgrades.graph.release.manifestref": "sha256:XXX"
+      }
+    }
+  ],
+  "edges": [
+    [
+      8,
+      41
+    ],
+    [
+      32,
+      38
+    ],
+    [
+      13,
+      10
+    ],
+    [
+      0,
+      43
+    ]
+  ],
+  "conditionalEdges": [
+    {
+      "edges": [
+        {
+          "from": "0.1.0",
+          "to": "0.1.1"
+        },
+        {
+          "from": "0.1.1",
+          "to": "0.1.2"
+        },
+        {
+          "from": "0.2.0",
+          "to": "0.3.2"
+        },
+        {
+          "from": "",
+          "to": "0.3.2"
+        }
+      ]
+    }
+  ]
+}
