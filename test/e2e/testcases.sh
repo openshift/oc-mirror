@@ -259,9 +259,6 @@ function oci_catalog {
 
 # Test OCI local release,catalog,additionalImages
 function oci_local_all {
-    # wait for https://github.com/openshift/oc-mirror/pull/557 to be merged
-    # to add the catalog from imagesetconfig
-    #
     # setup url to lookup release info (certificate issued for localhost.localdomain)release-images:alpine-x86_64
     export UPDATE_URL_OVERRIDE="https://localhost.localdomain:3443/graph"
     # ensure cincinnati client does not reject the rquest - due to untrusted CA Authority
@@ -270,7 +267,7 @@ function oci_local_all {
     go build -o test/e2e/graph test/e2e/graph/main.go 
     test/e2e/graph/main & PID_GO=$! 
     echo -e "go cincinnatti web service PID: ${PID_GO}"
-
+    # copy relevant files and start the mirror process
     workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy"
 
     # use crane digest to verify
@@ -279,6 +276,7 @@ function oci_local_all {
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/openshift/release:alpine-x86_64-alpime
 
     rm -rf test/e2e/graph/main
+    rm -rf test/e2e/graph/server*.*
     unset SSL_CERT_FILE
     unset UPDATE_URL_OVERRIDE
 }
