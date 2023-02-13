@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/opencontainers/go-digest"
@@ -28,7 +27,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -107,14 +105,19 @@ func (o *MirrorOptions) bulkImageCopy(ctx context.Context, isc *v1alpha2.ImageSe
 		// find the layer with the FB config
 		catalogContentsDir := filepath.Join(artifactsPath, repo)
 		klog.Infof("Finding file based config for %s (in catalog layers)\n", operator.Catalog)
-		ctlgConfigsDir, err := o.findFBCConfig(ctx, localOperatorDir, catalogContentsDir)
+		_, err = o.findFBCConfig(ctx, localOperatorDir, catalogContentsDir)
 		if err != nil {
 			return fmt.Errorf("unable to find config in %s: %v", localOperatorDir, err)
 		}
 
 		klog.Infof("Filtering on selected packages for %s \n", operator.Catalog)
 
-		relatedImages, err := getRelatedImages(ctlgConfigsDir, operator.Packages)
+		cfg, err := o.getFilteredDeclarativeConfig(ctx, operator, catalogContentsDir)
+		if err != nil {
+			return err
+		}
+
+		relatedImages, err := getRelatedImages(cfg, operator.Packages)
 		if err != nil {
 			return err
 		}
@@ -194,7 +197,16 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 
 		klog.Infof("Processing contents of local catalog %s\n", operator.Catalog)
 
-		relatedImages, err := getRelatedImages(catalogContentsDir, operator.Packages)
+		cfg, err := o.getFilteredDeclarativeConfig(ctx, operator, catalogContentsDir)
+		if err != nil {
+			klog.Errorf("getFilteredDeclarativeConfig error: %s", err.Error())
+			if strings.Contains(err.Error(), "package does not exist in new model") {
+				continue
+			}
+			return err
+		}
+
+		relatedImages, err := getRelatedImages(cfg, operator.Packages)
 		if err != nil {
 			klog.Fatal(err)
 			return err
@@ -263,6 +275,25 @@ func (o *MirrorOptions) bulkImageMirror(ctx context.Context, isc *v1alpha2.Image
 	}
 
 	return o.remoteRegFuncs.m2mWorkflowWrapper(ctx, *isc, cleanup)
+}
+
+// getFilteredDeclarativeConfig returns a filtered declarative config based on the image set config filtering in the operator level
+func (o *MirrorOptions) getFilteredDeclarativeConfig(ctx context.Context, operator v1alpha2.Operator, catalogContentsDir string) (declcfg.DeclarativeConfig, error) {
+	oo := NewOperatorOptions(o)
+	oo.complete()
+	reg, err := oo.createRegistry()
+	if err != nil {
+		return declcfg.DeclarativeConfig{}, fmt.Errorf("error creating container registry: %v", err)
+	}
+	defer reg.Destroy()
+	opForRenderer := operator
+	opForRenderer.Catalog = catalogContentsDir
+	dc, _, err := oo.renderDCDiff(ctx, reg, opForRenderer, v1alpha2.PastMirror{})
+	if err != nil {
+		return declcfg.DeclarativeConfig{}, oo.checkValidationErr(err)
+	}
+
+	return *dc, nil
 }
 
 func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedImages []declcfg.RelatedImage) (image.TypedImageMapping, error) {
@@ -583,13 +614,8 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 // getRelatedImages reads a directory containing an FBC catalog () unpacked contents
 // and returns the list of relatedImages found in the CSVs of bundles
 // filtering by the list of packages provided in imageSetConfig for the catalog
-func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
+func getRelatedImages(cfg declcfg.DeclarativeConfig, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
 	allImages := []declcfg.RelatedImage{}
-	// load the declarative config from the provided directory (if possible)
-	cfg, err := declcfg.LoadFS(os.DirFS(directory))
-	if err != nil {
-		return nil, err
-	}
 
 	if len(packages) == 0 {
 		for _, aPackage := range cfg.Packages {
@@ -600,14 +626,8 @@ func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]d
 	}
 
 	for _, bundle := range cfg.Bundles {
-		isSelected, err := isPackageSelected(bundle, cfg.Channels, packages)
-		if err != nil {
-			return nil, err
-		}
-		if isSelected {
-			allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
-			allImages = append(allImages, bundle.RelatedImages...)
-		}
+		allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
+		allImages = append(allImages, bundle.RelatedImages...)
 	}
 	//make sure there are no duplicates in the list with same image:
 	finalList := []declcfg.RelatedImage{}
@@ -624,65 +644,6 @@ func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]d
 		}
 	}
 	return finalList, nil
-}
-
-func isPackageSelected(bundle declcfg.Bundle, channels []declcfg.Channel, packages []v1alpha2.IncludePackage) (bool, error) {
-	isSelected := false
-	for _, pkg := range packages {
-		if pkg.Name == bundle.Package {
-			var min, max semver.Version
-			if pkg.MinVersion != "" || pkg.MaxVersion != "" {
-				version_string, err := bundleVersion(bundle)
-				if err != nil {
-					return isSelected, err
-				}
-				pkgVer, err := semver.Make(version_string)
-				if err != nil {
-					return isSelected, err
-				}
-				if err != nil {
-					return isSelected, err
-				}
-				if pkg.MinVersion != "" {
-					min, err = semver.Make(pkg.MinVersion)
-					if err != nil {
-						return isSelected, err
-					}
-				}
-				if pkg.MaxVersion != "" {
-					max, err = semver.Make(pkg.MaxVersion)
-					if err != nil {
-						return isSelected, err
-					}
-				}
-
-				if (pkg.MinVersion != "" && pkg.MaxVersion != "") && pkgVer.Compare(min) >= 0 && pkgVer.Compare(max) <= 0 {
-					isSelected = true
-				} else if pkg.MinVersion != "" && pkg.MaxVersion == "" && pkgVer.Compare(min) >= 0 {
-					isSelected = true
-				} else if pkg.MaxVersion != "" && pkg.MinVersion == "" && pkgVer.Compare(max) <= 0 {
-					isSelected = true
-				}
-
-			} else { // no filtering required
-				isSelected = true
-			}
-		}
-	}
-	return isSelected, nil
-}
-
-func bundleVersion(bundle declcfg.Bundle) (string, error) {
-	for _, prop := range bundle.Properties {
-		if prop.Type == property.TypePackage {
-			var p property.Package
-			if err := json.Unmarshal(prop.Value, &p); err != nil {
-				return "", err
-			}
-			return p.Version, nil
-		}
-	}
-	return "", fmt.Errorf("unable to find bundle version")
 }
 
 func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {

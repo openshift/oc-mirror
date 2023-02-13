@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -257,10 +256,330 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 }
 
+func TestGetFilteredDeclarativeConfig(t *testing.T) {
+
+	type spec struct {
+		desc           string
+		options        *MirrorOptions
+		operator       v1alpha2.Operator
+		expectedConfig declcfg.DeclarativeConfig
+		err            string
+	}
+
+	cases := []spec{
+		{
+			desc: "no channel, no version - take all bundle for that package - pass scenario",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+						},
+					},
+				},
+			},
+			expectedConfig: declcfg.DeclarativeConfig{
+				Channels: []declcfg.Channel{
+					{
+						Name:    "alpha",
+						Package: "aws-load-balancer-operator",
+					},
+					{
+						Name:    "stable-v0.1",
+						Package: "aws-load-balancer-operator",
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Name: "aws-load-balancer-operator.v0.0.1",
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			desc: "channel only - take only bundles from the specified channel - pass scenario",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable-v0.1",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConfig: declcfg.DeclarativeConfig{
+				Channels: []declcfg.Channel{
+					{
+						Name:    "stable-v0.1",
+						Package: "aws-load-balancer-operator",
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Name: "aws-load-balancer-operator.v0.0.1",
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			desc: "sem version only - take only bundles in the range - pass scenario",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable-v0.1",
+									IncludeBundle: v1alpha2.IncludeBundle{
+										MinVersion: "0.0.1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConfig: declcfg.DeclarativeConfig{
+				Channels: []declcfg.Channel{
+					{
+						Name:    "stable-v0.1",
+						Package: "aws-load-balancer-operator",
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Name: "aws-load-balancer-operator.v0.0.1",
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			desc: "sem version only - take only bundles in the range - fail scenario (bundles do not exist)",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable-v0.1",
+									IncludeBundle: v1alpha2.IncludeBundle{
+										MinVersion: "0.0.0",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: "error generating diff: error including items:\n[package=\"aws-load-balancer-operator\" channel=\"stable-v0.1\"] bundles do not exist in channel: versions=[\"0.0.0\"]",
+		},
+		{
+			desc: "with channel and version - take bundles in the specified channel and version - pass scenario",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable-v0.1",
+									IncludeBundle: v1alpha2.IncludeBundle{
+										MinVersion: "0.0.1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConfig: declcfg.DeclarativeConfig{
+				Channels: []declcfg.Channel{
+					{
+						Name:    "stable-v0.1",
+						Package: "aws-load-balancer-operator",
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Name: "aws-load-balancer-operator.v0.0.1",
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			desc: "with minBundle - take only the bundle specified in the MinBundle",
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+					IOStreams: genericclioptions.IOStreams{
+						In:     os.Stdin,
+						Out:    os.Stdout,
+						ErrOut: os.Stderr,
+					},
+				},
+			},
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "aws-load-balancer-operator",
+							Channels: []v1alpha2.IncludeChannel{
+								{
+									Name: "stable-v0.1",
+									IncludeBundle: v1alpha2.IncludeBundle{
+										MinBundle: "aws-load-balancer-operator.v0.0.1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedConfig: declcfg.DeclarativeConfig{
+				Channels: []declcfg.Channel{
+					{
+						Name:    "stable-v0.1",
+						Package: "aws-load-balancer-operator",
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Name: "aws-load-balancer-operator.v0.0.1",
+					},
+				},
+			},
+			err: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			cfg, err := c.options.getFilteredDeclarativeConfig(context.TODO(), c.operator, filepath.Join(c.options.OutputDir, artifactsFolderName))
+
+			var isCfgValid bool
+			if c.err != "" {
+				require.EqualErrorf(t, err, c.err, "expected %s actual %s", c.err, err)
+			} else {
+				isCfgValid = isCfgExpected(cfg, c.expectedConfig)
+				require.True(t, isCfgValid)
+			}
+		})
+	}
+}
+
+func isCfgExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
+	if len(actualCfg.Channels) != len(expectedCfg.Channels) ||
+		len(actualCfg.Bundles) != len(expectedCfg.Bundles) {
+		return false
+	}
+
+	var isExpected bool
+	if isExpected = isChannelExpected(actualCfg, expectedCfg); !isExpected {
+		return isExpected
+	}
+
+	if isExpected = isBundleExpected(actualCfg, expectedCfg); !isExpected {
+		return isExpected
+	}
+
+	return isExpected
+}
+
+func isChannelExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
+	for _, actual := range actualCfg.Channels {
+		for _, expected := range expectedCfg.Channels {
+			if actual.Name == expected.Name && actual.Package == expected.Package {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isBundleExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
+	for _, actual := range actualCfg.Bundles {
+		for _, expected := range expectedCfg.Bundles {
+			if actual.Name == expected.Name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestGetRelatedImages(t *testing.T) {
 	type spec struct {
 		desc                  string
 		configsPath           string
+		options               *MirrorOptions
+		operator              v1alpha2.Operator
 		expectedRelatedImages []declcfg.RelatedImage
 		packages              []v1alpha2.IncludePackage
 		err                   string
@@ -270,6 +589,24 @@ func TestGetRelatedImages(t *testing.T) {
 		{
 			desc:        "nominal case",
 			configsPath: filepath.Join(testdata, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
+
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+				},
+			},
+
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "node-observability-operator",
+						},
+					},
+				},
+			},
+
 			packages: []v1alpha2.IncludePackage{
 				{
 					Name: "node-observability-operator",
@@ -296,7 +633,25 @@ func TestGetRelatedImages(t *testing.T) {
 			err: "",
 		},
 		{
-			desc:        "nominal case with mashed index.yaml passes",
+			desc: "nominal case with mashed index.yaml passes",
+
+			options: &MirrorOptions{
+				OutputDir: testdata,
+				RootOptions: &cli.RootOptions{
+					Dir: "",
+				},
+			},
+
+			operator: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "node-observability-operator",
+						},
+					},
+				},
+			},
+
 			configsPath: filepath.Join(testdataMashed, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
 			packages: []v1alpha2.IncludePackage{
 				{
@@ -339,7 +694,14 @@ func TestGetRelatedImages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to untar %s: %v", c.configsPath, err)
 			}
-			relatedImages, err := getRelatedImages(filepath.Join(tmpdir, "configs"), c.packages)
+
+			cfg, err := c.options.getFilteredDeclarativeConfig(context.TODO(), c.operator, filepath.Join(c.options.OutputDir, artifactsFolderName))
+
+			if err != nil {
+				t.Fatalf("unable to get a declarative config filtered: %s", err.Error())
+			}
+
+			relatedImages, err := getRelatedImages(cfg, c.packages)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -378,258 +740,6 @@ func TestGetRelatedImages(t *testing.T) {
 					}
 				}
 			}
-		})
-	}
-}
-
-func TestIsPackageSelected(t *testing.T) {
-	type spec struct {
-		desc           string
-		bundle         declcfg.Bundle
-		channels       []declcfg.Channel
-		packages       []v1alpha2.IncludePackage
-		expectedResult bool
-		err            string
-	}
-
-	cases := []spec{
-		{
-			desc: "package has minVersion only, and bundle is above returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.3.0",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "package has minVersion only, and bundle is below returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.4.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "package has maxVersion only, and bundle is above returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MaxVersion: "0.3.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "package has maxVersion only, and bundle is below returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MaxVersion: "0.4.0",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle version is within range returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.3.0",
-						MaxVersion: "0.3.1",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle version is not within range returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "1.3.0",
-						MaxVersion: "1.3.1",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "No version range in IncludePackage returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle simply not in IncludePackage returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "bar",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "1.0.0",
-						MaxVersion: "2.0.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-
-			isSelected, err := isPackageSelected(c.bundle, c.channels, c.packages)
-			if c.err != "" {
-				require.EqualError(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, c.expectedResult, isSelected)
-				// require.ElementsMatch(t, c.expectedRelatedImages, relatedImages)
-			}
-
 		})
 	}
 }
