@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,7 +221,7 @@ func (h *HelmOptions) repoAdd(chartRepo v1alpha2.Repository) error {
 		URL:  chartRepo.URL,
 	}
 
-	b, err := ioutil.ReadFile(h.settings.RepositoryConfig)
+	b, err := os.ReadFile(h.settings.RepositoryConfig)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -307,7 +306,7 @@ func search(yamlData []byte, paths ...string) (images []v1alpha2.Image, err erro
 // mkTempFile will make a temporary file and return the name
 // and cleanup method
 func mktempFile(dir string) (func(), string, error) {
-	file, err := ioutil.TempFile(dir, "repo.*")
+	file, err := os.CreateTemp(dir, "repo.*")
 	return func() {
 		if err := os.Remove(file.Name()); err != nil {
 			klog.Fatal(err)

@@ -1,7 +1,7 @@
 package mirror
 
 import (
-	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 
@@ -63,7 +63,7 @@ func TestSearch(t *testing.T) {
 	}
 	for _, tt := range tests {
 
-		b, err := ioutil.ReadFile(tt.path)
+		b, err := os.ReadFile(tt.path)
 		require.NoError(t, err)
 
 		imgs, err := search(b, tt.ipaths...)

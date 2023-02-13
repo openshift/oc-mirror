@@ -3,7 +3,6 @@ package mirror
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -112,11 +111,11 @@ func TestHandleMetadata(t *testing.T) {
 			// Copy metadata in place for tests with existing
 			if tt.metadata != "" {
 				t.Log("Copying metadata")
-				input, err := ioutil.ReadFile(tt.metadata)
+				input, err := os.ReadFile(tt.metadata)
 				require.NoError(t, err)
 				err = os.MkdirAll(filepath.Join(tmpdir, config.PublishDir), os.ModePerm)
 				require.NoError(t, err)
-				err = ioutil.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644)
+				err = os.WriteFile(filepath.Join(tmpdir, config.MetadataBasePath), input, 0644)
 				require.NoError(t, err)
 				err = prepMetadata(ctx, u.Host, tmpdir, gotUUID.String())
 				require.NoError(t, err)

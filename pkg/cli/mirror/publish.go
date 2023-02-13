@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -94,7 +93,7 @@ func (o *MirrorOptions) Publish(ctx context.Context) (image.TypedImageMapping, e
 	}
 
 	klog.V(3).Infof("Process all images in imageset")
-	imgMappings, err := o.remoteRegFuncs.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
+	imgMappings, err := o.processMirroredImages(ctx, assocs, filesInArchive, currentMeta)
 	if err != nil {
 		return allMappings, fmt.Errorf("error occurred during image processing: %v", err)
 	}
@@ -457,7 +456,7 @@ func unpack(archiveFilePath, dest string, filesInArchive map[string]string) erro
 }
 
 func mktempDir(dir string) (func(), string, error) {
-	dir, err := ioutil.TempDir(dir, "images.*")
+	dir, err := os.MkdirTemp(dir, "images.*")
 	return func() {
 		if err := os.RemoveAll(dir); err != nil {
 			klog.Fatal(err)

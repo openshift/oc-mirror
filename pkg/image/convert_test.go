@@ -699,7 +699,8 @@ func TestConvertToTypedMapping(t *testing.T) {
 						},
 						Type: imagesource.DestinationRegistry,
 					},
-					Category: v1alpha2.TypeGeneric},
+					Category: v1alpha2.TypeGeneric,
+				},
 			},
 			input: []v1alpha2.Association{
 				{

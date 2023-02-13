@@ -249,8 +249,7 @@ func TestReadImageMapping(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			OriginalRef: "some-registry.com/namespace/image:latest",
-			Category:    v1alpha2.TypeOperatorBundle}: {
+			Category: v1alpha2.TypeOperatorBundle}: {
 			TypedImageReference: imagesource.TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry.com",
@@ -260,8 +259,7 @@ func TestReadImageMapping(t *testing.T) {
 				},
 				Type: imagesource.DestinationRegistry,
 			},
-			OriginalRef: "disconn-registry.com/namespace/image:latest",
-			Category:    v1alpha2.TypeOperatorBundle},
+			Category: v1alpha2.TypeOperatorBundle},
 		},
 	}, {
 		name:      "Invalid/NoSeparator",

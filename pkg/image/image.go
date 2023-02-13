@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	libgoref "github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
@@ -46,12 +47,12 @@ ParseReference is a wrapper function of imagesource.ParseReference
 	It provides support for oci: prefixes
 */
 func ParseReference(ref string) (imagesource.TypedImageReference, error) {
-	if !strings.HasPrefix(ref, "oci:") {
+	if !strings.HasPrefix(ref, v1alpha2.OCITransportPrefix) {
 		return imagesource.ParseReference(ref)
 	}
 
 	dstType := DestinationOCI
-	ref = strings.TrimPrefix(ref, "oci:")
+	ref = strings.TrimPrefix(ref, v1alpha2.OCITransportPrefix)
 	ref = strings.TrimPrefix(ref, "//") //it could be that there is none
 	ref = strings.TrimPrefix(ref, "/")  // case of full path
 
@@ -96,10 +97,14 @@ func ParseImageReference(imageName string) (string, string, string, string, stri
 // trimProtocol removes oci://, file:// or docker:// from
 // the parameter imageName
 func TrimProtocol(imageName string) string {
-	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, v1alpha2.OCITransportPrefix)
 	imageName = strings.TrimPrefix(imageName, "file:")
 	imageName = strings.TrimPrefix(imageName, "docker:")
 	imageName = strings.TrimPrefix(imageName, "//")
 
 	return imageName
+}
+
+func IsFBCOCI(imageRef string) bool {
+	return strings.HasPrefix(imageRef, v1alpha2.OCITransportPrefix)
 }
