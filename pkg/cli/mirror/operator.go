@@ -466,9 +466,17 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 	// Remove the catalog image from mappings we are going to transfer this
 	// using an OCI layout.
-	ctlgImg, err := image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
-	if err != nil {
-		return nil, err
+	var ctlgImg image.TypedImage
+	if ctlgRef.Type == "oci" {
+		ctlgImg, err = image.ParseTypedImage(ctlgRef.OCIFBCPath, v1alpha2.TypeOperatorBundle)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ctlgImg, err = image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
+		if err != nil {
+			return nil, err
+		}
 	}
 	mappings.Remove(ctlgImg)
 	// Write catalog OCI layout file to src so it is included in the archive

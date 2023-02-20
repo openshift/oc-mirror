@@ -119,6 +119,11 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 		}
 	}
 
+	err := o.createOlmArtifactsForOCI(ctx, *cfg)
+	if err != nil {
+		return mmappings, err
+	}
+
 	mappings, err := operatorPlan(ctx, *cfg)
 	if err != nil {
 		return mmappings, err
@@ -148,6 +153,27 @@ func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfigura
 	}
 
 	return mmappings, nil
+}
+
+func (o *MirrorOptions) createOlmArtifactsForOCI(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) error {
+	for _, operator := range cfg.Mirror.Operators {
+		if !operator.IsFBCOCI() {
+			continue
+		}
+
+		ctlg, err := image.ParseReference(operator.Catalog)
+		if err != nil {
+			return err
+		}
+
+		catalogContentsDir := filepath.Join(artifactsFolderName, ctlg.Ref.Name)
+
+		_, err = o.findFBCConfig(ctx, v1alpha2.TrimProtocol(operator.Catalog), catalogContentsDir)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type operatorFunc func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error)

@@ -248,10 +248,8 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 	if err != nil {
 		return err
 	}
-	if srcOperator.IsFBCOCI() {
-		if !strings.Contains(srcCtlgRef, v1alpha2.OCITransportPrefix) {
-			srcCtlgRef = v1alpha2.OCITransportPrefix + "//" + srcCtlgRef
-		}
+	if srcOperator.IsFBCOCI() && !strings.Contains(srcCtlgRef, v1alpha2.OCITransportPrefix) {
+		srcCtlgRef = v1alpha2.OCITransportPrefix + "//" + srcCtlgRef
 	}
 
 	ctlgSrcTIR, err := image.ParseReference(srcCtlgRef)
