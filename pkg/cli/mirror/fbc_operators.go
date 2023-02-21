@@ -210,30 +210,30 @@ func prepareDestCatalogRef(operator v1alpha2.Operator, destReg, namespace string
 	if destReg == "" {
 		return "", errors.New("destination registry may not be empty")
 	}
-	_, subNamespace, repo, tag, _ := v1alpha2.ParseImageReference(operator.Catalog)
+	uniqueName, err := operator.GetUniqueName()
+	if err != nil {
+		return "", err
+	}
+	notAReg, subNamespace, repo, tag, _ := v1alpha2.ParseImageReference(uniqueName)
 
 	to := dockerPrefix + destReg
+
 	if namespace != "" {
 		to = strings.Join([]string{to, namespace}, "/")
+	}
+	if notAReg != "" {
+		to = strings.Join([]string{to, notAReg}, "/")
 	}
 	if subNamespace != "" {
 		to = strings.Join([]string{to, subNamespace}, "/")
 	}
 
-	klog.Infof("pushing catalog %s to %s \n", operator.Catalog, to)
-
-	if operator.TargetName != "" {
-		to = strings.Join([]string{to, operator.TargetName}, "/")
-	} else {
-		to = strings.Join([]string{to, repo}, "/")
-	}
-	if operator.TargetTag != "" {
-		to += ":" + operator.TargetTag
-	} else if tag != "" {
+	to = strings.Join([]string{to, repo}, "/")
+	if tag != "" {
 		to += ":" + tag
 	}
 	//check if this is a valid reference
-	_, err := image.ParseReference(v1alpha2.TrimProtocol(to))
+	_, err = image.ParseReference(v1alpha2.TrimProtocol(to))
 	return to, err
 }
 

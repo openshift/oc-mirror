@@ -13,6 +13,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -179,7 +180,8 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 			registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
 		case icspScope == namespaceICSPScope:
 			source := path.Join(imgRegistry, imgNamespace)
-			dest := path.Join(v.Ref.Registry, v.Ref.Namespace)
+			reg, org, _, _, _ := v1alpha2.ParseImageReference(v.Ref.AsRepository().Exact())
+			dest := path.Join(reg, org)
 			registryMapping[source] = dest
 		default:
 			return registryMapping, fmt.Errorf("invalid ICSP scope %s", icspScope)
