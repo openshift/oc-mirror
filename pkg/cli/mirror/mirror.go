@@ -281,6 +281,10 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
+	if o.SkipPruning {
+		klog.Infof("Skip pruning - N.B. this feature is unsupported")
+	}
+
 	return nil
 }
 
