@@ -1,16 +1,63 @@
-# This config demonstrates how to mirror a single operator. 
+# This config demonstrates how to mirror a single operator.
 
-# By specifying a minVersion, that version and every version to the
-# specified channel's latest (HEAD) version will be mirrored. 
+# IMPORTANT: When using headsOnly mode, the latest (HEAD) version is mirrored for each channel
+# when metadata is first written for the operator package channel. On subsequent runs of oc-mirror, the channel bundles are mirrored
+# from the previous channel head to the current channel head
 
-# If a package is specified with no minVersion/maxVersion or channel, each channel's latest
-# version in the specified package will be mirrored.
+# Heads Only: If a package is specified without minVersion/maxVersion constraints or channel filter, each channel's latest
+# (HEAD) bundle version in the specified package will be mirrored.
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      packages:
+        - name: elasticsearch-operator
+---
+# Heads Only: If a package is specified with a channel filter without minVersion/maxVersion constraints, only the channel's latest (HEAD)
+# bundle version will be mirrored.
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      packages:
+        - name: elasticsearch-operator
+          channels:
+            - name: 'stable-v0'
+---
+# Full: If a package is specified without minVersion/maxVersion constraints or channel filter and full is set to true,
+# all bundle versions in each channel will be mirrored.
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      full: true
+      packages:
+        - name: elasticsearch-operator
+---
+# Full: If a package is specified with channel filter without minVersion/maxVersion constraints and full is set to true,
+# all bundle versions in that channel will be mirrored.
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      full: true
+      packages:
+        - name: elasticsearch-operator
+          channels:
+            - name: 'stable-v0'
+---
+# minVersion and maxVersion constraints can be set at the channel level OR the package level. If set at the package level, all channels
+# containing that version range with be included in the catalog.
 
-# If the package is specified with a minVersion and maxVersion, all bundles within that range
-# will be mirrored.
 # WARNING: Any specified channel information will override this setting. Setting versions by
 # package or channel are mutually exclusive.
----
+
+# Version Constraints: By specifying a minVersion, that version and every version to the
+# specified channel's latest (HEAD) version will be mirrored.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
@@ -20,14 +67,8 @@ mirror:
         - name: elasticsearch-operator
           minVersion: '5.3.2-20'
 ---
-apiVersion: mirror.openshift.io/v1alpha2
-kind: ImageSetConfiguration
-mirror:
-  operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
-      packages:
-        - name: elasticsearch-operator
----
+# Version Constraints: If the package is specified with a minVersion and maxVersion constraints, all bundles within that range
+# will be mirrored including all channels that contain any of those versions if a channel filter is not specified.
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 mirror:
