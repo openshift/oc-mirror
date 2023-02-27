@@ -682,7 +682,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 		{
 			desc: "Success/ImageManifestOnly",
 			expMapping: TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
 						Name:     "foo",
@@ -691,7 +691,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
 							Name:     "foo",
@@ -724,7 +724,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 		{
 			desc: "Success/IndexManifestOnly",
 			expMapping: TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
 						Name:     "foo",
@@ -733,7 +733,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
 							Name:     "foo",
@@ -742,7 +742,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeGeneric},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
 						Name:     "bar",
@@ -751,7 +751,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorBundle}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
 							Name:     "bar",
@@ -928,7 +928,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 		{
 			desc: "Success/BothManifestTypes",
 			expMapping: TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
 						Name:     "foo",
@@ -937,7 +937,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
 							Name:     "foo",
@@ -946,7 +946,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeGeneric},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry.com",
 						Name:     "bar",
@@ -955,7 +955,7 @@ func TestConvertToTypedMapping(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry.com",
 							Name:     "bar",

@@ -105,7 +105,7 @@ function workflow_oci_mirror() {
   local remote_image="${2:?remote_image required}"
   prepare_oci_testdata "${DATA_TMP}"
   prepare_mirror_testdata "${DATA_TMP}" "${MIRROR_OCI_DIR}" "${config}" false 
-  
+ 
   # call oc-mirror
   run_cmd --config "${MIRROR_OCI_DIR}/${config}" $CREATE_FLAGS "${remote_image}"
 }

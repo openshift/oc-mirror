@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +25,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -256,330 +256,10 @@ func TestFindFBCConfig(t *testing.T) {
 	}
 }
 
-func TestGetFilteredDeclarativeConfig(t *testing.T) {
-
-	type spec struct {
-		desc           string
-		options        *MirrorOptions
-		operator       v1alpha2.Operator
-		expectedConfig declcfg.DeclarativeConfig
-		err            string
-	}
-
-	cases := []spec{
-		{
-			desc: "no channel, no version - take all bundle for that package - pass scenario",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-						},
-					},
-				},
-			},
-			expectedConfig: declcfg.DeclarativeConfig{
-				Channels: []declcfg.Channel{
-					{
-						Name:    "alpha",
-						Package: "aws-load-balancer-operator",
-					},
-					{
-						Name:    "stable-v0.1",
-						Package: "aws-load-balancer-operator",
-					},
-				},
-				Bundles: []declcfg.Bundle{
-					{
-						Name: "aws-load-balancer-operator.v0.0.1",
-					},
-				},
-			},
-			err: "",
-		},
-		{
-			desc: "channel only - take only bundles from the specified channel - pass scenario",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-							Channels: []v1alpha2.IncludeChannel{
-								{
-									Name: "stable-v0.1",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedConfig: declcfg.DeclarativeConfig{
-				Channels: []declcfg.Channel{
-					{
-						Name:    "stable-v0.1",
-						Package: "aws-load-balancer-operator",
-					},
-				},
-				Bundles: []declcfg.Bundle{
-					{
-						Name: "aws-load-balancer-operator.v0.0.1",
-					},
-				},
-			},
-			err: "",
-		},
-		{
-			desc: "sem version only - take only bundles in the range - pass scenario",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-							Channels: []v1alpha2.IncludeChannel{
-								{
-									Name: "stable-v0.1",
-									IncludeBundle: v1alpha2.IncludeBundle{
-										MinVersion: "0.0.1",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedConfig: declcfg.DeclarativeConfig{
-				Channels: []declcfg.Channel{
-					{
-						Name:    "stable-v0.1",
-						Package: "aws-load-balancer-operator",
-					},
-				},
-				Bundles: []declcfg.Bundle{
-					{
-						Name: "aws-load-balancer-operator.v0.0.1",
-					},
-				},
-			},
-			err: "",
-		},
-		{
-			desc: "sem version only - take only bundles in the range - fail scenario (bundles do not exist)",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-							Channels: []v1alpha2.IncludeChannel{
-								{
-									Name: "stable-v0.1",
-									IncludeBundle: v1alpha2.IncludeBundle{
-										MinVersion: "0.0.0",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			err: "error generating diff: error including items:\n[package=\"aws-load-balancer-operator\" channel=\"stable-v0.1\"] bundles do not exist in channel: versions=[\"0.0.0\"]",
-		},
-		{
-			desc: "with channel and version - take bundles in the specified channel and version - pass scenario",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-							Channels: []v1alpha2.IncludeChannel{
-								{
-									Name: "stable-v0.1",
-									IncludeBundle: v1alpha2.IncludeBundle{
-										MinVersion: "0.0.1",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedConfig: declcfg.DeclarativeConfig{
-				Channels: []declcfg.Channel{
-					{
-						Name:    "stable-v0.1",
-						Package: "aws-load-balancer-operator",
-					},
-				},
-				Bundles: []declcfg.Bundle{
-					{
-						Name: "aws-load-balancer-operator.v0.0.1",
-					},
-				},
-			},
-			err: "",
-		},
-		{
-			desc: "with minBundle - take only the bundle specified in the MinBundle",
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-			},
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "aws-load-balancer-operator",
-							Channels: []v1alpha2.IncludeChannel{
-								{
-									Name: "stable-v0.1",
-									IncludeBundle: v1alpha2.IncludeBundle{
-										MinBundle: "aws-load-balancer-operator.v0.0.1",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedConfig: declcfg.DeclarativeConfig{
-				Channels: []declcfg.Channel{
-					{
-						Name:    "stable-v0.1",
-						Package: "aws-load-balancer-operator",
-					},
-				},
-				Bundles: []declcfg.Bundle{
-					{
-						Name: "aws-load-balancer-operator.v0.0.1",
-					},
-				},
-			},
-			err: "",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			cfg, err := c.options.getFilteredDeclarativeConfig(context.TODO(), c.operator, filepath.Join(c.options.OutputDir, artifactsFolderName))
-
-			var isCfgValid bool
-			if c.err != "" {
-				require.EqualErrorf(t, err, c.err, "expected %s actual %s", c.err, err)
-			} else {
-				isCfgValid = isCfgExpected(cfg, c.expectedConfig)
-				require.True(t, isCfgValid)
-			}
-		})
-	}
-}
-
-func isCfgExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
-	if len(actualCfg.Channels) != len(expectedCfg.Channels) ||
-		len(actualCfg.Bundles) != len(expectedCfg.Bundles) {
-		return false
-	}
-
-	var isExpected bool
-	if isExpected = isChannelExpected(actualCfg, expectedCfg); !isExpected {
-		return isExpected
-	}
-
-	if isExpected = isBundleExpected(actualCfg, expectedCfg); !isExpected {
-		return isExpected
-	}
-
-	return isExpected
-}
-
-func isChannelExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
-	for _, actual := range actualCfg.Channels {
-		for _, expected := range expectedCfg.Channels {
-			if actual.Name == expected.Name && actual.Package == expected.Package {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func isBundleExpected(actualCfg, expectedCfg declcfg.DeclarativeConfig) bool {
-	for _, actual := range actualCfg.Bundles {
-		for _, expected := range expectedCfg.Bundles {
-			if actual.Name == expected.Name {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func TestGetRelatedImages(t *testing.T) {
 	type spec struct {
 		desc                  string
 		configsPath           string
-		options               *MirrorOptions
-		operator              v1alpha2.Operator
 		expectedRelatedImages []declcfg.RelatedImage
 		packages              []v1alpha2.IncludePackage
 		err                   string
@@ -589,24 +269,6 @@ func TestGetRelatedImages(t *testing.T) {
 		{
 			desc:        "nominal case",
 			configsPath: filepath.Join(testdata, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
-
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-				},
-			},
-
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "node-observability-operator",
-						},
-					},
-				},
-			},
-
 			packages: []v1alpha2.IncludePackage{
 				{
 					Name: "node-observability-operator",
@@ -633,25 +295,7 @@ func TestGetRelatedImages(t *testing.T) {
 			err: "",
 		},
 		{
-			desc: "nominal case with mashed index.yaml passes",
-
-			options: &MirrorOptions{
-				OutputDir: testdata,
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-				},
-			},
-
-			operator: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
-						{
-							Name: "node-observability-operator",
-						},
-					},
-				},
-			},
-
+			desc:        "nominal case with mashed index.yaml passes",
 			configsPath: filepath.Join(testdataMashed, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
 			packages: []v1alpha2.IncludePackage{
 				{
@@ -694,14 +338,7 @@ func TestGetRelatedImages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to untar %s: %v", c.configsPath, err)
 			}
-
-			cfg, err := c.options.getFilteredDeclarativeConfig(context.TODO(), c.operator, filepath.Join(c.options.OutputDir, artifactsFolderName))
-
-			if err != nil {
-				t.Fatalf("unable to get a declarative config filtered: %s", err.Error())
-			}
-
-			relatedImages, err := getRelatedImages(cfg, c.packages)
+			relatedImages, err := getRelatedImages(filepath.Join(tmpdir, "configs"), c.packages)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -740,6 +377,258 @@ func TestGetRelatedImages(t *testing.T) {
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestIsPackageSelected(t *testing.T) {
+	type spec struct {
+		desc           string
+		bundle         declcfg.Bundle
+		channels       []declcfg.Channel
+		packages       []v1alpha2.IncludePackage
+		expectedResult bool
+		err            string
+	}
+
+	cases := []spec{
+		{
+			desc: "package has minVersion only, and bundle is above returns true",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "0.3.0",
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "package has minVersion only, and bundle is below returns false",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "0.4.0",
+					},
+				},
+			},
+			expectedResult: false,
+			err:            "",
+		},
+		{
+			desc: "package has maxVersion only, and bundle is above returns false",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MaxVersion: "0.3.0",
+					},
+				},
+			},
+			expectedResult: false,
+			err:            "",
+		},
+		{
+			desc: "package has maxVersion only, and bundle is below returns true",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MaxVersion: "0.4.0",
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle version is within range returns true",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "0.3.0",
+						MaxVersion: "0.3.1",
+					},
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle version is not within range returns false",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "1.3.0",
+						MaxVersion: "1.3.1",
+					},
+				},
+			},
+			expectedResult: false,
+			err:            "",
+		},
+		{
+			desc: "No version range in IncludePackage returns true",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "foo",
+				},
+			},
+			expectedResult: true,
+			err:            "",
+		},
+		{
+			desc: "bundle simply not in IncludePackage returns false",
+			bundle: declcfg.Bundle{
+				Name:    "foo.v0.3.1",
+				Package: "foo",
+				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+				RelatedImages: []declcfg.RelatedImage{
+					{
+						Name:  "operator",
+						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					},
+				},
+				Properties: []property.Property{
+					property.MustBuildPackage("foo", "0.3.1"),
+				},
+			},
+			channels: []declcfg.Channel{},
+			packages: []v1alpha2.IncludePackage{
+				{
+					Name: "bar",
+					IncludeBundle: v1alpha2.IncludeBundle{
+						MinVersion: "1.0.0",
+						MaxVersion: "2.0.0",
+					},
+				},
+			},
+			expectedResult: false,
+			err:            "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+
+			isSelected, err := isPackageSelected(c.bundle, c.channels, c.packages)
+			if c.err != "" {
+				require.EqualError(t, err, c.err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, c.expectedResult, isSelected)
+				// require.ElementsMatch(t, c.expectedRelatedImages, relatedImages)
+			}
+
 		})
 	}
 }
@@ -847,230 +736,6 @@ func TestGetISConfig(t *testing.T) {
 			require.NoError(t, err)
 		}
 	})
-}
-
-func TestBulkImageCopy(t *testing.T) {
-	type spec struct {
-		desc               string
-		isc                *v1alpha2.ImageSetConfiguration
-		expectedSubFolders []string
-		options            *MirrorOptions
-		err                string
-	}
-
-	cases := []spec{
-		{
-			desc: "Nominal case passes",
-			isc: &v1alpha2.ImageSetConfiguration{
-				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-
-						Operators: []v1alpha2.Operator{
-							{
-								Catalog: "registry.redhat.io/openshift/fakecatalog:latest",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{
-										{
-											Name: "aws-load-balancer-operator",
-											Channels: []v1alpha2.IncludeChannel{
-												{
-													Name: "stable-v0.1",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			options: &MirrorOptions{
-				From:      "test.registry.io",
-				ToMirror:  "",
-				OutputDir: "",
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-				SourceSkipTLS:              true,
-				DestSkipTLS:                true,
-				remoteRegFuncs:             createMockFunctions(0),
-				OCIInsecureSignaturePolicy: true,
-			},
-			err:                "",
-			expectedSubFolders: []string{"aws-load-balancer-operator"},
-		},
-	}
-
-	cleanup := func() error {
-		return nil
-	}
-
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			c.options.OutputDir = tmpDir
-			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			err := c.options.bulkImageCopy(context.TODO(), c.isc, c.options.SourceSkipTLS, c.options.DestSkipTLS, cleanup)
-			if c.err != "" {
-				require.EqualError(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-func TestBulkImageMirror(t *testing.T) {
-
-	// remove all relevant directory structures for olm_artifacts
-	os.RemoveAll("olm_artifacts")
-
-	type spec struct {
-		desc        string
-		sequence    int
-		isc         *v1alpha2.ImageSetConfiguration
-		catalogName string
-		options     *MirrorOptions
-		err         string
-	}
-
-	cases := []spec{
-		{
-			desc:     "Nominal case passes",
-			sequence: 1,
-			isc: &v1alpha2.ImageSetConfiguration{
-				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
-							{
-								Catalog: "oci://" + testdata,
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{
-										{
-											Name: "aws-load-balancer-operator",
-											Channels: []v1alpha2.IncludeChannel{
-												{
-													Name: "stable-v0.1",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			catalogName: "artifacts-rhop-ctlg-oci",
-			options: &MirrorOptions{
-				ToMirror:  "localhost.localdomain:5000",
-				OutputDir: "",
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-				SourceSkipTLS:              true,
-				DestSkipTLS:                true,
-				OCIInsecureSignaturePolicy: true,
-				remoteRegFuncs:             createMockFunctions(0),
-			},
-			err: "",
-		},
-		{
-			desc:     "No base olm_artifacts directory case passes",
-			sequence: 2,
-			isc: &v1alpha2.ImageSetConfiguration{
-				TypeMeta: v1alpha2.NewMetadata().TypeMeta,
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-
-						Operators: []v1alpha2.Operator{
-							{
-								Catalog: "oci://testdata/artifacts/ibm-use-case/rhop-ctlg-oci-mashed",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{
-										{
-											Name: "foo",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			catalogName: "artifacts-ibm-use-case-rhop-ctlg-oci-mashed",
-			options: &MirrorOptions{
-				ToMirror:  "localhost.localdomain:5000",
-				OutputDir: "",
-				RootOptions: &cli.RootOptions{
-					Dir: "",
-					IOStreams: genericclioptions.IOStreams{
-						In:     os.Stdin,
-						Out:    os.Stdout,
-						ErrOut: os.Stderr,
-					},
-				},
-				SourceSkipTLS:              true,
-				DestSkipTLS:                true,
-				OCIInsecureSignaturePolicy: true,
-				remoteRegFuncs:             createMockFunctions(0),
-			},
-			err: "",
-		},
-	}
-
-	cleanup := func() error {
-		return nil
-	}
-
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			ctlgSrcGenerated := false
-			icspGenerated := false
-			c.options.OutputDir = tmpDir
-			c.options.Dir = filepath.Join(tmpDir, "oc-mirror-workspace")
-			os.MkdirAll(c.options.Dir, 0755)
-			defer os.RemoveAll(c.options.Dir) // clean up
-			// for now we skip the metadata check
-			c.options.SkipMetadataCheck = true
-			err := c.options.bulkImageMirror(context.TODO(), c.isc, c.options.ToMirror, "testnamespace", cleanup)
-			if c.err != "" {
-				require.EqualError(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-				err = filepath.WalkDir(c.options.Dir, func(path string, d fs.DirEntry, err error) error {
-					if d.IsDir() {
-						return nil
-					}
-
-					if strings.Contains(path, "catalogSource-"+c.catalogName+".yaml") {
-						ctlgSrcGenerated = true
-					}
-					if strings.Contains(path, "imageContentSourcePolicy.yaml") {
-						icspGenerated = true
-					}
-					return nil
-				})
-				require.NoError(t, err, "Unable to recursively look into oc-mirror-workspace")
-				require.True(t, icspGenerated, "ICSP should be generated")
-				require.True(t, ctlgSrcGenerated, "catalog source should be generated")
-			}
-
-		})
-	}
 }
 
 func TestUntarLayers(t *testing.T) {
@@ -1244,7 +909,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 			expErr: "",
 			expMapping: image.TypedImageMapping{
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1256,7 +921,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1270,7 +935,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 				},
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1282,7 +947,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1296,7 +961,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 				},
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1308,7 +973,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
@@ -1351,7 +1016,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 			expErr: "",
 			expMapping: image.TypedImageMapping{
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "preprodlocation.in",
@@ -1363,7 +1028,7 @@ func TestGenerateSrcToFileMapping(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "preprodlocation.in",
@@ -1518,20 +1183,21 @@ func TestAddCatalogToMapping(t *testing.T) {
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: image.DestinationOCI,
 						Ref: reference.DockerImageReference{
-							Registry:  "",
-							Namespace: "testdata",
-							Name:      "artifacts/rhop-ctlg-oci",
+							Registry:  "testdata",
+							Namespace: "artifacts",
+							Name:      "rhop-ctlg-oci",
 							Tag:       "",
 							ID:        digest.FromString("just for testing").String(),
 						},
+						OCIFBCPath: "oci://testdata/artifacts/rhop-ctlg-oci",
 					},
 					Category:    v1alpha2.TypeOperatorCatalog,
 					ImageFormat: image.OCIFormat,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",
@@ -1540,6 +1206,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Tag:       "4.12",
 							ID:        digest.FromString("just for testing").String(),
 						},
+						OCIFBCPath: "",
 					},
 					Category:    v1alpha2.TypeOperatorCatalog,
 					ImageFormat: image.OCIFormat,
@@ -1568,7 +1235,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: imagesource.DestinationRegistry,
 						Ref: reference.DockerImageReference{
 							Registry:  "registry.redhat.io",
@@ -1577,10 +1244,11 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Tag:       "v4.12",
 							ID:        digest.FromString("just for testing").String(),
 						},
+						OCIFBCPath: "",
 					},
 					Category: v1alpha2.TypeOperatorCatalog,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",
@@ -1589,6 +1257,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Tag:       "v4.12",
 							ID:        digest.FromString("just for testing").String(),
 						},
+						OCIFBCPath: "",
 					},
 					Category: v1alpha2.TypeOperatorCatalog,
 				},
@@ -1647,18 +1316,19 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "registry.redhat.io",
 							Namespace: "openshift-logging",
-							Name:      "cluster-logging-rhel8-operator/2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
-							Tag:       "",
-							ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
+							//Name:      "cluster-logging-rhel8-operator/2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+							Name: "cluster-logging-rhel8-operator",
+							Tag:  "",
+							ID:   "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",
@@ -1684,18 +1354,19 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
 							Namespace: "okd",
-							Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:        ""},
+							//Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
+							Name: "scos-content",
+							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:   ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",
@@ -1721,18 +1392,19 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "file",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
-							Namespace: "scos-content",
-							Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:        ""},
+							Namespace: "",
+							//Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
+							Name: "scos-content",
+							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:   ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",

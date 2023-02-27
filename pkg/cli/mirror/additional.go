@@ -32,7 +32,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 	}
 	for _, img := range imageList {
 		// Get source image information
-		srcRef, err := imagesource.ParseReference(img.Name)
+		srcRef, err := image.ParseReference(img.Name)
 		if err != nil {
 			return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
@@ -53,7 +53,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 				klog.Warning(err)
 				continue
 			}
-			pinnedRef, err := imagesource.ParseReference(srcImage)
+			pinnedRef, err := image.ParseReference(srcImage)
 			if err != nil {
 				return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 			}

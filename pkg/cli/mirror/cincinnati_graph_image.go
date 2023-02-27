@@ -112,8 +112,12 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 		return refs, nil
 	}
 
+	graphImgCvt := image.TypedImageReference{
+		Ref:  graphImage.Ref,
+		Type: graphImage.Type,
+	}
 	// Add to mapping for UpdateService manifest generation
-	refs.Add(graphImage, graphImage, v1alpha2.TypeCincinnatiGraph)
+	refs.Add(graphImgCvt, graphImgCvt, v1alpha2.TypeCincinnatiGraph)
 
 	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, o.DestPlainHTTP, nil)
 	if err != nil {

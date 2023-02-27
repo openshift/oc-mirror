@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +52,7 @@ func TestParseReference(t *testing.T) {
 			expImgRef: imagesource.TypedImageReference{
 				Type: DestinationOCI,
 				Ref: reference.DockerImageReference{
-					Registry:  "home/user",
+					Registry:  "oci://home/user",
 					Namespace: "catalogs",
 					Tag:       "v4.11",
 					Name:      "redhat-operator-index",
@@ -106,7 +107,7 @@ func TestParseImageName(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			registry, org, repo, tag, sha := ParseImageReference(c.imageName)
+			registry, org, repo, tag, sha := v1alpha2.ParseImageReference(c.imageName)
 			require.Equal(t, c.expReg, registry)
 			require.Equal(t, c.expOrg, org)
 			require.Equal(t, c.expRepo, repo)

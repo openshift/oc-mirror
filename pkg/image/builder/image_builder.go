@@ -133,6 +133,10 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 		var layoutOpts []layout.Option
 		if manifest.Platform != nil {
 			layoutOpts = append(layoutOpts, layout.WithPlatform(*manifest.Platform))
+		} else {
+			//OCI workflow manifest.Platform is nil, to avoid failures in the OCI workflow the default amd64/linux is set here
+			pf := &v1.Platform{Architecture: "amd64", OS: "linux"}
+			layoutOpts = append(layoutOpts, layout.WithPlatform(*pf))
 		}
 		if err := layoutPath.ReplaceImage(img, match.Digests(manifest.Digest), layoutOpts...); err != nil {
 			return err

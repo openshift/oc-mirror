@@ -175,4 +175,6 @@ function prepare_oci_testdata() {
   local DATA_DIR="${1:?DATA_DIR required}"
   mkdir -p "${DATA_DIR}/mirror_oci"
   tar xfz "${DIR}/artifacts/${OCI_CTLG_PATH}" -C "${DATA_DIR}/mirror_oci"
+  mkdir -p  "olm_artifacts/oc-mirror-dev"
+  cp -r "${DIR}/artifacts/configs"  "olm_artifacts/oc-mirror-dev/"
 }

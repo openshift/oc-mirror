@@ -29,13 +29,13 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 							Tag:  "latest",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
 							Tag:  "latest",
@@ -67,13 +67,13 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 							ID:   "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
 							ID:   "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
@@ -105,13 +105,13 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 							Tag:  "latest",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "index_manifest",
 							Tag:  "latest",
@@ -209,12 +209,12 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
 						},
@@ -229,13 +229,13 @@ func TestAssociateLocalImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 							Tag:  "latest",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "fake_manifest",
 							Tag:  "latest",
@@ -282,14 +282,14 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "single_manifest",
 							Tag:      "latest",
 							Registry: u.Host,
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "single_manifest",
 							Tag:      "latest",
@@ -322,7 +322,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "single_manifest",
 							ID:       "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
@@ -330,7 +330,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 							Registry: u.Host,
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "single_manifest",
 							ID:       "sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19",
@@ -363,7 +363,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "index_manifest",
 							Tag:      "latest",
@@ -371,7 +371,7 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 							Registry: u.Host,
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "index_manifest",
 							Tag:      "latest",
@@ -470,12 +470,12 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
 						},
@@ -490,13 +490,13 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "imgname",
 							Tag:  "fake",
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name: "single_manifest",
 						},
@@ -511,14 +511,14 @@ func TestAssociateRemoteImageLayers(t *testing.T) {
 			imgTyp: v1alpha2.TypeGeneric,
 			imgMapping: map[TypedImage]TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "fake_manifest",
 							Tag:      "latest",
 							Registry: u.Host,
 						}},
 					Category: v1alpha2.TypeGeneric}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Name:     "single_manifest",
 							Registry: "test-registry.com",

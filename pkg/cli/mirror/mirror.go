@@ -9,12 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/opencontainers/go-digest"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
@@ -38,11 +35,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
-const (
-	OCIFeatureCopyAction   = "copy"
-	OCIFeatureMirrorAction = "mirror"
-)
-
 var (
 	mirrorlongDesc = templates.LongDesc(
 		` 
@@ -50,39 +42,29 @@ var (
 		Accepts an argument defining the destination for the mirrored images using the prefix file:// for a local mirror packed into a 
 		tar archive or docker:// for images to be streamed registry to registry without being stored locally. The default docker credentials are 
 		used for authenticating to the registries. The podman location for credentials is also supported as a secondary location.
-
 		When using file mirroring, the --from and --config flags control the location of the images to mirror. The --config flag accepts
 		an imageset configuration file and the --from flag accepts the location of the imageset on disk. The --from input can be passed as a 
 		file or directory, but must contain only one image sequence. The naming convention for an imageset is mirror\_seq<sequence number>\_<tar count>.tar.
-
 		The location of the directory used by oc-mirror as a workspace defaults to the name oc-mirror-workspace. The location of this directory
 		is outlined in the following: 
-
 		1. Destination prefix is docker:// - The current working directory will be used.
 		2. Destination prefix is file:// - The destination directory specified will be used.
-
 		`,
 	)
 	mirrorExamples = templates.Examples(
 		`
 		# Mirror to a directory
 		oc-mirror --config mirror-config.yaml file://mirror
-
 		# Mirror to a directory without layer and image differential operations
 		oc-mirror --config mirror-config.yaml file://mirror --ignore-history
-
 		# Mirror to mirror publish
 		oc-mirror --config mirror-config.yaml docker://localhost:5000
-
 		# Publish a previously created mirror archive
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000
-
 		# Publish to a registry and add a top-level namespace
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace
-
 		# Generate manifests for previously created mirror archive
 		oc-mirror --from mirror_seq1_000000.tar docker://localhost:5000/namespace --manifests-only
-
 		# Skip metadata check during imageset publishing. This example shows a two-step process.
 		# A differential imageset would have to be created with --ignore-history to be
 		# successfully published with --skip-metadata-check.
@@ -280,6 +262,9 @@ func (o *MirrorOptions) Validate() error {
 			}
 		}
 	}
+	if !o.UseOCIFeature && len(o.OCIRegistriesConfig) > 0 {
+		return fmt.Errorf("oci-registries-config flag can only be used with the --use-oci-feature flag")
+	}
 
 	return nil
 }
@@ -295,18 +280,12 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	cleanup := func() error {
 		if !o.SkipCleanup {
+			os.RemoveAll("olm_artifacts")
 			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
 		}
 		return nil
 	}
 
-	if o.UseOCIFeature {
-		return o.mirrorOCIImages(cmd.Context(), cleanup)
-	} else {
-		if len(o.OCIRegistriesConfig) > 0 {
-			return fmt.Errorf("this flag can only be used with the --use-oci-feature flag")
-		}
-	}
 	return o.mirrorImages(cmd.Context(), cleanup)
 }
 
@@ -363,38 +342,6 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		return o.mirrorToMirrorWrapper(ctx, cfg, cleanup)
 
 	}
-	if o.continuedOnError {
-		return fmt.Errorf("one or more errors occurred")
-	}
-
-	return cleanup()
-}
-func (o *MirrorOptions) mirrorOCIImages(ctx context.Context, cleanup cleanupFunc) error {
-	o.remoteRegFuncs = RemoteRegFuncs{
-		copy:           copy.Image,
-		mirrorMappings: o.mirrorMappings,
-		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
-			return imgRef.NewImageSource(ctx, sys)
-		},
-		getManifest: func(ctx context.Context, instanceDigest *digest.Digest, imgSrc types.ImageSource) ([]byte, string, error) {
-			return imgSrc.GetManifest(ctx, instanceDigest)
-		},
-		handleMetadata:     o.handleMetadata,
-		m2mWorkflowWrapper: o.mirrorToMirrorWrapper,
-	}
-
-	isc, err := o.getISConfig()
-	if err != nil {
-		return fmt.Errorf("reading imagesetconfig via command line %v", err)
-	}
-
-	klog.Infof("mirroring images to remote registry")
-	err = o.bulkImageMirror(ctx, isc, o.ToMirror, o.UserNamespace, cleanup)
-	if err != nil {
-		return fmt.Errorf("mirroring images %v", err)
-	}
-	klog.Infof("completed catalog mirror")
-
 	if o.continuedOnError {
 		return fmt.Errorf("one or more errors occurred")
 	}
@@ -464,9 +411,18 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 			continue
 		}
 
+		srcTIR := imagesource.TypedImageReference{
+			Ref:  srcRef.Ref,
+			Type: srcRef.Type,
+		}
+
+		dstTIR := imagesource.TypedImageReference{
+			Ref:  dstRef.Ref,
+			Type: dstRef.Type,
+		}
 		mappings = append(mappings, mirror.Mapping{
-			Source:      srcRef.TypedImageReference,
-			Destination: dstRef.TypedImageReference,
+			Source:      srcTIR,
+			Destination: dstTIR,
 			Name:        srcRef.Ref.Name,
 		})
 	}
@@ -644,13 +600,15 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	}
 
 	targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
-	if err != nil {
-		return err
-	}
-	var curr v1alpha2.Metadata
-	berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
-	if err := o.checkSequence(meta, curr, berr); err != nil {
-		return err
+	if !o.UseOCIFeature {
+		if err != nil {
+			return err
+		}
+		var curr v1alpha2.Metadata
+		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
+		if err := o.checkSequence(meta, curr, berr); err != nil {
+			return err
+		}
 	}
 
 	// Change the destination to registry
@@ -757,7 +715,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 			return err
 		}
 	}
-	return nil
+	return cleanup()
 }
 
 // mirrorToDiskWrapper

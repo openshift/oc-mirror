@@ -3,7 +3,6 @@ package image
 import (
 	"fmt"
 
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 
@@ -99,7 +98,7 @@ func ConvertToTypedMapping(assocs []v1alpha2.Association) (TypedImageMapping, er
 		if _, ok := childManifest[a.Name]; ok {
 			continue
 		}
-		typedImg, err := imagesource.ParseReference(a.Name)
+		typedImg, err := ParseReference(a.Name)
 		if err != nil {
 			errs = append(errs, err)
 			continue

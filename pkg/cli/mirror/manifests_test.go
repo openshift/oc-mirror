@@ -28,7 +28,7 @@ func TestICSPGeneration(t *testing.T) {
 	}{{
 		name: "Valid/OperatorType",
 		sourceImages: []image.TypedImage{{
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: image.TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "some-registry",
 					Namespace: "namespace",
@@ -40,7 +40,7 @@ func TestICSPGeneration(t *testing.T) {
 			Category: v1alpha2.TypeOperatorBundle,
 		}},
 		destImages: []image.TypedImage{{
-			TypedImageReference: imagesource.TypedImageReference{
+			TypedImageReference: image.TypedImageReference{
 				Ref: reference.DockerImageReference{
 					Registry:  "disconn-registry",
 					Namespace: "namespace",
@@ -76,7 +76,7 @@ func TestICSPGeneration(t *testing.T) {
 		{
 			name: "Valid/GenericType",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -88,7 +88,7 @@ func TestICSPGeneration(t *testing.T) {
 				Category: v1alpha2.TypeGeneric,
 			}},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -122,7 +122,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Valid/ReleaseType",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -134,7 +134,7 @@ func TestICSPGeneration(t *testing.T) {
 				Category: v1alpha2.TypeOCPRelease,
 			}},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -167,7 +167,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Valid/NamespaceScope",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -179,7 +179,7 @@ func TestICSPGeneration(t *testing.T) {
 				Category: v1alpha2.TypeGeneric,
 			}},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -213,7 +213,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Valid/RegistryScope",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -225,7 +225,7 @@ func TestICSPGeneration(t *testing.T) {
 				Category: v1alpha2.TypeGeneric,
 			}},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -259,7 +259,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Valid/NamespaceScopeNoNamespace",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "",
@@ -271,7 +271,7 @@ func TestICSPGeneration(t *testing.T) {
 				Category: v1alpha2.TypeGeneric,
 			}},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "",
@@ -305,7 +305,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Invalid/NoDigestMapping",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -320,7 +320,7 @@ func TestICSPGeneration(t *testing.T) {
 			icspSizeLimit: 250000,
 			typ:           &GenericBuilder{},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -335,7 +335,7 @@ func TestICSPGeneration(t *testing.T) {
 		}, {
 			name: "Invalid/InvalidICSPScope",
 			sourceImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "some-registry",
 						Namespace: "namespace",
@@ -350,7 +350,7 @@ func TestICSPGeneration(t *testing.T) {
 			icspSizeLimit: 250000,
 			typ:           &GenericBuilder{},
 			destImages: []image.TypedImage{{
-				TypedImageReference: imagesource.TypedImageReference{
+				TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "disconn-registry",
 						Namespace: "namespace",
@@ -368,7 +368,7 @@ func TestICSPGeneration(t *testing.T) {
 			name: "Valid/OperatorTypeWithRelatedImgs",
 			sourceImages: []image.TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "some-registry-bundle",
 							Namespace: "namespace-bundle",
@@ -380,7 +380,7 @@ func TestICSPGeneration(t *testing.T) {
 					Category: v1alpha2.TypeOperatorBundle,
 				},
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "some-registry-for-related",
 							Namespace: "namespace-related",
@@ -393,7 +393,7 @@ func TestICSPGeneration(t *testing.T) {
 				}},
 			destImages: []image.TypedImage{
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "disconn-registry",
 							Namespace: "namespace-bundle",
@@ -405,7 +405,7 @@ func TestICSPGeneration(t *testing.T) {
 					Category: v1alpha2.TypeOperatorBundle,
 				},
 				{
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "disconn-registry",
 							Namespace: "namespace-related",
@@ -478,7 +478,7 @@ func TestWriteCatalogSource(t *testing.T) {
 		{
 			name: "Success/UniqueCatalogNames",
 			images: image.TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "dev",
@@ -487,7 +487,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "dev",
@@ -496,7 +496,7 @@ func TestWriteCatalogSource(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeOperatorCatalog},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "staging",
@@ -505,7 +505,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "staging",
@@ -523,7 +523,7 @@ func TestWriteCatalogSource(t *testing.T) {
 		{
 			name: "Success/DuplicateCatalogName",
 			images: image.TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "dev",
@@ -532,7 +532,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "dev",
@@ -541,7 +541,7 @@ func TestWriteCatalogSource(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeOperatorCatalog},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "dev",
@@ -550,7 +550,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "dev",
@@ -559,7 +559,7 @@ func TestWriteCatalogSource(t *testing.T) {
 						Type: imagesource.DestinationRegistry,
 					},
 					Category: v1alpha2.TypeOperatorCatalog},
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry: "test-registry",
 						Name:     "dev",
@@ -568,7 +568,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry: "test-registry",
 							Name:     "dev",
@@ -591,7 +591,7 @@ func TestWriteCatalogSource(t *testing.T) {
 		{
 			name: "Success/CatalogNameContainingPathComponents",
 			images: image.TypedImageMapping{
-				{TypedImageReference: imagesource.TypedImageReference{
+				{TypedImageReference: image.TypedImageReference{
 					Ref: reference.DockerImageReference{
 						Registry:  "foo.com",
 						Namespace: "cp",
@@ -602,7 +602,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Type: imagesource.DestinationRegistry,
 				},
 					Category: v1alpha2.TypeOperatorCatalog}: {
-					TypedImageReference: imagesource.TypedImageReference{
+					TypedImageReference: image.TypedImageReference{
 						Ref: reference.DockerImageReference{
 							Registry:  "localhost:5000",
 							Namespace: "cp",
