@@ -1092,7 +1092,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/artifacts/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhop-ctlg-oci",
 			expectedErr: "",
 		},
 		{
@@ -1103,7 +1103,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/artifacts/rhopi",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi",
 			expectedErr: "",
 		},
 		{
@@ -1114,7 +1114,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/artifacts/rhop-ctlg-oci:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhop-ctlg-oci:v12",
 			expectedErr: "",
 		},
 		{
@@ -1126,7 +1126,19 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/artifacts/rhopi:v12",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi:v12",
+			expectedErr: "",
+		},
+		{
+			desc: "with targetCatalog",
+			operator: v1alpha2.Operator{
+				Catalog:       "oci://" + testdata,
+				TargetTag:     "v12",
+				TargetCatalog: "chosen_ns/rhopi",
+			},
+			destReg:     "localhost:5000",
+			namespace:   "disconnected_ocp",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/chosen_ns/rhopi:v12",
 			expectedErr: "",
 		},
 		{
@@ -1146,7 +1158,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "",
-			expectedRef: "docker://localhost:5000/artifacts/rhop-ctlg-oci",
+			expectedRef: "docker://localhost:5000/testdata/artifacts/rhop-ctlg-oci",
 			expectedErr: "",
 		},
 	}

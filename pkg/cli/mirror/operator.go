@@ -111,6 +111,9 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 		if err != nil {
 			return nil, err
 		}
+		if ctlg.IsFBCOCI() {
+			targetName = v1alpha2.OCITransportPrefix + "//" + targetName
+		}
 		targetCtlg, err := image.ParseReference(targetName)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
@@ -379,7 +382,6 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			return nil, fmt.Errorf("error pinning images in catalog %s: %v", ctlgRef, err)
 		}
 	}
-
 	indexDir, err := o.writeConfigs(dc, ic, targetCtlg.Ref)
 	if err != nil {
 		return nil, err

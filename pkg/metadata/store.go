@@ -145,8 +145,7 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 			if err != nil {
 				return v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
 			}
-			operatorMeta.ImagePin = ctlgPin // registry.redhat.io/redhat/redhat-operator-registry@sha256:sdfhgsdfsdhfgd
-
+			operatorMeta.ImagePin = ctlgPin
 		}
 
 	}
@@ -157,6 +156,9 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 	// or full catalogs to heads only.
 	if ctlg.IsHeadsOnly() {
 
+		if ctlg.IsFBCOCI() {
+			ctlgName = v1alpha2.OCITransportPrefix + "//" + ctlgName
+		}
 		// Determine the location of the created FBC
 		tir, err := image.ParseReference(ctlgName)
 		if err != nil {

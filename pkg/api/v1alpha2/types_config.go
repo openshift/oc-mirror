@@ -1,10 +1,9 @@
 package v1alpha2
 
 import (
-	"fmt"
+	"path"
 	"strings"
 
-	"github.com/openshift/library-go/pkg/image/reference"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -107,7 +106,22 @@ type Operator struct {
 	// TargetName is the target image name the catalog will be built with. If unset,
 	// the catalog will be published with the provided name in the Catalog
 	// field.
+	// Deprecated in oc-mirror 4.13, to be replaced with TargetCatalog.
 	TargetName string `json:"targetName,omitempty"`
+	// TargetCatalog replaces TargetName and allows for specifying the exact URL of the target
+	// catalog, including any path-components (organization, namespace) of the target catalog's location
+	// on the disconnected registry.
+	// This answer some customers requests regarding restrictions on where images can be placed.
+	// The targetCatalog field consists of an optional namespace followed by the target image name,
+	// described in extended Backus–Naur form below:
+	//     target-catalog = [namespace '/'] target-name
+	//     target-name    = path-component
+	//     namespace      = path-component ['/' path-component]*
+	//     path-component = alpha-numeric [separator alpha-numeric]*
+	//     alpha-numeric  = /[a-z0-9]+/
+	//     separator      = /[_.]|__|[-]*/
+	// TargetCatalog will be preferred over TargetName if both are specified in te ImageSetConfig.
+	TargetCatalog string `json:"targetCatalog,omitempty"`
 	// TargetTag is the tag the catalog image will be built with. If unset,
 	// the catalog will be publish with the provided tag in the Catalog
 	// field or a tag calculated from the partial digest.
@@ -126,52 +140,46 @@ type Operator struct {
 
 // GetUniqueName determines the catalog name that will
 // be tracked in the metadata and built. This depends on what fields
-// are set between Catalog, TargetName, and TargetTag.
+// are set between Catalog, TargetCatalog (and soon deprecated
+// TargetName), and TargetTag.
 func (o Operator) GetUniqueName() (string, error) {
 	ctlgRef := o.Catalog
-	if o.TargetName == "" && o.TargetTag == "" {
-		return ctlgRef, nil
+	if o.TargetCatalog == "" && o.TargetName == "" && o.TargetTag == "" {
+		return TrimProtocol(ctlgRef), nil
 	}
-	if o.IsFBCOCI() {
-		reg, ns, name, tag, id := ParseImageReference(ctlgRef)
+
+	reg, ns, name, tag, id := ParseImageReference(ctlgRef)
+
+	if o.TargetTag != "" {
+		tag = o.TargetTag
+		id = ""
+	}
+	uniqueName := ""
+
+	if o.TargetCatalog != "" {
+		// TargetCatalog takes precedence over TargetName, and replaces the catalog component-paths (URL)
+		if !o.IsFBCOCI() && reg != "" {
+			// reg is included in the name only in case of registry based catalogs.
+			// the parsed reg is not relevant in case of OCI, because the parsed ref is simply a filesystem path here
+			uniqueName += reg
+		}
+		uniqueName = path.Join(uniqueName, o.TargetCatalog)
+	} else {
+		uniqueName = path.Join(uniqueName, reg, ns)
+
 		if o.TargetName != "" {
 			name = o.TargetName
 		}
-		if o.TargetTag != "" {
-			tag = o.TargetTag
-			id = ""
-		}
-		uniqueName := "oci://"
-		if reg != "" {
-			uniqueName = reg
-		}
-		if ns != "" {
-			uniqueName = strings.Join([]string{uniqueName, ns}, "/")
-		}
-
-		uniqueName = strings.Join([]string{uniqueName, name}, "/")
-		if tag != "" {
-			uniqueName = uniqueName + ":" + tag
-		} else {
+		uniqueName = path.Join(uniqueName, name)
+	}
+	if tag != "" {
+		uniqueName = uniqueName + ":" + tag
+	} else {
+		if id != "" {
 			uniqueName = uniqueName + "@sha256:" + id
 		}
-		return uniqueName, nil
-	} else {
-		catalogRef, err := reference.Parse(ctlgRef)
-		if err != nil {
-			return "", fmt.Errorf("error parsing source catalog %s: %v", catalogRef, err)
-		}
-		if o.TargetName != "" {
-			catalogRef.Name = o.TargetName
-		}
-		if o.TargetTag != "" {
-			catalogRef.ID = ""
-			catalogRef.Tag = o.TargetTag
-		}
-
-		return catalogRef.Exact(), nil
 	}
-
+	return uniqueName, nil
 }
 
 // parseImageName returns the registry, organisation, repository, tag and digest
@@ -184,7 +192,10 @@ func ParseImageReference(imageName string) (string, string, string, string, stri
 	imageName = strings.TrimSuffix(imageName, "/")
 	tmp := strings.Split(imageName, "/")
 
-	registry = tmp[0]
+	if len(tmp) > 1 {
+		registry = tmp[0]
+	}
+
 	img := strings.Split(tmp[len(tmp)-1], ":")
 	if len(tmp) > 2 {
 		org = strings.Join(tmp[1:len(tmp)-1], "/")
@@ -208,7 +219,7 @@ func ParseImageReference(imageName string) (string, string, string, string, stri
 // trimProtocol removes oci://, file:// or docker:// from
 // the parameter imageName
 func TrimProtocol(imageName string) string {
-	imageName = strings.TrimPrefix(imageName, "oci:")
+	imageName = strings.TrimPrefix(imageName, OCITransportPrefix)
 	imageName = strings.TrimPrefix(imageName, "file:")
 	imageName = strings.TrimPrefix(imageName, "docker:")
 	imageName = strings.TrimPrefix(imageName, "//")
