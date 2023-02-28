@@ -162,7 +162,8 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		o.ToMirror = mirror.Ref.Registry
-		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
+		// get the <namespace>/<image> portion of the docker reference only
+		o.UserNamespace = mirror.Ref.RepositoryName()
 		err = checkDockerReference(mirror, o.MaxNestedPaths)
 		if err != nil {
 			return err

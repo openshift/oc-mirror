@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -17,14 +18,14 @@ import (
 type RootOptions struct {
 	genericclioptions.IOStreams
 
-	Dir      string
-	LogLevel int
+	Dir      string // Assets directory
+	LogLevel int    // Number for the log level verbosity (valid 1-9, default is 0)
 
 	logfileCleanup func()
 }
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.Dir, "dir", "d", "oc-mirror-workspace", "Assets directory")
+	fs.StringVarP(&o.Dir, "dir", "d", config.DefaultWorkspaceName, "Assets directory")
 	fs.IntVarP(&o.LogLevel, "verbose", "v", o.LogLevel, "Number for the log level verbosity (valid 1-9, default is 0)")
 	if err := fs.MarkHidden("dir"); err != nil {
 		klog.Fatal(err.Error())

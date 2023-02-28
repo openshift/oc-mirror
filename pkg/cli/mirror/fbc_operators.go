@@ -15,22 +15,22 @@ import (
 
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/oci/layout"
-	"github.com/containers/image/v5/pkg/sysregistriesv2"
-	"github.com/opencontainers/go-digest"
-
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/pkg/cli/environment"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/pkg/image"
-	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+	"github.com/opencontainers/go-digest"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/image"
+	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 const (
@@ -316,13 +316,14 @@ func (o *MirrorOptions) findFBCConfig(ctx context.Context, imagePath, catalogCon
 
 	//Use the label in the config layer to determine the
 	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
+	// TODO: handle manifest list / single image
+	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest[0].ConfigInfo().Digest))
 	if err != nil {
 		return "", err
 	}
 	// iterate through each layer
-
-	for _, layer := range manifest.LayerInfos() {
+	// TODO: handle manifest list or single image
+	for _, layer := range manifest[0].LayerInfos() {
 		layerSha := layer.Digest.String()
 		layerDirName := layerSha[7:]
 		r, err := os.Open(imagePath + blobsPath + layerDirName)
@@ -368,7 +369,8 @@ func (o *MirrorOptions) GetCatalogConfigPath(ctx context.Context, imagePath stri
 
 	//Use the label in the config layer to determine the
 	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
+	// TODO: handle manifest list or single image
+	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest[0].ConfigInfo().Digest))
 	if err != nil {
 		return "", err
 	}
@@ -539,16 +541,45 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 
 // getManifest reads the manifest of the OCI FBC image
 // and returns it as a go structure of type manifest.Manifest
-func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
+func getManifest(ctx context.Context, imgSrc types.ImageSource) ([]manifest.Manifest, error) {
+	// initialize return value to empty slice
+	manifests := []manifest.Manifest{}
+
+	// get the manifest from the image source
 	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
 	}
-	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
-	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
+
+	// handle single and multi architecture images
+	if manifest.MIMETypeIsMultiImage(manifestType) {
+		// blob should be a manifest list
+		manifestList, err := manifest.ListFromBlob(manifestBlob, manifestType)
+		if err != nil {
+			return manifests, fmt.Errorf("unable to obtain manifest list of image : %w", err)
+		}
+		// walk through each digest in the manifest list, fetch its manifest and add it to the result
+		for _, digest := range manifestList.Instances() {
+			archSpecificManifestBytes, archSpecificManifestType, err := imgSrc.GetManifest(ctx, &digest)
+			if err != nil {
+				return manifests, fmt.Errorf("unable to obtain manifest of image digest %s : %w", digest, err)
+			}
+			archSpecificManifest, err := manifest.FromBlob(archSpecificManifestBytes, archSpecificManifestType)
+			if err != nil {
+				return manifests, fmt.Errorf("unable to unmarshal manifest of image : %w", err)
+			}
+			manifests = append(manifests, archSpecificManifest)
+		}
+	} else {
+		// blob should be a single image reference
+		singleImageManifest, err := manifest.FromBlob(manifestBlob, manifestType)
+		if err != nil {
+			return manifests, fmt.Errorf("unable to unmarshal manifest of image : %w", err)
+		}
+		manifests = append(manifests, singleImageManifest)
 	}
-	return manifest, nil
+
+	return manifests, nil
 }
 
 // getOCIImgSrcFromPath tries to "load" the OCI FBC image in the path

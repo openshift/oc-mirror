@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -184,27 +185,58 @@ mirror:
   - catalog: registry.com/ns/baz:v1.2
     targetTag: v1.3
   - catalog: registry.com/ns/baz:v1.2
+  - catalog: oci:///tmp
+  - catalog: oci:///tmp/foo/bar
+  - catalog: oci:///tmp
+    targetName: baz
+  - catalog: oci:///tmp/foo/bar
+    targetName: baz
 `
 
+	// FUTURE: a new PR is likely to change away from TargetName to TargetCatalog
+	// and GetUniqueName is might change too. However, making this into a
+	// table driven test makes sense at this point, so adding that now as well as
+	// additional OCI tests
+	type testCase struct {
+		expected string
+	}
+	tests := []testCase{
+		{
+			expected: "registry.com/ns/bar:v1.2",
+		},
+		{
+			expected: "registry.com/ns/foo:v1.3",
+		},
+		{
+			expected: "registry.com/ns/baz:v1.3",
+		},
+		{
+			expected: "registry.com/ns/baz:v1.2",
+		},
+		{
+			expected: "tmp",
+		},
+		{
+			expected: "tmp/foo/bar",
+		},
+		{
+			expected: "baz",
+		},
+		{
+			expected: "tmp/baz",
+		},
+	}
 	cfg, err := LoadConfig([]byte(ctlgCfg))
 	require.NoError(t, err)
-	require.Len(t, cfg.Mirror.Operators, 4)
-	ctlgOne, err := cfg.Mirror.Operators[0].GetUniqueName()
-	require.NoError(t, err)
-	require.Equal(t, ctlgOne, "registry.com/ns/bar:v1.2")
-	require.NotEqual(t, ctlgOne, cfg.Mirror.Operators[0].Catalog)
-	ctlgTwo, err := cfg.Mirror.Operators[1].GetUniqueName()
-	require.NoError(t, err)
-	require.Equal(t, ctlgTwo, "registry.com/ns/foo:v1.3")
-	require.NotEqual(t, ctlgTwo, cfg.Mirror.Operators[1].Catalog)
-	ctlgThree, err := cfg.Mirror.Operators[2].GetUniqueName()
-	require.NoError(t, err)
-	require.Equal(t, ctlgThree, "registry.com/ns/baz:v1.3")
-	require.NotEqual(t, ctlgThree, cfg.Mirror.Operators[2].Catalog)
-	ctlgFour, err := cfg.Mirror.Operators[3].GetUniqueName()
-	require.NoError(t, err)
-	require.Equal(t, ctlgFour, "registry.com/ns/baz:v1.2")
-	require.Equal(t, ctlgFour, cfg.Mirror.Operators[3].Catalog)
+	require.Len(t, cfg.Mirror.Operators, 8)
+
+	for index, testCase := range tests {
+		t.Run(fmt.Sprintf("test %d", index+1), func(t *testing.T) {
+			got, err := cfg.Mirror.Operators[index].GetUniqueName()
+			require.NoError(t, err)
+			require.Equal(t, testCase.expected, got)
+		})
+	}
 }
 
 func TestLoadMetadata(t *testing.T) {

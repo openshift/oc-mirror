@@ -124,6 +124,15 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 }
 
 func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
+
+	// TODO: it seems like we need something like getImageDigests here
+	// // get the digests to process... could be more than one if a manifest list image is provided
+	// // we do this here so we don't have to do it multiple times within the renderDC function
+	// digestsToProcess, err := getImageDigests(ctx, ctlg.Catalog, o.insecure)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error fetching digests for catalog %s: %v", ctlg.Catalog, err)
+	// }
+
 	ctlgName, err := ctlg.GetUniqueName()
 	if err != nil {
 		return v1alpha2.OperatorMetadata{}, err

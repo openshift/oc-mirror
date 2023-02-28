@@ -111,7 +111,7 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 	if err != nil {
 		return refs, fmt.Errorf("error creating OCI layout: %v", err)
 	}
-	if err := imgBuilder.Run(ctx, graphImage.Ref.Exact(), layoutPath, update, add); err != nil {
+	if err := imgBuilder.Run(ctx, graphImage.Ref.Exact(), layoutPath, nil, update, add); err != nil {
 		return refs, nil
 	}
 

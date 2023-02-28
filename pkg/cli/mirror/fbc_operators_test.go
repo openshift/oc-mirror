@@ -16,18 +16,18 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
-	"github.com/otiai10/copy"
-
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
+	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/require"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"github.com/operator-framework/operator-registry/alpha/property"
-	"github.com/stretchr/testify/require"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 const (
@@ -140,7 +140,8 @@ func TestGetManifest(t *testing.T) {
 				require.EqualError(t, err, c.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, c.layerCount, len(manifest.LayerInfos()))
+				// TODO: handle potential manifest list
+				require.Equal(t, c.layerCount, len(manifest[0].LayerInfos()))
 			}
 
 		})
