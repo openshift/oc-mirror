@@ -268,7 +268,7 @@ function oci_local_all {
     test/e2e/graph/main & PID_GO=$! 
     echo -e "go cincinnatti web service PID: ${PID_GO}"
     # copy relevant files and start the mirror process
-    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy"
+    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy --use-oci-feature"
 
     # use crane digest to verify
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/redhatgov/oc-mirror-dev:bar-v0.1.0
