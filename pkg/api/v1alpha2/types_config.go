@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	"path"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -160,24 +161,16 @@ func (o Operator) GetUniqueName() (string, error) {
 		if !o.IsFBCOCI() && reg != "" {
 			// reg is included in the name only in case of registry based catalogs.
 			// the parsed reg is not relevant in case of OCI, because the parsed ref is simply a filesystem path here
-			uniqueName += reg + "/"
-		}
-		uniqueName += o.TargetCatalog
-	} else {
-		if reg != "" {
 			uniqueName += reg
 		}
-		if ns != "" {
-			uniqueName = strings.Join([]string{uniqueName, ns}, "/")
-		}
+		uniqueName = path.Join(uniqueName, o.TargetCatalog)
+	} else {
+		uniqueName = path.Join(uniqueName, reg, ns)
+
 		if o.TargetName != "" {
 			name = o.TargetName
 		}
-		if uniqueName != "" {
-			uniqueName = strings.Join([]string{uniqueName, name}, "/")
-		} else {
-			uniqueName = name
-		}
+		uniqueName = path.Join(uniqueName, name)
 	}
 	if tag != "" {
 		uniqueName = uniqueName + ":" + tag

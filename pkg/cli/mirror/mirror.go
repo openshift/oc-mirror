@@ -600,10 +600,10 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	}
 
 	targetBackend, err := storage.NewRegistryBackend(targetCfg, o.Dir)
+	if err != nil {
+		return err
+	}
 	if !o.UseOCIFeature {
-		if err != nil {
-			return err
-		}
 		var curr v1alpha2.Metadata
 		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
 		if err := o.checkSequence(meta, curr, berr); err != nil {
