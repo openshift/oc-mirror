@@ -22,7 +22,8 @@ TESTCASES[16]="skip_deps"
 TESTCASES[17]="helm_local"
 TESTCASES[18]="no_updates_exist"
 TESTCASES[19]="oci_catalog"
-TESTCASES[20]="headsonly_diff_with_target"
+TESTCASES[20]="oci_local_all"
+TESTCASES[21]="headsonly_diff_with_target"
 
 # Test full catalog mode.
 function full_catalog() {
@@ -254,4 +255,28 @@ function oci_catalog {
     # catalog : original is in docker-v2 format, so digest changes after transformation to oci
     #crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f74bd3f08c971fafd64c9c95fe9839f54bf776d00ac363f2c3882c0e37c946ef
     #check_bundles cannot be used for now, tags not set in disconnected registry
+}
+
+# Test OCI local release,catalog,additionalImages
+function oci_local_all {
+    # setup url to lookup release info (certificate issued for localhost.localdomain)release-images:alpine-x86_64
+    export UPDATE_URL_OVERRIDE="https://localhost.localdomain:3443/graph"
+    # ensure cincinnati client does not reject the rquest - due to untrusted CA Authority
+    export SSL_CERT_FILE=test/e2e/graph/server.crt
+    # build and start the service
+    go build -o test/e2e/graph test/e2e/graph/main.go 
+    test/e2e/graph/main & PID_GO=$! 
+    echo -e "go cincinnatti web service PID: ${PID_GO}"
+    # copy relevant files and start the mirror process
+    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy --use-oci-feature"
+
+    # use crane digest to verify
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/redhatgov/oc-mirror-dev:bar-v0.1.0
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/openshift/release-images:alpine-x86_64
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/openshift/release:alpine-x86_64-alpime
+
+    rm -rf test/e2e/graph/main
+    rm -rf test/e2e/graph/server*.*
+    unset SSL_CERT_FILE
+    unset UPDATE_URL_OVERRIDE
 }

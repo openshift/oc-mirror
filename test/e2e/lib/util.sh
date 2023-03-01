@@ -13,8 +13,27 @@ function run_cmd() {
 
 # cleanup_all will kill any running registry processes
 function cleanup_all() {
-    [[ -n $PID_DISCONN ]] && kill $PID_DISCONN
-    [[ -n $PID_CONN ]] && kill $PID_CONN
+    # check the PID's before 'killing'
+    if [[ -n $PID_DISCONN ]];
+    then
+        kill $PID_DISCONN
+        PID_DISONN=""
+    fi
+
+    if [[ -n $PID_CONN ]];
+    then
+        kill $PID_CONN
+        PID_CON=""
+    fi
+
+    if [[ -n $PID_GO ]];
+    then
+       kill $PID_GO
+       PID_GO=""
+    fi
+
+    #[[ -n $PID_DISCONN ]] && kill $PID_DISCONN
+    #[[ -n $PID_CONN ]] && kill $PID_CONN
 }
 
 # cleanup_conn will only kill the connected registry
@@ -59,6 +78,8 @@ function setup_reg() {
   registry serve ${DATA_TMP}/disconn.yaml &> ${DATA_TMP}/doutput.log &
   PID_DISCONN=$!
 
+  # avoid unbound variable error
+  PID_GO=""
   echo -e "disconnected registry PID: $PID_DISCONN"
   echo -e "connected registry PID: $PID_CONN"
 }

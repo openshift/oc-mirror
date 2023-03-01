@@ -1,0 +1,22 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: DATA_TMP
+mirror:
+  platform:
+    channels:
+    - name: stable-0.1
+      maxVersion: 0.2.0
+      minVersion: 0.2.0
+      type: okd
+    graph: false
+  operators:
+  - catalog: oci://DATA_TMP/mirror_oci/oc-mirror-dev
+    packages:
+    - name: baz
+      minVersion: 1.0.1
+      maxVersion: 1.0.1
+  additionalImages:
+    - name: quay.io/redhatgov/oc-mirror-dev:bar-v0.1.0
