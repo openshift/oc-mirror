@@ -131,10 +131,14 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 	return mapping, nil
 }
 
-func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.RelatedImage, destReg, namespace string) error {
+func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping image.TypedImageMapping, img declcfg.RelatedImage, destReg, namespace string) error {
 	if img.Image == "" {
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
+	}
+	reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), img.Image)
+	if err != nil {
+		klog.Warningf("Cannot find registry for %s", img.Image)
 	}
 
 	from, to := "", ""
@@ -143,18 +147,16 @@ func addRelatedImageToMapping(mapping image.TypedImageMapping, img declcfg.Relat
 		return fmt.Errorf("invalid related image %s: repository name empty", img.Image)
 	}
 
-	tmpIR, err := image.ParseReference(img.Image)
-	if err != nil {
-		return err
-	}
-	// The registry is needed in from, as this will be used to generate ICSP from mapping
-	var parts []string
-	for _, s := range []string{tmpIR.Ref.Registry, tmpIR.Ref.Namespace, tmpIR.Ref.Name} {
-		if strings.TrimSpace(s) != "" {
-			parts = append(parts, s)
+	from = img.Image
+
+	if reg != nil && len(reg.Mirrors) > 0 {
+		// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
+		mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+img.Image, reg.Prefix, o.remoteRegFuncs)
+		if err == nil {
+			img.Image = mirroredImage
 		}
 	}
-	from = strings.Join(parts, "/")
+
 	to = destReg
 	if namespace != "" {
 		to = strings.Join([]string{to, namespace}, "/")
