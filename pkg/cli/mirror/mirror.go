@@ -266,6 +266,10 @@ func (o *MirrorOptions) Validate() error {
 		return fmt.Errorf("oci-registries-config flag can only be used with the --use-oci-feature flag")
 	}
 
+	if o.SkipPruning {
+		klog.Infof("Skip pruning - N.B. this feature is unsupported")
+	}
+
 	return nil
 }
 
