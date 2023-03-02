@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -221,6 +222,29 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 	if err != nil {
 		return err
 	}
+
+	// This is an unfortunate hack to the index.json file that seems to be necessary
+	// because when pushing to a docker distribution registry running locally
+	// you end up getting "manifest invalid", which the docker
+	// log indicates is due to the wrong media type. Stripping the
+	// media type off for now... worst case we add it back with OCI media type.
+	tempIndexManifest, err := idx.IndexManifest()
+	if err != nil {
+		return err
+	}
+	tempIndexManifest.MediaType = ""
+	rawIndex, err := json.MarshalIndent(tempIndexManifest, "", "   ")
+	if err != nil {
+		return err
+	}
+	layoutPath.WriteFile("index.json", rawIndex, os.ModePerm)
+
+	// Pull updated index again
+	idx, err = layoutPath.ImageIndex()
+	if err != nil {
+		return err
+	}
+
 	// push to the remote
 	return remote.WriteIndex(tag, idx, b.RemoteOpts...)
 }
