@@ -417,6 +417,14 @@ func TestGetDigestFromOCILayout(t *testing.T) {
 				Hex:       "c7b6944911848ce39b44ed660d95fb54d69bbd531de724c7ce6fc9f743c0b861",
 			},
 		},
+		{
+			name:       "single arch",
+			layoutPath: layout.Path("testdata/artifacts/rhop-ctlg-oci"),
+			platformIn: OperatorCatalogPlatform{
+				isIndex: false,
+			},
+			expectedHash: nil,
+		},
 	}
 
 	for _, test := range tests {
