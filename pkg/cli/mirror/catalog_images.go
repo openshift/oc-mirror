@@ -60,7 +60,7 @@ type imageDetails struct {
 	*/
 	indexJsonPath string
 	platform      OperatorCatalogPlatform // platform associated with this image
-	hash          v1.Hash                 // the hash of this image pulled from the OCI layout directory
+	hash          *v1.Hash                // the hash of this image pulled from the OCI layout directory (could be nil for single arch images)
 }
 
 /*
@@ -235,15 +235,17 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			}
 			// reconstruct the platform from string and use that platform to lookup the matching platform image and get its hash
 			platform := *NewOperatorCatalogPlatform(platformString)
-			hash, err := getDigestFromOCILayout(ctx, layout.Path(filepath.Join(fullPathToRepoDir, config.LayoutsDir)), platform)
+			layoutPath := layout.Path(filepath.Join(fullPathToRepoDir, config.LayoutsDir))
+			hash, err := getDigestFromOCILayout(ctx, layoutPath, platform)
 			if err != nil {
 				return err
 			}
+
 			info.fullPathToRepoDir = fullPathToRepoDir
 			info.imageDetails = append(info.imageDetails, imageDetails{
 				indexJsonPath: fpath,
 				platform:      platform,
-				hash:          *hash,
+				hash:          hash, // this could be nil for single images
 			})
 
 			// update the map with the updated info
@@ -346,8 +348,16 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogRefs cata
 				cfg.Config.Cmd = []string{"serve", "/configs"}
 				cfg.Config.Entrypoint = []string{"/bin/opm"}
 			}
-			// Use the hash here so that the image builder only updates that image
-			if err := imgBuilder.Run(ctx, refExact, layoutPath, match.Digests(imageDetail.hash), update, layers...); err != nil {
+
+			var matcher match.Matcher
+			if imageDetail.hash != nil {
+				// Use the hash here so that the image builder only updates that image
+				matcher = match.Digests(*imageDetail.hash)
+			} else {
+				// no hash (likely because this is a single arch image) so don't define a matcher so we update all images
+				matcher = nil
+			}
+			if err := imgBuilder.Run(ctx, refExact, layoutPath, matcher, update, layers...); err != nil {
 				return fmt.Errorf("error building catalog layers: %v", err)
 			}
 		}
