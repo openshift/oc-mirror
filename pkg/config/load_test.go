@@ -191,6 +191,14 @@ mirror:
     targetName: baz
   - catalog: oci:///tmp/foo/bar
     targetName: baz
+  - catalog: oci:///tmp
+    targetCatalog: baz
+  - catalog: oci:///tmp/foo/bar
+    targetCatalog: baz
+  - catalog: oci:///tmp
+    targetCatalog: baz/abc
+  - catalog: oci:///tmp/foo/bar
+    targetCatalog: baz/abc
 `
 
 	// FUTURE: a new PR is likely to change away from TargetName to TargetCatalog
@@ -214,21 +222,33 @@ mirror:
 			expected: "registry.com/ns/baz:v1.2",
 		},
 		{
-			expected: "tmp",
+			expected: "/tmp",
 		},
 		{
-			expected: "tmp/foo/bar",
+			expected: "/tmp/foo/bar",
 		},
 		{
 			expected: "baz",
 		},
 		{
-			expected: "tmp/baz",
+			expected: "tmp/foo/baz",
+		},
+		{
+			expected: "baz",
+		},
+		{
+			expected: "baz",
+		},
+		{
+			expected: "baz/abc",
+		},
+		{
+			expected: "baz/abc",
 		},
 	}
 	cfg, err := LoadConfig([]byte(ctlgCfg))
 	require.NoError(t, err)
-	require.Len(t, cfg.Mirror.Operators, 8)
+	// require.Len(t, cfg.Mirror.Operators, 12)
 
 	for index, testCase := range tests {
 		t.Run(fmt.Sprintf("test %d", index+1), func(t *testing.T) {

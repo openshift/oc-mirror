@@ -125,7 +125,7 @@ func TestGetManifest(t *testing.T) {
 			desc:       "index is unmarshallable fails",
 			inRef:      filepath.Join(wdir, rottenManifest),
 			layerCount: 0,
-			err:        "unable to unmarshall manifest of image : unexpected end of JSON input",
+			err:        "unable to unmarshal manifest of image : unexpected end of JSON input",
 		},
 	}
 	for _, c := range cases {
