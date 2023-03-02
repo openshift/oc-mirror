@@ -451,7 +451,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		// create mappings for the related images that will moved from the workspace to the final destination
 		for _, i := range relatedImages {
 			// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-			err := addRelatedImageToMapping(result, i, o.ToMirror, "")
+			err := o.addRelatedImageToMapping(ctx, result, i, o.ToMirror, "")
 			if err != nil {
 				return nil, err
 			}

@@ -1290,9 +1290,11 @@ func TestAddCatalogToMapping(t *testing.T) {
 		})
 	}
 }
+
 func TestAddRelatedImageToMapping(t *testing.T) {
 	type spec struct {
 		desc       string
+		options    *MirrorOptions
 		img        declcfg.RelatedImage
 		destReg    string
 		namespace  string
@@ -1304,6 +1306,11 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			desc:       "empty image ref is ignored",
 			expErr:     "",
 			expMapping: image.TypedImageMapping{},
+			options: &MirrorOptions{
+				From:      v1alpha2.OCITransportPrefix + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
+			},
 			img: declcfg.RelatedImage{
 				Name:  "noRef",
 				Image: "",
@@ -1315,6 +1322,11 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			desc:       "destination namespace is uppercase fails",
 			expErr:     "\"localhost:5000/disconnectedOCP/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding\" is not a valid image reference: repository name must be lowercase",
 			expMapping: image.TypedImageMapping{},
+			options: &MirrorOptions{
+				From:      v1alpha2.OCITransportPrefix + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
+			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
@@ -1352,6 +1364,11 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				},
+			},
+			options: &MirrorOptions{
+				From:      v1alpha2.OCITransportPrefix + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
 			},
 			img: declcfg.RelatedImage{
 				Name:  "cluster-logging-operator",
@@ -1391,6 +1408,11 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
+			options: &MirrorOptions{
+				From:      v1alpha2.OCITransportPrefix + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
+			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
@@ -1429,6 +1451,11 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				},
 			},
+			options: &MirrorOptions{
+				From:      v1alpha2.OCITransportPrefix + testdata,
+				ToMirror:  "test.registry.io",
+				OutputDir: testdata,
+			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
@@ -1440,7 +1467,7 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			mapping := image.TypedImageMapping{}
-			err := addRelatedImageToMapping(mapping, c.img, c.destReg, c.namespace)
+			err := c.options.addRelatedImageToMapping(context.TODO(), mapping, c.img, c.destReg, c.namespace)
 
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)
