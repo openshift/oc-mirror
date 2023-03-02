@@ -160,7 +160,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 				// results in one of these:
 				//   <some path>/src/catalogs/<repoPath>
 				//   <some path>/src/catalogs/<repoPath>/multi/<platform>
-				slashPath = strings.TrimSuffix(slashPath, config.IndexDir)
+				slashPath = path.Dir(slashPath)
 			} else {
 				// if the index.json is not within a index folder, we've discovered the wrong file... move on to next item
 				return nil
