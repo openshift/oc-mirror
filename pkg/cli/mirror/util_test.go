@@ -311,13 +311,12 @@ func TestGetImageDigests(t *testing.T) {
 
 			// create expected / actual values in common format... lump all of the architectures together in this slice
 			actualDigestsAsString := []string{}
-			for platform, digests := range digestsMap {
+			for platform, catalogMetadata := range digestsMap {
 				// we should have a platform value that's not a "zero" value
 				require.NotZero(t, platform)
-				// now process the digests
-				for _, digest := range digests {
-					actualDigestsAsString = append(actualDigestsAsString, digest.Name())
-				}
+
+				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.catalogRef.Name())
+
 			}
 
 			expectedDigestsAsString := []string{}
@@ -361,13 +360,11 @@ func TestGetImageDigestsFromOCILayout(t *testing.T) {
 			require.Len(t, digestsMap, test.expectedArchitectures)
 			// create expected / actual values in common format... lump all of the architectures together in this slice
 			actualDigestsAsString := []string{}
-			for platform, digests := range digestsMap {
+			for platform, catalogMetadata := range digestsMap {
 				// we should have a platform value that's not a "zero" value
 				require.NotZero(t, platform)
-				// now process the digests
-				for _, digest := range digests {
-					actualDigestsAsString = append(actualDigestsAsString, digest.Name())
-				}
+
+				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.catalogRef.Name())
 			}
 
 			expectedDigestsAsString := []string{}
@@ -375,8 +372,8 @@ func TestGetImageDigestsFromOCILayout(t *testing.T) {
 				expectedDigestsAsString = append(expectedDigestsAsString, fmt.Sprintf("%s@%s", test.imageRef, expectedDigest))
 			}
 
-			// check expected / actual values
-			require.Equal(t, expectedDigestsAsString, actualDigestsAsString)
+			// check expected / actual values (order does not matter)
+			require.ElementsMatch(t, expectedDigestsAsString, actualDigestsAsString)
 		})
 	}
 }

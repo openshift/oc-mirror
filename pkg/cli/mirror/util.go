@@ -186,16 +186,16 @@ This OCI layout path could refer to a "manifest list" or an "image".
 
 # Returns
 
-• map[OperatorCatalogPlatform][]name.Digest: If no error occurs, returns a map whose key is Platform
-and value is a slice of one or more image digest references for that architecture.
+• map[OperatorCatalogPlatform]CatalogMetadata: If no error occurs, returns a map whose key is OperatorCatalogPlatform
+and value is CatalogMetadata with its image digest references set.
 If an error occurs the map will always be initialized (i.e non-nil) but could have partial results.
 
 • error: non-nil if an error occurs, nil otherwise
 */
-func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Path, insecure bool) (map[OperatorCatalogPlatform][]name.Reference, error) {
+func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Path, insecure bool) (map[OperatorCatalogPlatform]CatalogMetadata, error) {
 
 	// initialize return values
-	digestsMap := map[OperatorCatalogPlatform][]name.Reference{}
+	digestsMap := map[OperatorCatalogPlatform]CatalogMetadata{}
 
 	reference, err := name.ParseReference(imageRef, getNameOpts(insecure)...)
 	if err != nil {
@@ -207,18 +207,17 @@ func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Pa
 		if platformKey == nil {
 			return errors.New("no platform key was provided, unable to update map")
 		}
-		var digests []name.Reference
-		if existingDigests, exists := digestsMap[*platformKey]; exists {
-			// we'll be updating the existing digests
-			digests = existingDigests
-		} else {
-			// does not exist yet, initialize slice
-			digests = []name.Reference{}
-		}
-		digests = append(digests, *digestReference)
 
-		// update the map with the newly updated digests
-		digestsMap[*platformKey] = digests
+		if existingCatalogMetadata, exists := digestsMap[*platformKey]; exists {
+			// we'll be updating the existing digests
+			existingCatalogMetadata.catalogRef = digestReference
+			digestsMap[*platformKey] = existingCatalogMetadata
+		} else {
+			// does not exist yet, initialize
+			digestsMap[*platformKey] = CatalogMetadata{
+				catalogRef: digestReference,
+			}
+		}
 		return nil
 	}
 

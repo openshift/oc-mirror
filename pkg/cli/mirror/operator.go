@@ -70,8 +70,8 @@ func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha2.ImageSetCon
 		ctx context.Context,
 		reg *containerdregistry.Registry,
 		ctlg v1alpha2.Operator,
-		digestsToProcess map[OperatorCatalogPlatform][]name.Reference,
-	) (map[OperatorCatalogPlatform]CatalogMetadata, error) {
+		digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+	) error {
 		return o.renderDCDiff(ctx, reg, ctlg, lastRun, digestsToProcess)
 	}
 	return o.run(ctx, cfg, f)
@@ -86,119 +86,6 @@ func (o *OperatorOptions) complete() {
 	if o.Logger == nil {
 		o.Logger = logrus.NewEntry(logrus.New())
 	}
-}
-
-// satisfy the stringer interface
-var _ fmt.Stringer = &OperatorCatalogPlatform{}
-
-// OperatorCatalogPlatform represents the "platform" that a docker image runs on, which consists of
-// a combination of os / architecture / variant.
-type OperatorCatalogPlatform struct {
-	os           string // this is likely only ever linux, but this allows for future expansion
-	architecture string // this should be amd64 | ppc64le | s390x
-	variant      string // this is likely to always be empty string, but architectures do have variants (e.g. arm32 has v6, v7 and v8 variants)
-	isIndex      bool   // True if the image was associated with a "manifest list" (i.e. a "index" image), false otherwise for "single" architecture images
-}
-
-// String returns combination of os / architecture / variant for images that are associated with a "manifest list"
-// and empty string otherwise.
-func (p *OperatorCatalogPlatform) String() string {
-	if p.isIndex {
-		parts := []string{}
-		if p.os != "" {
-			parts = append(parts, p.os)
-		}
-		if p.architecture != "" {
-			parts = append(parts, p.architecture)
-		}
-		if p.variant != "" {
-			parts = append(parts, p.variant)
-		}
-		return strings.Join(parts, "-")
-	}
-	return ""
-}
-
-// getKnownOSValues returns known set of os values (see https://github.com/opencontainers/image-spec/blob/v1.0.0/image-index.md)
-func getKnownOSValues() map[string]struct{} {
-	return map[string]struct{}{
-		"aix":       {},
-		"android":   {},
-		"darwin":    {},
-		"dragonfly": {},
-		"freebsd":   {},
-		"illumos":   {},
-		"ios":       {},
-		"js":        {},
-		"linux":     {},
-		"netbsd":    {},
-		"openbsd":   {},
-		"plan9":     {},
-		"solaris":   {},
-		"windows":   {},
-	}
-}
-
-// getKnownArchitectureValues returns known set of arch values (see https://github.com/opencontainers/image-spec/blob/v1.0.0/image-index.md)
-func getKnownArchitectureValues() map[string]struct{} {
-	return map[string]struct{}{
-		"ppc64":    {},
-		"386":      {},
-		"amd64":    {},
-		"arm":      {},
-		"arm64":    {},
-		"wasm":     {},
-		"loong64":  {},
-		"mips":     {},
-		"mipsle":   {},
-		"mips64":   {},
-		"mips64le": {},
-		"ppc64le":  {},
-		"riscv64":  {},
-		"s390x":    {},
-	}
-}
-
-// getKnownVariantValues returns known set of variant values (see https://github.com/opencontainers/image-spec/blob/v1.0.0/image-index.md)
-func getKnownVariantValues() map[string]struct{} {
-	return map[string]struct{}{
-		"v5": {},
-		"v6": {},
-		"v7": {},
-		"v8": {},
-	}
-}
-
-/*
-This function parses a string created by OperatorCatalogPlatform.String() and creates a
-OperatorCatalogPlatform as a result.
-*/
-func NewOperatorCatalogPlatform(platformAsString string) *OperatorCatalogPlatform {
-	result := &OperatorCatalogPlatform{}
-	if platformAsString != "" {
-		// this is multi arch
-		for _, part := range strings.Split(platformAsString, "-") {
-			if _, found := getKnownOSValues()[part]; found {
-				result.os = part
-				continue
-			}
-			if _, found := getKnownArchitectureValues()[part]; found {
-				result.architecture = part
-				continue
-			}
-			if _, found := getKnownVariantValues()[part]; found {
-				result.variant = part
-				continue
-			}
-		}
-		result.isIndex = true
-	} else {
-		// best we can do here is set the flag correctly and return
-		result.isIndex = false
-		return result
-	}
-
-	return result
 }
 
 // ErrorMessagePrefix creates an error message prefix that handles both single and multi architecture images.
@@ -220,7 +107,7 @@ of DeclarativeConfig
 type CatalogMetadata struct {
 	dc         *declcfg.DeclarativeConfig // a DeclarativeConfig instance
 	ic         v1alpha2.IncludeConfig     // a IncludeConfig instance
-	catalogRef string                     // the reference used to obtain DeclarativeConfig and IncludeConfig
+	catalogRef name.Reference             // the reference used to obtain DeclarativeConfig and IncludeConfig
 }
 
 /*
@@ -235,11 +122,12 @@ Currently renderDCFull and renderDCDiff implement this function signature.
 
 • v1alpha2.Operator: operator metadata that should be processed
 
-• map[OperatorCatalogPlatform][]name.Reference: the pre-fetched digest references by platform that correspond to the v1alpha2.Operator.Catalog reference
+• map[OperatorCatalogPlatform]CatalogMetadata: This is an in/out parameter, where the CatalogMetadata value
+initially contains a pre-fetched digest reference that corresponds to a specific platform. These digest values
+originate with a v1alpha2.Operator.Catalog reference. The CatalogMetadata is augmented with DeclarativeConfig
+and IncludeConfig data by the time this function returns.
 
 # Returns
-
-• map[OperatorCatalogPlatform]CatalogMetadata: the resulting declarative config and IncludeConfig data by platform
 
 • error: non-nil if an error occurs, nil otherwise
 */
@@ -247,8 +135,8 @@ type renderDCFunc func(
 	context.Context,
 	*containerdregistry.Registry,
 	v1alpha2.Operator,
-	map[OperatorCatalogPlatform][]name.Reference,
-) (map[OperatorCatalogPlatform]CatalogMetadata, error)
+	map[OperatorCatalogPlatform]CatalogMetadata,
+) error
 
 func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
 	o.complete()
@@ -293,12 +181,12 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 			return nil, fmt.Errorf("error fetching digests for catalog %s: %v", ctlg.Catalog, err)
 		}
 		// Render the catalog to mirror into a declarative config.
-		results, err := renderDC(ctx, reg, ctlg, digestsToProcess)
+		err = renderDC(ctx, reg, ctlg, digestsToProcess)
 		if err != nil {
 			return nil, o.checkValidationErr(err)
 		}
 
-		mappings, err := o.plan(ctx, results, ctlgRef, targetCtlg)
+		mappings, err := o.plan(ctx, digestsToProcess, ctlgRef, targetCtlg)
 		if err != nil {
 			return nil, err
 		}
@@ -344,11 +232,8 @@ func (o *OperatorOptions) renderDCFull(
 	ctx context.Context,
 	reg *containerdregistry.Registry,
 	ctlg v1alpha2.Operator,
-	digestsToProcess map[OperatorCatalogPlatform][]name.Reference,
-) (results map[OperatorCatalogPlatform]CatalogMetadata, err error) {
-	// initialize results with empty map
-	results = map[OperatorCatalogPlatform]CatalogMetadata{}
-
+	digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+) (err error) {
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
 	full := !ctlg.IsHeadsOnly() && !hasInclude
@@ -365,63 +250,66 @@ func (o *OperatorOptions) renderDCFull(
 	// Now we need to process each architecture specific image that was discovered.
 	// Failures encountered during processing of any architecture abandons processing
 	// from that point forward.
-	for platformKey, digests := range digestsToProcess {
-		for _, digest := range digests {
-			catalog := digest.Name()
-			catLogger := o.Logger.WithField("catalog", catalog)
-			var dc *declcfg.DeclarativeConfig
-			var ic v1alpha2.IncludeConfig
-			if full {
-				// Mirror the entire catalog.
-				dc, err = action.Render{
-					Registry: reg,
-					Refs:     []string{catalog},
-				}.Run(ctx)
-				if err != nil {
-					return results, err
-				}
-				// use the include config from v1alpha2.Operator
-				ic = ctlg.IncludeConfig
-			} else {
-				// Generate and mirror a heads-only diff using only the catalog as a new ref.
-				dic, derr := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
-				if derr != nil {
-					return results, derr
-				}
-				dc, err = diff.Diff{
-					Registry:         reg,
-					NewRefs:          []string{catalog},
-					Logger:           catLogger,
-					IncludeConfig:    dic,
-					SkipDependencies: ctlg.SkipDependencies,
-					HeadsOnly:        ctlg.IsHeadsOnly(),
-				}.Run(ctx)
-				if err != nil {
-					return results, err
-				}
-
-				var icManager operator.IncludeConfigManager
-				if hasInclude {
-					icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
-				} else {
-					icManager = operator.NewCatalogStrategy()
-				}
-
-				// Render ic for incorporation into the metadata
-				ic, err = icManager.ConvertDCToIncludeConfig(*dc)
-				if err != nil {
-					return results, fmt.Errorf("error converting declarative config to include config: %v", err)
-				}
-
-				if err := o.verifyDC(dic, dc); err != nil {
-					return results, err
-				}
+	for platformKey, catalogMetadata := range digestsToProcess {
+		digest := catalogMetadata.catalogRef
+		catalog := digest.Name()
+		catLogger := o.Logger.WithField("catalog", catalog)
+		var dc *declcfg.DeclarativeConfig
+		var ic v1alpha2.IncludeConfig
+		if full {
+			// Mirror the entire catalog.
+			dc, err = action.Render{
+				Registry: reg,
+				Refs:     []string{catalog},
+			}.Run(ctx)
+			if err != nil {
+				return err
 			}
-			results[platformKey] = CatalogMetadata{dc: dc, ic: ic, catalogRef: catalog}
+			// use the include config from v1alpha2.Operator
+			ic = ctlg.IncludeConfig
+		} else {
+			// Generate and mirror a heads-only diff using only the catalog as a new ref.
+			dic, derr := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+			if derr != nil {
+				return derr
+			}
+			dc, err = diff.Diff{
+				Registry:         reg,
+				NewRefs:          []string{catalog},
+				Logger:           catLogger,
+				IncludeConfig:    dic,
+				SkipDependencies: ctlg.SkipDependencies,
+				HeadsOnly:        ctlg.IsHeadsOnly(),
+			}.Run(ctx)
+			if err != nil {
+				return err
+			}
+
+			var icManager operator.IncludeConfigManager
+			if hasInclude {
+				icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
+			} else {
+				icManager = operator.NewCatalogStrategy()
+			}
+
+			// Render ic for incorporation into the metadata
+			ic, err = icManager.ConvertDCToIncludeConfig(*dc)
+			if err != nil {
+				return fmt.Errorf("error converting declarative config to include config: %v", err)
+			}
+
+			if err := o.verifyDC(dic, dc); err != nil {
+				return err
+			}
 		}
+
+		// update the local catalogMetadata value, and update the map with this copy
+		catalogMetadata.dc = dc
+		catalogMetadata.ic = ic
+		digestsToProcess[platformKey] = catalogMetadata
 	}
 
-	return results, nil
+	return nil
 }
 
 // renderDCDiff renders data in ctlg into a declarative config for o.PlanDiff().
@@ -432,11 +320,8 @@ func (o *OperatorOptions) renderDCDiff(
 	reg *containerdregistry.Registry,
 	ctlg v1alpha2.Operator,
 	lastRun v1alpha2.PastMirror,
-	digestsToProcess map[OperatorCatalogPlatform][]name.Reference,
-) (results map[OperatorCatalogPlatform]CatalogMetadata, err error) {
-	// initialize results with empty map
-	results = map[OperatorCatalogPlatform]CatalogMetadata{}
-
+	digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+) (err error) {
 	// initialize map with previous catalogs by name for easy lookup
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
 	for _, pastCtlg := range lastRun.Operators {
@@ -446,7 +331,8 @@ func (o *OperatorOptions) renderDCDiff(
 	// now we need to process each architecture specific image that was discovered
 	// failures encountered during processing of any architecture abandons processing
 	// from that point forward
-	for platformKey, digests := range digestsToProcess {
+	for platformKey, catalogMetadata := range digestsToProcess {
+		digest := catalogMetadata.catalogRef
 
 		// TODO: this merged code needs to be addressed in some fashion
 		// ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
@@ -464,7 +350,7 @@ func (o *OperatorOptions) renderDCDiff(
 
 		if err != nil {
 			// stop all processing since we hit an error
-			return results, err
+			return err
 		}
 		prev, found := prevCatalog[uniqueName]
 
@@ -480,87 +366,87 @@ func (o *OperatorOptions) renderDCDiff(
 		catalogHeadsOnly := ctlg.IsHeadsOnly() && !hasInclude
 		includeWithHeadsOnly := ctlg.IsHeadsOnly() && hasInclude
 
-		for _, digest := range digests {
-			catalog := digest.Name()
+		catalog := digest.Name()
 
-			// Generate a heads-only diff using the catalog as a new ref and previous bundle information.
-			catLogger := o.Logger.WithField("catalog", catalog)
-			diffAction := diff.Diff{
-				Registry:         reg,
-				NewRefs:          []string{catalog},
-				Logger:           catLogger,
-				SkipDependencies: ctlg.SkipDependencies,
-			}
+		// Generate a heads-only diff using the catalog as a new ref and previous bundle information.
+		catLogger := o.Logger.WithField("catalog", catalog)
+		diffAction := diff.Diff{
+			Registry:         reg,
+			NewRefs:          []string{catalog},
+			Logger:           catLogger,
+			SkipDependencies: ctlg.SkipDependencies,
+		}
 
-			// If a previous catalog is found, reconcile the
-			// previously stored IncludeConfig with the current catalog information
-			// to make sure the bundles still exist. This causes the declarative config
-			// to be rendered once to get the full information and then a second time to
-			// get the final copy. This will help determine what bundles have been pruned.
-			var icManager operator.IncludeConfigManager
-			var dc *declcfg.DeclarativeConfig
-			switch {
-			case catalogHeadsOnly:
-				icManager = operator.NewCatalogStrategy()
-				dc, err = action.Render{
-					Registry: reg,
-					Refs:     []string{catalog},
-				}.Run(ctx)
-				if err != nil {
-					// stop all processing since we hit an error
-					return results, err
-				}
-
-			case includeWithHeadsOnly:
-				icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
-				// Must set the current
-				// diff include configuration to get the full
-				// channels before recalculating.
-				dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
-				if err != nil {
-					// stop all processing since we hit an error
-					return results, err
-				}
-				diffAction.IncludeConfig = dic
-				diffAction.HeadsOnly = false
-				dc, err = diffAction.Run(ctx)
-				if err != nil {
-					// stop all processing since we hit an error
-					return results, err
-				}
-			}
-
-			// Update the IncludeConfig and diff include configuration based on previous mirrored bundles
-			// and the current catalog.
-			ic, err := icManager.UpdateIncludeConfig(*dc, prev.IncludeConfig)
-			if err != nil {
-				return results, fmt.Errorf("error updating include config: %v", err)
-			}
-			dic, err := ic.ConvertToDiffIncludeConfig()
+		// If a previous catalog is found, reconcile the
+		// previously stored IncludeConfig with the current catalog information
+		// to make sure the bundles still exist. This causes the declarative config
+		// to be rendered once to get the full information and then a second time to
+		// get the final copy. This will help determine what bundles have been pruned.
+		var icManager operator.IncludeConfigManager
+		var dc *declcfg.DeclarativeConfig
+		switch {
+		case catalogHeadsOnly:
+			icManager = operator.NewCatalogStrategy()
+			dc, err = action.Render{
+				Registry: reg,
+				Refs:     []string{catalog},
+			}.Run(ctx)
 			if err != nil {
 				// stop all processing since we hit an error
-				return results, fmt.Errorf("error during include config conversion to declarative config: %v", err)
+				return err
 			}
 
-			// Set up action diff for final declarative config rendering
-			diffAction.HeadsOnly = true
+		case includeWithHeadsOnly:
+			icManager = operator.NewPackageStrategy(ctlg.IncludeConfig)
+			// Must set the current
+			// diff include configuration to get the full
+			// channels before recalculating.
+			dic, err := ctlg.IncludeConfig.ConvertToDiffIncludeConfig()
+			if err != nil {
+				// stop all processing since we hit an error
+				return err
+			}
 			diffAction.IncludeConfig = dic
+			diffAction.HeadsOnly = false
 			dc, err = diffAction.Run(ctx)
 			if err != nil {
 				// stop all processing since we hit an error
-				return results, err
+				return err
 			}
-
-			if err := o.verifyDC(dic, dc); err != nil {
-				// stop all processing since we hit an error
-				return results, err
-			}
-
-			// capture the results
-			results[platformKey] = CatalogMetadata{dc: dc, ic: ic, catalogRef: catalog}
 		}
+
+		// Update the IncludeConfig and diff include configuration based on previous mirrored bundles
+		// and the current catalog.
+		ic, err := icManager.UpdateIncludeConfig(*dc, prev.IncludeConfig)
+		if err != nil {
+			return fmt.Errorf("error updating include config: %v", err)
+		}
+		dic, err := ic.ConvertToDiffIncludeConfig()
+		if err != nil {
+			// stop all processing since we hit an error
+			return fmt.Errorf("error during include config conversion to declarative config: %v", err)
+		}
+
+		// Set up action diff for final declarative config rendering
+		diffAction.HeadsOnly = true
+		diffAction.IncludeConfig = dic
+		dc, err = diffAction.Run(ctx)
+		if err != nil {
+			// stop all processing since we hit an error
+			return err
+		}
+
+		if err := o.verifyDC(dic, dc); err != nil {
+			// stop all processing since we hit an error
+			return err
+		}
+
+		// update the local catalogMetadata value, and update the map with this copy
+		catalogMetadata.dc = dc
+		catalogMetadata.ic = ic
+		digestsToProcess[platformKey] = catalogMetadata
 	}
-	return results, nil
+	return nil
 }
 
 // verifyDC verifies the declarative config and that each of the requested operator packages were
