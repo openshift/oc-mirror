@@ -37,6 +37,7 @@ type MirrorOptions struct {
 	OCIFeatureAction           string
 	OCIRegistriesConfig        string
 	OCIInsecureSignaturePolicy bool
+	MaxNestedPaths             int
 	// cancelCh is a channel listening for command cancellations
 	cancelCh         <-chan struct{}
 	once             sync.Once
@@ -71,6 +72,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.OCIFeatureAction, "oci-feature-action", o.OCIFeatureAction, "One of copy or mirror")
 	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --use-oci-feature flag)")
 	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
+	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 2, "Number of nested paths, for destination registries that limit nested paths")
 }
 
 func (o *MirrorOptions) init() {
