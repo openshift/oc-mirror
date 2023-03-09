@@ -2,10 +2,12 @@ package image
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -130,6 +132,9 @@ func getManifest(ctx context.Context, imgPath string) (manifest.Manifest, error)
 		}
 	}()
 	if err != nil {
+		if err == layout.ErrMoreThanOneImage {
+			return nil, errors.New("multiple catalogs in the same location is not supported: https://github.com/openshift/oc-mirror/blob/main/TROUBLESHOOTING.md#error-examples")
+		}
 		return nil, fmt.Errorf("unable to create ImageSource for %s: %v", err, imgPath)
 	}
 	manifestBlob, manifestType, err := imgsrc.GetManifest(ctx, nil)

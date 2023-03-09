@@ -14,3 +14,8 @@ To troubleshoot issues with the created file-based catalog, use the following co
 
 ## Destination Registry parsing
 For docker registry destinations, to preserve the same docker reference format across the ecosystem, `docker://registry` is not parsed as a registry hostname, but as an image or repository name. In order to specify a registry, qualify the hostname, or use an IP address. For example, use `docker://registry.localdomain`. `docker://localhost` works as expected, because localhost is generally treated as a special exception, not requiring a qualified domain to be parsed as a registry host.
+
+## Error Examples
+```unable to get OCI Image from oci:///$LOCATION_FOR_OCI_CATALOG: more than one image in oci, choose an image```
+- It means that $LOCATION_FOR_OCI_CATALOG contains an OCI catalog with more than one manifest, and oc-mirror cannot choose which of them should be used.
+- This usually happens if you copy a catalog to the same location more than once.
