@@ -252,16 +252,23 @@ func (o *MirrorOptions) Validate() error {
 	if o.UseOCIFeature && diskToMirror {
 		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
 	}
-	// when oci flag is not set, ImageSetConfig should not contain any operators with oci:// prefix
-	if !o.UseOCIFeature && mirrorToMirror {
+	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
+	if mirrorToMirror {
+		bIsFBOCI := false
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
 		for _, op := range cfg.Mirror.Operators {
 			if op.IsFBCOCI() {
-				return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature")
+				bIsFBOCI = true
 			}
+		}
+		if o.UseOCIFeature && !bIsFBOCI {
+			return fmt.Errorf("no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --use-oci-feature flag")
+		}
+		if !o.UseOCIFeature && bIsFBOCI {
+			return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature")
 		}
 	}
 	if !o.UseOCIFeature && len(o.OCIRegistriesConfig) > 0 {

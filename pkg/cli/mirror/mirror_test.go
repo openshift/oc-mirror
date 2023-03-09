@@ -302,6 +302,15 @@ func TestMirrorValidate(t *testing.T) {
 			expError: "use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature",
 		},
 		{
+			name: "Invalid/MirrorToMirror/ImageSetConfigWithoutOCI",
+			opts: &MirrorOptions{
+				ConfigPath:    "testdata/configs/iscfg.yaml",
+				ToMirror:      u.Host,
+				UseOCIFeature: true,
+			},
+			expError: "no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --use-oci-feature flag",
+		},
+		{
 			name: "Valid/ManifestOnlyWithFakeMirror",
 			opts: &MirrorOptions{
 				ManifestsOnly: true,
