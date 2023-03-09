@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -15,6 +15,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
@@ -36,7 +37,15 @@ func SyncMetadata(ctx context.Context, first storage.Backend, second storage.Bac
 
 // UpdateMetadata runs some reconciliation functions on Metadata to ensure its state is consistent
 // then uses the Backend to update the metadata storage medium.
-func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2.Metadata, workspace string, skipTLSVerify, plainHTTP bool) error {
+func UpdateMetadata(
+	ctx context.Context,
+	backend storage.Backend,
+	meta *v1alpha2.Metadata,
+	workspace string,
+	skipTLSVerify,
+	plainHTTP bool,
+	allCatalogs map[string]map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+) error {
 	pastMeta := v1alpha2.NewMetadata()
 	pastReleases := map[string]string{}
 	merr := backend.ReadMetadata(ctx, &pastMeta, config.MetadataBasePath)
@@ -63,7 +72,8 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 
 	logger := logrus.New()
-	logger.SetOutput(ioutil.Discard)
+
+	logger.SetOutput(io.Discard)
 	nullLogger := logrus.NewEntry(logger)
 
 	reg, err := containerdregistry.NewRegistry(
@@ -81,13 +91,14 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	defer reg.Destroy()
 
 	for _, operator := range mirror.Mirror.Operators {
-		operatorMeta, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace)
+		// TODO: Changed this to return a slice of v1alpha2.OperatorMetadata... we need to validate that this solution will work
+		operatorMetas, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace, allCatalogs[operator.Catalog])
 		if err != nil {
 			operatorErrs = append(operatorErrs, err)
 			continue
 		}
 
-		meta.PastMirror.Operators = append(meta.PastMirror.Operators, operatorMeta)
+		meta.PastMirror.Operators = append(meta.PastMirror.Operators, operatorMetas...)
 	}
 	if len(operatorErrs) != 0 {
 		return utilerrors.NewAggregate(operatorErrs)
@@ -123,76 +134,88 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	return nil
 }
 
-func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
+func resolveOperatorMetadata(
+	ctx context.Context,
+	ctlg v1alpha2.Operator,
+	reg *containerdregistry.Registry,
+	resolver remotes.Resolver,
+	workspace string,
+	catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+) (operatorMetas []v1alpha2.OperatorMetadata, err error) {
 
-	// TODO: it seems like we need something like getImageDigests here
-	// // get the digests to process... could be more than one if a manifest list image is provided
-	// // we do this here so we don't have to do it multiple times within the renderDC function
-	// digestsToProcess, err := getImageDigests(ctx, ctlg.Catalog, o.insecure)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error fetching digests for catalog %s: %v", ctlg.Catalog, err)
-	// }
+	// initialize return value
+	operatorMetas = []v1alpha2.OperatorMetadata{}
 
-	ctlgName, err := ctlg.GetUniqueName()
-	if err != nil {
-		return v1alpha2.OperatorMetadata{}, err
-	}
-	operatorMeta.Catalog = ctlgName
+	for platform := range catalogMetadataByPlatform {
+		var operatorMeta v1alpha2.OperatorMetadata
 
-	// Stick to Catalog here because we
-	// are referencing the source
-	if !image.IsImagePinned(ctlg.Catalog) {
-		if ctlg.IsFBCOCI() {
-			ref, err := image.ParseReference(ctlg.Catalog)
-			if err != nil {
-				return v1alpha2.OperatorMetadata{}, err
+		ctlgName, err := ctlg.GetUniqueName()
+		if err != nil {
+			return []v1alpha2.OperatorMetadata{}, err
+		}
+		operatorMeta.Catalog = ctlgName
+
+		// Stick to Catalog here because we
+		// are referencing the source
+		if !image.IsImagePinned(ctlg.Catalog) {
+			if ctlg.IsFBCOCI() {
+				ref, err := image.ParseReference(ctlg.Catalog)
+				if err != nil {
+					return []v1alpha2.OperatorMetadata{}, err
+				}
+				operatorMeta.ImagePin = ref.String()
+			} else {
+				ctlgPin, err := image.ResolveToPin(ctx, resolver, ctlg.Catalog)
+				if err != nil {
+					return []v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
+				}
+				operatorMeta.ImagePin = ctlgPin
 			}
-			operatorMeta.ImagePin = ref.String()
-		} else {
-			ctlgPin := ctlg.Catalog
-			ctlgPin, err := image.ResolveToPin(ctx, resolver, ctlg.Catalog)
-			if err != nil {
-				return v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
+
+		}
+
+		var ic v1alpha2.IncludeConfig
+		// Only collect the information
+		// for heads only work flows for conversions from ranges
+		// or full catalogs to heads only.
+		if ctlg.IsHeadsOnly() {
+
+			if ctlg.IsFBCOCI() {
+				ctlgName = v1alpha2.OCITransportPrefix + "//" + ctlgName
 			}
-			operatorMeta.ImagePin = ctlgPin
+			// Determine the location of the created FBC
+			tir, err := image.ParseReference(ctlgName)
+			if err != nil {
+				return []v1alpha2.OperatorMetadata{}, err
+			}
+			ctlgRef := tir.Ref
+			ctlgLoc, err := operator.GenerateCatalogDir(ctlgRef)
+			if err != nil {
+				return []v1alpha2.OperatorMetadata{}, err
+			}
+			platformAsString := platform.String()
+			var icLoc string
+			if platformAsString == "" {
+				icLoc = filepath.Join(workspace, config.CatalogsDir, ctlgLoc, config.IncludeConfigFile)
+			} else {
+				icLoc = filepath.Join(workspace, config.CatalogsDir, ctlgLoc, config.MultiDir, platformAsString, config.IncludeConfigFile)
+			}
+			includeFile, err := os.Open(icLoc)
+			if err != nil {
+				return []v1alpha2.OperatorMetadata{}, fmt.Errorf("error opening include config file: %v", err)
+			}
+			defer includeFile.Close()
+
+			if err := ic.Decode(includeFile); err != nil {
+				return []v1alpha2.OperatorMetadata{}, fmt.Errorf("error decoding include config file: %v", err)
+			}
+
 		}
 
+		operatorMeta.IncludeConfig = ic
+
+		operatorMetas = append(operatorMetas, operatorMeta)
 	}
 
-	var ic v1alpha2.IncludeConfig
-	// Only collect the information
-	// for heads only work flows for conversions from ranges
-	// or full catalogs to heads only.
-	if ctlg.IsHeadsOnly() {
-
-		if ctlg.IsFBCOCI() {
-			ctlgName = v1alpha2.OCITransportPrefix + "//" + ctlgName
-		}
-		// Determine the location of the created FBC
-		tir, err := image.ParseReference(ctlgName)
-		if err != nil {
-			return v1alpha2.OperatorMetadata{}, err
-		}
-		ctlgRef := tir.Ref
-		ctlgLoc, err := operator.GenerateCatalogDir(ctlgRef)
-		if err != nil {
-			return v1alpha2.OperatorMetadata{}, err
-		}
-
-		icLoc := filepath.Join(workspace, config.CatalogsDir, ctlgLoc, config.IncludeConfigFile)
-		includeFile, err := os.Open(icLoc)
-		if err != nil {
-			return operatorMeta, fmt.Errorf("error opening include config file: %v", err)
-		}
-		defer includeFile.Close()
-
-		if err := ic.Decode(includeFile); err != nil {
-			return operatorMeta, fmt.Errorf("error decoding include config file: %v", err)
-		}
-
-	}
-
-	operatorMeta.IncludeConfig = ic
-
-	return operatorMeta, nil
+	return operatorMetas, nil
 }

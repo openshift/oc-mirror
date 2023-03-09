@@ -17,107 +17,108 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/pkg/cli"
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
 func TestOperatorCatalogPlatform(t *testing.T) {
 	type test struct {
-		name              string                  // test case name
-		platform          OperatorCatalogPlatform // platform under test
-		expected          string                  // expected value when converted to string
-		expectedRoundTrip OperatorCatalogPlatform // expected value when string is converted back to platform
+		name              string                     // test case name
+		platform          oc.OperatorCatalogPlatform // platform under test
+		expected          string                     // expected value when converted to string
+		expectedRoundTrip oc.OperatorCatalogPlatform // expected value when string is converted back to platform
 	}
 	tests := []test{
 		{
 			name:              "empty",
-			platform:          OperatorCatalogPlatform{isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "os only",
-			platform:          OperatorCatalogPlatform{os: "linux", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", IsIndex: true},
 			expected:          "linux",
-			expectedRoundTrip: OperatorCatalogPlatform{os: "linux", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Os: "linux", IsIndex: true},
 		},
 		{
 			name:              "architecture only",
-			platform:          OperatorCatalogPlatform{architecture: "arm64", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Architecture: "arm64", IsIndex: true},
 			expected:          "arm64",
-			expectedRoundTrip: OperatorCatalogPlatform{architecture: "arm64", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Architecture: "arm64", IsIndex: true},
 		},
 		{
 			name:              "variant only",
-			platform:          OperatorCatalogPlatform{variant: "v8", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Variant: "v8", IsIndex: true},
 			expected:          "v8",
-			expectedRoundTrip: OperatorCatalogPlatform{variant: "v8", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Variant: "v8", IsIndex: true},
 		},
 		{
 			name:              "os/arch (most common case)",
-			platform:          OperatorCatalogPlatform{os: "linux", architecture: "arm64", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", IsIndex: true},
 			expected:          "linux-arm64",
-			expectedRoundTrip: OperatorCatalogPlatform{os: "linux", architecture: "arm64", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", IsIndex: true},
 		},
 		{
 			name:              "arch/variant",
-			platform:          OperatorCatalogPlatform{architecture: "arm64", variant: "v8", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Architecture: "arm64", Variant: "v8", IsIndex: true},
 			expected:          "arm64-v8",
-			expectedRoundTrip: OperatorCatalogPlatform{architecture: "arm64", variant: "v8", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Architecture: "arm64", Variant: "v8", IsIndex: true},
 		},
 		{
 			name:              "os/arch/variant",
-			platform:          OperatorCatalogPlatform{os: "linux", architecture: "arm64", variant: "v8", isIndex: true},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", Variant: "v8", IsIndex: true},
 			expected:          "linux-arm64-v8",
-			expectedRoundTrip: OperatorCatalogPlatform{os: "linux", architecture: "arm64", variant: "v8", isIndex: true},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", Variant: "v8", IsIndex: true},
 		},
 		{
 			name:              "empty - single arch",
-			platform:          OperatorCatalogPlatform{isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "os only - single arch",
-			platform:          OperatorCatalogPlatform{os: "linux", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "architecture only - single arch",
-			platform:          OperatorCatalogPlatform{architecture: "arm64", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Architecture: "arm64", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "variant only - single arch",
-			platform:          OperatorCatalogPlatform{variant: "v8", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Variant: "v8", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "os/arch (most common case) - single arch",
-			platform:          OperatorCatalogPlatform{os: "linux", architecture: "arm64", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "arch/variant - single arch",
-			platform:          OperatorCatalogPlatform{architecture: "arm64", variant: "v8", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Architecture: "arm64", Variant: "v8", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 		{
 			name:              "os/arch/variant - single arch",
-			platform:          OperatorCatalogPlatform{os: "linux", architecture: "arm64", variant: "v8", isIndex: false},
+			platform:          oc.OperatorCatalogPlatform{Os: "linux", Architecture: "arm64", Variant: "v8", IsIndex: false},
 			expected:          "",
-			expectedRoundTrip: OperatorCatalogPlatform{isIndex: false},
+			expectedRoundTrip: oc.OperatorCatalogPlatform{IsIndex: false},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actual := test.platform.String()
 			require.Equal(t, test.expected, actual)
-			require.Equal(t, test.expectedRoundTrip, *NewOperatorCatalogPlatform(test.expected))
+			require.Equal(t, test.expectedRoundTrip, *oc.NewOperatorCatalogPlatform(test.expected))
 		})
 	}
 }
@@ -125,17 +126,17 @@ func TestOperatorCatalogPlatform(t *testing.T) {
 func TestPinImages(t *testing.T) {
 
 	type spec struct {
-		desc                     string
-		opts                     *OperatorOptions
-		renderResultsPerPlatform map[OperatorCatalogPlatform]CatalogMetadata
-		resolver                 remotes.Resolver
-		expErrorStr              string
+		desc                      string
+		opts                      *OperatorOptions
+		catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata
+		resolver                  remotes.Resolver
+		expErrorStr               string
 	}
-	amd64SingleArchPlatform := OperatorCatalogPlatform{
-		os:           "linux",
-		architecture: "amd64",
-		variant:      "",
-		isIndex:      false,
+	amd64SingleArchPlatform := oc.OperatorCatalogPlatform{
+		Os:           "linux",
+		Architecture: "amd64",
+		Variant:      "",
+		IsIndex:      false,
 	}
 	cases := []spec{
 		{
@@ -146,9 +147,9 @@ func TestPinImages(t *testing.T) {
 					SkipMissing:     false,
 				},
 			},
-			renderResultsPerPlatform: map[OperatorCatalogPlatform]CatalogMetadata{
+			catalogMetadataByPlatform: map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{
 				amd64SingleArchPlatform: {
-					dc: &declcfg.DeclarativeConfig{
+					Dc: &declcfg.DeclarativeConfig{
 						Bundles: []declcfg.Bundle{
 							{
 								Name:  "foo.v1.0.0",
@@ -184,9 +185,9 @@ func TestPinImages(t *testing.T) {
 					SkipMissing:     false,
 				},
 			},
-			renderResultsPerPlatform: map[OperatorCatalogPlatform]CatalogMetadata{
+			catalogMetadataByPlatform: map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{
 				amd64SingleArchPlatform: {
-					dc: &declcfg.DeclarativeConfig{
+					Dc: &declcfg.DeclarativeConfig{
 						Bundles: []declcfg.Bundle{
 							{
 								Name:  "foo.v1.0.0",
@@ -210,9 +211,9 @@ func TestPinImages(t *testing.T) {
 					SkipMissing:     false,
 				},
 			},
-			renderResultsPerPlatform: map[OperatorCatalogPlatform]CatalogMetadata{
+			catalogMetadataByPlatform: map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{
 				amd64SingleArchPlatform: {
-					dc: nil,
+					Dc: nil,
 				},
 			},
 			resolver:    mockResolver{digestMapping: map[string]string{}},
@@ -226,9 +227,9 @@ func TestPinImages(t *testing.T) {
 					SkipMissing:     false,
 				},
 			},
-			renderResultsPerPlatform: map[OperatorCatalogPlatform]CatalogMetadata{
+			catalogMetadataByPlatform: map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{
 				amd64SingleArchPlatform: {
-					dc: &declcfg.DeclarativeConfig{
+					Dc: &declcfg.DeclarativeConfig{
 						Bundles: []declcfg.Bundle{
 							{
 								Name:  "foo.v1.0.0",
@@ -251,9 +252,9 @@ func TestPinImages(t *testing.T) {
 					SkipMissing:     true,
 				},
 			},
-			renderResultsPerPlatform: map[OperatorCatalogPlatform]CatalogMetadata{
+			catalogMetadataByPlatform: map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{
 				amd64SingleArchPlatform: {
-					dc: &declcfg.DeclarativeConfig{
+					Dc: &declcfg.DeclarativeConfig{
 						Bundles: []declcfg.Bundle{
 							{
 								Name:  "foo.v1.0.0",
@@ -273,7 +274,7 @@ func TestPinImages(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			ctx := context.TODO()
-			err := c.opts.pinImages(ctx, c.renderResultsPerPlatform, c.resolver)
+			err := c.opts.pinImages(ctx, c.catalogMetadataByPlatform, c.resolver)
 			if c.expErrorStr == "" {
 				require.NoError(t, err)
 			} else {

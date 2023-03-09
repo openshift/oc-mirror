@@ -94,6 +94,7 @@ func ParseReference(ref string) (TypedImageReference, error) {
 
 	dstType := DestinationOCI
 
+	// TODO: this assumes you can parse it into a docker image ref (and you can’t do that since its just a path).
 	reg, ns, name, tag, id := v1alpha2.ParseImageReference(ref)
 	dst := libgoref.DockerImageReference{
 		Registry:  reg,
@@ -103,11 +104,16 @@ func ParseReference(ref string) (TypedImageReference, error) {
 		ID:        id,
 	}
 
-	// TODO if manifest does not exist , just do nothing
-	// in case of TargetName and TargetTag replacing the original name ,
-	// the returned path will not exist on disk
+	// if manifest does not exist (in case of TargetName and TargetTag replacing the original name,
+	// the returned path will not exist on disk), invalidate the ID since parsing the path
+	// to the OCI layout won't mean anything, and you'll likely get bogus
+	// information for the ID
 	manifest, err := getManifest(context.Background(), ref)
-	if err == nil {
+	if err != nil {
+		// invalidate the ID
+		dst.ID = ""
+		klog.Infof("%v", err)
+	} else {
 		dst.ID = string(manifest.ConfigInfo().Digest)
 	}
 	return TypedImageReference{Ref: dst, Type: dstType, OCIFBCPath: ref}, nil
@@ -141,7 +147,7 @@ func getManifest(ctx context.Context, imgPath string) (manifest.Manifest, error)
 	}
 	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
+		return nil, fmt.Errorf("unable to unmarshal manifest of image : %w", err)
 	}
 	return manifest, nil
 }

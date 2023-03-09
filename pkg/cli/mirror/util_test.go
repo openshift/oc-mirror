@@ -15,6 +15,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/stretchr/testify/require"
+
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 )
 
 func TestGetImageDigests(t *testing.T) {
@@ -305,7 +307,7 @@ func TestGetImageDigests(t *testing.T) {
 
 			// call function to test
 			ref := fmt.Sprintf("%s/%s%s%s", url.Host, test.repo, symbol, test.tagOrDigest)
-			digestsMap, err := getImageDigests(context.TODO(), ref, nil, false)
+			digestsMap, err := getCatalogMetadataByPlatform(context.TODO(), ref, nil, false)
 			require.NoError(t, err)
 			require.Len(t, digestsMap, test.expectedArchitectures)
 
@@ -315,7 +317,7 @@ func TestGetImageDigests(t *testing.T) {
 				// we should have a platform value that's not a "zero" value
 				require.NotZero(t, platform)
 
-				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.catalogRef.Name())
+				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.CatalogRef.Name())
 
 			}
 
@@ -355,7 +357,7 @@ func TestGetImageDigestsFromOCILayout(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			digestsMap, err := getImageDigests(context.TODO(), test.imageRef, &test.layoutPath, false)
+			digestsMap, err := getCatalogMetadataByPlatform(context.TODO(), test.imageRef, &test.layoutPath, false)
 			require.NoError(t, err)
 			require.Len(t, digestsMap, test.expectedArchitectures)
 			// create expected / actual values in common format... lump all of the architectures together in this slice
@@ -364,7 +366,7 @@ func TestGetImageDigestsFromOCILayout(t *testing.T) {
 				// we should have a platform value that's not a "zero" value
 				require.NotZero(t, platform)
 
-				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.catalogRef.Name())
+				actualDigestsAsString = append(actualDigestsAsString, catalogMetadata.CatalogRef.Name())
 			}
 
 			expectedDigestsAsString := []string{}
@@ -383,7 +385,7 @@ func TestGetDigestFromOCILayout(t *testing.T) {
 	type test struct {
 		name         string // name of test
 		layoutPath   layout.Path
-		platformIn   OperatorCatalogPlatform
+		platformIn   oc.OperatorCatalogPlatform
 		expectedHash *v1.Hash
 	}
 
@@ -391,10 +393,10 @@ func TestGetDigestFromOCILayout(t *testing.T) {
 		{
 			name:       "manifest list - amd64",
 			layoutPath: layout.Path("testdata/manifestlist/hello"),
-			platformIn: OperatorCatalogPlatform{
-				os:           "linux",
-				architecture: "amd64",
-				isIndex:      true,
+			platformIn: oc.OperatorCatalogPlatform{
+				Os:           "linux",
+				Architecture: "amd64",
+				IsIndex:      true,
 			},
 			expectedHash: &v1.Hash{
 				Algorithm: "sha256",
@@ -404,10 +406,10 @@ func TestGetDigestFromOCILayout(t *testing.T) {
 		{
 			name:       "manifest list - s390x",
 			layoutPath: layout.Path("testdata/manifestlist/hello"),
-			platformIn: OperatorCatalogPlatform{
-				os:           "linux",
-				architecture: "s390x",
-				isIndex:      true,
+			platformIn: oc.OperatorCatalogPlatform{
+				Os:           "linux",
+				Architecture: "s390x",
+				IsIndex:      true,
 			},
 			expectedHash: &v1.Hash{
 				Algorithm: "sha256",
@@ -417,8 +419,8 @@ func TestGetDigestFromOCILayout(t *testing.T) {
 		{
 			name:       "single arch",
 			layoutPath: layout.Path("testdata/artifacts/rhop-ctlg-oci"),
-			platformIn: OperatorCatalogPlatform{
-				isIndex: false,
+			platformIn: oc.OperatorCatalogPlatform{
+				IsIndex: false,
 			},
 			expectedHash: nil,
 		},

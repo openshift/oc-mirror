@@ -32,6 +32,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator"
@@ -58,23 +59,74 @@ func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
 	return opts
 }
 
-// PlanFull plans a mirror for each catalog image in its entirety
-func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
-	return o.run(ctx, cfg, o.renderDCFull)
+/*
+PlanFull plans a mirror for each catalog image in its entirety
+
+# Arguments
+
+• ctx: A cancellation context
+
+• cfg: An ImageSetConfiguration that should be processed
+
+• allCatalogs: A pre-populated map of all catalog metadata loaded with as much data as possible.
+For each v1alpha2.Operator entry in cfg, there's a corresponding map entry. The key is the
+v1alpha2.Operator.Catalog string, and the value is map[oc.OperatorCatalogPlatform]oc.CatalogMetadata
+containing whatever we've discovered so far.
+
+# Returns
+
+• image.TypedImageMapping: Any src->dest mappings found during planning. Will be nil if an error occurs, non-nil otherwise.
+
+• error: non-nil if an error occurs, nil otherwise
+*/
+func (o *OperatorOptions) PlanFull(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+	allCatalogs map[string]map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+) (image.TypedImageMapping, error) {
+	return o.run(ctx, cfg, allCatalogs, o.renderDCFull)
 }
 
-// PlanDiff plans only the diff between each old and new catalog image pair
-func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, lastRun v1alpha2.PastMirror) (image.TypedImageMapping, error) {
+//
+
+/*
+PlanDiff plans only the diff between each old and new catalog image pair
+
+# Arguments
+
+• ctx: A cancellation context
+
+• cfg: An ImageSetConfiguration that should be processed
+
+• allCatalogs: A pre-populated map of all catalog metadata loaded with as much data as possible.
+For each v1alpha2.Operator entry in cfg, there's a corresponding map entry. The key is the
+v1alpha2.Operator.Catalog string, and the value is map[oc.OperatorCatalogPlatform]oc.CatalogMetadata
+containing whatever we've discovered so far.
+
+• lastRun: The mirror results of the last run
+
+# Returns
+
+• image.TypedImageMapping: Any src->dest mappings found during planning. Will be nil if an error occurs, non-nil otherwise.
+
+• error: non-nil if an error occurs, nil otherwise
+*/
+func (o *OperatorOptions) PlanDiff(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+	allCatalogs map[string]map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+	lastRun v1alpha2.PastMirror,
+) (image.TypedImageMapping, error) {
 	// Wrapper renderDCDiff so it satisfies the renderDCFunc function signature.
 	f := func(
 		ctx context.Context,
 		reg *containerdregistry.Registry,
 		ctlg v1alpha2.Operator,
-		digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+		catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
 	) error {
-		return o.renderDCDiff(ctx, reg, ctlg, lastRun, digestsToProcess)
+		return o.renderDCDiff(ctx, reg, ctlg, lastRun, catalogMetadataByPlatform)
 	}
-	return o.run(ctx, cfg, f)
+	return o.run(ctx, cfg, allCatalogs, f)
 }
 
 // complete defaults OperatorOptions.
@@ -86,28 +138,6 @@ func (o *OperatorOptions) complete() {
 	if o.Logger == nil {
 		o.Logger = logrus.NewEntry(logrus.New())
 	}
-}
-
-// ErrorMessagePrefix creates an error message prefix that handles both single and multi architecture images.
-// In the case of a single architecture catalog image, we don't need a prefix since that would make things more confusing.
-func (p *OperatorCatalogPlatform) ErrorMessagePrefix() string {
-	// default to empty string for single architecture images
-	platformErrorMessage := ""
-	if p.isIndex {
-		platformErrorMessage = fmt.Sprintf("platform %s: ", p.String())
-	}
-	return platformErrorMessage
-}
-
-/*
-CatalogMetadata represents the combination of a DeclarativeConfig, and its associated
-IncludeConfig, which is either provided by the user directly or generated from the contents
-of DeclarativeConfig
-*/
-type CatalogMetadata struct {
-	dc         *declcfg.DeclarativeConfig // a DeclarativeConfig instance
-	ic         v1alpha2.IncludeConfig     // a IncludeConfig instance
-	catalogRef name.Reference             // the reference used to obtain DeclarativeConfig and IncludeConfig
 }
 
 /*
@@ -122,7 +152,7 @@ Currently renderDCFull and renderDCDiff implement this function signature.
 
 • v1alpha2.Operator: operator metadata that should be processed
 
-• map[OperatorCatalogPlatform]CatalogMetadata: This is an in/out parameter, where the CatalogMetadata value
+• map[oc.OperatorCatalogPlatform]oc.CatalogMetadata: This is an in/out parameter, where the CatalogMetadata value
 initially contains a pre-fetched digest reference that corresponds to a specific platform. These digest values
 originate with a v1alpha2.Operator.Catalog reference. The CatalogMetadata is augmented with DeclarativeConfig
 and IncludeConfig data by the time this function returns.
@@ -135,10 +165,15 @@ type renderDCFunc func(
 	context.Context,
 	*containerdregistry.Registry,
 	v1alpha2.Operator,
-	map[OperatorCatalogPlatform]CatalogMetadata,
+	map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
 ) error
 
-func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) run(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+	allCatalogs map[string]map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+	renderDC renderDCFunc,
+) (image.TypedImageMapping, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -174,19 +209,16 @@ func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfigur
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
 
-		// get the digests to process... could be more than one if a manifest list image is provided
-		// we do this here so we don't have to do it multiple times within the renderDC function
-		digestsToProcess, err := getImageDigests(ctx, ctlg.Catalog, nil, o.insecure)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching digests for catalog %s: %v", ctlg.Catalog, err)
-		}
-		// Render the catalog to mirror into a declarative config.
-		err = renderDC(ctx, reg, ctlg, digestsToProcess)
+		// lookup the catalog metadata that was pre-populated for this v1alpha2.Operator
+		// we'll be augmenting this map as we move along
+		catalogMetadataByPlatform := allCatalogs[ctlg.Catalog]
+
+		err = renderDC(ctx, reg, ctlg, catalogMetadataByPlatform)
 		if err != nil {
 			return nil, o.checkValidationErr(err)
 		}
 
-		mappings, err := o.plan(ctx, digestsToProcess, ctlgRef, targetCtlg)
+		mappings, err := o.plan(ctx, catalogMetadataByPlatform, ctlgRef, targetCtlg)
 		if err != nil {
 			return nil, err
 		}
@@ -232,27 +264,24 @@ func (o *OperatorOptions) renderDCFull(
 	ctx context.Context,
 	reg *containerdregistry.Registry,
 	ctlg v1alpha2.Operator,
-	digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+	catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
 ) (err error) {
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
 	full := !ctlg.IsHeadsOnly() && !hasInclude
 
-	// TODO: this merged code needs to be addressed in some fashion
-	// if ctlg.IsFBCOCI() {
-	// 	// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-	// 	ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
-	// 	if err != nil {
-	// 		return dc, ic, err
-	// 	}
-	// }
-
 	// Now we need to process each architecture specific image that was discovered.
 	// Failures encountered during processing of any architecture abandons processing
 	// from that point forward.
-	for platformKey, catalogMetadata := range digestsToProcess {
-		digest := catalogMetadata.catalogRef
+	for platformKey, catalogMetadata := range catalogMetadataByPlatform {
+		// default to using the digest reference
+		digest := catalogMetadata.CatalogRef
 		catalog := digest.Name()
+		// if the artifact path is explicitly set, we're using the declarative config
+		// that was extracted out of an OCI path provided by the user
+		if catalogMetadata.FullArtifactPath != "" {
+			catalog = catalogMetadata.FullArtifactPath
+		}
 		catLogger := o.Logger.WithField("catalog", catalog)
 		var dc *declcfg.DeclarativeConfig
 		var ic v1alpha2.IncludeConfig
@@ -304,9 +333,9 @@ func (o *OperatorOptions) renderDCFull(
 		}
 
 		// update the local catalogMetadata value, and update the map with this copy
-		catalogMetadata.dc = dc
-		catalogMetadata.ic = ic
-		digestsToProcess[platformKey] = catalogMetadata
+		catalogMetadata.Dc = dc
+		catalogMetadata.Ic = ic
+		catalogMetadataByPlatform[platformKey] = catalogMetadata
 	}
 
 	return nil
@@ -320,7 +349,7 @@ func (o *OperatorOptions) renderDCDiff(
 	reg *containerdregistry.Registry,
 	ctlg v1alpha2.Operator,
 	lastRun v1alpha2.PastMirror,
-	digestsToProcess map[OperatorCatalogPlatform]CatalogMetadata,
+	catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
 ) (err error) {
 	// initialize map with previous catalogs by name for easy lookup
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
@@ -331,17 +360,8 @@ func (o *OperatorOptions) renderDCDiff(
 	// now we need to process each architecture specific image that was discovered
 	// failures encountered during processing of any architecture abandons processing
 	// from that point forward
-	for platformKey, catalogMetadata := range digestsToProcess {
-		digest := catalogMetadata.catalogRef
-
-		// TODO: this merged code needs to be addressed in some fashion
-		// ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
-		// if ctlg.IsFBCOCI() {
-		// 	ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
-		// 	if err != nil {
-		// 		return dc, ic, err
-		// 	}
-		// }
+	for platformKey, catalogMetadata := range catalogMetadataByPlatform {
+		digest := catalogMetadata.CatalogRef
 
 		// TODO: this function currently uses OCI image paths for the "unique name"... is this OK??? It's only being used for metadata lookup, so it might be fine.
 		// TODO: this needs to take into account architecture to make it unique
@@ -357,7 +377,7 @@ func (o *OperatorOptions) renderDCDiff(
 		// The architecture specific catalog is new or we just need to mirror the full catalog or channels.
 		if !found || !ctlg.IsHeadsOnly() {
 			// render full handles all architectures so we can stop processing here and just return
-			return o.renderDCFull(ctx, reg, ctlg, digestsToProcess)
+			return o.renderDCFull(ctx, reg, ctlg, catalogMetadataByPlatform)
 		}
 
 		hasInclude := len(ctlg.IncludeConfig.Packages) != 0
@@ -366,7 +386,13 @@ func (o *OperatorOptions) renderDCDiff(
 		catalogHeadsOnly := ctlg.IsHeadsOnly() && !hasInclude
 		includeWithHeadsOnly := ctlg.IsHeadsOnly() && hasInclude
 
+		// default to using the digest reference
 		catalog := digest.Name()
+		// if the artifact path is explicitly set, we're using the declarative config
+		// that was extracted out of an OCI path provided by the user
+		if catalogMetadata.FullArtifactPath != "" {
+			catalog = catalogMetadata.FullArtifactPath
+		}
 
 		// Generate a heads-only diff using the catalog as a new ref and previous bundle information.
 		catLogger := o.Logger.WithField("catalog", catalog)
@@ -442,9 +468,9 @@ func (o *OperatorOptions) renderDCDiff(
 		}
 
 		// update the local catalogMetadata value, and update the map with this copy
-		catalogMetadata.dc = dc
-		catalogMetadata.ic = ic
-		digestsToProcess[platformKey] = catalogMetadata
+		catalogMetadata.Dc = dc
+		catalogMetadata.Ic = ic
+		catalogMetadataByPlatform[platformKey] = catalogMetadata
 	}
 	return nil
 }
@@ -487,7 +513,7 @@ plan determines the source -> destination mapping for images associated with the
 
 • ctx: A cancellation context
 
-• renderResultsPerPlatform: platform -> catalog metadata mapping for the ctlgRef argument
+• catalogMetadataByPlatform: platform -> catalog metadata mapping for the ctlgRef argument
 
 • ctlgRef: this is the source catalog reference
 
@@ -499,7 +525,7 @@ plan determines the source -> destination mapping for images associated with the
 
 • error: non-nil if an error occurs, nil otherwise
 */
-func (o *OperatorOptions) plan(ctx context.Context, renderResultsPerPlatform map[OperatorCatalogPlatform]CatalogMetadata, ctlgRef, targetCtlg image.TypedImageReference) (image.TypedImageMapping, error) {
+func (o *OperatorOptions) plan(ctx context.Context, catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata, ctlgRef, targetCtlg image.TypedImageReference) (image.TypedImageMapping, error) {
 
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -508,26 +534,30 @@ func (o *OperatorOptions) plan(ctx context.Context, renderResultsPerPlatform map
 		if err != nil {
 			return nil, fmt.Errorf("error creating image resolver: %v", err)
 		}
-		if err := o.pinImages(ctx, renderResultsPerPlatform, resolver); err != nil {
+		if err := o.pinImages(ctx, catalogMetadataByPlatform, resolver); err != nil {
 			return nil, fmt.Errorf("error pinning images in catalog %s: %v", ctlgRef, err)
 		}
 	}
 
-	indexDirectories, err := o.writeConfigs(renderResultsPerPlatform, targetCtlg.Ref)
+	indexDirectories, err := o.writeConfigs(catalogMetadataByPlatform, targetCtlg.Ref)
 	if err != nil {
 		return nil, err
 	}
 
-	// we should have one or more index directories to process
-	// i.e. a single directory if we're dealing with a single architecture catalog
-	// and multiple directories for multi architecture catalogs
+	// collection point for all of the mappings discovered
 	allMappings := image.TypedImageMapping{}
-	for _, indexDir := range indexDirectories {
-		opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir))
-		if err != nil {
-			return nil, err
-		}
-		if ctlgRef.Type != image.DestinationOCI {
+
+	// process docker image refs first
+	if ctlgRef.Type != image.DestinationOCI {
+		// we should have one or more index directories to process
+		// i.e. a single directory if we're dealing with a single architecture catalog
+		// and multiple directories for multi architecture catalogs
+		for _, indexDir := range indexDirectories {
+			opts, err := o.newMirrorCatalogOptions(ctlgRef.Ref, filepath.Join(o.Dir, config.SourceDir))
+			if err != nil {
+				return nil, err
+			}
+
 			// Create the mapping file, but don't mirror quite yet.
 			// Since the file-based catalog (declarative config) needs to be rebuilt
 			// after rendering with the existing image in the publishing step,
@@ -561,123 +591,106 @@ func (o *OperatorOptions) plan(ctx context.Context, renderResultsPerPlatform map
 			if err := opts.Run(); err != nil {
 				return nil, fmt.Errorf("error running catalog mirror: %v", err)
 			}
-		} else {
-			repo := ctlgRef.Ref.Name
-
-			artifactsPath := artifactsFolderName
-
-			operatorCatalog := v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath)
-
-			// check for the valid config label to use
-			configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
+			// FIXME: There's no reason why the catalog.MirrorCatalogOptions could not store a reference
+			// to its own mapping results, that way this re-reading of the mapping data from a file
+			// would not have to happen. I am sure this was done as a path of least resistance to avoid
+			// making changes in oc project, but this could be optimized if desired
+			mappingFile := filepath.Join(opts.ManifestDir, mappingFile)
+			mappings, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
 			if err != nil {
-
-				return nil, fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operatorCatalog, err)
-			}
-			// initialize path starting with <current working directory>/olm_artifacts/<repo>
-			catalogContentsDir := filepath.Join(artifactsPath, repo)
-			// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-			ctlgConfigDir := filepath.Join(catalogContentsDir, configsLabel)
-
-			// TODO: this merged code needs to be addressed in some fashion
-			// the renderResultsPerPlatform has the original location where the catalog came from, ctlgConfigDir is hardcoded to single location
-			// and needs to be made multi arch aware or integrated differently
-
-			// get all related images for every catalog dir
-			var relatedImages []declcfg.RelatedImage
-			for _, catalogMetaData := range renderResultsPerPlatform {
-				currentRelatedImages, err := getRelatedImages(ctlgConfigDir, catalogMetaData.ic.Packages)
-				if err != nil {
-					return nil, err
-				}
-				relatedImages = append(relatedImages, currentRelatedImages...)
-			}
-
-			// place related images into the workspace - aka mirrorToDisk
-			// TODO this should probably be done only if artifacts have not been copied
-			result := image.TypedImageMapping{}
-			// create mappings for the related images that will moved from the workspace to the final destination
-			for _, i := range relatedImages {
-				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-				err := o.addRelatedImageToMapping(ctx, result, i, o.ToMirror, "")
-				if err != nil {
-					return nil, err
-				}
-
-			}
-			if err := writeMappingFile(mappingFile, result); err != nil {
 				return nil, err
 			}
+
+			// Remove the catalog image from mappings we are going to transfer this
+			// using an OCI layout.
+			ctlgImg, err := image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
+			if err != nil {
+				return nil, err
+			}
+
+			mappings.Remove(ctlgImg)
+
+			// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
+			for srcRef, dstRef := range mappings {
+				newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
+				newRepoName = strings.TrimPrefix(newRepoName, "/")
+				tmpRef, err := imgreference.Parse(newRepoName)
+				if err != nil {
+					return nil, err
+				}
+				dstRef.Ref.Namespace = tmpRef.Namespace
+				dstRef.Ref.Name = tmpRef.Name
+				mappings[srcRef] = dstRef
+			}
+			// save mappings for later
+			allMappings.Merge(mappings)
+		}
+	}
+
+	// handle OCI specific refs next
+	if ctlgRef.Type == image.DestinationOCI {
+		// get all related images for every catalog dir
+		var relatedImages []declcfg.RelatedImage
+		for _, catalogMetaData := range catalogMetadataByPlatform {
+			currentRelatedImages, err := getRelatedImages(catalogMetaData.FullArtifactPath, catalogMetaData.Ic.Packages)
+			if err != nil {
+				return nil, err
+			}
+			relatedImages = append(relatedImages, currentRelatedImages...)
 		}
 
-		// FIXME: There's no reason why the catalog.MirrorCatalogOptions could not store a reference
-		// to its own mapping results, that way this re-reading of the mapping data from a file
-		// would not have to happen. I am sure this was done as a path of least resistance to avoid
-		// making changes in oc project, but this could be optimized if desired
-		mappingFile := filepath.Join(opts.ManifestDir, mappingFile)
-		mappings, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
+		// place related images into the workspace - aka mirrorToDisk
+		// TODO this should probably be done only if artifacts have not been copied
+		result := image.TypedImageMapping{}
+		// create mappings for the related images that will moved from the workspace to the final destination
+		for _, i := range relatedImages {
+			// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
+			err := o.addRelatedImageToMapping(ctx, result, i, o.ToMirror, "")
+			if err != nil {
+				return nil, err
+			}
+
+		}
+		// Remove the catalog image from mappings we are going to transfer this
+		// using an OCI layout.
+		ctlgImg, err := image.ParseTypedImage(ctlgRef.OCIFBCPath, v1alpha2.TypeOperatorBundle)
 		if err != nil {
 			return nil, err
 		}
+		result.Remove(ctlgImg)
 
-		// Remove the catalog image from mappings we are going to transfer this
-		// using an OCI layout.
-		var ctlgImg image.TypedImage
-		if ctlgRef.Type == "oci" {
-			ctlgImg, err = image.ParseTypedImage(ctlgRef.OCIFBCPath, v1alpha2.TypeOperatorBundle)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			ctlgImg, err = image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
-			if err != nil {
-				return nil, err
-			}
+		// TODO: why is this necessary???
+		if err := writeMappingFile(mappingFile, result); err != nil {
+			return nil, err
 		}
-
-		mappings.Remove(ctlgImg)
-		// Write catalog OCI layout file to src so it is included in the archive
-		// at a path unique to the image.
-		if ctlgRef.Type != image.DestinationOCI {
-			if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
-				return nil, err
-			}
-		} else {
-			ctlgDir, err := operator.GenerateCatalogDir(targetCtlg.Ref)
-			if err != nil {
-				return nil, err
-			}
-			layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
-			if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
-				return nil, fmt.Errorf("error catalog layout dir: %v", err)
-			}
-			if err := copy.Copy(v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath), layoutDir); err != nil {
-				return nil, fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
-			}
-		}
-
-		// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
-		for srcRef, dstRef := range mappings {
-			newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
-			newRepoName = strings.TrimPrefix(newRepoName, "/")
-			tmpRef, err := imgreference.Parse(newRepoName)
-			if err != nil {
-				return nil, err
-			}
-			dstRef.Ref.Namespace = tmpRef.Namespace
-			dstRef.Ref.Name = tmpRef.Name
-			mappings[srcRef] = dstRef
-		}
-		// save mappings for later
-		allMappings.Merge(mappings)
 	}
 
-	return allMappings, validateMapping(renderResultsPerPlatform, allMappings)
+	// Write catalog OCI layout file to src so it is included in the archive
+	// at a path unique to the image.
+	if ctlgRef.Type != image.DestinationOCI {
+		if err := o.writeLayout(ctx, ctlgRef.Ref, targetCtlg.Ref); err != nil {
+			return nil, err
+		}
+	} else {
+		ctlgDir, err := operator.GenerateCatalogDir(targetCtlg.Ref)
+		if err != nil {
+			return nil, err
+		}
+		layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
+		if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("error catalog layout dir: %v", err)
+		}
+		if err := copy.Copy(v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath), layoutDir); err != nil {
+			return nil, fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
+		}
+	}
+
+	return allMappings, validateMapping(catalogMetadataByPlatform, allMappings)
 }
 
 // validateMapping will search for bundle and related images in mapping
 // and log a warning if an image does not exist and will not be mirrored
-func validateMapping(renderResultsPerPlatform map[OperatorCatalogPlatform]CatalogMetadata, mapping image.TypedImageMapping) error {
+func validateMapping(catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata, mapping image.TypedImageMapping) error {
 	var errs []error
 	validateFunc := func(img string) error {
 		ref, err := image.ParseTypedImage(img, v1alpha2.TypeOperatorBundle)
@@ -691,9 +704,9 @@ func validateMapping(renderResultsPerPlatform map[OperatorCatalogPlatform]Catalo
 		return nil
 	}
 
-	for platform, catalogMetadata := range renderResultsPerPlatform {
+	for platform, catalogMetadata := range catalogMetadataByPlatform {
 		platformErrorMessage := platform.ErrorMessagePrefix()
-		for _, b := range catalogMetadata.dc.Bundles {
+		for _, b := range catalogMetadata.Dc.Bundles {
 			if err := validateFunc(b.Image); err != nil {
 				errs = append(errs, fmt.Errorf("%sbundle %q image %q: %v", platformErrorMessage, b.Name, b.Image, err))
 				continue
@@ -710,14 +723,14 @@ func validateMapping(renderResultsPerPlatform map[OperatorCatalogPlatform]Catalo
 }
 
 // pinImages resolves every image in dc to it's canonical name (includes digest).
-func (o *OperatorOptions) pinImages(ctx context.Context, renderResultsPerPlatform map[OperatorCatalogPlatform]CatalogMetadata, resolver remotes.Resolver) (err error) {
+func (o *OperatorOptions) pinImages(ctx context.Context, catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata, resolver remotes.Resolver) (err error) {
 
 	var errs []error
-	for platform, catalogMetadata := range renderResultsPerPlatform {
+	for platform, catalogMetadata := range catalogMetadataByPlatform {
 		platformErrorMessage := platform.ErrorMessagePrefix()
 		// Check that declarative config is not nil
 		// to avoid panics
-		if err := validate(catalogMetadata.dc); err != nil {
+		if err := validate(catalogMetadata.Dc); err != nil {
 			return err
 		}
 		// Instead of returning an error, just log it.
@@ -725,7 +738,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, renderResultsPerPlatfor
 			return o.ContinueOnError || (o.SkipMissing && errors.Is(err, errdefs.ErrNotFound))
 		}
 
-		for i, b := range catalogMetadata.dc.Bundles {
+		for i, b := range catalogMetadata.Dc.Bundles {
 
 			if !image.IsImagePinned(b.Image) {
 				klog.Warningf("%sbundle %s: pinning bundle image %s to digest", platformErrorMessage, b.Name, b.Image)
@@ -734,7 +747,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, renderResultsPerPlatfor
 					klog.Warningf("%sbundle %s: bundle image tag not set", platformErrorMessage, b.Name)
 					continue
 				}
-				if catalogMetadata.dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
+				if catalogMetadata.Dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
 					if isSkipErr(err) {
 						klog.Warningf("%sskipping bundle %s image %s resolve error: %v", platformErrorMessage, b.Name, b.Image, err)
 					} else {
@@ -847,11 +860,9 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg i
 /*
 writeConfigs will write the declarative and include configuration to disk in a directory generated by the catalog name.
 
-plan determines the source -> destination mapping for images associated with the provided catalog
-
 # Arguments
 
-• renderResultsPerPlatform: platform -> catalog metadata mapping for the targetCtlg argument
+• catalogMetadataByPlatform: platform -> catalog metadata mapping for the targetCtlg argument
 
 • targetCtlg: this is the target catalog reference
 
@@ -861,7 +872,7 @@ plan determines the source -> destination mapping for images associated with the
 
 • error: non-nil if an error occurs, nil otherwise
 */
-func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCatalogPlatform]CatalogMetadata, targetCtlg imgreference.DockerImageReference) ([]string, error) {
+func (o *OperatorOptions) writeConfigs(catalogMetadataByPlatform map[oc.OperatorCatalogPlatform]oc.CatalogMetadata, targetCtlg imgreference.DockerImageReference) ([]string, error) {
 
 	indexDirectories := []string{}
 
@@ -869,8 +880,8 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 	// As long as one platform is flagged as multi architecture, stop
 	// processing and assume all entries should be treated as multi platform.
 	isIndex := false
-	for platform := range renderResultsPerPlatform {
-		if platform.isIndex {
+	for platform := range catalogMetadataByPlatform {
+		if platform.IsIndex {
 			isIndex = true
 			break
 		}
@@ -880,8 +891,8 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 	createIndexAndIncludeFile := func(
 		indexDir string, // location where the index directory should go
 		includeConfigPath string, // location where the config file go
-		platform OperatorCatalogPlatform, // the platform for this catalog (only needed for writing debug info)
-		catalogMetadata CatalogMetadata, // the content to write to disk
+		platform oc.OperatorCatalogPlatform, // the platform for this catalog (only needed for writing debug info)
+		catalogMetadata oc.CatalogMetadata, // the content to write to disk
 	) error {
 
 		if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
@@ -915,11 +926,11 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 			}
 		}()
 
-		if err := declcfg.WriteJSON(*catalogMetadata.dc, indexFile); err != nil {
+		if err := declcfg.WriteJSON(*catalogMetadata.Dc, indexFile); err != nil {
 			return fmt.Errorf("error writing diff catalog: %v", err)
 		}
 
-		if err := catalogMetadata.ic.Encode(includeFile); err != nil {
+		if err := catalogMetadata.Ic.Encode(includeFile); err != nil {
 			return fmt.Errorf("error writing include config file: %v", err)
 		}
 		// success... remember this directory
@@ -939,7 +950,7 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 		// create content... e.g.:
 		// foo.io/bar/baz/image/sha256:XXXX/multi/<platform>/index/index.json
 		// foo.io/bar/baz/image/sha256:XXXX/multi/<platform>/include-config.gob
-		for platform, catalogMetdata := range renderResultsPerPlatform {
+		for platform, catalogMetdata := range catalogMetadataByPlatform {
 			err := createIndexAndIncludeFile(
 				filepath.Join(catalogBasePath, config.MultiDir, platform.String(), config.IndexDir),
 				filepath.Join(catalogBasePath, config.MultiDir, platform.String(), config.IncludeConfigFile),
@@ -953,7 +964,7 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 	} else {
 		// There should only be one platform entry for a single architecture catalog.
 		// If this is not true, then bail out since something is wrong
-		if len(renderResultsPerPlatform) != 1 {
+		if len(catalogMetadataByPlatform) != 1 {
 			return indexDirectories, fmt.Errorf("unexpected number of platforms for target catalog %q", targetCtlg.Exact())
 		}
 
@@ -961,7 +972,7 @@ func (o *OperatorOptions) writeConfigs(renderResultsPerPlatform map[OperatorCata
 		// foo.io/bar/baz/image/sha256:XXXX/index/index.json
 		// foo.io/bar/baz/image/sha256:XXXX/include-config.gob
 		// easiest way to get at the values is iterate... previous sanity check should ensure we only iterate once
-		for platform, catalogMetdata := range renderResultsPerPlatform {
+		for platform, catalogMetdata := range catalogMetadataByPlatform {
 			err := createIndexAndIncludeFile(
 				filepath.Join(catalogBasePath, config.IndexDir),
 				filepath.Join(catalogBasePath, config.IncludeConfigFile),
@@ -1097,18 +1108,18 @@ func (o *OperatorOptions) checkValidationErr(err error) error {
 	return err
 }
 
-func (o OperatorOptions) getOperatorCatalogRef(ctx context.Context, ref string) (string, error) {
-	_, _, repo, _, _ := v1alpha2.ParseImageReference(ref)
-	artifactsPath := artifactsFolderName
-	operatorCatalog := v1alpha2.TrimProtocol(ref)
-	// check for the valid config label to use
-	configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
-	if err != nil {
-		return "", fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", ref, err)
-	}
-	// initialize path starting with <current working directory>/olm_artifacts/<repo>
-	catalogContentsDir := filepath.Join(artifactsPath, repo)
-	// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-	ctlgRef := filepath.Join(catalogContentsDir, configsLabel)
-	return ctlgRef, nil
-}
+// func (o OperatorOptions) getOperatorCatalogRef(ctx context.Context, ref string) (string, error) {
+// 	_, _, repo, _, _ := v1alpha2.ParseImageReference(ref)
+// 	artifactsPath := artifactsFolderName
+// 	operatorCatalog := v1alpha2.TrimProtocol(ref)
+// 	// check for the valid config label to use
+// 	configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
+// 	if err != nil {
+// 		return "", fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", ref, err)
+// 	}
+// 	// initialize path starting with <current working directory>/olm_artifacts/<repo>
+// 	catalogContentsDir := filepath.Join(artifactsPath, repo)
+// 	// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
+// 	ctlgRef := filepath.Join(catalogContentsDir, configsLabel)
+// 	return ctlgRef, nil
+// }

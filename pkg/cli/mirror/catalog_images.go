@@ -20,6 +20,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
@@ -59,8 +60,8 @@ type imageDetails struct {
 			multi arch image: <some path>/src/catalogs/<repoPath>/multi/<platform>/index/index.json
 	*/
 	indexJsonPath string
-	platform      OperatorCatalogPlatform // platform associated with this image
-	hash          *v1.Hash                // the hash of this image pulled from the OCI layout directory (could be nil for single arch images)
+	platform      oc.OperatorCatalogPlatform // platform associated with this image
+	hash          *v1.Hash                   // the hash of this image pulled from the OCI layout directory (could be nil for single arch images)
 }
 
 /*
@@ -234,7 +235,7 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 				info = imageInfo{}
 			}
 			// reconstruct the platform from string and use that platform to lookup the matching platform image and get its hash
-			platform := *NewOperatorCatalogPlatform(platformString)
+			platform := *oc.NewOperatorCatalogPlatform(platformString)
 			layoutPath := layout.Path(filepath.Join(fullPathToRepoDir, config.LayoutsDir))
 			hash, err := getDigestFromOCILayout(ctx, layoutPath, platform)
 			if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/archive"
 	"github.com/openshift/oc-mirror/pkg/bundle"
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
@@ -34,7 +35,13 @@ const (
 
 // Pack will pack the imageset and return a temporary backend storing metadata for final push
 // The metadata has been updated by the plan stage at this point but not pushed to the backend
-func (o *MirrorOptions) Pack(ctx context.Context, prevAssocs, currAssocs image.AssociationSet, meta *v1alpha2.Metadata, archiveSize int64) (storage.Backend, error) {
+func (o *MirrorOptions) Pack(
+	ctx context.Context,
+	prevAssocs, currAssocs image.AssociationSet,
+	meta *v1alpha2.Metadata,
+	archiveSize int64,
+	allCatalogs map[string]map[oc.OperatorCatalogPlatform]oc.CatalogMetadata,
+) (storage.Backend, error) {
 	tmpdir, _, err := o.mktempDir()
 	if err != nil {
 		return nil, err
@@ -73,7 +80,7 @@ func (o *MirrorOptions) Pack(ctx context.Context, prevAssocs, currAssocs image.A
 	if err != nil {
 		return tmpBackend, err
 	}
-	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, filepath.Join(o.Dir, config.SourceDir), o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+	if err := metadata.UpdateMetadata(ctx, tmpBackend, meta, filepath.Join(o.Dir, config.SourceDir), o.SourceSkipTLS, o.SourcePlainHTTP, allCatalogs); err != nil {
 		return tmpBackend, err
 	}
 

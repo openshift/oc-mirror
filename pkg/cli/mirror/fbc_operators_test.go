@@ -15,11 +15,13 @@ import (
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -183,7 +185,7 @@ func TestGetConfigPathFromLabel(t *testing.T) {
 			imagePath:       rottenConfig,
 			configSha:       "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae5782ff",
 			expectedDirName: "",
-			err:             "label " + configsLabel + " not found in config blob c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae5782ff",
+			err:             "label " + containertools.ConfigsLocationLabel + " not found in config blob c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae5782ff",
 		},
 	}
 	for _, c := range cases {
@@ -198,6 +200,29 @@ func TestGetConfigPathFromLabel(t *testing.T) {
 
 		})
 	}
+}
+
+func TestExtractDeclarativeConfigFromImage(t *testing.T) {
+	// TODO: this needs to be completed
+	t.Run("", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		layoutPath := layout.Path(v1alpha2.OCITransportPrefix + testdata)
+		imageIndex, err := layoutPath.ImageIndex()
+		require.NoError(t, err)
+		manifest, err := imageIndex.IndexManifest()
+		require.NoError(t, err)
+		for _, descriptor := range manifest.Manifests {
+			if descriptor.MediaType.IsImage() {
+				img, err := layoutPath.Image(descriptor.Digest)
+				require.NoError(t, err)
+
+				actualDir, err := extractDeclarativeConfigFromImage(img, tmpDir)
+				require.NoError(t, err)
+				_ = actualDir
+			}
+		}
+
+	})
 }
 
 func TestFindFBCConfig(t *testing.T) {
@@ -232,7 +257,7 @@ func TestFindFBCConfig(t *testing.T) {
 				ToMirror:  "test.registry.io",
 				OutputDir: rottenManifest,
 			},
-			err: "unable to unmarshall manifest of image : unexpected end of JSON input",
+			err: "unable to unmarshal manifest of image : unexpected end of JSON input",
 		},
 		{
 			desc: "corrupted layer fails",

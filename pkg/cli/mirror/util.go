@@ -19,6 +19,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"k8s.io/klog/v2"
+
+	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 )
 
 const mappingFile = "mapping.txt"
@@ -129,36 +131,36 @@ func (o *MirrorOptions) checkErr(err error, acceptableErr func(error) bool, logM
 	return nil
 }
 
-func getPlatformKey(typeWithPlatorm interface{}) (*OperatorCatalogPlatform, error) {
+func getPlatformKey(typeWithPlatorm interface{}) (*oc.OperatorCatalogPlatform, error) {
 	if typeWithPlatorm == nil {
 		return nil, errors.New("no manifest or config provided, so unable to generate a platform key")
 	}
 	switch v := typeWithPlatorm.(type) {
 	case *v1.Platform:
-		return &OperatorCatalogPlatform{
-			os:           v.OS,
-			architecture: v.Architecture,
-			variant:      v.Variant,
-			isIndex:      true,
+		return &oc.OperatorCatalogPlatform{
+			Os:           v.OS,
+			Architecture: v.Architecture,
+			Variant:      v.Variant,
+			IsIndex:      true,
 		}, nil
 	case *v1.Descriptor:
 		if v.Platform == nil {
 			return nil, errors.New("no platform provided in descriptor, so unable to generate a platform key")
 		}
-		return &OperatorCatalogPlatform{
-			os:           v.Platform.OS,
-			architecture: v.Platform.Architecture,
-			variant:      v.Platform.Variant,
-			isIndex:      true,
+		return &oc.OperatorCatalogPlatform{
+			Os:           v.Platform.OS,
+			Architecture: v.Platform.Architecture,
+			Variant:      v.Platform.Variant,
+			IsIndex:      true,
 		}, nil
 	case *v1.ConfigFile:
 		// ConfigFile only comes into play when an image is a single architecture catalog.
 		// Callers may need to override the isIndex field if necessary
-		return &OperatorCatalogPlatform{
-			os:           v.OS,
-			architecture: v.Architecture,
-			variant:      v.Variant,
-			isIndex:      false,
+		return &oc.OperatorCatalogPlatform{
+			Os:           v.OS,
+			Architecture: v.Architecture,
+			Variant:      v.Variant,
+			IsIndex:      false,
 		}, nil
 	default:
 		// should not happen... this is a programmer error
@@ -167,10 +169,13 @@ func getPlatformKey(typeWithPlatorm interface{}) (*OperatorCatalogPlatform, erro
 }
 
 /*
-getImageDigests will fetch one or more image digests for a given image reference.
-This function handles both "manifest list" and "image" references. A "manifest list"
-can return one or more digest references, whereas a "image" reference only returns a single
-digest reference.
+getCatalogMetadataByPlatform will fetch metadata about a catalog broken down by different platforms
+for the imageRef variable. This function handles both "manifest list" and "image" references. A "manifest list"
+can return one or more platform entries in the resulting map, whereas a "image" reference only returns a single
+entry. The value of the map is initially populated with the catalog reference as a digest, and as well as
+the full artifact path assuming that layoutPath is provided (i.e. this is a OCI layout), otherwise the
+artifact path will be an empty string. The declarative config and IncludeConfig values are not yet populated,
+which will occur later.
 
 # Arguments
 
@@ -186,57 +191,126 @@ This OCI layout path could refer to a "manifest list" or an "image".
 
 # Returns
 
-• map[OperatorCatalogPlatform]CatalogMetadata: If no error occurs, returns a map whose key is OperatorCatalogPlatform
-and value is CatalogMetadata with its image digest references set.
+• map[oc.OperatorCatalogPlatform]oc.CatalogMetadata: If no error occurs, returns a map whose key is oc.OperatorCatalogPlatform
+and value is oc.CatalogMetadata with its image digest and artifact path set (if appropriate).
 If an error occurs the map will always be initialized (i.e non-nil) but could have partial results.
 
 • error: non-nil if an error occurs, nil otherwise
 */
-func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Path, insecure bool) (map[OperatorCatalogPlatform]CatalogMetadata, error) {
+func getCatalogMetadataByPlatform(ctx context.Context, imageRef string, layoutPath *layout.Path, insecure bool) (map[oc.OperatorCatalogPlatform]oc.CatalogMetadata, error) {
 
 	// initialize return values
-	digestsMap := map[OperatorCatalogPlatform]CatalogMetadata{}
+	digestsMap := map[oc.OperatorCatalogPlatform]oc.CatalogMetadata{}
 
+	// parse imageRef into a go-containerregistry reference
 	reference, err := name.ParseReference(imageRef, getNameOpts(insecure)...)
 	if err != nil {
 		return digestsMap, err
 	}
 
-	// function to update the digestsMap
-	updateDigestsMap := func(platformKey *OperatorCatalogPlatform, digestReference *name.Digest) error {
+	// function to update the digests in the map
+	updateDigestInMap := func(platformKey *oc.OperatorCatalogPlatform, digestReference *name.Digest) error {
 		if platformKey == nil {
 			return errors.New("no platform key was provided, unable to update map")
 		}
 
 		if existingCatalogMetadata, exists := digestsMap[*platformKey]; exists {
 			// we'll be updating the existing digests
-			existingCatalogMetadata.catalogRef = digestReference
+			existingCatalogMetadata.CatalogRef = digestReference
 			digestsMap[*platformKey] = existingCatalogMetadata
 		} else {
 			// does not exist yet, initialize
-			digestsMap[*platformKey] = CatalogMetadata{
-				catalogRef: digestReference,
+			digestsMap[*platformKey] = oc.CatalogMetadata{
+				CatalogRef: digestReference,
 			}
 		}
 		return nil
 	}
 
-	processImage := func(img v1.Image, digestRef name.Digest, flagAsManifestList bool) error {
+	// function to update the fullArtifactPath in the map:
+	// <current working directory>/olm_artifacts/<repo>/<optional platform>/<config folder>
+	updateArtifactPathInMap := func(platformKey *oc.OperatorCatalogPlatform, fullArtifactPath string) error {
+		if platformKey == nil {
+			return errors.New("no platform key was provided, unable to update map")
+		}
+
+		if existingCatalogMetadata, exists := digestsMap[*platformKey]; exists {
+			// we'll be updating the existing digests
+
+			existingCatalogMetadata.FullArtifactPath = fullArtifactPath
+			digestsMap[*platformKey] = existingCatalogMetadata
+		} else {
+			// does not exist yet, initialize
+			digestsMap[*platformKey] = oc.CatalogMetadata{
+				FullArtifactPath: fullArtifactPath,
+			}
+		}
+		return nil
+	}
+
+	// creates a platform from the image configuration
+	getKeyFromImage := func(img v1.Image, flagAsManifestList bool) (*oc.OperatorCatalogPlatform, error) {
 		config, err := img.ConfigFile()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		platformKey, err := getPlatformKey(config)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// override the isIndex field if flag is set
 		if flagAsManifestList {
-			platformKey.isIndex = true
+			platformKey.IsIndex = true
 		}
-		updateDigestsMap(platformKey, &digestRef)
+		return platformKey, nil
+	}
+
+	// if this is a OCI layout, extract the declarative config and update the path to where this was extracted
+	extractDCIfNecessary := func(img v1.Image, platformKey *oc.OperatorCatalogPlatform) error {
+		// when the layoutPath is non-nil, this is an indicator that we need to extract
+		// the declarative config and place it into the artifacts directory
+		if layoutPath != nil {
+			// TODO: need to validate the value used for imageRef here
+
+			// pull the declarative config out of the image and obtain the path where this was stored.
+			// Should be <current working directory>/olm_artifacts/<repo>/<optional platform>/<config folder>
+			fullArtifactPath, err := extractDeclarativeConfigFromImage(img, filepath.Join(artifactsFolderName, imageRef, platformKey.String()))
+			if err != nil {
+				return err
+			}
+			// save the path for later
+			updateArtifactPathInMap(platformKey, fullArtifactPath)
+		}
 		return nil
 	}
+
+	// common function for processing images
+	processImage := func(img v1.Image, descriptor v1.Descriptor, digestRef name.Digest, flagAsManifestList bool) error {
+		var platformKey *oc.OperatorCatalogPlatform
+		if descriptor.Platform == nil {
+			platformKey, err = getKeyFromImage(img, flagAsManifestList)
+			if err != nil {
+				return err
+			}
+		} else {
+			platformKey, err = getPlatformKey(descriptor.Platform)
+			if err != nil {
+				return err
+			}
+			// override the isIndex field if flag is set
+			if flagAsManifestList {
+				platformKey.IsIndex = true
+			}
+		}
+		if err := extractDCIfNecessary(img, platformKey); err != nil {
+			return err
+		}
+		if err := updateDigestInMap(platformKey, &digestRef); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// processImageIndex is recursive, so needs to be defined as a var here
 	var processImageIndex func(imageIndex v1.ImageIndex) error
 	processImageIndex = func(imageIndex v1.ImageIndex) error {
@@ -254,28 +328,14 @@ func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Pa
 		for _, manifest := range indexManifest.Manifests {
 			digestReference := reference.Context().Digest(manifest.Digest.String())
 
-			// if this is an image, and we don't have platform information,
-			// we'll have to delegate to processImage
-			if manifest.MediaType.IsImage() && manifest.Platform == nil {
-				// delegate to processImage
+			if manifest.MediaType.IsImage() {
 				img, err := imageIndex.Image(manifest.Digest)
 				if err != nil {
 					return err
 				}
-				err = processImage(img, digestReference, flagAsManifestList)
-				if err != nil {
+				if err := processImage(img, manifest, digestReference, flagAsManifestList); err != nil {
 					return err
 				}
-				// continue with next manifest
-				continue
-			}
-			// if we can get the platform from here, do so
-			if manifest.Platform != nil {
-				platformKey, err := getPlatformKey(manifest.Platform)
-				if err != nil {
-					return err
-				}
-				updateDigestsMap(platformKey, &digestReference)
 			} else if manifest.MediaType.IsIndex() {
 				// get the inner image index and recursively process it
 				innerImageIndex, err := imageIndex.ImageIndex(manifest.Digest)
@@ -303,11 +363,11 @@ func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Pa
 	}
 
 	// handle as docker image reference
-	descriptor, err := remote.Get(reference, getRemoteOpts(ctx, insecure)...)
+	remoteDescriptor, err := remote.Get(reference, getRemoteOpts(ctx, insecure)...)
 	if err != nil {
 		return digestsMap, err
 	}
-	mediaType := descriptor.MediaType
+	mediaType := remoteDescriptor.MediaType
 	if mediaType.IsIndex() {
 		// fetch the imageIndex (i.e. manifest list)
 		imageIndex, err := remote.Index(reference, getRemoteOpts(ctx, false)...)
@@ -316,17 +376,17 @@ func getImageDigests(ctx context.Context, imageRef string, layoutPath *layout.Pa
 		}
 		return digestsMap, processImageIndex(imageIndex)
 	} else if mediaType.IsImage() {
-		img, err := descriptor.Image()
+		img, err := remoteDescriptor.Image()
 		if err != nil {
 			return digestsMap, err
 		}
-		digestReference := reference.Context().Digest(descriptor.Digest.String())
-		return digestsMap, processImage(img, digestReference, false)
+		digestReference := reference.Context().Digest(remoteDescriptor.Digest.String())
+		return digestsMap, processImage(img, remoteDescriptor.Descriptor, digestReference, false)
 	}
 
 	// should probably never get here... it means that the media type was not provided
 	// at all, or was a type that's unexpected.
-	return digestsMap, fmt.Errorf("unknown media type %q encountered", descriptor.MediaType)
+	return digestsMap, fmt.Errorf("unknown media type %q encountered", remoteDescriptor.MediaType)
 }
 
 /*
@@ -348,7 +408,7 @@ is returned.
 
 • error: non-nil if an error occurs, nil otherwise
 */
-func getDigestFromOCILayout(ctx context.Context, layoutPath layout.Path, platformIn OperatorCatalogPlatform) (*v1.Hash, error) {
+func getDigestFromOCILayout(ctx context.Context, layoutPath layout.Path, platformIn oc.OperatorCatalogPlatform) (*v1.Hash, error) {
 	var hashResult *v1.Hash
 
 	processImage := func(img v1.Image, flagAsManifestList bool) error {
@@ -362,7 +422,7 @@ func getDigestFromOCILayout(ctx context.Context, layoutPath layout.Path, platfor
 		}
 		// override the isIndex field if flag is set
 		if flagAsManifestList {
-			platformKey.isIndex = true
+			platformKey.IsIndex = true
 		}
 
 		if *platformKey == platformIn {
@@ -418,7 +478,7 @@ func getDigestFromOCILayout(ctx context.Context, layoutPath layout.Path, platfor
 				}
 				// override the isIndex field if flag is set
 				if flagAsManifestList {
-					platformKey.isIndex = true
+					platformKey.IsIndex = true
 				}
 
 				if *platformKey == platformIn {

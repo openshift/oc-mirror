@@ -606,7 +606,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	if err := bundle.MakeWorkspaceDirs(o.Dir); err != nil {
 		return err
 	}
-	meta, mapping, err := o.Create(ctx, cfg)
+	meta, mapping, allCatalogs, err := o.Create(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -727,7 +727,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 			return err
 		}
 		workspace := filepath.Join(o.Dir, config.SourceDir)
-		if err = metadata.UpdateMetadata(ctx, sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP); err != nil {
+		if err = metadata.UpdateMetadata(ctx, sourceBackend, &meta, workspace, o.SourceSkipTLS, o.SourcePlainHTTP, allCatalogs); err != nil {
 			return err
 		}
 		if err := metadata.SyncMetadata(ctx, sourceBackend, targetBackend); err != nil {
@@ -745,7 +745,7 @@ func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.Im
 		return err
 	}
 
-	meta, mapping, err := o.Create(ctx, cfg)
+	meta, mapping, allCatalogs, err := o.Create(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -781,7 +781,7 @@ func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.Im
 	}
 
 	// Pack the images set
-	tmpBackend, err := o.Pack(ctx, prunedAssociations, assocs, &meta, cfg.ArchiveSize)
+	tmpBackend, err := o.Pack(ctx, prunedAssociations, assocs, &meta, cfg.ArchiveSize, allCatalogs)
 	if err != nil {
 		if errors.Is(err, ErrNoUpdatesExist) {
 			klog.Infof("No updates detected, process stopping")

@@ -182,7 +182,7 @@ func (o Operator) GetUniqueName() (string, error) {
 	return uniqueName, nil
 }
 
-// parseImageName returns the registry, organisation, repository, tag and digest
+// parseImageName returns the registry, organization, repository, tag and digest
 // from the imageName.
 // It can handle both remote and local images.
 func ParseImageReference(imageName string) (string, string, string, string, string) {
