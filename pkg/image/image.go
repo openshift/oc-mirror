@@ -105,9 +105,7 @@ func ParseReference(ref string) (TypedImageReference, error) {
 	// in case of TargetName and TargetTag replacing the original name ,
 	// the returned path will not exist on disk
 	manifest, err := getManifest(context.Background(), ref)
-	if err != nil {
-		fmt.Printf("%v", err)
-	} else {
+	if err == nil {
 		dst.ID = string(manifest.ConfigInfo().Digest)
 	}
 	return TypedImageReference{Ref: dst, Type: dstType, OCIFBCPath: ref}, nil
