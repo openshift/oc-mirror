@@ -7,15 +7,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 )
 
 func TestUpdateMetadata_Catalogs(t *testing.T) {
 	type spec struct {
-		name     string
-		config   v1alpha2.ImageSetConfiguration
-		expIC    v1alpha2.IncludeConfig
-		expError string
+		name        string
+		config      v1alpha2.ImageSetConfiguration
+		allCatalogs map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata
+		expIC       v1alpha2.IncludeConfig
+		expError    string
 	}
 
 	cases := []spec{
@@ -36,6 +38,11 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 					},
 				},
 			},
+			allCatalogs: map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata{
+				"test.registry/catalog@sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031": {
+					operatorcatalog.OperatorCatalogPlatform{IsIndex: false}: operatorcatalog.CatalogMetadata{},
+				},
+			},
 			expIC: v1alpha2.IncludeConfig{},
 		},
 		{
@@ -50,6 +57,11 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+			allCatalogs: map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata{
+				"test.registry/catalog@sha256:30c794a11b4c340c77238c5b7ca845752904bd8b74b73a9b16d31253234da031": {
+					operatorcatalog.OperatorCatalogPlatform{IsIndex: false}: operatorcatalog.CatalogMetadata{},
 				},
 			},
 			expIC: v1alpha2.IncludeConfig{
@@ -109,11 +121,13 @@ func TestUpdateMetadata_Catalogs(t *testing.T) {
 			}
 			backend, err := storage.ByConfig("", cfg)
 			require.NoError(t, err)
-			err = UpdateMetadata(context.TODO(), backend, &inputMeta, "testdata", true, true)
+			err = UpdateMetadata(context.TODO(), backend, &inputMeta, "testdata", true, true, c.allCatalogs)
 			if c.expError != "" {
 				require.EqualError(t, err, c.expError)
 			} else {
 				require.NoError(t, err)
+				// must have at least one entry
+				require.GreaterOrEqual(t, len(inputMeta.PastMirror.Operators), 1)
 				require.Equal(t, c.expIC, inputMeta.PastMirror.Operators[len(inputMeta.PastMirror.Operators)-1].IncludeConfig)
 			}
 		})
@@ -186,7 +200,8 @@ func TestUpdateMetadata_OCPReleases(t *testing.T) {
 			}
 			backend, err := storage.ByConfig("", cfg)
 			require.NoError(t, err)
-			err = UpdateMetadata(context.TODO(), backend, &inputMeta, "testdata", true, true)
+			// NOTE: passing nil for the "allCatalogs" argument is fine since this test has no operator catalogs
+			err = UpdateMetadata(context.TODO(), backend, &inputMeta, "testdata", true, true, nil)
 			if c.expError != "" {
 				require.EqualError(t, err, c.expError)
 			} else {

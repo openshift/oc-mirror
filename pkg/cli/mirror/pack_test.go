@@ -11,17 +11,19 @@ import (
 	"github.com/openshift/oc-mirror/internal/testutils"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 )
 
 func TestPack(t *testing.T) {
 	type spec struct {
-		desc    string
-		opts    *MirrorOptions
-		meta    v1alpha2.Metadata
-		assocs  image.AssociationSet
-		updates bool
+		desc        string
+		opts        *MirrorOptions
+		allCatalogs map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata
+		meta        v1alpha2.Metadata
+		assocs      image.AssociationSet
+		updates     bool
 	}
 
 	cases := []spec{
@@ -73,6 +75,8 @@ func TestPack(t *testing.T) {
 					},
 				},
 			},
+			// this test has no operator catalogs, just use an empty map
+			allCatalogs: map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata{},
 		},
 		{
 			desc: "Success/IgnoreHistory",
@@ -124,6 +128,8 @@ func TestPack(t *testing.T) {
 					},
 				},
 			},
+			// this test has no operator catalogs, just use an empty map
+			allCatalogs: map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata{},
 		},
 		{
 			desc: "Success/Updates",
@@ -157,6 +163,8 @@ func TestPack(t *testing.T) {
 					PastAssociations: []v1alpha2.Association{},
 				},
 			},
+			// this test has no operator catalogs, just use an empty map
+			allCatalogs: map[string]map[operatorcatalog.OperatorCatalogPlatform]operatorcatalog.CatalogMetadata{},
 		},
 	}
 
@@ -174,7 +182,7 @@ func TestPack(t *testing.T) {
 			prevAssocs, err := image.ConvertToAssociationSet(c.meta.PastAssociations)
 			require.NoError(t, err)
 			// First run will create mirror_seq1_0000.tar
-			_, err = c.opts.Pack(ctx, prevAssocs, c.assocs, &c.meta, 0)
+			_, err = c.opts.Pack(ctx, prevAssocs, c.assocs, &c.meta, 0, c.allCatalogs)
 
 			if c.updates {
 				require.NoError(t, err)

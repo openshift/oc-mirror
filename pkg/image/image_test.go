@@ -116,3 +116,126 @@ func TestParseImageName(t *testing.T) {
 		})
 	}
 }
+
+func TestV1A2ParseImageReferenceOCIRefs(t *testing.T) {
+	type spec struct {
+		desc      string
+		imageName string
+		expReg    string
+		expOrg    string
+		expRepo   string
+		expTag    string
+		expDigest string
+	}
+	cases := []spec{
+		{
+			desc:      "no path at all",
+			imageName: "oci:",
+			expReg:    "",
+			expOrg:    "",
+			expRepo:   "",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "single dir at relative path",
+			imageName: "oci://foo",
+			expReg:    "",
+			expOrg:    "",
+			expRepo:   "foo",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "no dir relative path",
+			imageName: "oci://",
+			expReg:    "",
+			expOrg:    "",
+			expRepo:   "",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "two levels deep at relative path",
+			imageName: "oci://foo/bar",
+			expReg:    "foo",
+			expOrg:    "",
+			expRepo:   "bar",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "three levels deep at relative path",
+			imageName: "oci://foo/bar/baz",
+			expReg:    "foo",
+			expOrg:    "bar",
+			expRepo:   "baz",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "three levels deep at relative path",
+			imageName: "oci://foo/bar/baz/blah",
+			expReg:    "foo",
+			expOrg:    "bar/baz",
+			expRepo:   "blah",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "no dir at root",
+			imageName: "oci:///",
+			expReg:    "",
+			expOrg:    "",
+			expRepo:   "",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "single dir at root",
+			imageName: "oci:///foo",
+			expReg:    "",
+			expOrg:    "",
+			expRepo:   "foo",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "two levels deep at root",
+			imageName: "oci:///foo/bar",
+			expReg:    "foo",
+			expOrg:    "",
+			expRepo:   "bar",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "three levels deep at root",
+			imageName: "oci:///foo/bar/baz",
+			expReg:    "foo",
+			expOrg:    "bar",
+			expRepo:   "baz",
+			expDigest: "",
+			expTag:    "",
+		},
+		{
+			desc:      "three levels deep at root",
+			imageName: "oci:///foo/bar/baz/blah",
+			expReg:    "foo",
+			expOrg:    "bar/baz",
+			expRepo:   "blah",
+			expDigest: "",
+			expTag:    "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			registry, org, repo, tag, sha := v1alpha2.ParseImageReference(c.imageName)
+			require.Equal(t, c.expReg, registry)
+			require.Equal(t, c.expOrg, org)
+			require.Equal(t, c.expRepo, repo)
+			require.Equal(t, c.expDigest, sha)
+			require.Equal(t, c.expTag, tag)
+		})
+	}
+}
