@@ -33,7 +33,7 @@ const (
 	// URL where graph archive is stored
 	graphURL       = "https://api.openshift.com/api/upgrades_info/graph-data"
 	outputFile     = "cincinnati-graph-data.tar.gz"
-	graphDataDir   = "/var/lib/cincinnati/graph-data/"
+	graphDataDir   = "/var/lib/cincinnati-graph-data/"
 	getDataTimeout = time.Minute * 60
 )
 
@@ -101,7 +101,10 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 		return refs, fmt.Errorf("error creating add layer: %v", err)
 	}
 
+	cpCmd := fmt.Sprintf("cp -rp %s/* /var/lib/cincinnati/graph-data", graphDataDir)
+
 	update := func(cfg *v1.ConfigFile) {
+		cfg.Config.Cmd = []string{"/bin/bash", "-c", cpCmd}
 		cfg.Author = "oc-mirror"
 	}
 	layoutPath, err := imgBuilder.CreateLayout(ubiImage.Ref.Exact(), layoutDir)
