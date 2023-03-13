@@ -12,7 +12,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/openshift/library-go/pkg/image/reference"
 	libgoref "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -33,7 +32,7 @@ var (
 
 type TypedImageReference struct {
 	Type       imagesource.DestinationType
-	Ref        reference.DockerImageReference
+	Ref        libgoref.DockerImageReference
 	OCIFBCPath string
 }
 
