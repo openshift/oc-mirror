@@ -31,10 +31,11 @@ const (
 	// Base image to use when build graph image
 	graphBaseImage = "registry.access.redhat.com/ubi8/ubi-micro:latest"
 	// URL where graph archive is stored
-	graphURL       = "https://api.openshift.com/api/upgrades_info/graph-data"
-	outputFile     = "cincinnati-graph-data.tar.gz"
-	graphDataDir   = "/var/lib/cincinnati-graph-data/"
-	getDataTimeout = time.Minute * 60
+	graphURL           = "https://api.openshift.com/api/upgrades_info/graph-data"
+	outputFile         = "cincinnati-graph-data.tar.gz"
+	graphDataDir       = "/var/lib/cincinnati-graph-data/"
+	graphDataMountPath = "/var/lib/cincinnati/graph-data"
+	getDataTimeout     = time.Minute * 60
 )
 
 // unpackRelease will unpack Cincinnati graph data if it exists in the archive
@@ -101,7 +102,7 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 		return refs, fmt.Errorf("error creating add layer: %v", err)
 	}
 
-	cpCmd := fmt.Sprintf("cp -rp %s/* /var/lib/cincinnati/graph-data", graphDataDir)
+	cpCmd := fmt.Sprintf("cp -rp %s/* %s", graphDataDir, graphDataMountPath)
 
 	update := func(cfg *v1.ConfigFile) {
 		cfg.Config.Cmd = []string{"/bin/bash", "-c", cpCmd}
