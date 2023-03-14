@@ -19,7 +19,7 @@ import (
 	oc "github.com/openshift/oc-mirror/pkg/cli/mirror/operatorcatalog"
 )
 
-func TestGetImageDigests(t *testing.T) {
+func TestGetCatalogMetadataByPlatform(t *testing.T) {
 	// function to calculate a sha from provided data
 	sha256String := func(data []byte) string {
 		h := sha256.Sum256(data)
@@ -332,7 +332,7 @@ func TestGetImageDigests(t *testing.T) {
 	}
 }
 
-func TestGetImageDigestsFromOCILayout(t *testing.T) {
+func TestGetCatalogMetadataByPlatformFromOCILayout(t *testing.T) {
 
 	type test struct {
 		name                  string // name of test
