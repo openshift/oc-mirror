@@ -41,6 +41,7 @@ const (
 	rottenConfig     = "testdata/artifacts/rhop-rotten-cfg"      // this has a broken config file
 	otherLayer       = "testdata/artifacts/rhop-not-catalog"     // this has a broken config file (TODO: only diff with rhop-rotten-cfg is blob layer... why?)
 	multiTestData    = "testdata/manifestlist/testonly/layout"   // multi architecture test case
+	singleTestData   = "testdata/single/testonly/layout"         // single architecture test case
 	registriesConfig = "testdata/configs/registries.conf"
 )
 
