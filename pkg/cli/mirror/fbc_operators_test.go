@@ -146,8 +146,10 @@ func TestExtractDeclarativeConfigFromImage(t *testing.T) {
 			// It then proceeds to untar the content, but since this layer is not a tar, the tar.Next()
 			// function gets an unexpected EOF, and causes the PipeWriter to close. This means that when
 			// we attempt to read the "tar" in our code, we get an EOF, and therefore no error.
+			// However, the code will check to make sure the folder exists and has content in it
+			// and returns an error if this does not happen.
 			// We won't get any files either since the extraction can't complete.
-			assertion: require.NoError,
+			assertion: require.Error,
 		},
 		{
 			name:          "image has broken config file",

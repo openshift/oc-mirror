@@ -173,7 +173,7 @@ func (o *MirrorOptions) run(
 
 			// get the catalog reference
 			// TODO: still not thrilled with this... this tries to get an ID when it does not have to since that'll happen later
-			//       in getImageDigests, and the code is still parsing a path like it means something
+			//       in getCatalogMetadataByPlatform, and the code is still parsing a path like it means something
 			// TODO: could this just be replaced with _, _, repo, _, _ := v1alpha2.ParseImageReference(ref) instead
 			//       especially since this is the OCI pathway?
 			parsedRef, err := image.ParseReference(ctlg.Catalog)

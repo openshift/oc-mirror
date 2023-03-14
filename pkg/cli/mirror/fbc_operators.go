@@ -385,6 +385,19 @@ func extractDeclarativeConfigFromImage(img v1.Image, extractedImageDir string) (
 			return "", err
 		}
 	}
+	// check for the folder (it should exist if we found something)
+	_, err = os.Stat(returnPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("directory not found after extracting %q within image", configsPrefix)
+	}
+	// folder itself should contain data
+	dirs, err := os.ReadDir(returnPath)
+	if err != nil {
+		return "", err
+	}
+	if len(dirs) == 0 {
+		return "", fmt.Errorf("no content found at %q within image", configsPrefix)
+	}
 	return returnPath, nil
 }
 
