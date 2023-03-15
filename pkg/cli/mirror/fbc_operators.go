@@ -15,6 +15,7 @@ import (
 
 	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/opencontainers/go-digest"
 
@@ -563,6 +564,9 @@ func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, 
 	}
 	imgsrc, err := ociImgRef.NewImageSource(ctx, nil)
 	if err != nil {
+		if err == layout.ErrMoreThanOneImage {
+			return nil, errors.New("multiple catalogs in the same location is not supported: https://github.com/openshift/oc-mirror/blob/main/TROUBLESHOOTING.md#error-examples")
+		}
 		return nil, fmt.Errorf("unable to get OCI Image from %s: %w", path, err)
 	}
 	return imgsrc, nil
