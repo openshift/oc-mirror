@@ -204,11 +204,6 @@ func (o *MirrorOptions) run(
 		allCatalogs[ctlg.Catalog] = catalogMetadataByPlatform
 	}
 
-	// err := o.createOlmArtifactsForOCI(ctx, *cfg)
-	// if err != nil {
-	// 	return mmappings, err
-	// }
-
 	mappings, err := operatorPlan(ctx, *cfg, allCatalogs)
 	if err != nil {
 		return mmappings, allCatalogs, err
