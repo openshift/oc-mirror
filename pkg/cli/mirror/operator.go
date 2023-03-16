@@ -659,10 +659,20 @@ func (o *OperatorOptions) plan(ctx context.Context, catalogMetadataByPlatform ma
 		}
 		result.Remove(ctlgImg)
 
-		// TODO: why is this necessary???
+		// values for keys might have file:// which is not correct, so we'll write out the mapping
+		// and read it back in to get an accurate mapping
+
+		// 1) write the mapping file out
 		if err := writeMappingFile(mappingFile, result); err != nil {
 			return nil, err
 		}
+		// 2) read it back in
+		mappingsFromFile, err := image.ReadImageMapping(mappingFile, "=", v1alpha2.TypeOperatorBundle)
+		if err != nil {
+			return nil, err
+		}
+		// save mappings for later
+		allMappings.Merge(mappingsFromFile)
 	}
 
 	// Write catalog OCI layout file to src so it is included in the archive
