@@ -75,69 +75,77 @@ func TestMirrorComplete(t *testing.T) {
 		{
 			name: "Valid/RegDest",
 			args: []string{"docker://reg.com"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror: "reg.com",
+				ToMirror:       "reg.com",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegDest",
 			args: []string{"docker://localhost"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror: "localhost",
+				ToMirror:       "localhost",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/FqdnRegPortDest",
 			args: []string{"docker://reg.com:5000"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror: "reg.com:5000",
+				ToMirror:       "reg.com:5000",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegPortDest",
 			args: []string{"docker://localhost:5000"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror: "localhost:5000",
+				ToMirror:       "localhost:5000",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/RegNamespace",
 			args: []string{"docker://reg.com/foo/bar"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror:      "reg.com",
-				UserNamespace: "foo/bar",
+				ToMirror:       "reg.com",
+				UserNamespace:  "foo/bar",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegNamespace",
 			args: []string{"docker://localhost/foo/bar"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror:      "localhost",
-				UserNamespace: "foo/bar",
+				ToMirror:       "localhost",
+				UserNamespace:  "foo/bar",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/NonFqdnRegPortNamespace",
 			args: []string{"docker://reg:5000/foo"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror:      "reg:5000",
-				UserNamespace: "foo",
+				ToMirror:       "reg:5000",
+				UserNamespace:  "foo",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
 			name: "Valid/NonFqdnRegPortNamespaceName",
 			args: []string{"docker://reg:5000/foo/bar"},
-			opts: &MirrorOptions{},
+			opts: &MirrorOptions{MaxNestedPaths: 3},
 			expOpts: &MirrorOptions{
-				ToMirror:      "reg:5000",
-				UserNamespace: "foo/bar",
+				ToMirror:       "reg:5000",
+				UserNamespace:  "foo/bar",
+				MaxNestedPaths: 3,
 			},
 		},
 		{
@@ -214,6 +222,12 @@ func TestMirrorComplete(t *testing.T) {
 			args:     []string{"foo"},
 			opts:     &MirrorOptions{},
 			expError: "no scheme delimiter in destination argument",
+		},
+		{
+			name:     "Invalid/ExceedsNestedPathsLength",
+			args:     []string{"docker://reg.com/foo/bar/baz"},
+			opts:     &MirrorOptions{MaxNestedPaths: 2},
+			expError: "the max-nested-paths value (3) for reg.com/foo/bar/baz exceeds the registry mirror paths setting (some registries limit the nested paths)",
 		},
 	}
 
