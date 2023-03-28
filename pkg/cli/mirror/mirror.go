@@ -180,7 +180,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 		}
 		o.ToMirror = mirror.Ref.Registry
 		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
-		err = checkDockerReference(mirror)
+		err = checkDockerReference(mirror, o.MaxNestedPaths)
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 }
 
 // checkDockerReference prints warnings or returns an error if applicable.
-func checkDockerReference(mirror imagesource.TypedImageReference) error {
+func checkDockerReference(mirror imagesource.TypedImageReference, nested int) error {
 	switch {
 	case mirror.Ref.Registry == "" && mirror.Ref.Namespace != "" && strings.Count(mirror.Ref.Name, "/") >= 1:
 		klog.V(0).Info("The docker reference was parsed as a namespace and a repository name, not including a registry.")
@@ -213,6 +213,12 @@ func checkDockerReference(mirror imagesource.TypedImageReference) error {
 	}
 	if mirror.Ref.Registry == "" || mirror.Ref.Tag != "" || mirror.Ref.ID != "" {
 		return fmt.Errorf("destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID")
+	}
+
+	depth := strings.Split(strings.Join([]string{mirror.Ref.Namespace, mirror.Ref.Name}, "/"), "/")
+	if len(depth) > nested {
+		destination := strings.Join([]string{mirror.Ref.Registry, mirror.Ref.Namespace, mirror.Ref.Name}, "/")
+		return fmt.Errorf("the max-nested-paths value (%d) for %s exceeds the registry mirror paths setting (some registries limit the nested paths)", len(depth), destination)
 	}
 	return nil
 }
