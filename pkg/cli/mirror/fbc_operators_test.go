@@ -1036,7 +1036,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi:latest",
 			expectedErr: "",
 		},
 		{
@@ -1123,7 +1123,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 			operator: v1alpha2.Operator{
 				Catalog: fmt.Sprintf("%s//%s", v1alpha2.OCITransportPrefix, testdata),
 			},
-			digest:  digest.FromString("just for testing"),
+			digest:  "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262",
 			destRef: "docker://localhost:5000/disconnected_ocp/redhat-operator-index:4.12",
 			expMapping: image.TypedImageMapping{
 
@@ -1135,7 +1135,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Namespace: "artifacts",
 							Name:      "rhop-ctlg-oci",
 							Tag:       "",
-							ID:        digest.FromString("just for testing").String(),
+							ID:        "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262",
 						},
 						OCIFBCPath: "oci://testdata/artifacts/rhop-ctlg-oci",
 					},
@@ -1149,7 +1149,7 @@ func TestAddCatalogToMapping(t *testing.T) {
 							Namespace: "disconnected_ocp",
 							Name:      "redhat-operator-index",
 							Tag:       "4.12",
-							ID:        digest.FromString("just for testing").String(),
+							ID:        "sha256:c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262",
 						},
 						OCIFBCPath: "",
 					},

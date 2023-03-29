@@ -109,7 +109,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			expError: "invalid configuration: catalog \"test\": duplicate found in configuration",
+			expError: "invalid configuration: catalog \"test:latest\": duplicate found in configuration",
 		},
 		{
 			name: "Invalid/DuplicateChannels",

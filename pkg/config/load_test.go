@@ -228,22 +228,22 @@ mirror:
 			expected: "/tmp/foo/bar",
 		},
 		{
-			expected: "baz",
+			expected: "baz:latest",
 		},
 		{
-			expected: "tmp/foo/baz",
+			expected: "tmp/foo/baz:latest",
 		},
 		{
-			expected: "baz",
+			expected: "baz:latest",
 		},
 		{
-			expected: "baz",
+			expected: "baz:latest",
 		},
 		{
-			expected: "baz/abc",
+			expected: "baz/abc:latest",
 		},
 		{
-			expected: "baz/abc",
+			expected: "baz/abc:latest",
 		},
 	}
 	cfg, err := LoadConfig([]byte(ctlgCfg))

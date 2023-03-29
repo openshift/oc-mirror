@@ -1,8 +1,10 @@
 package image
 
 import (
+	"path/filepath"
 	"testing"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
@@ -236,6 +238,72 @@ func TestV1A2ParseImageReferenceOCIRefs(t *testing.T) {
 			require.Equal(t, c.expRepo, repo)
 			require.Equal(t, c.expDigest, sha)
 			require.Equal(t, c.expTag, tag)
+		})
+	}
+}
+
+func TestGetFirstDigestFromPath(t *testing.T) {
+	type spec struct {
+		desc           string
+		inRef          string
+		errorFunc      require.ErrorAssertionFunc
+		expectedDigest *v1.Hash
+	}
+
+	makeRef := func(path string) string {
+		absPath, err := filepath.Abs(path)
+		require.NoError(t, err)
+		return v1alpha2.OCITransportPrefix + "//" + absPath
+	}
+	cases := []spec{
+		{
+			desc:           "single arch case one",
+			inRef:          makeRef("../cli/mirror/testdata/artifacts/rhop-ctlg-oci"),
+			errorFunc:      require.NoError,
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262"},
+		},
+		{
+			desc:           "single arch case two",
+			inRef:          makeRef("../cli/mirror/testdata/single/testonly/layout"),
+			errorFunc:      require.NoError,
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "2243535a05266fa83c1b3765cd813829264ea6893485dbbfb78cca46830fc467"},
+		},
+		{
+			desc:           "multi arch case one",
+			inRef:          makeRef("../cli/mirror/testdata/manifestlist/hello"),
+			errorFunc:      require.NoError,
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "d0c9de6b9869c144aca831898c562d01169b740e50a73b8893cdd05ab94c64b7"},
+		},
+		{
+			desc:           "multi arch case two",
+			inRef:          makeRef("../cli/mirror/testdata/manifestlist/testonly/layout"),
+			errorFunc:      require.NoError,
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "f8859996f481d0332f486fca612ac64f4fc31b94d03f45086ed3e1aa3df3f5f7"},
+		},
+		{
+			desc:           "multi arch case three - manifest at root",
+			inRef:          makeRef("../cli/mirror/testdata/manifestlist/manifestlist-at-root/layout"),
+			errorFunc:      require.NoError,
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "f8859996f481d0332f486fca612ac64f4fc31b94d03f45086ed3e1aa3df3f5f7"},
+		},
+		{
+			desc:           "nonexistent directory",
+			inRef:          makeRef("foo"),
+			errorFunc:      require.Error,
+			expectedDigest: nil,
+		},
+		{
+			desc:           "index is unmarshallable fails",
+			inRef:          makeRef("../cli/mirror/testdata/artifacts/rhop-rotten-manifest"),
+			errorFunc:      require.Error,
+			expectedDigest: nil,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			actualDigest, err := getFirstDigestFromPath(c.inRef)
+			require.Equal(t, c.expectedDigest, actualDigest)
+			c.errorFunc(t, err)
 		})
 	}
 }

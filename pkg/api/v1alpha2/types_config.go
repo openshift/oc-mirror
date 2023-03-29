@@ -172,11 +172,22 @@ func (o Operator) GetUniqueName() (string, error) {
 		}
 		uniqueName = path.Join(uniqueName, name)
 	}
-	if tag != "" {
-		uniqueName = uniqueName + ":" + tag
+
+	if tag == "" && id == "" {
+		// if we get here without a tag or digest, default to latest tag
+		uniqueName = uniqueName + ":" + "latest"
 	} else {
-		if id != "" {
-			uniqueName = uniqueName + "@sha256:" + id
+		// prefer the parsed tag if we have one...
+		if tag != "" {
+			uniqueName = uniqueName + ":" + tag
+		} else {
+			// ... otherwise use the SHA if we have one
+			if id != "" {
+				uniqueName = uniqueName + "@sha256:" + id
+			} else {
+				// ... no digest either, so fallback to latest tag (shouldn't happen)
+				uniqueName = uniqueName + ":" + "latest"
+			}
 		}
 	}
 	return uniqueName, nil
