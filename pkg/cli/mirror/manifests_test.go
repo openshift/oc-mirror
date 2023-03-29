@@ -458,7 +458,7 @@ func TestICSPGeneration(t *testing.T) {
 				// for loop replaces require.Equal(test.expected, icsps): order elements in Spec.RepositoryDigestMirrors
 				// was making the test fail
 				for ind, icsp := range test.expected {
-					require.Equal(t, icsp.Spec.RepositoryDigestMirrors, icsps[ind].Spec.RepositoryDigestMirrors)
+					require.ElementsMatch(t, icsp.Spec.RepositoryDigestMirrors, icsps[ind].Spec.RepositoryDigestMirrors)
 					require.Equal(t, icsp.Labels, icsps[ind].Labels)
 					require.Equal(t, icsp.Name, icsps[ind].Name)
 				}

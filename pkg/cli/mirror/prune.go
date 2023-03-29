@@ -26,13 +26,18 @@ import (
 
 // pruneRegistry plans and executes registry pruning based on current and previous Associations.
 func (o *MirrorOptions) pruneRegistry(ctx context.Context, prev, curr image.AssociationSet) error {
-	deleter, toRemove, err := o.planImagePruning(ctx, curr, prev)
-	if err != nil {
-		return err
+	//CFE-739
+	if !o.SkipPruning {
+		deleter, toRemove, err := o.planImagePruning(ctx, curr, prev)
+		if err != nil {
+			return err
+		}
+		// We can use MaxPerRegistry for maxWorkers because
+		// we only prune from one registry
+		return o.pruneImages(deleter, toRemove, o.MaxPerRegistry)
 	}
-	// We can use MaxPerRegistry for maxWorkers because
-	// we only prune from one registry
-	return o.pruneImages(deleter, toRemove, o.MaxPerRegistry)
+	klog.Info("skipped pruning")
+	return nil
 }
 
 // planImagePruning creates a ManifestDeleter and map of manifests scheduled for deletion.

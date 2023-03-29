@@ -262,6 +262,10 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
+	if o.SkipPruning {
+		klog.Infof("using --skip-pruning flag - pruning will be skipped")
+	}
+
 	return nil
 }
 
