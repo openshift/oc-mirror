@@ -402,6 +402,7 @@ func (o *MirrorOptions) fetchBlobs(ctx context.Context, meta v1alpha2.Metadata, 
 		imgRef, err := o.findBlobRepo(pathsByLayer, layerDigest)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error finding remote layer %q: %v", layerDigest, err))
+			continue
 		}
 		if err := o.fetchBlob(ctx, regctx, imgRef.Ref, layerDigest, dstBlobPaths); err != nil {
 			errs = append(errs, fmt.Errorf("layer %s: %v", layerDigest, err))
@@ -514,7 +515,7 @@ func (o *MirrorOptions) findBlobRepo(assocPathsByLayer map[string]string, layerD
 
 	srcRef, ok := assocPathsByLayer[layerDigest]
 	if !ok {
-		return imagesource.TypedImageReference{}, fmt.Errorf("layer %q is not present in previous metadata", layerDigest)
+		return imagesource.TypedImageReference{}, fmt.Errorf("layer %q is not present in the archive", layerDigest)
 	}
 
 	dstRef, err := imagesource.ParseReference(srcRef)
