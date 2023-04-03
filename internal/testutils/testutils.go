@@ -56,6 +56,7 @@ func WriteTestImageWithURL(URL string, dir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		// write the image into the layout path
 		if err := lp.AppendImage(i); err != nil {
 			return "", err
 		}
@@ -158,16 +159,18 @@ func WriteMultiArchTestImageWithURL(URL string, dir string) (string, error) {
 	)
 	// update the MediaType for this index
 	ii = mutate.IndexMediaType(ii, types.DockerManifestList)
-	// "wrap" the newly created index in a new index (i.e. create manifest list indirection)
-	ii = mutate.AppendManifests(empty.Index, mutate.IndexAddendum{
-		Add: ii,
-		Descriptor: v1.Descriptor{
-			MediaType: types.DockerManifestList,
-		},
-	})
 
 	if dir != "" {
-		_, err := layout.Write(dir, ii)
+		// "wrap" the newly created index in a new index (i.e. create manifest list indirection)
+		// NOTE: manifest list indirection is only useful for OCI layouts... this is
+		// not supported when pushing to a remote registry
+		oci_ii := mutate.AppendManifests(empty.Index, mutate.IndexAddendum{
+			Add: ii,
+			Descriptor: v1.Descriptor{
+				MediaType: types.DockerManifestList,
+			},
+		})
+		_, err := layout.Write(dir, oci_ii)
 		if err != nil {
 			return "", err
 		}

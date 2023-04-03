@@ -189,17 +189,79 @@ func TestRun(t *testing.T) {
 				// Get new image information
 				ref, err := name.ParseReference(targetRef, name.Insecure)
 				require.NoError(t, err)
-				// make remote call to our dummy server
+
+				/*
+					There's an important distinction between what's possible in OCI layout versus docker registries,
+					and its important to understand when reading this test. The WriteMultiArchTestImage function
+					creates an OCI layout AND pushes to the dummy registry.
+
+					An OCI layout path contains an index.json where the manifest entries reference either a manifest list or an actual image.
+					Since the index.json is technically its own index, you can have "index indirection" where the manifest entry in index.json
+					points to a SHA within the blobs directory that is itself an "index". For example:
+
+					Single arch in an index.json
+					{
+						"schemaVersion": 2,
+						"manifests": [
+							{
+								"mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+								"digest": "sha256:1234...",
+								"size": 111
+							}
+						]
+					}
+					multi arch with "indirection" in an index.json
+					{
+						"schemaVersion": 2,
+						"manifests": [
+							{
+								"mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+								"digest": "sha256:5678...",
+								"size": 321
+							}
+						]
+					}
+
+					multi arch without "indirection" in an index.json (this scenario is probably not likely)
+					{
+					   "schemaVersion": 2,
+					   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+					   "manifests": [
+					      {
+					         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+					         "size": 525,
+					         "digest": "sha256:9123...",
+					         "platform": {
+					            "architecture": "amd64",
+					            "os": "linux"
+					         }
+					      },
+					      {
+					         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+					         "size": 525,
+					         "digest": "sha256:4567...",
+					         "platform": {
+					            "architecture": "s390x",
+					            "os": "linux"
+					         }
+					      }
+					   ]
+					}
+
+					However, in a "remote" docker registry, manifest indirection does not exist. So when reading
+					the descriptor from the "remote", we should expect to see a direct reference to either the
+					manifest list or image.
+				*/
 				var desc *remote.Descriptor
+				// make remote call to our dummy server to get its descriptor
 				desc, err = remote.Get(ref)
 				require.NoError(t, err)
 				// figure out an image to test against
 				var img v1.Image
+
 				if test.multiarch {
-					// technically an index can have "infinite" levels of "index indirection"
-					// but we should only see two levels deep at most for this test case
-					// TODO: this traversal could be changed to a recursive function, but this may be better for debugging
 					require.True(t, desc.MediaType.IsIndex(), "expected a multi arch index")
+
 					idx, err := desc.ImageIndex()
 					require.NoError(t, err)
 					mf, err := idx.IndexManifest()
@@ -207,37 +269,17 @@ func TestRun(t *testing.T) {
 
 					// during iteration we'll either find a matching image (if a matcher is used in the test)
 					// or we'll just return the last image we find
-
-					// we're either expecting an index or image at this level
-					for _, firstLevelDescriptor := range mf.Manifests {
-						if firstLevelDescriptor.MediaType.IsIndex() {
-							// we have an index, so dig deeper
-							firstLevelIdx, err := idx.ImageIndex(firstLevelDescriptor.Digest)
+					for _, innerDescriptor := range mf.Manifests {
+						if test.matcher == nil || (test.matcher != nil && test.matcher(innerDescriptor)) {
+							img, err = idx.Image(innerDescriptor.Digest)
 							require.NoError(t, err)
-							firstLevelIdxManifest, err := firstLevelIdx.IndexManifest()
-							require.NoError(t, err)
-
-							for _, secondLevelDescriptor := range firstLevelIdxManifest.Manifests {
-								if secondLevelDescriptor.MediaType.IsIndex() {
-									// fail if we find another level of indirection... something is clearly wrong
-									require.Fail(t, "unexpected index two levels deep")
-								} else if secondLevelDescriptor.MediaType.IsImage() {
-									// does the test use a matcher? does it match?
-									if test.matcher == nil || (test.matcher != nil && test.matcher(secondLevelDescriptor)) {
-										img, err = firstLevelIdx.Image(secondLevelDescriptor.Digest)
-										require.NoError(t, err)
-									}
-								}
-							}
-						} else if firstLevelDescriptor.MediaType.IsImage() {
-							if test.matcher == nil || (test.matcher != nil && test.matcher(firstLevelDescriptor)) {
-								img, err = idx.Image(firstLevelDescriptor.Digest)
-								require.NoError(t, err)
-							}
 						}
 					}
 				} else {
 					// single arch tests we can just get the image directly
+					// NOTE: WriteTestImage pushes an OCI image to the registry, so its technically a "manifest list"
+					// and the image is "resolved" using the platform associated with the image reference, or the default
+					// (i.e. linux/amd64) if platform is not present
 					img, err = desc.Image()
 					require.NoError(t, err)
 				}
@@ -263,8 +305,13 @@ func TestRun(t *testing.T) {
 					}
 				}
 				require.True(t, found)
-				// for multi arch this is a single entry that points at a full manifest list in the blobs dir
-				require.Len(t, im.Manifests, 1)
+				if test.multiarch {
+					// multi arch test has two manifests (linux/amd64 and linux/s390x)
+					require.Len(t, im.Manifests, 2)
+				} else {
+					// single arch test has a single image, so only one manifest
+					require.Len(t, im.Manifests, 1)
+				}
 
 				if test.update != nil {
 					config, err := img.ConfigFile()

@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -93,8 +92,9 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 		processImageIndex is a recursive function that allows for traversal of the hierarchy of
 		parent/child indexes that can exist for a multi arch image. There's always
 		at least one index at the root since this is an OCI layout that we're dealing with.
-		There can be "infinite levels" of "index indirection" for multi arch images, but typically
-		its only two levels deep.
+		In theory there can be "infinite levels" of "index indirection" for multi arch images, but typically
+		its only two levels deep (i.e. index.json itself which is level one, and the manifest list
+		defined in the blobs directory, which is level two).
 	*/
 	var processImageIndex func(idx v1.ImageIndex) (v1.ImageIndex, error)
 	processImageIndex = func(idx v1.ImageIndex) (v1.ImageIndex, error) {
@@ -104,7 +104,7 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 		if err != nil {
 			return nil, err
 		}
-		idxManifest.DeepCopy()
+
 		for _, manifest := range idxManifest.Manifests {
 			currentHash := *manifest.Digest.DeepCopy()
 
@@ -217,36 +217,39 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 		return err
 	}
 
-	// Pull updated index
+	// "Pull" the updated index
 	idx, err = layoutPath.ImageIndex()
 	if err != nil {
 		return err
 	}
 
-	// This is an unfortunate hack to the index.json file that seems to be necessary
-	// because when pushing to a docker distribution registry running locally
-	// you end up getting "manifest invalid", which the docker
-	// log indicates is due to the wrong media type. Stripping the
-	// media type off for now... worst case we add it back with OCI media type.
-	tempIndexManifest, err := idx.IndexManifest()
+	// while it's entirely valid to have nested "manifest list" (i.e. an ImageIndex) within an OCI layout,
+	// this does NOT work for remote registries. So if we have those, then we need to get the nested
+	// ImageIndex and push that to the remote registry. In theory there could be any number of nested
+	// ImageIndexes, but in practice, there's only one level deep, and its a "singleton".
+	topLevelIndexManifest, err := idx.IndexManifest()
 	if err != nil {
 		return err
 	}
-	tempIndexManifest.MediaType = ""
-	rawIndex, err := json.MarshalIndent(tempIndexManifest, "", "   ")
-	if err != nil {
-		return err
+	var imageIndexToPush v1.ImageIndex
+	for _, descriptor := range topLevelIndexManifest.Manifests {
+		// if we find an image, then this top level index can be used to push to remote registry
+		// since its jus
+		if descriptor.MediaType.IsImage() {
+			imageIndexToPush = idx
+			// no need to look any further
+			break
+		} else if descriptor.MediaType.IsIndex() {
+			imageIndexToPush, err = idx.ImageIndex(descriptor.Digest)
+			if err != nil {
+				return err
+			}
+			// we're not going to look any deeper or look for other indexes at this level
+			break
+		}
 	}
-	layoutPath.WriteFile("index.json", rawIndex, os.ModePerm)
-
-	// Pull updated index again
-	idx, err = layoutPath.ImageIndex()
-	if err != nil {
-		return err
-	}
-
 	// push to the remote
-	return remote.WriteIndex(tag, idx, b.RemoteOpts...)
+	return remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
 }
 
 /*
