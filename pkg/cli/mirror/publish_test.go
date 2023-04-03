@@ -199,7 +199,7 @@ func TestFindBlobRepo(t *testing.T) {
 			options: &MirrorOptions{
 				ToMirror: "registry.com",
 			},
-			err: "layer \"notfound\" is not present in previous metadata",
+			err: "layer \"notfound\" is not present in the archive",
 		}}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
