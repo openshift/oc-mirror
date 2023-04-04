@@ -354,7 +354,32 @@ func (o *OperatorOptions) renderDCDiff(
 	// initialize map with previous catalogs by name for easy lookup
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
 	for _, pastCtlg := range lastRun.Operators {
-		prevCatalog[pastCtlg.Catalog] = pastCtlg
+		// Note that "SpecificTo" could be empty string for older metadata files,
+		// so the resulting key could be "<catalog name>" (i.e. the legacy value)
+		// or "<catalog name><platform>" (i.e. platform specific value)
+		prevCatalog[pastCtlg.Catalog+pastCtlg.SpecificTo] = pastCtlg
+	}
+
+	// findOperatorMetadata attempts to find an entry in prevCatalog using
+	// "<catalog name>" (i.e. the legacy value) or "<catalog name><platform>" (i.e. platform specific value)
+	findOperatorMetadata := func(ctlg v1alpha2.Operator, platformKey oc.OperatorCatalogPlatform) (prev v1alpha2.OperatorMetadata, found bool, err error) {
+		uniqueName, err := ctlg.GetUniqueName()
+		if err != nil {
+			// stop all processing since we hit an error
+			return
+		}
+		legacyCatalogKey := uniqueName + platformKey.String()
+		platformSpecificCatalogKey := uniqueName + platformKey.String()
+
+		// check legacy key first
+		prev, found = prevCatalog[legacyCatalogKey]
+		if found {
+			// found an entry, so no need to keep checking
+			return
+		}
+		// check platform specific key next
+		prev, found = prevCatalog[platformSpecificCatalogKey]
+		return
 	}
 
 	// now we need to process each architecture specific image that was discovered
@@ -363,16 +388,12 @@ func (o *OperatorOptions) renderDCDiff(
 	for platformKey, catalogMetadata := range catalogMetadataByPlatform {
 		digest := catalogMetadata.CatalogRef
 
-		// TODO: this function currently uses OCI image paths for the "unique name"... is this OK??? It's only being used for metadata lookup, so it might be fine.
-		// TODO: this needs to take into account architecture to make it unique
-		uniqueName, err := ctlg.GetUniqueName()
-		uniqueName = uniqueName + platformKey.String()
-
+		// attempt to find operator metadata within prevCatalog
+		prev, found, err := findOperatorMetadata(ctlg, platformKey)
 		if err != nil {
 			// stop all processing since we hit an error
 			return err
 		}
-		prev, found := prevCatalog[uniqueName]
 
 		// The architecture specific catalog is new or we just need to mirror the full catalog or channels.
 		if !found || !ctlg.IsHeadsOnly() {

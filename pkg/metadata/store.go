@@ -91,7 +91,6 @@ func UpdateMetadata(
 	defer reg.Destroy()
 
 	for _, operator := range mirror.Mirror.Operators {
-		// TODO: Changed this to return a slice of v1alpha2.OperatorMetadata... we need to validate that this solution will work
 		operatorMetas, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace, allCatalogs[operator.Catalog])
 		if err != nil {
 			operatorErrs = append(operatorErrs, err)
@@ -154,6 +153,7 @@ func resolveOperatorMetadata(
 			return []v1alpha2.OperatorMetadata{}, err
 		}
 		operatorMeta.Catalog = ctlgName
+		operatorMeta.SpecificTo = platform.String()
 
 		// Stick to Catalog here because we
 		// are referencing the source

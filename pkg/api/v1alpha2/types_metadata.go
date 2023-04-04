@@ -57,6 +57,9 @@ type PastMirror struct {
 type OperatorMetadata struct {
 	// Catalog references a catalog name from the mirror spec.
 	Catalog string `json:"catalog"`
+	// SpecificTo represents the platform that is specific to the Catalog value
+	// This could be empty string for older metadata entries
+	SpecificTo string `json:"specificTo,omitempty"`
 	// ImagePin is the resolved sha256 image name of Catalog.
 	// This image will be pulled using the pull secret
 	// in the metadata's Mirror config for this catalog.
