@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
@@ -19,6 +20,7 @@ type VersionOptions struct {
 	*cli.RootOptions
 	Output string
 	Short  bool
+	Info   bool
 }
 
 // Version is a struct for version information
@@ -46,6 +48,7 @@ func NewVersionCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.BoolVar(&o.Short, "short", o.Short, "Print just the version number")
+	fs.BoolVar(&o.Info, "info", o.Info, "Print the complete information about the version")
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
 	o.BindFlags(cmd.PersistentFlags())
 
@@ -71,9 +74,11 @@ func (o *VersionOptions) Run() error {
 	switch o.Output {
 	case "":
 		if o.Short {
-			fmt.Fprintf(o.Out, "Client Version: %s\n", clientVersion.GitVersion)
-		} else {
+			fmt.Fprintf(o.Out, "Client Version: %s\n", clientVersion.GitVersion[0:strings.Index(clientVersion.GitVersion, "-")])
+		} else if o.Info {
 			fmt.Fprintf(o.Out, "Client Version: %#v\n", clientVersion)
+		} else {
+			fmt.Fprintf(o.Out, "Client Version: %s\n", clientVersion.GitVersion)
 		}
 	case "yaml":
 		marshalled, err := yaml.Marshal(&versionInfo)
