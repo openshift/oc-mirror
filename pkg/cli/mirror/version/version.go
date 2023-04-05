@@ -46,8 +46,11 @@ func NewVersionCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.BoolVar(&o.Short, "short", o.Short, "Print just the version number")
+	fs.MarkDeprecated("short", "and will be removed in a future release. Use oc-mirror version instead.")
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
-	o.BindFlags(cmd.PersistentFlags())
+	flags := cmd.PersistentFlags()
+	o.BindFlags(flags)
+	flags.MarkDeprecated("verbose", "and will be removed in a future release.")
 
 	return cmd
 }
@@ -73,6 +76,7 @@ func (o *VersionOptions) Run() error {
 		if o.Short {
 			fmt.Fprintf(o.Out, "Client Version: %s\n", clientVersion.GitVersion)
 		} else {
+			fmt.Fprintf(o.ErrOut, "WARNING: This version information is deprecated and will be replaced with the output from --short. Use --output=yaml|json to get the full version.\n")
 			fmt.Fprintf(o.Out, "Client Version: %#v\n", clientVersion)
 		}
 	case "yaml":

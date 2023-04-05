@@ -13,17 +13,6 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 
 GO_BUILD_PACKAGES := ./cmd/...
 
-GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="1" \
-                   -X k8s.io/component-base/version.gitMinor="22" \
-                   -X k8s.io/component-base/version.gitVersion="v0.22.4" \
-                   -X k8s.io/component-base/version.gitCommit="$(SOURCE_GIT_COMMIT)" \
-                   -X k8s.io/component-base/version.buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-                   -X k8s.io/component-base/version.gitTreeState="clean" \
-                   -X k8s.io/client-go/pkg/version.gitVersion="$(SOURCE_GIT_TAG)" \
-                   -X k8s.io/client-go/pkg/version.gitCommit="$(SOURCE_GIT_COMMIT)" \
-                   -X k8s.io/client-go/pkg/version.buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-                   -X k8s.io/client-go/pkg/version.gitTreeState="$(SOURCE_GIT_TREE_STATE)"
-
 LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
 LIBSUBID_BUILD_TAG = $(shell hack/libsubid_tag.sh)
 BTRFS_BUILD_TAG = $(shell hack/btrfs_tag.sh) $(shell hack/btrfs_installed_tag.sh)
