@@ -36,7 +36,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 		if err != nil {
 			return mmappings, fmt.Errorf("error parsing source image %s: %v", img.Name, err)
 		}
-		srcRef.Ref = srcRef.Ref.DockerClientDefaults()
+		srcRef.Ref = image.SetDockerClientDefaults(srcRef.Ref)
 
 		// Instead of returning an error, just log it.
 		isSkipErr := func(err error) bool {
