@@ -176,7 +176,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 				containertools.ConfigsLocationLabel: "/configs",
 			}
 			cfg.Config.Labels = labels
-			cfg.Config.Cmd = []string{"serve", "/configs"}
+			cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir", "/tmp/cache"}
 			cfg.Config.Entrypoint = []string{"/bin/opm"}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
