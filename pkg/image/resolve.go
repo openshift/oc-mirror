@@ -17,7 +17,7 @@ func ResolveToPin(ctx context.Context, resolver remotes.Resolver, unresolvedImag
 	if err != nil {
 		return "", err
 	}
-	ref = SetDockerClientDefaults(ref)
+	ref = ref.DockerClientDefaults()
 
 	// Get the image's registry-specific digest.
 	_, desc, err := resolver.Resolve(ctx, ref.String())
