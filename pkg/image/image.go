@@ -21,8 +21,15 @@ import (
 
 var (
 	DestinationOCI imagesource.DestinationType = "oci"
-	TagLatest      string                      = "latest"
 )
+
+// type ImageReferenceInterface interface {
+// 	String() string
+// 	Equal(other ImageReferenceInterface) bool
+// 	DockerClientDefaults() ImageReferenceInterface
+// 	AsV2() ImageReferenceInterface
+// 	Exact() string
+// }
 
 type TypedImageReference struct {
 	Type       imagesource.DestinationType
@@ -41,25 +48,6 @@ func (t TypedImageReference) String() string {
 	default:
 		return t.Ref.Exact()
 	}
-}
-
-func SetDockerClientDefaults(r libgoref.DockerImageReference) libgoref.DockerImageReference {
-	oldTag := r.Tag
-	r = r.DockerClientDefaults()
-	newTag := r.Tag
-	if oldTag != TagLatest && newTag == TagLatest && r.ID != "" {
-		// OCPBUGS-2633: we cannot use latest, it will make oc-mirror fail
-		// yet a tag is still needed because of the way oc-mirror uses tags
-		// as symlinks
-		// Take away the `sha256:` from the beginning of the digest, and take
-		// the first 8 digits
-		newTag = strings.TrimPrefix(r.ID, "sha256:")
-		if len(newTag) >= 8 {
-			newTag = newTag[:8]
-		}
-	}
-	r.Tag = newTag
-	return r
 }
 
 // GetVersionsFromImage gets the set of versions after stripping a dash-suffix,
