@@ -494,10 +494,20 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 	if isPkgRequired {
 		bundlesByRange = make([][]*model.Bundle, len(ranges))
 	}
+	//OCPBUGS-11371 - bundles in skips, replaces or skipRange fields should not be considered as a valid bundle
+	rangesToSkip := []semver.Range{}
+	versionsToSkip := make(map[string]struct{})
+
+	populateVersionsToSkip(pkg, &rangesToSkip, versionsToSkip)
+
 	// Collect package bundles that provide a GVK or are in a range.
 	bundlesProvidingGVK := make(map[property.GVK][]*model.Bundle)
 	for _, ch := range pkg.Channels {
 		for _, b := range ch.Bundles {
+			if isToSkip(*b, rangesToSkip, versionsToSkip) {
+				continue
+			}
+
 			for _, gvk := range b.PropertiesP.GVKs {
 				if _, hasGVK := reqGVKs[gvk]; hasGVK {
 					bundlesProvidingGVK[gvk] = append(bundlesProvidingGVK[gvk], b)
@@ -561,6 +571,41 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 		providingBundles = append(providingBundles, b)
 	}
 	return providingBundles
+}
+
+func populateVersionsToSkip(pkg *model.Package, rangesToSkip *[]semver.Range, versionsToSkip map[string]struct{}) {
+	for _, ch := range pkg.Channels {
+		for _, b := range ch.Bundles {
+			if b.SkipRange != "" {
+				rangeVersion, err := semver.ParseRange(b.SkipRange)
+				if err == nil {
+					*rangesToSkip = append(*rangesToSkip, rangeVersion)
+				}
+			}
+
+			if b.Replaces != "" {
+				versionsToSkip[b.Replaces] = struct{}{}
+			}
+
+			for _, versionToSkip := range b.Skips {
+				versionsToSkip[versionToSkip] = struct{}{}
+			}
+		}
+	}
+}
+
+func isToSkip(b model.Bundle, rangesToSkip []semver.Range, versionsToSkip map[string]struct{}) bool {
+	if _, shouldSkip := versionsToSkip[b.Name]; shouldSkip {
+		return true
+	}
+
+	for _, rangeToSkip := range rangesToSkip {
+		if rangeToSkip(b.Version) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func convertFromModelBundle(b *model.Bundle) declcfg.Bundle {
