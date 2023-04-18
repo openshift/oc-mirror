@@ -505,7 +505,6 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 	bundlesProvidingGVK := make(map[property.GVK][]*model.Bundle)
 	for _, ch := range pkg.Channels {
 		for _, b := range ch.Bundles {
-
 			for _, gvk := range b.PropertiesP.GVKs {
 				if _, hasGVK := reqGVKs[gvk]; hasGVK {
 					bundlesProvidingGVK[gvk] = append(bundlesProvidingGVK[gvk], b)
@@ -571,6 +570,7 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 	return providingBundles
 }
 
+// isToSkip detects if the bundle is skipped by the head of the channel
 func isToSkip(b model.Bundle, head model.Bundle) bool {
 	for _, versionToSkip := range head.Skips {
 		if versionToSkip == b.Name {
