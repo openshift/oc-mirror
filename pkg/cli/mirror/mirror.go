@@ -42,6 +42,7 @@ import (
 const (
 	OCIFeatureCopyAction   = "copy"
 	OCIFeatureMirrorAction = "mirror"
+	tagLatest              = "latest"
 )
 
 var (
@@ -345,7 +346,47 @@ func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) e
 		if err != nil {
 			return err
 		}
+		// Fix OCPBUGS-2633:
+		// For DiskToMirror only
+		// if more than one image in imageList belong to the same repository with different digests, no tag
+		// and type destinationFile, then, replace the `latest` tag (set by `DockerClientDefaults`) by a subset
+		// of the digest
+		// Ex:
+		// - name: quay.io/okd/scos-content@sha256:fc37fb091804ce32411d04559a4b0ba63139bd12b51f7d87dc2e8fa9ff9d3ef7
+		// - name: quay.io/okd/scos-content@sha256:df80aa07467d1c6f59a39f3c00e00e130a6b25308b1419264565ca7cd8a76407
 
+		firstTagLatestImageByRepo := make(map[string]image.TypedImage)
+
+		for srcRef, dstRef := range mapping {
+
+			if dstRef.Ref.Tag == tagLatest {
+				if firstSrcRef, ok := firstTagLatestImageByRepo[srcRef.Ref.AsRepository().String()]; !ok {
+					firstTagLatestImageByRepo[srcRef.Ref.AsRepository().String()] = srcRef
+				} else {
+					// There's more than one image for this repository with tag latest
+					// Replace tag latest for firstDstRef by a subset of the digest
+					if firstDstRef, exists := mapping[firstSrcRef]; exists && firstSrcRef.Ref.ID != "" && firstDstRef.Type == imagesource.DestinationFile {
+						firstDstRefTag := strings.TrimPrefix(firstSrcRef.Ref.ID, "sha256:")
+						if len(firstDstRefTag) >= 8 {
+							firstDstRefTag = firstDstRefTag[:8]
+						}
+						firstDstRef.Ref.Tag = firstDstRefTag
+						mapping[firstSrcRef] = firstDstRef
+					}
+					// all following images with latest tag will get a subset of the digest as the tag as well
+					if dstRef.Type == imagesource.DestinationFile && srcRef.Ref.ID != "" {
+						newTag := strings.TrimPrefix(srcRef.Ref.ID, "sha256:")
+						if len(newTag) >= 8 {
+							newTag = newTag[:8]
+						}
+						dstRef.Ref.Tag = newTag
+						mapping[srcRef] = dstRef
+					}
+
+				}
+			}
+		}
+		// End Fix OCPBUGS-2633
 		prunedAssociations, err := o.removePreviouslyMirrored(mapping, meta)
 		if err != nil {
 			if errors.Is(err, ErrNoUpdatesExist) {
