@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
@@ -91,7 +93,32 @@ func (o *MirrorOptions) Create(ctx context.Context, cfg v1alpha2.ImageSetConfigu
 	}
 }
 
-func (o *MirrorOptions) run(ctx context.Context, cfg *v1alpha2.ImageSetConfiguration, meta v1alpha2.Metadata, operatorPlan operatorFunc) (image.TypedImageMapping, error) {
+/*
+operatorFunc is a function signature for operator planning operations
+
+# Arguments
+
+• ctx: A cancellation context
+
+• cfg: An ImageSetConfiguration that should be processed
+
+# Returns
+
+• image.TypedImageMapping: Any src->dest mappings found during planning. Will be nil if an error occurs, non-nil otherwise.
+
+• error: non-nil if an error occurs, nil otherwise
+*/
+type operatorFunc func(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+) (image.TypedImageMapping, error)
+
+func (o *MirrorOptions) run(
+	ctx context.Context,
+	cfg *v1alpha2.ImageSetConfiguration,
+	meta v1alpha2.Metadata,
+	operatorPlan operatorFunc,
+) (image.TypedImageMapping, error) {
 
 	mmappings := image.TypedImageMapping{}
 
@@ -166,14 +193,72 @@ func (o *MirrorOptions) createOlmArtifactsForOCI(ctx context.Context, cfg v1alph
 			return err
 		}
 
+		// setup where the FBC content will be written to
 		catalogContentsDir := filepath.Join(artifactsFolderName, ctlg.Ref.Name)
+		// obtain the path to where the OCI image reference resides
+		layoutPath := layout.Path(ctlg.OCIFBCPath)
 
-		_, err = o.findFBCConfig(ctx, v1alpha2.TrimProtocol(operator.Catalog), catalogContentsDir)
+		// get its index.json and obtain its manifest
+		rootIndex, err := layoutPath.ImageIndex()
 		if err != nil {
 			return err
 		}
+		rootIndexManifest, err := rootIndex.IndexManifest()
+		if err != nil {
+			return err
+		}
+
+		// attempt to find the first image reference in the layout...
+		// for a manifest list only search one level deep.
+		var img v1.Image
+	loop:
+		for _, descriptor := range rootIndexManifest.Manifests {
+
+			if descriptor.MediaType.IsIndex() {
+				// follow the descriptor using its digest to get the referenced index and its manifest
+				childIndex, err := rootIndex.ImageIndex(descriptor.Digest)
+				if err != nil {
+					return err
+				}
+				childIndexManifest, err := childIndex.IndexManifest()
+				if err != nil {
+					return err
+				}
+
+				// at this point, find the first image and store it for later if possible
+				for _, childDescriptor := range childIndexManifest.Manifests {
+					if childDescriptor.MediaType.IsImage() {
+						img, err = childIndex.Image(childDescriptor.Digest)
+						if err != nil {
+							return err
+						}
+						// no further processing necessary
+						break loop
+					}
+				}
+
+			} else if descriptor.MediaType.IsImage() {
+				// this is a direct reference to an image, so just store it for later
+				img, err = rootIndex.Image(descriptor.Digest)
+				if err != nil {
+					return err
+				}
+				// no further processing necessary
+				break loop
+			}
+		}
+		// if we get here and no image was found bail out
+		if img == nil {
+			return fmt.Errorf("unable to obtain image for %s", operator.Catalog)
+		}
+		// fullArtifactPath is set to <current working directory>/olm_artifacts/<repo>/<config folder>
+		fullArtifactPath, err := extractDeclarativeConfigFromImage(img, catalogContentsDir)
+		if err != nil {
+			return err
+		}
+
+		// store the full artifact path for later so we don't have to recalculate the path.
+		o.operatorCatalogToFullArtifactPath[operator.Catalog] = fullArtifactPath
 	}
 	return nil
 }
-
-type operatorFunc func(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error)

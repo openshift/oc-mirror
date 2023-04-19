@@ -60,13 +60,47 @@ func NewOperatorOptions(mo *MirrorOptions) *OperatorOptions {
 	return opts
 }
 
-// PlanFull plans a mirror for each catalog image in its entirety
-func (o *OperatorOptions) PlanFull(ctx context.Context, cfg v1alpha2.ImageSetConfiguration) (image.TypedImageMapping, error) {
+/*
+PlanFull plans a mirror for each catalog image in its entirety
+
+# Arguments
+
+• ctx: A cancellation context
+
+• cfg: An ImageSetConfiguration that should be processed
+
+# Returns
+
+• image.TypedImageMapping: Any src->dest mappings found during planning. Will be nil if an error occurs, non-nil otherwise.
+
+• error: non-nil if an error occurs, nil otherwise
+*/
+func (o *OperatorOptions) PlanFull(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+) (image.TypedImageMapping, error) {
 	return o.run(ctx, cfg, o.renderDCFull)
 }
 
-// PlanDiff plans only the diff between each old and new catalog image pair
+/*
+PlanDiff plans only the diff between each old and new catalog image pair
+
+# Arguments
+
+• ctx: A cancellation context
+
+• cfg: An ImageSetConfiguration that should be processed
+
+• lastRun: The mirror results of the last run
+
+# Returns
+
+• image.TypedImageMapping: Any src->dest mappings found during planning. Will be nil if an error occurs, non-nil otherwise.
+
+• error: non-nil if an error occurs, nil otherwise
+*/
 func (o *OperatorOptions) PlanDiff(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, lastRun v1alpha2.PastMirror) (image.TypedImageMapping, error) {
+	// Wrapper renderDCDiff so it satisfies the renderDCFunc function signature.
 	f := func(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (*declcfg.DeclarativeConfig, v1alpha2.IncludeConfig, error) {
 		return o.renderDCDiff(ctx, reg, ctlg, lastRun)
 	}
@@ -84,9 +118,33 @@ func (o *OperatorOptions) complete() {
 	}
 }
 
-type renderDCFunc func(context.Context, *containerdregistry.Registry, v1alpha2.Operator) (*declcfg.DeclarativeConfig, v1alpha2.IncludeConfig, error)
+/*
+renderDCFunc is a function signature for rendering declarative configurations for a catalog.
+Currently renderDCFull and renderDCDiff implement this function signature.
 
-func (o *OperatorOptions) run(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, renderDC renderDCFunc) (image.TypedImageMapping, error) {
+# Arguments
+
+• context.Context: the cancellation context
+
+• *containerdregistry.Registry: a containerd registry
+
+• v1alpha2.Operator: operator metadata that should be processed
+
+# Returns
+
+• error: non-nil if an error occurs, nil otherwise
+*/
+type renderDCFunc func(
+	context.Context,
+	*containerdregistry.Registry,
+	v1alpha2.Operator,
+) (*declcfg.DeclarativeConfig, v1alpha2.IncludeConfig, error)
+
+func (o *OperatorOptions) run(
+	ctx context.Context,
+	cfg v1alpha2.ImageSetConfiguration,
+	renderDC renderDCFunc,
+) (image.TypedImageMapping, error) {
 	o.complete()
 
 	cleanup, err := o.mktempDir()
@@ -169,7 +227,12 @@ func (o *OperatorOptions) createRegistry() (*containerdregistry.Registry, error)
 }
 
 // renderDCFull renders data in ctlg into a declarative config for o.Full().
-func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
+// Satisfies the renderDCFunc function signature.
+func (o *OperatorOptions) renderDCFull(
+	ctx context.Context,
+	reg *containerdregistry.Registry,
+	ctlg v1alpha2.Operator,
+) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
 
 	hasInclude := len(ctlg.IncludeConfig.Packages) != 0
 	// Render the full catalog if neither HeadsOnly or IncludeConfig are specified.
@@ -179,8 +242,8 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 	ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
 	if ctlg.IsFBCOCI() {
 		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-		ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
-		if err != nil {
+		var ok bool
+		if ctlgRef, ok = o.operatorCatalogToFullArtifactPath[ctlg.Catalog]; !ok {
 			return dc, ic, err
 		}
 	}
@@ -234,8 +297,13 @@ func (o *OperatorOptions) renderDCFull(ctx context.Context, reg *containerdregis
 
 // renderDCDiff renders data in ctlg into a declarative config for o.PlanDiff().
 // This produces the declarative config that will be used to determine
-// differential images
-func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregistry.Registry, ctlg v1alpha2.Operator, lastRun v1alpha2.PastMirror) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
+// differential images.
+func (o *OperatorOptions) renderDCDiff(
+	ctx context.Context,
+	reg *containerdregistry.Registry,
+	ctlg v1alpha2.Operator,
+	lastRun v1alpha2.PastMirror,
+) (dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, err error) {
 	prevCatalog := make(map[string]v1alpha2.OperatorMetadata, len(lastRun.Operators))
 	for _, pastCtlg := range lastRun.Operators {
 		prevCatalog[pastCtlg.Catalog] = pastCtlg
@@ -264,8 +332,8 @@ func (o *OperatorOptions) renderDCDiff(ctx context.Context, reg *containerdregis
 
 	ctlgRef := ctlg.Catalog //applies for all docker-v2 remote catalogs
 	if ctlg.IsFBCOCI() {
-		ctlgRef, err = o.getOperatorCatalogRef(ctx, ctlg.Catalog)
-		if err != nil {
+		var ok bool
+		if ctlgRef, ok = o.operatorCatalogToFullArtifactPath[ctlg.Catalog]; !ok {
 			return dc, ic, err
 		}
 	}
@@ -367,6 +435,27 @@ func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.Decla
 	return nil
 }
 
+/*
+plan determines the source -> destination mapping for images associated with the provided catalog
+
+# Arguments
+
+• ctx: A cancellation context
+
+• dc: the declarative config to use during processing
+
+• ic: the include config associated with the dc argument
+
+• ctlgRef: this is the source catalog reference
+
+• targetCtlg: this is the target catalog reference
+
+# Return
+
+• image.TypedImageMapping: the source -> destination image mapping for images found during planning
+
+• error: non-nil if an error occurs, nil otherwise
+*/
 func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, ctlgRef, targetCtlg image.TypedImageReference) (image.TypedImageMapping, error) {
 	o.Logger.Debugf("Mirroring catalog %q bundle and related images", ctlgRef.Ref.Exact())
 
@@ -496,10 +585,12 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			return nil, err
 		}
 	} else {
+		// ctlgDir is the result of converting targetCtlg.Ref to <repoPath> example: foo/bar/baz/image/sha256:XXXX
 		ctlgDir, err := operator.GenerateCatalogDir(targetCtlg.Ref)
 		if err != nil {
 			return nil, err
 		}
+		// layoutDir looks like <some path>/src/catalogs/<repoPath>/layout
 		layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
 		if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 			return nil, fmt.Errorf("error catalog layout dir: %v", err)
@@ -702,14 +793,32 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 	return utilerrors.NewAggregate(errs)
 }
 
+/*
+writeLayout creates OCI layout on the file system by pulling the image from the ctlgRef argument
+
+# Arguments
+
+• ctx: A cancellation context
+
+• ctlgRef: this is the source catalog reference
+
+• targetCtlg: this is the target catalog reference
+
+# Return
+
+• error: non-nil if an error occurs, nil otherwise
+*/
 func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg imgreference.DockerImageReference) error {
 
 	// Write catalog OCI layout file to src so it is included in the archive
 	// at a path unique to the image.
+
+	// ctlgDir is the result of converting targetCtlg to <repoPath> example: foo.io/bar/baz/image/sha256:XXXX
 	ctlgDir, err := operator.GenerateCatalogDir(targetCtlg)
 	if err != nil {
 		return err
 	}
+	// layoutDir looks like <some path>/src/catalogs/<repoPath>/layout
 	layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
 	if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 		return fmt.Errorf("error catalog layout dir: %v", err)
@@ -735,8 +844,18 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg i
 		if err != nil {
 			return err
 		}
-		// Default to amd64 architecture with no multi-arch image
-		if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"})); err != nil {
+		// try to get the config file... does it have os/arch values?
+		configFile, err := img.ConfigFile()
+		if err != nil || configFile == nil || (configFile.Architecture == "" && configFile.OS == "") {
+			o.Logger.Debugf("could not determine platform for catalog image %s, using linux/amd64 instead", ref.Name())
+			// Default to amd64 architecture with no multi-arch image since we can't know for sure what this image is
+			if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"})); err != nil {
+				return err
+			}
+			return nil
+		}
+		// set the correct platform while appending the image
+		if err := layoutPath.AppendImage(img, layout.WithPlatform(v1.Platform{OS: configFile.OS, Architecture: configFile.Architecture, Variant: configFile.Variant})); err != nil {
 			return err
 		}
 
@@ -753,20 +872,42 @@ func (o *OperatorOptions) writeLayout(ctx context.Context, ctlgRef, targetCtlg i
 	return nil
 }
 
-// writeConfigs will write the declarative and include configuration to disk in a directory generated by the catalog name.
+/*
+writeConfigs will write the declarative and include configuration to disk in a directory generated by the catalog name.
+
+# Arguments
+
+• dc: the declarative config to use during processing
+
+• ic: the include config associated with the dc argument
+
+• targetCtlg: this is the target catalog reference
+
+# Return
+
+• string: the index directory
+
+• error: non-nil if an error occurs, nil otherwise
+*/
 func (o *OperatorOptions) writeConfigs(dc *declcfg.DeclarativeConfig, ic v1alpha2.IncludeConfig, targetCtlg imgreference.DockerImageReference) (string, error) {
 
 	// Write catalog declarative config file to src so it is included in the archive
 	// at a path unique to the image.
+
+	// ctlgDir is the result of converting targetCtlg to <repoPath> example: foo.io/bar/baz/image/sha256:XXXX
 	ctlgDir, err := operator.GenerateCatalogDir(targetCtlg)
 	if err != nil {
 		return "", err
 	}
+
+	// catalogBasePath looks like <some path>/src/catalogs/<repoPath>
 	catalogBasePath := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir)
+	// indexDir looks like <some path>/src/catalogs/<repoPath>/index
 	indexDir := filepath.Join(catalogBasePath, config.IndexDir)
 	if err := os.MkdirAll(indexDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("error creating diff index dir: %v", err)
 	}
+	// catalogIndexPath looks like <some path>/src/catalogs/<repoPath>/index/index.json
 	catalogIndexPath := filepath.Join(indexDir, "index.json")
 
 	o.Logger.Debugf("writing target catalog %q diff to %s", targetCtlg.Exact(), catalogIndexPath)
@@ -776,6 +917,7 @@ func (o *OperatorOptions) writeConfigs(dc *declcfg.DeclarativeConfig, ic v1alpha
 		return "", fmt.Errorf("error creating diff index file: %v", err)
 	}
 
+	// includeConfigPath looks like <some path>/src/catalogs/<repoPath>/include-config.gob
 	includeConfigPath := filepath.Join(catalogBasePath, config.IncludeConfigFile)
 
 	o.Logger.Debugf("writing target catalog %q include config to %s", targetCtlg.Exact(), includeConfigPath)
@@ -920,20 +1062,4 @@ func (o *OperatorOptions) checkValidationErr(err error) error {
 	fmt.Fprintln(o.ErrOut, "\nRun \"oc-mirror list operators --catalog CATALOG-NAME --package PACKAGE-NAME\" for more information.")
 	fmt.Fprintln(o.ErrOut, validationMsg)
 	return err
-}
-
-func (o OperatorOptions) getOperatorCatalogRef(ctx context.Context, ref string) (string, error) {
-	_, _, repo, _, _ := v1alpha2.ParseImageReference(ref)
-	artifactsPath := artifactsFolderName
-	operatorCatalog := v1alpha2.TrimProtocol(ref)
-	// check for the valid config label to use
-	configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
-	if err != nil {
-		return "", fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", ref, err)
-	}
-	// initialize path starting with <current working directory>/olm_artifacts/<repo>
-	catalogContentsDir := filepath.Join(artifactsPath, repo)
-	// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
-	ctlgRef := filepath.Join(catalogContentsDir, configsLabel)
-	return ctlgRef, nil
 }

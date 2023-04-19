@@ -1,40 +1,31 @@
 package image
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/oci/layout"
-	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	gcr "github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/openshift/library-go/pkg/image/reference"
 	libgoref "github.com/openshift/library-go/pkg/image/reference"
-	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"k8s.io/klog/v2"
+
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 )
 
 var (
 	DestinationOCI imagesource.DestinationType = "oci"
 )
 
-// type ImageReferenceInterface interface {
-// 	String() string
-// 	Equal(other ImageReferenceInterface) bool
-// 	DockerClientDefaults() ImageReferenceInterface
-// 	AsV2() ImageReferenceInterface
-// 	Exact() string
-// }
-
 type TypedImageReference struct {
-	Type       imagesource.DestinationType
-	Ref        reference.DockerImageReference
-	OCIFBCPath string
+	Type       imagesource.DestinationType   // the destination type for this image
+	Ref        libgoref.DockerImageReference // docker image reference (NOTE: if OCIFBCPath is not empty, this is just an approximation of a docker reference)
+	OCIFBCPath string                        // the path to the OCI layout on the file system. Will be empty string if reference is not OCI.
 }
 
 func (t TypedImageReference) String() string {
@@ -103,45 +94,88 @@ func ParseReference(ref string) (TypedImageReference, error) {
 		ID:        id,
 	}
 
-	// TODO if manifest does not exist , just do nothing
-	// in case of TargetName and TargetTag replacing the original name ,
-	// the returned path will not exist on disk
-	manifest, err := getManifest(context.Background(), ref)
-	if err == nil {
-		dst.ID = string(manifest.ConfigInfo().Digest)
+	// if manifest does not exist (in case of TargetName and TargetTag replacing the original name,
+	// the returned path will not exist on disk), invalidate the ID since parsing the path
+	// to the OCI layout won't mean anything, and you'll likely get bogus
+	// information for the ID
+	digest, err := getFirstDigestFromPath(ref)
+	if err != nil {
+		// invalidate the ID
+		dst.ID = ""
+
+		if errors.Is(err, os.ErrNotExist) {
+			// we know the error could be due to ref not pointing at a real directory
+			klog.V(1).Infof("path to oci layout does not exist (this is expected): %v", err)
+		} else {
+			// be noisy about this, but don't fail
+			klog.Infof("unexpected error encountered while getting digest from oci layout path: %v", err)
+		}
+
+	} else {
+		dst.ID = digest.String()
 	}
 	return TypedImageReference{Ref: dst, Type: dstType, OCIFBCPath: ref}, nil
 }
 
-// getManifest reads the manifest of the OCI FBC image
-// and returns it as a go structure of type manifest.Manifest
-func getManifest(ctx context.Context, imgPath string) (manifest.Manifest, error) {
-	imgRef, err := alltransports.ParseImageName(imgPath)
+/*
+getFirstDigestFromPath will inspect a OCI layout path provided by
+the ref argument and return the **first** digest discovered. If this is
+a multi arch image, it returns the SHA of the manifest list itself.
+If this is a single arch image, it returns the config SHA. This function
+will error if no manifests were found in the top level index.json. If there
+are more than one manifest, the other entries are ignored and a log message
+is generated.
+*/
+func getFirstDigestFromPath(ref string) (*v1.Hash, error) {
+	filepath := v1alpha2.TrimProtocol(ref)
+	layoutPath, err := gcr.FromPath(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse reference %s: %v", imgPath, err)
+		return nil, err
 	}
-	imgsrc, err := imgRef.NewImageSource(ctx, nil)
-	defer func() {
-		if imgsrc != nil {
-			err = imgsrc.Close()
+	ii, err := layoutPath.ImageIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	idxManifest, err := ii.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle use case where the index.json does not use
+	// indirection to point at a manifest list in the blobs directory.
+	// Do this by looking at the media type... its normally not present
+	// but when it is, this is a direct reference to the manifest list.
+	if idxManifest.MediaType.IsIndex() {
+		hash, err := ii.Digest()
+		if err != nil {
+			return nil, err
+		}
+		return &hash, nil
+	}
+
+	// if manifest has more than one entry, indicate that something is probably not right with this OCI layout, but don't error out
+	if len(idxManifest.Manifests) > 1 {
+		klog.Infof("more than one image reference found in OCI layout %s using first entry only", ref)
+	}
+
+	// grab the first manifest an return its digest
+	for _, descriptor := range idxManifest.Manifests {
+		if descriptor.MediaType.IsImage() {
+			// if its an image, get the config hash and return that value
+			img, err := ii.Image(descriptor.Digest)
 			if err != nil {
-				klog.V(3).Infof("%s is not closed", imgsrc)
+				return nil, err
 			}
+			hash, err := img.ConfigName()
+			if err != nil {
+				return nil, err
+			}
+			return &hash, nil
+		} else {
+			// return the digest for the manifest list
+			return &descriptor.Digest, nil
 		}
-	}()
-	if err != nil {
-		if err == layout.ErrMoreThanOneImage {
-			return nil, errors.New("multiple catalogs in the same location is not supported: https://github.com/openshift/oc-mirror/blob/main/TROUBLESHOOTING.md#error-examples")
-		}
-		return nil, fmt.Errorf("unable to create ImageSource for %s: %v", err, imgPath)
 	}
-	manifestBlob, manifestType, err := imgsrc.GetManifest(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
-	}
-	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
-	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
-	}
-	return manifest, nil
+	return nil, fmt.Errorf("OCI layout %s did not contain any manifest entries", ref)
 }
