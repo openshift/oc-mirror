@@ -1,0 +1,27 @@
+# This config demonstrates how to mirror a specific version of an operator
+# when that version is not included in the default channel of that operator package.
+# 
+# This can be needed when an operator hasn't been updated in a long time, and 
+# the requested version of the operator is no longer in the default channel for 
+# that operator package in a newer catalog. 
+# 
+# In this example, the goal is to mirror elasticseach-operator version 5.5.9 onwards.
+# 5.5.9 is not present in the default channel, stable, hence we specify channel
+# stable-5.5.
+
+# IMPORTANT: Adding channel stable is MANDATORY here, as it is the default channel 
+# for the elasticsearch-operator package. OLM would consider the mirrored catalog
+# invalid without it. Only the bundle version corresponding to the head of channel 
+# stable will be mirrored.
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+      packages:
+        - name: elasticsearch-operator
+          channels:
+            - name: stable-5.5 # channel needed to mirror elasticsearch-operator v5.5.9
+              minVersion: "5.5.9"
+            - name: stable     # default channel which is mandatory for OLM to be able to work with the resulting catalog

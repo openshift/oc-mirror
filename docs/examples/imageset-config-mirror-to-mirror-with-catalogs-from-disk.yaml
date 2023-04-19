@@ -1,0 +1,41 @@
+# This configuration demonstrates how to include some locally built operator catalogs
+# to be mirrored to a partially disconnected cluster.
+
+# This feature might be interesting when needing to mirror internal operator catalogs
+# that are not pushed to registries, such as outcomes of a CI/CD pipeline for example.
+
+# These local catalogs need to be :
+# - File based catalogs (as opposed to SQLite)
+# - in OCI format
+
+# This ImageSet configuration can only be used to mirror to a registry that is reachable,
+# and cannot be used to create an image set archive for mirroring to a fully disconnected 
+# cluster.
+
+# In order to use this ImageSet configuration, --use-oci-feature flag needs to be added to the 
+# command. Example:
+# oc mirror --config=./imageset-config.yaml --use-oci-feature docker://registry.example.com/my-org
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  platform:
+    channels:
+      - name: stable-4.12  # OCP release 4.12 will be mirrored from the official redhat registries
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+      # operator catalog redhat-operator-index will be mirrored from registry.redhat.io
+      packages:
+      # only package aws-load-balancer-operator will be mirrored from this catalog, taking
+      # heads of all its available channels
+      - name: aws-load-balancer-operator
+    #- catalog: oci:///home/cicd/internal-catalog # prefix oci:// is key here
+    - catalog: oci:///home/skhoury/oci-catalog411
+      # /home/cicd/internal-catalog is an OCI formatted image, and contains a File-Based-Catalog
+      # json content describing the included operators.
+      packages:
+      # only package external-dns-operator will be mirrored from this catalog, taking
+      # heads of all its available channels
+      - name: external-dns-operator
+  additionalImages: # List of additional images to be included in imageset
+    - name: registry.redhat.io/ubi8/ubi:latest
