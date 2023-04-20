@@ -758,7 +758,7 @@ func TestPrepareDestCatalogRef(t *testing.T) {
 			},
 			destReg:     "localhost:5000",
 			namespace:   "disconnected_ocp",
-			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi:latest",
+			expectedRef: "docker://localhost:5000/disconnected_ocp/testdata/artifacts/rhopi",
 			expectedErr: "",
 		},
 		{
