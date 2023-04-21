@@ -405,6 +405,12 @@ func addAllDependencies(newModel, oldModel, outputModel model.Model) error {
 
 			head := heads[newCh.Name]
 			graph := makeUpgradeGraph(newCh)
+
+			//OCPBUGS-11371 - bundles in skips field should not be considered since they are not part of upgradeGraph
+			if isToSkip(*b, *head) {
+				continue
+			}
+
 			intersectingBundles, intersectionFound := findIntersectingBundles(newCh, b, head, graph)
 			if !intersectionFound {
 				// This should never happen, since b and head are from the same model.
@@ -494,6 +500,7 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 	if isPkgRequired {
 		bundlesByRange = make([][]*model.Bundle, len(ranges))
 	}
+
 	// Collect package bundles that provide a GVK or are in a range.
 	bundlesProvidingGVK := make(map[property.GVK][]*model.Bundle)
 	for _, ch := range pkg.Channels {
@@ -561,6 +568,17 @@ func getBundlesThatProvide(pkg *model.Package, reqGVKs map[property.GVK]struct{}
 		providingBundles = append(providingBundles, b)
 	}
 	return providingBundles
+}
+
+// isToSkip detects if the bundle is skipped by the head of the channel
+func isToSkip(b model.Bundle, head model.Bundle) bool {
+	for _, versionToSkip := range head.Skips {
+		if versionToSkip == b.Name {
+			return true
+		}
+	}
+
+	return false
 }
 
 func convertFromModelBundle(b *model.Bundle) declcfg.Bundle {
