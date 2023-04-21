@@ -202,10 +202,10 @@ func checkDockerReference(mirror imagesource.TypedImageReference, nested int) er
 		return fmt.Errorf("destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID")
 	}
 
-	depth := strings.Split(strings.Join([]string{mirror.Ref.Namespace, mirror.Ref.Name}, "/"), "/")
-	if len(depth) > nested {
-		destination := strings.Join([]string{mirror.Ref.Registry, mirror.Ref.Namespace, mirror.Ref.Name}, "/")
-		return fmt.Errorf("the max-nested-paths value (%d) for %s exceeds the registry mirror paths setting (some registries limit the nested paths)", len(depth), destination)
+	destination := strings.Join([]string{mirror.Ref.Registry, mirror.Ref.RepositoryName()}, "/")
+	depth := strings.Split(destination, "/")
+	if nested > 0 && (len(depth) >= nested) {
+		return fmt.Errorf("the max-nested-paths value (%d) for %s must be higher than (registry + namespace) - try increasing the value", len(depth), destination)
 	}
 	return nil
 }
@@ -445,10 +445,9 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 			Type: srcRef.Type,
 		}
 
-		dstTIR := imagesource.TypedImageReference{
-			Ref:  dstRef.Ref,
-			Type: dstRef.Type,
-		}
+		// OCPBUGS-11922
+		dstTIR := o.processNestedPaths(&dstRef)
+
 		mappings = append(mappings, mirror.Mapping{
 			Source:      srcTIR,
 			Destination: dstTIR,
@@ -489,7 +488,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
 	mappingResultsPath := filepath.Join(dir, mappingFile)
-	if err := writeMappingFile(mappingResultsPath, mapping); err != nil {
+	if err := o.writeMappingFile(mappingResultsPath, mapping); err != nil {
 		return err
 	}
 
@@ -500,7 +499,7 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorRelatedImage)
 
 	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
-		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
+		icsps, err := o.GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
 		if err != nil {
 			return fmt.Errorf("error generating ICSP manifests")
 		}
@@ -594,7 +593,7 @@ func (o *MirrorOptions) processAssociationErrors(errs []error) error {
 	return nil
 }
 
-func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
+func (o *MirrorOptions) writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
 	path := filepath.Clean(mappingPath)
 	mappingFile, err := os.Create(path)
 	if err != nil {
@@ -602,7 +601,7 @@ func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error
 	}
 	defer mappingFile.Close()
 	klog.Infof("Writing image mapping to %s", mappingPath)
-	if err := image.WriteImageMapping(mapping, mappingFile); err != nil {
+	if err := image.WriteImageMapping(o.MaxNestedPaths, mapping, mappingFile); err != nil {
 		return err
 	}
 	return mappingFile.Sync()
@@ -666,7 +665,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	}
 
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		if err := o.outputPruneImagePlan(ctx, prevAssociations, prunedAssociations); err != nil {
@@ -816,7 +815,7 @@ func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.Im
 
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		return cleanup()
@@ -869,7 +868,7 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		return cleanup()
@@ -879,4 +878,46 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 		return err
 	}
 	return nil
+}
+
+func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.TypedImageReference {
+
+	if o.MaxNestedPaths > 0 {
+		dir := ref.Ref
+		full := strings.Join([]string{dir.Registry, dir.Namespace, dir.Name}, "/")
+		splitUserNS := strings.Split(o.UserNamespace, "/")
+		// find the path length for registry & usernamespace
+		newIndex := o.MaxNestedPaths - (len(splitUserNS) + 1)
+		// if less than 0 will cause a panic
+		if newIndex >= 0 {
+			// restore the original usernamespace
+			dir.Namespace = o.UserNamespace
+			// split the full reference from the usernamespace
+			name := strings.Split(full, o.UserNamespace)
+			// use the second part to split the paths
+			newName := strings.Split(strings.Trim(name[1], "/"), "/")
+			// no need to replace
+			if newIndex >= len(newName) {
+				dir.Name = strings.Trim(name[1], "/")
+				return imagesource.TypedImageReference{Ref: dir, Type: ref.Type}
+			}
+			// replace all '/' with '-' from the index (MaxNestedPaths - (len(usernamespace) + 1))
+			replacedName := strings.ReplaceAll(strings.Join(newName[newIndex:], "/"), "/", "-")
+			preFix := strings.Join(newName[:newIndex], "/")
+			// we should never really see this condition
+			// MaxNestedPaths should always be greater than len(split(registry + usernamespace)
+			// i.e o.MaxNestedPaths > strings.Split(registry + usernamespace)
+			if newIndex == 0 && len(preFix) == 0 {
+				dir.Name = strings.Trim(replacedName, "/")
+			} else {
+				dir.Name = strings.Join([]string{preFix, replacedName}, "/")
+			}
+			return imagesource.TypedImageReference{Ref: dir, Type: ref.Type}
+		} else {
+			// return original - no changes
+			return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}
+		}
+	}
+	// return original - no changes
+	return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}
 }

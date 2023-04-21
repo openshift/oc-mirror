@@ -443,6 +443,13 @@ func TestICSPGeneration(t *testing.T) {
 			},
 		}}
 
+	// test processNestedPaths
+	o := &MirrorOptions{
+		MaxNestedPaths: 0,
+		ToMirror:       "localhost:5000",
+		UserNamespace:  "ocpbugs-11922/mirror-release",
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mapping := image.TypedImageMapping{}
@@ -450,7 +457,7 @@ func TestICSPGeneration(t *testing.T) {
 				mapping[sourceImage] = test.destImages[ind]
 			}
 
-			icsps, err := GenerateICSP("test", test.icspScope, test.icspSizeLimit, mapping, test.typ)
+			icsps, err := o.GenerateICSP("test", test.icspScope, test.icspSizeLimit, mapping, test.typ)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

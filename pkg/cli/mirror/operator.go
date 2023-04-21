@@ -441,7 +441,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			}
 
 		}
-		if err := writeMappingFile(mappingFile, result); err != nil {
+		if err := o.writeMappingFile(mappingFile, result); err != nil {
 			return nil, err
 		}
 	}
