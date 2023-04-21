@@ -112,7 +112,7 @@ func TestCreateOlmArtifactsForOCI(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "unable to get OCI Image from oci:: open index.json: no such file or directory",
+			expectedErr: "open index.json: no such file or directory",
 		},
 	}
 
@@ -129,7 +129,8 @@ func TestCreateOlmArtifactsForOCI(t *testing.T) {
 				ErrOut: os.Stderr,
 			},
 		},
-		OutputDir: path,
+		OutputDir:                         path,
+		operatorCatalogToFullArtifactPath: map[string]string{},
 	}
 
 	for _, c := range cases {
