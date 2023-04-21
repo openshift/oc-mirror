@@ -38,7 +38,7 @@ var icspTypeMeta = metav1.TypeMeta{
 // ICSPBuilder defines methods for generating ICSPs
 type ICSPBuilder interface {
 	New(string, int) operatorv1alpha1.ImageContentSourcePolicy
-	GetMapping(string, image.TypedImageMapping) (map[string]string, error)
+	GetMapping(int, string, image.TypedImageMapping) (map[string]string, error)
 }
 
 var _ ICSPBuilder = &ReleaseBuilder{}
@@ -58,11 +58,11 @@ func (b *ReleaseBuilder) New(icspName string, icspCount int) operatorv1alpha1.Im
 	}
 }
 
-func (b *ReleaseBuilder) GetMapping(_ string, mapping image.TypedImageMapping) (map[string]string, error) {
+func (b *ReleaseBuilder) GetMapping(paths int, _ string, mapping image.TypedImageMapping) (map[string]string, error) {
 	// Scope is set to repository for release because
 	// they are mirrored as different repo names by
 	// release planner
-	return getRegistryMapping(repositoryICSPScope, mapping)
+	return getRegistryMapping(paths, repositoryICSPScope, mapping)
 }
 
 var _ ICSPBuilder = &OperatorBuilder{}
@@ -83,8 +83,8 @@ func (b *OperatorBuilder) New(icspName string, icspCount int) operatorv1alpha1.I
 	}
 }
 
-func (b *OperatorBuilder) GetMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
-	return getRegistryMapping(icspScope, mapping)
+func (b *OperatorBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+	return getRegistryMapping(paths, icspScope, mapping)
 }
 
 var _ ICSPBuilder = &GenericBuilder{}
@@ -104,13 +104,13 @@ func (b *GenericBuilder) New(icspName string, icspCount int) operatorv1alpha1.Im
 	}
 }
 
-func (b *GenericBuilder) GetMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
-	return getRegistryMapping(icspScope, mapping)
+func (b *GenericBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+	return getRegistryMapping(paths, icspScope, mapping)
 }
 
 // GenerateICSP will generate ImageContentSourcePolicy objects based on image mapping and an ICSPBuilder
-func GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
-	registryMapping, err := builder.GetMapping(icspScope, mapping)
+func (o *MirrorOptions) GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+	registryMapping, err := builder.GetMapping(o.MaxNestedPaths, icspScope, mapping)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func aggregateICSPs(icsps [][]byte) []byte {
 	return aggregation
 }
 
-func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+func getRegistryMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
 		if len(v.Ref.ID) == 0 {
@@ -179,10 +179,18 @@ func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[
 		case icspScope == repositoryICSPScope:
 			registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
 		case icspScope == namespaceICSPScope:
-			source := path.Join(imgRegistry, imgNamespace)
-			reg, org, _, _, _ := v1alpha2.ParseImageReference(v.Ref.AsRepository().Exact())
-			dest := path.Join(reg, org)
-			registryMapping[source] = dest
+			// OCPBUGS-11922
+			if paths > 0 {
+				source := path.Join(imgRegistry, imgNamespace, k.Ref.Name)
+				reg, org, repo, _, _ := v1alpha2.ParseImageReference(v.Ref.String())
+				dest := path.Join(reg, org, repo)
+				registryMapping[source] = dest
+			} else {
+				source := path.Join(imgRegistry, imgNamespace)
+				reg, org, _, _, _ := v1alpha2.ParseImageReference(v.Ref.AsRepository().Exact())
+				dest := path.Join(reg, org)
+				registryMapping[source] = dest
+			}
 		default:
 			return registryMapping, fmt.Errorf("invalid ICSP scope %s", icspScope)
 		}
