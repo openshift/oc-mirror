@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/match"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -80,71 +81,125 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 	if err != nil {
 		return err
 	}
-	idxManifest, err := idx.IndexManifest()
+	// make a copy of the original manifest for later
+	originalIdxManifest, err := idx.IndexManifest()
 	if err != nil {
 		return err
 	}
+	originalIdxManifest = originalIdxManifest.DeepCopy()
 
-	for _, manifest := range idxManifest.Manifests {
-		switch manifest.MediaType {
-		case types.DockerManifestSchema2:
-			v2format = true
-		case types.OCIManifestSchema1:
-			v2format = false
-		default:
-			return fmt.Errorf("image %q: unsupported manifest format %q", targetRef, manifest.MediaType)
-		}
-
-		img, err := layoutPath.Image(manifest.Digest)
+	/*
+		processImageIndex is a recursive function that allows for traversal of the hierarchy of
+		parent/child indexes that can exist for a multi arch image. There's always
+		at least one index at the root since this is an OCI layout that we're dealing with.
+		In theory there can be "infinite levels" of "index indirection" for multi arch images, but typically
+		its only two levels deep (i.e. index.json itself which is level one, and the manifest list
+		defined in the blobs directory, which is level two).
+	*/
+	var processImageIndex func(idx v1.ImageIndex) (v1.ImageIndex, error)
+	processImageIndex = func(idx v1.ImageIndex) (v1.ImageIndex, error) {
+		var resultIdx v1.ImageIndex
+		resultIdx = idx
+		idxManifest, err := idx.IndexManifest()
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		// Add new layers to image.
-		// Ensure they have the right media type.
-		var mt types.MediaType
-		if v2format {
-			mt = types.DockerLayer
-		} else {
-			mt = types.OCILayer
-		}
-		additions := make([]mutate.Addendum, 0, len(layers))
-		for _, layer := range layers {
-			additions = append(additions, mutate.Addendum{Layer: layer, MediaType: mt})
-		}
-		img, err = mutate.Append(img, additions...)
-		if err != nil {
-			return err
-		}
-
-		if update != nil {
-			// Update image config
-			cfg, err := img.ConfigFile()
-			if err != nil {
-				return err
+		for _, manifest := range idxManifest.Manifests {
+			currentHash := *manifest.Digest.DeepCopy()
+			switch manifest.MediaType {
+			case types.DockerManifestList, types.OCIImageIndex:
+				innerIdx, err := idx.ImageIndex(currentHash)
+				if err != nil {
+					return nil, err
+				}
+				// recursive call
+				processedIdx, err := processImageIndex(innerIdx)
+				if err != nil {
+					return nil, err
+				}
+				resultIdx = processedIdx
+				// making an assumption here that at any given point in the parent/child
+				// hierarchy, there's only a single image index entry
+				return resultIdx, nil
+			case types.DockerManifestSchema2:
+				v2format = true
+			case types.OCIManifestSchema1:
+				v2format = false
+			default:
+				return nil, fmt.Errorf("image %q: unsupported manifest format %q", targetRef, manifest.MediaType)
 			}
-			update(cfg)
-			img, err = mutate.Config(img, cfg.Config)
-			if err != nil {
-				return err
-			}
-		}
 
-		var layoutOpts []layout.Option
-		if manifest.Platform != nil {
-			layoutOpts = append(layoutOpts, layout.WithPlatform(*manifest.Platform))
-		} else {
-			//OCI workflow manifest.Platform is nil, to avoid failures in the OCI workflow the default amd64/linux is set here
-			pf := &v1.Platform{Architecture: "amd64", OS: "linux"}
-			layoutOpts = append(layoutOpts, layout.WithPlatform(*pf))
+			img, err := idx.Image(currentHash)
+			if err != nil {
+				return nil, err
+			}
+
+			// Add new layers to image.
+			// Ensure they have the right media type.
+			var mt types.MediaType
+			if v2format {
+				mt = types.DockerLayer
+			} else {
+				mt = types.OCILayer
+			}
+			additions := make([]mutate.Addendum, 0, len(layers))
+			for _, layer := range layers {
+				additions = append(additions, mutate.Addendum{Layer: layer, MediaType: mt})
+			}
+			img, err = mutate.Append(img, additions...)
+			if err != nil {
+				return nil, err
+			}
+
+			if update != nil {
+				// Update image config
+				cfg, err := img.ConfigFile()
+				if err != nil {
+					return nil, err
+				}
+				update(cfg)
+				img, err = mutate.Config(img, cfg.Config)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			desc, err := partial.Descriptor(img)
+			if err != nil {
+				return nil, err
+			}
+
+			// if the platform is not set, we need to attempt to do something about that
+			if desc.Platform == nil {
+				if manifest.Platform != nil {
+					// use the value from the manifest
+					desc.Platform = manifest.Platform
+				} else {
+					if config, err := img.ConfigFile(); err != nil {
+						// we can't get the config file so fall back to linux/amd64
+						desc.Platform = &v1.Platform{Architecture: "amd64", OS: "linux"}
+					} else {
+						// if one of the required values is missing, fall back to linux/amd64
+						if config.Architecture == "" || config.OS == "" {
+							desc.Platform = &v1.Platform{Architecture: "amd64", OS: "linux"}
+						} else {
+							// use the value provided by the image config
+							desc.Platform = &v1.Platform{Architecture: config.Architecture, OS: config.OS}
+						}
+					}
+				}
+			}
+			add := mutate.IndexAddendum{
+				Add:        img,
+				Descriptor: *desc,
+			}
+			modifiedIndex := mutate.AppendManifests(mutate.RemoveManifests(resultIdx, match.Digests(currentHash)), add)
+			resultIdx = modifiedIndex
 		}
-		if err := layoutPath.ReplaceImage(img, match.Digests(manifest.Digest), layoutOpts...); err != nil {
-			return err
-		}
+		return resultIdx, nil
 	}
 
-	// Pull updated index
-	idx, err = layoutPath.ImageIndex()
+	resultIdx, err := processImageIndex(idx)
 	if err != nil {
 		return err
 	}
@@ -152,13 +207,70 @@ func (b *ImageBuilder) Run(ctx context.Context, targetRef string, layoutPath lay
 	// Ensure the index media type is a docker manifest list
 	// if child manifests are docker V2 schema
 	if v2format {
-		idx = mutate.IndexMediaType(idx, types.DockerManifestList)
+		resultIdx = mutate.IndexMediaType(resultIdx, types.DockerManifestList)
 	}
-	return remote.WriteIndex(tag, idx, b.RemoteOpts...)
+	// get the hashes from the original manifest since we need to remove them
+	originalHashes := []v1.Hash{}
+	for _, desc := range originalIdxManifest.Manifests {
+		originalHashes = append(originalHashes, desc.Digest)
+	}
+	// write out the index, replacing the old value
+	err = layoutPath.ReplaceIndex(resultIdx, match.Digests(originalHashes...))
+	if err != nil {
+		return err
+	}
+	// "Pull" the updated index
+	idx, err = layoutPath.ImageIndex()
+	if err != nil {
+		return err
+	}
+	// while it's entirely valid to have nested "manifest list" (i.e. an ImageIndex) within an OCI layout,
+	// this does NOT work for remote registries. So if we have those, then we need to get the nested
+	// ImageIndex and push that to the remote registry. In theory there could be any number of nested
+	// ImageIndexes, but in practice, there's only one level deep, and its a "singleton".
+	topLevelIndexManifest, err := idx.IndexManifest()
+	if err != nil {
+		return err
+	}
+	var imageIndexToPush v1.ImageIndex
+	for _, descriptor := range topLevelIndexManifest.Manifests {
+		if descriptor.MediaType.IsImage() {
+			// if we find an image, then this top level index can be used to push to remote registry
+			imageIndexToPush = idx
+			// no need to look any further
+			break
+		} else if descriptor.MediaType.IsIndex() {
+			// if we find an image index, we can push that to the remote registry
+			imageIndexToPush, err = idx.ImageIndex(descriptor.Digest)
+			if err != nil {
+				return err
+			}
+			// we're not going to look any deeper or look for other indexes at this level
+			break
+		}
+	}
+	// push to the remote
+	return remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
 }
 
-// CreateLayout will create an OCI image layout from an image or return
-// a layout path from an existing OCI layout
+/*
+CreateLayout will create an OCI image layout from an image or return
+a layout path from an existing OCI layout.
+
+# Arguments
+
+• srcRef: if empty string, the dir argument is used for the layout.Path, otherwise
+this value is used to pull an image into dir.
+
+• dir: a pre-populated OCI layout directory if srcRef is empty string, otherwise
+this directory will be created
+
+# Returns
+
+• layout.Path: a OCI layout path if successful or an empty string if an error occurs
+
+• error: non-nil if an error occurs, nil otherwise
+*/
 func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 	b.init()
 	if srcRef == "" {

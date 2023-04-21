@@ -81,7 +81,9 @@ const (
 )
 
 func NewMirrorCmd() *cobra.Command {
-	o := MirrorOptions{}
+	o := MirrorOptions{
+		operatorCatalogToFullArtifactPath: map[string]string{},
+	}
 	o.RootOptions = &cli.RootOptions{
 		IOStreams: genericclioptions.IOStreams{
 			In:     os.Stdin,

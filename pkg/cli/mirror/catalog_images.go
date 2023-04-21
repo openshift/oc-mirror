@@ -109,6 +109,14 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			ctlgRef := image.TypedImage{}
 			ctlgRef.Type = imagesource.DestinationRegistry
 			sourceRef, err := image.ParseReference(img)
+			// since we can't really tell if the "img" reference originated from an actual docker
+			// reference or from an OCI file path that approximates a docker reference, ParseReference
+			// might not lowercase the name and namespace values which is required by the
+			// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+			// Therefore we lower case name and namespace here to make sure it's done.
+			sourceRef.Ref.Name = strings.ToLower(sourceRef.Ref.Name)
+			sourceRef.Ref.Namespace = strings.ToLower(sourceRef.Ref.Namespace)
+
 			if err != nil {
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
 			}

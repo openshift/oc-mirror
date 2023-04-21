@@ -196,7 +196,7 @@ func (o *MirrorOptions) createOlmArtifactsForOCI(ctx context.Context, cfg v1alph
 		// setup where the FBC content will be written to
 		catalogContentsDir := filepath.Join(artifactsFolderName, ctlg.Ref.Name)
 		// obtain the path to where the OCI image reference resides
-		layoutPath := layout.Path(ctlg.OCIFBCPath)
+		layoutPath := layout.Path(v1alpha2.TrimProtocol(ctlg.OCIFBCPath))
 
 		// get its index.json and obtain its manifest
 		rootIndex, err := layoutPath.ImageIndex()

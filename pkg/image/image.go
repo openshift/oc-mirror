@@ -85,6 +85,7 @@ func ParseReference(ref string) (TypedImageReference, error) {
 
 	dstType := DestinationOCI
 
+	// Take the reference and convert it into a docker image reference.
 	reg, ns, name, tag, id := v1alpha2.ParseImageReference(ref)
 	dst := libgoref.DockerImageReference{
 		Registry:  reg,
@@ -93,6 +94,15 @@ func ParseReference(ref string) (TypedImageReference, error) {
 		Tag:       tag,
 		ID:        id,
 	}
+
+	// Because this docker reference is based on a path to the OCI layout
+	// we need to convert the name and namespace to lower case to comply with the
+	// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+	// Failure to do this will result in parsing errors for some docker reference parsers that
+	// perform strict validation.
+	// Example: when "ref" is oci:///Users/bob/temp/ocmirror the uppercase U will cause parsing errors.
+	dst.Name = strings.ToLower(dst.Name)
+	dst.Namespace = strings.ToLower(dst.Namespace)
 
 	// if manifest does not exist (in case of TargetName and TargetTag replacing the original name,
 	// the returned path will not exist on disk), invalidate the ID since parsing the path
