@@ -858,8 +858,16 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 	// Publish from disk to registry
 	// this takes care of syncing the metadata to the
 	// registry backends.
+
 	mapping, err := o.Publish(ctx)
 	if err != nil {
+		// OCPBUGS-4959 for automation processes to end gracefully
+		// when we have the same sequence - i.e nothing to do
+		msqErr := &ErrMirrorSequence{}
+		if errors.As(err, &msqErr) {
+			klog.Info("No diff from previous mirror (sequence is the same), nothing to do")
+			return cleanup()
+		}
 		serr := &ErrInvalidSequence{}
 		if errors.As(err, &serr) {
 			return fmt.Errorf("error during publishing, expecting imageset with prefix mirror_seq%d: %v", serr.wantSeq, err)
