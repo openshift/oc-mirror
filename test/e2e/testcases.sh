@@ -244,7 +244,7 @@ function no_updates_exist {
 
 # Test OCI local catalog
 function oci_catalog {
-    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--use-oci-feature --dest-skip-tls --oci-insecure-signature-policy"
+    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--include-local-oci-catalogs --dest-skip-tls --oci-insecure-signature-policy"
     # podman pull docker://localhost.localdomain:5001/test/redhatgov/oc-mirror-dev:test-catalog-latest --tls-verify=false
     # baz.v1.0.0 
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f5bf1128937e7486764341e7bfdce15150f70d0e48c57de1386602c7b25ad7b4
@@ -268,7 +268,7 @@ function oci_local_all {
     test/e2e/graph/main & PID_GO=$! 
     echo -e "go cincinnatti web service PID: ${PID_GO}"
     # copy relevant files and start the mirror process
-    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy --use-oci-feature"
+    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy --include-local-oci-catalogs"
 
     # use crane digest to verify
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/redhatgov/oc-mirror-dev:bar-v0.1.0

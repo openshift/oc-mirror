@@ -291,38 +291,38 @@ func TestMirrorValidate(t *testing.T) {
 		{
 			name: "Invalid/MirrortoDisk/OCIFlag",
 			opts: &MirrorOptions{
-				OutputDir:     t.TempDir(),
-				ConfigPath:    "foo",
-				UseOCIFeature: true,
+				OutputDir:               t.TempDir(),
+				ConfigPath:              "foo",
+				IncludeLocalOCICatalogs: true,
 			},
 			expError: "oci feature cannot be used when mirroring to local archive",
 		},
 		{
 			name: "Invalid/DisktoMirror/OCIFlag",
 			opts: &MirrorOptions{
-				From:          t.TempDir(),
-				ToMirror:      u.Host,
-				UseOCIFeature: true,
+				From:                    t.TempDir(),
+				ToMirror:                u.Host,
+				IncludeLocalOCICatalogs: true,
 			},
 			expError: "oci feature cannot be used when publishing from a local archive to a registry",
 		},
 		{
 			name: "Invalid/MirrorToMirror/ImageSetConfigWithOCI",
 			opts: &MirrorOptions{
-				ConfigPath:    "testdata/configs/iscfg_oci_ops.yaml",
-				ToMirror:      u.Host,
-				UseOCIFeature: false,
+				ConfigPath:              "testdata/configs/iscfg_oci_ops.yaml",
+				ToMirror:                u.Host,
+				IncludeLocalOCICatalogs: false,
 			},
-			expError: "use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature",
+			expError: "use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --include-local-oci-catalogs",
 		},
 		{
 			name: "Invalid/MirrorToMirror/ImageSetConfigWithoutOCI",
 			opts: &MirrorOptions{
-				ConfigPath:    "testdata/configs/iscfg.yaml",
-				ToMirror:      u.Host,
-				UseOCIFeature: true,
+				ConfigPath:              "testdata/configs/iscfg.yaml",
+				ToMirror:                u.Host,
+				IncludeLocalOCICatalogs: true,
 			},
-			expError: "no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --use-oci-feature flag",
+			expError: "no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --include-local-oci-catalogs flag",
 		},
 		{
 			name: "Valid/ManifestOnlyWithFakeMirror",
