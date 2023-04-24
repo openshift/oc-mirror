@@ -255,11 +255,11 @@ func (o *MirrorOptions) Validate() error {
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
 	// mirrorToDisk workflow is not supported with the oci feature
-	if o.UseOCIFeature && mirrorToDisk {
+	if o.IncludeLocalOCICatalogs && mirrorToDisk {
 		return fmt.Errorf("oci feature cannot be used when mirroring to local archive")
 	}
 	// diskToMirror workflow is not supported with the oci feature
-	if o.UseOCIFeature && diskToMirror {
+	if o.IncludeLocalOCICatalogs && diskToMirror {
 		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
 	}
 	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
@@ -274,15 +274,15 @@ func (o *MirrorOptions) Validate() error {
 				bIsFBOCI = true
 			}
 		}
-		if o.UseOCIFeature && !bIsFBOCI {
-			return fmt.Errorf("no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --use-oci-feature flag")
+		if o.IncludeLocalOCICatalogs && !bIsFBOCI {
+			return fmt.Errorf("no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --include-local-oci-catalogs flag")
 		}
-		if !o.UseOCIFeature && bIsFBOCI {
-			return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --use-oci-feature")
+		if !o.IncludeLocalOCICatalogs && bIsFBOCI {
+			return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --include-local-oci-catalogs")
 		}
 	}
-	if !o.UseOCIFeature && len(o.OCIRegistriesConfig) > 0 {
-		return fmt.Errorf("oci-registries-config flag can only be used with the --use-oci-feature flag")
+	if !o.IncludeLocalOCICatalogs && len(o.OCIRegistriesConfig) > 0 {
+		return fmt.Errorf("oci-registries-config flag can only be used with the --include-local-oci-catalog flag")
 	}
 
 	if o.SkipPruning {
@@ -632,7 +632,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	if err != nil {
 		return err
 	}
-	if !o.UseOCIFeature {
+	if !o.IncludeLocalOCICatalogs {
 		var curr v1alpha2.Metadata
 		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
 		if err := o.checkSequence(meta, curr, berr); err != nil {
