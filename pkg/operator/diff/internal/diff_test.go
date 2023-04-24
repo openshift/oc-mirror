@@ -1890,7 +1890,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
-						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3"},
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
@@ -1991,7 +1991,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
-						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3"},
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
@@ -2037,6 +2037,159 @@ func TestDiffHeadsOnly(t *testing.T) {
 							property.MustBuildGVK("etcd.database.coreos.com", "v1", "EtcdBackup"),
 							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
 							property.MustBuildPackage("etcd", "0.9.3"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v1.0.0",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "1.0.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "foo.v0.1.0",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("foo", "0.1.0"),
+							property.MustBuildPackageRequired("etcd", "<0.9.2"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "HasDiff/SelectDependencies/SkipHeadSkipsList",
+			newCfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: declcfg.SchemaPackage, Name: "etcd", DefaultChannel: "stable"},
+					{Schema: declcfg.SchemaPackage, Name: "foo", DefaultChannel: "stable"},
+					{Schema: declcfg.SchemaPackage, Name: "bar", DefaultChannel: "stable"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
+						{Name: "etcd.v0.9.0"},
+						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
+						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
+						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+					}},
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.1.0"},
+					}},
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.0"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "foo.v0.1.0",
+						Package: "foo",
+						Image:   "reg/foo:latest",
+						Properties: []property.Property{
+							property.MustBuildPackageRequired("etcd", "<0.9.2"),
+							property.MustBuildPackage("foo", "0.1.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "bar.v0.1.0",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v0.9.0",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "0.9.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v0.9.1",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "0.9.1"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v0.9.2",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "0.9.2"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v0.9.3",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildGVK("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "0.9.3"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "etcd.v1.0.0",
+						Package: "etcd",
+						Image:   "reg/etcd:latest",
+						Properties: []property.Property{
+							property.MustBuildGVK("etcd.database.coreos.com", "v1beta2", "EtcdBackup"),
+							property.MustBuildGVK("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("etcd", "1.0.0"),
+						},
+					},
+				},
+			},
+			g: &DiffGenerator{
+				HeadsOnly: true,
+			},
+			expCfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: declcfg.SchemaPackage, Name: "bar", DefaultChannel: "stable"},
+					{Schema: declcfg.SchemaPackage, Name: "etcd", DefaultChannel: "stable"},
+					{Schema: declcfg.SchemaPackage, Name: "foo", DefaultChannel: "stable"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "bar", Entries: []declcfg.ChannelEntry{
+						{Name: "bar.v0.1.0"},
+					}},
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "etcd", Entries: []declcfg.ChannelEntry{
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+					}},
+					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+						{Name: "foo.v0.1.0"},
+					}},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "bar.v0.1.0",
+						Package: "bar",
+						Image:   "reg/bar:latest",
+						Properties: []property.Property{
+							property.MustBuildGVKRequired("etcd.database.coreos.com", "v1", "EtcdBackup"),
+							property.MustBuildPackage("bar", "0.1.0"),
 						},
 					},
 					{
@@ -2230,7 +2383,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
-						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.2", "etcd.v0.9.3"}},
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
@@ -2346,7 +2499,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						{Name: "etcd.v0.9.1", Replaces: "etcd.v0.9.0"},
 						{Name: "etcd.v0.9.2", Replaces: "etcd.v0.9.1"},
 						{Name: "etcd.v0.9.3", Replaces: "etcd.v0.9.2"},
-						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.1", "etcd.v0.9.2", "etcd.v0.9.3"}},
+						{Name: "etcd.v1.0.0", Replaces: "etcd.v0.9.3", Skips: []string{"etcd.v0.9.2", "etcd.v0.9.3"}},
 					}},
 					{Schema: declcfg.SchemaChannel, Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
 						{Name: "foo.v0.1.0"},
