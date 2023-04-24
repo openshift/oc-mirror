@@ -4,8 +4,11 @@ reviewers:
   - deejross
   - lmzuccarelli
   - sherine-k
+  - aguidirh
 approvers:
   - soltysh
   - dinhxuanvu
+  - lmzuccarelli
+  - sherine-k
 component: oc
 subcomponent: oc-mirror
