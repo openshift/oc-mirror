@@ -257,13 +257,13 @@ func TestGetFirstDigestFromPath(t *testing.T) {
 			desc:           "single arch case one",
 			inRef:          makeRef("../cli/mirror/testdata/artifacts/rhop-ctlg-oci"),
 			errorFunc:      require.NoError,
-			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "c7c89df4a1f53d7e619080245c4784b6f5e6232fb71e98d981b89799ae578262"},
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "3986c6e039692ada9b5fa79ce51ce49bf6b24bc3af91d96e6c9d3d72f8077401"},
 		},
 		{
 			desc:           "single arch case two",
 			inRef:          makeRef("../cli/mirror/testdata/single/testonly/layout"),
 			errorFunc:      require.NoError,
-			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "2243535a05266fa83c1b3765cd813829264ea6893485dbbfb78cca46830fc467"},
+			expectedDigest: &v1.Hash{Algorithm: "sha256", Hex: "a0aae779d7da2bb33c2d06f49510a50ec612b8cd1fb81f6ff4625bde497289a3"},
 		},
 		{
 			desc:           "multi arch case one",

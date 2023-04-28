@@ -129,12 +129,22 @@ func ParseReference(ref string) (TypedImageReference, error) {
 
 /*
 getFirstDigestFromPath will inspect a OCI layout path provided by
-the ref argument and return the **first** digest discovered. If this is
-a multi arch image, it returns the SHA of the manifest list itself.
-If this is a single arch image, it returns the config SHA. This function
-will error if no manifests were found in the top level index.json. If there
-are more than one manifest, the other entries are ignored and a log message
-is generated.
+the ref argument and return the **first available digest** within the layout.
+
+- If this layout stores a multi arch image, it returns the SHA of the manifest list itself.
+This handles the case where index.json directly references a multi arch image
+as well when a manifest list is indirectly referenced in the blobs directory.
+
+- If this layout stores a single arch image, it returns the SHA of the image manifest.
+
+This function will error when:
+
+- the index.json has no manifests
+
+- the index.json has more than one manifest (assuming that the index is not directly
+referencing a multi arch image as described above)
+
+- other unexpected errors encountered during processing
 */
 func getFirstDigestFromPath(ref string) (*v1.Hash, error) {
 	filepath := v1alpha2.TrimProtocol(ref)
@@ -164,28 +174,38 @@ func getFirstDigestFromPath(ref string) (*v1.Hash, error) {
 		return &hash, nil
 	}
 
-	// if manifest has more than one entry, indicate that something is probably not right with this OCI layout, but don't error out
+	// if manifest has more than one entry, throw error
 	if len(idxManifest.Manifests) > 1 {
-		klog.Infof("more than one image reference found in OCI layout %s using first entry only", ref)
+		return nil, fmt.Errorf("more than one image reference found in OCI layout %s, which usually indicates multiple images are being stored in the layout", ref)
 	}
 
-	// grab the first manifest an return its digest
+	// grab the first manifest and return its digest
+	// using range here despite the prior length check for safety
+	// because we could have zero or one entries
 	for _, descriptor := range idxManifest.Manifests {
 		if descriptor.MediaType.IsImage() {
-			// if its an image, get the config hash and return that value
+			// if its an image, make sure it can be obtained
 			img, err := ii.Image(descriptor.Digest)
 			if err != nil {
-				return nil, err
+				// this is unlikely to happen but if it does, move on to the next item
+				continue
 			}
-			hash, err := img.ConfigName()
+			_, err = img.ConfigFile()
 			if err != nil {
-				return nil, err
+				// this is unlikely to happen but if it does, move on to the next item
+				continue
 			}
-			return &hash, nil
-		} else {
+			return &descriptor.Digest, nil
+		} else if descriptor.MediaType.IsIndex() {
+			// if its an image index, make sure it can be obtained
+			_, err := ii.ImageIndex(descriptor.Digest)
+			if err != nil {
+				// this is unlikely to happen but if it does, move on to the next item
+				continue
+			}
 			// return the digest for the manifest list
 			return &descriptor.Digest, nil
 		}
 	}
-	return nil, fmt.Errorf("OCI layout %s did not contain any manifest entries", ref)
+	return nil, fmt.Errorf("OCI layout %s did not contain any usable manifest entries", ref)
 }
