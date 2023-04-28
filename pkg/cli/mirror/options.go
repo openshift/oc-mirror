@@ -34,7 +34,7 @@ type MirrorOptions struct {
 	ContinueOnError            bool
 	IgnoreHistory              bool
 	MaxPerRegistry             int
-	UseOCIFeature              bool
+	IncludeLocalOCICatalogs    bool
 	OCIRegistriesConfig        string
 	OCIInsecureSignaturePolicy bool
 	MaxNestedPaths             int
@@ -68,12 +68,13 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 		"404/NotFound errors encountered while pulling images explicitly specified in the config "+
 		"will not be skipped")
 	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 6, "Number of concurrent requests allowed per registry")
-	fs.BoolVar(&o.UseOCIFeature, "use-oci-feature", o.UseOCIFeature, "Use the new oci feature for oc mirror (oci formatted copy")
+	fs.BoolVar(&o.IncludeLocalOCICatalogs, "use-oci-feature", o.IncludeLocalOCICatalogs, "Deprecated, use --include-local-oci-catalog instead")
+	fs.BoolVar(&o.IncludeLocalOCICatalogs, "include-local-oci-catalogs", o.IncludeLocalOCICatalogs, "If set, enables including local OCI-formatted catalogs (prefix oci://) in the list of operator catalogs defined in ImageSetConfig, so that these local catalogs are mirrored from the disk directly")
 	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --use-oci-feature flag)")
 	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
 	fs.BoolVar(&o.SkipPruning, "skip-pruning", o.SkipPruning, "If set, will disable pruning globally")
 	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 2, "Number of nested paths, for destination registries that limit nested paths")
-
+	fs.MarkDeprecated("use-oci-feature", "Use --include-local-oci-catalogs instead")
 }
 
 func (o *MirrorOptions) init() {

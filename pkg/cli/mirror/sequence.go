@@ -17,8 +17,16 @@ type ErrInvalidSequence struct {
 	gotSeq  int
 }
 
+type ErrMirrorSequence struct {
+	msg string
+}
+
 func (s *ErrInvalidSequence) Error() string {
 	return fmt.Sprintf("invalid mirror sequence order, want %v, got %v", s.wantSeq, s.gotSeq)
+}
+
+func (s *ErrMirrorSequence) Error() string {
+	return fmt.Sprintf(s.msg)
 }
 
 func (o *MirrorOptions) checkSequence(incoming, current v1alpha2.Metadata, backendErr error) error {
@@ -40,6 +48,10 @@ func (o *MirrorOptions) checkSequence(incoming, current v1alpha2.Metadata, backe
 		klog.V(3).Info("Checking metadata sequence number")
 		currRun := current.PastMirror
 		incomingRun := incoming.PastMirror
+		// OCPBUGS-4959
+		if incomingRun.Sequence == currRun.Sequence {
+			return &ErrMirrorSequence{msg: "mirror sequence is the same"}
+		}
 		if incomingRun.Sequence != (currRun.Sequence + 1) {
 			return &ErrInvalidSequence{currRun.Sequence + 1, incomingRun.Sequence}
 		}
