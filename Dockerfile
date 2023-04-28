@@ -14,15 +14,18 @@ ARG DNF_LIST="\
   git \
   gpgme-devel \
   libassuan-devel \
+  wget \
+  pigz \
 "
 
 #################################################################################
-# Build UBI8 Builder
+# Build UBI8 Builder with multi-arch support
 RUN set -ex \
+     && ARCH=$(arch | sed 's|x86_64|amd64|g')                                   \
      && dnf install -y --nodocs --setopt=install_weak_deps=false ${DNF_LIST}    \
      && dnf clean all -y                                                        \
-     && GO_VERSION=go1.19.5                                       \
-     && curl -sL https://golang.org/dl/${GO_VERSION}.linux-amd64.tar.gz         \
+     && GO_VERSION=go1.19.5                                                     \
+     && curl -sL https://golang.org/dl/${GO_VERSION}.linux-${ARCH}.tar.gz       \
         | tar xzvf - --directory /usr/local/                                    \
      && /usr/local/go/bin/go version                                            \
      && ln -f /usr/local/go/bin/go /usr/bin/go

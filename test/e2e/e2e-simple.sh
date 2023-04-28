@@ -32,8 +32,12 @@ METADATA_OCI_CATALOG="oci://${DIR}/artifacts/rhop-ctlg-oci"
 TARGET_CATALOG_NAME="target-name"
 TARGET_CATALOG_TAG="target-tag"
 
-
 GOBIN=$HOME/go/bin
+# Check if this is running with a different location
+if [ ! -d $GOBIN ]
+then 
+    GOBIN=/usr/local/go/bin/
+fi
 PATH=$PATH:$GOBIN
 
 mkdir -p $DATA_TMP

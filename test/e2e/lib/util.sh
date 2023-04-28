@@ -43,18 +43,47 @@ function cleanup_conn() {
 
 # install_deps will install crane and registry2 in go bin dir
 function install_deps() {
-  pushd ${DATA_TMP}
-  GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
-  popd
-  crane export registry:2 registry2.tar
-  tar xvf registry2.tar bin/registry
-  mv bin/registry $GOBIN
-  crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
-  tar xvf opm.tar bin/opm
-  mv bin/opm $GOBIN
-  rm -f registry2.tar opm.tar
-  wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-  chmod +x $GOBIN/jq
+  if [ "$(arch)" == "x86_64" ]
+  then
+    pushd ${DATA_TMP}
+    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    popd
+    crane export registry:2 registry2.tar
+    tar xvf registry2.tar bin/registry
+    mv bin/registry $GOBIN
+    crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
+    tar xvf opm.tar bin/opm
+    mv bin/opm $GOBIN
+    rm -f registry2.tar opm.tar
+      wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+      chmod +x $GOBIN/jq
+  else
+    pushd ${DATA_TMP}
+    # Creates a temp directory
+    mkdir -p test/e2e/operator-test.deps
+    cd test/e2e/operator-test.deps
+
+    curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.26.5/linux-$(arch)-opm
+    chmod +x $GOBIN/opm
+
+    # Serves a local registry
+    # When PR https://github.com/google/go-containerregistry/pull/1680
+    # is in a release the following few lines won't be necessary.
+    git clone https://github.com/google/go-containerregistry.git
+    cd go-containerregistry
+    git checkout $(git describe --tags) # latest tag
+    go build ./cmd/crane 
+    mv crane $GOBIN/
+    
+    crane export $(arch)/registry:2 registry2.tar
+    tar xvf registry2.tar bin/registry
+    cp bin/registry ../
+    mv bin/registry $GOBIN
+
+    cd ..
+    rm -rf go-containerregistry/
+    popd
+  fi
 }
 
 # setup_reg will configure and start registry2 processes

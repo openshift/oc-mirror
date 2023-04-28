@@ -11,6 +11,7 @@ builds:
       - linux
     goarch:
       - amd64
+      - ppc64le
     env:
       - CGO_ENABLED=1
     flags:
