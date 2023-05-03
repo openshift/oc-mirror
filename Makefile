@@ -32,7 +32,7 @@ cross-build-linux-amd64:
 .PHONY: cross-build-linux-amd64
 
 cross-build-linux-ppc64le:
-	+@GOOS=linux GOARCH=ppc64le $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
+	+@GOOS=linux GOARCH=ppc64le $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-ppc64le
 .PHONY: cross-build-linux-ppc64le
 
 cross-build: cross-build-linux-amd64 cross-build-linux-ppc64le
