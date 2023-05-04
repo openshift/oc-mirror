@@ -25,7 +25,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -261,7 +260,6 @@ func TestGetRelatedImages(t *testing.T) {
 		desc                  string
 		configsPath           string
 		expectedRelatedImages []declcfg.RelatedImage
-		packages              []v1alpha2.IncludePackage
 		err                   string
 	}
 	tmpdir := t.TempDir()
@@ -269,11 +267,6 @@ func TestGetRelatedImages(t *testing.T) {
 		{
 			desc:        "nominal case",
 			configsPath: filepath.Join(testdata, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "node-observability-operator",
-				},
-			},
 			expectedRelatedImages: []declcfg.RelatedImage{
 				{
 					Image: "registry.redhat.io/noo/node-observability-operator-bundle-rhel8@sha256:25b8e1c8ed635364d4dcba7814ad504570b1c6053d287ab7e26c8d6a97ae3f6a",
@@ -291,37 +284,21 @@ func TestGetRelatedImages(t *testing.T) {
 					Name:  "agent",
 					Image: "registry.redhat.io/noo/node-observability-agent-rhel8@sha256:59bd5b8cefae5d5769d33dafcaff083b583a552e1df61194a3cc078b75cb1fdc",
 				},
-			},
-			err: "",
-		},
-		{
-			desc:        "nominal case with mashed index.yaml passes",
-			configsPath: filepath.Join(testdataMashed, blobsPath, "cac5b2f40be10e552461651655ca8f3f6ba3f65f41ecf4345efbcf1875415db6"),
-			packages: []v1alpha2.IncludePackage{
 				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.3.0",
-						MaxVersion: "0.3.1",
-					},
-				},
-			},
-			expectedRelatedImages: []declcfg.RelatedImage{
-				{
-					Image: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.0",
-					Name:  "foo",
+					Name:  "controller",
+					Image: "registry.redhat.io/albo/aws-load-balancer-controller-rhel8@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
 				},
 				{
-					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:7e1e74b87a503e95db5203334917856f61aece90a72e8d53a9fd903344eb78a5",
-					Name:  "operator",
+					Name:  "registry.redhat.io/albo/aws-load-balancer-operator-bundle",
+					Image: "registry.redhat.io/albo/aws-load-balancer-operator-bundle@sha256:50b9402635dd4b312a86bed05dcdbda8c00120d3789ec2e9b527045100b3bdb4",
 				},
 				{
-					Name:  "foo",
-					Image: "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
+					Name:  "manager",
+					Image: "registry.redhat.io/albo/aws-load-balancer-rhel8-operator@sha256:95c45fae0ca9e9bee0fa2c13652634e726d8133e4e3009b363fcae6814b3461d",
 				},
 				{
-					Name:  "operator",
-					Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
+					Name:  "kube-rbac-proxy",
+					Image: "registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:3658954f199040b0f244945c94955f794ee68008657421002e1b32962e7c30fc",
 				},
 			},
 			err: "",
@@ -338,7 +315,14 @@ func TestGetRelatedImages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to untar %s: %v", c.configsPath, err)
 			}
-			relatedImages, err := getRelatedImages(filepath.Join(tmpdir, "configs"), c.packages)
+
+			directory := filepath.Join(tmpdir, "configs")
+			cfg, err := declcfg.LoadFS(os.DirFS(directory))
+			if err != nil {
+				t.Fatalf("unable to load the declarative config %s", err.Error())
+			}
+
+			relatedImages, err := getRelatedImages(*cfg)
 			if c.err != "" {
 				require.EqualError(t, err, c.err)
 			} else {
@@ -377,258 +361,6 @@ func TestGetRelatedImages(t *testing.T) {
 					}
 				}
 			}
-		})
-	}
-}
-
-func TestIsPackageSelected(t *testing.T) {
-	type spec struct {
-		desc           string
-		bundle         declcfg.Bundle
-		channels       []declcfg.Channel
-		packages       []v1alpha2.IncludePackage
-		expectedResult bool
-		err            string
-	}
-
-	cases := []spec{
-		{
-			desc: "package has minVersion only, and bundle is above returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.3.0",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "package has minVersion only, and bundle is below returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.4.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "package has maxVersion only, and bundle is above returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MaxVersion: "0.3.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "package has maxVersion only, and bundle is below returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MaxVersion: "0.4.0",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle version is within range returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "0.3.0",
-						MaxVersion: "0.3.1",
-					},
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle version is not within range returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "1.3.0",
-						MaxVersion: "1.3.1",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-		{
-			desc: "No version range in IncludePackage returns true",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "foo",
-				},
-			},
-			expectedResult: true,
-			err:            "",
-		},
-		{
-			desc: "bundle simply not in IncludePackage returns false",
-			bundle: declcfg.Bundle{
-				Name:    "foo.v0.3.1",
-				Package: "foo",
-				Image:   "quay.io/redhatgov/oc-mirror-dev:foo-bundle-v0.3.1",
-				RelatedImages: []declcfg.RelatedImage{
-					{
-						Name:  "operator",
-						Image: "quay.io/redhatgov/oc-mirror-dev@sha256:00aef3f7bd9bea8f627dbf46d2d062010ed7d8b208a98da389b701c3cae90026",
-					},
-				},
-				Properties: []property.Property{
-					property.MustBuildPackage("foo", "0.3.1"),
-				},
-			},
-			channels: []declcfg.Channel{},
-			packages: []v1alpha2.IncludePackage{
-				{
-					Name: "bar",
-					IncludeBundle: v1alpha2.IncludeBundle{
-						MinVersion: "1.0.0",
-						MaxVersion: "2.0.0",
-					},
-				},
-			},
-			expectedResult: false,
-			err:            "",
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-
-			isSelected, err := isPackageSelected(c.bundle, c.channels, c.packages)
-			if c.err != "" {
-				require.EqualError(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, c.expectedResult, isSelected)
-				// require.ElementsMatch(t, c.expectedRelatedImages, relatedImages)
-			}
-
 		})
 	}
 }
