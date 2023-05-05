@@ -244,6 +244,7 @@ func (o *OperatorOptions) renderDCFull(
 		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
 		var ok bool
 		if ctlgRef, ok = o.operatorCatalogToFullArtifactPath[ctlg.Catalog]; !ok {
+			err = fmt.Errorf("unable to obtain artifact path for %s while performing full render", ctlg.Catalog)
 			return dc, ic, err
 		}
 	}
@@ -334,6 +335,7 @@ func (o *OperatorOptions) renderDCDiff(
 	if ctlg.IsFBCOCI() {
 		var ok bool
 		if ctlgRef, ok = o.operatorCatalogToFullArtifactPath[ctlg.Catalog]; !ok {
+			err = fmt.Errorf("unable to obtain artifact path for %s while performing diff render", ctlg.Catalog)
 			return dc, ic, err
 		}
 	}
