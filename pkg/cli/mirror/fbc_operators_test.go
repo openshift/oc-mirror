@@ -263,6 +263,22 @@ func TestGetRelatedImages(t *testing.T) {
 					Name:  "agent",
 					Image: "registry.redhat.io/noo/node-observability-agent-rhel8@sha256:59bd5b8cefae5d5769d33dafcaff083b583a552e1df61194a3cc078b75cb1fdc",
 				},
+				{
+					Name:  "controller",
+					Image: "registry.redhat.io/albo/aws-load-balancer-controller-rhel8@sha256:d7bc364512178c36671d8a4b5a76cf7cb10f8e56997106187b0fe1f032670ece",
+				},
+				{
+					Name:  "registry.redhat.io/albo/aws-load-balancer-operator-bundle",
+					Image: "registry.redhat.io/albo/aws-load-balancer-operator-bundle@sha256:50b9402635dd4b312a86bed05dcdbda8c00120d3789ec2e9b527045100b3bdb4",
+				},
+				{
+					Name:  "manager",
+					Image: "registry.redhat.io/albo/aws-load-balancer-rhel8-operator@sha256:95c45fae0ca9e9bee0fa2c13652634e726d8133e4e3009b363fcae6814b3461d",
+				},
+				{
+					Name:  "kube-rbac-proxy",
+					Image: "registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:3658954f199040b0f244945c94955f794ee68008657421002e1b32962e7c30fc",
+				},
 			},
 			err: "",
 		},
