@@ -593,12 +593,34 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			return nil, err
 		}
 		// layoutDir looks like <some path>/src/catalogs/<repoPath>/layout
+		// this will be the destination of the copy action that follows
 		layoutDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, ctlgDir, config.LayoutsDir)
 		if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 			return nil, fmt.Errorf("error catalog layout dir: %v", err)
 		}
-		if err := copy.Copy(v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath), layoutDir); err != nil {
-			return nil, fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
+		// obtain the source directory for the OCI content
+		ociSourcePath := v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath)
+
+		// Now copy the individual components of the source OCI source to its layout dir destination.
+		// This is done to ensure that files/folders that are not part of the OCI layout specification
+		// are not copied.
+
+		// copyOCILayoutFileOrFolder will copy a file or folder that belongs to a oci layout
+		copyOCILayoutFileOrFolder := func(sourcePath, destinationPath, fileOrDir string) error {
+			if err := copy.Copy(filepath.Join(sourcePath, fileOrDir), filepath.Join(destinationPath, fileOrDir)); err != nil {
+				return fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
+			}
+			return nil
+		}
+
+		if err := copyOCILayoutFileOrFolder(ociSourcePath, layoutDir, "oci-layout"); err != nil {
+			return nil, err
+		}
+		if err := copyOCILayoutFileOrFolder(ociSourcePath, layoutDir, "index.json"); err != nil {
+			return nil, err
+		}
+		if err := copyOCILayoutFileOrFolder(ociSourcePath, layoutDir, "blobs"); err != nil {
+			return nil, err
 		}
 	}
 
