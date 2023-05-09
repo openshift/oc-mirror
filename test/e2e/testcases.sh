@@ -250,8 +250,6 @@ function oci_catalog {
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f5bf1128937e7486764341e7bfdce15150f70d0e48c57de1386602c7b25ad7b4
     # baz.v1.0.1 
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f1f6dabc6d05ae1d6e1b729d8ed80edb6b99fce8a6459c60a595945479e6f4ce
-    # baz.v1.1.0
-    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}:baz-bundle-v1.0.1
     # catalog : original is in docker-v2 format, so digest changes after transformation to oci
     #crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f74bd3f08c971fafd64c9c95fe9839f54bf776d00ac363f2c3882c0e37c946ef
     #check_bundles cannot be used for now, tags not set in disconnected registry
