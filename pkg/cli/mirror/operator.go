@@ -604,15 +604,6 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		// Now copy the individual components of the source OCI source to its layout dir destination.
 		// This is done to ensure that files/folders that are not part of the OCI layout specification
 		// are not copied.
-
-		// copyOCILayoutFileOrFolder will copy a file or folder that belongs to a oci layout
-		copyOCILayoutFileOrFolder := func(sourcePath, destinationPath, fileOrDir string) error {
-			if err := copy.Copy(filepath.Join(sourcePath, fileOrDir), filepath.Join(destinationPath, fileOrDir)); err != nil {
-				return fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
-			}
-			return nil
-		}
-
 		if err := copyOCILayoutFileOrFolder(ociSourcePath, layoutDir, "oci-layout"); err != nil {
 			return nil, err
 		}
@@ -638,6 +629,28 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	return mappings, validateMapping(*dc, mappings)
+}
+
+/*
+copyOCILayoutFileOrFolder will copy a file or folder that belongs to a oci layout
+
+# Arguments
+
+• sourcePath: the source directory
+
+• destinationPath: the destination directory
+
+• fileOrDir: the file or directory within the source that will be copied to the destination
+
+# Returns
+
+• error: non nil if file/folder copy failed, nil otherwise
+*/
+func copyOCILayoutFileOrFolder(sourcePath, destinationPath, fileOrDir string) error {
+	if err := copy.Copy(filepath.Join(sourcePath, fileOrDir), filepath.Join(destinationPath, fileOrDir)); err != nil {
+		return fmt.Errorf("error copying oci fbc catalog to layout directory: %v", err)
+	}
+	return nil
 }
 
 /*
