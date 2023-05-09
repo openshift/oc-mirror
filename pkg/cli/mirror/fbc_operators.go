@@ -468,54 +468,6 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 	return "", finalError
 }
 
-// getManifest reads the manifest of the OCI FBC image. If imgSrc is a manifest
-// list, it will return the first manifest available in the list
-// and returns it as a go structure of type manifest.Manifest
-func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
-	// initialize return value to empty slice
-	// var manifests manifest.Manifest
-
-	// get the manifest from the image source
-	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
-	}
-
-	// handle single and multi architecture images
-	if manifest.MIMETypeIsMultiImage(manifestType) {
-		// blob should be a manifest list
-		manifestList, err := manifest.ListFromBlob(manifestBlob, manifestType)
-		if err != nil {
-			return nil, fmt.Errorf("unable to obtain manifest list of image : %w", err)
-		}
-
-		// get the first digest if possible
-		if digests := manifestList.Instances(); len(digests) > 0 {
-			firstDigest := digests[0]
-			// walk through each digest in the manifest list, fetch its manifest and add it to the result
-			// for _, firstDigest := range manifestList.Instances() {
-			archSpecificManifestBytes, archSpecificManifestType, err := imgSrc.GetManifest(ctx, &firstDigest)
-			if err != nil {
-				return nil, fmt.Errorf("unable to obtain manifest of image digest %s : %w", firstDigest, err)
-			}
-			archSpecificManifest, err := manifest.FromBlob(archSpecificManifestBytes, archSpecificManifestType)
-			if err != nil {
-				return nil, fmt.Errorf("unable to unmarshal manifest of image : %w", err)
-			}
-			return archSpecificManifest, nil
-		}
-	} else {
-		// blob should be a single image reference
-		singleImageManifest, err := manifest.FromBlob(manifestBlob, manifestType)
-		if err != nil {
-			return nil, fmt.Errorf("unable to unmarshal manifest of image : %w", err)
-		}
-		return singleImageManifest, nil
-	}
-
-	return nil, errors.New("unable to determine manifest for image")
-}
-
 // copyImage is used both for pulling catalog images from the remote registry
 // as well as pushing these catalog images to the remote registry.
 // It calls the underlying containers/image copy library, which looks out for registries.conf

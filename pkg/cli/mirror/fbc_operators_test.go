@@ -15,7 +15,6 @@ import (
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
-	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -57,52 +56,6 @@ func TestParse(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	fmt.Printf("%s - %s\n", s, rf)
-}
-
-func TestGetManifest(t *testing.T) {
-	type spec struct {
-		desc       string
-		inRef      string
-		layerCount int
-		err        string
-	}
-	wdir, err := os.Getwd()
-	if err != nil {
-		t.Fatal("unable to get working dir")
-	}
-	cases := []spec{
-		{
-			desc:       "nominal case",
-			inRef:      v1alpha2.OCITransportPrefix + filepath.Join(wdir, testdata),
-			layerCount: 1,
-			err:        "",
-		},
-		{
-			desc:       "index is unmarshallable fails",
-			inRef:      v1alpha2.OCITransportPrefix + filepath.Join(wdir, rottenManifest),
-			layerCount: 0,
-			err:        "unable to unmarshal manifest of image : unexpected end of JSON input",
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.desc, func(t *testing.T) {
-			ociImgRef, err := alltransports.ParseImageName(c.inRef)
-			require.NoError(t, err)
-			imgSrc, err := ociImgRef.NewImageSource(context.TODO(), nil)
-			if err != nil {
-				t.Fatalf("The given path is not an OCI image : %v", err)
-			}
-			defer imgSrc.Close()
-			manifest, err := getManifest(context.TODO(), imgSrc)
-			if c.err != "" {
-				require.EqualError(t, err, c.err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, c.layerCount, len(manifest.LayerInfos()))
-			}
-
-		})
-	}
 }
 
 func TestExtractDeclarativeConfigFromImage(t *testing.T) {
