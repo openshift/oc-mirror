@@ -202,10 +202,9 @@ func checkDockerReference(mirror imagesource.TypedImageReference, nested int) er
 		return fmt.Errorf("destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID")
 	}
 
-	depth := strings.Split(strings.Join([]string{mirror.Ref.Namespace, mirror.Ref.Name}, "/"), "/")
-	if len(depth) > nested {
-		destination := strings.Join([]string{mirror.Ref.Registry, mirror.Ref.Namespace, mirror.Ref.Name}, "/")
-		return fmt.Errorf("the max-nested-paths value (%d) for %s exceeds the registry mirror paths setting (some registries limit the nested paths)", len(depth), destination)
+	depth := strings.Split(mirror.Ref.RepositoryName(), "/")
+	if nested > 0 && (len(depth) >= nested) {
+		return fmt.Errorf("the max-nested-paths value (%d) must be strictly higher than the number of path-components in the destination %s - try increasing the value", nested, mirror.Ref.RepositoryName())
 	}
 	return nil
 }
@@ -445,10 +444,19 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 			Type: srcRef.Type,
 		}
 
-		dstTIR := imagesource.TypedImageReference{
-			Ref:  dstRef.Ref,
-			Type: dstRef.Type,
+		// OCPBUGS-11922
+		dstTIR := o.processNestedPaths(&dstRef)
+		// Updating the original map - which will later be used to generate ICSP
+		images[srcRef] = image.TypedImage{
+			Category:    dstRef.Category,
+			ImageFormat: dstRef.ImageFormat,
+			TypedImageReference: image.TypedImageReference{
+				Type:       dstRef.Type,
+				Ref:        dstTIR.Ref,
+				OCIFBCPath: dstRef.OCIFBCPath,
+			},
 		}
+		// Updating mappings which will be used for mirroring the images
 		mappings = append(mappings, mirror.Mapping{
 			Source:      srcTIR,
 			Destination: dstTIR,
@@ -489,7 +497,7 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
 
 	mappingResultsPath := filepath.Join(dir, mappingFile)
-	if err := writeMappingFile(mappingResultsPath, mapping); err != nil {
+	if err := o.writeMappingFile(mappingResultsPath, mapping); err != nil {
 		return err
 	}
 
@@ -499,8 +507,8 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	generic := image.ByCategory(mapping, v1alpha2.TypeGeneric)
 	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorRelatedImage)
 
-	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
-		icsps, err := GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
+	getICSP := func(mapping image.TypedImageMapping, name string, scope string, builder ICSPBuilder) error {
+		icsps, err := o.GenerateICSP(name, scope, icspSizeLimit, mapping, builder)
 		if err != nil {
 			return fmt.Errorf("error generating ICSP manifests")
 		}
@@ -535,14 +543,20 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 		}
 	}
 
-	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {
+	if err := getICSP(releases, "release", namespaceICSPScope, &ReleaseBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(generic, "generic", &GenericBuilder{}); err != nil {
+	if err := getICSP(generic, "generic", namespaceICSPScope, &GenericBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(operator, "operator", &OperatorBuilder{}); err != nil {
-		return err
+	if o.MaxNestedPaths > 0 {
+		if err := getICSP(operator, "operator", repositoryICSPScope, &OperatorBuilder{}); err != nil {
+			return err
+		}
+	} else {
+		if err := getICSP(operator, "operator", namespaceICSPScope, &OperatorBuilder{}); err != nil {
+			return err
+		}
 	}
 
 	return WriteICSPs(dir, allICSPs)
@@ -594,7 +608,7 @@ func (o *MirrorOptions) processAssociationErrors(errs []error) error {
 	return nil
 }
 
-func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
+func (o *MirrorOptions) writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error {
 	path := filepath.Clean(mappingPath)
 	mappingFile, err := os.Create(path)
 	if err != nil {
@@ -602,7 +616,7 @@ func writeMappingFile(mappingPath string, mapping image.TypedImageMapping) error
 	}
 	defer mappingFile.Close()
 	klog.Infof("Writing image mapping to %s", mappingPath)
-	if err := image.WriteImageMapping(mapping, mappingFile); err != nil {
+	if err := image.WriteImageMapping(o.MaxNestedPaths, mapping, mappingFile); err != nil {
 		return err
 	}
 	return mappingFile.Sync()
@@ -666,7 +680,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	}
 
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		if err := o.outputPruneImagePlan(ctx, prevAssociations, prunedAssociations); err != nil {
@@ -816,7 +830,7 @@ func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.Im
 
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		return cleanup()
@@ -877,7 +891,7 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	if o.DryRun {
-		if err := writeMappingFile(mappingPath, mapping); err != nil {
+		if err := o.writeMappingFile(mappingPath, mapping); err != nil {
 			return err
 		}
 		return cleanup()
@@ -887,4 +901,27 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 		return err
 	}
 	return nil
+}
+
+func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.TypedImageReference {
+
+	if o.MaxNestedPaths > 0 {
+		dir := ref.Ref
+		full := dir.RepositoryName()
+
+		pathComponents := strings.Split(full, "/")
+		if o.MaxNestedPaths > 0 && len(pathComponents) > o.MaxNestedPaths {
+			lastPathComponent := strings.Join(pathComponents[o.MaxNestedPaths-1:], "-")
+			newPathComponents := pathComponents[:o.MaxNestedPaths-1]
+			newRef := dir // reinitializing newRef from dir (so that we don't loose id and tag)
+			newRef.Namespace = strings.Join(newPathComponents, "/")
+			newRef.Name = lastPathComponent
+			return imagesource.TypedImageReference{Ref: newRef, Type: ref.Type}
+		} else {
+			// return original - no changes
+			return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}
+		}
+	}
+	// return original - no changes
+	return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}
 }

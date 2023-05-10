@@ -73,8 +73,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --use-oci-feature flag)")
 	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
 	fs.BoolVar(&o.SkipPruning, "skip-pruning", o.SkipPruning, "If set, will disable pruning globally")
-	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 2, "Number of nested paths, for destination registries that limit nested paths")
 	fs.MarkDeprecated("use-oci-feature", "Use --include-local-oci-catalogs instead")
+	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 }
 
 func (o *MirrorOptions) init() {

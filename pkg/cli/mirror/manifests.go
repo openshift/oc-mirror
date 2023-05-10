@@ -38,7 +38,7 @@ var icspTypeMeta = metav1.TypeMeta{
 // ICSPBuilder defines methods for generating ICSPs
 type ICSPBuilder interface {
 	New(string, int) operatorv1alpha1.ImageContentSourcePolicy
-	GetMapping(string, image.TypedImageMapping) (map[string]string, error)
+	GetMapping(int, string, image.TypedImageMapping) (map[string]string, error)
 }
 
 var _ ICSPBuilder = &ReleaseBuilder{}
@@ -58,7 +58,7 @@ func (b *ReleaseBuilder) New(icspName string, icspCount int) operatorv1alpha1.Im
 	}
 }
 
-func (b *ReleaseBuilder) GetMapping(_ string, mapping image.TypedImageMapping) (map[string]string, error) {
+func (b *ReleaseBuilder) GetMapping(paths int, _ string, mapping image.TypedImageMapping) (map[string]string, error) {
 	// Scope is set to repository for release because
 	// they are mirrored as different repo names by
 	// release planner
@@ -83,7 +83,7 @@ func (b *OperatorBuilder) New(icspName string, icspCount int) operatorv1alpha1.I
 	}
 }
 
-func (b *OperatorBuilder) GetMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+func (b *OperatorBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
 	return getRegistryMapping(icspScope, mapping)
 }
 
@@ -104,13 +104,13 @@ func (b *GenericBuilder) New(icspName string, icspCount int) operatorv1alpha1.Im
 	}
 }
 
-func (b *GenericBuilder) GetMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+func (b *GenericBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
 	return getRegistryMapping(icspScope, mapping)
 }
 
 // GenerateICSP will generate ImageContentSourcePolicy objects based on image mapping and an ICSPBuilder
-func GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
-	registryMapping, err := builder.GetMapping(icspScope, mapping)
+func (o *MirrorOptions) GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+	registryMapping, err := builder.GetMapping(o.MaxNestedPaths, icspScope, mapping)
 	if err != nil {
 		return nil, err
 	}
