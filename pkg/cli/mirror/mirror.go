@@ -202,10 +202,9 @@ func checkDockerReference(mirror imagesource.TypedImageReference, nested int) er
 		return fmt.Errorf("destination registry must consist of registry host and namespace(s) only, and must not include an image tag or ID")
 	}
 
-	destination := strings.Join([]string{mirror.Ref.Registry, mirror.Ref.RepositoryName()}, "/")
-	depth := strings.Split(destination, "/")
+	depth := strings.Split(mirror.Ref.RepositoryName(), "/")
 	if nested > 0 && (len(depth) >= nested) {
-		return fmt.Errorf("the max-nested-paths value (%d) for %s must be higher than (registry + namespace) - try increasing the value", len(depth), destination)
+		return fmt.Errorf("the max-nested-paths value (%d) must be strictly higher than the number of path-components in the destination %s - try increasing the value", nested, mirror.Ref.RepositoryName())
 	}
 	return nil
 }
@@ -447,7 +446,17 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 
 		// OCPBUGS-11922
 		dstTIR := o.processNestedPaths(&dstRef)
-
+		// Updating the original map - which will later be used to generate ICSP
+		images[srcRef] = image.TypedImage{
+			Category:    dstRef.Category,
+			ImageFormat: dstRef.ImageFormat,
+			TypedImageReference: image.TypedImageReference{
+				Type:       dstRef.Type,
+				Ref:        dstTIR.Ref,
+				OCIFBCPath: dstRef.OCIFBCPath,
+			},
+		}
+		// Updating mappings which will be used for mirroring the images
 		mappings = append(mappings, mirror.Mapping{
 			Source:      srcTIR,
 			Destination: dstTIR,
@@ -498,8 +507,8 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 	generic := image.ByCategory(mapping, v1alpha2.TypeGeneric)
 	operator := image.ByCategory(mapping, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorRelatedImage)
 
-	getICSP := func(mapping image.TypedImageMapping, name string, builder ICSPBuilder) error {
-		icsps, err := o.GenerateICSP(name, namespaceICSPScope, icspSizeLimit, mapping, builder)
+	getICSP := func(mapping image.TypedImageMapping, name string, scope string, builder ICSPBuilder) error {
+		icsps, err := o.GenerateICSP(name, scope, icspSizeLimit, mapping, builder)
 		if err != nil {
 			return fmt.Errorf("error generating ICSP manifests")
 		}
@@ -534,14 +543,20 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 		}
 	}
 
-	if err := getICSP(releases, "release", &ReleaseBuilder{}); err != nil {
+	if err := getICSP(releases, "release", namespaceICSPScope, &ReleaseBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(generic, "generic", &GenericBuilder{}); err != nil {
+	if err := getICSP(generic, "generic", namespaceICSPScope, &GenericBuilder{}); err != nil {
 		return err
 	}
-	if err := getICSP(operator, "operator", &OperatorBuilder{}); err != nil {
-		return err
+	if o.MaxNestedPaths > 0 {
+		if err := getICSP(operator, "operator", repositoryICSPScope, &OperatorBuilder{}); err != nil {
+			return err
+		}
+	} else {
+		if err := getICSP(operator, "operator", namespaceICSPScope, &OperatorBuilder{}); err != nil {
+			return err
+		}
 	}
 
 	return WriteICSPs(dir, allICSPs)
@@ -892,35 +907,16 @@ func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.Ty
 
 	if o.MaxNestedPaths > 0 {
 		dir := ref.Ref
-		full := strings.Join([]string{dir.Registry, dir.Namespace, dir.Name}, "/")
-		splitUserNS := strings.Split(o.UserNamespace, "/")
-		// find the path length for registry & usernamespace
-		newIndex := o.MaxNestedPaths - (len(splitUserNS) + 1)
-		// if less than 0 will cause a panic
-		if newIndex >= 0 {
-			// restore the original usernamespace
-			dir.Namespace = o.UserNamespace
-			// split the full reference from the usernamespace
-			name := strings.Split(full, o.UserNamespace)
-			// use the second part to split the paths
-			newName := strings.Split(strings.Trim(name[1], "/"), "/")
-			// no need to replace
-			if newIndex >= len(newName) {
-				dir.Name = strings.Trim(name[1], "/")
-				return imagesource.TypedImageReference{Ref: dir, Type: ref.Type}
-			}
-			// replace all '/' with '-' from the index (MaxNestedPaths - (len(usernamespace) + 1))
-			replacedName := strings.ReplaceAll(strings.Join(newName[newIndex:], "/"), "/", "-")
-			preFix := strings.Join(newName[:newIndex], "/")
-			// we should never really see this condition
-			// MaxNestedPaths should always be greater than len(split(registry + usernamespace)
-			// i.e o.MaxNestedPaths > strings.Split(registry + usernamespace)
-			if newIndex == 0 && len(preFix) == 0 {
-				dir.Name = strings.Trim(replacedName, "/")
-			} else {
-				dir.Name = strings.Join([]string{preFix, replacedName}, "/")
-			}
-			return imagesource.TypedImageReference{Ref: dir, Type: ref.Type}
+		full := dir.RepositoryName()
+
+		pathComponents := strings.Split(full, "/")
+		if o.MaxNestedPaths > 0 && len(pathComponents) > o.MaxNestedPaths {
+			lastPathComponent := strings.Join(pathComponents[o.MaxNestedPaths-1:], "-")
+			newPathComponents := pathComponents[:o.MaxNestedPaths-1]
+			newRef := dir // reinitializing newRef from dir (so that we don't loose id and tag)
+			newRef.Namespace = strings.Join(newPathComponents, "/")
+			newRef.Name = lastPathComponent
+			return imagesource.TypedImageReference{Ref: newRef, Type: ref.Type}
 		} else {
 			// return original - no changes
 			return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}

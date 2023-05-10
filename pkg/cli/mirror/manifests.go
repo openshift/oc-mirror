@@ -62,7 +62,7 @@ func (b *ReleaseBuilder) GetMapping(paths int, _ string, mapping image.TypedImag
 	// Scope is set to repository for release because
 	// they are mirrored as different repo names by
 	// release planner
-	return getRegistryMapping(paths, repositoryICSPScope, mapping)
+	return getRegistryMapping(repositoryICSPScope, mapping)
 }
 
 var _ ICSPBuilder = &OperatorBuilder{}
@@ -84,7 +84,7 @@ func (b *OperatorBuilder) New(icspName string, icspCount int) operatorv1alpha1.I
 }
 
 func (b *OperatorBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
-	return getRegistryMapping(paths, icspScope, mapping)
+	return getRegistryMapping(icspScope, mapping)
 }
 
 var _ ICSPBuilder = &GenericBuilder{}
@@ -105,7 +105,7 @@ func (b *GenericBuilder) New(icspName string, icspCount int) operatorv1alpha1.Im
 }
 
 func (b *GenericBuilder) GetMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
-	return getRegistryMapping(paths, icspScope, mapping)
+	return getRegistryMapping(icspScope, mapping)
 }
 
 // GenerateICSP will generate ImageContentSourcePolicy objects based on image mapping and an ICSPBuilder
@@ -160,7 +160,7 @@ func aggregateICSPs(icsps [][]byte) []byte {
 	return aggregation
 }
 
-func getRegistryMapping(paths int, icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
+func getRegistryMapping(icspScope string, mapping image.TypedImageMapping) (map[string]string, error) {
 	registryMapping := map[string]string{}
 	for k, v := range mapping {
 		if len(v.Ref.ID) == 0 {
@@ -179,18 +179,10 @@ func getRegistryMapping(paths int, icspScope string, mapping image.TypedImageMap
 		case icspScope == repositoryICSPScope:
 			registryMapping[k.Ref.AsRepository().String()] = v.Ref.AsRepository().String()
 		case icspScope == namespaceICSPScope:
-			// OCPBUGS-11922
-			if paths > 0 {
-				source := path.Join(imgRegistry, imgNamespace, k.Ref.Name)
-				reg, org, repo, _, _ := v1alpha2.ParseImageReference(v.Ref.String())
-				dest := path.Join(reg, org, repo)
-				registryMapping[source] = dest
-			} else {
-				source := path.Join(imgRegistry, imgNamespace)
-				reg, org, _, _, _ := v1alpha2.ParseImageReference(v.Ref.AsRepository().Exact())
-				dest := path.Join(reg, org)
-				registryMapping[source] = dest
-			}
+			source := path.Join(imgRegistry, imgNamespace)
+			reg, org, _, _, _ := v1alpha2.ParseImageReference(v.Ref.AsRepository().Exact())
+			dest := path.Join(reg, org)
+			registryMapping[source] = dest
 		default:
 			return registryMapping, fmt.Errorf("invalid ICSP scope %s", icspScope)
 		}

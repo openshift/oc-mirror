@@ -228,7 +228,7 @@ func TestMirrorComplete(t *testing.T) {
 			name:     "Invalid/ExceedsNestedPathsLength",
 			args:     []string{"docker://reg.com/foo/bar/baz"},
 			opts:     &MirrorOptions{MaxNestedPaths: 2},
-			expError: "the max-nested-paths value (4) for reg.com/foo/bar/baz must be higher than (registry + namespace) - try increasing the value",
+			expError: "the max-nested-paths value (2) must be strictly higher than the number of path-components in the destination foo/bar/baz - try increasing the value",
 		},
 	}
 
@@ -603,7 +603,7 @@ func TestNestedPaths(t *testing.T) {
 	t.Run("Testing processNestedPaths (2) new image : should pass", func(t *testing.T) {
 		res := o.processNestedPaths(img)
 		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
-		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/openshift4/ose-kube-rbac-proxy", dst)
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release-openshift4-ose-kube-rbac-proxy", dst)
 	})
 
 	o.MaxNestedPaths = 5
