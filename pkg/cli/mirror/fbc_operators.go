@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	semver "github.com/blang/semver/v4"
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
@@ -27,6 +28,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -393,12 +395,31 @@ func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
 // getRelatedImages reads a directory containing an FBC catalog () unpacked contents
 // and returns the list of relatedImages found in the CSVs of bundles
 // filtering by the list of packages provided in imageSetConfig for the catalog
-func getRelatedImages(cfg declcfg.DeclarativeConfig) ([]declcfg.RelatedImage, error) {
+func getRelatedImages(directory string, packages []v1alpha2.IncludePackage) ([]declcfg.RelatedImage, error) {
 	allImages := []declcfg.RelatedImage{}
+	// load the declarative config from the provided directory (if possible)
+	cfg, err := declcfg.LoadFS(os.DirFS(directory))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(packages) == 0 {
+		for _, aPackage := range cfg.Packages {
+			packages = append(packages, v1alpha2.IncludePackage{
+				Name: aPackage.Name,
+			})
+		}
+	}
 
 	for _, bundle := range cfg.Bundles {
-		allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
-		allImages = append(allImages, bundle.RelatedImages...)
+		isSelected, err := isPackageSelected(bundle, cfg.Channels, packages)
+		if err != nil {
+			return nil, err
+		}
+		if isSelected {
+			allImages = append(allImages, declcfg.RelatedImage{Name: bundle.Package, Image: bundle.Image})
+			allImages = append(allImages, bundle.RelatedImages...)
+		}
 	}
 	//make sure there are no duplicates in the list with same image:
 	finalList := []declcfg.RelatedImage{}
@@ -415,6 +436,66 @@ func getRelatedImages(cfg declcfg.DeclarativeConfig) ([]declcfg.RelatedImage, er
 		}
 	}
 	return finalList, nil
+}
+
+// is isPackageSelected -  iterate through bundles, channels and packages to check if a package is selected s
+func isPackageSelected(bundle declcfg.Bundle, channels []declcfg.Channel, packages []v1alpha2.IncludePackage) (bool, error) {
+	isSelected := false
+	for _, pkg := range packages {
+		if pkg.Name == bundle.Package {
+			var min, max semver.Version
+			if pkg.MinVersion != "" || pkg.MaxVersion != "" {
+				version_string, err := bundleVersion(bundle)
+				if err != nil {
+					return isSelected, err
+				}
+				pkgVer, err := semver.Make(version_string)
+				if err != nil {
+					return isSelected, err
+				}
+				if err != nil {
+					return isSelected, err
+				}
+				if pkg.MinVersion != "" {
+					min, err = semver.Make(pkg.MinVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
+				if pkg.MaxVersion != "" {
+					max, err = semver.Make(pkg.MaxVersion)
+					if err != nil {
+						return isSelected, err
+					}
+				}
+
+				if (pkg.MinVersion != "" && pkg.MaxVersion != "") && pkgVer.Compare(min) >= 0 && pkgVer.Compare(max) <= 0 {
+					isSelected = true
+				} else if pkg.MinVersion != "" && pkg.MaxVersion == "" && pkgVer.Compare(min) >= 0 {
+					isSelected = true
+				} else if pkg.MaxVersion != "" && pkg.MinVersion == "" && pkgVer.Compare(max) <= 0 {
+					isSelected = true
+				}
+
+			} else { // no filtering required
+				isSelected = true
+			}
+		}
+	}
+	return isSelected, nil
+}
+
+func bundleVersion(bundle declcfg.Bundle) (string, error) {
+	for _, prop := range bundle.Properties {
+		if prop.Type == property.TypePackage {
+			var p property.Package
+			if err := json.Unmarshal(prop.Value, &p); err != nil {
+				return "", err
+			}
+			return p.Version, nil
+		}
+	}
+	return "", fmt.Errorf("unable to find bundle version")
 }
 
 func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {

@@ -424,7 +424,23 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			return nil, fmt.Errorf("error running catalog mirror: %v", err)
 		}
 	} else {
-		relatedImages, err := getRelatedImages(*dc)
+		repo := ctlgRef.Ref.Name
+
+		artifactsPath := artifactsFolderName
+
+		operatorCatalog := v1alpha2.TrimProtocol(ctlgRef.OCIFBCPath)
+
+		// check for the valid config label to use
+		configsLabel, err := o.GetCatalogConfigPath(ctx, operatorCatalog)
+		if err != nil {
+
+			return nil, fmt.Errorf("unable to retrieve configs layer for image %s:\n%v\nMake sure this catalog is in OCI format", operatorCatalog, err)
+		}
+		// initialize path starting with <current working directory>/olm_artifacts/<repo>
+		catalogContentsDir := filepath.Join(artifactsPath, repo)
+		// initialize path where we assume the catalog config dir is <current working directory>/olm_artifacts/<repo>/<config folder>
+		ctlgConfigDir := filepath.Join(catalogContentsDir, configsLabel)
+		relatedImages, err := getRelatedImages(ctlgConfigDir, ic.Packages)
 		if err != nil {
 			return nil, err
 		}
