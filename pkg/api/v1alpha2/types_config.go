@@ -186,34 +186,39 @@ func (o Operator) GetUniqueName() (string, error) {
 // from the imageName.
 // It can handle both remote and local images.
 func ParseImageReference(imageName string) (string, string, string, string, string) {
-	registry, org, repo, tag, sha := "", "", "", "", ""
+	registry, namespace, repo, tag, sha := "", "", "", "", ""
 	imageName = TrimProtocol(imageName)
 	imageName = strings.TrimPrefix(imageName, "/")
 	imageName = strings.TrimSuffix(imageName, "/")
-	tmp := strings.Split(imageName, "/")
+	pathComponents := strings.Split(imageName, "/")
 
-	if len(tmp) > 1 {
-		registry = tmp[0]
+	// For more than 2 pathComponents, the first must be the registry
+	if len(pathComponents) > 1 {
+		registry = pathComponents[0]
+	}
+	// For more than 3 pathComponents, everything in between registry (first) and
+	// repository (last) is considered to be namespace or organisation
+	if len(pathComponents) > 2 {
+		namespace = strings.Join(pathComponents[1:len(pathComponents)-1], "/")
 	}
 
-	img := strings.Split(tmp[len(tmp)-1], ":")
-	if len(tmp) > 2 {
-		org = strings.Join(tmp[1:len(tmp)-1], "/")
-	}
+	// It is best to split first on digest, as the `:` might
+	// exist for the tag or for the digest
+	img := strings.Split(pathComponents[len(pathComponents)-1], "@sha256:")
+	// The first element in the slice will always exist (repository)
+	repo = img[0]
 	if len(img) > 1 {
-		if strings.Contains(img[0], "@") {
-			nm := strings.Split(img[0], "@")
-			repo = nm[0]
-			sha = img[1]
-		} else {
-			repo = img[0]
-			tag = img[1]
-		}
-	} else {
-		repo = img[0]
+		sha = img[1]
 	}
 
-	return registry, org, repo, tag, sha
+	// We check now for the existance of a tag
+	if strings.Contains(repo, ":") {
+		nm := strings.Split(repo, ":")
+		repo = nm[0]
+		tag = nm[1]
+	}
+
+	return registry, namespace, repo, tag, sha
 }
 
 // trimProtocol removes oci://, file:// or docker:// from
