@@ -8,6 +8,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -685,4 +686,100 @@ spec:
 	data, err := generateUpdateService("test", release, graph)
 	require.NoError(t, err)
 	require.Equal(t, expCfg, string(data))
+}
+
+func TestCreateRFC1035NameForCatalogSource(t *testing.T) {
+	tests := []struct {
+		testName  string
+		input     string
+		expected  string
+		assertion assert.ErrorAssertionFunc
+	}{
+		{
+			testName:  "single path component",
+			input:     "abc",
+			expected:  "cs-abc",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "two path component",
+			input:     "abc/def",
+			expected:  "cs-abc-def",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "single path component with uppercase",
+			input:     "abC",
+			expected:  "cs-abc",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "two path component with uppercase",
+			input:     "abc/Def",
+			expected:  "cs-abc-def",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "single path component with number",
+			input:     "ab0",
+			expected:  "cs-ab0",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "two path component with numbers",
+			input:     "ab0/de9",
+			expected:  "cs-ab0-de9",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "all numbers",
+			input:     "123456789",
+			expected:  "cs-123456789",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "single path component with non-latin letters",
+			input:     "诶比西",
+			expected:  "cs-0", // ends in -0 suffix because all chars converted to dashes and de-duped so string would have ended with dash
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "two path component with non-latin letters",
+			input:     "诶比西/def",
+			expected:  "cs-def",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "non-latin letters interspersed through input",
+			input:     "诶abc比de西f",
+			expected:  "cs-abc-de-f",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "dash only",
+			input:     "-",
+			expected:  "cs-0", // ends in -0 suffix because string would end with dash, and this is not allowed
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "empty string",
+			input:     "",
+			expected:  "cs-0", // ends in -0 suffix because string would end with dash, and this is not allowed
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "bunch of dashes",
+			input:     "/////",
+			expected:  "cs-0", // ends in -0 suffix because string would end with dash, and this is not allowed
+			assertion: assert.NoError,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			got, gotErr := createRFC1035NameForCatalogSource(test.input)
+			assert.Equal(t, test.expected, got)
+			test.assertion(t, gotErr)
+		})
+	}
+
 }
