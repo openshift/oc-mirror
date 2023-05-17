@@ -109,7 +109,7 @@ func (b *GenericBuilder) GetMapping(icspScope string, mapping image.TypedImageMa
 }
 
 // GenerateICSP will generate ImageContentSourcePolicy objects based on image mapping and an ICSPBuilder
-func GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
+func (o *MirrorOptions) GenerateICSP(icspName, icspScope string, byteLimit int, mapping image.TypedImageMapping, builder ICSPBuilder) (icsps []operatorv1alpha1.ImageContentSourcePolicy, err error) {
 	registryMapping, err := builder.GetMapping(icspScope, mapping)
 	if err != nil {
 		return nil, err
