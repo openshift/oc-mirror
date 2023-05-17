@@ -524,8 +524,8 @@ func TestWriteCatalogSource(t *testing.T) {
 					Category: v1alpha2.TypeOperatorCatalog},
 			},
 			expectedFiles: []string{
-				"catalogSource-dev.yaml",
-				"catalogSource-staging.yaml",
+				"catalogSource-cs-dev.yaml",
+				"catalogSource-cs-staging.yaml",
 			},
 		},
 		{
@@ -587,9 +587,9 @@ func TestWriteCatalogSource(t *testing.T) {
 					Category: v1alpha2.TypeOperatorCatalog},
 			},
 			expectedFiles: []string{
-				"catalogSource-dev.yaml",
-				"catalogSource-dev-1.yaml",
-				"catalogSource-dev-2.yaml",
+				"catalogSource-cs-dev.yaml",
+				"catalogSource-cs-dev-1.yaml",
+				"catalogSource-cs-dev-2.yaml",
 			},
 		},
 		{
@@ -623,7 +623,7 @@ func TestWriteCatalogSource(t *testing.T) {
 					Category: v1alpha2.TypeOperatorCatalog},
 			},
 			expectedFiles: []string{
-				"catalogSource-test-common-services.yaml",
+				"catalogSource-cs-test-common-services.yaml",
 			},
 		},
 	}
@@ -771,6 +771,30 @@ func TestCreateRFC1035NameForCatalogSource(t *testing.T) {
 			testName:  "bunch of dashes",
 			input:     "/////",
 			expected:  "cs-0", // ends in -0 suffix because string would end with dash, and this is not allowed
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "very long path - exactly 62 characters with cs- prefix",
+			input:     "abcd/efgh/ijkl/mnop/qrst/uvwx/yzab/cdef/ghij/klmn/opqr/stuv",
+			expected:  "cs-abcd-efgh-ijkl-mnop-qrst-uvwx-yzab-cdef-ghij-klmn-opqr-stuv",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "very long path - exactly 63 characters with cs- prefix",
+			input:     "abcd/efgh/ijkl/mnop/qrst/uvwx/yzab/cdef/ghij/klmn/opqr/stuvw",
+			expected:  "cs-abcd-efgh-ijkl-mnop-qrst-uvwx-yzab-cdef-ghij-klmn-opqr-stuvw",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "very long path - longer than allowed 63 characters with cs- prefix results in no suffix",
+			input:     "abcd/efgh/ijkl/mnop/qrst/uvwx/yzab/cdef/ghij/klmn/opqr/stuvwx",
+			expected:  "cs-abcd-efgh-ijkl-mnop-qrst-uvwx-yzab-cdef-ghij-klmn-opqr-stuvw",
+			assertion: assert.NoError,
+		},
+		{
+			testName:  "very long path - longer than allowed 63 characters with cs- prefix results with suffix",
+			input:     "abcd/efgh/ijkl/mnop/qrst/uvwx/yzab/cdef/ghij/klmn/opqr/stuv/wxyz/abcd",
+			expected:  "cs-abcd-efgh-ijkl-mnop-qrst-uvwx-yzab-cdef-ghij-klmn-opqr-stu-0",
 			assertion: assert.NoError,
 		},
 	}

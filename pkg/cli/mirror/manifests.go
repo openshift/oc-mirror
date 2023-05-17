@@ -387,6 +387,23 @@ func createRFC1035NameForCatalogSource(nameIn string) (string, error) {
 	}
 	name = stringBuilder.String()
 
+	// truncate if necessary
+	if len(name) > validation.DNS1035LabelMaxLength {
+		// truncate the name to max length
+		truncatedName := name[:validation.DNS1035LabelMaxLength]
+		// is the last char a dash or a char that would be converted to a dash?
+		lastChar, _ := utf8.DecodeLastRuneInString(truncatedName)
+		if toRFC1035(lastChar) == '-' {
+			// truncate even more to allow -0 suffix
+			truncatedName = truncatedName[:validation.DNS1035LabelMaxLength-2]
+			// put suffix in place
+			name = strings.Join([]string{truncatedName, "0"}, "-")
+		} else {
+			// use truncated value as-is
+			name = truncatedName
+		}
+	}
+
 	// double check that the final name conforms to RFC 1035 (this should never fail)
 	errs := validation.IsDNS1035Label(name)
 	if len(errs) != 0 {
