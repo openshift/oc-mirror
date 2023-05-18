@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	imagecopy "github.com/containers/image/v5/copy"
@@ -1199,8 +1200,16 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			mapping := image.TypedImageMapping{}
-			err := c.options.addRelatedImageToMapping(context.TODO(), mapping, c.img, c.destReg, c.namespace)
-
+			syncMap := sync.Map{}
+			err := c.options.addRelatedImageToMapping(context.TODO(), &syncMap, c.img, c.destReg, c.namespace)
+			// convert to a more easily testable map type
+			syncMap.Range(func(key, value any) bool {
+				source := key.(image.TypedImage)
+				destination := value.(image.TypedImage)
+				mapping[source] = destination
+				// always continue iteration
+				return true
+			})
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)
 			} else {
