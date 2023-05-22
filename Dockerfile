@@ -20,6 +20,7 @@ ARG DNF_LIST="\
 
 #################################################################################
 # Build UBI8 Builder with multi-arch support
+# Link gcc to /usr/bin/s390x-linux-gnu-gcc as go requires it on s390x
 RUN set -ex \
      && ARCH=$(arch | sed 's|x86_64|amd64|g')                                   \
      && dnf install -y --nodocs --setopt=install_weak_deps=false ${DNF_LIST}    \
@@ -28,7 +29,8 @@ RUN set -ex \
      && curl -sL https://golang.org/dl/${GO_VERSION}.linux-${ARCH}.tar.gz       \
         | tar xzvf - --directory /usr/local/                                    \
      && /usr/local/go/bin/go version                                            \
-     && ln -f /usr/local/go/bin/go /usr/bin/go
+     && ln -f /usr/local/go/bin/go /usr/bin/go                                  \
+     && ln /usr/bin/gcc /usr/bin/s390x-linux-gnu-gcc
 
 WORKDIR /build
 ENTRYPOINT ["make"]

@@ -12,6 +12,7 @@ builds:
     goarch:
       - amd64
       - ppc64le
+      - s390x
     env:
       - CGO_ENABLED=1
     flags:
