@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/errdefs"
@@ -27,6 +28,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/otiai10/copy"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
@@ -522,16 +524,38 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 		// place related images into the workspace - aka mirrorToDisk
 		// TODO this should probably be done only if artifacts have not been copied
-		result := image.TypedImageMapping{}
+		var syncMapResult sync.Map
+		start := time.Now()
+		g, ctx := errgroup.WithContext(ctx)
 		// create mappings for the related images that will moved from the workspace to the final destination
 		for _, i := range relatedImages {
-			// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-			err := o.addRelatedImageToMapping(ctx, result, i, o.ToMirror, "")
-			if err != nil {
-				return nil, err
-			}
-
+			// avoid closure problems by making a copy of i
+			copyofI := i
+			g.Go(func() error {
+				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
+				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, o.ToMirror, "")
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 		}
+		// if error occurs in one of the go routines, get the first error and bail out
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
+		duration := time.Since(start)
+		klog.Infof("%d related images processed in %s", len(relatedImages), duration)
+
+		result := image.TypedImageMapping{}
+		syncMapResult.Range(func(key, value any) bool {
+			source := key.(image.TypedImage)
+			destination := value.(image.TypedImage)
+			result[source] = destination
+			// always continue iteration
+			return true
+		})
+
 		if err := o.writeMappingFile(mappingFile, result); err != nil {
 			return nil, err
 		}
