@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	imagecopy "github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/oci/layout"
@@ -130,7 +131,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 	return mapping, nil
 }
 
-func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping image.TypedImageMapping, img declcfg.RelatedImage, destReg, namespace string) error {
+func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *sync.Map, img declcfg.RelatedImage, destReg, namespace string) error {
 	if img.Image == "" {
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
@@ -152,7 +153,10 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping im
 		// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
 		mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+img.Image, reg.Prefix, o.remoteRegFuncs)
 		if err == nil {
-			img.Image = mirroredImage
+			from = mirroredImage
+		} else {
+			// verbose log so we know when we had no mirror hits
+			klog.V(3).Infof("Cannot find mirror for %s: %s", img.Image, err)
 		}
 	}
 
@@ -203,7 +207,7 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping im
 		TypedImageReference: dstTIR,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
-	mapping[srcTI] = dstTI
+	mapping.Store(srcTI, dstTI)
 	return nil
 }
 
