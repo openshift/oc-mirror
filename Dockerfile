@@ -20,22 +20,19 @@ ARG DNF_LIST="\
 
 #################################################################################
 # Build UBI8 Builder with multi-arch support
-# Link gcc to /usr/bin/s390x-linux-gnu-gcc as go requires it on s390x
 RUN set -ex \
-     && ARCH=$(arch | sed 's|x86_64|amd64|g')                                   \
+     && ARCH=$(arch | sed 's|x86_64|amd64|g' | sed 's|aarch64|arm64|g')         \
      && dnf install -y --nodocs --setopt=install_weak_deps=false ${DNF_LIST}    \
      && dnf clean all -y                                                        \
      && GO_VERSION=go1.19.5                                                     \
      && curl -sL https://golang.org/dl/${GO_VERSION}.linux-${ARCH}.tar.gz       \
         | tar xzvf - --directory /usr/local/                                    \
      && /usr/local/go/bin/go version                                            \
-     && ln -f /usr/local/go/bin/go /usr/bin/go                                  \
-     && ln /usr/bin/gcc /usr/bin/s390x-linux-gnu-gcc
+     && ln -f /usr/local/go/bin/go /usr/bin/go
 
 #################################################################################
 # Link gcc to /usr/bin/s390x-linux-gnu-gcc as go requires it on s390x
-RUN ARCH=$(arch | sed 's|x86_64|amd64|g')                                       \
-     && [ "${ARCH}" == "s390x" ]                                                \
+RUN [ "$(arch)" == "s390x" ]                                                    \
      && ln /usr/bin/gcc /usr/bin/s390x-linux-gnu-gcc                            \
      || echo "Not running on s390x, skip linking gcc binary"
 

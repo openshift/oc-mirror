@@ -13,6 +13,7 @@ builds:
       - amd64
       - ppc64le
       - s390x
+      - arm64
     env:
       - CGO_ENABLED=1
     flags:
