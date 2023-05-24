@@ -32,6 +32,13 @@ RUN set -ex \
      && ln -f /usr/local/go/bin/go /usr/bin/go                                  \
      && ln /usr/bin/gcc /usr/bin/s390x-linux-gnu-gcc
 
+#################################################################################
+# Link gcc to /usr/bin/s390x-linux-gnu-gcc as go requires it on s390x
+RUN ARCH=$(arch | sed 's|x86_64|amd64|g')                                       \
+     && [ "${ARCH}" == "s390x" ]                                                \
+     && ln /usr/bin/gcc /usr/bin/s390x-linux-gnu-gcc                            \
+     || echo "Not running on s390x, skip linking gcc binary"
+
 WORKDIR /build
 ENTRYPOINT ["make"]
 CMD []
