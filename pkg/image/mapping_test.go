@@ -376,7 +376,7 @@ func TestWriteImageMapping(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			output := new(strings.Builder)
-			err := WriteImageMapping(test.mapping, output)
+			err := WriteImageMapping(0, test.mapping, output)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
