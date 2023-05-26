@@ -1,12 +1,13 @@
 reviewers:
   - jpower432
-  - afflom
   - dinhxuanvu
-  - deejross
+  - lmzuccarelli
+  - sherine-k
+  - aguidirh
 approvers:
-  - jpower432
-  - afflom
-  - soltysh
   - dinhxuanvu
+  - lmzuccarelli
+  - sherine-k
+  - jerpeter1
 component: oc
 subcomponent: oc-mirror
