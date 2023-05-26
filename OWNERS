@@ -9,5 +9,6 @@ approvers:
   - dinhxuanvu
   - lmzuccarelli
   - sherine-k
+  - jerpeter1
 component: oc
 subcomponent: oc-mirror
