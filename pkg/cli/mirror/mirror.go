@@ -646,12 +646,11 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	if err != nil {
 		return err
 	}
-	if !o.IncludeLocalOCICatalogs {
-		var curr v1alpha2.Metadata
-		berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
-		if err := o.checkSequence(meta, curr, berr); err != nil {
-			return err
-		}
+
+	var curr v1alpha2.Metadata
+	berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
+	if err := o.checkSequence(meta, curr, berr); err != nil {
+		return err
 	}
 
 	// Change the destination to registry
