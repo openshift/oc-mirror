@@ -3,6 +3,7 @@ package mirror
 import (
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -75,77 +76,77 @@ func TestMirrorComplete(t *testing.T) {
 		{
 			name: "Valid/RegDest",
 			args: []string{"docker://reg.com"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "reg.com",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegDest",
 			args: []string{"docker://localhost"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "localhost",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/FqdnRegPortDest",
 			args: []string{"docker://reg.com:5000"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "reg.com:5000",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegPortDest",
 			args: []string{"docker://localhost:5000"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "localhost:5000",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/RegNamespace",
 			args: []string{"docker://reg.com/foo/bar"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "reg.com",
 				UserNamespace:  "foo/bar",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/LocalhostRegNamespace",
 			args: []string{"docker://localhost/foo/bar"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "localhost",
 				UserNamespace:  "foo/bar",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/NonFqdnRegPortNamespace",
 			args: []string{"docker://reg:5000/foo"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "reg:5000",
 				UserNamespace:  "foo",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
 			name: "Valid/NonFqdnRegPortNamespaceName",
 			args: []string{"docker://reg:5000/foo/bar"},
-			opts: &MirrorOptions{MaxNestedPaths: 3},
+			opts: &MirrorOptions{MaxNestedPaths: 0},
 			expOpts: &MirrorOptions{
 				ToMirror:       "reg:5000",
 				UserNamespace:  "foo/bar",
-				MaxNestedPaths: 3,
+				MaxNestedPaths: 0,
 			},
 		},
 		{
@@ -227,7 +228,7 @@ func TestMirrorComplete(t *testing.T) {
 			name:     "Invalid/ExceedsNestedPathsLength",
 			args:     []string{"docker://reg.com/foo/bar/baz"},
 			opts:     &MirrorOptions{MaxNestedPaths: 2},
-			expError: "the max-nested-paths value (3) for reg.com/foo/bar/baz exceeds the registry mirror paths setting (some registries limit the nested paths)",
+			expError: "the max-nested-paths value (2) must be strictly higher than the number of path-components in the destination foo/bar/baz - try increasing the value",
 		},
 	}
 
@@ -497,4 +498,90 @@ func TestRemovePreviouslyMirrored(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNestedPaths(t *testing.T) {
+
+	// test processNestedPaths
+	o := &MirrorOptions{
+		MaxNestedPaths: 2,
+		ToMirror:       "localhost:5000",
+		UserNamespace:  "ocpbugs-11922/mirror-release",
+	}
+
+	img := &image.TypedImage{
+		TypedImageReference: imagesource.TypedImageReference{
+			Ref: reference.DockerImageReference{
+				Name:      "ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp",
+				Namespace: "ocpbugs-11922/mirror-release/gitlab-org",
+				Registry:  "localhost:5000",
+			},
+		},
+	}
+
+	t.Run("Testing processNestedPaths (2) : should fail", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.NotEqual(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
+	})
+	o.MaxNestedPaths = 3
+	t.Run("Testing processNestedPaths (3) : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
+	})
+
+	o.MaxNestedPaths = 4
+	t.Run("Testing processNestedPaths (4) : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org/ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
+	})
+
+	o.MaxNestedPaths = 5
+	t.Run("Testing processNestedPaths (5) : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
+	})
+
+	o.MaxNestedPaths = 6
+	t.Run("Testing processNestedPaths (6) : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp", dst)
+	})
+
+	// change image
+	img = &image.TypedImage{
+		TypedImageReference: imagesource.TypedImageReference{
+			Ref: reference.DockerImageReference{
+				Name:      "openshift4/ose-kube-rbac-proxy",
+				Namespace: "ocpbugs-11922/mirror-release",
+				Registry:  "localhost:5000",
+			},
+		},
+	}
+
+	o.MaxNestedPaths = 2
+	t.Run("Testing processNestedPaths (2) new image : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release-openshift4-ose-kube-rbac-proxy", dst)
+	})
+
+	o.MaxNestedPaths = 5
+	t.Run("Testing processNestedPaths (5) new image : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/openshift4/ose-kube-rbac-proxy", dst)
+	})
+
+	o.MaxNestedPaths = 10
+	t.Run("Testing processNestedPaths (10) new image : should pass", func(t *testing.T) {
+		res := o.processNestedPaths(img)
+		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release/openshift4/ose-kube-rbac-proxy", dst)
+	})
+
 }
