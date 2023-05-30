@@ -87,6 +87,12 @@ const (
 	// IndexDir is the location of the
 	// file-based catalog json file.
 	IndexDir = "index"
+	// TmpDir is the location of the
+	// catalog cache directory.
+	TmpDir = "tmp/cache"
+	// OpmBinDir is the location of the
+	// catalog opm binary
+	OpmBinDir = "bin"
 	// IncludeConfigFile is the file where
 	// catalog include config data for incorporation
 	// into the metadata is located.

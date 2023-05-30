@@ -185,6 +185,14 @@ func (o *OperatorOptions) run(
 			return nil, o.checkValidationErr(err)
 		}
 
+		//TODO CFE-825 extract opm from catalog
+		//TODO deal with case of ID in ctlgRef
+		ctlgSrcDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, targetCtlg.Ref.Registry, targetCtlg.Ref.Namespace, targetCtlg.Ref.Name, targetCtlg.Ref.Tag, config.OpmBinDir)
+		err = extractOPMBinary(ctlgRef, ctlgSrcDir)
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
+		}
+
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
 		if err != nil {
 			return nil, err

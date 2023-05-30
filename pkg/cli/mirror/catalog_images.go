@@ -1,18 +1,24 @@
 package mirror
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
@@ -23,6 +29,13 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
+)
+
+const (
+	opmCachePrefix  = "/tmp/cache"
+	opmBinarySuffix = "opm"
+	opmBinaryPrefix = "usr/bin/registry/opm"
+	opmBinaryDir    = "usr/bin/registry"
 )
 
 // unpackCatalog will unpack file-based catalogs if they exists
@@ -195,22 +208,46 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		klog.Infof("Rendering catalog image %q with file-based catalog ", refExact)
 
-		add, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, config.IndexDir, "index.json"))
+		configLayerToAdd, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, config.IndexDir, "index.json"))
 		if err != nil {
 			return fmt.Errorf("error creating add layer: %v", err)
 		}
 
 		// Since we are defining the FBC as index.json,
 		// remove anything that may currently exist
-		deleted, err := deleteLayer("/.wh.configs")
+		deletedConfigLayer, err := deleteLayer("/.wh.configs")
 		if err != nil {
 			return fmt.Errorf("error creating deleted layer: %v", err)
 		}
 
-		// Delete must be first in the slice
-		// so that the /configs directory is deleted
-		// and then add back with the new FBC.
-		layers := []v1.Layer{deleted, add}
+		//TODO how do you know which is the cache dir
+
+		//TODO white out layer /tmp
+		deletedCacheLayer, err := deleteLayer("/tmp/.wh.cache")
+		if err != nil {
+			return fmt.Errorf("error creating deleted cache layer: %v", err)
+		}
+
+		opmCmdPath, err := findOpmCmd(artifactDir)
+		if err != nil {
+			return fmt.Errorf("cannot find opm in the extracted catalog %s for %s on %s: %v", refExact, runtime.GOOS, runtime.GOARCH, err)
+		}
+		//TODO call opm serve /configs –-cache-dir /tmp/cache –-cache-only
+		cmd := exec.Command(opmCmdPath, "serve", filepath.Join(artifactDir, config.IndexDir), "--cache-dir", filepath.Join(artifactDir, config.TmpDir), "--cache-only")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("error regenerating the cache for %s: %v", refExact, err)
+		}
+		//TODO check the tmp folder is not empty
+		//TODO create a new tmp layer from reconstructed cache
+		cacheLayerToAdd, err := builder.LayerFromPath("/tmp/cache", filepath.Join(artifactDir, config.TmpDir))
+		if err != nil {
+			return fmt.Errorf("error creating add layer: %v", err)
+		}
+
+		// Deleted layers must be added first in the slice
+		// so that the /configs and /tmp directories are deleted
+		// and then added back from the layers rebuilt from the new FBC.
+		layers := []v1.Layer{deletedConfigLayer, deletedCacheLayer, configLayerToAdd, cacheLayerToAdd}
 
 		layoutDir := filepath.Join(artifactDir, config.LayoutsDir)
 		layoutPath, err = imgBuilder.CreateLayout("", layoutDir)
@@ -223,12 +260,152 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 				containertools.ConfigsLocationLabel: "/configs",
 			}
 			cfg.Config.Labels = labels
-			cfg.Config.Cmd = []string{"serve", "/configs"}
-			cfg.Config.Entrypoint = []string{"/bin/opm"}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)
 		}
+	}
+	return nil
+}
+
+func findOpmCmd(artifactDir string) (string, error) {
+	//TODO guess the opmCmdPath
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("error finding current working directory while preparing to run opm to regenerate cache: %v", err)
+	}
+	runningOS := runtime.GOOS
+	runningArch := runtime.GOARCH
+	opmBin := "opm"
+
+	if runningOS != "linux" {
+		opmBin = strings.Join([]string{runningOS, runningArch, opmBin}, "-")
+	}
+	opmCmdPath := filepath.Join(wd, artifactDir, config.OpmBinDir, opmBinaryDir, opmBin)
+	_, err = os.Stat(opmCmdPath)
+	if err != nil {
+		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
+	}
+	err = os.Chmod(opmCmdPath, 0744)
+	if err != nil {
+		return "", fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
+	}
+	return opmCmdPath, nil
+}
+
+func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
+
+	refExact := srcRef.Ref.Exact()
+	var img v1.Image
+	img, err := crane.Pull(refExact)
+	if err != nil {
+		klog.Warningf("unable to pull image from %s, trying reference on disk: %v", refExact, err)
+
+		// obtain the path to where the OCI image reference resides
+		layoutPath := layout.Path(refExact)
+
+		// get its index.json and obtain its manifest
+		rootIndex, err := layoutPath.ImageIndex()
+		if err != nil {
+			return err
+		}
+		rootIndexManifest, err := rootIndex.IndexManifest()
+		if err != nil {
+			return err
+		}
+
+		// attempt to find the first image reference in the layout...
+		// for a manifest list only search one level deep.
+
+	loop:
+		for _, descriptor := range rootIndexManifest.Manifests {
+
+			if descriptor.MediaType.IsIndex() {
+				// follow the descriptor using its digest to get the referenced index and its manifest
+				childIndex, err := rootIndex.ImageIndex(descriptor.Digest)
+				if err != nil {
+					return err
+				}
+				childIndexManifest, err := childIndex.IndexManifest()
+				if err != nil {
+					return err
+				}
+
+				// at this point, find the first image and store it for later if possible
+				//TODO extract the child index that corresponds to this machine's architecture
+				for _, childDescriptor := range childIndexManifest.Manifests {
+					if childDescriptor.MediaType.IsImage() {
+						img, err = childIndex.Image(childDescriptor.Digest)
+						if err != nil {
+							return err
+						}
+						// no further processing necessary
+						break loop
+					}
+				}
+
+			} else if descriptor.MediaType.IsImage() {
+				// this is a direct reference to an image, so just store it for later
+				img, err = rootIndex.Image(descriptor.Digest)
+				if err != nil {
+					return err
+				}
+				// no further processing necessary
+				break loop
+			}
+		}
+	}
+	// if we get here and no image was found bail out
+	if img == nil {
+		return fmt.Errorf("unable to obtain image for %s", refExact)
+	}
+	tr := tar.NewReader(mutate.Extract(img))
+	for {
+		header, err := tr.Next()
+
+		// break the infinite loop when EOF
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		// skip the file if it is a directory or not in the bin dir
+		if !strings.HasSuffix(header.Name, opmBinarySuffix) || header.FileInfo().IsDir() {
+			continue
+		}
+
+		var buf bytes.Buffer
+		_, err = buf.ReadFrom(tr)
+		if err != nil {
+			return err
+		}
+
+		targetFileName := filepath.Join(outDir, header.Name)
+		bytes := buf.Bytes()
+
+		baseDir := filepath.Dir(targetFileName)
+		err = os.MkdirAll(baseDir, 0755)
+		if err != nil {
+			return err
+		}
+
+		f, err := os.Create(targetFileName)
+		if err == nil {
+			defer f.Close()
+		} else {
+			return err
+		}
+
+		_, err = f.Write(bytes)
+		if err != nil {
+			return err
+		}
+	}
+	//TODO use a constant cmd/oc-mirror/oc-mirror-workspace/src/catalogs/registry.redhat.io/redhat-operator-index/redhat-operator-index/v4.13/bin/usr/bin/registry/opm
+	returnPath := filepath.Join(outDir, opmBinaryPrefix)
+	// check for the folder (it should exist if we found something)
+	_, err = os.Stat(returnPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("opm binary not found after extracting %q within image", opmBinaryPrefix)
 	}
 	return nil
 }
