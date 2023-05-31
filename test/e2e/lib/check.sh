@@ -10,13 +10,19 @@ function check_bundles() {
 
   crane export --insecure $catalog_image temp.tar
   local index_dir="${DATA_TMP}/unpacked"
+  local tmp_cache_dir="${DATA_TMP}/unpacked_cache"
   mkdir -p "$index_dir"
+  mkdir -p "$tmp_cache_dir"
   local index_path="${index_dir}/index.json"
   tar xvf temp.tar /configs/index.json --strip-components=1 
+  tar xvf temp.tar /tmp/cache 
   mv index.json $index_dir
+  mv /tmp/cache $tmp_cache_dir
+  
   rm -f temp.tar
 
   opm validate $index_dir
+  opm serve $index_dir --cache-dir=$tmp_cache_dir --cache-only --cache-enforce-integrity
 
   declare -A exp_bundles_set
   for bundle in $exp_bundles_list; do

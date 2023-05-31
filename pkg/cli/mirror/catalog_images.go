@@ -34,7 +34,6 @@ import (
 const (
 	opmCachePrefix  = "/tmp/cache"
 	opmBinarySuffix = "opm"
-	opmBinaryPrefix = "usr/bin/registry/opm"
 	opmBinaryDir    = "usr/bin/registry"
 )
 
@@ -232,8 +231,17 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		if err != nil {
 			return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
 		}
+		absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
+		if err != nil {
+			return fmt.Errorf("error getting absolute path for catalog's index %v: %v", filepath.Join(artifactDir, config.IndexDir), err)
+		}
+		absCachePath, err := filepath.Abs(filepath.Join(artifactDir, config.TmpDir))
+		if err != nil {
+			return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
+		}
 		//TODO call opm serve /configs –-cache-dir /tmp/cache –-cache-only
-		cmd := exec.Command(opmCmdPath, "serve", filepath.Join(artifactDir, config.IndexDir), "--cache-dir", filepath.Join(artifactDir, config.TmpDir), "--cache-only")
+		cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
+		fmt.Printf("%s\n", cmd.String())
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
 		}
@@ -281,7 +289,23 @@ func findOpmCmd(artifactDir string) (string, error) {
 	if runningOS != "linux" {
 		opmBin = strings.Join([]string{runningOS, runningArch, opmBin}, "-")
 	}
-	opmCmdPath := filepath.Join(wd, artifactDir, config.OpmBinDir, opmBinaryDir, opmBin)
+	opmCmdPath := ""
+	binaryDir := filepath.Join(wd, artifactDir, config.OpmBinDir)
+	err = filepath.Walk(binaryDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
+			return err
+		}
+
+		if info.Name() == opmBin {
+			opmCmdPath = path
+		}
+
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
+	}
 	_, err = os.Stat(opmCmdPath)
 	if err != nil {
 		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
@@ -293,13 +317,13 @@ func findOpmCmd(artifactDir string) (string, error) {
 	return opmCmdPath, nil
 }
 
-func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
+func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, outDir string, insecure bool) error {
 	var img v1.Image
 	var err error
 	refExact := srcRef.Ref.Exact()
 	if srcRef.OCIFBCPath == "" {
-
-		img, err = crane.Pull(refExact)
+		remoteOpts := getCraneOpts(ctx, insecure)
+		img, err = crane.Pull(refExact, remoteOpts...)
 		if err != nil {
 			return fmt.Errorf("unable to pull image from %s: %v", refExact, err)
 		}
@@ -364,6 +388,7 @@ func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
 		return fmt.Errorf("unable to obtain image for %v", srcRef)
 	}
 	tr := tar.NewReader(mutate.Extract(img))
+	opmBinaryExtracted := ""
 	for {
 		header, err := tr.Next()
 
@@ -403,13 +428,12 @@ func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
 		if err != nil {
 			return err
 		}
+		opmBinaryExtracted = targetFileName
 	}
-	//TODO use a constant cmd/oc-mirror/oc-mirror-workspace/src/catalogs/registry.redhat.io/redhat-operator-index/redhat-operator-index/v4.13/bin/usr/bin/registry/opm
-	returnPath := filepath.Join(outDir, opmBinaryPrefix)
 	// check for the folder (it should exist if we found something)
-	_, err = os.Stat(returnPath)
+	_, err = os.Stat(opmBinaryExtracted)
 	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("opm binary not found after extracting %q within image", opmBinaryPrefix)
+		return fmt.Errorf("opm binary not found after extracting %q from catalog image %v", opmBinaryExtracted, srcRef)
 	}
 	return nil
 }
