@@ -230,12 +230,12 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		opmCmdPath, err := findOpmCmd(artifactDir)
 		if err != nil {
-			return fmt.Errorf("cannot find opm in the extracted catalog %s for %s on %s: %v", refExact, runtime.GOOS, runtime.GOARCH, err)
+			return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
 		}
 		//TODO call opm serve /configs –-cache-dir /tmp/cache –-cache-only
 		cmd := exec.Command(opmCmdPath, "serve", filepath.Join(artifactDir, config.IndexDir), "--cache-dir", filepath.Join(artifactDir, config.TmpDir), "--cache-only")
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error regenerating the cache for %s: %v", refExact, err)
+			return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
 		}
 		//TODO check the tmp folder is not empty
 		//TODO create a new tmp layer from reconstructed cache
@@ -294,15 +294,19 @@ func findOpmCmd(artifactDir string) (string, error) {
 }
 
 func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
-
-	refExact := srcRef.Ref.Exact()
 	var img v1.Image
-	img, err := crane.Pull(refExact)
-	if err != nil {
-		klog.Warningf("unable to pull image from %s, trying reference on disk: %v", refExact, err)
+	var err error
+	refExact := srcRef.Ref.Exact()
+	if srcRef.OCIFBCPath == "" {
+
+		img, err = crane.Pull(refExact)
+		if err != nil {
+			return fmt.Errorf("unable to pull image from %s: %v", refExact, err)
+		}
+	} else {
 
 		// obtain the path to where the OCI image reference resides
-		layoutPath := layout.Path(refExact)
+		layoutPath := layout.Path(v1alpha2.TrimProtocol(srcRef.OCIFBCPath))
 
 		// get its index.json and obtain its manifest
 		rootIndex, err := layoutPath.ImageIndex()
@@ -334,7 +338,7 @@ func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
 				// at this point, find the first image and store it for later if possible
 				//TODO extract the child index that corresponds to this machine's architecture
 				for _, childDescriptor := range childIndexManifest.Manifests {
-					if childDescriptor.MediaType.IsImage() {
+					if childDescriptor.MediaType.IsImage() && childDescriptor.Platform.Architecture == runtime.GOARCH && childDescriptor.Platform.OS == runtime.GOOS {
 						img, err = childIndex.Image(childDescriptor.Digest)
 						if err != nil {
 							return err
@@ -357,7 +361,7 @@ func extractOPMBinary(srcRef image.TypedImageReference, outDir string) error {
 	}
 	// if we get here and no image was found bail out
 	if img == nil {
-		return fmt.Errorf("unable to obtain image for %s", refExact)
+		return fmt.Errorf("unable to obtain image for %v", srcRef)
 	}
 	tr := tar.NewReader(mutate.Extract(img))
 	for {
