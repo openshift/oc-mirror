@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	cincinnativ1 "github.com/openshift/cincinnati-operator/api/v1"
@@ -17,6 +19,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -303,15 +306,11 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 	names := make(map[string]int, len(mapping))
 	for source, dest := range mapping {
 		name := source.Ref.Name
-
-		// In case the source ref has multiple path components (organization, namespace + subnamespace):
-		// Ex: foo.com/cp/test/common-services@sha256:ef64abd2c4c9acdc433ed4454b008d90891fe18fe33d3a53e7d6104a4a8bf5c5
-		// In this case, the `source.Ref.Name`` will contain some path-components, in addition to the image name, separated by `/`
-		// For the above example: name = `test/common-services`
-		// Since name is used to generate the file name, `os.WriteFile` will fail in this case, as subdir test
-		// doesn't exist. Therefore we replace `/` with `-`
-		name = strings.ReplaceAll(name, "/", "-")
-
+		name, err := createRFC1035NameForCatalogSource(name)
+		// in theory this should never error
+		if err != nil {
+			return err
+		}
 		value, found := names[name]
 		if found {
 			value++
@@ -330,6 +329,106 @@ func WriteCatalogSource(mapping image.TypedImageMapping, dir string) error {
 		}
 	}
 	return nil
+}
+
+/*
+CreateRFC1035Name converts the provided name to an RFC 1035 compliant name suitable
+for use in a catalog source. Unacceptable characters are converted to a dash.
+Duplicate consecutive dashes are converted to a single dash.
+
+RFC 1035 compliant strings:
+
+- must consist of lower case alphanumeric characters or '-'
+
+- must start with an alphabetic character
+
+- must end with an alphanumeric character
+
+# Arguments
+
+• nameIn: the string to use as a basis for conversion. It is assumed that this is the
+name portion of a DockerImageReference
+
+# Returns
+
+• string: a string compliant with RFC 1035 or empty string if error occurs
+
+• error: non nil if error occurs, nil otherwise
+*/
+func createRFC1035NameForCatalogSource(nameIn string) (string, error) {
+	// In case the nameIn argument has multiple path components (organization, namespace + subnamespace):
+	// Ex: foo.com/cp/test/common-services@sha256:ef64abd2c4c9acdc433ed4454b008d90891fe18fe33d3a53e7d6104a4a8bf5c5
+	// In this case, the `source.Ref.Name` will contain some path-components, in addition to the image name, separated by `/`
+	// For the above example: name = `test/common-services`
+	// Since name is used to generate the file name, `os.WriteFile` will fail in this case, as sub directory test
+	// doesn't exist. Therefore we replace all `/` with `-`. This also goes for any other "unacceptable" character
+	// that is not compliant with RFC 1035.
+
+	// start by making sure name starts with lower case alpha character, so prefix with `cs-`
+	name := strings.Join([]string{"cs", nameIn}, "-")
+	// modify name to be RFC 1035 compliant
+	name = strings.Map(toRFC1035, name)
+
+	// paranoid check to make sure the last character is alpha numeric
+	lastChar, _ := utf8.DecodeLastRuneInString(name)
+	if !(unicode.IsNumber(lastChar) || unicode.IsLetter(lastChar)) {
+		// convert name to have `-0` suffix
+		name = strings.Join([]string{name, "0"}, "-")
+	}
+
+	// remove duplicate dashes
+	stringBuilder := strings.Builder{}
+	var lastEncounteredRune rune
+	for position, currentRune := range name {
+		if currentRune != lastEncounteredRune || position == 0 || currentRune != '-' {
+			stringBuilder.WriteRune(currentRune)
+			lastEncounteredRune = currentRune
+		}
+	}
+	name = stringBuilder.String()
+
+	// truncate if necessary
+	if len(name) > validation.DNS1035LabelMaxLength {
+		// truncate the name to max length
+		truncatedName := name[:validation.DNS1035LabelMaxLength]
+		// is the last char a dash or a char that would be converted to a dash?
+		lastChar, _ := utf8.DecodeLastRuneInString(truncatedName)
+		if toRFC1035(lastChar) == '-' {
+			// truncate even more to allow -0 suffix
+			truncatedName = truncatedName[:validation.DNS1035LabelMaxLength-2]
+			// put suffix in place
+			name = strings.Join([]string{truncatedName, "0"}, "-")
+		} else {
+			// use truncated value as-is
+			name = truncatedName
+		}
+	}
+
+	// double check that the final name conforms to RFC 1035 (this should never fail)
+	errs := validation.IsDNS1035Label(name)
+	if len(errs) != 0 {
+		return "", fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))
+	}
+	return name, nil
+}
+
+/*
+toRFC1035 converts the supplied rune to a dash if its not
+a through z, 0 through 9 or a dash
+*/
+func toRFC1035(r rune) rune {
+	r = unicode.ToLower(r)
+	switch {
+	case r >= 'a' && r <= 'z':
+		return r
+	case r >= '0' && r <= '9':
+		return r
+	case r == '-':
+		return r
+	default:
+		// convert unacceptable character
+		return '-'
+	}
 }
 
 // WriteUpdateService will generate an UpdateService object and write it to disk
