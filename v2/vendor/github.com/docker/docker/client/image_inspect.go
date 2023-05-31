@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
+	"io/ioutil"
 
 	"github.com/docker/docker/api/types"
 )
@@ -17,10 +17,10 @@ func (cli *Client) ImageInspectWithRaw(ctx context.Context, imageID string) (typ
 	serverResp, err := cli.get(ctx, "/images/"+imageID+"/json", nil, nil)
 	defer ensureReaderClosed(serverResp)
 	if err != nil {
-		return types.ImageInspect{}, nil, err
+		return types.ImageInspect{}, nil, wrapResponseError(err, serverResp, "image", imageID)
 	}
 
-	body, err := io.ReadAll(serverResp.body)
+	body, err := ioutil.ReadAll(serverResp.body)
 	if err != nil {
 		return types.ImageInspect{}, nil, err
 	}

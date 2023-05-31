@@ -35,6 +35,8 @@ const (
 	opmCachePrefix  = "/tmp/cache"
 	opmBinarySuffix = "opm"
 	opmBinaryDir    = "usr/bin/registry"
+	cacheFolderUID  = 1001
+	cacheFolderGID  = 0
 )
 
 // unpackCatalog will unpack file-based catalogs if they exists
@@ -219,10 +221,8 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			return fmt.Errorf("error creating deleted layer: %v", err)
 		}
 
-		//TODO how do you know which is the cache dir
-
-		//TODO white out layer /tmp
-		deletedCacheLayer, err := deleteLayer("/tmp/.wh.cache")
+		// white out layer /tmp
+		deletedCacheLayer, err := deleteLayer("/.wh.tmp")
 		if err != nil {
 			return fmt.Errorf("error creating deleted cache layer: %v", err)
 		}
@@ -239,15 +239,11 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		if err != nil {
 			return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
 		}
-		//TODO call opm serve /configs –-cache-dir /tmp/cache –-cache-only
 		cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
-		fmt.Printf("%s\n", cmd.String())
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
 		}
-		//TODO check the tmp folder is not empty
-		//TODO create a new tmp layer from reconstructed cache
-		cacheLayerToAdd, err := builder.LayerFromPath("/tmp/cache", filepath.Join(artifactDir, config.TmpDir))
+		cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/tmp/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
 		if err != nil {
 			return fmt.Errorf("error creating add layer: %v", err)
 		}
@@ -268,6 +264,10 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 				containertools.ConfigsLocationLabel: "/configs",
 			}
 			cfg.Config.Labels = labels
+			// Although it was prefered to keep the entrypoint and command as it was
+			// we couldnt guarantie that the cache-dir was /tmp/cache, and therefore
+			// we had to specify the command for the newly built catalog
+			cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/tmp/cache"}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)
@@ -276,8 +276,10 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 	return nil
 }
 
+// findOpmCmd attempts to find the opm binary within the extracted contents of the catalog container image.
+// The exact location of the opm binary within the image is not certain: It depends among other things on
+// the version of the catalog, on the decisions by maintainers of the catalog, on the platform...
 func findOpmCmd(artifactDir string) (string, error) {
-	//TODO guess the opmCmdPath
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("error finding current working directory while preparing to run opm to regenerate cache: %v", err)
@@ -293,7 +295,6 @@ func findOpmCmd(artifactDir string) (string, error) {
 	binaryDir := filepath.Join(wd, artifactDir, config.OpmBinDir)
 	err = filepath.Walk(binaryDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
-			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
 			return err
 		}
 
@@ -317,6 +318,11 @@ func findOpmCmd(artifactDir string) (string, error) {
 	return opmCmdPath, nil
 }
 
+// extractOPMBinary is usually called after rendering catalog's declarative config.
+// it uses crane modules to pull the catalog image, select the manifest that corresponds to the
+// current platform. It then extracts from that image any files that are suffixed `*opm` for later
+// use upon rebuilding the catalog: This is because the opm binary can be called `opm` but also
+// `darwin-amd64-opm` etc.
 func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, outDir string, insecure bool) error {
 	var img v1.Image
 	var err error
@@ -342,7 +348,7 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 			return err
 		}
 
-		// attempt to find the first image reference in the layout...
+		// attempt to find the first image reference in the layout that corresponds to the platform...
 		// for a manifest list only search one level deep.
 
 	loop:
@@ -359,8 +365,8 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 					return err
 				}
 
-				// at this point, find the first image and store it for later if possible
-				//TODO extract the child index that corresponds to this machine's architecture
+				// at this point, find and extract the child index that corresponds to this machine's
+				// architecture
 				for _, childDescriptor := range childIndexManifest.Manifests {
 					if childDescriptor.MediaType.IsImage() && childDescriptor.Platform.Architecture == runtime.GOARCH && childDescriptor.Platform.OS == runtime.GOOS {
 						img, err = childIndex.Image(childDescriptor.Digest)
@@ -397,7 +403,7 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 			break
 		}
 
-		// skip the file if it is a directory or not in the bin dir
+		// skip the file if it is a directory or if file name does not end with `opm`
 		if !strings.HasSuffix(header.Name, opmBinarySuffix) || header.FileInfo().IsDir() {
 			continue
 		}
@@ -429,12 +435,14 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 			return err
 		}
 		opmBinaryExtracted = targetFileName
+
+		// check for the extracted opm file (it should exist if we found something)
+		_, err = os.Stat(opmBinaryExtracted)
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("opm binary not found after extracting %q from catalog image %v", opmBinaryExtracted, srcRef)
+		}
 	}
-	// check for the folder (it should exist if we found something)
-	_, err = os.Stat(opmBinaryExtracted)
-	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("opm binary not found after extracting %q from catalog image %v", opmBinaryExtracted, srcRef)
-	}
+
 	return nil
 }
 

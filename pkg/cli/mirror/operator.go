@@ -185,8 +185,6 @@ func (o *OperatorOptions) run(
 			return nil, o.checkValidationErr(err)
 		}
 
-		//TODO CFE-825 extract opm from catalog
-		//TODO deal with case of ID in ctlgRef
 		ctlgSrcDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, targetCtlg.Ref.Registry, targetCtlg.Ref.Namespace, targetCtlg.Ref.Name)
 		if targetCtlg.Ref.ID != "" {
 			ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.ID, config.OpmBinDir)

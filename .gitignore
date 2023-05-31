@@ -10,6 +10,13 @@ sha256sum.txt
 **/test-output
 **/.metadata.json
 oc-mirror-workspace/
+v2/working-dir/
+v2/tests/hold-test-untar
+v2/build/
+v2/cmd/mirror/logs/
+v2/cmd/mirror/working-dir/
+v2/launch.json
+v2/logs/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 
