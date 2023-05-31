@@ -723,7 +723,7 @@ func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, image
 
 		mappings = append(mappings, mirror.Mapping{
 			Source:      srcRef.TypedImageReference,
-			Destination: dstRef.TypedImageReference,
+			Destination: dstTIR,
 			Name:        srcRef.Ref.Name,
 		})
 	}
