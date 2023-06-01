@@ -1,6 +1,7 @@
 package mirror
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -15,10 +16,19 @@ import (
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/klog/v2"
+	ktest "k8s.io/klog/v2/test"
 
+	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
+	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
+
+func init() {
+	// TestValidateMapping requires klog to be initialized
+	ktest.InitKlog()
+}
 
 func TestPinImages(t *testing.T) {
 
@@ -359,6 +369,255 @@ func TestVerifyDC(t *testing.T) {
 
 		})
 		hook.Reset()
+	}
+}
+
+func mustParseAsBundle(t *testing.T, img string) (typedImage image.TypedImage) {
+	t.Helper()
+
+	// create a image with bundle type
+	typedImage, err := image.ParseTypedImage(img, v1alpha2.TypeOperatorBundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
+func TestValidateMapping(t *testing.T) {
+
+	type testCase struct {
+		name                string                    // test case name
+		dc                  declcfg.DeclarativeConfig // catalog to test with
+		mapping             image.TypedImageMapping   // the source/destination mapping to search through looking for a match based on the catalog content
+		expectedWarningMsgs []string                  // any warning messages that would be generated in the output
+	}
+	tests := []testCase{
+		{
+			name: "exact match with tags",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "foo.com/example/bundle:v1"):  image.TypedImage{},
+				mustParseAsBundle(t, "foo.com/example/related:v1"): image.TypedImage{},
+			},
+		},
+		{
+			name: "exact match with sha",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "foo.com/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "exact match with tag & sha",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "foo.com/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "foo.com/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with tags - mapping was redirected to baz.com",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/example/bundle:v1"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/example/related:v1"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with sha - mapping was redirected to baz.com",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with tag & sha - mapping was redirected to baz.com",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with tags - mapping was redirected to baz.com/foo/bar",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/foo/bar/example/bundle:v1"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/foo/bar/example/related:v1"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with sha - mapping was redirected to baz.com/foo/bar",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/foo/bar/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/foo/bar/example/related@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "partial match with tag & sha - mapping was redirected to baz.com/foo/bar",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "baz.com/foo/bar/example/bundle:v1@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e"):  image.TypedImage{},
+				mustParseAsBundle(t, "baz.com/foo/bar/example/related:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3"): image.TypedImage{},
+			},
+		},
+		{
+			name: "no match with sha, tag, or sha & tag",
+			dc: declcfg.DeclarativeConfig{
+				Bundles: []declcfg.Bundle{
+					{
+						Image: "foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e",
+						RelatedImages: []declcfg.RelatedImage{
+							{
+								Image: "foo.com/example/related:v1",
+							},
+							{
+								Image: "foo.com/example/relatedtoo:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3",
+							},
+						},
+					},
+				},
+			},
+			mapping: image.TypedImageMapping{
+				mustParseAsBundle(t, "foo.com/notfound@sha256:fe19778cf1ce280658154f2b9c01ffbccd825a23460141dcf3794e7a2c0eb629"): image.TypedImage{},
+			},
+			expectedWarningMsgs: []string{
+				"image foo.com/example/related:v1 is not included in mapping",
+				"image foo.com/example/bundle@sha256:2db967de122e3b71a54d1fef109925d45aab481dbd3c8d4bc18948848102e27e is not included in mapping",
+				"image foo.com/example/relatedtoo:v1@sha256:7e9b6e7ba2842c91cf49f3e214d04a7a496f8214356f41d81a6e6dcad11f11e3 is not included in mapping",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// This test needs to validate that the log generates the right output
+			// so restore the global klog state after each test
+			defer klog.CaptureState().Restore()
+
+			// override the logger so we can capture its output
+			var buf bytes.Buffer
+			klog.SetOutput(&buf)
+
+			// run the function we need to test
+			err := validateMapping(test.dc, test.mapping)
+			assert.NoError(t, err)
+
+			// grab the log output
+			got := buf.String()
+
+			// did we get output when there were no expected messages?
+			if len(test.expectedWarningMsgs) == 0 {
+				assert.Empty(t, got)
+			}
+			// if we have expected warning messages, are they present in the log output?
+			for _, expectedWarningMsg := range test.expectedWarningMsgs {
+				assert.Contains(t, got, expectedWarningMsg)
+			}
+
+		})
 	}
 }
 
