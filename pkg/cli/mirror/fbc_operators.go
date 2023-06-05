@@ -175,7 +175,7 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *s
 	}
 
 	// TODO : why file:// ? can we be more smart about setting the transport protocol
-	srcTIR, err := image.ParseReference(filePrefix + strings.ToLower(from))
+	srcTIR, err := image.ParseReference(strings.ToLower(from))
 	if err != nil {
 		return err
 	}

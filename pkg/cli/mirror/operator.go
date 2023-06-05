@@ -528,13 +528,20 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		var syncMapResult sync.Map
 		start := time.Now()
 		g, ctx := errgroup.WithContext(ctx)
+		destReg := o.ToMirror
+		mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
+		mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+		if mirrorToDisk && !mirrorToMirror {
+			destReg = "file://redhat/redhat-operator-index"
+		}
+
 		// create mappings for the related images that will moved from the workspace to the final destination
 		for _, i := range relatedImages {
 			// avoid closure problems by making a copy of i
 			copyofI := i
 			g.Go(func() error {
 				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, o.ToMirror, "")
+				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, destReg, "")
 				if err != nil {
 					return err
 				}

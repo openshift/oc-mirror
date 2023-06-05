@@ -257,15 +257,15 @@ func (o *MirrorOptions) Validate() error {
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
 	// mirrorToDisk workflow is not supported with the oci feature
-	if o.IncludeLocalOCICatalogs && mirrorToDisk {
-		return fmt.Errorf("oci feature cannot be used when mirroring to local archive")
-	}
+	// if o.IncludeLocalOCICatalogs && mirrorToDisk {
+	// 	return fmt.Errorf("oci feature cannot be used when mirroring to local archive")
+	// }
 	// diskToMirror workflow is not supported with the oci feature
 	if o.IncludeLocalOCICatalogs && diskToMirror {
 		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
 	}
 	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
-	if mirrorToMirror {
+	if mirrorToMirror || mirrorToDisk {
 		bIsFBOCI := false
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
@@ -274,6 +274,7 @@ func (o *MirrorOptions) Validate() error {
 		for _, op := range cfg.Mirror.Operators {
 			if op.IsFBCOCI() {
 				bIsFBOCI = true
+				break
 			}
 		}
 		if o.IncludeLocalOCICatalogs && !bIsFBOCI {
