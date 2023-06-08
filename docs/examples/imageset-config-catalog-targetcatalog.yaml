@@ -1,0 +1,20 @@
+# This config demonstrates the use of `targetCatalog` and `targetTag` for operator catalogs 
+# in oder to mirror the catalog image to a different location on the target registry.
+
+# IMPORTANT: In `targetCatalog`, the user may set as many path-components as needed,
+# ending with the image repository.
+
+# To mirror the catalog to `registry.example.com/my-org/vendors/redhat-operator-index:v4.13.0`, 
+# use the below ImageSetConfig with the following command:
+# $ oc mirror -c ./ImageSetConfiguration.yml docker://registry.example.com/my-org
+
+---
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v1alpha2
+mirror: 
+  operators: 
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.13
+    targetCatalog: vendors/redhat-operator-index 
+    targetTag: v4.13.0
+    packages:
+    - name: aws-load-balancer-operator

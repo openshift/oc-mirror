@@ -277,9 +277,15 @@ func getBundlesForVersions(ch *model.Channel, vers []semver.Version, names []str
 		namesToInclude[name] = struct{}{}
 	}
 	for _, b := range ch.Bundles {
+		// OCPBUGS-588 - the postfix i.e '-0' causes a miss in the lookup
+		// as an  example we have this in the 'vers' variable 2.2.0
+		// however the b.Version.String() could return 2.2.0-0
+		// the fix is to remove the -0 postfix to ensure the bundle is included
+		trimVer := strings.Split(b.Version.String(), "-")[0]
+		_, trimmedVersionedBundle := versionsToInclude[trimVer]
 		_, includeVersionedBundle := versionsToInclude[b.Version.String()]
 		_, includeNamedBundle := namesToInclude[b.Name]
-		if includeVersionedBundle || includeNamedBundle {
+		if includeVersionedBundle || includeNamedBundle || trimmedVersionedBundle {
 			bundles = append(bundles, b)
 		}
 	}

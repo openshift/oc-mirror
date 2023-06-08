@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/errdefs"
@@ -27,6 +28,7 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/otiai10/copy"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
@@ -431,16 +433,38 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 		// place related images into the workspace - aka mirrorToDisk
 		// TODO this should probably be done only if artifacts have not been copied
-		result := image.TypedImageMapping{}
+		var syncMapResult sync.Map
+		start := time.Now()
+		g, ctx := errgroup.WithContext(ctx)
 		// create mappings for the related images that will moved from the workspace to the final destination
 		for _, i := range relatedImages {
-			// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-			err := o.addRelatedImageToMapping(ctx, result, i, o.ToMirror, "")
-			if err != nil {
-				return nil, err
-			}
-
+			// avoid closure problems by making a copy of i
+			copyofI := i
+			g.Go(func() error {
+				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
+				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, o.ToMirror, "")
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 		}
+		// if error occurs in one of the go routines, get the first error and bail out
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
+		duration := time.Since(start)
+		klog.Infof("%d related images processed in %s", len(relatedImages), duration)
+
+		result := image.TypedImageMapping{}
+		syncMapResult.Range(func(key, value any) bool {
+			source := key.(image.TypedImage)
+			destination := value.(image.TypedImage)
+			result[source] = destination
+			// always continue iteration
+			return true
+		})
+
 		if err := o.writeMappingFile(mappingFile, result); err != nil {
 			return nil, err
 		}
@@ -501,21 +525,114 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	return mappings, validateMapping(*dc, mappings)
 }
 
-// validateMapping will search for bundle and related images in mapping
-// and log a warning if an image does not exist and will not be mirrored
+/*
+validateMapping will search for bundle and related images in mapping
+and log a warning if an image does not exist and will not be mirrored.
+
+# Arguments
+
+• dc: the catalog content that contains bundle and related images
+
+• mapping: the source/destination mapping to search through looking for a match based on the catalog content
+
+# Returns
+
+• error: this should only produce an error if the bundle or related images in the catalog could
+not be parsed
+*/
 func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMapping) error {
-	var errs []error
+
+	/*
+		The source image in the mapping could have been modified from the value found in the catalog
+		in some circumstances. For example, when using registries.conf we might find an image in a mirror
+		and use that for the mapping rather than the original location defined in the catalog.
+
+		The docker image format could be one of these variants:
+
+			<registry>/<namespace>/name
+			<registry>/<namespace>/name:tag
+			<registry>/<namespace>/name@digest
+			<registry>/<namespace>/name:tag@digest
+
+		Because the registry and namespace portion of the docker reference *could* be different, not
+		only do we need to check for "exact matches", we also need to attempt to find a match
+		based on the name and one of the tag / digest variants above to get a match. If none of those
+		variants match than we need to add a error message.
+	*/
+
+	// getImageList will produce a list of images formatted as described above.
+	// It returns a list for consistent ordering from most likely to least likely
+	// to be encountered, to allow for early search termination.
+	getImageList := func(sourceImage image.TypedImage) (result []string) {
+		// handle full reference first since this is the (most likely condition)
+		fullRef := sourceImage.Ref.Exact()
+		result = append(result, fullRef)
+
+		// depending on the number of components we could have one or more slashes
+		// and in that case get the last component
+		sourceImageName := sourceImage.Ref.Name
+		if i := strings.LastIndex(sourceImageName, "/"); i != -1 {
+			sourceImageName = sourceImageName[i+1:]
+		}
+
+		// handle name with id
+		if sourceImage.Ref.ID != "" {
+			nameId := fmt.Sprintf("%s@%s", sourceImageName, sourceImage.Ref.ID)
+			result = append(result, nameId)
+		}
+
+		// handle name with tag
+		if sourceImage.Ref.Tag != "" {
+			nameTag := fmt.Sprintf("%s:%s", sourceImageName, sourceImage.Ref.Tag)
+			result = append(result, nameTag)
+		}
+
+		// handle just the name
+		result = append(result, sourceImageName)
+
+		// handle name with tag and id (least likely condition)
+		if sourceImage.Ref.Tag != "" && sourceImage.Ref.ID != "" {
+			nameTagID := fmt.Sprintf("%s:%s@%s", sourceImageName, sourceImage.Ref.Tag, sourceImage.Ref.ID)
+			result = append(result, nameTagID)
+		}
+		return
+	}
+
+	// first convert the source portion of the mapping into a form suitable for comparison,
+	// but only do so for bundle types... ignore all others
+	sourceSet := map[string]struct{}{}
+	for sourceImage := range mapping {
+		for _, image := range getImageList(sourceImage) {
+			sourceSet[image] = struct{}{}
+		}
+	}
+
+	// validateFunc performs the search in the sourceSet looking for the provided img
 	validateFunc := func(img string) error {
 		ref, err := image.ParseTypedImage(img, v1alpha2.TypeOperatorBundle)
 		if err != nil {
 			return err
 		}
+		// attempt to find a match
+		matchFound := false
+		images := getImageList(ref)
+		for _, image := range images {
+			if _, ok := sourceSet[image]; ok {
+				// bail out on search since we found what we're looking for
+				matchFound = true
+				break
+			}
+		}
 
-		if _, ok := mapping[ref]; !ok {
+		// if no match warn user
+		if !matchFound {
 			klog.Warningf("image %s is not included in mapping", img)
 		}
 		return nil
 	}
+
+	// for all bundle/related images preform the validation against the source image in the mapping
+	var errs []error
 	for _, b := range dc.Bundles {
 		if err := validateFunc(b.Image); err != nil {
 			errs = append(errs, fmt.Errorf("bundle %q image %q: %v", b.Name, b.Image, err))

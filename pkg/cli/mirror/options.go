@@ -69,7 +69,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 		"will not be skipped")
 	fs.IntVar(&o.MaxPerRegistry, "max-per-registry", 6, "Number of concurrent requests allowed per registry")
 	fs.BoolVar(&o.IncludeLocalOCICatalogs, "include-local-oci-catalogs", o.IncludeLocalOCICatalogs, "If set, enables including local OCI-formatted catalogs (prefix oci://) in the list of operator catalogs defined in ImageSetConfig, so that these local catalogs are mirrored from the disk directly")
-	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --include-local-oci-catalogs flag)")
+	fs.StringVar(&o.OCIRegistriesConfig, "oci-registries-config", o.OCIRegistriesConfig, "Registries config file location (used only with --include-local-oci-catalog flag)")
 	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
 	fs.BoolVar(&o.SkipPruning, "skip-pruning", o.SkipPruning, "If set, will disable pruning globally")
 	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
