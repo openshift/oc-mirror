@@ -14,6 +14,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"k8s.io/klog/v2"
@@ -22,7 +23,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
-	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
 
 // unpackCatalog will unpack file-based catalogs if they exists
@@ -40,6 +40,22 @@ func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]s
 	return found, nil
 }
 
+/*
+rebuildCatalogs will modify an OCI catalog in <some path>/src/catalogs/<repoPath>/layout with
+the index.json files found in <some path>/src/catalogs/<repoPath>/index/index.json
+
+# Arguments
+
+• ctx: cancellation context
+
+• dstDir: the path to where the config.SourceDir resides
+
+# Returns
+
+• image.TypedImageMapping: the source/destination mapping for the catalog
+
+• error: non-nil if error occurs, nil otherwise
+*/
 func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (image.TypedImageMapping, error) {
 	refs := image.TypedImageMapping{}
 	var err error
@@ -68,12 +84,20 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 		// Using that path to determine the corresponding catalog image for processing.
 		slashPath := filepath.ToSlash(fpath)
 		if base := path.Base(slashPath); base == "index.json" {
+			// remove the index.json from the path
+			// results in <some path>/src/catalogs/<repoPath>/index
 			slashPath = path.Dir(slashPath)
+			// remove the index folder from the path
+			// results in <some path>/src/catalogs/<repoPath>
 			slashPath = strings.TrimSuffix(slashPath, config.IndexDir)
 
+			// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
 			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
+			// get the repo namespace and id (where ID is a SHA or tag)
+			// example: foo.com/foo/bar/<id>
 			regRepoNs, id := path.Split(path.Dir(repoPath))
 			regRepoNs = path.Clean(regRepoNs)
+			// reconstitute the path into a valid docker ref
 			var img string
 			if strings.Contains(id, ":") {
 				// Digest.
@@ -85,6 +109,14 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 			ctlgRef := image.TypedImage{}
 			ctlgRef.Type = imagesource.DestinationRegistry
 			sourceRef, err := image.ParseReference(img)
+			// since we can't really tell if the "img" reference originated from an actual docker
+			// reference or from an OCI file path that approximates a docker reference, ParseReference
+			// might not lowercase the name and namespace values which is required by the
+			// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+			// Therefore we lower case name and namespace here to make sure it's done.
+			sourceRef.Ref.Name = strings.ToLower(sourceRef.Ref.Name)
+			sourceRef.Ref.Namespace = strings.ToLower(sourceRef.Ref.Namespace)
+
 			if err != nil {
 				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
 			}
@@ -107,10 +139,12 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 		return nil, err
 	}
 
+	// update the catalogs in the OCI layout directory and push them to their destination
 	if err := o.processCatalogRefs(ctx, catalogsByImage); err != nil {
 		return nil, err
 	}
 
+	// use the resolver to obtain the digests of the newly pushed images
 	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, o.DestPlainHTTP, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating image resolver: %v", err)
@@ -129,6 +163,19 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	return refs, nil
 }
 
+/*
+processCatalogRefs uses the image builder to update a given image using the data provided in catalogRefs.
+
+# Arguments
+
+• ctx: cancellation context
+
+• catalogsByImage: key is catalog destination reference, value is <some path>/src/catalogs/<repoPath>
+
+# Returns
+
+• error: non-nil if error occurs, nil otherwise
+*/
 func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage map[image.TypedImage]string) error {
 	for ctlgRef, artifactDir := range catalogsByImage {
 		// Always build the catalog image with the new declarative config catalog
