@@ -410,6 +410,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		opts.RelatedImagesParser = catalog.RelatedImagesParserFunc(parseRelatedImages)
 
 		opts.MaxICSPSize = icspSizeLimit
+		opts.MaxIDMSSize = idmsSizeLimit
 		opts.SourceRef = imagesource.TypedImageReference{
 			Ref:  ctlgRef.Ref,
 			Type: ctlgRef.Type,

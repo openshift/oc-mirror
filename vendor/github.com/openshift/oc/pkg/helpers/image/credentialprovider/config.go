@@ -35,9 +35,10 @@ type DockerConfig map[string]DockerConfigEntry
 
 // DockerConfigEntry wraps a docker config as a entry
 type DockerConfigEntry struct {
-	Username string
-	Password string
-	Email    string
+	Username      string
+	Password      string
+	Email         string
+	IdentityToken string
 }
 
 var (
@@ -67,12 +68,12 @@ func GetPreferredDockercfgPath() string {
 	return preferredPath
 }
 
-//DefaultDockercfgPaths returns default search paths of .dockercfg
+// DefaultDockercfgPaths returns default search paths of .dockercfg
 func DefaultDockercfgPaths() []string {
 	return []string{GetPreferredDockercfgPath(), workingDirPath, homeDirPath, rootDirPath}
 }
 
-//DefaultDockerConfigJSONPaths returns default search paths of .docker/config.json
+// DefaultDockerConfigJSONPaths returns default search paths of .docker/config.json
 func DefaultDockerConfigJSONPaths() []string {
 	return []string{GetPreferredDockercfgPath(), workingDirPath, homeJSONDirPath, rootJSONDirPath}
 }
@@ -139,7 +140,7 @@ func ReadDockerConfigJSONFile(searchPaths []string) (cfg DockerConfig, err error
 
 }
 
-//ReadSpecificDockerConfigJSONFile attempts to read docker configJSON from a given file path.
+// ReadSpecificDockerConfigJSONFile attempts to read docker configJSON from a given file path.
 func ReadSpecificDockerConfigJSONFile(filePath string) (cfg DockerConfig, err error) {
 	var contents []byte
 
@@ -247,6 +248,8 @@ type dockerConfigEntryWithAuth struct {
 	Email string `json:"email,omitempty"`
 	// +optional
 	Auth string `json:"auth,omitempty"`
+	// +optional
+	IdentityToken string `json:"identitytoken,omitempty"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
@@ -260,6 +263,7 @@ func (ident *DockerConfigEntry) UnmarshalJSON(data []byte) error {
 	ident.Username = tmp.Username
 	ident.Password = tmp.Password
 	ident.Email = tmp.Email
+	ident.IdentityToken = tmp.IdentityToken
 
 	if len(tmp.Auth) == 0 {
 		return nil
@@ -271,7 +275,7 @@ func (ident *DockerConfigEntry) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON implements the json.Marshaler interface.
 func (ident DockerConfigEntry) MarshalJSON() ([]byte, error) {
-	toEncode := dockerConfigEntryWithAuth{ident.Username, ident.Password, ident.Email, ""}
+	toEncode := dockerConfigEntryWithAuth{ident.Username, ident.Password, ident.Email, "", ident.IdentityToken}
 	toEncode.Auth = encodeDockerConfigFieldAuth(ident.Username, ident.Password)
 
 	return json.Marshal(toEncode)
