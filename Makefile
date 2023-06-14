@@ -31,7 +31,19 @@ cross-build-linux-amd64:
 	+@GOOS=linux GOARCH=amd64 $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
 .PHONY: cross-build-linux-amd64
 
-cross-build: cross-build-linux-amd64
+cross-build-linux-ppc64le:
+	+@GOOS=linux GOARCH=ppc64le $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-ppc64le
+.PHONY: cross-build-linux-ppc64le
+
+cross-build-linux-s390x:
+	+@GOOS=linux GOARCH=s390x $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-s390x
+.PHONY: cross-build-linux-s390x
+
+cross-build-linux-arm64:
+	+@GOOS=linux GOARCH=arm64 $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-arm64
+.PHONY: cross-build-linux-arm64
+
+cross-build: cross-build-linux-amd64 cross-build-linux-ppc64le cross-build-linux-s390x cross-build-linux-arm64
 .PHONY: cross-build
 
 hack-build: clean
@@ -71,12 +83,12 @@ publish-catalog:
 	@cd test/operator && make
 .PHONY: publish-catalog
 
-format: 
+format:
 	$(GO) fmt ./pkg/...
 	$(GO) fmt ./cmd/...
 .PHONY: format
 
-vet: 
-	$(GO) vet $(GO_BUILD_FLAGS) ./pkg/... 
-	$(GO) vet $(GO_BUILD_FLAGS) ./cmd/...  
+vet:
+	$(GO) vet $(GO_BUILD_FLAGS) ./pkg/...
+	$(GO) vet $(GO_BUILD_FLAGS) ./cmd/...
 .PHONY: vet

@@ -14,35 +14,36 @@ import (
 
 type MirrorOptions struct {
 	*cli.RootOptions
-	OutputDir                  string
-	ConfigPath                 string
-	SkipImagePin               bool
-	ManifestsOnly              bool
-	From                       string
-	ToMirror                   string
-	UserNamespace              string
-	DryRun                     bool
-	SourceSkipTLS              bool
-	DestSkipTLS                bool
-	SourcePlainHTTP            bool
-	DestPlainHTTP              bool
-	SkipVerification           bool
-	SkipCleanup                bool
-	SkipMissing                bool
-	SkipMetadataCheck          bool
-	SkipPruning                bool
-	ContinueOnError            bool
-	IgnoreHistory              bool
-	MaxPerRegistry             int
-	IncludeLocalOCICatalogs    bool
-	OCIRegistriesConfig        string
-	OCIInsecureSignaturePolicy bool
+	OutputDir                  string // directory path, whose value is dependent on how oc mirror was invoked
+	ConfigPath                 string // Path to imageset configuration file
+	SkipImagePin               bool   // Do not replace image tags with digest pins in operator catalogs
+	ManifestsOnly              bool   // Generate manifests and do not mirror
+	From                       string // Path to an input file (e.g. archived imageset)
+	ToMirror                   string // Final destination for the mirror operation
+	UserNamespace              string // The <namespace>/<image> portion of a docker reference only
+	DryRun                     bool   // Print actions without mirroring images
+	SourceSkipTLS              bool   // Disable TLS validation for source registry
+	DestSkipTLS                bool   // Disable TLS validation for destination registry
+	SourcePlainHTTP            bool   // Use plain HTTP for source registry
+	DestPlainHTTP              bool   // Use plain HTTP for destination registry
+	SkipVerification           bool   // Skip verifying the integrity of the retrieved content.
+	SkipCleanup                bool   // Skip removal of artifact directories
+	SkipMissing                bool   // If an input image is not found, skip them.
+	SkipMetadataCheck          bool   // Skip metadata when publishing an imageset
+	SkipPruning                bool   // If set, will disable pruning globally
+	ContinueOnError            bool   // If an error occurs, keep going and attempt to complete operations if possible
+	IgnoreHistory              bool   // Ignore past mirrors when downloading images and packing layers
+	MaxPerRegistry             int    // Number of concurrent requests allowed per registry
+	IncludeLocalOCICatalogs    bool   // If set, enables including local OCI-formatted catalogs (prefix oci://) in the list of operator catalogs defined in ImageSetConfig, so that these local catalogs are mirrored from the disk directly
+	OCIRegistriesConfig        string // Registries config file location (used only with --use-oci-feature flag)
+	OCIInsecureSignaturePolicy bool   // If set, OCI catalog push will not try to push signatures
 	MaxNestedPaths             int
 	// cancelCh is a channel listening for command cancellations
-	cancelCh         <-chan struct{}
-	once             sync.Once
-	continuedOnError bool
-	remoteRegFuncs   RemoteRegFuncs
+	cancelCh                          <-chan struct{}
+	once                              sync.Once
+	continuedOnError                  bool
+	remoteRegFuncs                    RemoteRegFuncs
+	operatorCatalogToFullArtifactPath map[string]string // stores temporary paths to declarative config directory key: OCI URI (e.g. oci://foo which originates with v1alpha2.Operator.Catalog) value: <current working directory>/olm_artifacts/<repo>/<config folder>
 }
 
 func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {

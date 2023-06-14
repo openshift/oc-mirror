@@ -43,18 +43,44 @@ function cleanup_conn() {
 
 # install_deps will install crane and registry2 in go bin dir
 function install_deps() {
-  pushd ${DATA_TMP}
-  GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
-  popd
-  crane export registry:2 registry2.tar
-  tar xvf registry2.tar bin/registry
-  mv bin/registry $GOBIN
-  crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
-  tar xvf opm.tar bin/opm
-  mv bin/opm $GOBIN
-  rm -f registry2.tar opm.tar
-  wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-  chmod +x $GOBIN/jq
+  if [ "$(arch)" == "x86_64" ]
+  then
+    pushd ${DATA_TMP}
+    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    popd
+    crane export registry:2 registry2.tar
+    tar xvf registry2.tar bin/registry
+    mv bin/registry $GOBIN
+    crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
+    tar xvf opm.tar bin/opm
+    mv bin/opm $GOBIN
+    rm -f registry2.tar opm.tar
+    wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+    chmod +x $GOBIN/jq
+  else
+    # non-x86_64 flow
+    pushd ${DATA_TMP}
+
+    # For ppc64le, this is compiled with Power9 compatibility (does not run on Power8)
+    ARCH=$(arch | sed 's|aarch64|arm64|g')
+    curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
+    chmod +x $GOBIN/opm
+
+    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    mv ~/go/bin/crane $GOBIN/
+
+    if [ "${ARCH}" == "arm64" ]
+    then
+      crane export --platform linux/arm64/v8 registry:2 registry2.tar
+    else
+      crane export ${ARCH}/registry:2 registry2.tar
+    fi
+    tar xvf registry2.tar bin/registry
+    mv bin/registry $GOBIN
+    rm registry2.tar
+
+    popd
+  fi
 }
 
 # setup_reg will configure and start registry2 processes
