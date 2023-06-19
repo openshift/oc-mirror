@@ -26,6 +26,7 @@ import (
 
 const (
 	icspSizeLimit       = 250000
+	idmsSizeLimit       = 250000
 	registryICSPScope   = "registry"
 	repositoryICSPScope = "repository"
 	namespaceICSPScope  = "namespace"

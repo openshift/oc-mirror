@@ -59,8 +59,9 @@ func NewAuthResolver(authFilePath string) (*AuthResolver, error) {
 				// give priority to the docker config file $HOME/.docker/config.json
 				for registry, entry := range config {
 					credentials[registry] = containertypes.DockerAuthConfig{
-						Username: entry.Username,
-						Password: entry.Password,
+						Username:      entry.Username,
+						Password:      entry.Password,
+						IdentityToken: entry.IdentityToken,
 					}
 				}
 			}
@@ -175,7 +176,8 @@ func defaultClientDockerConfig() credentialprovider.DockerConfig {
 }
 
 // defaultPathsForCredentials returns the correct search directories for a docker config
-//  file
+//
+//	file
 func defaultPathsForCredentials() []string {
 	if runtime.GOOS == "windows" { // Windows
 		return []string{filepath.Join(os.Getenv("USERPROFILE"), ".docker")}
@@ -184,7 +186,8 @@ func defaultPathsForCredentials() []string {
 }
 
 // defaultPathsForCredentials returns the correct search directories for a docker config
-//  file
+//
+//	file
 func defaultPathsForLegacyCredentials() []string {
 	if runtime.GOOS == "windows" { // Windows
 		return []string{os.Getenv("USERPROFILE")}
