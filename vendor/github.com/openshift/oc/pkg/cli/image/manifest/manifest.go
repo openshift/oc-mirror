@@ -50,7 +50,7 @@ type SecurityOptions struct {
 }
 
 func (o *SecurityOptions) Bind(flags *pflag.FlagSet) {
-	// TODO: fix priority and deprecation notice in 4.12
+	// TODO: fix priority and deprecation notice in 4.13
 	flags.StringVarP(&o.RegistryConfig, "registry-config", "a", o.RegistryConfig, "Path to your registry credentials. Alternatively REGISTRY_AUTH_FILE env variable can be also specified. Defaults to  ~/.docker/config.json, ${XDG_RUNTIME_DIR}/containers/auth.json, ${XDG_CONFIG_HOME}/containers/auth.json, /run/containers/${UID}/auth.json, ${DOCKER_CONFIG}, ~/.dockercfg. The order can be changed via REGISTRY_AUTH_PREFERENCE env variable to docker (current default - deprecated) or podman (prioritizes podman credentials over docker).")
 	flags.BoolVar(&o.Insecure, "insecure", o.Insecure, "Allow push and pull operations to registries to be made over HTTP")
 	flags.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip verifying the integrity of the retrieved content. This is not recommended, but may be necessary when importing images from older image registries. Only bypass verification if the registry is known to be trustworthy.")
@@ -214,9 +214,37 @@ type FilterFunc func(*manifestlist.ManifestDescriptor, bool) bool
 // PreferManifestList specifically requests a manifest list first
 var PreferManifestList = distribution.WithManifestMediaTypes([]string{
 	manifestlist.MediaTypeManifestList,
+	imagespecv1.MediaTypeImageIndex,
 	schema2.MediaTypeManifest,
 	imagespecv1.MediaTypeImageManifest,
 })
+
+// IsManifestList returns if a given image is a manifestlist or not
+func IsManifestList(ctx context.Context, from imagereference.DockerImageReference, repo distribution.Repository) (bool, error) {
+	var srcDigest digest.Digest
+	if len(from.ID) > 0 {
+		srcDigest = digest.Digest(from.ID)
+	} else if len(from.Tag) > 0 {
+		desc, err := repo.Tags(ctx).Get(ctx, from.Tag)
+		if err != nil {
+			return false, err
+		}
+		srcDigest = desc.Digest
+	} else {
+		return false, fmt.Errorf("no tag or digest specified")
+	}
+	manifests, err := repo.Manifests(ctx)
+	if err != nil {
+		return false, err
+	}
+	srcManifest, err := manifests.Get(ctx, srcDigest, PreferManifestList)
+	if err != nil {
+		return false, err
+	}
+
+	_, ok := srcManifest.(*manifestlist.DeserializedManifestList)
+	return ok, nil
+}
 
 // AllManifests returns all non-list manifests, the list manifest (if any), the digest the from refers to, or an error.
 func AllManifests(ctx context.Context, from imagereference.DockerImageReference, repo distribution.Repository) (map[digest.Digest]distribution.Manifest, *manifestlist.DeserializedManifestList, digest.Digest, error) {
@@ -251,6 +279,13 @@ type ManifestLocation struct {
 
 func (m ManifestLocation) IsList() bool {
 	return len(m.ManifestList) > 0
+}
+
+func (m ManifestLocation) ManifestListDigest() digest.Digest {
+	if m.IsList() {
+		return m.ManifestList
+	}
+	return ""
 }
 
 func (m ManifestLocation) String() string {
@@ -289,7 +324,7 @@ func FirstManifest(ctx context.Context, from imagereference.DockerImageReference
 		return nil, ManifestLocation{}, err
 	}
 	if len(srcManifests) == 0 {
-		return nil, ManifestLocation{}, fmt.Errorf("filtered all images from manifest list")
+		return nil, ManifestLocation{}, AllImageFilteredErr
 	}
 
 	if srcDigest != originalSrcDigest {
@@ -380,6 +415,8 @@ func ManifestToImageConfig(ctx context.Context, srcManifest distribution.Manifes
 
 		return base, layers, nil
 
+	case *manifestlist.DeserializedManifestList:
+		return nil, nil, fmt.Errorf("use --keep-manifest-list option for image manifest type %T from %s", srcManifest, location)
 	default:
 		return nil, nil, fmt.Errorf("unknown image manifest of type %T from %s", srcManifest, location)
 	}
@@ -418,7 +455,7 @@ func ProcessManifestList(ctx context.Context, srcDigest digest.Digest, srcManife
 				return nil, nil, "", fmt.Errorf("unable to filter source image %s manifest list (bad payload): %v", ref, err)
 			}
 			manifestList = t
-			manifestDigest, err := registryclient.ContentDigestForManifest(t, srcDigest.Algorithm())
+			manifestDigest, err = registryclient.ContentDigestForManifest(t, srcDigest.Algorithm())
 			if err != nil {
 				return nil, nil, "", err
 			}
@@ -426,7 +463,7 @@ func ProcessManifestList(ctx context.Context, srcDigest digest.Digest, srcManife
 		}
 
 		for i, manifest := range t.Manifests {
-			childManifest, err := manifests.Get(ctx, manifest.Digest, distribution.WithManifestMediaTypes([]string{manifestlist.MediaTypeManifestList, schema2.MediaTypeManifest}))
+			childManifest, err := manifests.Get(ctx, manifest.Digest, PreferManifestList)
 			if err != nil {
 				return nil, nil, "", fmt.Errorf("unable to retrieve source image %s manifest #%d from manifest list: %v", ref, i+1, err)
 			}
@@ -439,7 +476,7 @@ func ProcessManifestList(ctx context.Context, srcDigest digest.Digest, srcManife
 			if err != nil {
 				return nil, nil, "", err
 			}
-			klog.Warningf("Chose %s/%s manifest from the manifest list.", t.Manifests[0].Platform.OS, t.Manifests[0].Platform.Architecture)
+			klog.V(2).Infof("Chose %s/%s manifest from the manifest list.", t.Manifests[0].Platform.OS, t.Manifests[0].Platform.Architecture)
 			return srcManifests, srcManifests[0], manifestDigest, nil
 		default:
 			return append(srcManifests, manifestList), manifestList, manifestDigest, nil
@@ -460,7 +497,7 @@ func ManifestsFromList(ctx context.Context, srcDigest digest.Digest, srcManifest
 		manifestList := t
 
 		for i, manifest := range t.Manifests {
-			childManifest, err := manifests.Get(ctx, manifest.Digest, distribution.WithManifestMediaTypes([]string{manifestlist.MediaTypeManifestList, schema2.MediaTypeManifest}))
+			childManifest, err := manifests.Get(ctx, manifest.Digest, PreferManifestList)
 			if err != nil {
 				return nil, nil, "", fmt.Errorf("unable to retrieve source image %s manifest #%d from manifest list: %v", ref, i+1, err)
 			}
