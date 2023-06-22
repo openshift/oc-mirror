@@ -4,6 +4,7 @@ Design: oc-mirror Imageset Configuration
 - [Design: oc-mirror Imageset Configuration](#design-oc-mirror-imageset-configuration)
 - [Content Types](#content-types)
   - [Platforms](#platforms)
+    - [Architectures](#architectures)
   - [Operators](#operators)
   - [Additional Images](#additional-images)
   - [Helm Chart](#helm-chart)
@@ -19,6 +20,10 @@ Design: oc-mirror Imageset Configuration
 Release channels for container management platforms can be specified for mirroring. 
 Currently, OpenShift Container Platform is supported by all `oc-mirror` commands.
 OKD is a supported type in the imageset configuration, but not by the `oc-mirror` list commands.
+
+### Architectures
+
+This is the list of release payload architectures that will be mirrored. An empty value will default to `amd64`. Additional supported values are: `arm64`, `ppc64le`, `s390x`, and `multi`. Note, `multi` is a [schema2](https://github.com/opencontainers/image-spec/blob/main/image-index.md#example-image-index) (aka "fat" manifest) list of all 4 architectures. Therefore it will use ~4x more registry space than a single architecure release.
 
 ## Operators
 

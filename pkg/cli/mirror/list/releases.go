@@ -55,6 +55,9 @@ func NewReleasesCommand(f kcmdutil.Factory, ro *cli.RootOptions) *cobra.Command 
 
 			# List all OpenShift channels for a specific version
 			oc-mirror list releases --channels --version=4.8
+
+			# List OpenShift channels for a specific version and one or more release architecture. Valid architectures: amd64 (default), arm64, ppc64le, s390x, multi.
+			oc-mirror list releases --channels --version=4.13 --filter-by-archs amd64,arm64,ppc64le,s390x,multi
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete())
