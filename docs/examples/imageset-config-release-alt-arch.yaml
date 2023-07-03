@@ -6,7 +6,7 @@ kind: ImageSetConfiguration
 mirror:
   platform:
     architectures:
-      - "s390x"
+      - "s390x" # Valid values are: amd64(default), arm64, ppc64le, s390x and multi.
     channels:
       - name: stable-4.9
         minVersion: 4.9.13

@@ -365,6 +365,7 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 
 	opts.IOStreams.Out = file
 	opts.ToMirror = true
+	opts.KeepManifestList = true
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}

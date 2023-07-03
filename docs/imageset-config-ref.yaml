@@ -7,7 +7,7 @@ storageConfig:
 mirror:
   platform:
     architectures:
-      - "s390x" # Architectures to mirror for the collection of release versions (defaults to amd64)
+      - "s390x" # Architectures to mirror for the collection of release versions. Valid values are: amd64(default), arm64, ppc64le, s390x and multi.
     channels:
       - name: stable-4.9 # References the latest stable release
       - name: stable-4.7 # Annotation references min and max version. 
