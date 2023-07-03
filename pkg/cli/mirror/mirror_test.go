@@ -290,13 +290,13 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
-			name: "Invalid/MirrortoDisk/OCIFlag",
+			name: "Valid/MirrortoDisk/OCIFlag",
 			opts: &MirrorOptions{
 				OutputDir:               t.TempDir(),
-				ConfigPath:              "foo",
+				ConfigPath:              "testdata/configs/iscfg_oci_ops.yaml",
 				IncludeLocalOCICatalogs: true,
 			},
-			expError: "oci feature cannot be used when mirroring to local archive",
+			expError: "",
 		},
 		{
 			name: "Invalid/DisktoMirror/OCIFlag",
@@ -338,7 +338,7 @@ func TestMirrorValidate(t *testing.T) {
 			name: "Valid/MirrortoDisk",
 			opts: &MirrorOptions{
 				OutputDir:  t.TempDir(),
-				ConfigPath: "foo",
+				ConfigPath: "testdata/configs/iscfg.yaml",
 			},
 			expError: "",
 		},

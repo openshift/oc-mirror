@@ -965,14 +965,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "registry.redhat.io",
 							Namespace: "openshift-logging",
-							//Name:      "cluster-logging-rhel8-operator/2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
-							Name: "cluster-logging-rhel8-operator",
-							Tag:  "",
-							ID:   "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
+							Name:      "cluster-logging-rhel8-operator",
+							Tag:       "",
+							ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
@@ -1008,14 +1007,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
 							Namespace: "okd",
-							//Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Name: "scos-content",
-							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:   ""},
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
@@ -1051,14 +1049,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
 							Namespace: "",
-							//Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Name: "scos-content",
-							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:   ""},
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
