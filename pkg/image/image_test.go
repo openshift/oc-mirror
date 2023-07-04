@@ -304,3 +304,102 @@ func TestGetFirstDigestFromPath(t *testing.T) {
 		})
 	}
 }
+
+func TestString(t *testing.T) {
+	type spec struct {
+		desc           string
+		img            TypedImageReference
+		expectedString string
+	}
+	cases := []spec{
+		{
+			desc: "docker remote image with tag",
+			img: TypedImageReference{
+				Type: imagesource.DestinationRegistry,
+				Ref: reference.DockerImageReference{
+					Registry:  "quay.io",
+					Namespace: "okd-project",
+					Name:      "okd-scos",
+					Tag:       "latest",
+				},
+			},
+			expectedString: "quay.io/okd-project/okd-scos:latest",
+		},
+		{
+			desc: "docker remote image with tag and digest",
+			img: TypedImageReference{
+				Type: imagesource.DestinationRegistry,
+				Ref: reference.DockerImageReference{
+					Registry:  "quay.io",
+					Namespace: "okd-project",
+					Name:      "okd-scos",
+					Tag:       "latest",
+					ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+				},
+			},
+			expectedString: "quay.io/okd-project/okd-scos@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+		},
+		{
+			desc: "oci local image",
+			img: TypedImageReference{
+				Type: DestinationOCI,
+				Ref: reference.DockerImageReference{
+					Registry:  "",
+					Namespace: "/tmp/oci",
+					Name:      "redhat-operator-index",
+					Tag:       "",
+					ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+				},
+			},
+			expectedString: "oci:///tmp/oci/redhat-operator-index@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+		},
+		{
+			desc: "on disk (file) image",
+			img: TypedImageReference{
+				Type: imagesource.DestinationFile,
+				Ref: reference.DockerImageReference{
+					Registry:  "",
+					Namespace: "openshift4",
+					Name:      "ose-kube-rbac-proxy",
+					Tag:       "",
+					ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+				},
+			},
+			expectedString: "file://openshift4/ose-kube-rbac-proxy@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+		},
+		{
+			desc: "s3 remote image",
+			img: TypedImageReference{
+				Type: imagesource.DestinationS3,
+				Ref: reference.DockerImageReference{
+					Registry:  "mybucket",
+					Namespace: "tmp/oci",
+					Name:      "redhat-operator-index",
+					Tag:       "",
+					ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+				},
+			},
+			expectedString: "s3://mybucket/tmp/oci/redhat-operator-index@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+		},
+		{
+			desc: "remote image on docker hub",
+			img: TypedImageReference{
+				Type: imagesource.DestinationRegistry,
+				Ref: reference.DockerImageReference{
+					Registry:  "docker.io",
+					Namespace: "",
+					Name:      "alpine",
+					Tag:       "",
+					ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+				},
+			},
+			expectedString: "docker.io/library/alpine@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			actualString := c.img.String()
+			require.Equal(t, c.expectedString, actualString)
+		})
+	}
+}

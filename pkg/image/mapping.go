@@ -169,7 +169,6 @@ func WriteImageMapping(nestedPaths int, m TypedImageMapping, output io.Writer) e
 		if toImage.Ref.Tag != "" {
 			toImage.Ref.ID = ""
 		}
-		// OCPBUGS-11922
 
 		strFrom = fromImage.String()
 		strTo = toImage.String()

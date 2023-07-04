@@ -532,6 +532,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		// set the destination for the related images mirroring
 		// Case of MirrorToMirror workflow, mirror to o.ToMirror
 		targetLocation := o.ToMirror
+
 		mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 		mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 		// Case of MirrorToDisk workflow, the location is on disk, and should be under
@@ -555,7 +556,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			copyofI := i
 			g.Go(func() error {
 				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, targetLocation, "")
+				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, targetLocation)
 				if err != nil {
 					return err
 				}
