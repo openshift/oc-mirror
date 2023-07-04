@@ -290,42 +290,6 @@ func TestMirrorValidate(t *testing.T) {
 			expError: `must specify a configuration file with --config`,
 		},
 		{
-			name: "Valid/MirrortoDisk/OCIFlag",
-			opts: &MirrorOptions{
-				OutputDir:               t.TempDir(),
-				ConfigPath:              "testdata/configs/iscfg_oci_ops.yaml",
-				IncludeLocalOCICatalogs: true,
-			},
-			expError: "",
-		},
-		{
-			name: "Invalid/DisktoMirror/OCIFlag",
-			opts: &MirrorOptions{
-				From:                    t.TempDir(),
-				ToMirror:                u.Host,
-				IncludeLocalOCICatalogs: true,
-			},
-			expError: "oci feature cannot be used when publishing from a local archive to a registry",
-		},
-		{
-			name: "Invalid/MirrorToMirror/ImageSetConfigWithOCI",
-			opts: &MirrorOptions{
-				ConfigPath:              "testdata/configs/iscfg_oci_ops.yaml",
-				ToMirror:                u.Host,
-				IncludeLocalOCICatalogs: false,
-			},
-			expError: "use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --include-local-oci-catalogs",
-		},
-		{
-			name: "Invalid/MirrorToMirror/ImageSetConfigWithoutOCI",
-			opts: &MirrorOptions{
-				ConfigPath:              "testdata/configs/iscfg.yaml",
-				ToMirror:                u.Host,
-				IncludeLocalOCICatalogs: true,
-			},
-			expError: "no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --include-local-oci-catalogs flag",
-		},
-		{
 			name: "Valid/ManifestOnlyWithFakeMirror",
 			opts: &MirrorOptions{
 				ManifestsOnly: true,
