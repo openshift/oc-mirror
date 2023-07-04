@@ -528,11 +528,25 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		var syncMapResult sync.Map
 		start := time.Now()
 		g, ctx := errgroup.WithContext(ctx)
-		destReg := o.ToMirror
+
+		// set the destination for the related images mirroring
+		// Case of MirrorToMirror workflow, mirror to o.ToMirror
+		targetLocation := o.ToMirror
 		mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 		mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
+		// Case of MirrorToDisk workflow, the location is on disk, and should be under
+		// a folder structure with catalogNamespace/catalogName
+		// as in vendor/github.com/openshift/oc/pkg/cli/admin/catalog/mirrorer.go, function mount.
+		// for the case of mirrorToDisk, it's as if we wanted to call mount with dest=file:// and
+		// maxComponents=0
 		if mirrorToDisk && !mirrorToMirror {
-			destReg = "file://redhat/redhat-operator-index"
+			targetLocation = filePrefix
+			if ctlgRef.Ref.Namespace != "" {
+				targetLocation += ctlgRef.Ref.Namespace
+			}
+			if ctlgRef.Ref.Name != "" {
+				targetLocation += "/" + ctlgRef.Ref.Name
+			}
 		}
 
 		// create mappings for the related images that will moved from the workspace to the final destination
@@ -541,7 +555,7 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			copyofI := i
 			g.Go(func() error {
 				// intentionally removed the usernamespace from the call, because mirror.go is going to add it back!!
-				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, destReg, "")
+				err := o.addRelatedImageToMapping(ctx, &syncMapResult, copyofI, targetLocation, "")
 				if err != nil {
 					return err
 				}
