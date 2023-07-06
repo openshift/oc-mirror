@@ -25,7 +25,6 @@ TESTCASES[19]="m2m_oci_catalog"
 TESTCASES[20]="m2m_release_with_oci_catalog"
 TESTCASES[21]="headsonly_diff_with_target"
 TESTCASES[22]="m2d2m_oci_catalog"
-# TESTCASES[23]="m2d2m_oci_catalog_diff"
 
 
 # Test full catalog mode.
@@ -286,8 +285,8 @@ function m2m_release_with_oci_catalog {
 # Test full catalog mode.
 function m2d2m_oci_catalog() {
     workflow_m2d2m_oci_catalog imageset-config-oci-mirror.yaml "localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--source-use-http"
-    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}${DATA_TMP}/mirror_oci/oc-mirror-dev:aa5e78
-    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}${DATA_TMP}/mirror_oci/oc-mirror-dev:aa5e78 \
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "baz.v1.0.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
