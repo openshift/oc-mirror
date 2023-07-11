@@ -99,7 +99,7 @@ function workflow_oci_copy() {
   run_cmd --config "${MIRROR_OCI_DIR}/${config}" $CREATE_FLAGS "${oci_fbc}"
 }
 
-function workflow_oci_mirror() {
+function workflow_m2m_oci_catalog() {
   parse_args "$@" 
   local config="${1:?config required}"
   local remote_image="${2:?remote_image required}"
@@ -108,6 +108,26 @@ function workflow_oci_mirror() {
  
   # call oc-mirror
   run_cmd --config "${MIRROR_OCI_DIR}/${config}" $CREATE_FLAGS "${remote_image}"
+}
+
+function workflow_m2d2m_oci_catalog() {
+
+  parse_args "$@"
+  local config="${1:?config required}"
+  local remote_image="${2:?remote_image required}"
+
+  mkdir $PUBLISH_FULL_DIR
+  prepare_oci_testdata "${DATA_TMP}"
+  prepare_mirror_testdata "${DATA_TMP}" "${MIRROR_OCI_DIR}" "${config}" false 
+  
+  run_cmd --config "${MIRROR_OCI_DIR}/${config}" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
+  pushd $PUBLISH_FULL_DIR
+  if !$DIFF; then
+    cleanup_conn
+  fi
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://${remote_image}"
+
+  popd
 }
 
 function workflow_oci_mirror_all() {

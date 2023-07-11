@@ -21,9 +21,11 @@ TESTCASES[15]="max_version"
 TESTCASES[16]="skip_deps"
 TESTCASES[17]="helm_local"
 TESTCASES[18]="no_updates_exist"
-TESTCASES[19]="oci_catalog"
-TESTCASES[20]="oci_local_all"
+TESTCASES[19]="m2m_oci_catalog"
+TESTCASES[20]="m2m_release_with_oci_catalog"
 TESTCASES[21]="headsonly_diff_with_target"
+TESTCASES[22]="m2d2m_oci_catalog"
+
 
 # Test full catalog mode.
 function full_catalog() {
@@ -243,8 +245,8 @@ function no_updates_exist {
 }
 
 # Test OCI local catalog
-function oci_catalog {
-    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--include-local-oci-catalogs --dest-skip-tls --oci-insecure-signature-policy"
+function m2m_oci_catalog {
+    workflow_m2m_oci_catalog imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test" -c="--dest-skip-tls --oci-insecure-signature-policy"
     # podman pull docker://localhost.localdomain:5001/test/redhatgov/oc-mirror-dev:test-catalog-latest --tls-verify=false
     # baz.v1.0.0 
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test/${CATALOGNAMESPACE}@sha256:f5bf1128937e7486764341e7bfdce15150f70d0e48c57de1386602c7b25ad7b4
@@ -256,7 +258,7 @@ function oci_catalog {
 }
 
 # Test OCI local release,catalog,additionalImages
-function oci_local_all {
+function m2m_release_with_oci_catalog {
     # setup url to lookup release info (certificate issued for localhost.localdomain)release-images:alpine-x86_64
     export UPDATE_URL_OVERRIDE="https://localhost.localdomain:3443/graph"
     # ensure cincinnati client does not reject the rquest - due to untrusted CA Authority
@@ -266,7 +268,7 @@ function oci_local_all {
     test/e2e/graph/main & PID_GO=$! 
     echo -e "go cincinnatti web service PID: ${PID_GO}"
     # copy relevant files and start the mirror process
-    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy --include-local-oci-catalogs"
+    workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy"
 
     # use crane digest to verify
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/redhatgov/oc-mirror-dev:bar-v0.1.0
@@ -277,4 +279,14 @@ function oci_local_all {
     rm -rf test/e2e/graph/server*.*
     unset SSL_CERT_FILE
     unset UPDATE_URL_OVERRIDE
+}
+
+
+# Test full catalog mode.
+function m2d2m_oci_catalog() {
+    workflow_m2d2m_oci_catalog imageset-config-oci-mirror.yaml "localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--source-use-http"
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
+    "baz.v1.0.1" \
+    localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }

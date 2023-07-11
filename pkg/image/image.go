@@ -37,6 +37,9 @@ func (t TypedImageReference) String() string {
 	case DestinationOCI:
 		return fmt.Sprintf("oci://%s", t.Ref.Exact())
 	default:
+		if len(t.Ref.Namespace) == 0 && libgoref.IsRegistryDockerHub(t.Ref.Registry) {
+			t.Ref.Namespace = "library"
+		}
 		return t.Ref.Exact()
 	}
 }

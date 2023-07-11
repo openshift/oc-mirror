@@ -251,40 +251,21 @@ func (o *MirrorOptions) Validate() error {
 		}
 	}
 
-	// Three mode options
+	// mode options
 	mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
-	diskToMirror := len(o.ToMirror) > 0 && len(o.From) > 0
 	mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
 
-	// mirrorToDisk workflow is not supported with the oci feature
-	if o.IncludeLocalOCICatalogs && mirrorToDisk {
-		return fmt.Errorf("oci feature cannot be used when mirroring to local archive")
-	}
-	// diskToMirror workflow is not supported with the oci feature
-	if o.IncludeLocalOCICatalogs && diskToMirror {
-		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
-	}
 	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
-	if mirrorToMirror {
-		bIsFBOCI := false
+	if mirrorToMirror || mirrorToDisk {
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
 		for _, op := range cfg.Mirror.Operators {
 			if op.IsFBCOCI() {
-				bIsFBOCI = true
+				break
 			}
 		}
-		if o.IncludeLocalOCICatalogs && !bIsFBOCI {
-			return fmt.Errorf("no operator found with OCI FBC catalog prefix (oci://) in configuration file, please execute without the --include-local-oci-catalogs flag")
-		}
-		if !o.IncludeLocalOCICatalogs && bIsFBOCI {
-			return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --include-local-oci-catalogs")
-		}
-	}
-	if !o.IncludeLocalOCICatalogs && len(o.OCIRegistriesConfig) > 0 {
-		return fmt.Errorf("oci-registries-config flag can only be used with the --include-local-oci-catalog flag")
 	}
 
 	if o.SkipPruning {
