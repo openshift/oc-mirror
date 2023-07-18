@@ -917,13 +917,12 @@ func TestAddCatalogToMapping(t *testing.T) {
 
 func TestAddRelatedImageToMapping(t *testing.T) {
 	type spec struct {
-		desc       string
-		options    *MirrorOptions
-		img        declcfg.RelatedImage
-		destReg    string
-		namespace  string
-		expErr     string
-		expMapping image.TypedImageMapping
+		desc           string
+		options        *MirrorOptions
+		img            declcfg.RelatedImage
+		targetLocation string
+		expErr         string
+		expMapping     image.TypedImageMapping
 	}
 	cases := []spec{
 		{
@@ -931,48 +930,45 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 			expErr:     "",
 			expMapping: image.TypedImageMapping{},
 			options: &MirrorOptions{
-				From:      v1alpha2.OCITransportPrefix + testdata,
+				From:      "",
 				ToMirror:  "test.registry.io",
-				OutputDir: testdata,
+				OutputDir: "",
 			},
 			img: declcfg.RelatedImage{
 				Name:  "noRef",
 				Image: "",
 			},
-			destReg:   "localhost:5000",
-			namespace: "disconnectedOCP",
+			targetLocation: "localhost:5000/disconnectedOCP",
 		},
 		{
 			desc:       "destination namespace is uppercase fails",
 			expErr:     "\"localhost:5000/disconnectedOCP/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding\" is not a valid image reference: repository name must be lowercase",
 			expMapping: image.TypedImageMapping{},
 			options: &MirrorOptions{
-				From:      v1alpha2.OCITransportPrefix + testdata,
+				From:      "",
 				ToMirror:  "test.registry.io",
-				OutputDir: testdata,
+				OutputDir: "",
 			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 			},
-			destReg:   "localhost:5000",
-			namespace: "disconnectedOCP",
+			targetLocation: "localhost:5000/disconnectedOCP",
 		},
 		{
-			desc:   "nominal case passes",
+			desc:   "nominal case for MirrorToMirror passes",
 			expErr: "",
 			expMapping: image.TypedImageMapping{
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "registry.redhat.io",
 							Namespace: "openshift-logging",
-							//Name:      "cluster-logging-rhel8-operator/2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
-							Name: "cluster-logging-rhel8-operator",
-							Tag:  "",
-							ID:   "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
+							Name:      "cluster-logging-rhel8-operator",
+							Tag:       "",
+							ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
@@ -990,16 +986,15 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 				},
 			},
 			options: &MirrorOptions{
-				From:      v1alpha2.OCITransportPrefix + testdata,
+				From:      "",
 				ToMirror:  "test.registry.io",
-				OutputDir: testdata,
+				OutputDir: "",
 			},
 			img: declcfg.RelatedImage{
 				Name:  "cluster-logging-operator",
 				Image: "registry.redhat.io/openshift-logging/cluster-logging-rhel8-operator@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
 			},
-			destReg:   "localhost:5000",
-			namespace: "disconnected-ocp",
+			targetLocation: "localhost:5000/disconnected-ocp",
 		},
 		{
 			desc:   "destination namespace is empty passes",
@@ -1008,14 +1003,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
 							Namespace: "okd",
-							//Name:      "scos-content/" + fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Name: "scos-content",
-							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:   ""},
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
@@ -1033,16 +1027,15 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 				},
 			},
 			options: &MirrorOptions{
-				From:      v1alpha2.OCITransportPrefix + testdata,
+				From:      "",
 				ToMirror:  "test.registry.io",
-				OutputDir: testdata,
+				OutputDir: "",
 			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/okd/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 			},
-			destReg:   "localhost:5000",
-			namespace: "",
+			targetLocation: "localhost:5000",
 		},
 		{
 			desc:   "source namespace is empty passes",
@@ -1051,14 +1044,13 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 
 				image.TypedImage{
 					TypedImageReference: image.TypedImageReference{
-						Type: "file",
+						Type: "docker",
 						Ref: reference.DockerImageReference{
 							Registry:  "quay.io",
 							Namespace: "",
-							//Name:      fmt.Sprintf("%x", sha256.Sum256([]byte("4.12.0-0.okd-scos-2022-10-22-232744-branding")))[0:6],
-							Name: "scos-content",
-							Tag:  "4.12.0-0.okd-scos-2022-10-22-232744-branding",
-							ID:   ""},
+							Name:      "scos-content",
+							Tag:       "4.12.0-0.okd-scos-2022-10-22-232744-branding",
+							ID:        ""},
 					},
 					Category: v1alpha2.TypeOperatorRelatedImage,
 				}: image.TypedImage{
@@ -1076,23 +1068,63 @@ func TestAddRelatedImageToMapping(t *testing.T) {
 				},
 			},
 			options: &MirrorOptions{
-				From:      v1alpha2.OCITransportPrefix + testdata,
+				From:      "",
 				ToMirror:  "test.registry.io",
-				OutputDir: testdata,
+				OutputDir: "",
 			},
 			img: declcfg.RelatedImage{
 				Name:  "scos-content",
 				Image: "quay.io/scos-content:4.12.0-0.okd-scos-2022-10-22-232744-branding",
 			},
-			destReg:   "localhost:5000",
-			namespace: "disconnected_ocp",
+			targetLocation: "localhost:5000/disconnected_ocp",
+		},
+		{
+			desc:   "nominal case for MirrorToDisk passes",
+			expErr: "",
+			expMapping: image.TypedImageMapping{
+
+				image.TypedImage{
+					TypedImageReference: image.TypedImageReference{
+						Type: "docker",
+						Ref: reference.DockerImageReference{
+							Registry:  "registry.redhat.io",
+							Namespace: "openshift-logging",
+							Name:      "cluster-logging-rhel8-operator",
+							Tag:       "",
+							ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429"},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				}: image.TypedImage{
+					TypedImageReference: image.TypedImageReference{
+						Type: "file",
+						Ref: reference.DockerImageReference{
+							Registry:  "",
+							Namespace: "namespace",
+							Name:      "catalog/openshift-logging/cluster-logging-rhel8-operator",
+							Tag:       "2881fc",
+							ID:        "sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+						},
+					},
+					Category: v1alpha2.TypeOperatorRelatedImage,
+				},
+			},
+			options: &MirrorOptions{
+				From:      "",
+				ToMirror:  "",
+				OutputDir: testdata,
+			},
+			img: declcfg.RelatedImage{
+				Name:  "cluster-logging-operator",
+				Image: "registry.redhat.io/openshift-logging/cluster-logging-rhel8-operator@sha256:2881fc4ddeea9a1d244c37c0216c7d6c79a572757bce007520523c9120e66429",
+			},
+			targetLocation: "file://namespace/catalog",
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			mapping := image.TypedImageMapping{}
 			syncMap := sync.Map{}
-			err := c.options.addRelatedImageToMapping(context.TODO(), &syncMap, c.img, c.destReg, c.namespace)
+			err := c.options.addRelatedImageToMapping(context.TODO(), &syncMap, c.img, c.targetLocation)
 			// convert to a more easily testable map type
 			syncMap.Range(func(key, value any) bool {
 				source := key.(image.TypedImage)

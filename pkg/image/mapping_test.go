@@ -370,6 +370,60 @@ func TestWriteImageMapping(t *testing.T) {
 			expected: "some-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84" +
 				"=disconn-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84\n",
 		},
+		{
+			name: "Valid/DestinationDisk",
+			mapping: TypedImageMapping{{
+				TypedImageReference: TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "some-registry.com",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle}: {
+				TypedImageReference: TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationFile,
+				},
+				Category: v1alpha2.TypeOperatorBundle},
+			},
+			expected: "some-registry.com/namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84" +
+				"=file://namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84\n",
+		},
+		{
+			name: "Valid/SourceDockerHub",
+			mapping: TypedImageMapping{{
+				TypedImageReference: TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "docker.io",
+						Namespace: "",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationRegistry,
+				},
+				Category: v1alpha2.TypeOperatorBundle}: {
+				TypedImageReference: TypedImageReference{
+					Ref: reference.DockerImageReference{
+						Registry:  "",
+						Namespace: "namespace",
+						Name:      "image",
+						ID:        "sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84",
+					},
+					Type: imagesource.DestinationFile,
+				},
+				Category: v1alpha2.TypeOperatorBundle},
+			},
+			expected: "docker.io/library/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84" +
+				"=file://namespace/image@sha256:fc07c1e2a5f012320ae672ca8546ff0d09eb8dba3c5acbbfc426c7984169ee84\n",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

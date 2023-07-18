@@ -131,7 +131,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 	return mapping, nil
 }
 
-func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *sync.Map, img declcfg.RelatedImage, destReg, namespace string) error {
+func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *sync.Map, img declcfg.RelatedImage, targetLocation string) error {
 	if img.Image == "" {
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
@@ -160,10 +160,7 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *s
 		}
 	}
 
-	to = destReg
-	if namespace != "" {
-		to = strings.Join([]string{to, namespace}, "/")
-	}
+	to = targetLocation
 	if subns != "" {
 		to = strings.Join([]string{to, subns}, "/")
 	}
@@ -174,8 +171,10 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *s
 		to = to + "@" + sha256Tag + sha
 	}
 
-	// TODO : why file:// ? can we be more smart about setting the transport protocol
-	srcTIR, err := image.ParseReference(filePrefix + strings.ToLower(from))
+	// a deccfg.RelatedImage is a reference to a remote image
+	// we can parse it directly, without adding a transport prefix
+	// as it is assumed to be docker:// by default
+	srcTIR, err := image.ParseReference(strings.ToLower(from))
 	if err != nil {
 		return err
 	}
