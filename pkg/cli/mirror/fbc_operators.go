@@ -2,33 +2,35 @@ package mirror
 
 import (
 	"archive/tar"
-	"compress/gzip"
+	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	imagecopy "github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/oci/layout"
-	"github.com/containers/image/v5/pkg/sysregistriesv2"
-	"github.com/opencontainers/go-digest"
-
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/pkg/cli/environment"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/opencontainers/go-digest"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
+
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -37,7 +39,6 @@ const (
 	configPath          string = "configs/"
 	catalogJSON         string = "/catalog.json"
 	relatedImages       string = "relatedImages"
-	configsLabel        string = "operators.operatorframework.io.index.configs.v1"
 	artifactsFolderName string = "olm_artifacts"
 	ocpRelease          string = "release"
 	ocpReleaseImages    string = "release-images"
@@ -130,7 +131,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 	return mapping, nil
 }
 
-func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping image.TypedImageMapping, img declcfg.RelatedImage, destReg, namespace string) error {
+func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *sync.Map, img declcfg.RelatedImage, destReg, namespace string) error {
 	if img.Image == "" {
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
@@ -152,7 +153,10 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping im
 		// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
 		mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+img.Image, reg.Prefix, o.remoteRegFuncs)
 		if err == nil {
-			img.Image = mirroredImage
+			from = mirroredImage
+		} else {
+			// verbose log so we know when we had no mirror hits
+			klog.V(3).Infof("Cannot find mirror for %s: %s", img.Image, err)
 		}
 	}
 
@@ -203,7 +207,7 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping im
 		TypedImageReference: dstTIR,
 		Category:            v1alpha2.TypeOperatorRelatedImage,
 	}
-	mapping[srcTI] = dstTI
+	mapping.Store(srcTI, dstTI)
 	return nil
 }
 
@@ -299,95 +303,103 @@ func addCatalogToMapping(catalogMapping image.TypedImageMapping, srcOperator v1a
 	return nil
 }
 
-// findFBCConfig function to find the layer from the catalog
-// that has the file based configuration
-func (o *MirrorOptions) findFBCConfig(ctx context.Context, imagePath, catalogContentsPath string) (string, error) {
-	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(ctx, imagePath)
-	if err != nil {
-		return "", err
-	}
-	manifest, err := getManifest(ctx, srcImg)
-	if err != nil {
-		return "", err
+/*
+extractDeclarativeConfigFromImage obtains a DeclarativeConfig instance from an image
+
+# Arguments
+
+• img: the image to pull a DeclarativeConfig out of
+
+• extractedImageDir: the location where the DeclarativeConfig should be placed upon extraction.
+Typically <current working directory>/olm_artifacts/<repo>.
+
+# Returns
+
+• string: path to the folder containing the DeclarativeConfig if no error occurred, otherwise empty string.
+The config directory from img is determined and appended to extractedImageDir.
+Typically results in <current working directory>/olm_artifacts/<repo>/<config folder>
+
+• error: non-nil if an error occurred, nil otherwise
+*/
+func extractDeclarativeConfigFromImage(img v1.Image, extractedImageDir string) (string, error) {
+	if img == nil {
+		return "", errors.New("unable to extract DeclarativeConfig because no image was provided")
 	}
 
-	//Use the label in the config layer to determine the
-	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
+	config, err := img.ConfigFile()
 	if err != nil {
 		return "", err
 	}
-	// iterate through each layer
+	configsPrefix := "configs/"
+	if config.Config.Labels != nil {
+		label := config.Config.Labels[containertools.ConfigsLocationLabel]
+		if label != "" {
+			// strip beginning slash since this would prevent the configsPrefix from matching later on
+			label = strings.TrimPrefix(label, "/")
+			// since configsPrefix is supposed to be a directory, put in the ending slash if its not already present.
+			if !strings.HasSuffix(label, "/") {
+				label = label + "/"
+			}
+			configsPrefix = label
+		}
+	}
+	returnPath := filepath.Join(extractedImageDir, configsPrefix)
 
-	for _, layer := range manifest.LayerInfos() {
-		layerSha := layer.Digest.String()
-		layerDirName := layerSha[7:]
-		r, err := os.Open(imagePath + blobsPath + layerDirName)
+	tr := tar.NewReader(mutate.Extract(img))
+	for {
+		header, err := tr.Next()
+
+		// break the infinite loop when EOF
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		// skip the file if it is a directory or not in the configs dir
+		if !strings.HasPrefix(header.Name, configsPrefix) || header.FileInfo().IsDir() {
+			continue
+		}
+
+		var buf bytes.Buffer
+		_, err = buf.ReadFrom(tr)
 		if err != nil {
 			return "", err
 		}
-		// untar if it is the FBC
-		err = UntarLayers(r, catalogContentsPath, cfgDirName)
+
+		targetFileName := filepath.Join(extractedImageDir, header.Name)
+		bytes := buf.Bytes()
+
+		baseDir := filepath.Dir(targetFileName)
+		err = os.MkdirAll(baseDir, 0755)
+		if err != nil {
+			return "", err
+		}
+
+		f, err := os.Create(targetFileName)
+		if err == nil {
+			defer f.Close()
+		} else {
+			return "", err
+		}
+
+		_, err = f.Write(bytes)
 		if err != nil {
 			return "", err
 		}
 	}
-	cfgContentsPath := filepath.Join(catalogContentsPath, cfgDirName)
-	f, err := os.Open(cfgContentsPath)
-	if err != nil {
-		return "", fmt.Errorf("unable to open temp folder containing extracted catalogs %s: %w", cfgContentsPath, err)
+	// check for the folder (it should exist if we found something)
+	_, err = os.Stat(returnPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("directory not found after extracting %q within image", configsPrefix)
 	}
-	contents, err := f.Readdir(0)
-	if err != nil {
-		return "", fmt.Errorf("unable to read temp folder containing extracted catalogs %s: %w", cfgContentsPath, err)
-	}
-	if len(contents) == 0 {
-		return "", fmt.Errorf("no packages found in catalog")
-	}
-	return cfgContentsPath, nil
-}
-
-// getCatalogConfigPath takes an OCI FBC image as an input,
-// it reads the manifest, then the config layer,
-// more specifically the label `configLabel`
-// and returns the value of that label
-// The function fails if more than one manifest exist in the image
-func (o *MirrorOptions) GetCatalogConfigPath(ctx context.Context, imagePath string) (string, error) {
-	// read the index.json of the catalog
-	srcImg, err := getOCIImgSrcFromPath(ctx, imagePath)
+	// folder itself should contain data
+	dirs, err := os.ReadDir(returnPath)
 	if err != nil {
 		return "", err
 	}
-	manifest, err := getManifest(ctx, srcImg)
-	if err != nil {
-		return "", err
+	if len(dirs) == 0 {
+		return "", fmt.Errorf("no content found at %q within image", configsPrefix)
 	}
-
-	//Use the label in the config layer to determine the
-	//folder containing the related images, when untarring layers
-	cfgDirName, err := getConfigPathFromConfigLayer(imagePath, string(manifest.ConfigInfo().Digest))
-	if err != nil {
-		return "", err
-	}
-	return cfgDirName, nil
-}
-
-func getConfigPathFromConfigLayer(imagePath, configSha string) (string, error) {
-	var cfg *manifest.Schema2V1Image
-	configLayerDir := configSha[7:]
-	cfgBlob, err := os.ReadFile(filepath.Join(v1alpha2.TrimProtocol(imagePath), blobsPath, configLayerDir))
-	if err != nil {
-		return "", fmt.Errorf("unable to read the config blob %s from the oci image: %w", configLayerDir, err)
-	}
-	err = json.Unmarshal(cfgBlob, &cfg)
-	if err != nil {
-		return "", fmt.Errorf("problem unmarshaling config blob in %s: %w", configLayerDir, err)
-	}
-	if dirName, ok := cfg.Config.Labels[configsLabel]; ok {
-		return dirName, nil
-	}
-	return "", fmt.Errorf("label %s not found in config blob %s", configsLabel, configLayerDir)
+	return returnPath, nil
 }
 
 // getRelatedImages reads a directory containing an FBC catalog () unpacked contents
@@ -454,91 +466,6 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 		}
 	}
 	return "", finalError
-}
-
-// getManifest reads the manifest of the OCI FBC image
-// and returns it as a go structure of type manifest.Manifest
-func getManifest(ctx context.Context, imgSrc types.ImageSource) (manifest.Manifest, error) {
-	manifestBlob, manifestType, err := imgSrc.GetManifest(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get manifest blob from image : %w", err)
-	}
-	manifest, err := manifest.FromBlob(manifestBlob, manifestType)
-	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall manifest of image : %w", err)
-	}
-	return manifest, nil
-}
-
-// getOCIImgSrcFromPath tries to "load" the OCI FBC image in the path
-// for further processing.
-// It supports path strings with or without the protocol (oci:) prefix
-func getOCIImgSrcFromPath(ctx context.Context, path string) (types.ImageSource, error) {
-	if !strings.HasPrefix(path, "oci") {
-		path = v1alpha2.OCITransportPrefix + path
-	}
-	ociImgRef, err := alltransports.ParseImageName(path)
-	if err != nil {
-		return nil, err
-	}
-	imgsrc, err := ociImgRef.NewImageSource(ctx, nil)
-	if err != nil {
-		if err == layout.ErrMoreThanOneImage {
-			return nil, errors.New("multiple catalogs in the same location is not supported: https://github.com/openshift/oc-mirror/blob/main/TROUBLESHOOTING.md#error-examples")
-		}
-		return nil, fmt.Errorf("unable to get OCI Image from %s: %w", path, err)
-	}
-	return imgsrc, nil
-}
-
-// UntarLayers simple function that untars the layer that
-// has the FB configuration
-func UntarLayers(gzipStream io.Reader, path string, cfgDirName string) error {
-	//Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
-	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
-	uncompressedStream, err := gzip.NewReader(gzipStream)
-	if err != nil {
-		return fmt.Errorf("UntarLayers: NewReader failed - %w", err)
-	}
-
-	tarReader := tar.NewReader(uncompressedStream)
-	for {
-		header, err := tarReader.Next()
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return fmt.Errorf("UntarLayers: Next() failed: %s", err.Error())
-		}
-
-		if strings.Contains(header.Name, cfgDirName) {
-			switch header.Typeflag {
-			case tar.TypeDir:
-				if header.Name != "./" {
-					if err := os.MkdirAll(path+"/"+header.Name, 0755); err != nil {
-						return fmt.Errorf("UntarLayers: Mkdir() failed: %v", err)
-					}
-				}
-			case tar.TypeReg:
-				outFile, err := os.Create(path + "/" + header.Name)
-				if err != nil {
-					return fmt.Errorf("UntarLayers: Create() failed: %v", err)
-				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					return fmt.Errorf("UntarLayers: Copy() failed: %v", err)
-				}
-				outFile.Close()
-
-			default:
-				// just ignore errors as we are only interested in the FB configs layer
-				klog.Warningf("UntarLayers: unknown type: %v in %s", header.Typeflag, header.Name)
-			}
-		}
-	}
-	return nil
 }
 
 // copyImage is used both for pulling catalog images from the remote registry

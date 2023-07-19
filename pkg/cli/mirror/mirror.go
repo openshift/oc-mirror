@@ -81,7 +81,9 @@ const (
 )
 
 func NewMirrorCmd() *cobra.Command {
-	o := MirrorOptions{}
+	o := MirrorOptions{
+		operatorCatalogToFullArtifactPath: map[string]string{},
+	}
 	o.RootOptions = &cli.RootOptions{
 		IOStreams: genericclioptions.IOStreams{
 			In:     os.Stdin,
@@ -166,7 +168,8 @@ func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		o.ToMirror = mirror.Ref.Registry
-		o.UserNamespace = mirror.Ref.AsRepository().RepositoryName()
+		// get the <namespace>/<image> portion of the docker reference only
+		o.UserNamespace = mirror.Ref.RepositoryName()
 		err = checkDockerReference(mirror, o.MaxNestedPaths)
 		if err != nil {
 			return err
@@ -302,7 +305,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 
 	cleanup := func() error {
 		if !o.SkipCleanup {
-			os.RemoveAll("olm_artifacts")
+			os.RemoveAll(artifactsFolderName)
 			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
 		}
 		return nil

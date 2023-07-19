@@ -2,8 +2,10 @@ package builder
 
 import (
 	"context"
-	"io/ioutil"
+	"net"
+	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -75,6 +77,7 @@ func TestRun(t *testing.T) {
 		pinToDigest      bool
 		update           configUpdateFunc
 		configAssertFunc func(cfg v1.ConfigFile) bool
+		multiarch        bool // create a multi arch image
 		err              error
 	}{
 		{
@@ -100,15 +103,56 @@ func TestRun(t *testing.T) {
 			pinToDigest: true,
 			err:         &ErrInvalidReference{},
 		},
+		{
+			name:          "Success/ExistingImage - multi arch",
+			existingImage: true,
+			multiarch:     true,
+		},
+		{
+			name:          "Success/NewImage - multi arch",
+			existingImage: false,
+			multiarch:     true,
+		},
+		{
+			name:          "Success/WithConfigUpdate - multi arch",
+			existingImage: true,
+			update: func(cfg *v1.ConfigFile) {
+				cfg.Config.Cmd = []string{"newcommand"}
+			},
+			configAssertFunc: func(cfg v1.ConfigFile) bool {
+				return cfg.Config.Cmd[0] == "newcommand"
+			},
+			multiarch: true,
+		},
+		{
+			name:        "Failure/DigestReference - multi arch",
+			pinToDigest: true,
+			err:         &ErrInvalidReference{},
+			multiarch:   true,
+		},
+		{
+			name:          "Success/ExistingImage - multi arch with filter",
+			existingImage: true,
+			multiarch:     true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
 			tmpdir := t.TempDir()
+			// each test case gets its own server
 			server := httptest.NewServer(registry.New())
 			t.Cleanup(server.Close)
 
-			targetRef, err := testutils.WriteTestImage(server, tmpdir)
+			var targetRef string
+			var err error
+			if test.multiarch {
+				targetRef, err = testutils.WriteMultiArchTestImage(server, tmpdir)
+				// targetRef, err := testutils.WriteMultiArchTestImageWithURL("http://localhost:5000", tmpdir)
+			} else {
+				targetRef, err = testutils.WriteTestImage(server, tmpdir)
+				// targetRef, err := testutils.WriteTestImageWithURL("http://localhost:5000", tmpdir)
+			}
 			require.NoError(t, err)
 
 			if test.pinToDigest {
@@ -117,7 +161,7 @@ func TestRun(t *testing.T) {
 			}
 
 			d1 := []byte("hello\ngo\n")
-			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
 
 			add, err := LayerFromPath("/testfile", filepath.Join(tmpdir, "test"))
 			require.NoError(t, err)
@@ -139,10 +183,90 @@ func TestRun(t *testing.T) {
 				// Get new image information
 				ref, err := name.ParseReference(targetRef, name.Insecure)
 				require.NoError(t, err)
-				desc, err := remote.Get(ref)
+				/*
+					There's an important distinction between what's possible in OCI layout versus docker registries,
+					and you need to understand this when reading this test. The WriteMultiArchTestImage function
+					creates an OCI layout AND pushes to the dummy registry.
+					An OCI layout path contains an index.json where the manifest entries reference either a manifest list or an actual image.
+					Since the index.json is technically its own index, you can have "index indirection" where the manifest entry in index.json
+					points to a SHA within the blobs directory that is itself an "index". For example:
+					Single arch in an index.json
+					{
+						"schemaVersion": 2,
+						"manifests": [
+							{
+								"mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+								"digest": "sha256:1234...",
+								"size": 111
+							}
+						]
+					}
+					multi arch with "indirection" in an index.json
+					{
+						"schemaVersion": 2,
+						"manifests": [
+							{
+								"mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+								"digest": "sha256:5678...",
+								"size": 321
+							}
+						]
+					}
+					multi arch without "indirection" in an index.json (this scenario is probably not likely)
+					{
+					   "schemaVersion": 2,
+					   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+					   "manifests": [
+					      {
+					         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+					         "size": 525,
+					         "digest": "sha256:9123...",
+					         "platform": {
+					            "architecture": "amd64",
+					            "os": "linux"
+					         }
+					      },
+					      {
+					         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+					         "size": 525,
+					         "digest": "sha256:4567...",
+					         "platform": {
+					            "architecture": "s390x",
+					            "os": "linux"
+					         }
+					      }
+					   ]
+					}
+					However, in a "remote" docker registry, manifest indirection does not exist. So when reading
+					the descriptor from the "remote", we should expect to see a direct reference to either the
+					manifest list or image.
+				*/
+				var desc *remote.Descriptor
+				// make remote call to our dummy server to get its descriptor
+				desc, err = remote.Get(ref)
 				require.NoError(t, err)
-				img, err := desc.Image()
-				require.NoError(t, err)
+				// figure out an image to test against
+				var img v1.Image
+				if test.multiarch {
+					require.True(t, desc.MediaType.IsIndex(), "expected a multi arch index")
+					idx, err := desc.ImageIndex()
+					require.NoError(t, err)
+					mf, err := idx.IndexManifest()
+					require.NoError(t, err)
+					for _, innerDescriptor := range mf.Manifests {
+						img, err = idx.Image(innerDescriptor.Digest)
+						require.NoError(t, err)
+					}
+				} else {
+					// single arch tests we can just get the image directly
+					// NOTE: WriteTestImage pushes an OCI image to the registry, so its technically a "manifest list"
+					// and the image is "resolved" using the platform associated with the image reference, or the default
+					// (i.e. linux/amd64) if platform is not present
+					img, err = desc.Image()
+					require.NoError(t, err)
+				}
+				// make sure we've actually found an image to work with
+				require.NotNil(t, img)
 				layers, err := img.Layers()
 				require.NoError(t, err)
 				idx, err := desc.ImageIndex()
@@ -162,7 +286,13 @@ func TestRun(t *testing.T) {
 					}
 				}
 				require.True(t, found)
-				require.Len(t, im.Manifests, 1)
+				if test.multiarch {
+					// multi arch test has two manifests (linux/amd64 and linux/s390x)
+					require.Len(t, im.Manifests, 2)
+				} else {
+					// single arch test has a single image, so only one manifest
+					require.Len(t, im.Manifests, 1)
+				}
 
 				if test.update != nil {
 					config, err := img.ConfigFile()
@@ -175,6 +305,19 @@ func TestRun(t *testing.T) {
 			}
 		})
 	}
+}
+func NewTestServerWithURL(URL string, handler http.Handler) (*httptest.Server, error) {
+	ts := httptest.NewUnstartedServer(handler)
+	if URL != "" {
+		l, err := net.Listen("tcp", URL)
+		if err != nil {
+			return nil, err
+		}
+		ts.Listener.Close()
+		ts.Listener = l
+	}
+	ts.Start()
+	return ts, nil
 }
 
 func TestLayoutFromPath(t *testing.T) {
@@ -203,7 +346,7 @@ func TestLayoutFromPath(t *testing.T) {
 
 			// prep directory with files to write into layer
 			d1 := []byte("hello\ngo\n")
-			require.NoError(t, ioutil.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(tmpdir, "test"), d1, 0644))
 
 			var sourcePath string
 			if test.dir {

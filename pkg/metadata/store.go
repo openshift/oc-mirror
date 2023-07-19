@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -63,7 +63,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	}
 
 	logger := logrus.New()
-	logger.SetOutput(ioutil.Discard)
+	logger.SetOutput(io.Discard)
 	nullLogger := logrus.NewEntry(logger)
 
 	reg, err := containerdregistry.NewRegistry(
