@@ -287,6 +287,7 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	cleanup := func() error {
 		if !o.SkipCleanup {
 			os.RemoveAll(artifactsFolderName)
+			removeTmpDirs()
 			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
 		}
 		return nil
@@ -908,4 +909,24 @@ func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.Ty
 	}
 	// return original - no changes
 	return imagesource.TypedImageReference{Ref: ref.Ref, Type: ref.Type}
+}
+
+// removeTmpDirs - utility function to delete left over temporary files
+func removeTmpDirs() {
+	const directory string = "/tmp/"
+	var toDelete = []string{"render-unpack-*", "imageset-catalog-*"}
+
+	for _, x := range toDelete {
+		// instead of traversing through all the directories in /tmp
+		// look for a spepcific name + wildcard
+		name, err := filepath.Glob(filepath.Join(directory, x))
+		if err != nil {
+			klog.Warningf("finding directory %s %v", x, err)
+		}
+		// could be more than one directory
+		for _, y := range name {
+			klog.Infof("deleting directory %s", y)
+			os.RemoveAll(y)
+		}
+	}
 }
