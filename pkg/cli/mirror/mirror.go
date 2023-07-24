@@ -287,7 +287,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 	cleanup := func() error {
 		if !o.SkipCleanup {
 			os.RemoveAll(artifactsFolderName)
-			os.RemoveAll("olm_artifacts")
 			removeTmpDirs()
 			return os.RemoveAll(filepath.Join(o.Dir, config.SourceDir))
 		}
