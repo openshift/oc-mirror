@@ -1,0 +1,70 @@
+{
+  "apiVersion": "mirror.openshift.io/v1alpha2",
+  "kind": "Metadata",
+  "uid": "360a43c2-8a14-4b5d-906b-07491459f25f",
+  "pastAssociations": [
+    {"name": "test-registry.com/test@sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+    "path": "localhost:5000/test@sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+    "id": "sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+    "tagSymlink": "latest",
+    "type": "generic",
+    "manifestDigests": [
+      "sha256:cbc1e8cea8c78cfa1490c4f01b2be59d43ddbbad6987d938def1960f64bcd02c",
+      "sha256:f52d79a9d0a3c23e6ac4c3c8f2ed8d6337ea47f4e2dfd46201756160ca193308",
+      "sha256:ead8fdb2dbd7882f3627733ae420d85203c6d01e227d8b45762a0fdc71683ad7",
+      "sha256:6436a5bb6bf916d6dee31700ebfb056286468962f09bf470d9e15516239307d5"
+    ]
+  }
+],
+  "pastMirror":
+    {
+      "timestamp": 1624543862,
+      "sequence": 1,
+      "mirror": {
+        "additionalImages": [
+          {
+            "name": "redis"
+          },
+          {
+            "name": "postgres"
+          }
+        ],
+        "blockedImages": [
+          {
+            "name": "mongodb"
+          },
+          {
+            "name": "ubuntu"
+          }
+        ],
+        "platform": {
+          "graph": true,
+          "channels": [
+            {
+              "name": "stable-4.7",
+              "minVersion": "4.7.3",
+              "maxVersion": "4.7.10"
+            },
+            {
+              "name": "stable-4.6",
+              "minVersion": "4.6.12"
+            }
+          ]
+        }
+      },
+      "associations": [
+            {"name": "test-registry.com/test@sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+            "path": "localhost:5000/test@sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+            "id": "sha256:f3e11575aee05d474cb994c0ece89d992ece85be0596480582251fdec7a68f0b",
+            "tagSymlink": "latest",
+            "type": "generic",
+            "manifestDigests": [
+              "sha256:cbc1e8cea8c78cfa1490c4f01b2be59d43ddbbad6987d938def1960f64bcd02c",
+              "sha256:f52d79a9d0a3c23e6ac4c3c8f2ed8d6337ea47f4e2dfd46201756160ca193308",
+              "sha256:ead8fdb2dbd7882f3627733ae420d85203c6d01e227d8b45762a0fdc71683ad7",
+              "sha256:6436a5bb6bf916d6dee31700ebfb056286468962f09bf470d9e15516239307d5"
+            ]
+          }
+      ]
+    }
+}
