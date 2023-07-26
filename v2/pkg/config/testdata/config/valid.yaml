@@ -1,0 +1,45 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  platform:
+    channels:
+      - name: stable-4.7
+      - name: stable-4.6
+        minVersion: 4.6.3
+        maxVersion: 4.6.13
+      - name: okd
+        type: okd
+    graph: true
+  operators:
+    - catalog: redhat-operators:v4.7
+      full: true
+    - catalog: certified-operators:v4.7
+      full: true
+      packages:
+        - name: couchbase-operator
+        - name: mongodb-operator
+          minVersion: '1.4.0'
+        - name: crunchy-postgresql-operator
+          channels:
+            - name: 'stable'
+    - catalog: community-operators:v4.7
+  samples:
+    - name: ruby
+    - name: python
+    - name: nginx
+  additionalimages:
+    - name: registry.redhat.io/ubi8/ubi:latest
+  helm:
+    local:
+      - name: podinfo
+        path: /test/podinfo-5.0.0.tar.gz
+    repositories:
+      - name: podinfo
+        url: https://stefanprodan.github.io/podinfo
+        charts:
+          - name: podinfo
+            version: 5.0.0
+  blockedimages:
+    - name: alpine
+    - name: redis

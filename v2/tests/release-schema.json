@@ -1,0 +1,36 @@
+{
+  "kind": "ImageStream",
+  "apiVersion": "image.openshift.io/v1",
+  "metadata": {
+    "name": "4.12.0",
+    "creationTimestamp": "2023-01-12T18:29:52Z",
+    "annotations": {
+      "release.openshift.io/from-image-stream": "ocp/4.12-art-latest-2023-01-09-095104",
+      "release.openshift.io/from-release": "registry.ci.openshift.org/ocp/release:4.12.0-0.nightly-2023-01-09-095104"
+    }
+  },
+  "spec": {
+    "lookupPolicy": {
+      "local": false
+    },
+    "tags": [
+      {
+        "name": "agent-installer-api-server",
+        "annotations": {
+          "io.openshift.build.commit.id": "40936e7a9159189889c637fa1631f8cbdd5c3c4f",
+          "io.openshift.build.commit.ref": "",
+          "io.openshift.build.source-location": "https://github.com/openshift/assisted-service"
+        },
+        "from": {
+          "kind": "DockerImage",
+          "name": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e"
+        },
+        "generation": null,
+        "importPolicy": {},
+        "referencePolicy": {
+          "type": ""
+        }
+      }
+    ]
+  }
+}

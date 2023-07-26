@@ -1,0 +1,219 @@
+{
+  "schema": "olm.package",
+  "name": "3scale-operator",
+  "defaultChannel": "threescale-mas",
+  "icon": {
+    "base64data": "",
+    "mediatype": "image/svg+xml"
+  }
+}
+{
+  "schema": "olm.channel",
+  "name": "threescale-2.11",
+  "package": "3scale-operator",
+  "entries": [
+    {
+      "name": "3scale-operator.v0.8.0",
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.0-0.1634606167.p",
+      "skips": [
+        "3scale-operator.v0.8.0"
+      ],
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.1",
+      "replaces": "3scale-operator.v0.8.0-0.1634606167.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.2",
+      "replaces": "3scale-operator.v0.8.1"
+    },
+    {
+      "name": "3scale-operator.v0.8.3"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1645735250.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646619125.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646742992.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1649688682.p",
+      "replaces": "3scale-operator.v0.8.2",
+      "skips": [
+        "3scale-operator.v0.8.3",
+        "3scale-operator.v0.8.3-0.1646742992.p",
+        "3scale-operator.v0.8.3-0.1646619125.p",
+        "3scale-operator.v0.8.3-0.1645735250.p"
+      ]
+    },
+    {
+      "name": "3scale-operator.v0.8.4"
+    },
+    {
+      "name": "3scale-operator.v0.8.4-0.1655690146.p",
+      "replaces": "3scale-operator.v0.8.3-0.1649688682.p",
+      "skips": [
+        "3scale-operator.v0.8.4"
+      ]
+    }
+  ]
+}
+{
+  "schema": "olm.channel",
+  "name": "threescale-2.12",
+  "package": "3scale-operator",
+  "entries": [
+    {
+      "name": "3scale-operator.v0.8.0",
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.0-0.1634606167.p",
+      "skips": [
+        "3scale-operator.v0.8.0"
+      ],
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.1",
+      "replaces": "3scale-operator.v0.8.0-0.1634606167.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.2",
+      "replaces": "3scale-operator.v0.8.1"
+    },
+    {
+      "name": "3scale-operator.v0.8.3"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1645735250.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646619125.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646742992.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1649688682.p",
+      "replaces": "3scale-operator.v0.8.2",
+      "skips": [
+        "3scale-operator.v0.8.3",
+        "3scale-operator.v0.8.3-0.1646742992.p",
+        "3scale-operator.v0.8.3-0.1646619125.p",
+        "3scale-operator.v0.8.3-0.1645735250.p"
+      ]
+    },
+    {
+      "name": "3scale-operator.v0.8.4"
+    },
+    {
+      "name": "3scale-operator.v0.8.4-0.1655690146.p",
+      "replaces": "3scale-operator.v0.8.3-0.1649688682.p",
+      "skips": [
+        "3scale-operator.v0.8.4"
+      ]
+    },
+    {
+      "name": "3scale-operator.v0.9.0",
+      "replaces": "3scale-operator.v0.8.4-0.1655690146.p"
+    },
+    {
+      "name": "3scale-operator.v0.9.1"
+    },
+    {
+      "name": "3scale-operator.v0.9.1-0.1664967752.p",
+      "replaces": "3scale-operator.v0.9.0",
+      "skips": [
+        "3scale-operator.v0.9.1"
+      ]
+    }
+  ]
+}
+{
+  "schema": "olm.channel",
+  "name": "threescale-mas",
+  "package": "3scale-operator",
+  "entries": [
+    {
+      "name": "3scale-operator.v0.10.0-mas",
+      "replaces": "3scale-operator.v0.9.1-0.1664967752.p"
+    },
+    {
+      "name": "3scale-operator.v0.11.0-mas",
+      "replaces": "3scale-operator.v0.10.0-mas"
+    },
+    {
+      "name": "3scale-operator.v0.8.0",
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.0-0.1634606167.p",
+      "skips": [
+        "3scale-operator.v0.8.0"
+      ],
+      "skipRange": ">=0.7.0 <0.8.0"
+    },
+    {
+      "name": "3scale-operator.v0.8.1",
+      "replaces": "3scale-operator.v0.8.0-0.1634606167.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.2",
+      "replaces": "3scale-operator.v0.8.1"
+    },
+    {
+      "name": "3scale-operator.v0.8.3"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1645735250.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646619125.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1646742992.p"
+    },
+    {
+      "name": "3scale-operator.v0.8.3-0.1649688682.p",
+      "replaces": "3scale-operator.v0.8.2",
+      "skips": [
+        "3scale-operator.v0.8.3",
+        "3scale-operator.v0.8.3-0.1646742992.p",
+        "3scale-operator.v0.8.3-0.1646619125.p",
+        "3scale-operator.v0.8.3-0.1645735250.p"
+      ]
+    },
+    {
+      "name": "3scale-operator.v0.8.4"
+    },
+    {
+      "name": "3scale-operator.v0.8.4-0.1655690146.p",
+      "replaces": "3scale-operator.v0.8.3-0.1649688682.p",
+      "skips": [
+        "3scale-operator.v0.8.4"
+      ]
+    },
+    {
+      "name": "3scale-operator.v0.9.0",
+      "replaces": "3scale-operator.v0.8.4-0.1655690146.p"
+    },
+    {
+      "name": "3scale-operator.v0.9.1"
+    },
+    {
+      "name": "3scale-operator.v0.9.1-0.1664967752.p",
+      "replaces": "3scale-operator.v0.9.0",
+      "skips": [
+        "3scale-operator.v0.9.1"
+      ]
+    }
+  ]
+}
