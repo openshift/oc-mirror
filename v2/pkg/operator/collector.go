@@ -110,6 +110,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 				}
 				src := dockerProtocol + op.Catalog
 				dest := ociProtocolTrimmed + dir
+				o.Opts.All = false
 				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
 				writer.Flush()
 				if err != nil {

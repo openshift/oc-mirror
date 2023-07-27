@@ -94,6 +94,7 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
 				}
 				src := dockerProtocol + value.Source
 				dest := ociProtocolTrimmed + dir
+				o.Opts.All = false
 				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)

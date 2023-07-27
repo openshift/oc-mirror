@@ -226,6 +226,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
 	//call the batch worker
+	o.Opts.All = true
 	err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
 	if err != nil {
 		cleanUp()
