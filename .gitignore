@@ -1,5 +1,6 @@
 # Build artifacts.
 /bin/
+v2/build
 
 # Test artifacts.
 coverage.out
@@ -15,6 +16,11 @@ olm_artifacts/
 
 # Logs.
 **/.oc-mirror.log
+v2/logs
+v2/*.log
+
+v2/working-dir
+v2/*.yaml
 
 # Local vendor. Remove when ready to vendor dependencies.
 #/vendor/

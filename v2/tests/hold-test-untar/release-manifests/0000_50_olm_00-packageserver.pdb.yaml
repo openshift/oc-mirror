@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: packageserver-pdb
+  namespace: openshift-operator-lifecycle-manager
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: packageserver

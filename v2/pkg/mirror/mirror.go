@@ -143,21 +143,21 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 	//	stdout = nil
 	//}
 
-	imageListSelection := copy.CopySystemImage
+	//	imageListSelection := copy.CopySystemImage
 	if len(opts.MultiArch) > 0 && opts.All {
 		return fmt.Errorf("Cannot use --all and --multi-arch flags together")
 	}
 
 	if len(opts.MultiArch) > 0 {
-		imageListSelection, err = parseMultiArch(opts.MultiArch)
+		//imageListSelection, err = parseMultiArch(opts.MultiArch)
 		if err != nil {
 			return err
 		}
 	}
 
-	if opts.All {
-		imageListSelection = copy.CopyAllImages
-	}
+	//if opts.All {
+	//imageListSelection = copy.CopyAllImages
+	//}
 
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
@@ -236,8 +236,10 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		SourceCtx:                        sourceCtx,
 		DestinationCtx:                   destinationCtx,
 		ForceManifestMIMEType:            manifestType,
-		ImageListSelection:               imageListSelection,
-		PreserveDigests:                  opts.PreserveDigests,
+		//ImageListSelection:               imageListSelection,
+		ImageListSelection: copy.CopyAllImages,
+		PreserveDigests:    true,
+		//PreserveDigests:                  opts.PreserveDigests,
 		//OciDecryptConfig:                 decConfig,
 		//OciEncryptLayers:                 encLayers,
 		//OciEncryptConfig:                 encConfig,
@@ -294,6 +296,7 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 }
 
 // parseMultiArch
+/*
 func parseMultiArch(multiArch string) (copy.ImageListSelection, error) {
 	switch multiArch {
 	case "system":
@@ -312,3 +315,4 @@ func parseMultiArch(multiArch string) (copy.ImageListSelection, error) {
 		return copy.CopySystemImage, fmt.Errorf("unknown multi-arch option %q. Choose one of the supported options: 'system', 'all', or 'index-only'", multiArch)
 	}
 }
+*/

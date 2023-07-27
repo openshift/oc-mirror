@@ -1,4 +1,4 @@
-package services
+package cli
 
 import (
 	"fmt"
@@ -291,7 +291,7 @@ func (o *ExecutorSchema) Validate(dest []string) error {
 		if err != nil {
 			return err
 		}
-		if len(cfg.Mirror.Platform.Release) == 0 {
+		if len(cfg.Mirror.Platform.Release) > 0 && !strings.Contains(cfg.Mirror.Platform.Release, dirProtocol) {
 			return fmt.Errorf("ensure the release field is set and has dir:// prefix")
 		}
 		for _, x := range cfg.Mirror.Operators {

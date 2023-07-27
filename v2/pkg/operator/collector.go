@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	indexJson                   string = "index.json"
+	indexJson                   string = "manifest.json"
 	operatorImageExtractDir     string = "hold-operator"
 	workingDir                  string = "working-dir"
 	dockerProtocol              string = "docker://"
@@ -205,18 +205,16 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 			o.Log.Error("%v", e)
 		}
 		for _, op := range o.Config.Mirror.Operators {
-			// Need to fix this - incase their are no operators in the ImageSetConfig
 			for _, pkg := range op.Packages {
 				imagesDir := strings.Replace(op.Catalog, "dir://", "", 1)
 				e = filepath.Walk(imagesDir, func(path string, info os.FileInfo, err error) error {
 					if err == nil && regex.MatchString(info.Name()) && strings.Contains(path, pkg.Name) {
 						o.Log.Info("path %s", filepath.Dir(path))
 						hld := strings.Split(filepath.Dir(path), operatorImageDir)
-						//ref := filepath.Dir(strings.Join(hld[1], "/"))
 						if len(hld) == 0 {
 							return fmt.Errorf(errMsg+"%s", "no directory found for operator-images ", path)
 						} else {
-							src := ociProtocolTrimmed + filepath.Dir(path)
+							src := dirProtocolTrimmed + filepath.Dir(path)
 							dest := o.Opts.Destination + hld[1]
 							allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 						}
@@ -235,17 +233,14 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 // customImageParser - simple image string parser
 func customImageParser(image string) (*v1alpha3.ImageRefSchema, error) {
 	var irs *v1alpha3.ImageRefSchema
-	var component string
+	//var component string
+	//TODO needs some fine tuning
 	parts := strings.Split(image, "/")
-	if len(parts) < 3 {
-		return irs, fmt.Errorf("[customImageParser] image url seems to be wrong %s ", image)
+	ns := ""
+	for x := 1; x < len(parts)-1; x++ {
+		ns = ns + parts[x]
 	}
-	if strings.Contains(parts[2], "@") {
-		component = strings.Split(parts[2], "@")[0]
-	} else {
-		component = parts[2]
-	}
-	irs = &v1alpha3.ImageRefSchema{Repository: parts[0], Namespace: parts[1], Component: component}
+	irs = &v1alpha3.ImageRefSchema{Repository: parts[0], Namespace: ns, Component: parts[len(parts)-1]}
 	return irs, nil
 }
 
@@ -259,7 +254,7 @@ func batchWorkerConverter(log clog.PluggableLoggerInterface, dir string, images 
 				log.Error("[batchWorkerConverter] %v", err)
 				return result, err
 			}
-			componentDir := strings.Join([]string{dir, bundle, irs.Namespace}, "/")
+			componentDir := strings.Join([]string{dir, bundle, irs.Namespace, irs.Component}, "/")
 			// do a lookup on dist first
 			if _, err := os.Stat(componentDir); errors.Is(err, os.ErrNotExist) {
 				err = os.MkdirAll(componentDir, 0755)
@@ -273,12 +268,12 @@ func batchWorkerConverter(log clog.PluggableLoggerInterface, dir string, images 
 					s := fmt.Sprintf("%d", timestamp)
 					img.Name = fmt.Sprintf("%x", sha256.Sum256([]byte(s)))[:6]
 				}
-				dest := dirProtocolTrimmed + strings.Join([]string{dir, bundle, irs.Namespace, img.Name}, "/")
+				dest := dirProtocolTrimmed + strings.Join([]string{dir, bundle, irs.Namespace, irs.Component}, "/")
 				log.Debug("source %s ", img.Image)
 				log.Debug("destination %s ", dest)
 				result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 			} else {
-				log.Info("image in cache %s", componentDir)
+				log.Info("component directory exists %s", irs.Component)
 			}
 		}
 	}

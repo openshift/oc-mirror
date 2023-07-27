@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    capability.openshift.io/name: baremetal
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  labels:
+    k8s-app: cluster-baremetal-operator
+  name: cluster-baremetal-operator
+  namespace: openshift-machine-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: cluster-baremetal-operator
+  template:
+    metadata:
+      annotations:
+        capability.openshift.io/name: baremetal
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        k8s-app: cluster-baremetal-operator
+    spec:
+      containers:
+      - command:
+        - /usr/bin/cluster-baremetal-operator
+        env:
+        - name: RELEASE_VERSION
+          value: 4.12.0
+        - name: COMPONENT_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: METRICS_PORT
+          value: "8080"
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4e5f13cd4d2a9556b980a8a6790c237685b007f7ea7723191bf1633d8d88e27
+        name: cluster-baremetal-operator
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        volumeMounts:
+        - mountPath: /etc/cluster-baremetal-operator/tls
+          name: cert
+          readOnly: true
+        - mountPath: /etc/cluster-baremetal-operator/images
+          name: images
+          readOnly: true
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://localhost:8080/
+        - --tls-cert-file=/etc/tls/private/tls.crt
+        - --tls-private-key-file=/etc/tls/private/tls.key
+        - --config-file=/etc/baremetal-kube-rbac-proxy/config-file.yaml
+        - --logtostderr=true
+        - --v=10
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c28f27a3a10df13e5e8c074e8734683a6603ebaccd9d67e2095070fb6859b1d6
+        name: baremetal-kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /etc/baremetal-kube-rbac-proxy
+          name: config
+        - mountPath: /etc/tls/private
+          name: cluster-baremetal-operator-tls
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      serviceAccountName: cluster-baremetal-operator
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: cluster-baremetal-webhook-server-cert
+      - configMap:
+          defaultMode: 420
+          name: baremetal-kube-rbac-proxy
+        name: config
+      - name: cluster-baremetal-operator-tls
+        secret:
+          defaultMode: 420
+          secretName: cluster-baremetal-operator-tls
+      - configMap:
+          name: cluster-baremetal-operator-images
+        name: images

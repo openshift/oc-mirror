@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	indexJson               string = "index.json"
+	indexJson               string = "manifest.json"
 	operatorImageExtractDir string = "hold-operator"
 	workingDir              string = "working-dir/"
 	dockerProtocol          string = "docker://"
@@ -96,7 +96,7 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 				if err == nil && regex.MatchString(info.Name()) {
 					hld := strings.Split(filepath.Dir(path), additionalImagesDir)
 					//ref := filepath.Dir(strings.Join(hld, "/"))
-					src := ociProtocolTrimmed + filepath.Dir(path)
+					src := dirProtocolTrimmed + filepath.Dir(path)
 					dest := o.Opts.Destination + hld[1]
 					allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 				}

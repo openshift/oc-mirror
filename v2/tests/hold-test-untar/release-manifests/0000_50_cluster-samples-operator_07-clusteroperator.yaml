@@ -1,0 +1,28 @@
+apiVersion: config.openshift.io/v1
+kind: ClusterOperator
+metadata:
+  name: openshift-samples
+  annotations:
+    capability.openshift.io/name: openshift-samples
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec: {}
+status:
+  relatedObjects:
+    - group: samples.operator.openshift.io
+      name: cluster
+      resource: configs
+    - group: ""
+      name: openshift-cluster-samples-operator
+      resource: namespaces
+    - group: template.openshift.io
+      name: ""
+      resource: templates
+      namespace: openshift
+    - group: image.openshift.io
+      name: ""
+      resource: imagestreams
+      namespace: openshift
+  versions:
+    - name: operator
+      version: "4.12.0"

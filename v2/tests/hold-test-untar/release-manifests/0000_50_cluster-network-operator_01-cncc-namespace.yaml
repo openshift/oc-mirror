@@ -1,0 +1,16 @@
+# This is the namespace for the Cloud Network Controller
+# Although this is really an operand of the CNO, we create this now
+# because CredentialsRequests must be created at install time.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-cloud-network-config-controller
+  labels:
+    openshift.io/cluster-monitoring: "true"
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    openshift.io/node-selector: ""
+    openshift.io/description: "OpenShift cloud network config controller namespace - a controller used to manage cloud-level network configuration"
+    workload.openshift.io/allowed: "management"

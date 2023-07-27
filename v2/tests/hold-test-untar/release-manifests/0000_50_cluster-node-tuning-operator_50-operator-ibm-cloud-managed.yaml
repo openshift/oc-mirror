@@ -1,0 +1,95 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+  name: cluster-node-tuning-operator
+  namespace: openshift-cluster-node-tuning-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: cluster-node-tuning-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: cluster-node-tuning-operator
+    spec:
+      containers:
+      - args:
+        - -v=0
+        command:
+        - cluster-node-tuning-operator
+        env:
+        - name: RELEASE_VERSION
+          value: 4.12.0
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: RESYNC_PERIOD
+          value: "600"
+        - name: CLUSTER_NODE_TUNED_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:946567bcda2161bc1f55a6aa236106c947c5d863225f024c8c46f19b91b71679
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:946567bcda2161bc1f55a6aa236106c947c5d863225f024c8c46f19b91b71679
+        imagePullPolicy: IfNotPresent
+        name: cluster-node-tuning-operator
+        ports:
+        - containerPort: 60000
+          name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/secrets
+          name: node-tuning-operator-tls
+        - mountPath: /var/run/configmaps/trusted-ca/
+          name: trusted-ca
+        - mountPath: /apiserver.local.config/certificates
+          name: apiservice-cert
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 499
+      serviceAccountName: cluster-node-tuning-operator
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      volumes:
+      - name: node-tuning-operator-tls
+        secret:
+          secretName: node-tuning-operator-tls
+      - name: apiservice-cert
+        secret:
+          defaultMode: 420
+          items:
+          - key: tls.crt
+            path: apiserver.crt
+          - key: tls.key
+            path: apiserver.key
+          secretName: performance-addon-operator-webhook-cert
+      - configMap:
+          items:
+          - key: ca-bundle.crt
+            path: tls-ca-bundle.pem
+          name: trusted-ca
+          optional: true
+        name: trusted-ca

@@ -1,0 +1,38 @@
+apiVersion: config.openshift.io/v1
+kind: ClusterOperator
+metadata:
+  name: machine-api
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec: {}
+status:
+  versions:
+    - name: operator
+      version: "4.12.0"
+  relatedObjects:
+  - group: ""
+    name: openshift-machine-api
+    resource: namespaces
+  - group: machine.openshift.io
+    name: ""
+    resource: machines
+  - group: machine.openshift.io
+    name: ""
+    resource: machinesets
+  - group: machine.openshift.io
+    name: ""
+    resource: machinehealthchecks
+  - group: rbac.authorization.k8s.io
+    name: ""
+    resource: roles
+  - group: rbac.authorization.k8s.io
+    name: machine-api-operator
+    resource: clusterroles
+  - group: rbac.authorization.k8s.io
+    name: machine-api-controllers
+    resource: clusterroles
+  - group: metal3.io
+    resource: baremetalhosts
+    name: ""

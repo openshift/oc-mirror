@@ -1,0 +1,19 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-snapshot-controller-runner-operator
+  labels:
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: CSISnapshot
+subjects:
+  - kind: ServiceAccount
+    name: csi-snapshot-controller-operator
+    namespace: openshift-cluster-storage-operator
+roleRef:
+  kind: ClusterRole
+  name: openshift-csi-snapshot-controller-runner

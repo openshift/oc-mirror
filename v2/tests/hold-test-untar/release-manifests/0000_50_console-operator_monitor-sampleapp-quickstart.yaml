@@ -1,0 +1,77 @@
+apiVersion: console.openshift.io/v1
+kind: ConsoleQuickStart
+metadata:
+  name: monitor-sampleapp
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Console
+spec:
+  displayName: Monitor your sample application
+  durationMinutes: 10
+  description: Now that you’ve created a sample application and added health checks,
+    let’s monitor your application.
+  prerequisites: [You completed the "Getting started with a sample" quick start.]
+  introduction: |-
+    ### This quick start shows you how to monitor your sample application.
+    You should have previously created the **sample-app** application and **nodejs-basic** deployment via the **Get started with a sample** quick start. If you haven't, you may be able to follow these tasks with any existing deployment.
+  tasks:
+    - title: View the monitoring details of your sample application
+      description: |-
+        To view the details of your sample application:
+        
+        1. Go to the project your sample application was created in.
+        
+        1. Click on the [perspective switcher]{{highlight qs-perspective-switcher}} at the top of the navigation, and select **Developer**.
+        
+        1. In the navigation menu, click [Topology]{{highlight qs-nav-topology}}.
+
+        1. Click on the **nodejs-basic** deployment to view its details.
+        
+        1. Click on the **Observe** tab in the side panel.
+
+        You can see context sensitive metrics and alerts in the **Observe** tab.
+      review:
+        instructions: |-
+          #### To verify you can view the monitoring information:
+          1. Do you see a **Metrics** accordion in the side panel?
+          2. Do you see a **View dashboard** link in the **Metrics** accordion?
+          3. Do you see three charts in the **Metrics** accordion: **CPU usage**, **Memory usage** and **Receive bandwidth**?
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+      summary:
+        success: You have learned how you can monitor your sample app!
+        failed: Try the steps again.
+    - title: View project metrics in the dashboard
+      description: |-
+        ### To view the project metrics in the dashboard in the context of **nodejs-basic**:
+        1. Click on the **View dashboard** link in the side panel.
+        2. You can change the **Time Range** and **Refresh Interval** of the dashboard.
+        3. Click on the **Dashboard** drop-down list to view a list of available dashboards.
+      review:
+        instructions: |-
+          #### To verify that you are able to view the project metrics in the dashboard:
+          Do you see metrics charts in the dashboard?
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+      summary:
+        success: You have learned how to view the dashboard in the context of your sample
+          app!
+        failed: Try the steps again.
+    - title: View custom metrics
+      description: |-
+        ### To view custom metrics:
+        1. Click on the **Metrics** tab of the **Observe** page.
+        2. Click the **Select Query** drop-down list to see the available queries.
+        3. Click on **Filesystem Usage** from the list to run the query.
+
+        #### Note: select **Custom Query** from the dropdown to create and run a custom query utilizing PromQL.
+      review:
+        instructions: |
+          #### Verify you can see the chart associated with the query:
+
+          - Do you see a chart displayed with filesystem usage for your project?
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+      summary:
+        success: You have learned how to run a query!
+        failed: Try the steps again.
+  conclusion: You have learned how to access workload monitoring and metrics!

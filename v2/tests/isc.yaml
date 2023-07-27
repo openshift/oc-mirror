@@ -1,0 +1,26 @@
+# This config demonstrates how to mirror a version range
+# in the specified channel for an OpenShift release.
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: /tmp/lmz-images
+mirror:
+  platform:
+    architectures:
+      - "amd64"
+    channels:
+      - name: stable-4.12
+        minVersion: 4.12.0
+        maxVersion: 4.12.0
+  operators:
+  - catalog: oci:///home/lzuccarelli/go/src/github.com/openshift/oc-mirror/newlmz/redhat-operator-index
+    #  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+    packages:
+    - name: aws-load-balancer-operator
+      channels: 
+      - name: stable-v0
+  
+  additionalImages: 
+    - name: registry.redhat.io/ubi8/ubi:latest  

@@ -1,0 +1,71 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    capability.openshift.io/name: CSISnapshot
+    include.release.openshift.io/ibm-cloud-managed: "true"
+  labels:
+    app: csi-snapshot-controller-operator
+  name: csi-snapshot-controller-operator
+  namespace: openshift-cluster-storage-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-snapshot-controller-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app: csi-snapshot-controller-operator
+    spec:
+      containers:
+      - args:
+        - start
+        - -v=2
+        env:
+        - name: OPERAND_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:631012b7d9f911558fa49e34402be56a1587a09e58ad645ce2de37aaa20eb468
+        - name: WEBHOOK_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f876250993619037cbf206da00d0419c545269799f3b29848a9d1bc0e88aad30
+        - name: OPERATOR_IMAGE_VERSION
+          value: 4.12.0
+        - name: OPERAND_IMAGE_VERSION
+          value: 4.12.0
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:961706a0d75013fcef5f3bbf59754ed23549316fba391249b22529d6a97f1cb2
+        imagePullPolicy: IfNotPresent
+        name: csi-snapshot-controller-operator
+        resources:
+          requests:
+            cpu: 10m
+            memory: 65Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePolicy: FallbackToLogsOnError
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: csi-snapshot-controller-operator
+      tolerations:
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
