@@ -1,0 +1,76 @@
+# This demo uses the  POC based on our design (enhancement proposal document) for oc-mirror
+
+# We are going to demo the mirror-to-disk and disk-to-mirror functionality
+
+# first lets show the imagesetconfig used for the demo 
+
+# This config demonstrates how to mirror a version range
+# in the specified channel for an OpenShift release.
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: /tmp/lmz-images
+mirror:
+  platform:
+    architectures:
+      - "amd64"
+    channels:
+      - name: stable-4.12
+        minVersion: 4.12.0
+        maxVersion: 4.12.0
+  operators:
+    #- catalog: oci:///home/lzuccarelli/go/src/github.com/openshift/oc-mirror/newlmz/redhat-operator-index
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+      packages:
+      - name: aws-load-balancer-operator
+        channels: 
+        - name: stable-v0
+  
+  additionalImages: 
+    #- name: registry.redhat.io/ubi8/ubi:latest  
+    - name: registry.redhat.io/ubi9/ubi:latest
+
+# in this step we show the mirror-to-disk functionality
+
+build/mirror oci://test-lmz --config isc-copy.yaml --loglevel debug
+
+# all images were already copied to disk that's why it finished fairly quickly
+
+# I have purposely used the disk cache as a complete download of all images does take some time
+
+# here is the structure on disk for both release and operator images
+
+tree -d working-dir/test-lmz/release-images/ | more
+
+tree -d working-dir/test-lmz/release-images/ | more
+
+# I'll delete an image from disk
+
+# re-run the mirror-to-disk cli again (it should only download the image I deleted)
+
+# the great thing about this is that if your mirror-to-disk is disrupted it will continue where it left off
+
+# next I'll show the  disk-to-mirror functionality
+
+build/mirror docker://localhost.localdomain:5000/testlmz --release-from working-dir/test-lmz/release-images/ocp-release/4.12.0-x86_64/images/ --operators-from working-dir/test-lmz/operator-images/redhat-operator-index/v4.12/ --additional-from working-dir/test-lmz/additional-images/ --loglevel debug
+
+# this also finished fairly quickly as we already mirrored to a remote registry
+
+# here is the list of catalogs found
+
+curl -L http://localhost:5000/v2/_catalog | jq
+
+# I'll delete all images from the remote registry and re-run
+
+curl -L http://localhost:5000/v2/_catalog | jq
+
+# the process to mirror (+-) 189 images took about 1 minute - this is a great performance improvement
+
+# lets query the remote registry catalog
+
+# lets pull a remote image to ensure it works
+
+# this concludes the demo - thanks for watching !!!!
+
