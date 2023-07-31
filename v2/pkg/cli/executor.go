@@ -380,10 +380,16 @@ health:
 		return err
 	}
 	o.LocalStorage = *reg
-	go reg.ListenAndServe()
+	var errchan chan error
+	go func() {
+		errchan <- reg.ListenAndServe()
+	}()
+	select {
+	case err = <-errchan:
+		o.Log.Error("error initializing oc-mirror's local storage : %v \n", err)
 
-	if err != nil {
-		return err
+		panic(err)
+	default:
 	}
 	return nil
 }
