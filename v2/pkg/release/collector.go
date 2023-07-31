@@ -155,7 +155,7 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
 			allImages = append(allImages, tmpImages...)
 		}
 	}
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.Mode == diskToMirror && strings.Contains(o.Config.Mirror.Platform.Release, dirProtocol) {
 		// we know the directory format is
 		// release-images/name/version/
 		// we can do some replacing from the directory passed as string
