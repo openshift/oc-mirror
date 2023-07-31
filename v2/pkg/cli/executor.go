@@ -1,12 +1,19 @@
-package services
+package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/distribution/distribution/v3/configuration"
+	dcontext "github.com/distribution/distribution/v3/context"
+	"github.com/distribution/distribution/v3/registry"
+	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
+	distversion "github.com/distribution/distribution/v3/version"
 
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
@@ -27,6 +34,7 @@ const (
 	dockerProtocol          string = "docker://"
 	ociProtocol             string = "oci://"
 	dirProtocol             string = "dir://"
+	fileProtocol            string = "file://"
 	diskToMirror            string = "diskToMirror"
 	mirrorToDisk            string = "mirrorToDisk"
 	releaseImageDir         string = "release-images"
@@ -71,6 +79,7 @@ type ExecutorSchema struct {
 	Manifest         manifest.ManifestInterface
 	Batch            batch.BatchInterface
 	Diff             diff.DiffInterface
+	LocalStorage     registry.Registry
 }
 
 // NewMirrorCmd - cobra entry point
@@ -130,6 +139,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.Global.ConfigPath, "config", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.From, "from", "working-dir", "local storage directory for disk to mirror workflow")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -148,6 +158,13 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 
 	// create logs directory
 	err := os.MkdirAll(logsDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// prepare internal storage
+	err = o.prepareStorage()
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
@@ -257,13 +274,15 @@ func (o *ExecutorSchema) Complete(args []string) {
 
 	// logic to check mode
 	var dest string
-	if strings.Contains(args[0], ociProtocol) || strings.Contains(args[0], dirProtocol) {
+	if strings.Contains(args[0], fileProtocol) {
 		o.Opts.Mode = mirrorToDisk
 		dest = workingDir + "/" + strings.Split(args[0], "://")[1]
 		o.Log.Debug("destination %s ", dest)
-	} else {
+	} else if strings.Contains(args[0], dockerProtocol) {
 		dest = workingDir
 		o.Opts.Mode = diskToMirror
+	} else {
+		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
 	o.Opts.Destination = args[0]
 	o.Opts.Global.Dir = dest
@@ -275,7 +294,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest)
-	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest)
+	o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:5000")
 
 }
 
@@ -284,31 +303,14 @@ func (o *ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
+	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
+		return fmt.Errorf("when destination is file://, diskToMirror workflow is assumed, and the --from argument become mandatory")
 
-	if strings.Contains(dest[0], dockerProtocol) {
-		// read the ImageSetConfiguration
-		cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
-		if err != nil {
-			return err
-		}
-		if len(cfg.Mirror.Platform.Release) == 0 {
-			return fmt.Errorf("ensure the release field is set and has dir:// prefix")
-		}
-		for _, x := range cfg.Mirror.Operators {
-			if !strings.Contains(x.Catalog, dirProtocol) {
-				return fmt.Errorf("ensure the catalog field has a dir:// prefix")
-			}
-		}
-		for _, x := range cfg.Mirror.AdditionalImages {
-			if !strings.Contains(x.Name, dirProtocol) {
-				return fmt.Errorf("ensure the additional name field is set and has dir:// prefix")
-			}
-		}
 	}
-	if strings.Contains(dest[0], ociProtocol) || strings.Contains(dest[0], dirProtocol) || strings.Contains(dest[0], dockerProtocol) {
+	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
 	} else {
-		return fmt.Errorf("destination must have either oci://, dir:// or docker:// protocol prefixes")
+		return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
 	}
 }
 
@@ -323,4 +325,71 @@ func mergeImages(base, in []v1alpha3.CopyImageSchema) []v1alpha3.CopyImageSchema
 func cleanUp() {
 	// clean up logs directory
 	os.RemoveAll(logsDir)
+
+}
+
+func (o *ExecutorSchema) prepareStorage() error {
+	configYamlV0_1 := `
+version: 0.1
+log:
+  fields:
+    service: registry
+storage:
+  cache:
+    blobdescriptor: inmemory
+  filesystem:
+    rootdirectory: $$PLACEHOLDER$$
+http:
+  addr: :5000
+  headers:
+    X-Content-Type-Options: [nosniff]
+      #auth:
+      #htpasswd:
+      #realm: basic-realm
+      #path: /etc/registry
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3
+`
+
+	rootDir := ""
+
+	if o.Opts.Mode == mirrorToDisk {
+		rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
+	} else {
+		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
+	}
+
+	if rootDir == "" {
+		// something went wrong
+		return fmt.Errorf("error determining the local storage folder to use")
+	}
+	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER$$", rootDir, 1)
+	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
+
+	if err != nil {
+		return fmt.Errorf("error parsing local storage configuration : %v\n %s\n", err, configYamlV0_1)
+	}
+	fmt.Printf("%v\n", config)
+
+	ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
+	reg, err := registry.NewRegistry(ctx, config)
+	if err != nil {
+		return err
+	}
+	o.LocalStorage = *reg
+	var errchan chan error
+	go func() {
+		errchan <- reg.ListenAndServe()
+	}()
+	select {
+	case err = <-errchan:
+		o.Log.Error("error initializing oc-mirror's local storage : %v \n", err)
+
+		panic(err)
+	default:
+	}
+	return nil
 }

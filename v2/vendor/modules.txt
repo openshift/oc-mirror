@@ -46,6 +46,9 @@ github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
+# github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d
+## explicit
+github.com/Shopify/logrus-bugsnag
 # github.com/VividCortex/ewma v1.2.0
 ## explicit; go 1.12
 github.com/VividCortex/ewma
@@ -55,9 +58,28 @@ github.com/acarl005/stripansi
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
+# github.com/beorn7/perks v1.0.1
+## explicit; go 1.11
+github.com/beorn7/perks/quantile
 # github.com/blang/semver/v4 v4.0.0
 ## explicit; go 1.14
 github.com/blang/semver/v4
+# github.com/bshuster-repo/logrus-logstash-hook v1.0.0
+## explicit
+github.com/bshuster-repo/logrus-logstash-hook
+# github.com/bugsnag/bugsnag-go v1.5.3
+## explicit
+github.com/bugsnag/bugsnag-go
+github.com/bugsnag/bugsnag-go/device
+github.com/bugsnag/bugsnag-go/errors
+github.com/bugsnag/bugsnag-go/headers
+github.com/bugsnag/bugsnag-go/sessions
+# github.com/bugsnag/panicwrap v1.2.0
+## explicit
+github.com/bugsnag/panicwrap
+# github.com/cespare/xxhash/v2 v2.2.0
+## explicit; go 1.11
+github.com/cespare/xxhash/v2
 # github.com/containerd/cgroups v1.0.4
 ## explicit; go 1.17
 github.com/containerd/cgroups/stats/v1
@@ -210,6 +232,47 @@ github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/distribution/distribution/v3 v3.0.0-20230722181636-7b502560cad4
+## explicit; go 1.18
+github.com/distribution/distribution/v3
+github.com/distribution/distribution/v3/configuration
+github.com/distribution/distribution/v3/context
+github.com/distribution/distribution/v3/health
+github.com/distribution/distribution/v3/health/checks
+github.com/distribution/distribution/v3/manifest
+github.com/distribution/distribution/v3/manifest/manifestlist
+github.com/distribution/distribution/v3/manifest/ocischema
+github.com/distribution/distribution/v3/manifest/schema1
+github.com/distribution/distribution/v3/manifest/schema2
+github.com/distribution/distribution/v3/metrics
+github.com/distribution/distribution/v3/notifications
+github.com/distribution/distribution/v3/reference
+github.com/distribution/distribution/v3/registry
+github.com/distribution/distribution/v3/registry/api/errcode
+github.com/distribution/distribution/v3/registry/api/v2
+github.com/distribution/distribution/v3/registry/auth
+github.com/distribution/distribution/v3/registry/client
+github.com/distribution/distribution/v3/registry/client/auth
+github.com/distribution/distribution/v3/registry/client/auth/challenge
+github.com/distribution/distribution/v3/registry/client/transport
+github.com/distribution/distribution/v3/registry/handlers
+github.com/distribution/distribution/v3/registry/listener
+github.com/distribution/distribution/v3/registry/middleware/registry
+github.com/distribution/distribution/v3/registry/middleware/repository
+github.com/distribution/distribution/v3/registry/proxy
+github.com/distribution/distribution/v3/registry/proxy/scheduler
+github.com/distribution/distribution/v3/registry/storage
+github.com/distribution/distribution/v3/registry/storage/cache
+github.com/distribution/distribution/v3/registry/storage/cache/memory
+github.com/distribution/distribution/v3/registry/storage/cache/metrics
+github.com/distribution/distribution/v3/registry/storage/cache/redis
+github.com/distribution/distribution/v3/registry/storage/driver
+github.com/distribution/distribution/v3/registry/storage/driver/base
+github.com/distribution/distribution/v3/registry/storage/driver/factory
+github.com/distribution/distribution/v3/registry/storage/driver/filesystem
+github.com/distribution/distribution/v3/registry/storage/driver/middleware
+github.com/distribution/distribution/v3/uuid
+github.com/distribution/distribution/v3/version
 # github.com/docker/cli v23.0.5+incompatible
 ## explicit
 github.com/docker/cli/cli/config
@@ -254,9 +317,21 @@ github.com/docker/docker-credential-helpers/credentials
 github.com/docker/go-connections/nat
 github.com/docker/go-connections/sockets
 github.com/docker/go-connections/tlsconfig
+# github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
+## explicit
+github.com/docker/go-events
+# github.com/docker/go-metrics v0.0.1
+## explicit; go 1.11
+github.com/docker/go-metrics
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
+# github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
+## explicit
+github.com/docker/libtrust
+# github.com/felixge/httpsnoop v1.0.3
+## explicit; go 1.13
+github.com/felixge/httpsnoop
 # github.com/go-logr/logr v1.2.4
 ## explicit; go 1.16
 github.com/go-logr/logr
@@ -297,6 +372,9 @@ github.com/go-openapi/swag
 # github.com/go-openapi/validate v0.22.1
 ## explicit; go 1.14
 github.com/go-openapi/validate
+# github.com/gofrs/uuid v3.3.0+incompatible
+## explicit
+github.com/gofrs/uuid
 # github.com/gogo/protobuf v1.3.2
 ## explicit; go 1.15
 github.com/gogo/protobuf/gogoproto
@@ -314,6 +392,9 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/gomodule/redigo v1.8.2
+## explicit; go 1.14
+github.com/gomodule/redigo/redis
 # github.com/google/go-containerregistry v0.15.2
 ## explicit; go 1.18
 github.com/google/go-containerregistry/internal/and
@@ -354,6 +435,9 @@ github.com/google/gofuzz/bytesource
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
+# github.com/gorilla/handlers v1.5.1
+## explicit; go 1.14
+github.com/gorilla/handlers
 # github.com/gorilla/mux v1.8.0
 ## explicit; go 1.12
 github.com/gorilla/mux
@@ -363,6 +447,10 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
+# github.com/hashicorp/golang-lru v0.5.4
+## explicit; go 1.12
+github.com/hashicorp/golang-lru
+github.com/hashicorp/golang-lru/simplelru
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
@@ -372,6 +460,9 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
+# github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
+## explicit
+github.com/kardianos/osext
 # github.com/klauspost/compress v1.16.6
 ## explicit; go 1.18
 github.com/klauspost/compress
@@ -404,6 +495,9 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-shellwords v1.0.12
 ## explicit; go 1.13
 github.com/mattn/go-shellwords
+# github.com/matttproud/golang_protobuf_extensions v1.0.4
+## explicit; go 1.9
+github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/microlib/simple v1.0.2
 ## explicit
 github.com/microlib/simple
@@ -482,6 +576,24 @@ github.com/pmezard/go-difflib/difflib
 # github.com/proglottis/gpgme v0.1.3
 ## explicit; go 1.11
 github.com/proglottis/gpgme
+# github.com/prometheus/client_golang v1.15.1
+## explicit; go 1.17
+github.com/prometheus/client_golang/prometheus
+github.com/prometheus/client_golang/prometheus/internal
+github.com/prometheus/client_golang/prometheus/promhttp
+# github.com/prometheus/client_model v0.4.0
+## explicit; go 1.18
+github.com/prometheus/client_model/go
+# github.com/prometheus/common v0.42.0
+## explicit; go 1.18
+github.com/prometheus/common/expfmt
+github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+github.com/prometheus/common/model
+# github.com/prometheus/procfs v0.9.0
+## explicit; go 1.18
+github.com/prometheus/procfs
+github.com/prometheus/procfs/internal/fs
+github.com/prometheus/procfs/internal/util
 # github.com/rivo/uniseg v0.4.4
 ## explicit; go 1.18
 github.com/rivo/uniseg
@@ -550,6 +662,15 @@ github.com/vbauerster/mpb/v8
 github.com/vbauerster/mpb/v8/cwriter
 github.com/vbauerster/mpb/v8/decor
 github.com/vbauerster/mpb/v8/internal
+# github.com/yvasiyarov/go-metrics v0.0.0-20150112132944-c25f46c4b940
+## explicit
+github.com/yvasiyarov/go-metrics
+# github.com/yvasiyarov/gorelic v0.0.7
+## explicit
+github.com/yvasiyarov/gorelic
+# github.com/yvasiyarov/newrelic_platform_go v0.0.0-20160601141957-9c099fbc30e9
+## explicit
+github.com/yvasiyarov/newrelic_platform_go
 # go.etcd.io/bbolt v1.3.7
 ## explicit; go 1.17
 go.etcd.io/bbolt
@@ -574,6 +695,8 @@ go.opencensus.io/trace/internal
 go.opencensus.io/trace/tracestate
 # golang.org/x/crypto v0.10.0
 ## explicit; go 1.17
+golang.org/x/crypto/acme
+golang.org/x/crypto/acme/autocert
 golang.org/x/crypto/cast5
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/internal/alias
