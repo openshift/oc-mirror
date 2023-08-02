@@ -125,7 +125,12 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				log.Error("%v ", err)
 				os.Exit(1)
 			}
-
+			// prepare internal storage
+			err = ex.prepareStorage()
+			if err != nil {
+				log.Error(" %v ", err)
+				os.Exit(1)
+			}
 			ex.Complete(args)
 
 			err = ex.Run(cmd, args)
@@ -158,13 +163,6 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 
 	// create logs directory
 	err := os.MkdirAll(logsDir, 0755)
-	if err != nil {
-		o.Log.Error(" %v ", err)
-		return err
-	}
-
-	// prepare internal storage
-	err = o.prepareStorage()
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err

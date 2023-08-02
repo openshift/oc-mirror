@@ -68,7 +68,7 @@ func TestExecutor(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = "mirrorToDisk"
-		err := ex.Run(res, []string{"oci://test"})
+		err := ex.Run(res, []string{"file://test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -161,7 +161,7 @@ func TestExecutor(t *testing.T) {
 		res := NewMirrorCmd(log)
 		res.SilenceUsage = true
 		ex.Opts.Global.ConfigPath = "hello"
-		err := ex.Validate([]string{"oci://test"})
+		err := ex.Validate([]string{"file://test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
