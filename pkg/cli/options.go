@@ -44,11 +44,14 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	checkErr(fsv2.Set("v", fmt.Sprintf("%d", o.LogLevel)))
 
 	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0600)
-	if err != nil {
-		klog.Fatal(err)
+	if err == nil {
+		fmt.Println("Logging to .oc-mirror.log")
+		klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
+	} else {
+		fmt.Printf("Failed to open .oc-mirror.log for writing. Err: %s. Running without logging.\n",
+			err.Error())
+		klog.SetOutput(io.MultiWriter(o.IOStreams.Out))
 	}
-
-	klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
 
 	// Setup logrus for use with operator-registry
 	logrus.SetOutput(ioutil.Discard)
@@ -71,21 +74,32 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 		DisableLevelTruncation: true,
 		DisableQuote:           true,
 	}))
-	logrusCleanup := setupFileHook(logFile)
 
-	// Add to root IOStream options
-	o.IOStreams = genericclioptions.IOStreams{
-		In:     o.IOStreams.In,
-		Out:    io.MultiWriter(o.IOStreams.Out, logFile),
-		ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logFile),
+	if logFile != nil {
+		logrusCleanup := setupFileHook(logFile)
+
+		// Add to root IOStream options
+		o.IOStreams = genericclioptions.IOStreams{
+			In:     o.IOStreams.In,
+			Out:    io.MultiWriter(o.IOStreams.Out, logFile),
+			ErrOut: io.MultiWriter(o.IOStreams.ErrOut, logFile),
+		}
+
+		o.logfileCleanup = func() {
+			klog.Flush()
+			logrusCleanup()
+			checkErr(logFile.Close())
+		}
+	} else {
+		o.IOStreams = genericclioptions.IOStreams{
+			In:     o.IOStreams.In,
+			Out:    io.MultiWriter(o.IOStreams.Out),
+			ErrOut: io.MultiWriter(o.IOStreams.ErrOut),
+		}
+		o.logfileCleanup = func() {
+			klog.Flush()
+		}
 	}
-
-	o.logfileCleanup = func() {
-		klog.Flush()
-		logrusCleanup()
-		checkErr(logFile.Close())
-	}
-
 }
 
 func (o *RootOptions) LogfilePostRun(*cobra.Command, []string) {
