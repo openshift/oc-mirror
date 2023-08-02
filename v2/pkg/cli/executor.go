@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"k8s.io/kubectl/pkg/util/templates"
@@ -126,7 +127,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				os.Exit(1)
 			}
 			// prepare internal storage
-			err = ex.prepareStorage()
+			err = ex.PrepareStorage()
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
@@ -145,6 +146,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "working-dir", "local storage directory for disk to mirror workflow")
+	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -292,7 +294,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest)
-	o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:5000")
+	o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))
 
 }
 
@@ -326,7 +328,7 @@ func cleanUp() {
 
 }
 
-func (o *ExecutorSchema) prepareStorage() error {
+func (o *ExecutorSchema) PrepareStorage() error {
 	configYamlV0_1 := `
 version: 0.1
 log:
@@ -336,9 +338,9 @@ storage:
   cache:
     blobdescriptor: inmemory
   filesystem:
-    rootdirectory: $$PLACEHOLDER$$
+    rootdirectory: $$PLACEHOLDER_ROOT$$
 http:
-  addr: :5000
+  addr: :$$PLACEHOLDER_PORT$$
   headers:
     X-Content-Type-Options: [nosniff]
       #auth:
@@ -364,13 +366,13 @@ health:
 		// something went wrong
 		return fmt.Errorf("error determining the local storage folder to use")
 	}
-	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER$$", rootDir, 1)
+	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", rootDir, 1)
+	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
 
 	if err != nil {
 		return fmt.Errorf("error parsing local storage configuration : %v\n %s\n", err, configYamlV0_1)
 	}
-	fmt.Printf("%v\n", config)
 
 	ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
 	reg, err := registry.NewRegistry(ctx, config)
@@ -378,16 +380,19 @@ health:
 		return err
 	}
 	o.LocalStorage = *reg
-	var errchan chan error
-	go func() {
-		errchan <- reg.ListenAndServe()
-	}()
-	select {
-	case err = <-errchan:
-		o.Log.Error("error initializing oc-mirror's local storage : %v \n", err)
+	errchan := make(chan error)
 
+	o.Log.Info("starting local storage on %v", config.HTTP.Addr)
+
+	go startLocalRegistry(reg, errchan)
+	err = <-errchan
+	if err != nil {
 		panic(err)
-	default:
 	}
 	return nil
+}
+
+func startLocalRegistry(reg *registry.Registry, errchan chan error) {
+	err := reg.ListenAndServe()
+	errchan <- err
 }
