@@ -230,7 +230,7 @@ health:
 	o.LocalStorage = *reg
 	errchan := make(chan error)
 
-	o.Log.Info("starting local storage on %v with storage as folder %v", config.HTTP.Addr, config.Storage.Parameters())
+	o.Log.Info("starting local storage on %v", config.HTTP.Addr)
 
 	go startLocalRegistry(reg, errchan)
 	go panicOnRegistryError(errchan)
