@@ -427,7 +427,6 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
 	collectionFinish := time.Now()
-
 	//call the batch worker
 	err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
 	mirrorFinish := time.Now()
