@@ -462,6 +462,8 @@ type GlobalOptions struct {
 	RegistriesConfPath string        // Path to the "registries.conf" file
 	TmpDir             string        // Path to use for big temporary files
 	Dir                string        // working directory
+	From               string        // local storage for diskToMirror workflow
+	Port               uint16        // HTTP port used by oc-mirror's local storage instance
 	ConfigPath         string        // Path to use for imagesetconfig
 	ReleaseFrom        string        // Used for release mirroring (diskToMirror)
 	OperatorsFrom      string        // Used for operators mirroring (diskToMirror)

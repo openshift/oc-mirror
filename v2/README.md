@@ -34,7 +34,7 @@ For the mirror-to-disk use case
 
 ``` bash
 
-mirror oci:test-dir --config isc.yaml --loglevel debug
+mirror oci://test-dir --config isc.yaml --loglevel debug
 
 # imagesetconfig used
 

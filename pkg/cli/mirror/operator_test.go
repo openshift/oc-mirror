@@ -25,11 +25,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/operator/diff"
 )
 
-func init() {
-	// TestValidateMapping requires klog to be initialized
-	ktest.InitKlog()
-}
-
 func TestPinImages(t *testing.T) {
 
 	type spec struct {
@@ -593,6 +588,7 @@ func TestValidateMapping(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ktest.InitKlog(t)
 			// This test needs to validate that the log generates the right output
 			// so restore the global klog state after each test
 			defer klog.CaptureState().Restore()
