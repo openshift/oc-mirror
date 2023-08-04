@@ -1,0 +1,8 @@
+go 1.20
+
+use (
+	.
+	./v2
+)
+
+replace github.com/docker/docker => github.com/docker/docker v20.10.21+incompatible

@@ -312,3 +312,7 @@ func parseMultiArch(multiArch string) (copy.ImageListSelection, error) {
 		return copy.CopySystemImage, fmt.Errorf("unknown multi-arch option %q. Choose one of the supported options: 'system', 'all', or 'index-only'", multiArch)
 	}
 }
+
+func HelloFromV2() string {
+	return "Hello From V2"
+}

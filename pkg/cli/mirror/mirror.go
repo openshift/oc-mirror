@@ -35,6 +35,8 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
+
+	v2 "github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
 var (
@@ -297,6 +299,11 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
+
+	//dummy example on how v2 can be called from v1
+	if o.V2 {
+		println(v2.HelloFromV2())
+	}
 
 	o.remoteRegFuncs = RemoteRegFuncs{
 		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {

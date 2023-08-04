@@ -24,6 +24,7 @@ type MirrorOptions struct {
 	DryRun                     bool   // Print actions without mirroring images
 	SourceSkipTLS              bool   // Disable TLS validation for source registry
 	DestSkipTLS                bool   // Disable TLS validation for destination registry
+	V2                         bool   // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
 	SourcePlainHTTP            bool   // Use plain HTTP for source registry
 	DestPlainHTTP              bool   // Use plain HTTP for destination registry
 	SkipVerification           bool   // Skip verifying the integrity of the retrieved content.
@@ -53,6 +54,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images")
 	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Disable TLS validation for source registry")
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Disable TLS validation for destination registry")
+	fs.BoolVar(&o.V2, "v2", o.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
 	fs.BoolVar(&o.SourcePlainHTTP, "source-use-http", o.SourcePlainHTTP, "Use plain HTTP for source registry")
 	fs.BoolVar(&o.DestPlainHTTP, "dest-use-http", o.DestPlainHTTP, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip verifying the integrity of the retrieved content."+
