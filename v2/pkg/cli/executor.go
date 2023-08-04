@@ -16,6 +16,8 @@ import (
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	distversion "github.com/distribution/distribution/v3/version"
+	"github.com/sirupsen/logrus"
+
 	"github.com/google/uuid"
 
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
@@ -46,6 +48,7 @@ const (
 	releaseImageExtractDir  string = "hold-release"
 	operatorImageExtractDir string = "hold-operator"
 	signaturesDir           string = "signatures"
+	registryLogFilename     string = "logs/registry.log"
 )
 
 var (
@@ -67,6 +70,7 @@ var (
 		oc-mirror oci:mirror --config mirror-config.yaml
 		`,
 	)
+	registryLogFile *os.File
 )
 
 type ExecutorSchema struct {
@@ -127,13 +131,13 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				log.Error("%v ", err)
 				os.Exit(1)
 			}
+			ex.Complete(args)
 			// prepare internal storage
-			err = ex.PrepareStorage()
+			err = ex.PrepareStorageAndLogs()
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
 			}
-			ex.Complete(args)
 
 			err = ex.Run(cmd, args)
 			if err != nil {
@@ -176,10 +180,26 @@ func (o *ExecutorSchema) Validate(dest []string) error {
 	}
 }
 
-func (o *ExecutorSchema) PrepareStorage() error {
+func (o *ExecutorSchema) PrepareStorageAndLogs() error {
+
+	// clean up logs directory
+	os.RemoveAll(logsDir)
+
+	// create logs directory
+	err := os.MkdirAll(logsDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	//create config file for local registry
 	configYamlV0_1 := `
 version: 0.1
 log:
+  accesslog:
+    disabled: $$PLACEHOLDER_ACCESS_LOG_OFF$$
+  level: $$PLACEHOLDER_LOG_LEVEL$$
+  formatter: text
   fields:
     service: registry
 storage:
@@ -216,13 +236,39 @@ health:
 	}
 	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", rootDir, 1)
 	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
+	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
+	if o.Opts.Global.LogLevel == "debug" {
+		configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
+	} else {
+		configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "true", 1)
+	}
+
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
 
 	if err != nil {
-		return fmt.Errorf("error parsing local storage configuration : %v\n %s\n", err, configYamlV0_1)
+		return fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV0_1)
 	}
 
+	regLogger := logrus.New()
+	// prepare the logger
+	registryLogFile, err = os.Create(registryLogFilename)
+	if err != nil {
+		regLogger.Warn("Failed to create log file for local storage registry, using default stderr")
+	} else {
+		regLogger.Out = registryLogFile
+	}
+	absPath, err := filepath.Abs(registryLogFilename)
+	o.Log.Info("local storage registry will log to %s", absPath)
+	if err != nil {
+		o.Log.Error(err.Error())
+	}
+	regLogEntry := logrus.NewEntry(regLogger)
+
+	// setup the context
+	dcontext.SetDefaultLogger(regLogEntry)
 	ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
+	ctx = dcontext.WithLogger(ctx, regLogEntry)
+
 	reg, err := registry.NewRegistry(ctx, config)
 	if err != nil {
 		return err
@@ -391,6 +437,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	defer cleanUp()
 	return nil
 }
 
@@ -403,7 +450,11 @@ func mergeImages(base, in []v1alpha3.CopyImageSchema) []v1alpha3.CopyImageSchema
 
 // cleanUp - utility to clean directories
 func cleanUp() {
+	// close registry log file
+	err := registryLogFile.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing log file %s: %v\n", registryLogFilename, err)
+	}
 	// clean up logs directory
 	os.RemoveAll(logsDir)
-
 }
