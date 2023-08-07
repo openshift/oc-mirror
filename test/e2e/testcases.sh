@@ -264,7 +264,11 @@ function m2m_release_with_oci_catalog {
     # ensure cincinnati client does not reject the rquest - due to untrusted CA Authority
     export SSL_CERT_FILE=test/e2e/graph/server.crt
     # build and start the service
-    go build -mod=readonly -o test/e2e/graph test/e2e/graph/main.go 
+    
+    #v2 workspace required change
+    #go build -mod=readonly -o test/e2e/graph test/e2e/graph/main.go 
+
+    go build -o test/e2e/graph test/e2e/graph/main.go 
     test/e2e/graph/main & PID_GO=$! 
     echo -e "go cincinnatti web service PID: ${PID_GO}"
     # copy relevant files and start the mirror process
