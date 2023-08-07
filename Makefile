@@ -10,10 +10,11 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/images.mk \
 	targets/openshift/deps-gomod.mk \
 )
-
-GO_MOD_FLAGS = -mod=readonly
+#v2 workspace required change
+#GO_MOD_FLAGS = -mod=readonly
 GO_BUILD_PACKAGES := ./cmd/...
-GO_PACKAGE = github.com/openshift/oc-mirror
+#v2 workspace required change
+#GO_PACKAGE = github.com/openshift/oc-mirror
 
 LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
 LIBSUBID_BUILD_TAG = $(shell hack/libsubid_tag.sh)
@@ -54,10 +55,8 @@ hack-build: clean
 
 tidy:
 	$(GO) mod tidy
-	# commented out because of this issue https://github.com/golang/go/issues/50750#issuecomment-1130020382
-	# go workspace is not working with mod verify and mod vendor
-	# $(GO) mod verify
-	# $(GO) mod vendor
+	$(GO) mod verify
+	$(GO) mod vendor
 .PHONY: tidy
 
 clean:
@@ -66,7 +65,9 @@ clean:
 .PHONY: clean
 
 test-unit:
-	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
+#v2 workspace required change
+#$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
+	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 .PHONY: test-unit
 
 test-e2e: build
@@ -88,16 +89,23 @@ publish-catalog:
 .PHONY: publish-catalog
 
 format:
-	$(GO) fmt $(GO_MOD_FLAGS) ./pkg/...
-	$(GO) fmt $(GO_MOD_FLAGS) ./cmd/...
+#v2 workspace required change
+#$(GO) fmt $(GO_MOD_FLAGS) ./pkg/...
+#$(GO) fmt $(GO_MOD_FLAGS) ./cmd/...
+	$(GO) fmt ./pkg/...
+	$(GO) fmt ./cmd/...
 .PHONY: format
 
 vet:
-	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./pkg/...
-	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./cmd/...
+#v2 workspace required change
+#$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./pkg/...
+#$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./cmd/...
+	$(GO) vet $(GO_BUILD_FLAGS) ./pkg/...
+	$(GO) vet $(GO_BUILD_FLAGS) ./cmd/...
 .PHONY: vet
 
-build: 
-	mkdir -p $(GO_BUILD_BINDIR)
-	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
-.PHONY: build
+#v2 workspace required change
+# build: 
+# 	mkdir -p $(GO_BUILD_BINDIR)
+# 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
+# .PHONY: build
