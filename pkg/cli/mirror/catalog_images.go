@@ -32,12 +32,21 @@ import (
 )
 
 const (
-	opmCachePrefix  = "/tmp/cache"
-	opmBinarySuffix = "opm"
-	opmBinaryDir    = "usr/bin/registry"
-	cacheFolderUID  = 1001
-	cacheFolderGID  = 0
+	opmCachePrefix           = "/tmp/cache"
+	opmBinarySuffix          = "opm"
+	opmBinaryDir             = "usr/bin/registry"
+	cacheLocationPlaceholder = "cacheLocation.txt"
+	cacheFolderUID           = 1001
+	cacheFolderGID           = 0
 )
+
+type NoCacheArgsErrorType struct{}
+
+var NoCacheArgsError = NoCacheArgsErrorType{}
+
+func (m NoCacheArgsErrorType) Error() string {
+	return "catalog container image command does not specify cache arguments - no cache generation will be attempted"
+}
 
 // unpackCatalog will unpack file-based catalogs if they exists
 func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]string) (bool, error) {
@@ -209,10 +218,21 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		klog.Infof("Rendering catalog image %q with file-based catalog ", refExact)
 
+		layersToAdd := []v1.Layer{}
+		layersToDelete := []v1.Layer{}
+		withCacheRegeneration := true
+		_, err := os.Stat(filepath.Join(artifactDir, cacheLocationPlaceholder))
+		if errors.Is(err, os.ErrNotExist) {
+			withCacheRegeneration = false
+		} else if err != nil {
+			return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
+		}
+
 		configLayerToAdd, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, config.IndexDir, "index.json"))
 		if err != nil {
 			return fmt.Errorf("error creating add layer: %v", err)
 		}
+		layersToAdd = append(layersToAdd, configLayerToAdd)
 
 		// Since we are defining the FBC as index.json,
 		// remove anything that may currently exist
@@ -220,38 +240,52 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		if err != nil {
 			return fmt.Errorf("error creating deleted layer: %v", err)
 		}
+		layersToDelete = append(layersToDelete, deletedConfigLayer)
 
-		// white out layer /tmp
-		deletedCacheLayer, err := deleteLayer("/.wh.tmp")
-		if err != nil {
-			return fmt.Errorf("error creating deleted cache layer: %v", err)
-		}
+		if withCacheRegeneration {
+			// read the location of the cache
+			dat, err := os.ReadFile(filepath.Join(artifactDir, cacheLocationPlaceholder))
+			if err != nil {
+				return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
+			}
+			cacheLocation := string(dat)
+			cacheLocationElmts := strings.Split(strings.TrimPrefix(cacheLocation, string(os.PathSeparator)), string(os.PathSeparator))
+			// white out layer /tmp
+			deletedCacheLayer, err := deleteLayer("/.wh." + cacheLocationElmts[0])
+			if err != nil {
+				return fmt.Errorf("error creating deleted cache layer: %v", err)
+			}
+			layersToDelete = append(layersToDelete, deletedCacheLayer)
 
-		opmCmdPath, err := findOpmCmd(artifactDir)
-		if err != nil {
-			return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
-		}
-		absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
-		if err != nil {
-			return fmt.Errorf("error getting absolute path for catalog's index %v: %v", filepath.Join(artifactDir, config.IndexDir), err)
-		}
-		absCachePath, err := filepath.Abs(filepath.Join(artifactDir, config.TmpDir))
-		if err != nil {
-			return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
-		}
-		cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
-		}
-		cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/tmp/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
-		if err != nil {
-			return fmt.Errorf("error creating add layer: %v", err)
+			opmCmdPath, err := findOpmCmd(artifactDir)
+			if err != nil {
+				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
+			}
+			absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
+			if err != nil {
+				return fmt.Errorf("error getting absolute path for catalog's index %v: %v", filepath.Join(artifactDir, config.IndexDir), err)
+			}
+			absCachePath, err := filepath.Abs(filepath.Join(artifactDir, config.TmpDir))
+			if err != nil {
+				return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
+			}
+			cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
+			}
+			cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/tmp/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
+			if err != nil {
+				return fmt.Errorf("error creating add layer: %v", err)
+			}
+			layersToAdd = append(layersToAdd, cacheLayerToAdd)
 		}
 
 		// Deleted layers must be added first in the slice
 		// so that the /configs and /tmp directories are deleted
 		// and then added back from the layers rebuilt from the new FBC.
-		layers := []v1.Layer{deletedConfigLayer, deletedCacheLayer, configLayerToAdd, cacheLayerToAdd}
+		layers := []v1.Layer{}
+		layers = append(layers, layersToDelete...)
+		layers = append(layers, layersToAdd...)
 
 		layoutDir := filepath.Join(artifactDir, config.LayoutsDir)
 		layoutPath, err = imgBuilder.CreateLayout("", layoutDir)
@@ -298,7 +332,8 @@ func findOpmCmd(artifactDir string) (string, error) {
 			return err
 		}
 
-		if info.Name() == opmBin {
+		// files that match the opmBin name with size 0 are the result of extracted symbolic links where the link has broken during extraction
+		if info.Name() == opmBin && info.Size() > 0 {
 			opmCmdPath = path
 		}
 
@@ -318,12 +353,12 @@ func findOpmCmd(artifactDir string) (string, error) {
 	return opmCmdPath, nil
 }
 
-// extractOPMBinary is usually called after rendering catalog's declarative config.
+// extractOPMAndCache is usually called after rendering catalog's declarative config.
 // it uses crane modules to pull the catalog image, select the manifest that corresponds to the
 // current platform. It then extracts from that image any files that are suffixed `*opm` for later
 // use upon rebuilding the catalog: This is because the opm binary can be called `opm` but also
 // `darwin-amd64-opm` etc.
-func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, outDir string, insecure bool) error {
+func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, outDir string, insecure bool) error {
 	var img v1.Image
 	var err error
 	refExact := srcRef.Ref.Exact()
@@ -334,65 +369,45 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 			return fmt.Errorf("unable to pull image from %s: %v", refExact, err)
 		}
 	} else {
-
-		// obtain the path to where the OCI image reference resides
-		layoutPath := layout.Path(v1alpha2.TrimProtocol(srcRef.OCIFBCPath))
-
-		// get its index.json and obtain its manifest
-		rootIndex, err := layoutPath.ImageIndex()
+		img, err = getPtfImageFromOCIIndex(v1alpha2.TrimProtocol(srcRef.OCIFBCPath), runtime.GOARCH, runtime.GOOS)
 		if err != nil {
 			return err
-		}
-		rootIndexManifest, err := rootIndex.IndexManifest()
-		if err != nil {
-			return err
-		}
-
-		// attempt to find the first image reference in the layout that corresponds to the platform...
-		// for a manifest list only search one level deep.
-
-	loop:
-		for _, descriptor := range rootIndexManifest.Manifests {
-
-			if descriptor.MediaType.IsIndex() {
-				// follow the descriptor using its digest to get the referenced index and its manifest
-				childIndex, err := rootIndex.ImageIndex(descriptor.Digest)
-				if err != nil {
-					return err
-				}
-				childIndexManifest, err := childIndex.IndexManifest()
-				if err != nil {
-					return err
-				}
-
-				// at this point, find and extract the child index that corresponds to this machine's
-				// architecture
-				for _, childDescriptor := range childIndexManifest.Manifests {
-					if childDescriptor.MediaType.IsImage() && childDescriptor.Platform.Architecture == runtime.GOARCH && childDescriptor.Platform.OS == runtime.GOOS {
-						img, err = childIndex.Image(childDescriptor.Digest)
-						if err != nil {
-							return err
-						}
-						// no further processing necessary
-						break loop
-					}
-				}
-
-			} else if descriptor.MediaType.IsImage() {
-				// this is a direct reference to an image, so just store it for later
-				img, err = rootIndex.Image(descriptor.Digest)
-				if err != nil {
-					return err
-				}
-				// no further processing necessary
-				break loop
-			}
 		}
 	}
 	// if we get here and no image was found bail out
 	if img == nil {
 		return fmt.Errorf("unable to obtain image for %v", srcRef)
 	}
+	cachePath, err := getCachePath(img)
+	if err != nil {
+		if errors.Is(err, NoCacheArgsError) {
+			return nil
+		} else {
+			return err
+		}
+	}
+
+	cacheLocationFileName := filepath.Join(outDir, cacheLocationPlaceholder)
+
+	baseDir := filepath.Dir(cacheLocationFileName)
+	err = os.MkdirAll(baseDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	cfl, err := os.Create(cacheLocationFileName)
+	if err == nil {
+		defer cfl.Close()
+	} else {
+		return err
+	}
+
+	_, err = cfl.Write([]byte(cachePath))
+	if err != nil {
+		return err
+	}
+	cfl.Close()
+	// cachePath exists, opm binary will be needed to regenerate it
 	tr := tar.NewReader(mutate.Extract(img))
 	opmBinaryExtracted := ""
 	for {
@@ -414,7 +429,7 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 			return err
 		}
 
-		targetFileName := filepath.Join(outDir, header.Name)
+		targetFileName := filepath.Join(outDir, config.OpmBinDir, header.Name)
 		bytes := buf.Bytes()
 
 		baseDir := filepath.Dir(targetFileName)
@@ -444,6 +459,98 @@ func extractOPMBinary(ctx context.Context, srcRef image.TypedImageReference, out
 	}
 
 	return nil
+}
+
+// getPtfImageFromOCIIndex takes an oci local image located in `fbcPath` and finds the image that
+// corresponds to the current platform and OS within the manifestList or imageIndex
+func getPtfImageFromOCIIndex(fbcPath string, architecture string, os string) (v1.Image, error) {
+	var img v1.Image
+
+	// obtain the path to where the OCI image reference resides
+	layoutPath := layout.Path(fbcPath)
+
+	// get its index.json and obtain its manifest
+	rootIndex, err := layoutPath.ImageIndex()
+	if err != nil {
+		return nil, err
+	}
+	rootIndexManifest, err := rootIndex.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+
+	// attempt to find the first image reference in the layout that corresponds to the platform...
+	// for a manifest list only search one level deep.
+
+loop:
+	for _, descriptor := range rootIndexManifest.Manifests {
+
+		if descriptor.MediaType.IsIndex() {
+			// follow the descriptor using its digest to get the referenced index and its manifest
+			childIndex, err := rootIndex.ImageIndex(descriptor.Digest)
+			if err != nil {
+				return nil, err
+			}
+			childIndexManifest, err := childIndex.IndexManifest()
+			if err != nil {
+				return nil, err
+			}
+
+			// at this point, find and extract the child index that corresponds to this machine's
+			// architecture
+			for _, childDescriptor := range childIndexManifest.Manifests {
+				if childDescriptor.MediaType.IsImage() && childDescriptor.Platform.Architecture == architecture && childDescriptor.Platform.OS == os {
+					img, err = childIndex.Image(childDescriptor.Digest)
+					if err != nil {
+						return nil, err
+					}
+					// no further processing necessary
+					break loop
+				}
+			}
+
+		} else if descriptor.MediaType.IsImage() {
+			// this is a direct reference to an image, so just store it for later
+			img, err = rootIndex.Image(descriptor.Digest)
+			if err != nil {
+				return nil, err
+			}
+			// no further processing necessary
+			break loop
+		}
+	}
+	return img, nil
+}
+
+// getCachePath reads an image's config, and determines if the container command  had a --cache-dir argument
+// and if so, returns the path that corresponds to that argument
+func getCachePath(img v1.Image) (string, error) {
+	cachePath := ""
+	cfgf, err := img.ConfigFile()
+	if err != nil {
+		return "", fmt.Errorf("unable to get config file for image %v: %v", img, err)
+	}
+	cmd := cfgf.Config.Cmd
+	hasCacheArg := false
+	for i, elmt := range cmd {
+		if strings.Contains(elmt, "--cache-dir") {
+			hasCacheArg = true
+			subElmts := strings.Split(elmt, "=")
+			if len(subElmts) == 1 { // the command might  be `serve --cache-dir /tmp/cache`
+				cachePath = cmd[i+1]
+			} else if len(subElmts) == 2 { // the command might be `serve --cache-dir=/tmp/cache`
+				cachePath = subElmts[1]
+			} else {
+				return "", fmt.Errorf("unable to parse command line for image %v: %v", img, err)
+			}
+			break
+		}
+	}
+	if !hasCacheArg {
+		return "", NoCacheArgsError
+	} else {
+		return cachePath, nil
+	}
 }
 
 func deleteLayer(old string) (v1.Layer, error) {

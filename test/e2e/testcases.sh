@@ -79,13 +79,13 @@ function pruned_catalogs() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 
     workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 }
 
 # Test heads-only mode with catalogs that prune with a custom target
@@ -95,13 +95,13 @@ function pruned_catalogs_with_target() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 
     workflow_diff imageset-config-headsonly-newtarget.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 }
 
 # Test heads-only mode with catalogs that prune bundles
@@ -110,13 +110,13 @@ function pruned_catalogs_with_include() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 
     workflow_diff imageset-config-filter-multi-prune.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 }
 
 # Test heads-only mode with catalogs that prune bundles
@@ -125,13 +125,13 @@ function pruned_catalogs_mirror_to_mirror() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 
     workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:4055c03d"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
 }
 
 # Test registry backend

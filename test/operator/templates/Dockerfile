@@ -2,7 +2,7 @@ FROM quay.io/operator-framework/opm:latest
 
 # Configure the entrypoint and command
 ENTRYPOINT ["/bin/opm"]
-CMD ["serve", "/configs"]
+CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
 
 COPY {{ index.name }} /configs
 
