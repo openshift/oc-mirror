@@ -49,7 +49,7 @@ function install_deps() {
   crane export registry:2 registry2.tar
   tar xvf registry2.tar bin/registry
   mv bin/registry $GOBIN
-  crane export quay.io/operator-framework/opm@sha256:d31c6ea5c50be93d6eb94d2b508f0208e84a308c011c6454ebf291d48b37df19 opm.tar
+  crane export quay.io/operator-framework/opm:v1.27.1 opm.tar
   tar xvf opm.tar bin/opm
   mv bin/opm $GOBIN
   rm -f registry2.tar opm.tar
