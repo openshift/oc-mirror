@@ -32,12 +32,10 @@ import (
 )
 
 const (
-	opmCachePrefix           = "/tmp/cache"
-	opmBinarySuffix          = "opm"
-	opmBinaryDir             = "usr/bin/registry"
-	cacheLocationPlaceholder = "cacheLocation.txt"
-	cacheFolderUID           = 1001
-	cacheFolderGID           = 0
+	opmCachePrefix  = "/tmp/cache"
+	opmBinarySuffix = "opm"
+	cacheFolderUID  = 1001
+	cacheFolderGID  = 0
 )
 
 type NoCacheArgsErrorType struct{}
@@ -221,7 +219,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		layersToAdd := []v1.Layer{}
 		layersToDelete := []v1.Layer{}
 		withCacheRegeneration := true
-		_, err := os.Stat(filepath.Join(artifactDir, cacheLocationPlaceholder))
+		_, err := os.Stat(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
 		if errors.Is(err, os.ErrNotExist) {
 			withCacheRegeneration = false
 		} else if err != nil {
@@ -244,7 +242,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		if withCacheRegeneration {
 			// read the location of the cache
-			dat, err := os.ReadFile(filepath.Join(artifactDir, cacheLocationPlaceholder))
+			dat, err := os.ReadFile(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
 			if err != nil {
 				return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
 			}
@@ -301,7 +299,11 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			// Although it was prefered to keep the entrypoint and command as it was
 			// we couldnt guarantie that the cache-dir was /tmp/cache, and therefore
 			// we had to specify the command for the newly built catalog
-			cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/tmp/cache"}
+			if withCacheRegeneration {
+				cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/tmp/cache"}
+			} else { // this means that no cache was found in the original catalog (old catalog with opm < 1.25)
+				cfg.Config.Cmd = []string{"serve", "/configs"}
+			}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)
@@ -355,10 +357,10 @@ func findOpmCmd(artifactDir string) (string, error) {
 
 // extractOPMAndCache is usually called after rendering catalog's declarative config.
 // it uses crane modules to pull the catalog image, select the manifest that corresponds to the
-// current platform. It then extracts from that image any files that are suffixed `*opm` for later
+// current platform architecture. It then extracts from that image any files that are suffixed `*opm` for later
 // use upon rebuilding the catalog: This is because the opm binary can be called `opm` but also
 // `darwin-amd64-opm` etc.
-func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, outDir string, insecure bool) error {
+func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, ctlgSrcDir string, insecure bool) error {
 	var img v1.Image
 	var err error
 	refExact := srcRef.Ref.Exact()
@@ -369,7 +371,7 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, o
 			return fmt.Errorf("unable to pull image from %s: %v", refExact, err)
 		}
 	} else {
-		img, err = getPtfImageFromOCIIndex(v1alpha2.TrimProtocol(srcRef.OCIFBCPath), runtime.GOARCH, runtime.GOOS)
+		img, err = getPlatformImageFromOCIIndex(v1alpha2.TrimProtocol(srcRef.OCIFBCPath), runtime.GOARCH, runtime.GOOS)
 		if err != nil {
 			return err
 		}
@@ -387,7 +389,7 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, o
 		}
 	}
 
-	cacheLocationFileName := filepath.Join(outDir, cacheLocationPlaceholder)
+	cacheLocationFileName := filepath.Join(ctlgSrcDir, config.OPMCacheLocationPlaceholder)
 
 	baseDir := filepath.Dir(cacheLocationFileName)
 	err = os.MkdirAll(baseDir, 0755)
@@ -396,17 +398,15 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, o
 	}
 
 	cfl, err := os.Create(cacheLocationFileName)
-	if err == nil {
-		defer cfl.Close()
-	} else {
+	if err != nil {
 		return err
 	}
+	defer cfl.Close()
 
 	_, err = cfl.Write([]byte(cachePath))
 	if err != nil {
 		return err
 	}
-	cfl.Close()
 	// cachePath exists, opm binary will be needed to regenerate it
 	tr := tar.NewReader(mutate.Extract(img))
 	opmBinaryExtracted := ""
@@ -429,7 +429,7 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, o
 			return err
 		}
 
-		targetFileName := filepath.Join(outDir, config.OpmBinDir, header.Name)
+		targetFileName := filepath.Join(ctlgSrcDir, config.OpmBinDir, header.Name)
 		bytes := buf.Bytes()
 
 		baseDir := filepath.Dir(targetFileName)
@@ -461,9 +461,9 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, o
 	return nil
 }
 
-// getPtfImageFromOCIIndex takes an oci local image located in `fbcPath` and finds the image that
+// getPlatformImageFromOCIIndex takes an oci local image located in `fbcPath` and finds the image that
 // corresponds to the current platform and OS within the manifestList or imageIndex
-func getPtfImageFromOCIIndex(fbcPath string, architecture string, os string) (v1.Image, error) {
+func getPlatformImageFromOCIIndex(fbcPath string, architecture string, os string) (v1.Image, error) {
 	var img v1.Image
 
 	// obtain the path to where the OCI image reference resides
