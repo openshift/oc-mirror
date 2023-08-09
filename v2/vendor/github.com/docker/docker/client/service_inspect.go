@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/url"
 
 	"github.com/docker/docker/api/types"
@@ -22,10 +22,10 @@ func (cli *Client) ServiceInspectWithRaw(ctx context.Context, serviceID string, 
 	serverResp, err := cli.get(ctx, "/services/"+serviceID, query, nil)
 	defer ensureReaderClosed(serverResp)
 	if err != nil {
-		return swarm.Service{}, nil, err
+		return swarm.Service{}, nil, wrapResponseError(err, serverResp, "service", serviceID)
 	}
 
-	body, err := io.ReadAll(serverResp.body)
+	body, err := ioutil.ReadAll(serverResp.body)
 	if err != nil {
 		return swarm.Service{}, nil, err
 	}

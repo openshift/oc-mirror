@@ -342,6 +342,13 @@ func (b *ImageBuilder) CreateLayout(srcRef, dir string) (layout.Path, error) {
 // LayerFromPath will write the contents of the path(s) the target
 // directory and build a v1.Layer
 func LayerFromPath(targetPath, path string) (v1.Layer, error) {
+	return LayerFromPathWithUidGid(targetPath, path, -1, -1)
+}
+
+// LayerFromPath will write the contents of the path(s) the target
+// directory specifying the target UID/GID and build a v1.Layer.
+// Use gid = -1 , uid = -1 if you don't want to override.
+func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Layer, error) {
 	var b bytes.Buffer
 	tw := tar.NewWriter(&b)
 
@@ -396,6 +403,12 @@ func LayerFromPath(targetPath, path string) (v1.Layer, error) {
 				Name: filepath.Join(targetPath, filepath.ToSlash(rel)),
 				Mode: int64(info.Mode()),
 			}
+			if uid != -1 {
+				hdr.Uid = uid
+			}
+			if gid != -1 {
+				hdr.Gid = gid
+			}
 			if err := processPaths(hdr, info, fp); err != nil {
 				return err
 			}
@@ -411,6 +424,12 @@ func LayerFromPath(targetPath, path string) (v1.Layer, error) {
 		hdr := &tar.Header{
 			Name: filepath.Join(targetPath, filepath.ToSlash(base)),
 			Mode: int64(pathInfo.Mode()),
+		}
+		if uid != -1 { // uid was specified in the input param
+			hdr.Uid = uid
+		}
+		if gid != -1 { // gid was specified in the input param
+			hdr.Gid = gid
 		}
 		if err := processPaths(hdr, pathInfo, path); err != nil {
 			return nil, err

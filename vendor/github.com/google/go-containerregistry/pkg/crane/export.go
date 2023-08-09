@@ -30,23 +30,16 @@ func Export(img v1.Image, w io.Writer) error {
 		return err
 	}
 	if len(layers) == 1 {
-		// If it's a single layer...
+		// If it's a single layer, we don't have to flatten the filesystem.
+		// An added perk of skipping mutate.Extract here is that this works
+		// for non-tarball layers.
 		l := layers[0]
-		mt, err := l.MediaType()
+		rc, err := l.Uncompressed()
 		if err != nil {
 			return err
 		}
-
-		if !mt.IsLayer() {
-			// ...and isn't an OCI mediaType, we don't have to flatten it.
-			// This lets export work for single layer, non-tarball images.
-			rc, err := l.Uncompressed()
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(w, rc)
-			return err
-		}
+		_, err = io.Copy(w, rc)
+		return err
 	}
 	fs := mutate.Extract(img)
 	_, err = io.Copy(w, fs)

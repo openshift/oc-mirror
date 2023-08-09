@@ -23,10 +23,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	"github.com/google/go-containerregistry/pkg/v1/types"
 )
 
 func isWindows(img v1.Image) (bool, error) {
+	if img == nil {
+		return false, nil
+	}
 	cfg, err := img.ConfigFile()
 	if err != nil {
 		return false, err
@@ -40,30 +42,14 @@ func isWindows(img v1.Image) (bool, error) {
 // "windows"), the contents of the tarballs will be modified to be suitable for
 // a Windows container image.`,
 func Append(base v1.Image, paths ...string) (v1.Image, error) {
-	if base == nil {
-		return nil, fmt.Errorf("invalid argument: base")
-	}
-
 	win, err := isWindows(base)
 	if err != nil {
 		return nil, fmt.Errorf("getting base image: %w", err)
 	}
 
-	baseMediaType, err := base.MediaType()
-
-	if err != nil {
-		return nil, fmt.Errorf("getting base image media type: %w", err)
-	}
-
-	layerType := types.DockerLayer
-
-	if baseMediaType == types.OCIManifestSchema1 {
-		layerType = types.OCILayer
-	}
-
 	layers := make([]v1.Layer, 0, len(paths))
 	for _, path := range paths {
-		layer, err := getLayer(path, layerType)
+		layer, err := getLayer(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading layer %q: %w", path, err)
 		}
@@ -81,16 +67,16 @@ func Append(base v1.Image, paths ...string) (v1.Image, error) {
 	return mutate.AppendLayers(base, layers...)
 }
 
-func getLayer(path string, layerType types.MediaType) (v1.Layer, error) {
+func getLayer(path string) (v1.Layer, error) {
 	f, err := streamFile(path)
 	if err != nil {
 		return nil, err
 	}
 	if f != nil {
-		return stream.NewLayer(f, stream.WithMediaType(layerType)), nil
+		return stream.NewLayer(f), nil
 	}
 
-	return tarball.LayerFromFile(path, tarball.WithMediaType(layerType))
+	return tarball.LayerFromFile(path)
 }
 
 // If we're dealing with a named pipe, trying to open it multiple times will
