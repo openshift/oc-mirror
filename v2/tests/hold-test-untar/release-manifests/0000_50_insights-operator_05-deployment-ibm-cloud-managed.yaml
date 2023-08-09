@@ -1,0 +1,100 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    config.openshift.io/inject-proxy: insights-operator
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    capability.openshift.io/name: Insights
+  name: insights-operator
+  namespace: openshift-insights
+spec:
+  selector:
+    matchLabels:
+      app: insights-operator
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app: insights-operator
+    spec:
+      containers:
+      - args:
+        - start
+        - -v=4
+        - --config=/etc/insights-operator/server.yaml
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: RELEASE_VERSION
+          value: 4.12.0
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:cca18ee8f9680c755e8b31aeec058b8d29fbdc6cc5dfb03158391fe81ee166bc
+        name: insights-operator
+        ports:
+        - containerPort: 8443
+          name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 30Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/lib/insights-operator
+          name: snapshots
+        - mountPath: /var/run/configmaps/trusted-ca-bundle
+          name: trusted-ca-bundle
+          readOnly: true
+        - mountPath: /var/run/configmaps/service-ca-bundle
+          name: service-ca-bundle
+          readOnly: true
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: operator
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 900
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 900
+      volumes:
+      - emptyDir: {}
+        name: snapshots
+      - configMap:
+          name: trusted-ca-bundle
+          optional: true
+        name: trusted-ca-bundle
+      - configMap:
+          name: service-ca-bundle
+          optional: true
+        name: service-ca-bundle
+      - name: serving-cert
+        secret:
+          optional: true
+          secretName: openshift-insights-serving-cert

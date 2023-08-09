@@ -1,0 +1,87 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ingress-operator
+  namespace: openshift-ingress-operator
+  labels:
+    role: alert-rules
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec:
+  groups:
+    - name: openshift-ingress.rules
+      rules:
+      - alert: HAProxyReloadFail
+        expr: template_router_reload_failure == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: HAProxy reload failure
+          description: "This alert fires when HAProxy fails to reload its configuration, which will result in the router not picking up recently created or modified routes."
+          message: "HAProxy reloads are failing on {{ $labels.pod }}. Router is not respecting recently created or modified routes"
+      - alert: HAProxyDown
+        expr: haproxy_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: HAProxy is down
+          description: "This alert fires when metrics report that HAProxy is down."
+          message: "HAProxy metrics are reporting that HAProxy is down on pod {{ $labels.namespace }} / {{ $labels.pod }}"
+      - alert: IngressControllerDegraded
+        expr: ingress_controller_conditions{condition="Degraded"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: IngressController is degraded
+          description: "This alert fires when the IngressController status is degraded."
+          message: |
+            The {{ $labels.namespace }}/{{ $labels.name }} ingresscontroller is
+            degraded: {{ $labels.reason }}.
+      - alert: IngressControllerUnavailable
+        expr: ingress_controller_conditions{condition="Available"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: IngressController is unavailable
+          description: "This alert fires when the IngressController is not available."
+          message: |
+            The {{ $labels.namespace }}/{{ $labels.name }} ingresscontroller is
+            unavailable: {{ $labels.reason }}.
+      # Recording rules related to route metrics for sending via telemetry
+      - expr: min(route_metrics_controller_routes_per_shard)
+        record: cluster:route_metrics_controller_routes_per_shard:min
+      - expr: max(route_metrics_controller_routes_per_shard)
+        record: cluster:route_metrics_controller_routes_per_shard:max
+      - expr: avg(route_metrics_controller_routes_per_shard)
+        record: cluster:route_metrics_controller_routes_per_shard:avg
+      - expr: quantile(0.5, route_metrics_controller_routes_per_shard)
+        record: cluster:route_metrics_controller_routes_per_shard:median
+      - expr: sum (openshift_route_info) by (tls_termination)
+        record: cluster:openshift_route_info:tls_termination:sum
+    - name: openshift-ingress-to-route-controller.rules
+      rules:
+        - alert: IngressWithoutClassName
+          expr: openshift_ingress_to_route_controller_ingress_without_class_name == 1
+          for: 1d
+          labels:
+            severity: warning
+          annotations:
+            summary: Ingress without IngressClassName for 1 day
+            description: "This alert fires when there is an Ingress with an unset IngressClassName for longer than one day."
+            message: "Ingress {{ $labels.name }} is missing the IngressClassName for 1 day."
+        - alert: UnmanagedRoutes
+          expr: openshift_ingress_to_route_controller_route_with_unmanaged_owner == 1
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: Route owned by an Ingress no longer managed
+            description: "This alert fires when there is a Route owned by an unmanaged Ingress."
+            message: "Route {{ $labels.name }} is owned by an unmanaged Ingress."
+

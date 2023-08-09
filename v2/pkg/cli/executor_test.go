@@ -8,7 +8,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
-	"github.com/openshift/oc-mirror/v2/pkg/diff"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/spf13/cobra"
@@ -52,7 +51,6 @@ func TestExecutor(t *testing.T) {
 	t.Run("Testing Executor : should pass", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts}
-		diff := &Diff{Log: log, Config: cfg, Opts: opts, Mirror: Mirror{}}
 		ex := &ExecutorSchema{
 			Log:              log,
 			Config:           cfg,
@@ -61,7 +59,6 @@ func TestExecutor(t *testing.T) {
 			Release:          collector,
 			AdditionalImages: collector,
 			Batch:            batch,
-			Diff:             diff,
 		}
 
 		res := &cobra.Command{}
@@ -78,7 +75,6 @@ func TestExecutor(t *testing.T) {
 	t.Run("Testing Executor : should fail (batch worker)", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: true}
-		diff := &Diff{Log: log, Config: cfg, Opts: opts, Mirror: Mirror{}}
 		ex := &ExecutorSchema{
 			Log:              log,
 			Config:           cfg,
@@ -87,7 +83,6 @@ func TestExecutor(t *testing.T) {
 			Release:          collector,
 			AdditionalImages: collector,
 			Batch:            batch,
-			Diff:             diff,
 		}
 
 		res := &cobra.Command{}
@@ -104,7 +99,6 @@ func TestExecutor(t *testing.T) {
 		releaseCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
 		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
-		diff := &Diff{Log: log, Config: cfg, Opts: opts, Mirror: Mirror{}}
 		ex := &ExecutorSchema{
 			Log:              log,
 			Config:           cfg,
@@ -113,7 +107,6 @@ func TestExecutor(t *testing.T) {
 			Release:          releaseCollector,
 			AdditionalImages: releaseCollector,
 			Batch:            batch,
-			Diff:             diff,
 		}
 
 		res := &cobra.Command{}
@@ -130,7 +123,6 @@ func TestExecutor(t *testing.T) {
 		releaseCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
-		diff := &Diff{Log: log, Config: cfg, Opts: opts, Mirror: Mirror{}}
 		ex := &ExecutorSchema{
 			Log:              log,
 			Config:           cfg,
@@ -139,7 +131,6 @@ func TestExecutor(t *testing.T) {
 			Release:          releaseCollector,
 			AdditionalImages: releaseCollector,
 			Batch:            batch,
-			Diff:             diff,
 		}
 
 		res := &cobra.Command{}
@@ -201,30 +192,6 @@ type Batch struct {
 	Config v1alpha2.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Fail   bool
-}
-
-type Diff struct {
-	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
-	Opts   mirror.CopyOptions
-	Mirror Mirror
-	Fail   bool
-}
-
-func (o *Diff) DeleteImages(ctx context.Context) error {
-	return nil
-}
-
-func (o *Diff) CheckDiff(prevCfg v1alpha2.ImageSetConfiguration) (bool, error) {
-	return false, nil
-}
-
-func (o *Diff) GetAllMetadata(dir string) (diff.SequenceSchema, v1alpha2.ImageSetConfiguration, error) {
-	return diff.SequenceSchema{}, v1alpha2.ImageSetConfiguration{}, nil
-}
-
-func (o *Diff) WriteMetadata(dir, dest string, sch diff.SequenceSchema, cfg v1alpha2.ImageSetConfiguration) error {
-	return nil
 }
 
 func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {

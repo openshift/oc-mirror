@@ -22,7 +22,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
-	"github.com/openshift/oc-mirror/v2/pkg/diff"
+	"github.com/openshift/oc-mirror/v2/pkg/distributor"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -71,7 +71,6 @@ var (
 type ExecutorSchema struct {
 	Log              clog.PluggableLoggerInterface
 	Config           v1alpha2.ImageSetConfiguration
-	MetaData         diff.SequenceSchema
 	Opts             mirror.CopyOptions
 	Operator         operator.CollectorInterface
 	Release          release.CollectorInterface
@@ -79,8 +78,8 @@ type ExecutorSchema struct {
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
 	Batch            batch.BatchInterface
-	Diff             diff.DiffInterface
 	LocalStorage     registry.Registry
+	RemoteWorker     distributor.RemoteWorkerInterface
 }
 
 // NewMirrorCmd - cobra entry point
@@ -149,6 +148,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
+	cmd.Flags().StringVar(&opts.Global.Workers, "distributed-workers", "", "a csv file with a list of distributed servers (ip address:port)")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
 	cmd.Flags().AddFlagSet(&flagDepTLS)
@@ -242,6 +242,33 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	o.Log.Info("total additional images to copy %d ", len(imgs))
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
+	// check if we have worker nodes enabled
+	if len(o.Opts.Global.Workers) > 0 {
+		// read the csv serverf ile
+		ips, err := o.RemoteWorker.ReadWorkerCsv(o.Opts.Global.Workers)
+		if err != nil {
+			return err
+		}
+		// check each service, if not available abandon the mirroring
+		err = o.RemoteWorker.CheckServices(ips)
+		if err != nil {
+			return err
+		}
+		// send a payload to each worker node
+		err = o.RemoteWorker.ProcessWorkload(ips, allRelatedImages)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		//call the batch worker
+		err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
+		if err != nil {
+			cleanUp()
+			return err
+		}
+	}
+
 	//call the batch worker
 	err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
 	if err != nil {
@@ -295,7 +322,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))
-
+	o.RemoteWorker = distributor.New(o.Log)
 }
 
 // Validate - cobra validation

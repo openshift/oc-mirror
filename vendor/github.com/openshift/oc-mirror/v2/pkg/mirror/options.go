@@ -470,6 +470,7 @@ type GlobalOptions struct {
 	AdditionalFrom     string        // Used for additionalImages mirroring (diskToMirror)
 	Quiet              bool          // Suppress output information when copying images
 	Force              bool          // Force the copy/mirror even if there is nothing to update
+	Workers            string        // Distributed worker a file in csv format that has a list of ips (address:port)
 }
 
 type CopyOptions struct {

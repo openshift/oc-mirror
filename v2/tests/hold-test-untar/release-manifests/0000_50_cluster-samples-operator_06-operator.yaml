@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-samples-operator
+  namespace: openshift-cluster-samples-operator
+  annotations:
+    capability.openshift.io/name: openshift-samples
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: cluster-samples-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: cluster-samples-operator
+    spec:
+      serviceAccountName: cluster-samples-operator
+      shareProcessNamespace: true
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      priorityClassName: "system-cluster-critical"
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+      - key: node-role.kubernetes.io/master  # Just tolerate NoSchedule taint on master node. If there are other conditions like disk-pressure etc, let's not schedule the control-plane pods onto that node.
+        operator: Exists
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120 # Evict pods within 2 mins.
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120 # Evict pods within 2 mins.
+      volumes:
+      - name: samples-operator-tls
+        secret:
+          secretName: samples-operator-tls
+      containers:
+      - name: cluster-samples-operator
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7e5cf6294e213c4dfbd16d7f5e0bd3071703a0fde2342eb09b3957eb6a2b6b3d
+        ports:
+        - containerPort: 60000
+          name: metrics
+        command:
+        - cluster-samples-operator
+        resources:
+          requests:
+            memory: 50Mi
+            cpu: 10m
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - name: samples-operator-tls
+          mountPath: /etc/secrets
+        env:
+          - name: WATCH_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: OPERATOR_NAME
+            value: cluster-samples-operator
+          - name: RELEASE_VERSION
+            value: "4.12.0"
+      - name: cluster-samples-operator-watch
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7e5cf6294e213c4dfbd16d7f5e0bd3071703a0fde2342eb09b3957eb6a2b6b3d
+        command:
+        - cluster-samples-operator-watch
+        - file-watcher-watchdog
+        args:
+        - --namespace=openshift-cluster-samples-operator
+        - --process-name=cluster-samples-operator
+        - --termination-grace-period=30s
+        - --files=/etc/secrets/tls.crt,/etc/secrets/tls.key
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: 50Mi
+            cpu: 10m
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL

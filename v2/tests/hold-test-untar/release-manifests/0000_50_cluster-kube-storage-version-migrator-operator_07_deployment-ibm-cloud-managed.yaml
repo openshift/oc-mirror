@@ -1,0 +1,88 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+  labels:
+    app: kube-storage-version-migrator-operator
+  name: kube-storage-version-migrator-operator
+  namespace: openshift-kube-storage-version-migrator-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-storage-version-migrator-operator
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app: kube-storage-version-migrator-operator
+      name: kube-storage-version-migrator-operator
+    spec:
+      containers:
+      - args:
+        - --config=/var/run/configmaps/config/config.yaml
+        command:
+        - cluster-kube-storage-version-migrator-operator
+        - start
+        env:
+        - name: IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:e36c1c4e383fd252168aa2cb465236aa642062446aa3a026f06ea4a4afb52d7f
+        - name: OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:773fe01f949872eaae7daee9bac53f06ca4d375e3f8d6207a9a3eccaa4ab9f98
+        - name: OPERATOR_IMAGE_VERSION
+          value: 4.12.0
+        - name: OPERAND_IMAGE_VERSION
+          value: 4.12.0
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:773fe01f949872eaae7daee9bac53f06ca4d375e3f8d6207a9a3eccaa4ab9f98
+        name: kube-storage-version-migrator-operator
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsUser: 1001
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/run/configmaps/config
+          name: config
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: kube-storage-version-migrator-operator
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      volumes:
+      - name: serving-cert
+        secret:
+          optional: true
+          secretName: serving-cert
+      - configMap:
+          name: config
+        name: config

@@ -1,0 +1,30 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: controlplanemachineset.machine.openshift.io
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: control-plane-machine-set-operator
+      namespace: openshift-machine-api
+      path: /validate-machine-openshift-io-v1-controlplanemachineset
+      port: 9443
+  failurePolicy: Fail
+  name: controlplanemachineset.machine.openshift.io
+  rules:
+  - apiGroups:
+    - machine.openshift.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - controlplanemachinesets
+  sideEffects: None

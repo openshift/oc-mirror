@@ -1,0 +1,14 @@
+# The network operator is responsible for injecting
+# the trusted ca bundle into this configmap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/create-only: "true"
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+  name: trusted-ca
+  namespace: openshift-ingress-operator

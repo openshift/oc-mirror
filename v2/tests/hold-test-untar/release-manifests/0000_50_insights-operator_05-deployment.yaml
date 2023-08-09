@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insights-operator
+  namespace: openshift-insights
+  annotations:
+    config.openshift.io/inject-proxy: insights-operator
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Insights
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: insights-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app: insights-operator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: operator
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        node-role.kubernetes.io/master: ""
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 900
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 900
+      volumes:
+      - name: snapshots
+        emptyDir: {}
+          #sizeLimit: 1Gi # bug https://bugzilla.redhat.com/show_bug.cgi?id=1713207
+      - name: trusted-ca-bundle
+        configMap:
+          name: trusted-ca-bundle
+          optional: true
+      - name: service-ca-bundle
+        configMap:
+          name: service-ca-bundle
+          optional: true
+      - name: serving-cert
+        secret:
+          secretName: openshift-insights-serving-cert
+          optional: true
+      containers:
+      - name: insights-operator
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:cca18ee8f9680c755e8b31aeec058b8d29fbdc6cc5dfb03158391fe81ee166bc
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - name: snapshots
+          mountPath: /var/lib/insights-operator
+        - mountPath: /var/run/configmaps/trusted-ca-bundle
+          name: trusted-ca-bundle
+          readOnly: true
+        - mountPath: /var/run/configmaps/service-ca-bundle
+          name: service-ca-bundle
+          readOnly: true
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+        ports:
+        - containerPort: 8443
+          name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 30Mi
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: RELEASE_VERSION
+          value: "4.12.0"
+        args:
+        - start
+        - -v=4
+        - --config=/etc/insights-operator/server.yaml

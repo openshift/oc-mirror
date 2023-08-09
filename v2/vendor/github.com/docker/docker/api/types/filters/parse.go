@@ -1,5 +1,4 @@
-/*
-Package filters provides tools for encoding a mapping of keys to a set of
+/*Package filters provides tools for encoding a mapping of keys to a set of
 multiple values.
 */
 package filters // import "github.com/docker/docker/api/types/filters"
@@ -49,7 +48,7 @@ func (args Args) Keys() []string {
 // MarshalJSON returns a JSON byte representation of the Args
 func (args Args) MarshalJSON() ([]byte, error) {
 	if len(args.fields) == 0 {
-		return []byte("{}"), nil
+		return []byte{}, nil
 	}
 	return json.Marshal(args.fields)
 }
@@ -98,7 +97,7 @@ func FromJSON(p string) (Args, error) {
 	// Fallback to parsing arguments in the legacy slice format
 	deprecated := map[string][]string{}
 	if legacyErr := json.Unmarshal(raw, &deprecated); legacyErr != nil {
-		return args, invalidFilter{}
+		return args, err
 	}
 
 	args.fields = deprecatedArgs(deprecated)
@@ -107,6 +106,9 @@ func FromJSON(p string) (Args, error) {
 
 // UnmarshalJSON populates the Args from JSON encode bytes
 func (args Args) UnmarshalJSON(raw []byte) error {
+	if len(raw) == 0 {
+		return nil
+	}
 	return json.Unmarshal(raw, &args.fields)
 }
 
@@ -162,13 +164,13 @@ func (args Args) MatchKVList(key string, sources map[string]string) bool {
 	}
 
 	for value := range fieldValues {
-		testK, testV, hasValue := strings.Cut(value, "=")
+		testKV := strings.SplitN(value, "=", 2)
 
-		v, ok := sources[testK]
+		v, ok := sources[testKV[0]]
 		if !ok {
 			return false
 		}
-		if hasValue && testV != v {
+		if len(testKV) == 2 && testKV[1] != v {
 			return false
 		}
 	}
@@ -193,38 +195,6 @@ func (args Args) Match(field, source string) bool {
 		}
 	}
 	return false
-}
-
-// GetBoolOrDefault returns a boolean value of the key if the key is present
-// and is intepretable as a boolean value. Otherwise the default value is returned.
-// Error is not nil only if the filter values are not valid boolean or are conflicting.
-func (args Args) GetBoolOrDefault(key string, defaultValue bool) (bool, error) {
-	fieldValues, ok := args.fields[key]
-
-	if !ok {
-		return defaultValue, nil
-	}
-
-	if len(fieldValues) == 0 {
-		return defaultValue, invalidFilter{key, nil}
-	}
-
-	isFalse := fieldValues["0"] || fieldValues["false"]
-	isTrue := fieldValues["1"] || fieldValues["true"]
-
-	conflicting := isFalse && isTrue
-	invalid := !isFalse && !isTrue
-
-	if conflicting || invalid {
-		return defaultValue, invalidFilter{key, args.Get(key)}
-	} else if isFalse {
-		return false, nil
-	} else if isTrue {
-		return true, nil
-	}
-
-	// This code shouldn't be reached.
-	return defaultValue, unreachableCode{Filter: key, Value: args.Get(key)}
 }
 
 // ExactMatch returns true if the source matches exactly one of the values.
@@ -277,12 +247,20 @@ func (args Args) Contains(field string) bool {
 	return ok
 }
 
+type invalidFilter string
+
+func (e invalidFilter) Error() string {
+	return "Invalid filter '" + string(e) + "'"
+}
+
+func (invalidFilter) InvalidParameter() {}
+
 // Validate compared the set of accepted keys against the keys in the mapping.
 // An error is returned if any mapping keys are not in the accepted set.
 func (args Args) Validate(accepted map[string]bool) error {
 	for name := range args.fields {
 		if !accepted[name] {
-			return invalidFilter{name, nil}
+			return invalidFilter(name)
 		}
 	}
 	return nil

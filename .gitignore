@@ -1,5 +1,6 @@
 # Build artifacts.
 /bin/
+v2/build/
 
 # Test artifacts.
 coverage.out
@@ -12,6 +13,8 @@ sha256sum.txt
 oc-mirror-workspace/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
+v2/tests/results/
+v2/logs
 
 # Logs.
 **/.oc-mirror.log

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: openshift-config-operator
+  name: openshift-config-operator
+  labels:
+    app: openshift-config-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openshift-config-operator
+  template:
+    metadata:
+      name: openshift-config-operator
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        app: openshift-config-operator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: openshift-config-operator
+      priorityClassName: "system-cluster-critical"
+      volumes:
+      - name: serving-cert
+        secret:
+          secretName: config-operator-serving-cert
+          optional: true
+      containers:
+      - name: openshift-config-operator
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f6ba6ec29ae317b65ccae96aae4338eed31430f09c536e09ac1e36d9f11b208e
+        imagePullPolicy: IfNotPresent
+        command: ["cluster-config-operator", "operator"]
+        ports:
+          - containerPort: 8443
+            name: metrics
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            scheme: HTTPS
+            port: 8443
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz # TODO: replace this with /readyz
+            scheme: HTTPS
+            port: 8443
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        resources:
+          requests:
+            memory: 50Mi
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+        env:
+        - name: IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f6ba6ec29ae317b65ccae96aae4338eed31430f09c536e09ac1e36d9f11b208e
+        - name: OPERATOR_IMAGE_VERSION
+          value: "4.12.0"
+        - name: OPERAND_IMAGE_VERSION
+          value: "4.12.0"
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120
