@@ -255,7 +255,8 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			}
 			layersToDelete = append(layersToDelete, deletedCacheLayer)
 
-			opmCmdPath, err := findOpmCmd(artifactDir)
+			opmCmdPath := filepath.Join(artifactDir, config.OpmBinDir, "opm")
+			_, err = os.Stat(opmCmdPath)
 			if err != nil {
 				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
 			}
@@ -312,49 +313,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 	return nil
 }
 
-// findOpmCmd attempts to find the opm binary within the extracted contents of the catalog container image.
-// The exact location of the opm binary within the image is not certain: It depends among other things on
-// the version of the catalog, on the decisions by maintainers of the catalog, on the platform...
-func findOpmCmd(artifactDir string) (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("error finding current working directory while preparing to run opm to regenerate cache: %v", err)
-	}
-	runningOS := runtime.GOOS
-	runningArch := runtime.GOARCH
-	opmBin := "opm"
-
-	if runningOS != "linux" {
-		opmBin = strings.Join([]string{runningOS, runningArch, opmBin}, "-")
-	}
-	opmCmdPath := ""
-	binaryDir := filepath.Join(wd, artifactDir, config.OpmBinDir)
-	err = filepath.Walk(binaryDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// files that match the opmBin name with size 0 are the result of extracted symbolic links where the link has broken during extraction
-		if info.Name() == opmBin && info.Size() > 0 {
-			opmCmdPath = path
-		}
-
-		return nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
-	}
-	_, err = os.Stat(opmCmdPath)
-	if err != nil {
-		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
-	}
-	err = os.Chmod(opmCmdPath, 0744)
-	if err != nil {
-		return "", fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
-	}
-	return opmCmdPath, nil
-}
-
 // extractOPMAndCache is usually called after rendering catalog's declarative config.
 // it uses crane modules to pull the catalog image, select the manifest that corresponds to the
 // current platform architecture. It then extracts from that image any files that are suffixed `*opm` for later
@@ -408,56 +366,20 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 		return err
 	}
 	// cachePath exists, opm binary will be needed to regenerate it
-	tr := tar.NewReader(mutate.Extract(img))
-	opmBinaryExtracted := ""
-	for {
-		header, err := tr.Next()
-
-		// break the infinite loop when EOF
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		// skip the file if it is a directory or if file name does not end with `opm`
-		if !strings.HasSuffix(header.Name, opmBinarySuffix) || header.FileInfo().IsDir() {
-			continue
-		}
-
-		var buf bytes.Buffer
-		_, err = buf.ReadFrom(tr)
-		if err != nil {
-			return err
-		}
-
-		targetFileName := filepath.Join(ctlgSrcDir, config.OpmBinDir, header.Name)
-		bytes := buf.Bytes()
-
-		baseDir := filepath.Dir(targetFileName)
-		err = os.MkdirAll(baseDir, 0755)
-		if err != nil {
-			return err
-		}
-
-		f, err := os.Create(targetFileName)
-		if err == nil {
-			defer f.Close()
-		} else {
-			return err
-		}
-
-		_, err = f.Write(bytes)
-		if err != nil {
-			return err
-		}
-		opmBinaryExtracted = targetFileName
-
-		// check for the extracted opm file (it should exist if we found something)
-		_, err = os.Stat(opmBinaryExtracted)
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("opm binary not found after extracting %q from catalog image %v", opmBinaryExtracted, srcRef)
-		}
+	opmBinaryFileName := filepath.Join(ctlgSrcDir, config.OpmBinDir, "opm")
+	err = copyOPMBinary(img, opmBinaryFileName)
+	if err != nil {
+		return err
 	}
-
+	// check for the extracted opm file (it should exist if we found something)
+	_, err = os.Stat(opmBinaryFileName)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("opm binary not found after extracting opm from catalog image %v", srcRef)
+	}
+	err = os.Chmod(opmBinaryFileName, 0744)
+	if err != nil {
+		return fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
+	}
 	return nil
 }
 
@@ -557,4 +479,79 @@ func deleteLayer(old string) (v1.Layer, error) {
 	deleteMap := map[string][]byte{}
 	deleteMap[old] = []byte{}
 	return crane.Layer(deleteMap)
+}
+
+func copyOPMBinary(img v1.Image, target string) error {
+	cfgf, err := img.ConfigFile()
+	if err != nil {
+		return err
+	}
+	entrypoint := cfgf.Config.Entrypoint
+	opmBin := strings.TrimPrefix(entrypoint[0], (string)(os.PathSeparator))
+
+	return extractOPMBinary(opmBin, img, target)
+}
+
+func extractOPMBinary(opmBin string, img v1.Image, target string) error {
+
+	tr := tar.NewReader(mutate.Extract(img))
+	found := false
+	for {
+		header, err := tr.Next()
+
+		// break the infinite loop when EOF
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// skip the file if it is a directory or if file name does not end with `opm`
+		if !strings.Contains(header.Name, opmBin) || header.FileInfo().IsDir() {
+			continue
+		}
+		if header.Typeflag == tar.TypeReg {
+			var buf bytes.Buffer
+			_, err = buf.ReadFrom(tr)
+			if err != nil {
+				return err
+			}
+			bytes := buf.Bytes()
+
+			baseDir := filepath.Dir(target)
+			err = os.MkdirAll(baseDir, 0755)
+			if err != nil {
+				return err
+			}
+
+			f, err := os.Create(target)
+			if err == nil {
+				defer f.Close()
+			} else {
+				return err
+			}
+
+			_, err = f.Write(bytes)
+			if err != nil {
+				return err
+			}
+			found = true
+			break
+		} else if header.Typeflag == tar.TypeSymlink {
+			linkTarget := header.Linkname
+			// absLinkTarget := filepath.Join("/tmp", linkTarget)
+			// if err := os.Symlink(absLinkTarget, filepath.Join("/tmp", header.Name)); err != nil {
+			// 	panic(err)
+			// }
+			return extractOPMBinary(linkTarget, img, target)
+		}
+
+	}
+	if found {
+		return nil
+	} else {
+		return fmt.Errorf("%s not found in image ", opmBin)
+	}
 }
