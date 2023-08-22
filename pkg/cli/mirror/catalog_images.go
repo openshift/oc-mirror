@@ -492,10 +492,29 @@ func copyOPMBinary(img v1.Image, target string) error {
 	return extractOPMBinary(opmBin, img, target)
 }
 
-func extractOPMBinary(opmBin string, img v1.Image, target string) error {
+func opmBinEqual(src, dst string) bool {
+	if src == dst {
+		return true
+	}
+	if strings.HasPrefix(src, "bin") || strings.HasPrefix(src, "/bin") {
+		src = filepath.Join("usr", src)
+	}
+	if strings.HasPrefix(dst, "bin") || strings.HasPrefix(dst, "/bin") {
+		dst = filepath.Join("usr", dst)
+	}
+	return src == dst
+
+}
+
+func extractOPMBinary(opmBin string, img v1.Image, destBinary string) error {
 
 	tr := tar.NewReader(mutate.Extract(img))
 	found := false
+	baseDir := filepath.Dir(destBinary)
+	err := os.MkdirAll(baseDir, 0755)
+	if err != nil {
+		return err
+	}
 	for {
 		header, err := tr.Next()
 
@@ -508,11 +527,15 @@ func extractOPMBinary(opmBin string, img v1.Image, target string) error {
 			return err
 		}
 
-		// skip the file if it is a directory or if file name does not end with `opm`
-		if !strings.Contains(header.Name, opmBin) || header.FileInfo().IsDir() {
+		// skip the file if it is a directory or if file name does not end with `opm` and
+		// does not match the queried binary
+		if (!opmBinEqual(header.Name, opmBin) && !strings.HasSuffix(header.Name, "opm")) || header.FileInfo().IsDir() {
 			continue
 		}
+		// a file with suffix "opm" or a match for the queried binary was found
+		klog.V(2).Infof("found %s\n", header.Name)
 		if header.Typeflag == tar.TypeReg {
+			// this file is a regular file (not a symlink)
 			var buf bytes.Buffer
 			_, err = buf.ReadFrom(tr)
 			if err != nil {
@@ -520,32 +543,73 @@ func extractOPMBinary(opmBin string, img v1.Image, target string) error {
 			}
 			bytes := buf.Bytes()
 
-			baseDir := filepath.Dir(target)
-			err = os.MkdirAll(baseDir, 0755)
-			if err != nil {
-				return err
-			}
-
-			f, err := os.Create(target)
-			if err == nil {
-				defer f.Close()
+			var f *os.File
+			if opmBinEqual(header.Name, opmBin) {
+				f, err = os.Create(destBinary)
+				if err == nil {
+					defer f.Close()
+				} else {
+					return err
+				}
 			} else {
-				return err
+				anOpmBin := filepath.Join(baseDir, header.Name)
+				anOpmBinParentDir := filepath.Dir(anOpmBin)
+				err := os.MkdirAll(anOpmBinParentDir, 0755)
+				if err != nil {
+					return err
+				}
+				f, err = os.Create(anOpmBin)
+				if err == nil {
+					defer f.Close()
+				} else {
+					return err
+				}
 			}
 
 			_, err = f.Write(bytes)
 			if err != nil {
 				return err
 			}
-			found = true
-			break
-		} else if header.Typeflag == tar.TypeSymlink {
-			linkTarget := header.Linkname
-			// absLinkTarget := filepath.Join("/tmp", linkTarget)
-			// if err := os.Symlink(absLinkTarget, filepath.Join("/tmp", header.Name)); err != nil {
-			// 	panic(err)
-			// }
-			return extractOPMBinary(linkTarget, img, target)
+			klog.V(2).Infof("untarred regular file to %s", f.Name())
+
+			if opmBinEqual(header.Name, opmBin) {
+				found = true
+				break
+			} else {
+				klog.V(2).Info("continuing extraction\n")
+				continue
+			}
+		} else if header.Typeflag == tar.TypeSymlink && opmBinEqual(header.Name, opmBin) {
+			opmBin = header.Linkname
+			isExtracted, err := alreadyExtracted(filepath.Join(baseDir, opmBin))
+			if err != nil {
+				return err
+			}
+			if strings.HasPrefix(opmBin, "bin") || strings.HasPrefix(opmBin, "/bin") {
+				usrOpmBin := filepath.Join("usr", opmBin)
+				isUsrBinExtracted, err := alreadyExtracted(filepath.Join(baseDir, usrOpmBin))
+				if err != nil {
+					return err
+				}
+				if isUsrBinExtracted {
+					opmBin = usrOpmBin
+				}
+				isExtracted = isExtracted || isUsrBinExtracted
+			}
+			if isExtracted {
+				// otherwise symLink points to an already extracted binary, move that binary to destBinary
+				found = true
+				klog.V(2).Infof("symLink %s points to an already extracted file: %s", header.Name, header.Linkname)
+
+				err := os.Rename(filepath.Join(baseDir, opmBin), destBinary)
+				if err != nil {
+					return fmt.Errorf("error renaming file %s, opm binary extraction failed: \n%v", header.Linkname, err)
+				}
+				break
+			} else {
+				klog.V(2).Infof("symLink %s points to file %s : continuing extraction", header.Name, opmBin)
+				continue
+			}
 		}
 
 	}
@@ -554,4 +618,14 @@ func extractOPMBinary(opmBin string, img v1.Image, target string) error {
 	} else {
 		return fmt.Errorf("%s not found in image ", opmBin)
 	}
+}
+
+func alreadyExtracted(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
 }
