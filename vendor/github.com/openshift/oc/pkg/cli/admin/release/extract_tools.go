@@ -31,6 +31,7 @@ import (
 
 	"github.com/MakeNowJust/heredoc"
 	imagereference "github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/oc/pkg/cli/admin/internal/codesign"
 	"github.com/openshift/oc/pkg/cli/image/extract"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 )
@@ -45,6 +46,7 @@ type extractTarget struct {
 
 	InjectReleaseImage   bool
 	InjectReleaseVersion bool
+	SignMachOBinary      bool
 
 	ArchiveFormat string
 	AsArchive     bool
@@ -139,13 +141,35 @@ var (
 	program is [located on github](https://github.com/openshift/oc).
 	`)
 
+	readmeCCOUnix = heredoc.Doc(`
+	# Cloud Credential Operator utility
+
+	The ccoctl tool provides various commands to assist with the creating and maintenance of
+	cloud credentials from outside the cluster (necessary when CCO is put in "Manual" mode).
+
+	To learn more about OpenShift, visit [docs.openshift.com](https://docs.openshift.com)
+	and select the version of OpenShift you are using.
+
+	## Installing the tools
+
+	After extracting this archive, move the \u0060ccoctl\u0060 binary to a location on your
+	PATH such as \u0060/usr/local/bin\u0060, or keep it in a temporary directory and
+	reference it via \u0060./ccoctl\u0060.
+
+	## License
+
+	OpenShift is licensed under the Apache Public License 2.0. The source code for this
+	program is [located on github](https://github.com/openshift/cloud-credential-operator).
+	`)
+
 	// indicates that the architecture of the binary matches the release payload
 	targetReleaseArch = "release-arch"
 )
 
 // extractTools extracts specific commands out of images referenced by the release image.
 // TODO: in the future the metadata this command contains might be loaded from the release
-//   image, but we must maintain compatibility with older payloads if so
+//
+//	image, but we must maintain compatibility with older payloads if so
 func (o *ExtractOptions) extractCommand(command string) error {
 	// Available targets is treated as a GA API and may not be changed without backwards
 	// compatibility of at least N-2 releases.
@@ -171,6 +195,7 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			LinkTo:               []string{"kubectl"},
 			Readme:               readmeCLIUnix,
 			InjectReleaseVersion: true,
+			SignMachOBinary:      true,
 			ArchiveFormat:        "openshift-client-mac-arm64-%s.tar.gz",
 		},
 		{
@@ -194,6 +219,18 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			Readme:               readmeCLIUnix,
 			InjectReleaseVersion: true,
 			ArchiveFormat:        "openshift-client-linux-amd64-%s.tar.gz",
+		},
+		{
+			OS:      "linux",
+			Arch:    "arm64",
+			Command: "oc",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "cli-artifacts", From: "usr/share/openshift/linux_arm64/oc"},
+
+			LinkTo:               []string{"kubectl"},
+			Readme:               readmeCLIUnix,
+			InjectReleaseVersion: true,
+			ArchiveFormat:        "openshift-client-linux-arm64-%s.tar.gz",
 		},
 		{
 			OS:      "windows",
@@ -227,6 +264,7 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			Readme:               readmeInstallUnix,
 			InjectReleaseImage:   true,
 			InjectReleaseVersion: true,
+			SignMachOBinary:      true,
 			ArchiveFormat:        "openshift-install-mac-arm64-%s.tar.gz",
 		},
 		{
@@ -253,6 +291,18 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			ArchiveFormat:        "openshift-install-linux-amd64-%s.tar.gz",
 		},
 		{
+			OS:      "linux",
+			Arch:    "arm64",
+			Command: "openshift-install",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "installer-artifacts", From: "usr/share/openshift/linux_arm64/openshift-install"},
+
+			Readme:               readmeInstallUnix,
+			InjectReleaseImage:   true,
+			InjectReleaseVersion: true,
+			ArchiveFormat:        "openshift-install-linux-arm64-%s.tar.gz",
+		},
+		{
 			OS:       "linux",
 			Arch:     targetReleaseArch,
 			Command:  "openshift-baremetal-install",
@@ -264,6 +314,16 @@ func (o *ExtractOptions) extractCommand(command string) error {
 			InjectReleaseVersion: true,
 			ArchiveFormat:        "openshift-baremetal-install-linux-%s.tar.gz",
 		},
+		{
+			OS:      "linux",
+			Arch:    targetReleaseArch,
+			Command: "ccoctl",
+			NewArch: true,
+			Mapping: extract.Mapping{Image: "cloud-credential-operator", From: "usr/bin/ccoctl"},
+
+			Readme:        readmeCCOUnix,
+			ArchiveFormat: "ccoctl-linux-%s.tar.gz",
+		},
 	}
 
 	currentArch := runtime.GOARCH
@@ -273,7 +333,19 @@ func (o *ExtractOptions) extractCommand(command string) error {
 		if currentOS == "*" {
 			currentArch = "*"
 		} else {
-			currentArch = "amd64"
+			parsed := strings.Split(currentOS, "/")
+			switch len(parsed) {
+			case 1:
+				// --command-os=linux
+				currentArch = "amd64"
+			case 2:
+				// --command-os=linux/amd64
+				currentOS = parsed[0]
+				currentArch = parsed[1]
+			default:
+				return fmt.Errorf("invalid --command-os value")
+			}
+
 		}
 	}
 	if currentOS == "mac" {
@@ -360,7 +432,9 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	dir := o.Directory
 	infoOptions := NewInfoOptions(o.IOStreams)
 	infoOptions.SecurityOptions = o.SecurityOptions
+	infoOptions.FilterOptions = o.FilterOptions
 	infoOptions.FileDir = o.FileDir
+	infoOptions.ICSPFile = o.ICSPFile
 	release, err := infoOptions.LoadReleaseInfo(o.From, false)
 	if err != nil {
 		return err
@@ -369,7 +443,14 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	releaseName := release.PreferredName()
 	refExact := release.ImageRef
 	refExact.Ref.Tag = ""
-	refExact.Ref.ID = release.Digest.String()
+	// if the release image is manifestlist image, we'll not change digest with
+	// arch based sha. Because we want that the extracted tool can be used for all archs.
+	if len(release.ManifestListDigest) == 0 {
+		refExact.Ref.ID = release.Digest.String()
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		refExact.Ref.ID = release.ManifestListDigest.String()
+	}
 	exactReleaseImage := refExact.String()
 
 	// resolve target image references to their pull specs
@@ -417,7 +498,10 @@ func (o *ExtractOptions) extractCommand(command string) error {
 		if len(missing) == 1 {
 			return fmt.Errorf("the image %q containing the desired command is not available", missing.List()[0])
 		}
-		return fmt.Errorf("some required images are missing: %s", strings.Join(missing.List(), ", "))
+		if len(missing) > 1 {
+			return fmt.Errorf("some required images are missing: %s", strings.Join(missing.List(), ", "))
+		}
+		return fmt.Errorf("the command '%s' is not available for %s/%s on %s", command, currentOS, currentArch, o.From)
 	}
 	if len(missing) > 0 {
 		fmt.Fprintf(o.ErrOut, "warning: Some commands can not be extracted due to missing images: %s\n", strings.Join(missing.List(), ", "))
@@ -427,6 +511,8 @@ func (o *ExtractOptions) extractCommand(command string) error {
 	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
+	opts.FilterOptions = o.FilterOptions
+	opts.ICSPFile = o.ICSPFile
 	opts.OnlyFiles = true
 
 	// create the mapping lookup of the valid targets
@@ -605,6 +691,12 @@ func (o *ExtractOptions) extractCommand(command string) error {
 		}
 		if err := os.Chtimes(f.Name(), hdr.ModTime, hdr.ModTime); err != nil {
 			klog.V(2).Infof("Unable to set extracted file modification time: %v", err)
+		}
+
+		if (target.InjectReleaseVersion || target.InjectReleaseImage) && target.SignMachOBinary {
+			if err = codesign.ResignMacho(layer.Mapping.To, target.AsArchive, target.Command, target.LinkTo); err != nil {
+				klog.Infof("Unable to resign macho binaries:  %v", err)
+			}
 		}
 
 		func() {
