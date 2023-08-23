@@ -254,4 +254,10 @@ replace github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-201610102
 
 replace github.com/docker/docker => github.com/docker/docker v20.10.21+incompatible
 
-replace github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044 => ./v2
+replace github.com/openshift/oc-mirror/v2 => ./v2
+
+// replace github.com/containerd/stargz-snapshotter/estargz => github.com/containerd/stargz-snapshotter/estargz v0.12.0
+
+replace github.com/google/go-containerregistry => github.com/google/go-containerregistry v0.10.0
+
+// replace github.com/vbatts/tar-split =>	github.com/vbatts/tar-split v0.11.2

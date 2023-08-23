@@ -17,6 +17,8 @@ package tarball
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,9 +63,8 @@ func v1LayerID(layer v1.Layer, parentID string, rawConfig []byte) (string, error
 	if len(rawConfig) != 0 {
 		s = fmt.Sprintf("%s %s", s, string(rawConfig))
 	}
-
-	h, _, _ := v1.SHA256(strings.NewReader(s))
-	return h.Hex, nil
+	rawDigest := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(rawDigest[:]), nil
 }
 
 // newTopV1Layer creates a new v1Layer for a layer other than the top layer in a v1 image tarball.
@@ -186,11 +187,9 @@ func filterEmpty(h []v1.History) []v1.History {
 // One manifest.json file at the top level containing information about several images.
 // One repositories file mapping from the image <registry>/<repo name> to <tag> to the id of the top most layer.
 // For every layer, a directory named with the layer ID is created with the following contents:
-//
-//	layer.tar - The uncompressed layer tarball.
-//	<layer id>.json- Layer metadata json.
-//	VERSION- Schema version string. Always set to "1.0".
-//
+//   layer.tar - The uncompressed layer tarball.
+//   <layer id>.json- Layer metadata json.
+//   VERSION- Schema version string. Always set to "1.0".
 // One file for the config blob, named after its SHA.
 func MultiWrite(refToImage map[name.Reference]v1.Image, w io.Writer) error {
 	tf := tar.NewWriter(w)
@@ -313,7 +312,10 @@ func MultiWrite(refToImage map[name.Reference]v1.Image, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return writeTarEntry(tf, "repositories", bytes.NewReader(reposBytes), int64(len(reposBytes)))
+	if err := writeTarEntry(tf, "repositories", bytes.NewReader(reposBytes), int64(len(reposBytes))); err != nil {
+		return err
+	}
+	return nil
 }
 
 func dedupRefToImage(refToImage map[name.Reference]v1.Image) ([]v1.Image, map[v1.Image][]string) {
