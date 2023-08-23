@@ -2,7 +2,6 @@ package mirror
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -248,6 +247,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			}
 			cacheLocation := string(dat)
 			cacheLocationElmts := strings.Split(strings.TrimPrefix(cacheLocation, string(os.PathSeparator)), string(os.PathSeparator))
+
 			// white out layer /tmp
 			deletedCacheLayer, err := deleteLayer("/.wh." + cacheLocationElmts[0])
 			if err != nil {
@@ -366,8 +366,7 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 		return err
 	}
 	// cachePath exists, opm binary will be needed to regenerate it
-	opmBinaryFileName := filepath.Join(ctlgSrcDir, config.OpmBinDir, "opm")
-	err = copyOPMBinary(img, opmBinaryFileName)
+	opmBinaryFileName, err := copyOPMBinary(img, ctlgSrcDir)
 	if err != nil {
 		return err
 	}
@@ -380,6 +379,7 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 	if err != nil {
 		return fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
 	}
+
 	return nil
 }
 
@@ -481,37 +481,49 @@ func deleteLayer(old string) (v1.Layer, error) {
 	return crane.Layer(deleteMap)
 }
 
-func copyOPMBinary(img v1.Image, target string) error {
+func copyOPMBinary(img v1.Image, ctlgSrcDir string) (string, error) {
+	targetOpm := filepath.Join(ctlgSrcDir, config.OpmBinDir, "opm")
 	cfgf, err := img.ConfigFile()
 	if err != nil {
-		return err
+		return "", err
 	}
 	entrypoint := cfgf.Config.Entrypoint
 	opmBin := strings.TrimPrefix(entrypoint[0], (string)(os.PathSeparator))
 
-	return extractOPMBinary(opmBin, img, target)
+	err = extractCatalog(img, filepath.Join(ctlgSrcDir, config.CtlgExtractionDir), opmBin)
+	if err != nil {
+		return "", err
+	}
+	opmBinPath := filepath.Join(ctlgSrcDir, config.CtlgExtractionDir, opmBin)
+	_, err = os.Stat(opmBinPath)
+	if err != nil {
+		return "", err
+	}
+
+	err = os.MkdirAll(filepath.Join(ctlgSrcDir, config.OpmBinDir), 0755)
+	if err != nil {
+		return "", err
+	}
+
+	realOpmBinPath, err := filepath.EvalSymlinks(opmBinPath)
+	if err != nil {
+		return "", err
+	}
+	err = os.Rename(realOpmBinPath, targetOpm)
+	if err != nil {
+		return "", err
+	}
+	err = os.RemoveAll(filepath.Join(ctlgSrcDir, config.CtlgExtractionDir))
+	if err != nil {
+		return "", err
+	}
+	return targetOpm, nil
 }
 
-func opmBinEqual(src, dst string) bool {
-	if src == dst {
-		return true
-	}
-	if strings.HasPrefix(src, "bin") || strings.HasPrefix(src, "/bin") {
-		src = filepath.Join("usr", src)
-	}
-	if strings.HasPrefix(dst, "bin") || strings.HasPrefix(dst, "/bin") {
-		dst = filepath.Join("usr", dst)
-	}
-	return src == dst
-
-}
-
-func extractOPMBinary(opmBin string, img v1.Image, destBinary string) error {
-
+func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
+	symLinks := make(map[string]string)
 	tr := tar.NewReader(mutate.Extract(img))
-	found := false
-	baseDir := filepath.Dir(destBinary)
-	err := os.MkdirAll(baseDir, 0755)
+	err := os.MkdirAll(destFolder, 0755)
 	if err != nil {
 		return err
 	}
@@ -527,105 +539,67 @@ func extractOPMBinary(opmBin string, img v1.Image, destBinary string) error {
 			return err
 		}
 
-		// skip the file if it is a directory or if file name does not end with `opm` and
-		// does not match the queried binary
-		if (!opmBinEqual(header.Name, opmBin) && !strings.HasSuffix(header.Name, "opm")) || header.FileInfo().IsDir() {
+		if header == nil {
 			continue
 		}
-		// a file with suffix "opm" or a match for the queried binary was found
-		klog.V(2).Infof("found %s\n", header.Name)
-		if header.Typeflag == tar.TypeReg {
-			// this file is a regular file (not a symlink)
-			var buf bytes.Buffer
-			_, err = buf.ReadFrom(tr)
+
+		target := filepath.Join(destFolder, header.Name)
+
+		// check the file type
+		// if its a dir and it doesn't exist create it
+		if header.Typeflag == tar.TypeDir {
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					return err
+				}
+			}
+		} else if header.Typeflag == tar.TypeReg {
+			// if it's a file create it
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err
 			}
-			bytes := buf.Bytes()
 
-			var f *os.File
-			if opmBinEqual(header.Name, opmBin) {
-				f, err = os.Create(destBinary)
-				if err == nil {
-					defer f.Close()
-				} else {
-					return err
-				}
-			} else {
-				anOpmBin := filepath.Join(baseDir, header.Name)
-				anOpmBinParentDir := filepath.Dir(anOpmBin)
-				err := os.MkdirAll(anOpmBinParentDir, 0755)
-				if err != nil {
-					return err
-				}
-				f, err = os.Create(anOpmBin)
-				if err == nil {
-					defer f.Close()
-				} else {
-					return err
-				}
-			}
-
-			_, err = f.Write(bytes)
-			if err != nil {
+			// copy over contents
+			if _, err := io.Copy(f, tr); err != nil {
 				return err
 			}
-			klog.V(2).Infof("untarred regular file to %s", f.Name())
 
-			if opmBinEqual(header.Name, opmBin) {
-				found = true
-				break
-			} else {
-				klog.V(2).Info("continuing extraction\n")
-				continue
-			}
-		} else if header.Typeflag == tar.TypeSymlink && opmBinEqual(header.Name, opmBin) {
-			opmBin = header.Linkname
-			isExtracted, err := alreadyExtracted(filepath.Join(baseDir, opmBin))
-			if err != nil {
-				return err
-			}
-			if strings.HasPrefix(opmBin, "bin") || strings.HasPrefix(opmBin, "/bin") {
-				usrOpmBin := filepath.Join("usr", opmBin)
-				isUsrBinExtracted, err := alreadyExtracted(filepath.Join(baseDir, usrOpmBin))
-				if err != nil {
-					return err
-				}
-				if isUsrBinExtracted {
-					opmBin = usrOpmBin
-				}
-				isExtracted = isExtracted || isUsrBinExtracted
-			}
-			if isExtracted {
-				// otherwise symLink points to an already extracted binary, move that binary to destBinary
-				found = true
-				klog.V(2).Infof("symLink %s points to an already extracted file: %s", header.Name, header.Linkname)
-
-				err := os.Rename(filepath.Join(baseDir, opmBin), destBinary)
-				if err != nil {
-					return fmt.Errorf("error renaming file %s, opm binary extraction failed: \n%v", header.Linkname, err)
-				}
-				break
-			} else {
-				klog.V(2).Infof("symLink %s points to file %s : continuing extraction", header.Name, opmBin)
-				continue
-			}
+			// manually close here after each file operation; defering would cause each file close
+			// to wait until all operations have completed.
+			f.Close()
+		} else if header.Typeflag == tar.TypeSymlink {
+			symLinks[target] = filepath.Join(destFolder, header.Linkname)
 		}
 
 	}
-	if found {
-		return nil
-	} else {
-		return fmt.Errorf("%s not found in image ", opmBin)
+	opmBinPathComponents := strings.Split(opmBin, string(filepath.Separator))
+	for link, src := range symLinks {
+		srcAbsPath, err := filepath.Abs(src)
+		if err != nil {
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(link, pathComp) {
+					return err
+				}
+			}
+		}
+		linkAbsPath, err := filepath.Abs(link)
+		if err != nil {
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(link, pathComp) {
+					return err
+				}
+			}
+		}
+		err = os.Symlink(srcAbsPath, linkAbsPath)
+		if err != nil {
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(link, pathComp) {
+					return err
+				}
+			}
+		}
 	}
-}
 
-func alreadyExtracted(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-	return true, nil
+	return nil
 }
