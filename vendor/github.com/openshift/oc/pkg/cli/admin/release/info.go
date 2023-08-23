@@ -74,7 +74,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 
 			If no arguments are specified the release of the currently connected cluster is displayed.
 			Specify one or more images via pull spec to see details of each release image. You may also
-			pass a semantic version (4.2.2) as an argument, and if cluster version object has seen such a
+			pass a semantic version (4.11.2) as an argument, and if cluster version object has seen such a
 			version in the upgrades channel it will find the release info for that version.
 
 			The --commits flag will display the Git commit IDs and repository URLs for the source of each
@@ -104,17 +104,17 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 			oc adm release info
 
 			# Show the source code that comprises a release
-			oc adm release info 4.2.2 --commit-urls
+			oc adm release info 4.11.2 --commit-urls
 
 			# Show the source code difference between two releases
-			oc adm release info 4.2.0 4.2.2 --commits
+			oc adm release info 4.11.0 4.11.2 --commits
 
 			# Show where the images referenced by the release are located
-			oc adm release info quay.io/openshift-release-dev/ocp-release:4.2.2 --pullspecs
+			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --pullspecs
 
 			# Show information about linux/s390x image
 			# Note: Wildcard filter is not supported. Pass a single os/arch to extract
-			oc adm release info quay.io/openshift-release-dev/ocp-release:4.2.2 --filter-by-os=linux/s390x
+			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --filter-by-os=linux/s390x
 
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -132,6 +132,8 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 	flags.StringVar(&o.From, "changes-from", o.From, "Show changes from this image to the requested image.")
 
 	flags.BoolVar(&o.Verify, "verify", o.Verify, "Generate bug listings from the changelogs in the git repositories extracted to this path.")
+
+	flags.StringVar(&o.ICSPFile, "icsp-file", o.ICSPFile, "Path to an ImageContentSourcePolicy file. If set, data from this file will be used to find alternative locations for images.")
 
 	flags.BoolVar(&o.ShowContents, "contents", o.ShowContents, "Display the contents of a release.")
 	flags.BoolVar(&o.ShowCommit, "commits", o.ShowCommit, "Display information about the source an image was created with.")
@@ -165,6 +167,7 @@ type InfoOptions struct {
 	ShowPullSpec  bool
 	ShowSize      bool
 	Verify        bool
+	ICSPFile      string
 
 	ChangelogDir string
 	BugsDir      string
@@ -413,8 +416,8 @@ func (o *InfoOptions) Validate() error {
 	if o.SkipBugCheck && len(o.BugsDir) == 0 {
 		return fmt.Errorf("--skip-bug-check requires --bugs")
 	}
-	if o.SkipBugCheck && o.Output != "name" {
-		return fmt.Errorf("--skip-bug-check requires --output to be set to 'name'")
+	if o.SkipBugCheck && o.Output != "name" && o.Output != "json" {
+		return fmt.Errorf("--skip-bug-check requires --output to be set to 'name' or 'json'")
 	}
 	if len(o.ChangelogDir) > 0 || len(o.BugsDir) > 0 {
 		if len(o.From) == 0 {
@@ -427,13 +430,15 @@ func (o *InfoOptions) Validate() error {
 	switch {
 	case len(o.BugsDir) > 0:
 		switch o.Output {
-		case "", "name":
+		case "", "name", "json":
 		default:
-			return fmt.Errorf("--output only supports 'name' for --bugs")
+			return fmt.Errorf("--output only supports 'name' or 'json' for --bugs")
 		}
 	case len(o.ChangelogDir) > 0:
-		if len(o.Output) > 0 {
-			return fmt.Errorf("--output is not supported for this mode")
+		switch o.Output {
+		case "", "json":
+		default:
+			return fmt.Errorf("--output only supports 'json' for --changelog")
 		}
 	default:
 		output := strings.SplitN(o.Output, "=", 2)[0]
@@ -486,7 +491,7 @@ func (o *InfoOptions) Run() error {
 			return describeBugs(o.Out, o.ErrOut, diff, o.BugsDir, o.Output, o.SkipBugCheck)
 		}
 		if len(o.ChangelogDir) > 0 {
-			return describeChangelog(o.Out, o.ErrOut, diff, o.ChangelogDir)
+			return describeChangelog(o.Out, o.ErrOut, diff, o.ChangelogDir, o.Output)
 		}
 		return describeReleaseDiff(o.Out, diff, o.ShowCommit, o.Output)
 	}
@@ -689,15 +694,14 @@ type ReleaseManifestDiff struct {
 }
 
 type ReleaseInfo struct {
-	Image         string                          `json:"image"`
-	ImageRef      imagesource.TypedImageReference `json:"-"`
-	Digest        digest.Digest                   `json:"digest"`
-	ContentDigest digest.Digest                   `json:"contentDigest"`
-	// TODO: return the list digest in the future
-	// ListDigest    digest.Digest                       `json:"listDigest"`
-	Config     *dockerv1client.DockerImageConfig `json:"config"`
-	Metadata   *CincinnatiMetadata               `json:"metadata"`
-	References *imageapi.ImageStream             `json:"references"`
+	Image              string                            `json:"image"`
+	ImageRef           imagesource.TypedImageReference   `json:"-"`
+	Digest             digest.Digest                     `json:"digest"`
+	ContentDigest      digest.Digest                     `json:"contentDigest"`
+	ManifestListDigest digest.Digest                     `json:"listDigest"`
+	Config             *dockerv1client.DockerImageConfig `json:"config"`
+	Metadata           *CincinnatiMetadata               `json:"metadata"`
+	References         *imageapi.ImageStream             `json:"references"`
 
 	// This field is deprecated, does not contain display names. Is replaced by
 	// ComponentVersions.
@@ -734,15 +738,23 @@ func (i *ReleaseInfo) PreferredName() string {
 }
 
 func (i *ReleaseInfo) Platform() string {
-	os := i.Config.OS
-	if len(os) > 0 {
+	config := i.Config
+	if config == nil {
+		config = &dockerv1client.DockerImageConfig{}
+	}
+
+	os := config.OS
+	if len(os) == 0 {
 		os = "unknown"
 	}
-	arch := i.Config.Architecture
+	arch := config.Architecture
 	if len(arch) == 0 {
 		arch = "unknown"
 	}
-	return fmt.Sprintf("%s/%s", os, arch)
+	if len(i.ManifestListDigest) == 0 {
+		return fmt.Sprintf("%s/%s", os, arch)
+	}
+	return fmt.Sprintf("multi (%s/%s)", os, arch)
 }
 
 func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*ReleaseInfo, error) {
@@ -756,6 +768,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	opts.SecurityOptions = o.SecurityOptions
 	opts.FilterOptions = o.FilterOptions
 	opts.FileDir = o.FileDir
+	opts.ICSPFile = o.ICSPFile
 
 	release := &ReleaseInfo{
 		Image:    image,
@@ -764,8 +777,9 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 		RawMetadata: make(map[string][]byte),
 	}
 
-	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 		verifier.Verify(dgst, contentDigest)
+		release.ManifestListDigest = manifestListDigest
 		release.Digest = dgst
 		release.ContentDigest = contentDigest
 		release.Config = config
@@ -1207,9 +1221,14 @@ func describeReleaseInfo(out io.Writer, release *ReleaseInfo, showCommit, showCo
 	defer w.Flush()
 	now := time.Now()
 	fmt.Fprintf(w, "Name:\t%s\n", release.PreferredName())
-	fmt.Fprintf(w, "Digest:\t%s\n", release.Digest)
+	if len(release.ManifestListDigest) == 0 {
+		fmt.Fprintf(w, "Digest:\t%s\n", release.Digest)
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		fmt.Fprintf(w, "Digest:\t%s\n", release.ManifestListDigest.String())
+	}
 	fmt.Fprintf(w, "Created:\t%s\n", release.Config.Created.UTC().Truncate(time.Second).Format(time.RFC3339))
-	fmt.Fprintf(w, "OS/Arch:\t%s/%s\n", release.Config.OS, release.Config.Architecture)
+	fmt.Fprintf(w, "OS/Arch:\t%s\n", release.Platform())
 	fmt.Fprintf(w, "Manifests:\t%d\n", len(release.ManifestFiles))
 	if len(release.UnknownFiles) > 0 {
 		fmt.Fprintf(w, "Metadata files:\t%d\n", len(release.UnknownFiles))
@@ -1218,7 +1237,12 @@ func describeReleaseInfo(out io.Writer, release *ReleaseInfo, showCommit, showCo
 	fmt.Fprintln(w)
 	refExact := release.ImageRef
 	refExact.Ref.Tag = ""
-	refExact.Ref.ID = release.Digest.String()
+	if len(release.ManifestListDigest) == 0 {
+		refExact.Ref.ID = release.Digest.String()
+	} else {
+		// if the image is manifestlisted, use the manifestlist digest.
+		refExact.Ref.ID = release.ManifestListDigest.String()
+	}
 	fmt.Fprintf(w, "Pull From:\t%s\n", refExact)
 
 	if m := release.Metadata; m != nil {
@@ -1457,39 +1481,9 @@ var replaceUnsafeInput = strings.NewReplacer(
 	`>`, "&gt;",
 )
 
-func describeChangelog(out, errOut io.Writer, diff *ReleaseDiff, dir string) error {
+func describeChangelog(out, errOut io.Writer, diff *ReleaseDiff, dir, format string) error {
 	if diff.To.Digest == diff.From.Digest {
 		return fmt.Errorf("releases are identical")
-	}
-
-	fmt.Fprintf(out, heredoc.Docf(`
-		# %s
-
-		Created: %s
-
-		Image Digest: %s
-
-	`, diff.To.PreferredName(), diff.To.References.CreationTimestamp.UTC(), "`"+diff.To.Digest+"`"))
-
-	if release, ok := diff.To.References.Annotations[annotationReleaseFromRelease]; ok {
-		fmt.Fprintf(out, "Promoted from %s\n\n", release)
-	}
-	fmt.Fprintln(out)
-	fmt.Fprintf(out, "## Changes from %s\n\n", diff.From.PreferredName())
-
-	if keys := diff.To.ComponentVersions.OrderedKeys(); len(keys) > 0 {
-		fmt.Fprintf(out, "### Components\n\n")
-		for _, key := range keys {
-			version := diff.To.ComponentVersions[key]
-			old, ok := diff.From.ComponentVersions[key]
-			if !ok || old == version {
-				fmt.Fprintf(out, "* %s %s\n", componentDisplayName(key, version.DisplayName), version)
-				continue
-			}
-			fmt.Fprintf(out, "* %s upgraded from %s to %s\n", componentDisplayName(key, version.DisplayName), old, version)
-		}
-		fmt.Fprintln(out)
-		fmt.Fprintln(out)
 	}
 
 	var hasError bool
@@ -1508,70 +1502,208 @@ func describeChangelog(out, errOut io.Writer, diff *ReleaseDiff, dir string) err
 	sort.Strings(added)
 	sort.Strings(removed)
 
-	if len(added) > 0 {
-		fmt.Fprintf(out, "### New images\n\n")
-		for _, k := range added {
-			fmt.Fprintf(out, "* %s\n", refToShortDescription(diff.ChangedImages[k].To))
+	switch format {
+	case "json":
+		changeLog := &ChangeLog{
+			From: ChangeLogReleaseInfo{
+				Name:    diff.From.PreferredName(),
+				Created: diff.From.References.CreationTimestamp.UTC(),
+				Digest:  diff.From.Digest,
+			},
+			To: ChangeLogReleaseInfo{
+				Name:    diff.To.PreferredName(),
+				Created: diff.To.References.CreationTimestamp.UTC(),
+				Digest:  diff.To.Digest,
+			},
+			Components:    []ChangeLogComponentInfo{},
+			NewImages:     []ChangeLogImageInfo{},
+			RemovedImages: []ChangeLogImageInfo{},
+			UpdatedImages: []ChangeLogImageInfo{},
 		}
-		fmt.Fprintln(out)
-		fmt.Fprintln(out)
-	}
-
-	if len(removed) > 0 {
-		fmt.Fprintf(out, "### Removed images\n\n")
-		for _, k := range removed {
-			fmt.Fprintf(out, "* %s\n", k)
+		if release, ok := diff.From.References.Annotations[annotationReleaseFromRelease]; ok {
+			changeLog.From.PromotedFrom = release
 		}
-		fmt.Fprintln(out)
-		fmt.Fprintln(out)
-	}
-
-	if len(imageChanges) > 0 || len(incorrectImageChanges) > 0 {
-		fmt.Fprintf(out, "### Rebuilt images without code change\n\n")
-		for _, change := range imageChanges {
-			fmt.Fprintf(out, "* %s\n", refToShortDescription(diff.ChangedImages[change.Name].To))
+		if release, ok := diff.To.References.Annotations[annotationReleaseFromRelease]; ok {
+			changeLog.To.PromotedFrom = release
 		}
-		for _, k := range incorrectImageChanges {
-			fmt.Fprintf(out, "* %s\n", k)
-		}
-		fmt.Fprintln(out)
-		fmt.Fprintln(out)
-	}
-
-	for _, change := range codeChanges {
-		u, commits, err := commitsForRepo(dir, change, out, errOut)
-		if err != nil {
-			fmt.Fprintf(errOut, "error: %v\n", err)
-			hasError = true
-			continue
-		}
-		if len(commits) > 0 {
-			if u.Host == "github.com" {
-				fmt.Fprintf(out, "### [%s](https://github.com%s/tree/%s)\n\n", strings.Join(change.ImagesAffected, ", "), u.Path, change.To)
-			} else {
-				fmt.Fprintf(out, "### %s\n\n", strings.Join(change.ImagesAffected, ", "))
-			}
-			for _, commit := range commits {
-				fmt.Fprintf(out, "*")
-				commit.Bugs.PrintBugs(out)
-				fmt.Fprintf(out, " %s", replaceUnsafeInput.Replace(commit.Subject))
-				switch {
-				case commit.PullRequest > 0:
-					fmt.Fprintf(out, " [#%d](%s)", commit.PullRequest, fmt.Sprintf("https://%s%s/pull/%d", u.Host, u.Path, commit.PullRequest))
-				case u.Host == "github.com":
-					commit := commit.Commit[:8]
-					fmt.Fprintf(out, " [%s](%s)", commit, fmt.Sprintf("https://%s%s/commit/%s", u.Host, u.Path, commit))
-				default:
-					fmt.Fprintf(out, " %s", commit.Commit[:8])
+		if keys := diff.To.ComponentVersions.OrderedKeys(); len(keys) > 0 {
+			for _, key := range keys {
+				version := diff.To.ComponentVersions[key]
+				old, ok := diff.From.ComponentVersions[key]
+				if !ok || old == version {
+					changeLog.Components = append(changeLog.Components, ChangeLogComponentInfo{
+						Name:    componentDisplayName(key, version.DisplayName),
+						Version: version.Version,
+					})
+					continue
 				}
-				fmt.Fprintf(out, "\n")
+				changeLog.Components = append(changeLog.Components, ChangeLogComponentInfo{
+					Name:    componentDisplayName(key, version.DisplayName),
+					Version: version.Version,
+					From:    old.Version,
+				})
 			}
-			if u.Host == "github.com" {
-				fmt.Fprintf(out, "* [Full changelog](%s)\n\n", fmt.Sprintf("https://%s%s/compare/%s...%s", u.Host, u.Path, change.From, change.To))
-			} else {
-				fmt.Fprintf(out, "* %s from %s to %s\n\n", change.Repo, change.FromShort(), change.ToShort())
+		}
+		if len(added) > 0 {
+			for _, k := range added {
+				changeLog.NewImages = append(changeLog.NewImages, refToChangeInfo(diff.ChangedImages[k].To))
+			}
+		}
+		if len(removed) > 0 {
+			for _, k := range removed {
+				changeLog.RemovedImages = append(changeLog.RemovedImages, ChangeLogImageInfo{Name: k})
+			}
+		}
+		if len(imageChanges) > 0 || len(incorrectImageChanges) > 0 {
+			for _, change := range imageChanges {
+				changeLog.RebuiltImages = append(changeLog.RebuiltImages, refToChangeInfo(diff.ChangedImages[change.Name].To))
+			}
+			for _, k := range incorrectImageChanges {
+				changeLog.RebuiltImages = append(changeLog.RebuiltImages, ChangeLogImageInfo{Name: k})
+			}
+		}
+		for _, change := range codeChanges {
+			u, commits, err := commitsForRepo(dir, change, out, errOut)
+			if err != nil {
+				fmt.Fprintf(errOut, "error: %v\n", err)
+				hasError = true
+				continue
+			}
+			if len(commits) > 0 {
+				info := ChangeLogImageInfo{
+					Name:    strings.Join(change.ImagesAffected, ", "),
+					Commits: []CommitInfo{},
+				}
+				if u.Host == "github.com" {
+					info.Path = fmt.Sprintf("https://github.com%s/tree/%s", u.Path, change.To)
+				}
+				for _, commit := range commits {
+					commitInfo := CommitInfo{
+						Bugs:       commit.Refs.GetRefsForSource(Bugzilla),
+						Issues:     commit.Refs.GetRefsForSource(Jira),
+						Subject:    replaceUnsafeInput.Replace(commit.Subject),
+						CommitDate: commit.CommitDate,
+					}
+					switch {
+					case commit.PullRequest > 0:
+						commitInfo.PullID = commit.PullRequest
+						commitInfo.PullURL = fmt.Sprintf("https://%s%s/pull/%d", u.Host, u.Path, commit.PullRequest)
+					case u.Host == "github.com":
+						commitInfo.CommitID = commit.Commit[:8]
+						commitInfo.CommitURL = fmt.Sprintf("https://%s%s/commit/%s", u.Host, u.Path, commit.Commit[:8])
+					default:
+						commitInfo.CommitID = commit.Commit[:8]
+					}
+					info.Commits = append(info.Commits, commitInfo)
+				}
+				if u.Host == "github.com" {
+					info.FullChangeLog = fmt.Sprintf("https://%s%s/compare/%s...%s", u.Host, u.Path, change.From, change.To)
+				}
+				changeLog.UpdatedImages = append(changeLog.UpdatedImages, info)
+			}
+		}
+		data, err := json.MarshalIndent(changeLog, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, string(data))
+
+	default:
+		fmt.Fprintf(out, heredoc.Docf(`
+		# %s
+
+		Created: %s
+
+		Image Digest: %s
+
+	`, diff.To.PreferredName(), diff.To.References.CreationTimestamp.UTC(), "`"+diff.To.Digest+"`"))
+
+		if release, ok := diff.To.References.Annotations[annotationReleaseFromRelease]; ok {
+			fmt.Fprintf(out, "Promoted from %s\n\n", release)
+		}
+		fmt.Fprintln(out)
+		fmt.Fprintf(out, "## Changes from %s\n\n", diff.From.PreferredName())
+
+		if keys := diff.To.ComponentVersions.OrderedKeys(); len(keys) > 0 {
+			fmt.Fprintf(out, "### Components\n\n")
+			for _, key := range keys {
+				version := diff.To.ComponentVersions[key]
+				old, ok := diff.From.ComponentVersions[key]
+				if !ok || old == version {
+					fmt.Fprintf(out, "* %s %s\n", componentDisplayName(key, version.DisplayName), version)
+					continue
+				}
+				fmt.Fprintf(out, "* %s upgraded from %s to %s\n", componentDisplayName(key, version.DisplayName), old, version)
 			}
 			fmt.Fprintln(out)
+			fmt.Fprintln(out)
+		}
+
+		if len(added) > 0 {
+			fmt.Fprintf(out, "### New images\n\n")
+			for _, k := range added {
+				fmt.Fprintf(out, "* %s\n", refToShortDescription(diff.ChangedImages[k].To))
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out)
+		}
+
+		if len(removed) > 0 {
+			fmt.Fprintf(out, "### Removed images\n\n")
+			for _, k := range removed {
+				fmt.Fprintf(out, "* %s\n", k)
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out)
+		}
+
+		if len(imageChanges) > 0 || len(incorrectImageChanges) > 0 {
+			fmt.Fprintf(out, "### Rebuilt images without code change\n\n")
+			for _, change := range imageChanges {
+				fmt.Fprintf(out, "* %s\n", refToShortDescription(diff.ChangedImages[change.Name].To))
+			}
+			for _, k := range incorrectImageChanges {
+				fmt.Fprintf(out, "* %s\n", k)
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out)
+		}
+
+		for _, change := range codeChanges {
+			u, commits, err := commitsForRepo(dir, change, out, errOut)
+			if err != nil {
+				fmt.Fprintf(errOut, "error: %v\n", err)
+				hasError = true
+				continue
+			}
+			if len(commits) > 0 {
+				if u.Host == "github.com" {
+					fmt.Fprintf(out, "### [%s](https://github.com%s/tree/%s)\n\n", strings.Join(change.ImagesAffected, ", "), u.Path, change.To)
+				} else {
+					fmt.Fprintf(out, "### %s\n\n", strings.Join(change.ImagesAffected, ", "))
+				}
+				for _, commit := range commits {
+					fmt.Fprintf(out, "*")
+					commit.Refs.PrintRefs(out)
+					fmt.Fprintf(out, " %s", replaceUnsafeInput.Replace(commit.Subject))
+					switch {
+					case commit.PullRequest > 0:
+						fmt.Fprintf(out, " [#%d](%s)", commit.PullRequest, fmt.Sprintf("https://%s%s/pull/%d", u.Host, u.Path, commit.PullRequest))
+					case u.Host == "github.com":
+						commit := commit.Commit[:8]
+						fmt.Fprintf(out, " [%s](%s)", commit, fmt.Sprintf("https://%s%s/commit/%s", u.Host, u.Path, commit))
+					default:
+						fmt.Fprintf(out, " %s", commit.Commit[:8])
+					}
+					fmt.Fprintf(out, "\n")
+				}
+				if u.Host == "github.com" {
+					fmt.Fprintf(out, "* [Full changelog](%s)\n\n", fmt.Sprintf("https://%s%s/compare/%s...%s", u.Host, u.Path, change.From, change.To))
+				} else {
+					fmt.Fprintf(out, "* %s from %s to %s\n\n", change.Repo, change.FromShort(), change.ToShort())
+				}
+				fmt.Fprintln(out)
+			}
 		}
 	}
 	if hasError {
@@ -1588,7 +1720,7 @@ func describeBugs(out, errOut io.Writer, diff *ReleaseDiff, dir string, format s
 	var hasError bool
 	codeChanges, _, _ := releaseDiffContentChanges(diff)
 
-	bugIDs := make(map[string]Bug)
+	bugIDs := make(map[string]Ref)
 	for _, change := range codeChanges {
 		_, commits, err := commitsForRepo(dir, change, out, errOut)
 		if err != nil {
@@ -1597,27 +1729,30 @@ func describeBugs(out, errOut io.Writer, diff *ReleaseDiff, dir string, format s
 			continue
 		}
 		for _, commit := range commits {
-			if len(commit.Bugs.Bugs) == 0 {
+			if len(commit.Refs.Refs) == 0 {
 				continue
 			}
-			for _, v := range commit.Bugs.Bugs {
-				if _, ok := bugIDs[generateBugKey(v.Source, v.ID)]; !ok {
-					// We are using generated bug key according to the source type
-					// to prevent possible clashes like BUG 111 and OCPBUGS-111
-					bugIDs[generateBugKey(v.Source, v.ID)] = v
+			for _, v := range commit.Refs.Refs {
+				// the describeBugs function only returns bug references because it's used from the --bugs argument
+				// which prints bugs (not all changes) in the payload, so ignore jira refs to non bugs
+				if v.Source == Jira && !(strings.HasPrefix(v.ID, "OCPBUGS-") || strings.HasPrefix(v.ID, "OCPBUGSM-")) {
+					continue
+				}
+				if _, ok := bugIDs[v.ID]; !ok {
+					bugIDs[v.ID] = v
 				}
 			}
 		}
 	}
 
-	bugs := make(map[string]BugRemoteInfo)
-	var valid []Bug
+	bugs := make(map[string]RefRemoteInfo)
+	var valid []Ref
 	if skipBugCheck {
-		valid = GetBugList(bugIDs)
+		valid = GetRefList(bugIDs)
 	} else {
-		allBugIDs := GetBugList(bugIDs)
+		allBugIDs := GetRefList(bugIDs)
 		for len(allBugIDs) > 0 {
-			var next []Bug
+			var next []Ref
 			if len(allBugIDs) > 10 {
 				next = allBugIDs[:10]
 				allBugIDs = allBugIDs[10:]
@@ -1626,18 +1761,18 @@ func describeBugs(out, errOut io.Writer, diff *ReleaseDiff, dir string, format s
 				allBugIDs = nil
 			}
 
-			bugList, err := RetrieveBugs(next)
+			bugList, err := RetrieveRefs(next)
 			if err != nil {
 
 			}
-			for _, bug := range bugList.Bugs {
-				bugs[generateBugKey(bug.Source, bug.ID)] = bug
+			for _, bug := range bugList.Refs {
+				bugs[bug.ID] = bug
 			}
 		}
 
-		for _, id := range GetBugList(bugIDs) {
-			if _, ok := bugs[generateBugKey(id.Source, id.ID)]; !ok {
-				fmt.Fprintf(errOut, "error: Bug %d was not retrieved\n", id.ID)
+		for _, id := range GetRefList(bugIDs) {
+			if _, ok := bugs[id.ID]; !ok {
+				fmt.Fprintf(errOut, "error: Bug %s was not retrieved\n", id.ID)
 				hasError = true
 				continue
 			}
@@ -1651,12 +1786,28 @@ func describeBugs(out, errOut io.Writer, diff *ReleaseDiff, dir string, format s
 			for _, b := range valid {
 				fmt.Fprintln(out, b.ID)
 			}
+		case "json":
+			var printedBugs []RefRemoteInfo
+			for _, v := range valid {
+				if skipBugCheck {
+					printedBugs = append(printedBugs, RefRemoteInfo{ID: v.ID, Source: v.Source})
+				} else {
+					if bug, ok := bugs[v.ID]; ok {
+						printedBugs = append(printedBugs, bug)
+					}
+				}
+			}
+			data, err := json.MarshalIndent(printedBugs, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(out, string(data))
 		default:
 			tw := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 			fmt.Fprintln(tw, "ID\tSTATUS\tPRIORITY\tSUMMARY")
 			for _, v := range valid {
-				if bug, ok := bugs[generateBugKey(v.Source, v.ID)]; ok {
-					fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", v.ID, bug.Status, bug.Priority, bug.Summary)
+				if bug, ok := bugs[v.ID]; ok {
+					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", v.ID, bug.Status, bug.Priority, bug.Summary)
 				}
 			}
 			tw.Flush()
@@ -1918,4 +2069,83 @@ func newContentStreamForRelease(image *ReleaseInfo) io.Reader {
 		}
 	}
 	return &contentStream{parts: data}
+}
+
+type ChangeLog struct {
+	From ChangeLogReleaseInfo `json:"from"`
+	To   ChangeLogReleaseInfo `json:"to"`
+
+	Components    []ChangeLogComponentInfo `json:"components,omitempty"`
+	NewImages     []ChangeLogImageInfo     `json:"newImages,omitempty"`
+	RemovedImages []ChangeLogImageInfo     `json:"removedImages,omitempty"`
+	RebuiltImages []ChangeLogImageInfo     `json:"rebuiltImages,omitempty"`
+	UpdatedImages []ChangeLogImageInfo     `json:"updatedImages,omitempty"`
+}
+
+type ChangeLogReleaseInfo struct {
+	Name         string        `json:"name"`
+	Created      time.Time     `json:"created"`
+	Digest       digest.Digest `json:"digest"`
+	PromotedFrom string        `json:"promotedFrom,omitempty"`
+}
+
+type ChangeLogComponentInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	From    string `json:"from,omitempty"`
+}
+
+type ChangeLogImageInfo struct {
+	Name          string       `json:"name"`
+	Path          string       `json:"path"`
+	ShortCommit   string       `json:"shortCommit,omitempty"`
+	Commit        string       `json:"commit,omitempty"`
+	ImageRef      string       `json:"imageRef,omitempty"`
+	Commits       []CommitInfo `json:"commits,omitempty"`
+	FullChangeLog string       `json:"fullChangeLog,omitempty"`
+}
+
+type CommitInfo struct {
+	Bugs       map[string]string `json:"bugs,omitempty"`
+	Issues     map[string]string `json:"issues,omitempty"`
+	Subject    string            `json:"subject,omitempty"`
+	PullID     int               `json:"pullID,omitempty"`
+	PullURL    string            `json:"pullURL,omitempty"`
+	CommitID   string            `json:"commitID,omitempty"`
+	CommitURL  string            `json:"commitURL,omitempty"`
+	CommitDate time.Time         `json:"commitDate,omitempty"`
+}
+
+func refToChangeInfo(ref *imageapi.TagReference) ChangeLogImageInfo {
+	info := ChangeLogImageInfo{Name: ref.Name}
+
+	if from := ref.From; from != nil {
+		if u, err := sourceLocationAsURL(ref.Annotations[annotationBuildSourceLocation]); err == nil {
+			if u.Host == "github.com" {
+				if commit, ok := ref.Annotations[annotationBuildSourceCommit]; ok {
+					shortCommit := commit
+					if len(shortCommit) > 8 {
+						shortCommit = shortCommit[:8]
+					}
+					info.Commit = commit
+					info.ShortCommit = shortCommit
+				}
+				info.Path = fmt.Sprintf("https://github.com%s", u.Path)
+			}
+		}
+		imageRef, err := imagereference.Parse(from.Name)
+		if err == nil {
+			switch {
+			case len(imageRef.ID) > 0:
+				info.ImageRef = imageRef.ID
+			case len(imageRef.Tag) > 0:
+				info.ImageRef = imageRef.Tag
+			default:
+				info.ImageRef = imageRef.Exact()
+			}
+			return info
+		}
+		info.ImageRef = from.Name
+	}
+	return info
 }

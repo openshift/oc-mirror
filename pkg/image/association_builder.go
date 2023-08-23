@@ -343,4 +343,5 @@ var preferManifestList = distribution.WithManifestMediaTypes([]string{
 	manifestlist.MediaTypeManifestList,
 	schema2.MediaTypeManifest,
 	imgspecv1.MediaTypeImageManifest,
+	imgspecv1.MediaTypeImageIndex,
 })

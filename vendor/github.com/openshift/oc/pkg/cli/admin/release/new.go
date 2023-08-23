@@ -55,7 +55,7 @@ func NewNewOptions(streams genericclioptions.IOStreams) *NewOptions {
 		// We strongly control the set of allowed component versions to prevent confusion
 		// about what component versions may be used for. Changing this list requires
 		// approval from the release architects.
-		AllowedComponents: []string{"kubernetes", "machine-os"},
+		AllowedComponents: []string{"kubernetes", "machine-os", "kernel", "crio"},
 	}
 }
 
@@ -97,18 +97,18 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 		`),
 		Example: templates.Examples(`
 			# Create a release from the latest origin images and push to a DockerHub repo
-			oc adm release new --from-image-stream=4.1 -n origin --to-image docker.io/mycompany/myrepo:latest
+			oc adm release new --from-image-stream=4.11 -n origin --to-image docker.io/mycompany/myrepo:latest
 
 			# Create a new release with updated metadata from a previous release
-			oc adm release new --from-release registry.svc.ci.openshift.org/origin/release:v4.1 --name 4.1.1 \
-				--previous 4.1.0 --metadata ... --to-image docker.io/mycompany/myrepo:latest
+			oc adm release new --from-release registry.ci.openshift.org/origin/release:v4.11 --name 4.11.1 \
+				--previous 4.11.0 --metadata ... --to-image docker.io/mycompany/myrepo:latest
 
 			# Create a new release and override a single image
-			oc adm release new --from-release registry.svc.ci.openshift.org/origin/release:v4.1 \
+			oc adm release new --from-release registry.ci.openshift.org/origin/release:v4.11 \
 				cli=docker.io/mycompany/cli:latest --to-image docker.io/mycompany/myrepo:latest
 
 			# Run a verification pass to ensure the release can be reproduced
-			oc adm release new --from-release registry.svc.ci.openshift.org/origin/release:v4.1
+			oc adm release new --from-release registry.ci.openshift.org/origin/release:v4.11
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(f, cmd, args))
@@ -133,6 +133,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 	// properties of the release
 	flags.StringVar(&o.Name, "name", o.Name, "The name of the release. Will default to the current time.")
 	flags.StringSliceVar(&o.PreviousVersions, "previous", o.PreviousVersions, "A list of semantic versions that should precede this version in the release manifest.")
+	flags.StringSliceVar(&o.NextVersions, "next", o.NextVersions, "A list of semantic versions that should succeed this version in the release manifest. Using --next can potentially cause regressions given the release does not exist. Use with caution")
 	flags.StringVar(&o.ReleaseMetadata, "metadata", o.ReleaseMetadata, "A JSON object to attach as the metadata for the release manifest.")
 	flags.BoolVar(&o.ForceManifest, "release-manifest", o.ForceManifest, "If true, a release manifest will be created using --name as the semantic version.")
 	flags.BoolVar(&o.KeepManifestList, "keep-manifest-list", o.KeepManifestList, "If an image is part of a manifest list, always mirror the list even if only one image is found.")
@@ -190,6 +191,7 @@ type NewOptions struct {
 	ForceManifest    bool
 	ReleaseMetadata  string
 	PreviousVersions []string
+	NextVersions     []string
 	KeepManifestList bool
 
 	DryRun bool
@@ -297,6 +299,7 @@ type CincinnatiMetadata struct {
 
 	Version  string   `json:"version"`
 	Previous []string `json:"previous"`
+	Next     []string `json:"next,omitempty"`
 
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -330,6 +333,7 @@ func (o *NewOptions) Run() error {
 	hasMetadataOverrides := len(o.Name) > 0 ||
 		len(o.ReleaseMetadata) > 0 ||
 		len(o.PreviousVersions) > 0 ||
+		len(o.NextVersions) > 0 ||
 		len(o.ToImageBase) > 0 ||
 		len(o.ExtraComponentVersions) > 0 ||
 		len(o.ExtraComponentVersionsDisplayNames) > 0 ||
@@ -368,6 +372,15 @@ func (o *NewOptions) Run() error {
 		extractOpts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
 		extractOpts.ParallelOptions = o.ParallelOptions
 		extractOpts.SecurityOptions = o.SecurityOptions
+		if o.KeepManifestList {
+			// we'll always use manifests from the linux/amd64 image, since the manifests
+			// won't differ between architectures, at least for now
+			re, err := regexp.Compile("linux/amd64")
+			if err != nil {
+				return err
+			}
+			extractOpts.FilterOptions.OSFilter = re
+		}
 		extractOpts.OnlyFiles = true
 		extractOpts.Mappings = []extract.Mapping{
 			{
@@ -375,7 +388,7 @@ func (o *NewOptions) Run() error {
 				From:     "release-manifests/",
 			},
 		}
-		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 			verifier.Verify(dgst, contentDigest)
 			releaseDigest = contentDigest
 			if config.Config != nil {
@@ -436,7 +449,8 @@ func (o *NewOptions) Run() error {
 			ordered = append(ordered, tag.Name)
 		}
 
-		// default the base image to a matching release payload digest or error
+		// default the base image to a matching release payload base digest or
+		// if the base digest is invalid use release payload itself as base image.
 		if len(o.ToImageBase) == 0 && len(baseDigest) > 0 {
 			for _, tag := range is.Spec.Tags {
 				if tag.From == nil || tag.From.Kind != "DockerImage" {
@@ -452,7 +466,16 @@ func (o *NewOptions) Run() error {
 				}
 			}
 			if len(o.ToImageBase) == 0 {
-				return fmt.Errorf("unable to find an image within the release that matches the base image manifest %q, please specify --to-image-base", baseDigest)
+				if !o.KeepManifestList {
+					return fmt.Errorf("unable to find an image within the release that matches the base image manifest %q, please specify --to-image-base", baseDigest)
+				}
+
+				o.ToImageBase = o.FromReleaseImage
+				// ToImageBase is set and thereby, metadata is overridden.
+				// To skip verification, we need to set hasMetadataOverrides to true
+				// in order to behave similar when user passes --to-image-base flag.
+				hasMetadataOverrides = true
+				klog.V(2).Infof("unable to find an image within the release that matches the base image manifest %q, using --from-release %q as base image", baseDigest, o.FromReleaseImage)
 			}
 		}
 
@@ -468,6 +491,9 @@ func (o *NewOptions) Run() error {
 		}
 		if o.PreviousVersions == nil {
 			o.PreviousVersions = cm.Previous
+		}
+		if o.NextVersions == nil {
+			o.NextVersions = cm.Next
 		}
 
 		if hasMetadataOverrides {
@@ -607,6 +633,20 @@ func (o *NewOptions) Run() error {
 	sort.Strings(cm.Previous)
 	if cm.Previous == nil {
 		cm.Previous = []string{}
+	}
+	for _, next := range o.NextVersions {
+		if len(next) == 0 {
+			continue
+		}
+		v, err := semver.Parse(next)
+		if err != nil {
+			return fmt.Errorf("%q is not a valid semantic version: %v", next, err)
+		}
+		cm.Next = append(cm.Next, v.String())
+	}
+	sort.Strings(cm.Next)
+	if cm.Next == nil {
+		cm.Next = []string{}
 	}
 	klog.V(4).Infof("Release metadata:\n%s", toJSONString(cm))
 
@@ -918,15 +958,17 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
-	// we'll always use manifests from the linux/amd64 image, since the manifests
-	// won't differ between architectures, at least for now
-	re, err := regexp.Compile("linux/amd64")
-	if err != nil {
-		return err
+	if o.KeepManifestList {
+		// we'll always use manifests from the linux/amd64 image, since the manifests
+		// won't differ between architectures, at least for now
+		re, err := regexp.Compile("linux/amd64")
+		if err != nil {
+			return err
+		}
+		opts.FilterOptions.OSFilter = re
 	}
-	opts.FilterOptions.OSFilter = re
 	opts.OnlyFiles = true
-	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+	opts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 		verifier.Verify(dgst, contentDigest)
 
 		lock.Lock()

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -77,12 +78,11 @@ func NewMirrorOptions(streams genericclioptions.IOStreams) *MirrorOptions {
 
 // NewMirror creates a command to mirror an existing release.
 //
-// Example command to mirror a release to a local repository to work offline
+// # Example command to mirror a release to a local repository to work offline
 //
-// $ oc adm release mirror \
-//     --from=registry.svc.ci.openshift.org/openshift/v4.0 \
-//     --to=mycompany.com/myrepository/repo
-//
+//	$ oc adm release mirror \
+//	    --from=registry.ci.openshift.org/openshift/v4.11 \
+//	    --to=mycompany.com/myrepository/repo
 func NewMirror(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	o := NewMirrorOptions(streams)
 	cmd := &cobra.Command{
@@ -123,22 +123,22 @@ func NewMirror(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.C
 		`),
 		Example: templates.Examples(`
 			# Perform a dry run showing what would be mirrored, including the mirror objects
-			oc adm release mirror 4.3.0 --to myregistry.local/openshift/release \
+			oc adm release mirror 4.11.0 --to myregistry.local/openshift/release \
 				--release-image-signature-to-dir /tmp/releases --dry-run
 
 			# Mirror a release into the current directory
-			oc adm release mirror 4.3.0 --to file://openshift/release \
+			oc adm release mirror 4.11.0 --to file://openshift/release \
 				--release-image-signature-to-dir /tmp/releases
 
 			# Mirror a release to another directory in the default location
-			oc adm release mirror 4.3.0 --to-dir /tmp/releases
+			oc adm release mirror 4.11.0 --to-dir /tmp/releases
 
 			# Upload a release from the current directory to another server
 			oc adm release mirror --from file://openshift/release --to myregistry.com/openshift/release \
 				--release-image-signature-to-dir /tmp/releases
 
-			# Mirror the 4.3.0 release to repository registry.example.com and apply signatures to connected cluster
-			oc adm release mirror --from=quay.io/openshift-release-dev/ocp-release:4.3.0-x86_64 \
+			# Mirror the 4.11.0 release to repository registry.example.com and apply signatures to connected cluster
+			oc adm release mirror --from=quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64 \
 				--to=registry.example.com/your/repository --apply-release-image-signature
 		`),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -470,7 +470,6 @@ func (o *MirrorOptions) Run() error {
 
 	var releaseDigest string
 	var manifests []manifest.Manifest
-	verifier := imagemanifest.NewVerifier()
 	is := o.ImageStream
 	if is == nil {
 		o.ImageStream = &imagev1.ImageStream{}
@@ -481,11 +480,22 @@ func (o *MirrorOptions) Run() error {
 		extractOpts := NewExtractOptions(genericclioptions.IOStreams{Out: buf, ErrOut: o.ErrOut}, true)
 		extractOpts.ParallelOptions = o.ParallelOptions
 		extractOpts.SecurityOptions = o.SecurityOptions
-		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig) {
+		if o.KeepManifestList {
+			// we'll always use manifests from the linux/amd64 image, since the manifests
+			// won't differ between architectures, at least for now
+			re, err := regexp.Compile("linux/amd64")
+			if err != nil {
+				return err
+			}
+			extractOpts.FilterOptions.OSFilter = re
+		}
+		extractOpts.ImageMetadataCallback = func(m *extract.Mapping, dgst, contentDigest digest.Digest, config *dockerv1client.DockerImageConfig, manifestListDigest digest.Digest) {
 			releaseDigest = contentDigest.String()
-			verifier.Verify(dgst, contentDigest)
 			if config != nil {
-				if val, ok := archMap[config.Architecture]; ok {
+				// Use 'multi' instead of config.Architecture if keeping the ManifestList.
+				if o.KeepManifestList && manifestListDigest != "" {
+					archExt = "-multi"
+				} else if val, ok := archMap[config.Architecture]; ok {
 					archExt = "-" + val
 				} else {
 					archExt = "-" + config.Architecture
@@ -505,13 +515,6 @@ func (o *MirrorOptions) Run() error {
 		}
 		if is.Kind != "ImageStream" || is.APIVersion != "image.openshift.io/v1" {
 			return fmt.Errorf("unrecognized image-references in release payload")
-		}
-		if !verifier.Verified() {
-			err := fmt.Errorf("the release image failed content verification and may have been tampered with")
-			if !o.SecurityOptions.SkipVerification {
-				return err
-			}
-			fmt.Fprintf(o.ErrOut, "warning: %v\n", err)
 		}
 		manifests = extractOpts.Manifests
 	}
