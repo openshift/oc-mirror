@@ -489,7 +489,7 @@ func TestFirstAvailableMirror(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			mirror, err := findFirstAvailableMirror(context.TODO(), c.mirrors, c.imageName, c.prefix, c.regFuncs)
+			mirror, err := findFirstAvailableMirror(context.TODO(), nil, c.mirrors, c.imageName, c.prefix, c.regFuncs)
 
 			if c.expErr != "" {
 				require.EqualError(t, err, c.expErr)
