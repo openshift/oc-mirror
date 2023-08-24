@@ -448,7 +448,7 @@ func findFirstAvailableMirror(ctx context.Context, sysCtx *types.SystemContext, 
 		}
 		imgsrc, err := regFuncs.newImageSource(ctx, sysCtx, imgRef)
 		defer func() {
-			if imgsrc != nil {
+			if imgsrc != nil && err == nil {
 				err = imgsrc.Close()
 				if err != nil {
 					klog.V(3).Infof("%s is not closed", imgsrc)
