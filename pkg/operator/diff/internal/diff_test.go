@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -3927,7 +3928,7 @@ func TestSetDefaultChannelRange2(t *testing.T) {
 			//oldModel, err := declcfg.ConvertToModel(s.oldCfg)
 			//require.NoError(t, err)
 
-			newCfg, err := declcfg.LoadFS(s.fsys)
+			newCfg, err := declcfg.LoadFS(context.Background(), s.fsys)
 			if err != nil {
 				fmt.Println(err)
 			}

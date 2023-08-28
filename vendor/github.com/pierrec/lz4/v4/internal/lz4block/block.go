@@ -41,11 +41,11 @@ func CompressBlockBound(n int) int {
 	return n + n/255 + 16
 }
 
-func UncompressBlock(src, dst []byte) (int, error) {
+func UncompressBlock(src, dst, dict []byte) (int, error) {
 	if len(src) == 0 {
 		return 0, nil
 	}
-	if di := decodeBlock(dst, src); di >= 0 {
+	if di := decodeBlock(dst, src, dict); di >= 0 {
 		return di, nil
 	}
 	return 0, lz4errors.ErrInvalidSourceShortBuffer
@@ -132,7 +132,7 @@ func (c *Compressor) CompressBlock(src, dst []byte) (int, error) {
 
 		offset := si - ref
 
-		if ref < 0 || uint32(match) != binary.LittleEndian.Uint32(src[ref:]) {
+		if offset <= 0 || offset >= winSize || uint32(match) != binary.LittleEndian.Uint32(src[ref:]) {
 			// No match. Start calculating another hash.
 			// The processor can usually do this out-of-order.
 			h = blockHash(match >> 16)
@@ -142,13 +142,13 @@ func (c *Compressor) CompressBlock(src, dst []byte) (int, error) {
 			si += 1
 			offset = si - ref2
 
-			if ref2 < 0 || uint32(match>>8) != binary.LittleEndian.Uint32(src[ref2:]) {
+			if offset <= 0 || offset >= winSize || uint32(match>>8) != binary.LittleEndian.Uint32(src[ref2:]) {
 				// No match. Check the third match at si+2
 				si += 1
 				offset = si - ref3
 				c.put(h, si)
 
-				if ref3 < 0 || uint32(match>>16) != binary.LittleEndian.Uint32(src[ref3:]) {
+				if offset <= 0 || offset >= winSize || uint32(match>>16) != binary.LittleEndian.Uint32(src[ref3:]) {
 					// Skip one extra byte (at si+3) before we check 3 matches again.
 					si += 2 + (si-anchor)>>adaptSkipLog
 					continue
@@ -187,6 +187,9 @@ func (c *Compressor) CompressBlock(src, dst []byte) (int, error) {
 		}
 
 		mLen = si - mLen
+		if di >= len(dst) {
+			return 0, lz4errors.ErrInvalidSourceShortBuffer
+		}
 		if mLen < 0xF {
 			dst[di] = byte(mLen)
 		} else {
@@ -200,9 +203,12 @@ func (c *Compressor) CompressBlock(src, dst []byte) (int, error) {
 			dst[di] |= 0xF0
 			di++
 			l := lLen - 0xF
-			for ; l >= 0xFF; l -= 0xFF {
+			for ; l >= 0xFF && di < len(dst); l -= 0xFF {
 				dst[di] = 0xFF
 				di++
+			}
+			if di >= len(dst) {
+				return 0, lz4errors.ErrInvalidSourceShortBuffer
 			}
 			dst[di] = byte(l)
 		}

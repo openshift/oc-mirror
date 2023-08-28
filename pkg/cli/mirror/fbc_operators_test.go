@@ -270,7 +270,7 @@ func TestGetRelatedImages(t *testing.T) {
 			imageIndex, err := c.configsPath.ImageIndex()
 			require.NoError(t, err)
 			handleIndex(t, imageIndex)
-			cfg, err := declcfg.LoadFS(os.DirFS(actualDir))
+			cfg, err := declcfg.LoadFS(context.Background(), os.DirFS(actualDir))
 			if err != nil {
 				t.Fatalf("unable to load the declarative config %s", err.Error())
 			}

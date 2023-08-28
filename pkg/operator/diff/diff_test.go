@@ -494,7 +494,7 @@ func loadDirFS(t *testing.T, parent fs.FS, dir string) *declcfg.DeclarativeConfi
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := declcfg.LoadFS(sub)
+	cfg, err := declcfg.LoadFS(context.Background(), sub)
 	if err != nil {
 		t.Fatal(err)
 	}
