@@ -487,8 +487,21 @@ func copyOPMBinary(img v1.Image, ctlgSrcDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	opmBin := ""
+	// Following https://docs.docker.com/engine/reference/builder/#understand-how-cmd-and-entrypoint-interact,
+	// identifying the binary that will be run by the catalog:
 	entrypoint := cfgf.Config.Entrypoint
-	opmBin := strings.TrimPrefix(entrypoint[0], (string)(os.PathSeparator))
+	if len(entrypoint) > 0 {
+		opmBin = strings.TrimPrefix(entrypoint[0], (string)(os.PathSeparator)) // /bin/opm becomes bin/opm in order to prepare for extraction from the image
+	} else {
+		cmd := cfgf.Config.Cmd
+		if len(cmd) > 0 {
+			opmBin = strings.TrimPrefix(cmd[0], (string)(os.PathSeparator))
+		}
+	}
+	if opmBin == "" {
+		return "", fmt.Errorf("unable to find the path to opm in the catalog image: both entrypoint and cmd were empty")
+	}
 
 	err = extractCatalog(img, filepath.Join(ctlgSrcDir, config.CtlgExtractionDir), opmBin)
 	if err != nil {
