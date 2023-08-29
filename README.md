@@ -126,7 +126,7 @@ If a user does not desire content removal from a mirror registry, they can eithe
     ```
 - List updates since last run for releases and operators
   ```sh
-  ./bin/oc-mirror list updates --config imageset-config.yaml
+  ./bin/oc-mirror list updates imageset-config.yaml
   ```
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
