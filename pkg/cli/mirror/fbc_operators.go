@@ -84,13 +84,14 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 			klog.Warningf("invalid related image %s: reference empty", i.Name)
 			continue
 		}
-		reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), i.Image)
+		sysCtx := newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig)
+		reg, err := sysregistriesv2.FindRegistry(sysCtx, i.Image)
 		if err != nil {
 			klog.Warningf("Cannot find registry for %s", i.Image)
 		}
 		if reg != nil && len(reg.Mirrors) > 0 {
 			// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
-			mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+i.Image, reg.Prefix, o.remoteRegFuncs)
+			mirroredImage, err := findFirstAvailableMirror(ctx, sysCtx, reg.Mirrors, dockerPrefix+i.Image, reg.Prefix, o.remoteRegFuncs)
 			if err == nil {
 				i.Image = mirroredImage
 			}
@@ -136,7 +137,8 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *s
 		klog.Warningf("invalid related image %s: reference empty", img.Name)
 		return nil
 	}
-	reg, err := sysregistriesv2.FindRegistry(newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig), img.Image)
+	sysCtx := newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig)
+	reg, err := sysregistriesv2.FindRegistry(sysCtx, img.Image)
 	if err != nil {
 		klog.Warningf("Cannot find registry for %s", img.Image)
 	}
@@ -151,7 +153,7 @@ func (o *MirrorOptions) addRelatedImageToMapping(ctx context.Context, mapping *s
 
 	if reg != nil && len(reg.Mirrors) > 0 {
 		// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
-		mirroredImage, err := findFirstAvailableMirror(ctx, reg.Mirrors, dockerPrefix+img.Image, reg.Prefix, o.remoteRegFuncs)
+		mirroredImage, err := findFirstAvailableMirror(ctx, sysCtx, reg.Mirrors, dockerPrefix+img.Image, reg.Prefix, o.remoteRegFuncs)
 		if err == nil {
 			from = mirroredImage
 		} else {
@@ -429,7 +431,7 @@ func getRelatedImages(cfg declcfg.DeclarativeConfig) ([]declcfg.RelatedImage, er
 	return finalList, nil
 }
 
-func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
+func findFirstAvailableMirror(ctx context.Context, sysCtx *types.SystemContext, mirrors []sysregistriesv2.Endpoint, imageName string, prefix string, regFuncs RemoteRegFuncs) (string, error) {
 	finalError := fmt.Errorf("could not find a valid mirror for %s", imageName)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
@@ -444,9 +446,9 @@ func findFirstAvailableMirror(ctx context.Context, mirrors []sysregistriesv2.End
 			finalError = fmt.Errorf("%w: unable to parse reference %s: %v", finalError, mirroredImage, err)
 			continue
 		}
-		imgsrc, err := regFuncs.newImageSource(ctx, nil, imgRef)
+		imgsrc, err := regFuncs.newImageSource(ctx, sysCtx, imgRef)
 		defer func() {
-			if imgsrc != nil {
+			if imgsrc != nil && err == nil {
 				err = imgsrc.Close()
 				if err != nil {
 					klog.V(3).Infof("%s is not closed", imgsrc)
