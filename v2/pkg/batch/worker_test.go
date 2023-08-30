@@ -58,8 +58,12 @@ func TestWorker(t *testing.T) {
 type Mirror struct{}
 type Manifest struct{}
 
-func (o *Mirror) Run(ctx context.Context, src, dest, mode string, opts *mirror.CopyOptions, out bufio.Writer) (retErr error) {
+func (o *Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, stdout bufio.Writer) error {
 	return nil
+}
+
+func (o *Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+	return true, nil
 }
 
 func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {

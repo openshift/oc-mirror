@@ -194,6 +194,11 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
+		//copy tests/release-filters-fake to working-dir
+		err = copy.Copy("../../tests/release-filters-fake/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.Dir, releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
 		manifest := &Manifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,

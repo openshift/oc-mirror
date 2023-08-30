@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/containers/common/pkg/retry"
 	"github.com/containers/image/v5/copy"
@@ -18,14 +19,12 @@ import (
 	"github.com/docker/distribution/reference"
 )
 
-const (
-	mirrorToDisk = "mirrorToDisk"
-	diskToMirror = "diskToMirror"
-)
+type Mode string
 
 // MirrorInterface  used to mirror images with container/images (skopeo)
 type MirrorInterface interface {
-	Run(ctx context.Context, src, dest, mode string, opts *CopyOptions, stdout bufio.Writer) (retErr error)
+	Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions, stdout bufio.Writer) (retErr error)
+	Check(ctx context.Context, image string, opts *CopyOptions) (bool, error)
 }
 
 type MirrorCopyInterface interface {
@@ -35,6 +34,14 @@ type MirrorCopyInterface interface {
 type MirrorDeleteInterface interface {
 	DeleteImage(ctx context.Context, image string, opts *CopyOptions) error
 }
+
+const (
+	mirrorToDisk      = "mirrorToDisk"
+	diskToMirror      = "diskToMirror"
+	CopyMode     Mode = "copy"
+	DeleteMode   Mode = "delete"
+	CheckMode    Mode = "check"
+)
 
 // Mirror
 type Mirror struct {
@@ -60,8 +67,8 @@ func NewMirrorDelete() MirrorDeleteInterface {
 }
 
 // Run - method to copy images from source to destination
-func (o *Mirror) Run(ctx context.Context, src, dest, mode string, opts *CopyOptions, stdout bufio.Writer) (retErr error) {
-	if mode == "delete" {
+func (o *Mirror) Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions, stdout bufio.Writer) (retErr error) {
+	if mode == DeleteMode {
 		return o.delete(ctx, src, opts)
 	}
 	return o.copy(ctx, src, dest, opts, stdout)
@@ -262,6 +269,43 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		}
 		return nil
 	}, opts.RetryOpts)
+}
+
+// check exists - checks if image exists
+func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions) (bool, error) {
+
+	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
+		return false, err
+	}
+
+	imageRef, err := alltransports.ParseImageName(image)
+	if err != nil {
+		return false, fmt.Errorf("invalid source name %s: %v", image, err)
+	}
+
+	sysCtx, err := opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return false, err
+	}
+
+	ctx, cancel := opts.Global.CommandTimeoutContext()
+	defer cancel()
+
+	err = retry.IfNecessary(ctx, func() error {
+		_, err := imageRef.NewImageSource(ctx, sysCtx)
+		if err != nil {
+			return err
+		}
+		return nil
+	}, opts.RetryOpts)
+
+	if err == nil {
+		return true, nil
+	} else if strings.Contains(err.Error(), "manifest unknown") {
+		return false, nil
+	} else {
+		return false, err
+	}
 }
 
 // delete - delete images

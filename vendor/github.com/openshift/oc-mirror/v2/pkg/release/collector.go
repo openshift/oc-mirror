@@ -38,6 +38,7 @@ const (
 	errMsg                      string = "[ReleaseImageCollector] %v "
 	diskToMirror                string = "diskToMirror"
 	mirrorToDisk                string = "mirrorToDisk"
+	prepare                     string = "prepare"
 	logFile                     string = "logs/release.log"
 )
 

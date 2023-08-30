@@ -234,11 +234,15 @@ type Cincinnati struct {
 	Fail   bool
 }
 
-func (o *Mirror) Run(ctx context.Context, src, dest, mode string, opts *mirror.CopyOptions, out bufio.Writer) error {
+func (o *Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, out bufio.Writer) error {
 	if o.Fail {
 		return fmt.Errorf("forced mirror run fail")
 	}
 	return nil
+}
+
+func (o *Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+	return true, nil
 }
 
 func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {

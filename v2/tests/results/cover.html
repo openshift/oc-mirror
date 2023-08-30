@@ -806,6 +806,7 @@ health:
 
         reg, err := registry.NewRegistry(ctx, config)
         if err != nil </span><span class="cov0" title="0">{
+                cleanUp()
                 return err
         }</span>
         <span class="cov0" title="0">o.LocalStorage = *reg
