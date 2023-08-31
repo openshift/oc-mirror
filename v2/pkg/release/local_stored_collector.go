@@ -113,28 +113,45 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
+			tmpAllImages, err := o.prepareM2DCopyBatch(o.Log, allRelatedImages)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+			allImages = append(allImages, tmpAllImages...)
+			allImages = append(allImages, value)
 
-			if o.Opts.Mode == mirrorToDisk {
+		}
+	} else if o.Opts.Mode == diskToMirror {
+		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
 
-				allImages, err = o.prepareM2DCopyBatch(o.Log, dir, allRelatedImages)
-				if err != nil {
-					return []v1alpha3.CopyImageSchema{}, err
-				}
+		for _, value := range releases {
+			hld := strings.Split(value.Source, "/")
+			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
+			// cacheDir := strings.Join([]string{o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir}, "/")
+			dir := strings.Join([]string{o.Opts.Global.Dir, releaseImageDir, imageIndexDir}, "/")
+			if _, err := os.Stat(dir); err != nil {
+				return nil, fmt.Errorf("unable to find the release %s on disk : %v", value.Source, err)
 			}
 
-			if o.Opts.Mode == diskToMirror {
-				allImages, err = o.prepareD2MCopyBatch(o.Log, dir, allRelatedImages)
-				if err != nil {
-					return []v1alpha3.CopyImageSchema{}, err
-				}
+			// get all release images from manifest (json)
+			allRelatedImages, err := o.Manifest.GetReleaseSchema(imageIndexDir)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
+
+			tmpAllImages, err := o.prepareD2MCopyBatch(o.Log, allRelatedImages)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+			allImages = append(allImages, tmpAllImages...)
+			allImages = append(allImages, value)
 		}
 	}
 
 	return allImages, nil
 }
 
-func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
+func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, img := range images {
 		// TODO Make this more complete
@@ -175,7 +192,7 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 	return result, nil
 }
 
-func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
+func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, img := range images {
 		imgName := img.Image
