@@ -10,13 +10,13 @@ require (
 	github.com/containers/storage v1.47.0
 	github.com/distribution/distribution/v3 v3.0.0-20230722181636-7b502560cad4
 	github.com/docker/distribution v2.8.2+incompatible
-	github.com/docker/docker v24.0.2+incompatible
 	github.com/google/go-containerregistry v0.15.2
 	github.com/google/uuid v1.3.0
 	github.com/microlib/simple v1.0.2
 	github.com/opencontainers/image-spec v1.1.0-rc3
 	github.com/openshift/library-go v0.0.0-20230308200407-f3277c772011
 	github.com/operator-framework/operator-registry v1.26.4
+	github.com/otiai10/copy v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
@@ -53,6 +53,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/cli v23.0.5+incompatible // indirect
+	github.com/docker/docker v24.0.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
@@ -76,7 +77,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/gomodule/redigo v1.8.2 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/handlers v1.5.1 // indirect
@@ -157,7 +157,6 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gotest.tools/v3 v3.4.0 // indirect
 	k8s.io/api v0.26.3 // indirect
 	k8s.io/client-go v0.26.3 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect

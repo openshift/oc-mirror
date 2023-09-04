@@ -3,8 +3,11 @@ package release
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -163,8 +166,14 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
+		os.RemoveAll("../../tests/hold-release/")
+		os.RemoveAll("../../tests/release-images")
+		os.RemoveAll("../../tests/tmp/")
 		//copy tests/hold-test-fake to working-dir
-
+		err := copy.Copy("../../tests/hold-test-fake", filepath.Join(d2mOpts.Global.Dir, strings.TrimPrefix(d2mOpts.Global.From, fileProtocol), releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
 		manifest := &Manifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
@@ -191,6 +200,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
 		os.RemoveAll("../../tests/hold-release/")
 		os.RemoveAll("../../tests/release-images")
+		os.RemoveAll("../../tests/tmp/")
 		manifest := &Manifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
@@ -264,5 +274,27 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			t.Fatalf("should fail")
 		}
 		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing identifyReleaseFolders: should pass", func(t *testing.T) {
+		manifest := &Manifest{Log: log}
+		ex := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &Mirror{Fail: false},
+			Config:           cfg,
+			Manifest:         manifest,
+			Opts:             m2dOpts,
+			Cincinnati:       nil,
+			LocalStorageFQDN: "localhost:9999",
+		}
+
+		res, err := ex.identifyReleaseFolders("/home/skhoury/go/src/github.com/openshift/oc-mirror/v2/working-dir/home/skhoury/m2d/hold-release")
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		if len(res) < 1 {
+			t.Fatalf("should not be empty")
+		}
+		log.Debug("completed test identifyImages %v ", res)
 	})
 }

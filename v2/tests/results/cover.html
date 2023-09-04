@@ -81,7 +81,7 @@
 				
 				<option value="file12">github.com/openshift/oc-mirror/v2/pkg/operator/collector.go (63.1%)</option>
 				
-				<option value="file13">github.com/openshift/oc-mirror/v2/pkg/release/cincinnati.go (48.3%)</option>
+				<option value="file13">github.com/openshift/oc-mirror/v2/pkg/release/cincinnati.go (48.8%)</option>
 				
 				<option value="file14">github.com/openshift/oc-mirror/v2/pkg/release/client.go (84.6%)</option>
 				
@@ -91,7 +91,7 @@
 				
 				<option value="file17">github.com/openshift/oc-mirror/v2/pkg/release/find.go (95.8%)</option>
 				
-				<option value="file18">github.com/openshift/oc-mirror/v2/pkg/release/local_stored_collector.go (56.5%)</option>
+				<option value="file18">github.com/openshift/oc-mirror/v2/pkg/release/local_stored_collector.go (78.7%)</option>
 				
 				</select>
 			</div>
@@ -3122,8 +3122,6 @@ func (o *SignatureSchema) GenerateReleaseSignatures(ctx context.Context, rd []v1
                         o.Log.Trace("field LiteralData %v", md.LiteralData)
                         o.Log.Trace("field SignatureError %v", md.SignatureError)
                         o.Log.Trace("field Signature %v", md.Signature)
-                        o.Log.Trace("field SignatureV3 %v", md.SignatureV3.IssuerKeyId)
-                        o.Log.Trace("field SignatureV3 %v", md.SignatureV3.CreationTime)
 
                         if md.Signature != nil </span><span class="cov0" title="0">{
                                 if md.Signature.SigLifetimeSecs != nil </span><span class="cov0" title="0">{
@@ -4168,6 +4166,7 @@ import (
         "errors"
         "fmt"
         "os"
+        "path/filepath"
         "strings"
 
         "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -4175,6 +4174,10 @@ import (
         clog "github.com/openshift/oc-mirror/v2/pkg/log"
         "github.com/openshift/oc-mirror/v2/pkg/manifest"
         "github.com/openshift/oc-mirror/v2/pkg/mirror"
+)
+
+const (
+        fileProtocol string = "file://"
 )
 
 func NewWithLocalStorage(log clog.PluggableLoggerInterface,
@@ -4214,18 +4217,18 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
                 for _, value := range releases </span><span class="cov8" title="1">{
                         hld := strings.Split(value.Source, "/")
                         imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
-                        cacheDir := strings.Join([]string{o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir}, "/")
-                        dir := strings.Join([]string{o.Opts.Global.Dir, releaseImageDir, imageIndexDir}, "/")
-                        if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) </span><span class="cov0" title="0">{
+                        cacheDir := filepath.Join(o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir)
+                        dir := filepath.Join(o.Opts.Global.Dir, releaseImageDir, imageIndexDir)
+                        if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) </span><span class="cov8" title="1">{
                                 o.Log.Info("copying  %s ", value.Source)
                                 err := os.MkdirAll(dir, 0755)
                                 if err != nil </span><span class="cov0" title="0">{
                                         return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                                 }</span>
-                                <span class="cov0" title="0">src := dockerProtocol + value.Source
+                                <span class="cov8" title="1">src := dockerProtocol + value.Source
                                 dest := ociProtocolTrimmed + dir
                                 err = o.Mirror.Run(ctx, src, dest, "copy", &amp;o.Opts, *writer)
-                                if err != nil </span><span class="cov0" title="0">{
+                                if err != nil </span><span class="cov8" title="1">{
                                         return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                                 }</span>
                                 <span class="cov0" title="0">o.Log.Debug("copied release index image %s ", value.Source)
@@ -4275,30 +4278,47 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
                         if err != nil </span><span class="cov0" title="0">{
                                 return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                         }</span>
+                        //add the release image itself
+                        <span class="cov8" title="1">allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
+                        tmpAllImages, err := o.prepareM2DCopyBatch(o.Log, allRelatedImages)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, err
+                        }</span>
+                        <span class="cov8" title="1">allImages = append(allImages, tmpAllImages...)</span>
 
-                        <span class="cov8" title="1">if o.Opts.Mode == mirrorToDisk </span><span class="cov8" title="1">{
+                }
+        } else<span class="cov8" title="1"> if o.Opts.Mode == diskToMirror </span><span class="cov8" title="1">{
+                cacheDir := filepath.Join(o.Opts.Global.Dir, strings.TrimPrefix(o.Opts.Global.From, fileProtocol), releaseImageExtractDir)
 
-                                allImages, err = o.prepareM2DCopyBatch(o.Log, dir, allRelatedImages)
-                                if err != nil </span><span class="cov0" title="0">{
-                                        return []v1alpha3.CopyImageSchema{}, err
-                                }</span>
-                        }
+                releases, err := o.identifyReleaseFolders(cacheDir)
+                if err != nil </span><span class="cov0" title="0">{
+                        return allImages, err
+                }</span>
+                <span class="cov8" title="1">o.Log.Debug("found %d releases that match the filter", len(releases))
+                for _, releaseDir := range releases </span><span class="cov8" title="1">{
 
-                        <span class="cov8" title="1">if o.Opts.Mode == diskToMirror </span><span class="cov0" title="0">{
-                                allImages, err = o.prepareD2MCopyBatch(o.Log, dir, allRelatedImages)
-                                if err != nil </span><span class="cov0" title="0">{
-                                        return []v1alpha3.CopyImageSchema{}, err
-                                }</span>
-                        }
+                        // get all release images from manifest (json)
+                        allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir + "/" + imageReferences)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
+                        }</span>
+                        // TODO
+                        //allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
+
+                        <span class="cov8" title="1">tmpAllImages, err := o.prepareD2MCopyBatch(o.Log, allRelatedImages)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, err
+                        }</span>
+                        <span class="cov8" title="1">allImages = append(allImages, tmpAllImages...)</span>
                 }
         }
 
         <span class="cov8" title="1">return allImages, nil</span>
 }
 
-func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov0" title="0">{
+func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov8" title="1">{
         var result []v1alpha3.CopyImageSchema
-        for _, img := range images </span><span class="cov0" title="0">{
+        for _, img := range images </span><span class="cov8" title="1">{
                 // TODO Make this more complete
                 // This logic will be useful for operators and releases
                 // strip the domain name from the img.Name
@@ -4312,7 +4332,7 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
                 if len(transportAndRef) &gt; 1 </span><span class="cov0" title="0">{
                         domainAndPathComps = transportAndRef[1]
                 }</span>
-                <span class="cov0" title="0">src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
+                <span class="cov8" title="1">src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
                 dst = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
 
                 // the following is for having the destination without the initial domain name =&gt; later
@@ -4329,15 +4349,15 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
                         return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dst, img.Name)
                 }</span>
 
-                <span class="cov0" title="0">o.Log.Debug("source %s", src)
+                <span class="cov8" title="1">o.Log.Debug("source %s", src)
                 o.Log.Debug("destination %s", dst)
                 result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dst})</span>
 
         }
-        <span class="cov0" title="0">return result, nil</span>
+        <span class="cov8" title="1">return result, nil</span>
 }
 
-func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov8" title="1">{
+func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov8" title="1">{
         var result []v1alpha3.CopyImageSchema
         for _, img := range images </span><span class="cov8" title="1">{
                 imgName := img.Image
@@ -4355,6 +4375,66 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
                 result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})</span>
         }
         <span class="cov8" title="1">return result, nil</span>
+}
+
+func (o *LocalStorageCollector) identifyReleaseFolders(cacheDir string) ([]string, error) <span class="cov8" title="1">{
+        releases := make([]string, 0)
+        // walk the cacheDir
+        errFP := filepath.Walk(cacheDir, func(path string, info os.FileInfo, err error) error </span><span class="cov8" title="1">{
+                if err == nil &amp;&amp; info.Name() == "release-metadata" </span><span class="cov8" title="1">{
+                        // example : working-dir/home/skhoury/m2d/hold-release/ocp-release/4.13.9-x86_64/release-manifests
+                        o.Log.Debug("checking if %s is within the filter", path)
+                        version_platform_path := filepath.Dir(filepath.Dir(path))
+                        version_platform := filepath.Base(version_platform_path)
+                        distribution_path := filepath.Dir(version_platform_path)
+                        distribution := filepath.Base(distribution_path)
+                        // check if this is the requested distribution: ocp or okd
+                        if o.Config.Mirror.Platform.Release != "" </span><span class="cov0" title="0">{
+                                // compare against the release distribution specified
+                                if !strings.Contains(distribution, o.Config.Mirror.Platform.Release) </span><span class="cov0" title="0">{
+                                        return nil
+                                }</span>
+                        } else<span class="cov8" title="1"> if !strings.Contains(distribution, "ocp") </span><span class="cov0" title="0">{
+                                // ocp is implied in case the release is not specified in config
+                                return nil
+                        }</span>
+                        <span class="cov8" title="1">array := strings.Split(version_platform, "-")
+                        if len(array) != 2 </span><span class="cov0" title="0">{
+                                return fmt.Errorf("expecting folder name to contain version and platform : %s", version_platform)
+                        }</span>
+                        //version := array[0]
+                        <span class="cov8" title="1">platform := array[1]
+
+                        // compare against the platform requested in config
+                        platformMatch := false
+                        if len(o.Config.Mirror.Platform.Architectures) &gt; 0 </span><span class="cov0" title="0">{
+                                for _, p := range o.Config.Mirror.Platform.Architectures </span><span class="cov0" title="0">{
+                                        if platform == p || (platform == "x86_64" &amp;&amp; p == "amd64") </span><span class="cov0" title="0">{
+                                                platformMatch = true
+                                                break</span>
+                                        }
+                                }
+                        } else<span class="cov8" title="1"> {
+                                platformMatch = platform == "x86_64"
+                        }</span>
+                        <span class="cov8" title="1">if !platformMatch </span><span class="cov0" title="0">{
+                                return nil
+                        }</span>
+
+                        // TODO compare against the channels requested
+
+                        // TODO compare against the version ranges requested
+                        <span class="cov8" title="1">releases = append(releases, filepath.Dir(path))</span>
+                } else<span class="cov8" title="1"> if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return nil</span>
+        })
+        <span class="cov8" title="1">if errFP != nil </span><span class="cov0" title="0">{
+                return []string{}, errFP
+        }</span>
+
+        <span class="cov8" title="1">return releases, nil</span>
 }
 </pre>
 		

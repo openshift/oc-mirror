@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -13,6 +14,10 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
+)
+
+const (
+	fileProtocol string = "file://"
 )
 
 func NewWithLocalStorage(log clog.PluggableLoggerInterface,
@@ -52,8 +57,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
 			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
-			cacheDir := strings.Join([]string{o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir}, "/")
-			dir := strings.Join([]string{o.Opts.Global.Dir, releaseImageDir, imageIndexDir}, "/")
+			cacheDir := filepath.Join(o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir)
+			dir := filepath.Join(o.Opts.Global.Dir, releaseImageDir, imageIndexDir)
 			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 				o.Log.Info("copying  %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
@@ -113,38 +118,38 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
+			//add the release image itself
+			allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
 			tmpAllImages, err := o.prepareM2DCopyBatch(o.Log, allRelatedImages)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 			allImages = append(allImages, tmpAllImages...)
-			allImages = append(allImages, value)
 
 		}
 	} else if o.Opts.Mode == diskToMirror {
-		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
+		cacheDir := filepath.Join(o.Opts.Global.Dir, strings.TrimPrefix(o.Opts.Global.From, fileProtocol), releaseImageExtractDir)
 
-		for _, value := range releases {
-			hld := strings.Split(value.Source, "/")
-			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
-			// cacheDir := strings.Join([]string{o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir}, "/")
-			dir := strings.Join([]string{o.Opts.Global.Dir, releaseImageDir, imageIndexDir}, "/")
-			if _, err := os.Stat(dir); err != nil {
-				return nil, fmt.Errorf("unable to find the release %s on disk : %v", value.Source, err)
-			}
+		releases, err := o.identifyReleaseFolders(cacheDir)
+		if err != nil {
+			return allImages, err
+		}
+		o.Log.Debug("found %d releases that match the filter", len(releases))
+		for _, releaseDir := range releases {
 
 			// get all release images from manifest (json)
-			allRelatedImages, err := o.Manifest.GetReleaseSchema(imageIndexDir)
+			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir + "/" + imageReferences)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
+			// TODO
+			//allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
 
 			tmpAllImages, err := o.prepareD2MCopyBatch(o.Log, allRelatedImages)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 			allImages = append(allImages, tmpAllImages...)
-			allImages = append(allImages, value)
 		}
 	}
 
@@ -210,4 +215,64 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 	}
 	return result, nil
+}
+
+func (o *LocalStorageCollector) identifyReleaseFolders(cacheDir string) ([]string, error) {
+	releases := make([]string, 0)
+	// walk the cacheDir
+	errFP := filepath.Walk(cacheDir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && info.Name() == "release-metadata" {
+			// example : working-dir/home/skhoury/m2d/hold-release/ocp-release/4.13.9-x86_64/release-manifests
+			o.Log.Debug("checking if %s is within the filter", path)
+			version_platform_path := filepath.Dir(filepath.Dir(path))
+			version_platform := filepath.Base(version_platform_path)
+			distribution_path := filepath.Dir(version_platform_path)
+			distribution := filepath.Base(distribution_path)
+			// check if this is the requested distribution: ocp or okd
+			if o.Config.Mirror.Platform.Release != "" {
+				// compare against the release distribution specified
+				if !strings.Contains(distribution, o.Config.Mirror.Platform.Release) {
+					return nil
+				}
+			} else if !strings.Contains(distribution, "ocp") {
+				// ocp is implied in case the release is not specified in config
+				return nil
+			}
+			array := strings.Split(version_platform, "-")
+			if len(array) != 2 {
+				return fmt.Errorf("expecting folder name to contain version and platform : %s", version_platform)
+			}
+			//version := array[0]
+			platform := array[1]
+
+			// compare against the platform requested in config
+			platformMatch := false
+			if len(o.Config.Mirror.Platform.Architectures) > 0 {
+				for _, p := range o.Config.Mirror.Platform.Architectures {
+					if platform == p || (platform == "x86_64" && p == "amd64") {
+						platformMatch = true
+						break
+					}
+				}
+			} else {
+				platformMatch = platform == "x86_64"
+			}
+			if !platformMatch {
+				return nil
+			}
+
+			// TODO compare against the channels requested
+
+			// TODO compare against the version ranges requested
+			releases = append(releases, filepath.Dir(path))
+		} else if err != nil {
+			return err
+		}
+		return nil
+	})
+	if errFP != nil {
+		return []string{}, errFP
+	}
+
+	return releases, nil
 }
