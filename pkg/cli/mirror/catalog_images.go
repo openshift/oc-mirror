@@ -502,30 +502,39 @@ func copyOPMBinary(img v1.Image, ctlgSrcDir string) (string, error) {
 	if opmBin == "" {
 		return "", fmt.Errorf("unable to find the path to opm in the catalog image: both entrypoint and cmd were empty")
 	}
-
+	// Extract all catalog contents to a temporary folder
 	err = extractCatalog(img, filepath.Join(ctlgSrcDir, config.CtlgExtractionDir), opmBin)
 	if err != nil {
 		return "", err
 	}
+	// The extractionDir now contains all the contents of the image, including
+	// any symbolic links.
+	// check that `opmBin` (as set in the image Entrypoint) can be found in the extractionDir
 	opmBinPath := filepath.Join(ctlgSrcDir, config.CtlgExtractionDir, opmBin)
 	_, err = os.Stat(opmBinPath)
 	if err != nil {
 		return "", err
 	}
 
+	// prepare folder for copying the binary for later use
 	err = os.MkdirAll(filepath.Join(ctlgSrcDir, config.OpmBinDir), 0755)
 	if err != nil {
 		return "", err
 	}
 
+	// if `opmBin` has any symbolic links they can be evaluated easily
 	realOpmBinPath, err := filepath.EvalSymlinks(opmBinPath)
 	if err != nil {
 		return "", err
 	}
+
+	// copy opm binary from the extractionDir to a separate folder (bin) under catalogSourceDir
 	err = os.Rename(realOpmBinPath, targetOpm)
 	if err != nil {
 		return "", err
 	}
+	// in order to avoid using too much space (case where several operator catalogs are included in the imagesetconfig)
+	// we clean up the extracted catalog right after having copied the opmBinary to its target location
 	err = os.RemoveAll(filepath.Join(ctlgSrcDir, config.CtlgExtractionDir))
 	if err != nil {
 		return "", err
@@ -533,7 +542,13 @@ func copyOPMBinary(img v1.Image, ctlgSrcDir string) (string, error) {
 	return targetOpm, nil
 }
 
+// `extractCatalog` function extracts the `img` contents into `destFolder`.
+// All layers of the image are flattened.
+// All contents (files, folders and symLinks are extracted)
+// Errors related to creation of symbolic links are not considered as blockers
+// unless they relate to the `opmBin` path.
 func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
+	// `symLinks` is a map of symbolic link (key) to the file it points to (value)
 	symLinks := make(map[string]string)
 	tr := tar.NewReader(mutate.Extract(img))
 	err := os.MkdirAll(destFolder, 0755)
@@ -556,19 +571,20 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 			continue
 		}
 
-		target := filepath.Join(destFolder, header.Name)
+		// descriptor points to the file being read
+		descriptor := filepath.Join(destFolder, header.Name)
 
 		// check the file type
 		// if its a dir and it doesn't exist create it
 		if header.Typeflag == tar.TypeDir {
-			if _, err := os.Stat(target); err != nil {
-				if err := os.MkdirAll(target, 0755); err != nil {
+			if _, err := os.Stat(descriptor); err != nil {
+				if err := os.MkdirAll(descriptor, 0755); err != nil {
 					return err
 				}
 			}
 		} else if header.Typeflag == tar.TypeReg {
-			// if it's a file create it
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			// if it's a file create it, making sure it's at least writable and executable by the user - should only be needed for debug cases
+			f, err := os.OpenFile(descriptor, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)|0755)
 			if err != nil {
 				return err
 			}
@@ -582,30 +598,53 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 			// to wait until all operations have completed.
 			f.Close()
 		} else if header.Typeflag == tar.TypeSymlink {
-			symLinks[target] = filepath.Join(destFolder, header.Linkname)
+			// A symLink cannot be created inside the loop:
+			// the file/folder it points to (header.Linkname), or any folder on the path
+			// to that file/folder might not have been untarred yet.
+			// Storing the symbolic link to the map in order to create it later.
+			// Examples:
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/darwin-amd64-opm"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/bin/registry/darwin-amd64-opm"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/opm"; 					".../oc-mirror-workspace/src/catalogs/.../extracted/bin/registry/opm"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/etc/alternatives/easy_install-3"; ".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/hostname"
+			symLinks[descriptor] = filepath.Join(destFolder, header.Linkname)
 		}
 
 	}
+
+	// symLinks map now contains all symbolic links from the image, all layers included.
+	// The following loop will attempt to create each of these symbolic links.
+	// Some attempts will fail.
+	// Example : `hostname` is the target of several symbolic links in this map.
+	// Creating symlinks pointing to `hostname` have been known to fail sometimes
+	// because this file is not owned by the user and is read only.
+	// Most of such problems have been solved by forcing the filemode to 0755 for all files untarred
+	// (see previous loop).
+	// For those attempts that failed, most will not be of any incidence to extracting the opm binary.
+	// That is why we ignore these errors unless they correspond to a map entry relating to opmBin's path.
+	// This technique is not flowless, but it reduces substancially breaking for symbolic links like `hostname`
+	// that should not have any incidence on the extraction of the opm binary from the image.
 	opmBinPathComponents := strings.Split(opmBin, string(filepath.Separator))
-	for link, src := range symLinks {
-		srcAbsPath, err := filepath.Abs(src)
-		if err != nil {
+	for link, target := range symLinks {
+		targetAbsPath, err := filepath.Abs(target)
+		if err != nil { // this is an overkill, and should not happen
 			for _, pathComp := range opmBinPathComponents {
-				if strings.Contains(link, pathComp) {
+				if strings.Contains(target, pathComp) {
 					return err
 				}
 			}
 		}
 		linkAbsPath, err := filepath.Abs(link)
-		if err != nil {
+		if err != nil { // this is an overkill, and should not happen
 			for _, pathComp := range opmBinPathComponents {
 				if strings.Contains(link, pathComp) {
 					return err
 				}
 			}
 		}
-		err = os.Symlink(srcAbsPath, linkAbsPath)
-		if err != nil {
+		err = os.Symlink(targetAbsPath, linkAbsPath)
+		if err != nil { // For `opmBin` = `/bin/opm`,
+			// only return the error if the symlink contains `/bin` or `/opm`
 			for _, pathComp := range opmBinPathComponents {
 				if strings.Contains(link, pathComp) {
 					return err
