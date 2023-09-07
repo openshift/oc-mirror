@@ -101,6 +101,9 @@ const (
 	// OpmBinDir is the location of the
 	// catalog opm binary
 	OpmBinDir = "bin"
+	// OpmBinDir is the location to which catalog
+	// contents are extracted to get the opm binary
+	CtlgExtractionDir = "extracted"
 	// IncludeConfigFile is the file where
 	// catalog include config data for incorporation
 	// into the metadata is located.
