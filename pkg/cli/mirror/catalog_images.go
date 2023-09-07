@@ -2,7 +2,6 @@ package mirror
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -248,6 +247,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			}
 			cacheLocation := string(dat)
 			cacheLocationElmts := strings.Split(strings.TrimPrefix(cacheLocation, string(os.PathSeparator)), string(os.PathSeparator))
+
 			// white out layer /tmp
 			deletedCacheLayer, err := deleteLayer("/.wh." + cacheLocationElmts[0])
 			if err != nil {
@@ -255,7 +255,8 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			}
 			layersToDelete = append(layersToDelete, deletedCacheLayer)
 
-			opmCmdPath, err := findOpmCmd(artifactDir)
+			opmCmdPath := filepath.Join(artifactDir, config.OpmBinDir, "opm")
+			_, err = os.Stat(opmCmdPath)
 			if err != nil {
 				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
 			}
@@ -312,49 +313,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 	return nil
 }
 
-// findOpmCmd attempts to find the opm binary within the extracted contents of the catalog container image.
-// The exact location of the opm binary within the image is not certain: It depends among other things on
-// the version of the catalog, on the decisions by maintainers of the catalog, on the platform...
-func findOpmCmd(artifactDir string) (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("error finding current working directory while preparing to run opm to regenerate cache: %v", err)
-	}
-	runningOS := runtime.GOOS
-	runningArch := runtime.GOARCH
-	opmBin := "opm"
-
-	if runningOS != "linux" {
-		opmBin = strings.Join([]string{runningOS, runningArch, opmBin}, "-")
-	}
-	opmCmdPath := ""
-	binaryDir := filepath.Join(wd, artifactDir, config.OpmBinDir)
-	err = filepath.Walk(binaryDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// files that match the opmBin name with size 0 are the result of extracted symbolic links where the link has broken during extraction
-		if info.Name() == opmBin && info.Size() > 0 {
-			opmCmdPath = path
-		}
-
-		return nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
-	}
-	_, err = os.Stat(opmCmdPath)
-	if err != nil {
-		return "", fmt.Errorf("error finding the extracted opm binary %s while preparing to run opm to regenerate cache: %v", opmCmdPath, err)
-	}
-	err = os.Chmod(opmCmdPath, 0744)
-	if err != nil {
-		return "", fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
-	}
-	return opmCmdPath, nil
-}
-
 // extractOPMAndCache is usually called after rendering catalog's declarative config.
 // it uses crane modules to pull the catalog image, select the manifest that corresponds to the
 // current platform architecture. It then extracts from that image any files that are suffixed `*opm` for later
@@ -408,54 +366,18 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 		return err
 	}
 	// cachePath exists, opm binary will be needed to regenerate it
-	tr := tar.NewReader(mutate.Extract(img))
-	opmBinaryExtracted := ""
-	for {
-		header, err := tr.Next()
-
-		// break the infinite loop when EOF
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		// skip the file if it is a directory or if file name does not end with `opm`
-		if !strings.HasSuffix(header.Name, opmBinarySuffix) || header.FileInfo().IsDir() {
-			continue
-		}
-
-		var buf bytes.Buffer
-		_, err = buf.ReadFrom(tr)
-		if err != nil {
-			return err
-		}
-
-		targetFileName := filepath.Join(ctlgSrcDir, config.OpmBinDir, header.Name)
-		bytes := buf.Bytes()
-
-		baseDir := filepath.Dir(targetFileName)
-		err = os.MkdirAll(baseDir, 0755)
-		if err != nil {
-			return err
-		}
-
-		f, err := os.Create(targetFileName)
-		if err == nil {
-			defer f.Close()
-		} else {
-			return err
-		}
-
-		_, err = f.Write(bytes)
-		if err != nil {
-			return err
-		}
-		opmBinaryExtracted = targetFileName
-
-		// check for the extracted opm file (it should exist if we found something)
-		_, err = os.Stat(opmBinaryExtracted)
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("opm binary not found after extracting %q from catalog image %v", opmBinaryExtracted, srcRef)
-		}
+	opmBinaryFileName, err := copyOPMBinary(img, ctlgSrcDir)
+	if err != nil {
+		return err
+	}
+	// check for the extracted opm file (it should exist if we found something)
+	_, err = os.Stat(opmBinaryFileName)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("opm binary not found after extracting opm from catalog image %v", srcRef)
+	}
+	err = os.Chmod(opmBinaryFileName, 0744)
+	if err != nil {
+		return fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
 	}
 
 	return nil
@@ -557,4 +479,179 @@ func deleteLayer(old string) (v1.Layer, error) {
 	deleteMap := map[string][]byte{}
 	deleteMap[old] = []byte{}
 	return crane.Layer(deleteMap)
+}
+
+func copyOPMBinary(img v1.Image, ctlgSrcDir string) (string, error) {
+	targetOpm := filepath.Join(ctlgSrcDir, config.OpmBinDir, "opm")
+	cfgf, err := img.ConfigFile()
+	if err != nil {
+		return "", err
+	}
+	opmBin := ""
+	// Following https://docs.docker.com/engine/reference/builder/#understand-how-cmd-and-entrypoint-interact,
+	// identifying the binary that will be run by the catalog:
+	entrypoint := cfgf.Config.Entrypoint
+	if len(entrypoint) > 0 {
+		opmBin = strings.TrimPrefix(entrypoint[0], (string)(os.PathSeparator)) // /bin/opm becomes bin/opm in order to prepare for extraction from the image
+	} else {
+		cmd := cfgf.Config.Cmd
+		if len(cmd) > 0 {
+			opmBin = strings.TrimPrefix(cmd[0], (string)(os.PathSeparator))
+		}
+	}
+	if opmBin == "" {
+		return "", fmt.Errorf("unable to find the path to opm in the catalog image: both entrypoint and cmd were empty")
+	}
+	// Extract all catalog contents to a temporary folder
+	err = extractCatalog(img, filepath.Join(ctlgSrcDir, config.CtlgExtractionDir), opmBin)
+	if err != nil {
+		return "", err
+	}
+	// The extractionDir now contains all the contents of the image, including
+	// any symbolic links.
+	// check that `opmBin` (as set in the image Entrypoint) can be found in the extractionDir
+	opmBinPath := filepath.Join(ctlgSrcDir, config.CtlgExtractionDir, opmBin)
+	_, err = os.Stat(opmBinPath)
+	if err != nil {
+		return "", err
+	}
+
+	// prepare folder for copying the binary for later use
+	err = os.MkdirAll(filepath.Join(ctlgSrcDir, config.OpmBinDir), 0755)
+	if err != nil {
+		return "", err
+	}
+
+	// if `opmBin` has any symbolic links they can be evaluated easily
+	realOpmBinPath, err := filepath.EvalSymlinks(opmBinPath)
+	if err != nil {
+		return "", err
+	}
+
+	// copy opm binary from the extractionDir to a separate folder (bin) under catalogSourceDir
+	err = os.Rename(realOpmBinPath, targetOpm)
+	if err != nil {
+		return "", err
+	}
+	// in order to avoid using too much space (case where several operator catalogs are included in the imagesetconfig)
+	// we clean up the extracted catalog right after having copied the opmBinary to its target location
+	err = os.RemoveAll(filepath.Join(ctlgSrcDir, config.CtlgExtractionDir))
+	if err != nil {
+		return "", err
+	}
+	return targetOpm, nil
+}
+
+// `extractCatalog` function extracts the `img` contents into `destFolder`.
+// All layers of the image are flattened.
+// All contents (files, folders and symLinks are extracted)
+// Errors related to creation of symbolic links are not considered as blockers
+// unless they relate to the `opmBin` path.
+func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
+	// `symLinks` is a map of symbolic link (key) to the file it points to (value)
+	symLinks := make(map[string]string)
+	tr := tar.NewReader(mutate.Extract(img))
+	err := os.MkdirAll(destFolder, 0755)
+	if err != nil {
+		return err
+	}
+	for {
+		header, err := tr.Next()
+
+		// break the infinite loop when EOF
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		if header == nil {
+			continue
+		}
+
+		// descriptor points to the file being read
+		descriptor := filepath.Join(destFolder, header.Name)
+
+		// check the file type
+		// if its a dir and it doesn't exist create it
+		if header.Typeflag == tar.TypeDir {
+			if _, err := os.Stat(descriptor); err != nil {
+				if err := os.MkdirAll(descriptor, 0755); err != nil {
+					return err
+				}
+			}
+		} else if header.Typeflag == tar.TypeReg {
+			// if it's a file create it, making sure it's at least writable and executable by the user - should only be needed for debug cases
+			f, err := os.OpenFile(descriptor, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)|0755)
+			if err != nil {
+				return err
+			}
+
+			// copy over contents
+			if _, err := io.Copy(f, tr); err != nil {
+				return err
+			}
+
+			// manually close here after each file operation; defering would cause each file close
+			// to wait until all operations have completed.
+			f.Close()
+		} else if header.Typeflag == tar.TypeSymlink {
+			// A symLink cannot be created inside the loop:
+			// the file/folder it points to (header.Linkname), or any folder on the path
+			// to that file/folder might not have been untarred yet.
+			// Storing the symbolic link to the map in order to create it later.
+			// Examples:
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/darwin-amd64-opm"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/bin/registry/darwin-amd64-opm"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/opm"; 					".../oc-mirror-workspace/src/catalogs/.../extracted/bin/registry/opm"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/etc/alternatives/easy_install-3"; ".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"
+			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/hostname"
+			symLinks[descriptor] = filepath.Join(destFolder, header.Linkname)
+		}
+
+	}
+
+	// symLinks map now contains all symbolic links from the image, all layers included.
+	// The following loop will attempt to create each of these symbolic links.
+	// Some attempts will fail.
+	// Example : `hostname` is the target of several symbolic links in this map.
+	// Creating symlinks pointing to `hostname` have been known to fail sometimes
+	// because this file is not owned by the user and is read only.
+	// Most of such problems have been solved by forcing the filemode to 0755 for all files untarred
+	// (see previous loop).
+	// For those attempts that failed, most will not be of any incidence to extracting the opm binary.
+	// That is why we ignore these errors unless they correspond to a map entry relating to opmBin's path.
+	// This technique is not flowless, but it reduces substancially breaking for symbolic links like `hostname`
+	// that should not have any incidence on the extraction of the opm binary from the image.
+	opmBinPathComponents := strings.Split(opmBin, string(filepath.Separator))
+	for link, target := range symLinks {
+		targetAbsPath, err := filepath.Abs(target)
+		if err != nil { // this is an overkill, and should not happen
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(target, pathComp) {
+					return err
+				}
+			}
+		}
+		linkAbsPath, err := filepath.Abs(link)
+		if err != nil { // this is an overkill, and should not happen
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(link, pathComp) {
+					return err
+				}
+			}
+		}
+		err = os.Symlink(targetAbsPath, linkAbsPath)
+		if err != nil { // For `opmBin` = `/bin/opm`,
+			// only return the error if the symlink contains `/bin` or `/opm`
+			for _, pathComp := range opmBinPathComponents {
+				if strings.Contains(link, pathComp) {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
