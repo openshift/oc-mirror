@@ -243,9 +243,9 @@ function no_updates_exist {
 }
 
 # Test OCI local catalog
-function m2m_oci_catalog {
+function oci_catalog {
     rm -fr olm_artifacts
-    workflow_m2m_oci_catalog imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--dest-skip-tls --oci-insecure-signature-policy"
+    workflow_oci_mirror imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--dest-skip-tls --oci-insecure-signature-policy --include-local-oci-catalogs"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/redhatgov/oc-mirror-dev:test-catalog-latest \
     "baz.v1.0.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
@@ -273,14 +273,4 @@ function oci_local_all {
     rm -rf test/e2e/graph/server*.*
     unset SSL_CERT_FILE
     unset UPDATE_URL_OVERRIDE
-}
-
-
-# Test full catalog mode.
-function m2d2m_oci_catalog() {
-    rm -fr olm_artifacts
-    workflow_m2d2m_oci_catalog imageset-config-oci-mirror.yaml "localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--source-use-http  --source-skip-tls"
-    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/redhatgov/oc-mirror-dev:test-catalog-latest \
-    "baz.v1.0.1" \
-    localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
