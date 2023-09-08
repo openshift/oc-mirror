@@ -56,6 +56,9 @@ github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
 github.com/Microsoft/hcsshim/pkg/ociwclayer
+# github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d
+## explicit
+github.com/Shopify/logrus-bugsnag
 # github.com/VividCortex/ewma v1.2.0
 ## explicit; go 1.12
 github.com/VividCortex/ewma
@@ -147,6 +150,17 @@ github.com/blang/semver
 github.com/blang/semver/v4
 # github.com/bshuster-repo/logrus-logstash-hook v1.0.2
 ## explicit; go 1.16
+github.com/bshuster-repo/logrus-logstash-hook
+# github.com/bugsnag/bugsnag-go v1.5.3
+## explicit
+github.com/bugsnag/bugsnag-go
+github.com/bugsnag/bugsnag-go/device
+github.com/bugsnag/bugsnag-go/errors
+github.com/bugsnag/bugsnag-go/headers
+github.com/bugsnag/bugsnag-go/sessions
+# github.com/bugsnag/panicwrap v1.2.0
+## explicit
+github.com/bugsnag/panicwrap
 # github.com/cenkalti/backoff/v4 v4.2.1
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
@@ -350,6 +364,47 @@ github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/distribution/distribution/v3 v3.0.0-20230722181636-7b502560cad4
+## explicit; go 1.18
+github.com/distribution/distribution/v3
+github.com/distribution/distribution/v3/configuration
+github.com/distribution/distribution/v3/context
+github.com/distribution/distribution/v3/health
+github.com/distribution/distribution/v3/health/checks
+github.com/distribution/distribution/v3/manifest
+github.com/distribution/distribution/v3/manifest/manifestlist
+github.com/distribution/distribution/v3/manifest/ocischema
+github.com/distribution/distribution/v3/manifest/schema1
+github.com/distribution/distribution/v3/manifest/schema2
+github.com/distribution/distribution/v3/metrics
+github.com/distribution/distribution/v3/notifications
+github.com/distribution/distribution/v3/reference
+github.com/distribution/distribution/v3/registry
+github.com/distribution/distribution/v3/registry/api/errcode
+github.com/distribution/distribution/v3/registry/api/v2
+github.com/distribution/distribution/v3/registry/auth
+github.com/distribution/distribution/v3/registry/client
+github.com/distribution/distribution/v3/registry/client/auth
+github.com/distribution/distribution/v3/registry/client/auth/challenge
+github.com/distribution/distribution/v3/registry/client/transport
+github.com/distribution/distribution/v3/registry/handlers
+github.com/distribution/distribution/v3/registry/listener
+github.com/distribution/distribution/v3/registry/middleware/registry
+github.com/distribution/distribution/v3/registry/middleware/repository
+github.com/distribution/distribution/v3/registry/proxy
+github.com/distribution/distribution/v3/registry/proxy/scheduler
+github.com/distribution/distribution/v3/registry/storage
+github.com/distribution/distribution/v3/registry/storage/cache
+github.com/distribution/distribution/v3/registry/storage/cache/memory
+github.com/distribution/distribution/v3/registry/storage/cache/metrics
+github.com/distribution/distribution/v3/registry/storage/cache/redis
+github.com/distribution/distribution/v3/registry/storage/driver
+github.com/distribution/distribution/v3/registry/storage/driver/base
+github.com/distribution/distribution/v3/registry/storage/driver/factory
+github.com/distribution/distribution/v3/registry/storage/driver/filesystem
+github.com/distribution/distribution/v3/registry/storage/driver/middleware
+github.com/distribution/distribution/v3/uuid
+github.com/distribution/distribution/v3/version
 # github.com/docker/cli v23.0.5+incompatible
 ## explicit
 github.com/docker/cli/cli/config
@@ -416,6 +471,9 @@ github.com/docker/docker-credential-helpers/credentials
 github.com/docker/go-connections/nat
 github.com/docker/go-connections/sockets
 github.com/docker/go-connections/tlsconfig
+# github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
+## explicit
+github.com/docker/go-events
 # github.com/docker/go-metrics v0.0.1
 ## explicit; go 1.11
 github.com/docker/go-metrics
@@ -520,6 +578,9 @@ github.com/gobwas/glob/syntax/ast
 github.com/gobwas/glob/syntax/lexer
 github.com/gobwas/glob/util/runes
 github.com/gobwas/glob/util/strings
+# github.com/gofrs/uuid v3.3.0+incompatible
+## explicit
+github.com/gofrs/uuid
 # github.com/gogo/protobuf v1.3.2
 ## explicit; go 1.15
 github.com/gogo/protobuf/gogoproto
@@ -546,6 +607,9 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/golang/snappy v0.0.4
 ## explicit
 github.com/golang/snappy
+# github.com/gomodule/redigo v1.8.2
+## explicit; go 1.14
+github.com/gomodule/redigo/redis
 # github.com/google/btree v1.0.1
 ## explicit; go 1.12
 github.com/google/btree
@@ -627,6 +691,9 @@ github.com/google/shlex
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
+# github.com/gorilla/handlers v1.5.1
+## explicit; go 1.14
+github.com/gorilla/handlers
 # github.com/gorilla/mux v1.8.0
 ## explicit; go 1.12
 github.com/gorilla/mux
@@ -653,6 +720,10 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
+# github.com/hashicorp/golang-lru v0.5.4
+## explicit; go 1.12
+github.com/hashicorp/golang-lru
+github.com/hashicorp/golang-lru/simplelru
 # github.com/huandu/xstrings v1.4.0
 ## explicit; go 1.12
 github.com/huandu/xstrings
@@ -677,6 +748,9 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
+# github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
+## explicit
+github.com/kardianos/osext
 # github.com/klauspost/compress v1.16.6
 ## explicit; go 1.18
 github.com/klauspost/compress
@@ -722,6 +796,9 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/mholt/archiver/v3 v3.5.0
 ## explicit; go 1.13
 github.com/mholt/archiver/v3
+# github.com/microlib/simple v1.0.2
+## explicit
+github.com/microlib/simple
 # github.com/miekg/pkcs11 v1.1.1
 ## explicit; go 1.12
 github.com/miekg/pkcs11
@@ -889,7 +966,18 @@ github.com/openshift/oc/pkg/helpers/image/dockerlayer
 github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
 # github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044 => ./v2
 ## explicit; go 1.19
+github.com/openshift/oc-mirror/v2/pkg/additional
+github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2
+github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3
+github.com/openshift/oc-mirror/v2/pkg/batch
+github.com/openshift/oc-mirror/v2/pkg/cli
+github.com/openshift/oc-mirror/v2/pkg/config
+github.com/openshift/oc-mirror/v2/pkg/diff
+github.com/openshift/oc-mirror/v2/pkg/log
+github.com/openshift/oc-mirror/v2/pkg/manifest
 github.com/openshift/oc-mirror/v2/pkg/mirror
+github.com/openshift/oc-mirror/v2/pkg/operator
+github.com/openshift/oc-mirror/v2/pkg/release
 # github.com/operator-framework/api v0.17.7
 ## explicit; go 1.19
 github.com/operator-framework/api/pkg/constraints
@@ -1062,6 +1150,15 @@ github.com/xi2/xz
 # github.com/xlab/treeprint v1.1.0
 ## explicit; go 1.13
 github.com/xlab/treeprint
+# github.com/yvasiyarov/go-metrics v0.0.0-20150112132944-c25f46c4b940
+## explicit
+github.com/yvasiyarov/go-metrics
+# github.com/yvasiyarov/gorelic v0.0.7
+## explicit
+github.com/yvasiyarov/gorelic
+# github.com/yvasiyarov/newrelic_platform_go v0.0.0-20160601141957-9c099fbc30e9
+## explicit
+github.com/yvasiyarov/newrelic_platform_go
 # go.etcd.io/bbolt v1.3.7
 ## explicit; go 1.17
 go.etcd.io/bbolt
@@ -1153,6 +1250,8 @@ go.starlark.net/starlarkstruct
 go.starlark.net/syntax
 # golang.org/x/crypto v0.10.0
 ## explicit; go 1.17
+golang.org/x/crypto/acme
+golang.org/x/crypto/acme/autocert
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/cast5
@@ -1910,4 +2009,5 @@ sigs.k8s.io/yaml
 # github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
 # github.com/docker/docker => github.com/docker/docker v20.10.21+incompatible
 # github.com/openshift/oc-mirror/v2 => ./v2
+# github.com/openshift/oc-mirror/v2/pkg/cli => ./v2/pkg/cli
 # github.com/google/go-containerregistry => github.com/google/go-containerregistry v0.10.0
