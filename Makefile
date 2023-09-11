@@ -68,7 +68,12 @@ test-unit:
 #v2 workspace required change
 #$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
+	mkdir -p v2/tests/results
+	$(GO) test $(GO_BUILD_FLAGS) -v -coverprofile=v2/tests/results/cover.out ./...
 .PHONY: test-unit
+
+v2cover:
+	go tool cover -html=v2/tests/results/cover.out -o v2/tests/results/cover.html
 
 test-e2e: build
 	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror

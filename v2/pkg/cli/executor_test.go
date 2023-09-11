@@ -26,7 +26,7 @@ func TestExecutor(t *testing.T) {
 	}
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	_, srcOpts := mirror.ImageFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
 	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 

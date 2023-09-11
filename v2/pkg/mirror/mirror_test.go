@@ -17,7 +17,7 @@ func TestMirror(t *testing.T) {
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
-	_, srcOpts := ImageFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
 	_, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := RetryFlags()
 	opts := CopyOptions{

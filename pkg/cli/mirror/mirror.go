@@ -36,7 +36,9 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 
-	v2 "github.com/openshift/oc-mirror/v2/pkg/mirror"
+	cliV2 "github.com/openshift/oc-mirror/v2/pkg/cli"
+	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -83,6 +85,18 @@ const (
 )
 
 func NewMirrorCmd() *cobra.Command {
+	if isV2() {
+		return buildV2Cmd()
+	} else {
+		return buildV1Cmd()
+	}
+}
+
+func isV2() bool {
+	return len(os.Args) > 0 && slices.Contains(os.Args[:], "--v2")
+}
+
+func buildV1Cmd() *cobra.Command {
 	o := MirrorOptions{
 		operatorCatalogToFullArtifactPath: map[string]string{},
 	}
@@ -127,6 +141,14 @@ func NewMirrorCmd() *cobra.Command {
 	cmd.AddCommand(describe.NewDescribeCommand(f, o.RootOptions))
 	cmd.AddCommand(initcmd.NewInitCommand(f, o.RootOptions))
 
+	return cmd
+}
+
+func buildV2Cmd() *cobra.Command {
+	fmt.Println("--v2 flag identified, flow redirected to the oc-mirror v2 version. PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used. ")
+
+	log := clog.New("info")
+	cmd := cliV2.NewMirrorCmd(log)
 	return cmd
 }
 
@@ -299,11 +321,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
-
-	//dummy example on how v2 can be called from v1
-	if o.V2 {
-		println(v2.HelloFromV2())
-	}
 
 	o.remoteRegFuncs = RemoteRegFuncs{
 		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
