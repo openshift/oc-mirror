@@ -10,10 +10,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"k8s.io/klog/v2"
 )
@@ -26,6 +29,23 @@ func getRemoteOpts(ctx context.Context, insecure bool) []remote.Option {
 		remote.WithTransport(createRT(insecure)),
 		remote.WithContext(ctx),
 	}
+}
+
+func getCraneOpts(ctx context.Context, insecure bool) []crane.Option {
+	currentPlatform := v1.Platform{
+		Architecture: runtime.GOARCH,
+		OS:           runtime.GOOS,
+	}
+	opts := []crane.Option{
+		crane.WithAuthFromKeychain(authn.DefaultKeychain),
+		crane.WithTransport(createRT(insecure)),
+		crane.WithContext(ctx),
+		crane.WithPlatform(&currentPlatform),
+	}
+	if insecure {
+		opts = append(opts, crane.Insecure)
+	}
+	return opts
 }
 
 func getNameOpts(insecure bool) (options []name.Option) {
