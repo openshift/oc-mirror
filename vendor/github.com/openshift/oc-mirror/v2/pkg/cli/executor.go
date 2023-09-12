@@ -337,7 +337,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 
 	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn)
+	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 

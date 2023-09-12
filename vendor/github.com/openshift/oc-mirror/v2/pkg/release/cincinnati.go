@@ -426,8 +426,8 @@ func (o *SignatureSchema) GenerateReleaseSignatures(ctx context.Context, rd []v1
 			o.Log.Trace("field LiteralData %v", md.LiteralData)
 			o.Log.Trace("field SignatureError %v", md.SignatureError)
 			o.Log.Trace("field Signature %v", md.Signature)
-			o.Log.Trace("field SignatureV3 %v", md.SignatureV3.IssuerKeyId)
-			o.Log.Trace("field SignatureV3 %v", md.SignatureV3.CreationTime)
+			// o.Log.Trace("field SignatureV3 %v", md.SignatureV3.IssuerKeyId)
+			// o.Log.Trace("field SignatureV3 %v", md.SignatureV3.CreationTime)
 
 			if md.Signature != nil {
 				if md.Signature.SigLifetimeSecs != nil {

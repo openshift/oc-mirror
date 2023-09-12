@@ -28,6 +28,7 @@ const (
 	dirProtocolTrimmed          string = "dir:"
 	releaseImageDir             string = "release-images"
 	releaseIndex                string = "release-index"
+	releaseFiltersDir           string = "release-filters"
 	operatorImageDir            string = "operator-images"
 	releaseImageExtractDir      string = "hold-release"
 	releaseManifests            string = "release-manifests"
