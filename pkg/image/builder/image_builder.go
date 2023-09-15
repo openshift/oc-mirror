@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -361,7 +362,7 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 		if !info.IsDir() {
 			hdr.Size = info.Size()
 		}
-
+		hdr.ChangeTime = time.Now()
 		if info.Mode().IsDir() {
 			hdr.Typeflag = tar.TypeDir
 		} else if info.Mode().IsRegular() {
