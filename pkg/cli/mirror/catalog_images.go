@@ -225,7 +225,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
 		}
 
-		configLayerToAdd, err := builder.LayerFromPath("/configs", filepath.Join(artifactDir, config.IndexDir, "index.json"))
+		configLayerToAdd, err := builder.LayerFromPathWithUidGid("/configs", filepath.Join(artifactDir, config.IndexDir), 0, 0)
 		if err != nil {
 			return fmt.Errorf("error creating add layer: %v", err)
 		}
@@ -240,20 +240,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		layersToDelete = append(layersToDelete, deletedConfigLayer)
 
 		if withCacheRegeneration {
-			// read the location of the cache
-			dat, err := os.ReadFile(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
-			if err != nil {
-				return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
-			}
-			cacheLocation := string(dat)
-			cacheLocationElmts := strings.Split(strings.TrimPrefix(cacheLocation, string(os.PathSeparator)), string(os.PathSeparator))
-
-			// white out layer /tmp
-			deletedCacheLayer, err := deleteLayer("/.wh." + cacheLocationElmts[0])
-			if err != nil {
-				return fmt.Errorf("error creating deleted cache layer: %v", err)
-			}
-			layersToDelete = append(layersToDelete, deletedCacheLayer)
 
 			opmCmdPath := filepath.Join(artifactDir, config.OpmBinDir, "opm")
 			_, err = os.Stat(opmCmdPath)
@@ -272,7 +258,9 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
 			}
-			cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/tmp/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
+			// Fix OCPBUGS-17546:
+			// Add the cache under /cache in a new layer (instead of white-out /tmp/cache, which resulted in crashLoopBackoff only on some clusters)
+			cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
 			if err != nil {
 				return fmt.Errorf("error creating add layer: %v", err)
 			}
@@ -298,10 +286,9 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			}
 			cfg.Config.Labels = labels
 			// Although it was prefered to keep the entrypoint and command as it was
-			// we couldnt guarantie that the cache-dir was /tmp/cache, and therefore
-			// we had to specify the command for the newly built catalog
+			// we couldnt reuse /tmp/cache as the cache directory (OCPBUGS-17546)
 			if withCacheRegeneration {
-				cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/tmp/cache"}
+				cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/cache"}
 			} else { // this means that no cache was found in the original catalog (old catalog with opm < 1.25)
 				cfg.Config.Cmd = []string{"serve", "/configs"}
 			}
