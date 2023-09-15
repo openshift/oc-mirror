@@ -627,6 +627,7 @@ func (o *MirrorOptions) writeMappingFile(mappingPath string, mapping image.Typed
 
 func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.ImageSetConfiguration, cleanup cleanupFunc) error {
 	destInsecure := o.DestPlainHTTP || o.DestSkipTLS
+	srcInsecure := o.SourcePlainHTTP || o.SourceSkipTLS
 
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 
@@ -673,7 +674,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 
 	// QUESTION(jpower432): Can you specify different TLS configuration for source
 	// and destination with `oc image mirror`?
-	if err := o.mirrorMappings(cfg, mapping, destInsecure); err != nil {
+	if err := o.mirrorMappings(cfg, mapping, destInsecure || srcInsecure); err != nil {
 		return err
 	}
 

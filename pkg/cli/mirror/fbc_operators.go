@@ -87,7 +87,7 @@ func (o *MirrorOptions) generateSrcToFileMapping(ctx context.Context, relatedIma
 		sysCtx := newSystemContext(o.SourceSkipTLS, o.OCIRegistriesConfig)
 		reg, err := sysregistriesv2.FindRegistry(sysCtx, i.Image)
 		if err != nil {
-			klog.Warningf("Cannot find registry for %s", i.Image)
+			klog.Warningf("Cannot find registry for %s: %v", i.Image, err)
 		}
 		if reg != nil && len(reg.Mirrors) > 0 {
 			// i.Image is coming from a declarativeConfig (ClusterServiceVersion) it's therefore always a docker ref
