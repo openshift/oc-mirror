@@ -16,20 +16,8 @@ import (
 )
 
 const (
-	index       string = "index.json"
-	catalogJson string = "catalog.json"
-	errorSemver string = " semver %v "
+	hashTruncLen int = 12
 )
-
-func NewWithLocalStorage(log clog.PluggableLoggerInterface,
-	config v1alpha2.ImageSetConfiguration,
-	opts mirror.CopyOptions,
-	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
-	localStorageFQDN string,
-) CollectorInterface {
-	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
-}
 
 type LocalStorageCollector struct {
 	Log              clog.PluggableLoggerInterface
@@ -197,8 +185,8 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 			// TODO Make this more complete
 			// This logic will be useful for operators and releases
 			// strip the domain name from the img.Name
-			src := ""
-			dst := ""
+			var src string
+			var dest string
 
 			domainAndPathComps := img.Image
 			// pathComponents := img.Name
@@ -208,7 +196,12 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 				domainAndPathComps = transportAndRef[1]
 			}
 			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
-			dst = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+
+			if isImageByDigest(img.Image) {
+				dest = strings.Join([]string{o.Opts.Destination, imageName(img.Image) + ":" + imageHash(img.Image)[:hashTruncLen]}, "/")
+			} else {
+				dest = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+			}
 
 			// the following is for having the destination without the initial domain name => later
 			// domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
@@ -220,13 +213,13 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 			// src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents}, "/")
 			// dst = strings.Join([]string{o.Opts.Destination, pathComponents}, "/") // already has a transport protocol
 
-			if src == "" || dst == "" {
-				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dst, img.Name)
+			if src == "" || dest == "" {
+				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
 			}
 
 			o.Log.Debug("source %s", src)
-			o.Log.Debug("destination %s", dst)
-			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dst})
+			o.Log.Debug("destination %s", dest)
+			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 		}
 	}
 	return result, nil
@@ -236,16 +229,24 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
-			imgName := img.Image
-			src := ""
-			if !strings.Contains(src, "://") { // no transport was provided, assume docker://
-				src = dockerProtocol + imgName
+			imgRef := img.Image
+			var src string
+			var dest string
+			// no transport was provided, assume docker://
+			if !strings.Contains(src, "://") {
+				src = dockerProtocol + imgRef
 			} else {
-				transportAndRef := strings.Split(imgName, "://")
-				imgName = transportAndRef[1] // because we are reusing this to construct dest
+				transportAndRef := strings.Split(imgRef, "://")
+				// because we are reusing this to construct dest
+				imgRef = transportAndRef[1]
 			}
 
-			dest := dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgName}, "/")
+			if isImageByDigest(imgRef) {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imageName(imgRef) + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+			} else {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgRef}, "/")
+			}
+
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
 			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
@@ -253,4 +254,28 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 		}
 	}
 	return result, nil
+}
+
+func isImageByDigest(imgRef string) bool {
+	return strings.Contains(imgRef, "@")
+}
+
+func imageName(imgRef string) string {
+	var imageName string
+	imgSplit := strings.Split(imgRef, "@")
+	if len(imgSplit) > 1 {
+		imageName = imgSplit[0]
+	}
+
+	return imageName
+}
+
+func imageHash(imgRef string) string {
+	var hash string
+	imgSplit := strings.Split(imgRef, "@")
+	if len(imgSplit) > 1 {
+		hash = strings.Split(imgSplit[1], ":")[1]
+	}
+
+	return hash
 }

@@ -17,34 +17,11 @@ import (
 )
 
 const (
-	indexJson               string = "index.json"
-	operatorImageExtractDir string = "hold-operator"
-	workingDir              string = "working-dir/"
-	dockerProtocol          string = "docker://"
-	ociProtocol             string = "oci://"
-	ociProtocolTrimmed      string = "oci:"
-	dirProtocol             string = "dir://"
-	dirProtocolTrimmed      string = "dir:"
-	additionalImagesDir     string = "additional-images"
-	blobsDir                string = "/blobs/sha256/"
-	diskToMirror            string = "diskToMirror"
-	mirrorToDisk            string = "mirrorToDisk"
-	errMsg                  string = "[AdditionalImagesCollector] %v "
-	logsFile                string = "logs/additional-images.log"
+	indexJson           string = "index.json"
+	ociProtocolTrimmed  string = "oci:"
+	additionalImagesDir string = "additional-images"
+	errMsg              string = "[AdditionalImagesCollector] %v "
 )
-
-type CollectorInterface interface {
-	AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
-}
-
-func New(log clog.PluggableLoggerInterface,
-	config v1alpha2.ImageSetConfiguration,
-	opts mirror.CopyOptions,
-	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
-) CollectorInterface {
-	return &Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
-}
 
 type Collector struct {
 	Log      clog.PluggableLoggerInterface
