@@ -27,6 +27,9 @@ At this point in time the problems/lack of features are
 - detached api's - need to implement for upstream api changes
 - no e2e tests
 
+## Architecture
+![Alt text](./assets/architecture.png)
+
 
 ## Usage
 

@@ -12,15 +12,9 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-func NewWithLocalStorage(log clog.PluggableLoggerInterface,
-	config v1alpha2.ImageSetConfiguration,
-	opts mirror.CopyOptions,
-	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
-	localStorageFQDN string,
-) CollectorInterface {
-	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
-}
+const (
+	hashTruncLen int = 12
+)
 
 type LocalStorageCollector struct {
 	Log              clog.PluggableLoggerInterface
@@ -40,17 +34,24 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 
 	if o.Opts.Mode == mirrorToDisk {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
-
-			imgName := img.Name
-			src := ""
-			if !strings.Contains(src, "://") { // no transport was provided, assume docker://
-				src = dockerProtocol + imgName
+			imgRef := img.Name
+			var src string
+			var dest string
+			// no transport was provided, assume docker://
+			if !strings.Contains(src, "://") {
+				src = dockerProtocol + imgRef
 			} else {
-				transportAndRef := strings.Split(imgName, "://")
-				imgName = transportAndRef[1] // because we are reusing this to construct dest
+				transportAndRef := strings.Split(imgRef, "://")
+				// because we are reusing this to construct dest
+				imgRef = transportAndRef[1]
 			}
 
-			dest := dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgName}, "/")
+			if isImageByDigest(imgRef) {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imageName(imgRef) + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+			} else {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgRef}, "/")
+			}
+
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
 			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
@@ -63,8 +64,8 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 			// TODO Make this more complete
 			// This logic will be useful for operators and releases
 			// strip the domain name from the img.Name
-			src := ""
-			dst := ""
+			var src string
+			var dest string
 
 			if !strings.HasPrefix(img.Name, ociProtocol) {
 
@@ -76,7 +77,12 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 					domainAndPathComps = transportAndRef[1]
 				}
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
-				dst = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
+
+				if isImageByDigest(img.Name) {
+					dest = strings.Join([]string{o.Opts.Destination, imageName(img.Name) + ":" + imageHash(img.Name)[:hashTruncLen]}, "/")
+				} else {
+					dest = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
+				}
 
 				// the following is for having the destination without the initial domain name => later
 				// domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
@@ -91,19 +97,41 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 			} else {
 				src = img.Name
 				transportAndPath := strings.Split(img.Name, "://")
-				dst = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
 			}
 
-			if src == "" || dst == "" {
-				return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dst, img.Name)
+			if src == "" || dest == "" {
+				return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
 			}
 
 			o.Log.Debug("source %s", src)
-			o.Log.Debug("destination %s", dst)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dst})
+			o.Log.Debug("destination %s", dest)
+			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 		}
 	}
 	return allImages, nil
 }
 
-// customImageParser - simple image string parser
+func isImageByDigest(imgRef string) bool {
+	return strings.Contains(imgRef, "@")
+}
+
+func imageName(imgRef string) string {
+	var imageName string
+	imgSplit := strings.Split(imgRef, "@")
+	if len(imgSplit) > 1 {
+		imageName = imgSplit[0]
+	}
+
+	return imageName
+}
+
+func imageHash(imgRef string) string {
+	var hash string
+	imgSplit := strings.Split(imgRef, "@")
+	if len(imgSplit) > 1 {
+		hash = strings.Split(imgSplit[1], ":")[1]
+	}
+
+	return hash
+}

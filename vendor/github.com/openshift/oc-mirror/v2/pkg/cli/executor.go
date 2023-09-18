@@ -86,6 +86,7 @@ type ExecutorSchema struct {
 	Batch            batch.BatchInterface
 	Diff             diff.DiffInterface
 	LocalStorage     registry.Registry
+	LocalStorageFQDN string
 }
 
 // NewMirrorCmd - cobra entry point
@@ -330,14 +331,15 @@ func (o *ExecutorSchema) Complete(args []string) {
 	o.Opts.Destination = args[0]
 	o.Opts.Global.Dir = dest
 	o.Log.Info("mode %s ", o.Opts.Mode)
+	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 
 	client, _ := release.NewOCPClient(uuid.New())
 
 	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn)
-	o.Operator = operator.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))
-	o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))
+	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 
 }
 
