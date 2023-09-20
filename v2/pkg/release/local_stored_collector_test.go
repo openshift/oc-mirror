@@ -17,18 +17,17 @@ import (
 func TestReleaseLocalStoredCollector(t *testing.T) {
 
 	log := clog.New("trace")
-
 	globalM2D := &mirror.GlobalOptions{
 		TlsVerify:      false,
 		InsecurePolicy: true,
-		Dir:            "../../tests",
+		Dir:            t.TempDir(),
 	}
 
 	tmpDir := t.TempDir()
 	globalD2M := &mirror.GlobalOptions{
 		TlsVerify:      false,
 		InsecurePolicy: true,
-		Dir:            "../../tests",
+		Dir:            tmpDir + "/working-dir",
 		From:           tmpDir,
 	}
 
@@ -186,12 +185,12 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/release-images")
 		os.RemoveAll("../../tests/tmp/")
 		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy("../../tests/hold-test-fake", filepath.Join(d2mOpts.Global.Dir, strings.TrimPrefix(d2mOpts.Global.From, fileProtocol), releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		err := copy.Copy("../../tests/hold-test-fake", filepath.Join(d2mOpts.Global.Dir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 		//copy tests/release-filters-fake to working-dir
-		err = copy.Copy("../../tests/release-filters-fake/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.Dir, strings.TrimPrefix(d2mOpts.Global.From, fileProtocol), releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
+		err = copy.Copy("../../tests/release-filters-fake/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.Dir, releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -219,9 +218,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		log.Debug("completed test related images %v ", res)
 	})
 	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
-		os.RemoveAll("../../tests/hold-release/")
-		os.RemoveAll("../../tests/release-images")
-		os.RemoveAll("../../tests/tmp/")
+		os.RemoveAll(m2dOpts.Global.Dir)
 		manifest := &Manifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,

@@ -320,10 +320,10 @@ func (o *ExecutorSchema) Complete(args []string) {
 	var dest string
 	if strings.Contains(args[0], fileProtocol) {
 		o.Opts.Mode = mirrorToDisk
-		dest = workingDir + "/" + strings.Split(args[0], "://")[1]
+		dest = filepath.Join(strings.Split(args[0], "://")[1], workingDir)
 		o.Log.Debug("destination %s ", dest)
 	} else if strings.Contains(args[0], dockerProtocol) {
-		dest = workingDir
+		dest = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
 		o.Opts.Mode = diskToMirror
 	} else {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")

@@ -55,43 +55,49 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/openshift/oc-mirror/v2/pkg/additional/collector.go (42.6%)</option>
+				<option value="file0">github.com/openshift/oc-mirror/v2/pkg/additional/collector.go (43.5%)</option>
 				
 				<option value="file1">github.com/openshift/oc-mirror/v2/pkg/additional/local_stored_collector.go (0.0%)</option>
 				
-				<option value="file2">github.com/openshift/oc-mirror/v2/pkg/batch/worker.go (61.7%)</option>
+				<option value="file2">github.com/openshift/oc-mirror/v2/pkg/additional/new.go (0.0%)</option>
 				
-				<option value="file3">github.com/openshift/oc-mirror/v2/pkg/cli/executor.go (45.6%)</option>
+				<option value="file3">github.com/openshift/oc-mirror/v2/pkg/batch/worker.go (62.3%)</option>
 				
-				<option value="file4">github.com/openshift/oc-mirror/v2/pkg/config/defaults.go (100.0%)</option>
+				<option value="file4">github.com/openshift/oc-mirror/v2/pkg/cli/executor.go (43.2%)</option>
 				
-				<option value="file5">github.com/openshift/oc-mirror/v2/pkg/config/load.go (81.2%)</option>
+				<option value="file5">github.com/openshift/oc-mirror/v2/pkg/config/defaults.go (100.0%)</option>
 				
-				<option value="file6">github.com/openshift/oc-mirror/v2/pkg/config/validate.go (95.0%)</option>
+				<option value="file6">github.com/openshift/oc-mirror/v2/pkg/config/load.go (81.2%)</option>
 				
-				<option value="file7">github.com/openshift/oc-mirror/v2/pkg/log/logger.go (85.7%)</option>
+				<option value="file7">github.com/openshift/oc-mirror/v2/pkg/config/validate.go (95.0%)</option>
 				
-				<option value="file8">github.com/openshift/oc-mirror/v2/pkg/manifest/oci-manifest.go (67.5%)</option>
+				<option value="file8">github.com/openshift/oc-mirror/v2/pkg/log/logger.go (85.7%)</option>
 				
-				<option value="file9">github.com/openshift/oc-mirror/v2/pkg/mirror/mirror.go (51.0%)</option>
+				<option value="file9">github.com/openshift/oc-mirror/v2/pkg/manifest/oci-manifest.go (67.5%)</option>
 				
-				<option value="file10">github.com/openshift/oc-mirror/v2/pkg/mirror/options.go (60.4%)</option>
+				<option value="file10">github.com/openshift/oc-mirror/v2/pkg/mirror/mirror.go (51.0%)</option>
 				
-				<option value="file11">github.com/openshift/oc-mirror/v2/pkg/mirror/unshare.go (30.8%)</option>
+				<option value="file11">github.com/openshift/oc-mirror/v2/pkg/mirror/options.go (61.0%)</option>
 				
-				<option value="file12">github.com/openshift/oc-mirror/v2/pkg/operator/collector.go (63.1%)</option>
+				<option value="file12">github.com/openshift/oc-mirror/v2/pkg/mirror/unshare.go (30.8%)</option>
 				
-				<option value="file13">github.com/openshift/oc-mirror/v2/pkg/release/cincinnati.go (48.8%)</option>
+				<option value="file13">github.com/openshift/oc-mirror/v2/pkg/operator/collector.go (63.6%)</option>
 				
-				<option value="file14">github.com/openshift/oc-mirror/v2/pkg/release/client.go (84.6%)</option>
+				<option value="file14">github.com/openshift/oc-mirror/v2/pkg/operator/local_stored_collector.go (0.0%)</option>
 				
-				<option value="file15">github.com/openshift/oc-mirror/v2/pkg/release/collector.go (58.3%)</option>
+				<option value="file15">github.com/openshift/oc-mirror/v2/pkg/operator/new.go (0.0%)</option>
 				
-				<option value="file16">github.com/openshift/oc-mirror/v2/pkg/release/core-cincinnati.go (83.3%)</option>
+				<option value="file16">github.com/openshift/oc-mirror/v2/pkg/release/cincinnati.go (48.8%)</option>
 				
-				<option value="file17">github.com/openshift/oc-mirror/v2/pkg/release/find.go (95.8%)</option>
+				<option value="file17">github.com/openshift/oc-mirror/v2/pkg/release/client.go (84.6%)</option>
 				
-				<option value="file18">github.com/openshift/oc-mirror/v2/pkg/release/local_stored_collector.go (78.7%)</option>
+				<option value="file18">github.com/openshift/oc-mirror/v2/pkg/release/collector.go (63.1%)</option>
+				
+				<option value="file19">github.com/openshift/oc-mirror/v2/pkg/release/core-cincinnati.go (83.3%)</option>
+				
+				<option value="file20">github.com/openshift/oc-mirror/v2/pkg/release/find.go (95.8%)</option>
+				
+				<option value="file21">github.com/openshift/oc-mirror/v2/pkg/release/local_stored_collector.go (79.5%)</option>
 				
 				</select>
 			</div>
@@ -124,34 +130,11 @@ import (
 )
 
 const (
-        indexJson               string = "index.json"
-        operatorImageExtractDir string = "hold-operator"
-        workingDir              string = "working-dir/"
-        dockerProtocol          string = "docker://"
-        ociProtocol             string = "oci://"
-        ociProtocolTrimmed      string = "oci:"
-        dirProtocol             string = "dir://"
-        dirProtocolTrimmed      string = "dir:"
-        additionalImagesDir     string = "additional-images"
-        blobsDir                string = "/blobs/sha256/"
-        diskToMirror            string = "diskToMirror"
-        mirrorToDisk            string = "mirrorToDisk"
-        errMsg                  string = "[AdditionalImagesCollector] %v "
-        logsFile                string = "logs/additional-images.log"
+        indexJson           string = "index.json"
+        ociProtocolTrimmed  string = "oci:"
+        additionalImagesDir string = "additional-images"
+        errMsg              string = "[AdditionalImagesCollector] %v "
 )
-
-type CollectorInterface interface {
-        AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
-}
-
-func New(log clog.PluggableLoggerInterface,
-        config v1alpha2.ImageSetConfiguration,
-        opts mirror.CopyOptions,
-        mirror mirror.MirrorInterface,
-        manifest manifest.ManifestInterface,
-) CollectorInterface <span class="cov0" title="0">{
-        return &amp;Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
-}</span>
 
 type Collector struct {
         Log      clog.PluggableLoggerInterface
@@ -251,15 +234,9 @@ import (
         "github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-func NewWithLocalStorage(log clog.PluggableLoggerInterface,
-        config v1alpha2.ImageSetConfiguration,
-        opts mirror.CopyOptions,
-        mirror mirror.MirrorInterface,
-        manifest manifest.ManifestInterface,
-        localStorageFQDN string,
-) CollectorInterface <span class="cov0" title="0">{
-        return &amp;LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
-}</span>
+const (
+        hashTruncLen int = 12
+)
 
 type LocalStorageCollector struct {
         Log              clog.PluggableLoggerInterface
@@ -279,18 +256,25 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 
         if o.Opts.Mode == mirrorToDisk </span><span class="cov0" title="0">{
                 for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages </span><span class="cov0" title="0">{
-
-                        imgName := img.Name
-                        src := ""
-                        if !strings.Contains(src, "://") </span><span class="cov0" title="0">{ // no transport was provided, assume docker://
-                                src = dockerProtocol + imgName
+                        imgRef := img.Name
+                        var src string
+                        var dest string
+                        // no transport was provided, assume docker://
+                        if !strings.Contains(src, "://") </span><span class="cov0" title="0">{
+                                src = dockerProtocol + imgRef
                         }</span> else<span class="cov0" title="0"> {
-                                transportAndRef := strings.Split(imgName, "://")
-                                imgName = transportAndRef[1] // because we are reusing this to construct dest
+                                transportAndRef := strings.Split(imgRef, "://")
+                                // because we are reusing this to construct dest
+                                imgRef = transportAndRef[1]
                         }</span>
 
-                        <span class="cov0" title="0">dest := dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgName}, "/")
-                        o.Log.Debug("source %s", src)
+                        <span class="cov0" title="0">if isImageByDigest(imgRef) </span><span class="cov0" title="0">{
+                                dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imageName(imgRef) + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+                        }</span> else<span class="cov0" title="0"> {
+                                dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgRef}, "/")
+                        }</span>
+
+                        <span class="cov0" title="0">o.Log.Debug("source %s", src)
                         o.Log.Debug("destination %s", dest)
                         allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})</span>
 
@@ -302,8 +286,8 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
                         // TODO Make this more complete
                         // This logic will be useful for operators and releases
                         // strip the domain name from the img.Name
-                        src := ""
-                        dst := ""
+                        var src string
+                        var dest string
 
                         if !strings.HasPrefix(img.Name, ociProtocol) </span><span class="cov0" title="0">{
 
@@ -315,7 +299,12 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
                                         domainAndPathComps = transportAndRef[1]
                                 }</span>
                                 <span class="cov0" title="0">src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
-                                dst = strings.Join([]string{o.Opts.Destination, img.Name}, "/")</span>
+
+                                if isImageByDigest(img.Name) </span><span class="cov0" title="0">{
+                                        dest = strings.Join([]string{o.Opts.Destination, imageName(img.Name) + ":" + imageHash(img.Name)[:hashTruncLen]}, "/")
+                                }</span> else<span class="cov0" title="0"> {
+                                        dest = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
+                                }</span>
 
                                 // the following is for having the destination without the initial domain name =&gt; later
                                 // domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
@@ -330,25 +319,72 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
                         } else<span class="cov0" title="0"> {
                                 src = img.Name
                                 transportAndPath := strings.Split(img.Name, "://")
-                                dst = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+                                dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
                         }</span>
 
-                        <span class="cov0" title="0">if src == "" || dst == "" </span><span class="cov0" title="0">{
-                                return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dst, img.Name)
+                        <span class="cov0" title="0">if src == "" || dest == "" </span><span class="cov0" title="0">{
+                                return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
                         }</span>
 
                         <span class="cov0" title="0">o.Log.Debug("source %s", src)
-                        o.Log.Debug("destination %s", dst)
-                        allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dst})</span>
+                        o.Log.Debug("destination %s", dest)
+                        allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})</span>
                 }
         }
         <span class="cov0" title="0">return allImages, nil</span>
 }
 
-// customImageParser - simple image string parser
+func isImageByDigest(imgRef string) bool <span class="cov0" title="0">{
+        return strings.Contains(imgRef, "@")
+}</span>
+
+func imageName(imgRef string) string <span class="cov0" title="0">{
+        var imageName string
+        imgSplit := strings.Split(imgRef, "@")
+        if len(imgSplit) &gt; 1 </span><span class="cov0" title="0">{
+                imageName = imgSplit[0]
+        }</span>
+
+        <span class="cov0" title="0">return imageName</span>
+}
+
+func imageHash(imgRef string) string <span class="cov0" title="0">{
+        var hash string
+        imgSplit := strings.Split(imgRef, "@")
+        if len(imgSplit) &gt; 1 </span><span class="cov0" title="0">{
+                hash = strings.Split(imgSplit[1], ":")[1]
+        }</span>
+
+        <span class="cov0" title="0">return hash</span>
+}
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package batch
+		<pre class="file" id="file2" style="display: none">package additional
+
+import (
+        "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+        clog "github.com/openshift/oc-mirror/v2/pkg/log"
+        "github.com/openshift/oc-mirror/v2/pkg/mirror"
+        "github.com/openshift/oc-mirror/v2/pkg/manifest"
+)
+
+
+func New(log clog.PluggableLoggerInterface,
+                config v1alpha2.ImageSetConfiguration,
+                opts mirror.CopyOptions,
+                mirror mirror.MirrorInterface,
+                manifest manifest.ManifestInterface,
+                localStorageFQDN string,
+) CollectorInterface <span class="cov0" title="0">{
+        if localStorageFQDN != "" </span><span class="cov0" title="0">{
+                return &amp;LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
+        }</span> else<span class="cov0" title="0"> {
+                return &amp;Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package batch
 
 import (
         "bufio"
@@ -435,6 +471,7 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
                         index := (i * b.BatchSize) + x
                         o.Log.Debug("source %s ", images[index].Source)
                         o.Log.Debug("destination %s ", images[index].Destination)
+                        opts.MultiArch = "all"
                         go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions, writer bufio.Writer) </span><span class="cov8" title="1">{
                                 defer wg.Done()
                                 err := o.Mirror.Run(ctx, src, dest, "copy", opts, writer)
@@ -495,7 +532,7 @@ func consoleLogFromFile(log clog.PluggableLoggerInterface) <span class="cov0" ti
 }
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package cli
+		<pre class="file" id="file4" style="display: none">package cli
 
 import (
         "bytes"
@@ -504,6 +541,7 @@ import (
         "path/filepath"
         "strconv"
         "strings"
+        "time"
 
         "k8s.io/kubectl/pkg/util/templates"
 
@@ -512,8 +550,10 @@ import (
         "github.com/distribution/distribution/v3/registry"
         _ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
         distversion "github.com/distribution/distribution/v3/version"
+        "github.com/sirupsen/logrus"
 
         "github.com/google/uuid"
+
         "github.com/openshift/oc-mirror/v2/pkg/additional"
         "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
         "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
@@ -542,6 +582,7 @@ const (
         releaseImageExtractDir  string = "hold-release"
         operatorImageExtractDir string = "hold-operator"
         signaturesDir           string = "signatures"
+        registryLogFilename     string = "logs/registry.log"
 )
 
 var (
@@ -563,6 +604,7 @@ var (
                 oc-mirror oci:mirror --config mirror-config.yaml
                 `,
         )
+        registryLogFile *os.File
 )
 
 type ExecutorSchema struct {
@@ -578,6 +620,7 @@ type ExecutorSchema struct {
         Batch            batch.BatchInterface
         Diff             diff.DiffInterface
         LocalStorage     registry.Registry
+        LocalStorageFQDN string
 }
 
 // NewMirrorCmd - cobra entry point
@@ -590,7 +633,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command <span class=
 
         flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
         flagDepTLS, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-        flagSrcOpts, srcOpts := mirror.ImageFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+        flagSrcOpts, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
         flagDestOpts, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
         flagRetryOpts, retryOpts := mirror.RetryFlags()
 
@@ -623,15 +666,15 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command <span class=
                                 log.Error("%v ", err)
                                 os.Exit(1)
                         }</span>
+                        <span class="cov0" title="0">ex.Complete(args)
                         // prepare internal storage
-                        <span class="cov0" title="0">err = ex.PrepareStorage()
+                        err = ex.PrepareStorageAndLogs()
                         if err != nil </span><span class="cov0" title="0">{
                                 log.Error(" %v ", err)
                                 os.Exit(1)
                         }</span>
-                        <span class="cov0" title="0">ex.Complete(args)
 
-                        err = ex.Run(cmd, args)
+                        <span class="cov0" title="0">err = ex.Run(cmd, args)
                         if err != nil </span><span class="cov0" title="0">{
                                 log.Error("%v ", err)
                                 os.Exit(1)
@@ -639,13 +682,15 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command <span class=
                 },
         }
 
-        <span class="cov8" title="1">cmd.PersistentFlags().StringVar(&amp;opts.Global.ConfigPath, "config", "", "Path to imageset configuration file")
+        <span class="cov8" title="1">cmd.PersistentFlags().StringVarP(&amp;opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
         cmd.Flags().StringVar(&amp;opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
         cmd.Flags().StringVar(&amp;opts.Global.Dir, "dir", "working-dir", "Assets directory")
         cmd.Flags().StringVar(&amp;opts.Global.From, "from", "working-dir", "local storage directory for disk to mirror workflow")
         cmd.Flags().Uint16VarP(&amp;opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
         cmd.Flags().BoolVarP(&amp;opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
         cmd.Flags().BoolVarP(&amp;opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
+        cmd.Flags().BoolVar(&amp;opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
+        cmd.Flags().MarkHidden("v2")
         cmd.Flags().AddFlagSet(&amp;flagSharedOpts)
         cmd.Flags().AddFlagSet(&amp;flagRetryOpts)
         cmd.Flags().AddFlagSet(&amp;flagDepTLS)
@@ -654,9 +699,187 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command <span class=
         return cmd</span>
 }
 
+// Validate - cobra validation
+func (o *ExecutorSchema) Validate(dest []string) error <span class="cov8" title="1">{
+        if len(o.Opts.Global.ConfigPath) == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("use the --config flag it is mandatory")
+        }</span>
+        <span class="cov8" title="1">if strings.Contains(dest[0], dockerProtocol) &amp;&amp; o.Opts.Global.From == "" </span><span class="cov0" title="0">{
+                return fmt.Errorf("when destination is file://, diskToMirror workflow is assumed, and the --from argument become mandatory")
+
+        }</span>
+        <span class="cov8" title="1">if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) </span><span class="cov8" title="1">{
+                return nil
+        }</span> else<span class="cov8" title="1"> {
+                return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
+        }</span>
+}
+
+func (o *ExecutorSchema) PrepareStorageAndLogs() error <span class="cov0" title="0">{
+
+        // clean up logs directory
+        os.RemoveAll(logsDir)
+
+        // create logs directory
+        err := os.MkdirAll(logsDir, 0755)
+        if err != nil </span><span class="cov0" title="0">{
+                o.Log.Error(" %v ", err)
+                return err
+        }</span>
+
+        //create config file for local registry
+        <span class="cov0" title="0">configYamlV0_1 := `
+version: 0.1
+log:
+  accesslog:
+    disabled: $$PLACEHOLDER_ACCESS_LOG_OFF$$
+  level: $$PLACEHOLDER_LOG_LEVEL$$
+  formatter: text
+  fields:
+    service: registry
+storage:
+  cache:
+    blobdescriptor: inmemory
+  filesystem:
+    rootdirectory: $$PLACEHOLDER_ROOT$$
+http:
+  addr: :$$PLACEHOLDER_PORT$$
+  headers:
+    X-Content-Type-Options: [nosniff]
+      #auth:
+      #htpasswd:
+      #realm: basic-realm
+      #path: /etc/registry
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3
+`
+
+        rootDir := ""
+
+        if o.Opts.Mode == mirrorToDisk </span><span class="cov0" title="0">{
+                rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
+        }</span> else<span class="cov0" title="0"> {
+                rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
+        }</span>
+
+        <span class="cov0" title="0">if rootDir == "" </span><span class="cov0" title="0">{
+                // something went wrong
+                return fmt.Errorf("error determining the local storage folder to use")
+        }</span>
+        <span class="cov0" title="0">configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", rootDir, 1)
+        configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
+        configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
+        if o.Opts.Global.LogLevel == "debug" </span><span class="cov0" title="0">{
+                configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
+        }</span> else<span class="cov0" title="0"> {
+                configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "true", 1)
+        }</span>
+
+        <span class="cov0" title="0">config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
+
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV0_1)
+        }</span>
+
+        <span class="cov0" title="0">regLogger := logrus.New()
+        // prepare the logger
+        registryLogFile, err = os.Create(registryLogFilename)
+        if err != nil </span><span class="cov0" title="0">{
+                regLogger.Warn("Failed to create log file for local storage registry, using default stderr")
+        }</span> else<span class="cov0" title="0"> {
+                regLogger.Out = registryLogFile
+        }</span>
+        <span class="cov0" title="0">absPath, err := filepath.Abs(registryLogFilename)
+        o.Log.Info("local storage registry will log to %s", absPath)
+        if err != nil </span><span class="cov0" title="0">{
+                o.Log.Error(err.Error())
+        }</span>
+        <span class="cov0" title="0">regLogEntry := logrus.NewEntry(regLogger)
+
+        // setup the context
+        dcontext.SetDefaultLogger(regLogEntry)
+        ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
+        ctx = dcontext.WithLogger(ctx, regLogEntry)
+
+        reg, err := registry.NewRegistry(ctx, config)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">o.LocalStorage = *reg
+        errchan := make(chan error)
+
+        o.Log.Info("starting local storage on %v", config.HTTP.Addr)
+
+        go startLocalRegistry(reg, errchan)
+        go panicOnRegistryError(errchan)
+        return nil</span>
+}
+
+func startLocalRegistry(reg *registry.Registry, errchan chan error) <span class="cov0" title="0">{
+        err := reg.ListenAndServe()
+        errchan &lt;- err
+}</span>
+
+func panicOnRegistryError(errchan chan error) <span class="cov0" title="0">{
+        err := &lt;-errchan
+        if err != nil </span><span class="cov0" title="0">{
+                panic(err)</span>
+        }
+}
+
+// Complete - do the final setup of modules
+func (o *ExecutorSchema) Complete(args []string) <span class="cov0" title="0">{
+        // override log level
+        o.Log.Level(o.Opts.Global.LogLevel)
+        o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
+        // read the ImageSetConfiguration
+        cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
+        if err != nil </span><span class="cov0" title="0">{
+                o.Log.Error("imagesetconfig %v ", err)
+        }</span>
+        <span class="cov0" title="0">o.Log.Trace("imagesetconfig : %v ", cfg)
+
+        // update all dependant modules
+        mc := mirror.NewMirrorCopy()
+        md := mirror.NewMirrorDelete()
+        o.Manifest = manifest.New(o.Log)
+        o.Mirror = mirror.New(mc, md)
+        o.Config = cfg
+        o.Batch = batch.New(o.Log, o.Mirror, o.Manifest)
+
+        // logic to check mode
+        var dest string
+        if strings.Contains(args[0], fileProtocol) </span><span class="cov0" title="0">{
+                o.Opts.Mode = mirrorToDisk
+                dest = workingDir + "/" + strings.Split(args[0], "://")[1]
+                o.Log.Debug("destination %s ", dest)
+        }</span> else<span class="cov0" title="0"> if strings.Contains(args[0], dockerProtocol) </span><span class="cov0" title="0">{
+                dest = workingDir
+                o.Opts.Mode = diskToMirror
+        }</span> else<span class="cov0" title="0"> {
+                o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
+        }</span>
+        <span class="cov0" title="0">o.Opts.Destination = args[0]
+        o.Opts.Global.Dir = dest
+        o.Log.Info("mode %s ", o.Opts.Mode)
+        o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
+
+        client, _ := release.NewOCPClient(uuid.New())
+
+        signature := release.NewSignatureClient(o.Log, &amp;o.Config, &amp;o.Opts)
+        cn := release.NewCincinnati(o.Log, &amp;o.Config, &amp;o.Opts, client, false, signature)
+        o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
+        o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+        o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)</span>
+
+}
+
 // Run - start the mirror functionality
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error <span class="cov8" title="1">{
-
+        startTime := time.Now()
         // clean up logs directory
         os.RemoveAll(logsDir)
 
@@ -739,76 +962,19 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error <span clas
         <span class="cov8" title="1">o.Log.Info("total additional images to copy %d ", len(imgs))
         allRelatedImages = mergeImages(allRelatedImages, imgs)
 
+        collectionFinish := time.Now()
+
         //call the batch worker
         err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
+        mirrorFinish := time.Now()
+        o.Log.Info("start time: %v\ncollection time: %v\nmirror time: %v", startTime, collectionFinish, mirrorFinish)
         if err != nil </span><span class="cov8" title="1">{
                 cleanUp()
                 return err
         }</span>
 
-        <span class="cov8" title="1">return nil</span>
-}
-
-// Complete - do the final setup of modules
-func (o *ExecutorSchema) Complete(args []string) <span class="cov0" title="0">{
-        // override log level
-        o.Log.Level(o.Opts.Global.LogLevel)
-        o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
-        // read the ImageSetConfiguration
-        cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
-        if err != nil </span><span class="cov0" title="0">{
-                o.Log.Error("imagesetconfig %v ", err)
-        }</span>
-        <span class="cov0" title="0">o.Log.Trace("imagesetconfig : %v ", cfg)
-
-        // update all dependant modules
-        mc := mirror.NewMirrorCopy()
-        md := mirror.NewMirrorDelete()
-        o.Manifest = manifest.New(o.Log)
-        o.Mirror = mirror.New(mc, md)
-        o.Config = cfg
-        o.Batch = batch.New(o.Log, o.Mirror, o.Manifest)
-
-        // logic to check mode
-        var dest string
-        if strings.Contains(args[0], fileProtocol) </span><span class="cov0" title="0">{
-                o.Opts.Mode = mirrorToDisk
-                dest = workingDir + "/" + strings.Split(args[0], "://")[1]
-                o.Log.Debug("destination %s ", dest)
-        }</span> else<span class="cov0" title="0"> if strings.Contains(args[0], dockerProtocol) </span><span class="cov0" title="0">{
-                dest = workingDir
-                o.Opts.Mode = diskToMirror
-        }</span> else<span class="cov0" title="0"> {
-                o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
-        }</span>
-        <span class="cov0" title="0">o.Opts.Destination = args[0]
-        o.Opts.Global.Dir = dest
-        o.Log.Info("mode %s ", o.Opts.Mode)
-
-        client, _ := release.NewOCPClient(uuid.New())
-
-        signature := release.NewSignatureClient(o.Log, &amp;o.Config, &amp;o.Opts)
-        cn := release.NewCincinnati(o.Log, &amp;o.Config, &amp;o.Opts, client, false, signature)
-        o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))
-        o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest)
-        o.AdditionalImages = additional.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, "localhost:"+strconv.Itoa(int(o.Opts.Global.Port)))</span>
-
-}
-
-// Validate - cobra validation
-func (o *ExecutorSchema) Validate(dest []string) error <span class="cov8" title="1">{
-        if len(o.Opts.Global.ConfigPath) == 0 </span><span class="cov0" title="0">{
-                return fmt.Errorf("use the --config flag it is mandatory")
-        }</span>
-        <span class="cov8" title="1">if strings.Contains(dest[0], dockerProtocol) &amp;&amp; o.Opts.Global.From == "" </span><span class="cov0" title="0">{
-                return fmt.Errorf("when destination is file://, diskToMirror workflow is assumed, and the --from argument become mandatory")
-
-        }</span>
-        <span class="cov8" title="1">if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) </span><span class="cov8" title="1">{
-                return nil
-        }</span> else<span class="cov8" title="1"> {
-                return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
-        }</span>
+        <span class="cov8" title="1">defer cleanUp()
+        return nil</span>
 }
 
 // mergeImages - simple function to append related images
@@ -820,86 +986,17 @@ func mergeImages(base, in []v1alpha3.CopyImageSchema) []v1alpha3.CopyImageSchema
 
 // cleanUp - utility to clean directories
 func cleanUp() <span class="cov8" title="1">{
+        // close registry log file
+        err := registryLogFile.Close()
+        if err != nil </span><span class="cov8" title="1">{
+                fmt.Fprintf(os.Stderr, "error closing log file %s: %v\n", registryLogFilename, err)
+        }</span>
         // clean up logs directory
-        os.RemoveAll(logsDir)
-
-}</span>
-
-func (o *ExecutorSchema) PrepareStorage() error <span class="cov0" title="0">{
-        configYamlV0_1 := `
-version: 0.1
-log:
-  fields:
-    service: registry
-storage:
-  cache:
-    blobdescriptor: inmemory
-  filesystem:
-    rootdirectory: $$PLACEHOLDER_ROOT$$
-http:
-  addr: :$$PLACEHOLDER_PORT$$
-  headers:
-    X-Content-Type-Options: [nosniff]
-      #auth:
-      #htpasswd:
-      #realm: basic-realm
-      #path: /etc/registry
-health:
-  storagedriver:
-    enabled: true
-    interval: 10s
-    threshold: 3
-`
-
-        rootDir := ""
-
-        if o.Opts.Mode == mirrorToDisk </span><span class="cov0" title="0">{
-                rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
-        }</span> else<span class="cov0" title="0"> {
-                rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
-        }</span>
-
-        <span class="cov0" title="0">if rootDir == "" </span><span class="cov0" title="0">{
-                // something went wrong
-                return fmt.Errorf("error determining the local storage folder to use")
-        }</span>
-        <span class="cov0" title="0">configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", rootDir, 1)
-        configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
-        config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
-
-        if err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("error parsing local storage configuration : %v\n %s\n", err, configYamlV0_1)
-        }</span>
-
-        <span class="cov0" title="0">ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
-        reg, err := registry.NewRegistry(ctx, config)
-        if err != nil </span><span class="cov0" title="0">{
-                return err
-        }</span>
-        <span class="cov0" title="0">o.LocalStorage = *reg
-        errchan := make(chan error)
-
-        o.Log.Info("starting local storage on %v", config.HTTP.Addr)
-
-        go startLocalRegistry(reg, errchan)
-        go panicOnRegistryError(errchan)
-        return nil</span>
-}
-
-func startLocalRegistry(reg *registry.Registry, errchan chan error) <span class="cov0" title="0">{
-        err := reg.ListenAndServe()
-        errchan &lt;- err
-}</span>
-
-func panicOnRegistryError(errchan chan error) <span class="cov0" title="0">{
-        err := &lt;-errchan
-        if err != nil </span><span class="cov0" title="0">{
-                panic(err)</span>
-        }
+        <span class="cov8" title="1">os.RemoveAll(logsDir)</span>
 }
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package config
+		<pre class="file" id="file5" style="display: none">package config
 
 import (
         "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -918,7 +1015,7 @@ func completeReleaseArchitectures(cfg *v1alpha2.ImageSetConfiguration) <span cla
 }
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package config
+		<pre class="file" id="file6" style="display: none">package config
 
 import (
         "bytes"
@@ -1010,7 +1107,7 @@ func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) <span class=
 }
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package config
+		<pre class="file" id="file7" style="display: none">package config
 
 import (
         "fmt"
@@ -1066,7 +1163,7 @@ func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error <span cl
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package log
+		<pre class="file" id="file8" style="display: none">package log
 
 import (
         "fmt"
@@ -1126,7 +1223,7 @@ func (c *PluggableLogger) Level(level string) <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package manifest
+		<pre class="file" id="file9" style="display: none">package manifest
 
 import (
         "archive/tar"
@@ -1531,7 +1628,7 @@ func semverFindRange(entries []v1alpha3.ChannelEntry, min, max string) ([]string
 }
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package mirror
+		<pre class="file" id="file10" style="display: none">package mirror
 
 import (
         "bufio"
@@ -1851,7 +1948,7 @@ func HelloFromV2() string <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package mirror
+		<pre class="file" id="file11" style="display: none">package mirror
 
 import (
         "context"
@@ -1880,6 +1977,108 @@ const defaultUserAgent string = "skopeo/v.19.5"
 // errorShouldDisplayUsage is a subtype of error used by command handlers to indicate that cli.ShowSubcommandHelp should be called.
 type ErrorShouldDisplayUsage struct {
         Error error
+}
+
+type GlobalOptions struct {
+        LogLevel           string        // one of info, debug, trace
+        TlsVerify          bool          // Require HTTPS and verify certificates (for docker: and docker-daemon:)
+        PolicyPath         string        // Path to a signature verification policy file
+        InsecurePolicy     bool          // Use an "allow everything" signature verification policy
+        RegistriesDirPath  string        // Path to a "registries.d" registry configuration directory
+        OverrideArch       string        // Architecture to use for choosing images, instead of the runtime one
+        OverrideOS         string        // OS to use for choosing images, instead of the runtime one
+        OverrideVariant    string        // Architecture variant to use for choosing images, instead of the runtime one
+        CommandTimeout     time.Duration // Timeout for the command execution
+        RegistriesConfPath string        // Path to the "registries.conf" file
+        TmpDir             string        // Path to use for big temporary files
+        Dir                string        // working directory
+        From               string        // local storage for diskToMirror workflow
+        Port               uint16        // HTTP port used by oc-mirror's local storage instance
+        ConfigPath         string        // Path to use for imagesetconfig
+        ReleaseFrom        string        // Used for release mirroring (diskToMirror)
+        OperatorsFrom      string        // Used for operators mirroring (diskToMirror)
+        AdditionalFrom     string        // Used for additionalImages mirroring (diskToMirror)
+        Quiet              bool          // Suppress output information when copying images
+        Force              bool          // Force the copy/mirror even if there is nothing to update
+        V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
+}
+
+type CopyOptions struct {
+        Global                   *GlobalOptions
+        DeprecatedTLSVerify      *DeprecatedTLSVerifyOption
+        SrcImage                 *imageOptions
+        DestImage                *imageDestOptions
+        RetryOpts                *retry.Options
+        AdditionalTags           []string  // For docker-archive: destinations, in addition to the name:tag specified as destination, also add these
+        RemoveSignatures         bool      // Do not copy signatures from the source image
+        SignByFingerprint        string    // Sign the image using a GPG key with the specified fingerprint
+        SignBySigstorePrivateKey string    // Sign the image using a sigstore private key
+        SignPassphraseFile       string    // Path pointing to a passphrase file when signing (for either signature format, but only one of them)
+        SignIdentity             string    // Identity of the signed image, must be a fully specified docker reference
+        DigestFile               string    // Write digest to this file
+        Format                   string    // Force conversion of the image to a specified format
+        All                      bool      // Copy all of the images if the source is a list
+        MultiArch                string    // How to handle multi architecture images
+        PreserveDigests          bool      // Preserve digests during copy
+        EncryptLayer             []int     // The list of layers to encrypt
+        EncryptionKeys           []string  // Keys needed to encrypt the image
+        DecryptionKeys           []string  // Keys needed to decrypt the image
+        Mode                     string    // 2 options disktoMirror or mirrorToDisk (for now)
+        Dev                      bool      // developer mode - will be removed when completed
+        Destination              string    // what to target to
+        UUID                     uuid.UUID // set uuid
+        ImageType                string    // release, catalog-operator, additionalImage
+}
+
+// deprecatedTLSVerifyOption represents a deprecated --tls-verify option,
+// which was accepted for all subcommands, for a time.
+// Every user should call deprecatedTLSVerifyOption.warnIfUsed() as part of handling the CLI,
+// whether or not the value actually ends up being used.
+// DO NOT ADD ANY NEW USES OF THIS; just call dockerImageFlags with an appropriate, possibly empty, flagPrefix.
+type DeprecatedTLSVerifyOption struct {
+        tlsVerify commonFlag.OptionalBool // FIXME FIXME: Warn if this is used, or even if it is ignored.
+}
+
+// sharedImageOptions collects CLI flags which are image-related, but do not change across images.
+// This really should be a part of globalOptions, but that would break existing users of (skopeo copy --authfile=).
+type SharedImageOptions struct {
+        authFilePath string // Path to a */containers/auth.json
+}
+
+// dockerImageOptions collects CLI flags specific to the "docker" transport, which are
+// the same across subcommands, but may be different for each image
+// (e.g. may differ between the source and destination of a copy)
+type dockerImageOptions struct {
+        global              *GlobalOptions             // May be shared across several imageOptions instances.
+        shared              *SharedImageOptions        // May be shared across several imageOptions instances.
+        deprecatedTLSVerify *DeprecatedTLSVerifyOption // May be shared across several imageOptions instances, or nil.
+        authFilePath        commonFlag.OptionalString  // Path to a */containers/auth.json (prefixed version to override shared image option).
+        credsOption         commonFlag.OptionalString  // username[:password] for accessing a registry
+        userName            commonFlag.OptionalString  // username for accessing a registry
+        password            commonFlag.OptionalString  // password for accessing a registry
+        registryToken       commonFlag.OptionalString  // token to be used directly as a Bearer token when accessing the registry
+        dockerCertPath      string                     // A directory using Docker-like *.{crt,cert,key} files for connecting to a registry or a daemon
+        tlsVerify           commonFlag.OptionalBool    // Require HTTPS and verify certificates (for docker: and docker-daemon:)
+        noCreds             bool                       // Access the registry anonymously
+}
+
+// imageOptions collects CLI flags which are the same across subcommands, but may be different for each image
+// (e.g. may differ between the source and destination of a copy)
+type imageOptions struct {
+        dockerImageOptions
+        sharedBlobDir    string // A directory to use for OCI blobs, shared across repositories
+        dockerDaemonHost string // docker-daemon: host to connect to
+}
+
+// imageDestOptions is a superset of imageOptions specialized for image destinations.
+type imageDestOptions struct {
+        *imageOptions
+        dirForceCompression         bool                   // Compress layers when saving to the dir: transport
+        dirForceDecompression       bool                   // Decompress layers when saving to the dir: transport
+        ociAcceptUncompressedLayers bool                   // Whether to accept uncompressed layers in the oci: transport
+        compressionFormat           string                 // Format to use for the compression
+        compressionLevel            commonFlag.OptionalInt // Level to use for the compression
+        precomputeDigests           bool                   // Precompute digests to dedup layers when saving to the docker: transport
 }
 
 // noteCloseFailure returns (possibly-nil) err modified to account for (non-nil) closeErr.
@@ -1919,15 +2118,6 @@ func CommandAction(handler func(args []string, stdout io.Writer) error) func(cmd
         }</span>
 }
 
-// deprecatedTLSVerifyOption represents a deprecated --tls-verify option,
-// which was accepted for all subcommands, for a time.
-// Every user should call deprecatedTLSVerifyOption.warnIfUsed() as part of handling the CLI,
-// whether or not the value actually ends up being used.
-// DO NOT ADD ANY NEW USES OF THIS; just call dockerImageFlags with an appropriate, possibly empty, flagPrefix.
-type DeprecatedTLSVerifyOption struct {
-        tlsVerify commonFlag.OptionalBool // FIXME FIXME: Warn if this is used, or even if it is ignored.
-}
-
 // warnIfUsed warns if tlsVerify was set by the user, and suggests alternatives (which should
 // start with "--").
 // Every user should call this as part of handling the CLI, whether or not the value actually
@@ -1948,12 +2138,6 @@ func DeprecatedTLSVerifyFlags() (pflag.FlagSet, *DeprecatedTLSVerifyOption) <spa
         return fs, &amp;opts
 }</span>
 
-// sharedImageOptions collects CLI flags which are image-related, but do not change across images.
-// This really should be a part of globalOptions, but that would break existing users of (skopeo copy --authfile=).
-type SharedImageOptions struct {
-        authFilePath string // Path to a */containers/auth.json
-}
-
 // sharedImageFlags prepares a collection of CLI flags writing into sharedImageOptions, and the managed sharedImageOptions structure.
 func SharedImageFlags() (pflag.FlagSet, *SharedImageOptions) <span class="cov8" title="1">{
         opts := SharedImageOptions{}
@@ -1961,31 +2145,6 @@ func SharedImageFlags() (pflag.FlagSet, *SharedImageOptions) <span class="cov8" 
         fs.StringVar(&amp;opts.authFilePath, "authfile", os.Getenv("REGISTRY_AUTH_FILE"), "path of the authentication file. Default is ${XDG_RUNTIME_DIR}/containers/auth.json")
         return fs, &amp;opts
 }</span>
-
-// dockerImageOptions collects CLI flags specific to the "docker" transport, which are
-// the same across subcommands, but may be different for each image
-// (e.g. may differ between the source and destination of a copy)
-type dockerImageOptions struct {
-        global              *GlobalOptions             // May be shared across several imageOptions instances.
-        shared              *SharedImageOptions        // May be shared across several imageOptions instances.
-        deprecatedTLSVerify *DeprecatedTLSVerifyOption // May be shared across several imageOptions instances, or nil.
-        authFilePath        commonFlag.OptionalString  // Path to a */containers/auth.json (prefixed version to override shared image option).
-        credsOption         commonFlag.OptionalString  // username[:password] for accessing a registry
-        userName            commonFlag.OptionalString  // username for accessing a registry
-        password            commonFlag.OptionalString  // password for accessing a registry
-        registryToken       commonFlag.OptionalString  // token to be used directly as a Bearer token when accessing the registry
-        dockerCertPath      string                     // A directory using Docker-like *.{crt,cert,key} files for connecting to a registry or a daemon
-        tlsVerify           commonFlag.OptionalBool    // Require HTTPS and verify certificates (for docker: and docker-daemon:)
-        noCreds             bool                       // Access the registry anonymously
-}
-
-// imageOptions collects CLI flags which are the same across subcommands, but may be different for each image
-// (e.g. may differ between the source and destination of a copy)
-type imageOptions struct {
-        dockerImageOptions
-        sharedBlobDir    string // A directory to use for OCI blobs, shared across repositories
-        dockerDaemonHost string // docker-daemon: host to connect to
-}
 
 // dockerImageFlags prepares a collection of docker-transport specific CLI flags
 // writing into imageOptions, and the managed imageOptions structure.
@@ -2020,10 +2179,11 @@ func dockerImageFlags(global *GlobalOptions, shared *SharedImageOptions, depreca
 }
 
 // imageFlags prepares a collection of CLI flags writing into imageOptions, and the managed imageOptions structure.
-func ImageFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageOptions) <span class="cov8" title="1">{
+func ImageSrcFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageOptions) <span class="cov8" title="1">{
+        fs := pflag.FlagSet{}
+
         dockerFlags, opts := dockerImageFlags(global, shared, deprecatedTLSVerify, flagPrefix, credsOptionAlias)
 
-        fs := pflag.FlagSet{}
         fs.StringVar(&amp;opts.sharedBlobDir, flagPrefix+"shared-blob-dir", "", "`DIRECTORY` to use to share blobs across OCI repositories")
         fs.StringVar(&amp;opts.dockerDaemonHost, flagPrefix+"daemon-host", "", "use docker daemon host at `HOST` (docker-daemon: only)")
         fs.AddFlagSet(&amp;dockerFlags)
@@ -2148,22 +2308,11 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) <span
         <span class="cov8" title="1">return ctx, nil</span>
 }
 
-// imageDestOptions is a superset of imageOptions specialized for image destinations.
-type imageDestOptions struct {
-        *imageOptions
-        dirForceCompression         bool                   // Compress layers when saving to the dir: transport
-        dirForceDecompression       bool                   // Decompress layers when saving to the dir: transport
-        ociAcceptUncompressedLayers bool                   // Whether to accept uncompressed layers in the oci: transport
-        compressionFormat           string                 // Format to use for the compression
-        compressionLevel            commonFlag.OptionalInt // Level to use for the compression
-        precomputeDigests           bool                   // Precompute digests to dedup layers when saving to the docker: transport
-}
-
 // imageDestFlags prepares a collection of CLI flags writing into imageDestOptions, and the managed imageDestOptions structure.
 func ImageDestFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageDestOptions) <span class="cov8" title="1">{
-        genericFlags, genericOptions := ImageFlags(global, shared, deprecatedTLSVerify, flagPrefix, credsOptionAlias)
-        opts := imageDestOptions{imageOptions: genericOptions}
         fs := pflag.FlagSet{}
+        genericFlags, genericOptions := dockerImageFlags(global, shared, deprecatedTLSVerify, flagPrefix, credsOptionAlias)
+        opts := imageDestOptions{imageOptions: genericOptions}
         fs.AddFlagSet(&amp;genericFlags)
         fs.BoolVar(&amp;opts.dirForceCompression, flagPrefix+"compress", false, "Compress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
         fs.BoolVar(&amp;opts.dirForceDecompression, flagPrefix+"decompress", false, "Decompress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
@@ -2171,6 +2320,8 @@ func ImageDestFlags(global *GlobalOptions, shared *SharedImageOptions, deprecate
         fs.StringVar(&amp;opts.compressionFormat, flagPrefix+"compress-format", "", "`FORMAT` to use for the compression")
         fs.Var(commonFlag.NewOptionalIntValue(&amp;opts.compressionLevel), flagPrefix+"compress-level", "`LEVEL` to use for the compression")
         fs.BoolVar(&amp;opts.precomputeDigests, flagPrefix+"precompute-digests", false, "Precompute digests to prevent uploading layers already on the registry using the 'docker' transport.")
+        fs.StringVar(&amp;opts.sharedBlobDir, flagPrefix+"shared-blob-dir", "", "`DIRECTORY` to use to share blobs across OCI repositories")
+        fs.StringVar(&amp;opts.dockerDaemonHost, flagPrefix+"daemon-host", "", "use docker daemon host at `HOST` (docker-daemon: only)")
         return fs, &amp;opts
 }</span>
 
@@ -2301,59 +2452,9 @@ func PromptForPassphrase(privateKeyFile string, stdin, stdout *os.File) (string,
         <span class="cov0" title="0">fmt.Fprintf(stdout, "\n")
         return string(passphrase), nil</span>
 }
-
-type GlobalOptions struct {
-        LogLevel           string        // one of info, debug, trace
-        TlsVerify          bool          // Require HTTPS and verify certificates (for docker: and docker-daemon:)
-        PolicyPath         string        // Path to a signature verification policy file
-        InsecurePolicy     bool          // Use an "allow everything" signature verification policy
-        RegistriesDirPath  string        // Path to a "registries.d" registry configuration directory
-        OverrideArch       string        // Architecture to use for choosing images, instead of the runtime one
-        OverrideOS         string        // OS to use for choosing images, instead of the runtime one
-        OverrideVariant    string        // Architecture variant to use for choosing images, instead of the runtime one
-        CommandTimeout     time.Duration // Timeout for the command execution
-        RegistriesConfPath string        // Path to the "registries.conf" file
-        TmpDir             string        // Path to use for big temporary files
-        Dir                string        // working directory
-        From               string        // local storage for diskToMirror workflow
-        Port               uint16        // HTTP port used by oc-mirror's local storage instance
-        ConfigPath         string        // Path to use for imagesetconfig
-        ReleaseFrom        string        // Used for release mirroring (diskToMirror)
-        OperatorsFrom      string        // Used for operators mirroring (diskToMirror)
-        AdditionalFrom     string        // Used for additionalImages mirroring (diskToMirror)
-        Quiet              bool          // Suppress output information when copying images
-        Force              bool          // Force the copy/mirror even if there is nothing to update
-}
-
-type CopyOptions struct {
-        Global                   *GlobalOptions
-        DeprecatedTLSVerify      *DeprecatedTLSVerifyOption
-        SrcImage                 *imageOptions
-        DestImage                *imageDestOptions
-        RetryOpts                *retry.Options
-        AdditionalTags           []string  // For docker-archive: destinations, in addition to the name:tag specified as destination, also add these
-        RemoveSignatures         bool      // Do not copy signatures from the source image
-        SignByFingerprint        string    // Sign the image using a GPG key with the specified fingerprint
-        SignBySigstorePrivateKey string    // Sign the image using a sigstore private key
-        SignPassphraseFile       string    // Path pointing to a passphrase file when signing (for either signature format, but only one of them)
-        SignIdentity             string    // Identity of the signed image, must be a fully specified docker reference
-        DigestFile               string    // Write digest to this file
-        Format                   string    // Force conversion of the image to a specified format
-        All                      bool      // Copy all of the images if the source is a list
-        MultiArch                string    // How to handle multi architecture images
-        PreserveDigests          bool      // Preserve digests during copy
-        EncryptLayer             []int     // The list of layers to encrypt
-        EncryptionKeys           []string  // Keys needed to encrypt the image
-        DecryptionKeys           []string  // Keys needed to decrypt the image
-        Mode                     string    // 2 options disktoMirror or mirrorToDisk (for now)
-        Dev                      bool      // developer mode - will be removed when completed
-        Destination              string    // what to target to
-        UUID                     uuid.UUID // set uuid
-        ImageType                string    // release, catalog-operator, additionalImage
-}
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">//go: build !windows
+		<pre class="file" id="file12" style="display: none">// go: build !windows
 // build !windows
 package mirror
 
@@ -2406,7 +2507,7 @@ func ReexecIfNecessaryForImages(imageNames ...string) error <span class="cov8" t
 }
 </pre>
 		
-		<pre class="file" id="file12" style="display: none">package operator
+		<pre class="file" id="file13" style="display: none">package operator
 
 import (
         "bufio"
@@ -2428,39 +2529,8 @@ import (
 )
 
 const (
-        indexJson                   string = "index.json"
-        operatorImageExtractDir     string = "hold-operator"
-        workingDir                  string = "working-dir"
-        dockerProtocol              string = "docker://"
-        ociProtocol                 string = "oci://"
-        ociProtocolTrimmed          string = "oci:"
-        dirProtocol                 string = "dir://"
-        dirProtocolTrimmed          string = "dir:"
-        releaseImageDir             string = "release-images"
-        operatorImageDir            string = "operator-images"
-        releaseImageExtractDir      string = "hold-release"
-        releaseManifests            string = "release-manifests"
-        imageReferences             string = "image-references"
-        releaseImageExtractFullPath string = releaseImageExtractDir + "/" + releaseManifests + "/" + imageReferences
-        blobsDir                    string = "blobs/sha256"
-        diskToMirror                string = "diskToMirror"
-        mirrorToDisk                string = "mirrorToDisk"
-        errMsg                      string = "[OperatorImageCollector] %v "
-        logsFile                    string = "logs/operator.log"
+        dirProtocolTrimmed string = "dir:"
 )
-
-type CollectorInterface interface {
-        OperatorImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
-}
-
-func New(log clog.PluggableLoggerInterface,
-        config v1alpha2.ImageSetConfiguration,
-        opts mirror.CopyOptions,
-        mirror mirror.MirrorInterface,
-        manifest manifest.ManifestInterface,
-) CollectorInterface <span class="cov0" title="0">{
-        return &amp;Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
-}</span>
 
 type Collector struct {
         Log      clog.PluggableLoggerInterface
@@ -2694,7 +2764,315 @@ func batchWorkerConverter(log clog.PluggableLoggerInterface, dir string, images 
 }
 </pre>
 		
-		<pre class="file" id="file13" style="display: none">package release
+		<pre class="file" id="file14" style="display: none">package operator
+
+import (
+        "bufio"
+        "context"
+        "errors"
+        "fmt"
+        "os"
+        "strings"
+
+        "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+        "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+        clog "github.com/openshift/oc-mirror/v2/pkg/log"
+        "github.com/openshift/oc-mirror/v2/pkg/manifest"
+        "github.com/openshift/oc-mirror/v2/pkg/mirror"
+)
+
+const (
+        hashTruncLen int = 12
+)
+
+type LocalStorageCollector struct {
+        Log              clog.PluggableLoggerInterface
+        Mirror           mirror.MirrorInterface
+        Manifest         manifest.ManifestInterface
+        Config           v1alpha2.ImageSetConfiguration
+        Opts             mirror.CopyOptions
+        LocalStorageFQDN string
+}
+
+// OperatorImageCollector - this looks into the operator index image
+// taking into account the mode we are in (mirrorToDisk, diskToMirror)
+// the image is downloaded (oci format) and the index.json is inspected
+// once unmarshalled, the links to manifests are inspected
+func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) <span class="cov0" title="0">{
+
+        var (
+                allImages []v1alpha3.CopyImageSchema
+                label     string
+                dir       string
+        )
+        compare := make(map[string]v1alpha3.ISCPackage)
+        relatedImages := make(map[string][]v1alpha3.RelatedImage)
+
+        // compile a map to compare channels,min &amp; max versions
+        for _, ops := range o.Config.Mirror.Operators </span><span class="cov0" title="0">{
+                o.Log.Info("isc operators: %s\n", ops.Catalog)
+                for _, pkg := range ops.Packages </span><span class="cov0" title="0">{
+                        o.Log.Info("catalog packages: %s \n", pkg.Name)
+                        for _, channel := range pkg.Channels </span><span class="cov0" title="0">{
+                                compare[pkg.Name] = v1alpha3.ISCPackage{Channel: channel.Name, MinVersion: channel.MinVersion, MaxVersion: channel.MaxVersion, Full: ops.Full}
+                                o.Log.Info("channels: %v \n", compare)
+                        }</span>
+                }
+        }
+        <span class="cov0" title="0">f, err := os.Create(logsFile)
+        if err != nil </span><span class="cov0" title="0">{
+                o.Log.Error(errMsg, err)
+        }</span>
+        <span class="cov0" title="0">writer := bufio.NewWriter(f)
+        defer f.Close()
+        for _, op := range o.Config.Mirror.Operators </span><span class="cov0" title="0">{
+                // download the operator index image
+                o.Log.Info("copying operator image %v", op.Catalog)
+                hld := strings.Split(op.Catalog, "/")
+                imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
+                cacheDir := strings.Join([]string{o.Opts.Global.Dir, operatorImageExtractDir, imageIndexDir}, "/")
+                dir = strings.Join([]string{o.Opts.Global.Dir, operatorImageDir, imageIndexDir}, "/")
+                if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) </span><span class="cov0" title="0">{
+                        err := os.MkdirAll(dir, 0755)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, err
+                        }</span>
+                        <span class="cov0" title="0">src := dockerProtocol + op.Catalog
+                        dest := ociProtocolTrimmed + dir
+                        err = o.Mirror.Run(ctx, src, dest, "copy", &amp;o.Opts, *writer)
+                        writer.Flush()
+                        if err != nil </span><span class="cov0" title="0">{
+                                o.Log.Error(errMsg, err)
+                        }</span>
+                        // read the logs
+                        <span class="cov0" title="0">f, _ := os.ReadFile(logsFile)
+                        lines := strings.Split(string(f), "\n")
+                        for _, s := range lines </span><span class="cov0" title="0">{
+                                if len(s) &gt; 0 </span><span class="cov0" title="0">{
+                                        o.Log.Debug("%s ", strings.ToLower(s))
+                                }</span>
+                        }
+                }
+
+                // it's in oci format so we can go directly to the index.json file
+                <span class="cov0" title="0">oci, err := o.Manifest.GetImageIndex(dir)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+
+                //read the link to the manifest
+                <span class="cov0" title="0">if len(oci.Manifests) == 0 </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] no manifests found for %s ", op.Catalog)
+                }</span> else<span class="cov0" title="0"> {
+                        if !strings.Contains(oci.Manifests[0].Digest, "sha256") </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to incorrect for %s ", op.Catalog)
+                        }</span>
+                }
+                <span class="cov0" title="0">manifest := strings.Split(oci.Manifests[0].Digest, ":")[1]
+                o.Log.Info("manifest %v", manifest)
+
+                // read the operator image manifest
+                manifestDir := strings.Join([]string{dir, blobsDir, manifest}, "/")
+                oci, err = o.Manifest.GetImageManifest(manifestDir)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+
+                // read the config digest to get the detailed manifest
+                // looking for the lable to search for a specific folder
+                <span class="cov0" title="0">catalogDir := strings.Join([]string{dir, blobsDir, strings.Split(oci.Config.Digest, ":")[1]}, "/")
+                ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+
+                <span class="cov0" title="0">label = ocs.Config.Labels.OperatorsOperatorframeworkIoIndexConfigsV1
+                o.Log.Info("label %s", label)
+
+                // untar all the blobs for the operator
+                // if the layer with "label (from previous step) is found to a specific folder"
+                fromDir := strings.Join([]string{dir, blobsDir}, "/")
+                err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, label, oci)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+
+                // select all packages
+                // this is the equivalent of the headOnly mode
+                // only the latest version of each operator will be selected
+                <span class="cov0" title="0">if len(op.Packages) == 0 </span><span class="cov0" title="0">{
+                        relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(cacheDir, label)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, err
+                        }</span>
+                } else<span class="cov0" title="0"> {
+                        // iterate through each package
+                        relatedImages, err = o.Manifest.GetRelatedImagesFromCatalogByFilter(cacheDir, label, op, compare)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return []v1alpha3.CopyImageSchema{}, err
+                        }</span>
+                }
+                <span class="cov0" title="0">relatedImages["index"] = []v1alpha3.RelatedImage{
+                        {
+                                Name:  "index",
+                                Image: op.Catalog,
+                        },
+                }</span>
+        }
+
+        <span class="cov0" title="0">o.Log.Info("related images length %d ", len(relatedImages))
+        var count = 0
+        for _, v := range relatedImages </span><span class="cov0" title="0">{
+                count = count + len(v)
+        }</span>
+        <span class="cov0" title="0">o.Log.Info("images to copy (before duplicates) %d ", count)
+        // check the mode
+        if o.Opts.Mode == mirrorToDisk </span><span class="cov0" title="0">{
+
+                allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+        }
+
+        <span class="cov0" title="0">if o.Opts.Mode == diskToMirror </span><span class="cov0" title="0">{
+                allImages, err = o.prepareD2MCopyBatch(o.Log, dir, relatedImages)
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, err
+                }</span>
+        }
+        <span class="cov0" title="0">return allImages, nil</span>
+}
+
+func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov0" title="0">{
+        var result []v1alpha3.CopyImageSchema
+        for _, relatedImgs := range images </span><span class="cov0" title="0">{
+                for _, img := range relatedImgs </span><span class="cov0" title="0">{
+                        // TODO Make this more complete
+                        // This logic will be useful for operators and releases
+                        // strip the domain name from the img.Name
+                        var src string
+                        var dest string
+
+                        domainAndPathComps := img.Image
+                        // pathComponents := img.Name
+                        // temporarily strip out the transport
+                        transportAndRef := strings.Split(domainAndPathComps, "://")
+                        if len(transportAndRef) &gt; 1 </span><span class="cov0" title="0">{
+                                domainAndPathComps = transportAndRef[1]
+                        }</span>
+                        <span class="cov0" title="0">src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
+
+                        if isImageByDigest(img.Image) </span><span class="cov0" title="0">{
+                                dest = strings.Join([]string{o.Opts.Destination, imageName(img.Image) + ":" + imageHash(img.Image)[:hashTruncLen]}, "/")
+                        }</span> else<span class="cov0" title="0"> {
+                                dest = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+                        }</span>
+
+                        // the following is for having the destination without the initial domain name =&gt; later
+                        // domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
+                        // if len(domainAndPathCompsArray) &gt; 2 {
+                        //         pathComponents = strings.Join(domainAndPathCompsArray[1:], "/")
+                        // } else {
+                        //         return allImages, fmt.Errorf("unable to parse image %s correctly", img.Name)
+                        // }
+                        // src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents}, "/")
+                        // dst = strings.Join([]string{o.Opts.Destination, pathComponents}, "/") // already has a transport protocol
+
+                        <span class="cov0" title="0">if src == "" || dest == "" </span><span class="cov0" title="0">{
+                                return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
+                        }</span>
+
+                        <span class="cov0" title="0">o.Log.Debug("source %s", src)
+                        o.Log.Debug("destination %s", dest)
+                        result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})</span>
+                }
+        }
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) <span class="cov0" title="0">{
+        var result []v1alpha3.CopyImageSchema
+        for _, relatedImgs := range images </span><span class="cov0" title="0">{
+                for _, img := range relatedImgs </span><span class="cov0" title="0">{
+                        imgRef := img.Image
+                        var src string
+                        var dest string
+                        // no transport was provided, assume docker://
+                        if !strings.Contains(src, "://") </span><span class="cov0" title="0">{
+                                src = dockerProtocol + imgRef
+                        }</span> else<span class="cov0" title="0"> {
+                                transportAndRef := strings.Split(imgRef, "://")
+                                // because we are reusing this to construct dest
+                                imgRef = transportAndRef[1]
+                        }</span>
+
+                        <span class="cov0" title="0">if isImageByDigest(imgRef) </span><span class="cov0" title="0">{
+                                dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imageName(imgRef) + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+                        }</span> else<span class="cov0" title="0"> {
+                                dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgRef}, "/")
+                        }</span>
+
+                        <span class="cov0" title="0">o.Log.Debug("source %s", src)
+                        o.Log.Debug("destination %s", dest)
+                        result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})</span>
+
+                }
+        }
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+func isImageByDigest(imgRef string) bool <span class="cov0" title="0">{
+        return strings.Contains(imgRef, "@")
+}</span>
+
+func imageName(imgRef string) string <span class="cov0" title="0">{
+        var imageName string
+        imgSplit := strings.Split(imgRef, "@")
+        if len(imgSplit) &gt; 1 </span><span class="cov0" title="0">{
+                imageName = imgSplit[0]
+        }</span>
+
+        <span class="cov0" title="0">return imageName</span>
+}
+
+func imageHash(imgRef string) string <span class="cov0" title="0">{
+        var hash string
+        imgSplit := strings.Split(imgRef, "@")
+        if len(imgSplit) &gt; 1 </span><span class="cov0" title="0">{
+                hash = strings.Split(imgSplit[1], ":")[1]
+        }</span>
+
+        <span class="cov0" title="0">return hash</span>
+}
+</pre>
+		
+		<pre class="file" id="file15" style="display: none">package operator
+
+import (
+        "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+        clog "github.com/openshift/oc-mirror/v2/pkg/log"
+        "github.com/openshift/oc-mirror/v2/pkg/mirror"
+        "github.com/openshift/oc-mirror/v2/pkg/manifest"
+)
+
+
+func New(log clog.PluggableLoggerInterface,
+                config v1alpha2.ImageSetConfiguration,
+                opts mirror.CopyOptions,
+                mirror mirror.MirrorInterface,
+                manifest manifest.ManifestInterface,
+                localStorageFQDN string,
+) CollectorInterface <span class="cov0" title="0">{
+        if localStorageFQDN != "" </span><span class="cov0" title="0">{
+                return &amp;LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
+        }</span> else<span class="cov0" title="0"> {
+                return &amp;Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file16" style="display: none">package release
 
 import (
         "bytes"
@@ -3122,6 +3500,8 @@ func (o *SignatureSchema) GenerateReleaseSignatures(ctx context.Context, rd []v1
                         o.Log.Trace("field LiteralData %v", md.LiteralData)
                         o.Log.Trace("field SignatureError %v", md.SignatureError)
                         o.Log.Trace("field Signature %v", md.Signature)
+                        // o.Log.Trace("field SignatureV3 %v", md.SignatureV3.IssuerKeyId)
+                        // o.Log.Trace("field SignatureV3 %v", md.SignatureV3.CreationTime)
 
                         if md.Signature != nil </span><span class="cov0" title="0">{
                                 if md.Signature.SigLifetimeSecs != nil </span><span class="cov0" title="0">{
@@ -3161,7 +3541,7 @@ func (o *SignatureSchema) GenerateReleaseSignatures(ctx context.Context, rd []v1
 }
 </pre>
 		
-		<pre class="file" id="file14" style="display: none">package release
+		<pre class="file" id="file17" style="display: none">package release
 
 import (
         "crypto/tls"
@@ -3301,7 +3681,7 @@ func getTLSConfig() (*tls.Config, error) <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file15" style="display: none">package release
+		<pre class="file" id="file18" style="display: none">package release
 
 import (
         "bufio"
@@ -3331,6 +3711,7 @@ const (
         dirProtocolTrimmed          string = "dir:"
         releaseImageDir             string = "release-images"
         releaseIndex                string = "release-index"
+        releaseFiltersDir           string = "release-filters"
         operatorImageDir            string = "operator-images"
         releaseImageExtractDir      string = "hold-release"
         releaseManifests            string = "release-manifests"
@@ -3401,12 +3782,12 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
                                 if err != nil </span><span class="cov8" title="1">{
                                         return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                                 }</span>
-                                <span class="cov0" title="0">o.Log.Debug("copied release index image %s ", value.Source)
+                                <span class="cov8" title="1">o.Log.Debug("copied release index image %s ", value.Source)
 
                                 // TODO: create common function to show logs
                                 f, _ := os.ReadFile(logFile)
                                 lines := strings.Split(string(f), "\n")
-                                for _, s := range lines </span><span class="cov0" title="0">{
+                                for _, s := range lines </span><span class="cov8" title="1">{
                                         if len(s) &gt; 0 </span><span class="cov0" title="0">{
                                                 o.Log.Debug(" %s ", strings.ToLower(s))
                                         }</span>
@@ -3542,7 +3923,7 @@ func findRelatedImage(name string, imgs []v1alpha3.RelatedImage) string <span cl
 }
 </pre>
 		
-		<pre class="file" id="file16" style="display: none">package release
+		<pre class="file" id="file19" style="display: none">package release
 
 import (
         "context"
@@ -4097,7 +4478,7 @@ func (e *edge) UnmarshalJSON(data []byte) error <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file17" style="display: none">package release
+		<pre class="file" id="file20" style="display: none">package release
 
 import (
         "errors"
@@ -4158,11 +4539,13 @@ func findReleases(channels []v1alpha2.ReleaseChannel, min bool) (map[string]semv
 }
 </pre>
 		
-		<pre class="file" id="file18" style="display: none">package release
+		<pre class="file" id="file21" style="display: none">package release
 
 import (
         "bufio"
         "context"
+        "crypto/md5"
+        "encoding/json"
         "errors"
         "fmt"
         "os"
@@ -4175,6 +4558,11 @@ import (
         "github.com/openshift/oc-mirror/v2/pkg/manifest"
         "github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
+
+type releasesForFilter struct {
+        Filter   v1alpha2.Platform          `json:"filter"`
+        Releases []v1alpha3.CopyImageSchema `json:"releases"`
+}
 
 const (
         fileProtocol string = "file://"
@@ -4204,9 +4592,16 @@ type LocalStorageCollector struct {
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) <span class="cov8" title="1">{
         var allImages []v1alpha3.CopyImageSchema
         var imageIndexDir string
-
+        filterCopy := o.Config.Mirror.Platform.DeepCopy()
         if o.Opts.Mode == mirrorToDisk </span><span class="cov8" title="1">{
                 releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
+
+                releasesForFilter := releasesForFilter{
+                        Filter: filterCopy,
+                        //TODO check if here I cannot directly use the releases from L56
+                        Releases: []v1alpha3.CopyImageSchema{},
+                }
+
                 f, err := os.Create(logFile)
                 if err != nil </span><span class="cov8" title="1">{
                         o.Log.Error("[ReleaseImageCollector] %v", err)
@@ -4231,7 +4626,13 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
                                 if err != nil </span><span class="cov8" title="1">{
                                         return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                                 }</span>
-                                <span class="cov0" title="0">o.Log.Debug("copied release index image %s ", value.Source)
+                                //Save what has been copied so that we can reuse it during Disk To Mirror flow
+                                <span class="cov0" title="0">r := v1alpha3.CopyImageSchema{
+                                        Source:      src,
+                                        Destination: dest,
+                                }
+                                releasesForFilter.Releases = append(releasesForFilter.Releases, r)
+                                o.Log.Debug("copied release index image %s ", value.Source)
 
                                 // TODO: create common function to show logs
                                 f, _ := os.ReadFile(logFile)
@@ -4287,10 +4688,15 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
                         <span class="cov8" title="1">allImages = append(allImages, tmpAllImages...)</span>
 
                 }
+                // save the releasesForFilter to json cache,
+                // so that it can be used during diskToMirror flow
+                <span class="cov8" title="1">err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
+                if err != nil </span><span class="cov0" title="0">{
+                        return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinatti response: %v", err)
+                }</span>
         } else<span class="cov8" title="1"> if o.Opts.Mode == diskToMirror </span><span class="cov8" title="1">{
-                cacheDir := filepath.Join(o.Opts.Global.Dir, strings.TrimPrefix(o.Opts.Global.From, fileProtocol), releaseImageExtractDir)
 
-                releases, err := o.identifyReleaseFolders(cacheDir)
+                releases, err := o.identifyReleaseFolders()
                 if err != nil </span><span class="cov0" title="0">{
                         return allImages, err
                 }</span>
@@ -4298,7 +4704,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
                 for _, releaseDir := range releases </span><span class="cov8" title="1">{
 
                         // get all release images from manifest (json)
-                        allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir + "/" + imageReferences)
+                        imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
+                        allRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
                         if err != nil </span><span class="cov0" title="0">{
                                 return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
                         }</span>
@@ -4377,64 +4784,62 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
         <span class="cov8" title="1">return result, nil</span>
 }
 
-func (o *LocalStorageCollector) identifyReleaseFolders(cacheDir string) ([]string, error) <span class="cov8" title="1">{
-        releases := make([]string, 0)
-        // walk the cacheDir
-        errFP := filepath.Walk(cacheDir, func(path string, info os.FileInfo, err error) error </span><span class="cov8" title="1">{
-                if err == nil &amp;&amp; info.Name() == "release-metadata" </span><span class="cov8" title="1">{
-                        // example : working-dir/home/skhoury/m2d/hold-release/ocp-release/4.13.9-x86_64/release-manifests
-                        o.Log.Debug("checking if %s is within the filter", path)
-                        version_platform_path := filepath.Dir(filepath.Dir(path))
-                        version_platform := filepath.Base(version_platform_path)
-                        distribution_path := filepath.Dir(version_platform_path)
-                        distribution := filepath.Base(distribution_path)
-                        // check if this is the requested distribution: ocp or okd
-                        if o.Config.Mirror.Platform.Release != "" </span><span class="cov0" title="0">{
-                                // compare against the release distribution specified
-                                if !strings.Contains(distribution, o.Config.Mirror.Platform.Release) </span><span class="cov0" title="0">{
-                                        return nil
-                                }</span>
-                        } else<span class="cov8" title="1"> if !strings.Contains(distribution, "ocp") </span><span class="cov0" title="0">{
-                                // ocp is implied in case the release is not specified in config
-                                return nil
-                        }</span>
-                        <span class="cov8" title="1">array := strings.Split(version_platform, "-")
-                        if len(array) != 2 </span><span class="cov0" title="0">{
-                                return fmt.Errorf("expecting folder name to contain version and platform : %s", version_platform)
-                        }</span>
-                        //version := array[0]
-                        <span class="cov8" title="1">platform := array[1]
-
-                        // compare against the platform requested in config
-                        platformMatch := false
-                        if len(o.Config.Mirror.Platform.Architectures) &gt; 0 </span><span class="cov0" title="0">{
-                                for _, p := range o.Config.Mirror.Platform.Architectures </span><span class="cov0" title="0">{
-                                        if platform == p || (platform == "x86_64" &amp;&amp; p == "amd64") </span><span class="cov0" title="0">{
-                                                platformMatch = true
-                                                break</span>
-                                        }
-                                }
-                        } else<span class="cov8" title="1"> {
-                                platformMatch = platform == "x86_64"
-                        }</span>
-                        <span class="cov8" title="1">if !platformMatch </span><span class="cov0" title="0">{
-                                return nil
-                        }</span>
-
-                        // TODO compare against the channels requested
-
-                        // TODO compare against the version ranges requested
-                        <span class="cov8" title="1">releases = append(releases, filepath.Dir(path))</span>
-                } else<span class="cov8" title="1"> if err != nil </span><span class="cov0" title="0">{
-                        return err
-                }</span>
-                <span class="cov8" title="1">return nil</span>
-        })
-        <span class="cov8" title="1">if errFP != nil </span><span class="cov0" title="0">{
-                return []string{}, errFP
+func (o *LocalStorageCollector) identifyReleaseFolders() ([]string, error) <span class="cov8" title="1">{
+        //Find the filter file, containing all the images that correspond to the filter
+        rff := releasesForFilter{
+                Filter: o.Config.Mirror.Platform,
+        }
+        filter := fmt.Sprintf("%v", rff.Filter)
+        filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
+        filterFilePath := filepath.Join(o.Opts.Global.Dir, strings.TrimPrefix(o.Opts.Global.From, fileProtocol), releaseFiltersDir, filterFileName)
+        dat, err := os.ReadFile(filterFilePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("unable to read file %s: %v", filterFilePath, err)
         }</span>
 
-        <span class="cov8" title="1">return releases, nil</span>
+        <span class="cov8" title="1">err = json.Unmarshal(dat, &amp;rff)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("unable to unmarshall contents of %s: %v", filterFilePath, err)
+        }</span>
+
+        <span class="cov8" title="1">releaseImages := rff.Releases
+        releaseFolders := []string{}
+        for _, img := range releaseImages </span><span class="cov8" title="1">{
+                releasePath := strings.TrimPrefix(img.Destination, ociProtocol)
+                releasePath = strings.TrimPrefix(releasePath, ociProtocolTrimmed)
+                releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
+                releaseFolders = append(releaseFolders, releaseHoldPath)
+        }</span>
+        <span class="cov8" title="1">return releaseFolders, nil</span>
+}
+
+func (o *LocalStorageCollector) saveReleasesForFilter(r releasesForFilter, to string) error <span class="cov8" title="1">{
+        toJson, err := json.Marshal(r)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">filter := fmt.Sprintf("%v", r.Filter)
+        filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
+
+        if _, err := os.Stat(to); errors.Is(err, os.ErrNotExist) </span><span class="cov0" title="0">{
+                o.Log.Info("copying  cincinatti response to %s", to)
+                err := os.MkdirAll(to, 0755)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">filterFile, err := os.Create(filepath.Join(to, filterFileName))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer filterFile.Close()
+
+        _, err = filterFile.Write([]byte(toJson))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">return nil</span>
 }
 </pre>
 		

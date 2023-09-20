@@ -57,7 +57,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 
 		releasesForFilter := releasesForFilter{
 			Filter: filterCopy,
-			//TODO check if here I cannot directly use the releases from L56
+			//cannot directly use the array releases here as the Destinations are still empty
 			Releases: []v1alpha3.CopyImageSchema{},
 		}
 
@@ -73,24 +73,27 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
 			cacheDir := filepath.Join(o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir)
 			dir := filepath.Join(o.Opts.Global.Dir, releaseImageDir, imageIndexDir)
+
+			//Save to releasesForFilter so that we can reuse it during Disk To Mirror flow
+			src := dockerProtocol + value.Source
+			dest := ociProtocolTrimmed + dir
+			r := v1alpha3.CopyImageSchema{
+				Source:      src,
+				Destination: dest,
+			}
+			releasesForFilter.Releases = append(releasesForFilter.Releases, r)
+
 			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 				o.Log.Info("copying  %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 				}
-				src := dockerProtocol + value.Source
-				dest := ociProtocolTrimmed + dir
+
 				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 				}
-				//Save what has been copied so that we can reuse it during Disk To Mirror flow
-				r := v1alpha3.CopyImageSchema{
-					Source:      src,
-					Destination: dest,
-				}
-				releasesForFilter.Releases = append(releasesForFilter.Releases, r)
 				o.Log.Debug("copied release index image %s ", value.Source)
 
 				// TODO: create common function to show logs
@@ -155,28 +158,30 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		}
 	} else if o.Opts.Mode == diskToMirror {
 
-		releases, err := o.identifyReleaseFolders()
+		releaseImages, releaseFolders, err := o.identifyReleases()
 		if err != nil {
 			return allImages, err
 		}
-		o.Log.Debug("found %d releases that match the filter", len(releases))
-		for _, releaseDir := range releases {
+		allRelatedImages := []v1alpha3.RelatedImage{}
+
+		// add the releaseImages so that they are added to the list of images to copy
+		allRelatedImages = append(allRelatedImages, releaseImages...)
+
+		for _, releaseDir := range releaseFolders {
 
 			// get all release images from manifest (json)
 			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
-			allRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
+			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
-			// TODO
-			//allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
-
-			tmpAllImages, err := o.prepareD2MCopyBatch(o.Log, allRelatedImages)
-			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, err
-			}
-			allImages = append(allImages, tmpAllImages...)
+			allRelatedImages = append(allRelatedImages, releaseRelatedImages...)
 		}
+		allImages, err = o.prepareD2MCopyBatch(o.Log, allRelatedImages)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
+		}
+
 	}
 
 	return allImages, nil
@@ -198,8 +203,8 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 		if len(transportAndRef) > 1 {
 			domainAndPathComps = transportAndRef[1]
 		}
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
-		dst = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, domainAndPathComps}, "/")
+		dst = strings.Join([]string{o.Opts.Destination, domainAndPathComps}, "/")
 
 		// the following is for having the destination without the initial domain name => later
 		// domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
@@ -243,33 +248,35 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 	return result, nil
 }
 
-func (o *LocalStorageCollector) identifyReleaseFolders() ([]string, error) {
+func (o *LocalStorageCollector) identifyReleases() ([]v1alpha3.RelatedImage, []string, error) {
 	//Find the filter file, containing all the images that correspond to the filter
 	rff := releasesForFilter{
 		Filter: o.Config.Mirror.Platform,
 	}
 	filter := fmt.Sprintf("%v", rff.Filter)
 	filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
-	filterFilePath := filepath.Join(o.Opts.Global.Dir, strings.TrimPrefix(o.Opts.Global.From, fileProtocol), releaseFiltersDir, filterFileName)
+	filterFilePath := filepath.Join(o.Opts.Global.Dir, releaseFiltersDir, filterFileName)
 	dat, err := os.ReadFile(filterFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read file %s: %v", filterFilePath, err)
+		return nil, nil, fmt.Errorf("unable to read file %s: %v", filterFilePath, err)
 	}
 
 	err = json.Unmarshal(dat, &rff)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall contents of %s: %v", filterFilePath, err)
+		return nil, nil, fmt.Errorf("unable to unmarshall contents of %s: %v", filterFilePath, err)
 	}
 
-	releaseImages := rff.Releases
+	releaseImageCopies := rff.Releases
 	releaseFolders := []string{}
-	for _, img := range releaseImages {
-		releasePath := strings.TrimPrefix(img.Destination, ociProtocol)
+	releaseImages := []v1alpha3.RelatedImage{}
+	for _, copy := range releaseImageCopies {
+		releasePath := strings.TrimPrefix(copy.Destination, ociProtocol)
 		releasePath = strings.TrimPrefix(releasePath, ociProtocolTrimmed)
 		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
 		releaseFolders = append(releaseFolders, releaseHoldPath)
+		releaseImages = append(releaseImages, v1alpha3.RelatedImage{Name: copy.Source, Image: copy.Source})
 	}
-	return releaseFolders, nil
+	return releaseImages, releaseFolders, nil
 }
 
 func (o *LocalStorageCollector) saveReleasesForFilter(r releasesForFilter, to string) error {
