@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/distribution/manifest"
+	"github.com/distribution/distribution/v3/manifest"
+	_ "github.com/distribution/distribution/v3/manifest/manifestlist"
+	_ "github.com/distribution/distribution/v3/manifest/schema2"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"

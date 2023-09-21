@@ -41,7 +41,7 @@ func NewContext(skipVerification bool) (*registryclient.Context, error) {
 	}
 
 	if len(registryConfig) != 0 {
-		creds, err := dockercredentials.NewCredentialStoreFactory(registryConfig)
+		creds, err := dockercredentials.NewCredentialStoreFactory(registryConfig, true)
 		if err != nil {
 			return nil, err
 		}
