@@ -26,9 +26,9 @@ function check_bundles() {
   mv index.json $index_dir
 
   # extract the cache from the tar file
-  local cache_dir="${extraction_dir}/tmp/cache"
-  tar xvf $extraction_dir/temp.tar /tmp
-  mv tmp "${extraction_dir}"
+  local cache_dir="${extraction_dir}/cache"
+  tar xvf $extraction_dir/temp.tar /cache
+  mv cache "${extraction_dir}"
 
   # extract the opm binary from the tar file
   local opm_path="${extraction_dir}/opm"
