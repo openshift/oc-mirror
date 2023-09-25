@@ -23,10 +23,6 @@ type releasesForFilter struct {
 	Releases []v1alpha3.CopyImageSchema `json:"releases"`
 }
 
-const (
-	fileProtocol string = "file://"
-)
-
 func NewWithLocalStorage(log clog.PluggableLoggerInterface,
 	config v1alpha2.ImageSetConfiguration,
 	opts mirror.CopyOptions,
@@ -154,7 +150,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		// so that it can be used during diskToMirror flow
 		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinatti response: %v", err)
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinnati response: %v", err)
 		}
 	} else if o.Opts.Mode == diskToMirror {
 
@@ -288,7 +284,7 @@ func (o *LocalStorageCollector) saveReleasesForFilter(r releasesForFilter, to st
 	filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
 
 	if _, err := os.Stat(to); errors.Is(err, os.ErrNotExist) {
-		o.Log.Info("copying  cincinatti response to %s", to)
+		o.Log.Info("copying  cincinnati response to %s", to)
 		err := os.MkdirAll(to, 0755)
 		if err != nil {
 			return err
