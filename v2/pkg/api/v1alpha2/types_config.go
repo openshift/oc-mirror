@@ -65,6 +65,20 @@ type Platform struct {
 	Release string `json:"release,omitempty"`
 }
 
+func (p Platform) DeepCopy() Platform {
+	platformCopy := Platform{
+		Graph: p.Graph,
+	}
+
+	platformCopy.Channels = make([]ReleaseChannel, len(p.Channels))
+	copy(platformCopy.Channels, p.Channels)
+
+	platformCopy.Architectures = make([]string, len(p.Architectures))
+	copy(platformCopy.Architectures, p.Architectures)
+
+	return platformCopy
+}
+
 // ReleaseChannel defines the configuration for individual
 // OCP and OKD channels
 type ReleaseChannel struct {
