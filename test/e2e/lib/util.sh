@@ -63,7 +63,8 @@ function install_deps() {
 
     # For ppc64le, this is compiled with Power9 compatibility (does not run on Power8)
     ARCH=$(arch | sed 's|aarch64|arm64|g')
-    curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
+    curl -o opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
+    mv opm $GOBIN/
     chmod +x $GOBIN/opm
 
     GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
