@@ -174,7 +174,7 @@ function setup_operator_testdata() {
     INDEX_PATH=latest
   fi
 
-  local CATALOG_ARCH="ARCH=$(arch | sed 's|aarch64|arm64|g')
+  local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
 
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
