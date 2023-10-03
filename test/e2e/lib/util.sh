@@ -173,6 +173,9 @@ function setup_operator_testdata() {
   else
     INDEX_PATH=latest
   fi
+
+  local CATALOG_ARCH="ARCH=$(arch | sed 's|aarch64|arm64|g')
+
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
@@ -183,6 +186,7 @@ function setup_operator_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@METADATA_ARCH@'"$METADATA_ARCH"'@g' {} \;
 }
 
 # setup_helm_testdata will move required
