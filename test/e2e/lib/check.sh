@@ -3,6 +3,7 @@
 # check_bundles ensures the number and names of bundles in catalog_image's index.json
 # matches that of exp_bundles_list, and that all bundle images are pullable.
 function check_bundles() {
+  local catalog_image="${1:?catalog image required}"
   local exp_bundles_list="${2:?expected bundles list must be set}"
   local disconn_registry="${3:?disconnected registry host name must be set}"
   local ns="${4:-""}"
@@ -19,6 +20,7 @@ function check_bundles() {
   # catalog-extract go code replaces crane extract, which was facing an issue
   # it extracts the contents of the catalog image to a tar archive.
   go run -mod=readonly test/e2e/lib/catalog-extract/main.go $catalog_image $extraction_dir/temp.tar
+
   # extract declarative config from tar file
   tar xvf $extraction_dir/temp.tar /configs/index.json --strip-components=1 
   mv index.json $index_dir
@@ -33,7 +35,6 @@ function check_bundles() {
   tar xvf $extraction_dir/temp.tar bin/opm
   mv bin/opm "${extraction_dir}"
   chmod +x $opm_path
-
 
   $opm_path validate $index_dir
 
