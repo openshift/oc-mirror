@@ -3,12 +3,8 @@
 # check_bundles ensures the number and names of bundles in catalog_image's index.json
 # matches that of exp_bundles_list, and that all bundle images are pullable.
 function check_bundles() {
-  local catalog_image="${1:?catalog image required}"
-
-  if [ "$(arch)" != "x86_64" ]
-  then
-    catalog_image="quay.io/operator-framework/opm:v1.27.1"
-  fi
+  local catalog_arch="$(arch | sed 's|aarch64|arm64|g')"
+  local catalog_image="${1:?catalog image required}-${catalog_arch}"
 
   local exp_bundles_list="${2:?expected bundles list must be set}"
   local disconn_registry="${3:?disconnected registry host name must be set}"

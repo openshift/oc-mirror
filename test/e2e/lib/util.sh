@@ -122,8 +122,6 @@ function prep_registry() {
     CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
 
-
-
 # parse_args will parse common arguments
 # for each workflow function
 function parse_args() {
