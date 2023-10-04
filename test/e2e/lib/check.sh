@@ -109,7 +109,7 @@ function check_sequence_number() {
 # check_image_removed will check if an image has been pruned from the registry
 function check_image_removed() {
    local removed_image="${1:?removed image required}"
-   set -e
+
    output=$(crane digest --insecure $removed_image 2>&1) && returncode=$? || returncode=$?
    if [[ $returncode != 1 ]]; then
       echo "image $removed_image still exists in registry"

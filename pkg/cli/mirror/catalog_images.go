@@ -240,7 +240,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		layersToDelete = append(layersToDelete, deletedConfigLayer)
 
 		if withCacheRegeneration {
-
+			klog.Infof("With CacheRegeneration is running")
 			opmCmdPath := filepath.Join(artifactDir, config.OpmBinDir, "opm")
 			_, err = os.Stat(opmCmdPath)
 			if err != nil {

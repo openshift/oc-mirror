@@ -31,6 +31,7 @@ CATALOG_ARCH="-$(arch | sed 's|aarch64|arm64|g')"
 
 # Test full catalog mode.
 function full_catalog() {
+    set -x
     workflow_full imageset-config-full.yaml "test-catalog-latest${CATALOG_ARCH}" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest${CATALOG_ARCH} \
     "bar.v0.1.0 bar.v0.2.0 bar.v1.0.0 baz.v1.0.0 baz.v1.0.1 baz.v1.1.0 foo.v0.1.0 foo.v0.2.0 foo.v0.3.0 foo.v0.3.1" \
