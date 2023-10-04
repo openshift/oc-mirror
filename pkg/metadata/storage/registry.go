@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/docker/distribution/registry/client/auth"
+	"github.com/distribution/distribution/v3/registry/client/auth"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"

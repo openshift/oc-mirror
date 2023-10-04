@@ -186,7 +186,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 
 		// Create release mapping and get images list
 		// before mirroring actions
-		mappings, err := o.getMapping(opts)
+		mappings, err := o.getMapping(opts, ctx)
 		if err != nil {
 			return mmapping, fmt.Errorf("error retrieving mapping information for %s: %v", img, err)
 		}
@@ -354,7 +354,7 @@ func (o *ReleaseOptions) newMirrorReleaseOptions(fileDir string) (*release.Mirro
 }
 
 // getMapping will run release mirror with ToMirror set to true to get mapping information
-func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedImageMapping, error) {
+func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions, ctx context.Context) (image.TypedImageMapping, error) {
 	mappingPath := filepath.Join(o.Dir, mappingFile)
 	file, err := os.Create(filepath.Clean(mappingPath))
 	defer os.Remove(mappingPath)
@@ -369,7 +369,7 @@ func (o *ReleaseOptions) getMapping(opts *release.MirrorOptions) (image.TypedIma
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
-	if err := opts.Run(); err != nil {
+	if err := opts.Run(ctx); err != nil {
 		return nil, err
 	}
 
