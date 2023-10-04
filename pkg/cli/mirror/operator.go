@@ -155,20 +155,21 @@ func (o *OperatorOptions) run(
 		defer cleanup()
 	}
 
-	reg, err := o.createRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("error creating container registry: %v", err)
-	}
-	defer reg.Destroy()
-
 	mmapping := image.TypedImageMapping{}
 	for _, ctlg := range cfg.Mirror.Operators {
+		reg, err := o.createRegistry()
+		if err != nil {
+			return nil, fmt.Errorf("error creating container registry: %v", err)
+		}
+
 		ctlgRef, err := image.ParseReference(ctlg.Catalog)
 		if err != nil {
+			reg.Destroy()
 			return nil, err
 		}
 		targetName, err := ctlg.GetUniqueName()
 		if err != nil {
+			reg.Destroy()
 			return nil, err
 		}
 		if ctlg.IsFBCOCI() {
@@ -176,12 +177,14 @@ func (o *OperatorOptions) run(
 		}
 		targetCtlg, err := image.ParseReference(targetName)
 		if err != nil {
+			reg.Destroy()
 			return nil, fmt.Errorf("error parsing catalog: %v", err)
 		}
 
 		// Render the catalog to mirror into a declarative config.
 		dc, ic, err := renderDC(ctx, reg, ctlg)
 		if err != nil {
+			reg.Destroy()
 			return nil, o.checkValidationErr(err)
 		}
 
@@ -193,15 +196,17 @@ func (o *OperatorOptions) run(
 		}
 		err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
 		if err != nil {
+			reg.Destroy()
 			return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
 		}
 
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
 		if err != nil {
+			reg.Destroy()
 			return nil, err
 		}
 		mmapping.Merge(mappings)
-
+		reg.Destroy()
 	}
 
 	return mmapping, nil
