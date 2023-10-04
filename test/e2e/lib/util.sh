@@ -63,8 +63,7 @@ function install_deps() {
 
     # For ppc64le, this is compiled with Power9 compatibility (does not run on Power8)
     ARCH=$(arch | sed 's|aarch64|arm64|g')
-    curl -o opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
-    mv opm $GOBIN/
+    curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
     chmod +x $GOBIN/opm
 
     GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
@@ -121,6 +120,8 @@ function prep_registry() {
 
     CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
+
+
 
 # parse_args will parse common arguments
 # for each workflow function
@@ -184,7 +185,7 @@ function setup_operator_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
-  find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_ARCH@'"$CATALOG_ARCH"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@-CATALOG_ARCH@'"$CATALOG_ARCH"'@g' {} \;
 }
 
 # setup_helm_testdata will move required

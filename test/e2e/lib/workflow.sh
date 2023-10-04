@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 
-CATALOG_ARCH="-$(arch | sed 's|aarch64|arm64|g')"
-
 # workflow_full will simulate an initial oc-mirror run
 # to disk then publish to registry
 function workflow_full() {
   parse_args "$@"
   local config="${1:?config required}"
-  local catalog_tag="${2:?catalog_tag required}${CATALOG_ARCH}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
   prep_registry "${catalog_tag}"
   # Copy the catalog to the connected registry so they can have the same tag
@@ -28,7 +26,7 @@ function workflow_full() {
 function workflow_diff() {
   parse_args "$@"
   local config="${1:?config required}"
-  local catalog_tag="${2:?catalog_tag required}${CATALOG_ARCH}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_DIFF_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_DIFF_DIR" "$config" true
@@ -44,7 +42,7 @@ function workflow_diff() {
 function workflow_no_updates() {
   parse_args "$@"
   local config="${1:?config required}"
-  local catalog_tag="${2:?catalog_tag required}${CATALOG_ARCH}"
+  local catalog_tag="${2:?catalog_tag required}"
   mkdir $PUBLISH_FULL_DIR
   # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false
@@ -61,7 +59,7 @@ function workflow_no_updates() {
 function workflow_mirror2mirror() {
   parse_args "$@"
   local config="${1:?config required}"
-  local catalog_tag="${2:?catalog_tag required}${CATALOG_ARCH}"
+  local catalog_tag="${2:?catalog_tag required}"
    # Copy the catalog to the connected registry so they can have the same tag
   setup_operator_testdata "${DATA_TMP}" "${CREATE_FULL_DIR}" "$config" false
   prep_registry "$catalog_tag"
@@ -89,7 +87,7 @@ function workflow_helm() {
 function workflow_oci_copy() {
   parse_args "$@" 
   local config="${1:?config required}"
-  local catalog_tag="${2:?catalog_tag required}${CATALOG_ARCH}"
+  local catalog_tag="${2:?catalog_tag required}"
   local oci_fbc="${3:?oci_fbc required}"
   # Prepare test data
   setup_operator_testdata "${DATA_TMP}" "${MIRROR_OCI_DIR}" "${config}" false 
