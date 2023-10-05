@@ -218,7 +218,7 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dst)
-		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dst})
+		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dst})
 
 	}
 	return result, nil
