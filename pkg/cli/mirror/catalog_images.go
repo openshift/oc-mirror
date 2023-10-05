@@ -220,6 +220,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		withCacheRegeneration := true
 		_, err := os.Stat(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
 		if errors.Is(err, os.ErrNotExist) {
+			klog.Infof("cacheLocation.txt does not exist")
 			withCacheRegeneration = false
 		} else if err != nil {
 			return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
