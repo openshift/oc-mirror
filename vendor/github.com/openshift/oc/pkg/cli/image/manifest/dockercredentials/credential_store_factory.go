@@ -1,8 +1,10 @@
 package dockercredentials
 
 import (
+	"fmt"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/distribution/distribution/v3/registry/client/auth"
@@ -54,10 +56,14 @@ type DynamicCredentialStore struct {
 }
 
 func NewDynamicCredentialStore(auth *types.AuthConfig) auth.CredentialStore {
+	fmt.Println("NewDynamicCredentialStore func")
+	fmt.Println("Current time: ", time.Now())
 	return DynamicCredentialStore{authConfig: auth}
 }
 
 func (dcs DynamicCredentialStore) Basic(*url.URL) (string, string) {
+	fmt.Println("DynamicCredentialStore Basic func")
+	fmt.Println("Current time: ", time.Now())
 	if dcs.authConfig == nil {
 		return "", ""
 	}
@@ -68,6 +74,8 @@ func (dcs DynamicCredentialStore) Basic(*url.URL) (string, string) {
 }
 
 func (dcs DynamicCredentialStore) RefreshToken(*url.URL, string) string {
+	fmt.Println("DynamicCredentialStore RefreshToken func")
+	fmt.Println("Current time: ", time.Now())
 	if dcs.authConfig == nil {
 		return ""
 	}
@@ -78,6 +86,9 @@ func (dcs DynamicCredentialStore) RefreshToken(*url.URL, string) string {
 }
 
 func (dcs DynamicCredentialStore) SetRefreshToken(u *url.URL, service, token string) {
+	fmt.Println("DynamicCredentialStore SetRefreshToken func")
+	fmt.Printf("service: %s token: %s", service, token)
+	fmt.Println("Current time: ", time.Now())
 	if dcs.authConfig != nil {
 		dcs.mutex.Lock()
 		defer dcs.mutex.Unlock()
