@@ -14,7 +14,7 @@ function workflow_full() {
   setup_operator_testdata "${DATA_TMP}" "$CREATE_FULL_DIR" "$config" false $CATALOGDIGEST
   run_cmd --config "${CREATE_FULL_DIR}/$config" "file://${CREATE_FULL_DIR}" $CREATE_FLAGS
   pushd $PUBLISH_FULL_DIR
-  if !$DIFF; then
+  if ! $DIFF; then
     cleanup_conn
   fi
   run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}${NS}" $PUBLISH_FLAGS
