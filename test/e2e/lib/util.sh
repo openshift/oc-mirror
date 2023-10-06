@@ -115,15 +115,15 @@ function setup_reg() {
 function prep_registry() {
   local CATALOGTAG="${1:?CATALOGTAG required}"
 
-  CATALOG_ARCH="-$(arch | sed 's|aarch64|arm64|g')"
+  # To pull a manifest-listed catalog registry to test
+  CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
   # Copy target catalog to connected registry
   crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
-    localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest${CATALOG_ARCH}
+    --platform linux/${CATALOG_ARCH} \
+    localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
 
-  CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest${CATALOG_ARCH})
+  CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
-
-
 
 # parse_args will parse common arguments
 # for each workflow function
@@ -175,8 +175,6 @@ function setup_operator_testdata() {
     INDEX_PATH=latest
   fi
 
-  local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
-
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
@@ -187,7 +185,6 @@ function setup_operator_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
-  find "$DATA_DIR" -type f -exec sed -i -E 's@-CATALOG_ARCH@'"-$CATALOG_ARCH"'@g' {} \;
 }
 
 # setup_helm_testdata will move required
@@ -204,7 +201,7 @@ function setup_helm_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
 }
 
-# setup_operator_testdata will move required
+# prepare_mirror_testdata will move required
 # files in place to do operator testing
 function prepare_mirror_testdata() {
   local DATA_DIR="${1:?DATA_DIR required}"
@@ -229,5 +226,5 @@ function prepare_oci_testdata() {
   mkdir -p "${DATA_DIR}/mirror_oci"
   tar xfz "${DIR}/artifacts/${OCI_CTLG_PATH}" -C "${DATA_DIR}/mirror_oci"
   mkdir -p  "olm_artifacts/oc-mirror-dev"
-  cp -r "${DIR}/artifacts/configs"  "olm_artifacts/oc-mirror-dev/"
+  cp -r "${DIR}/artifacts/configs" "olm_artifacts/oc-mirror-dev/"
 }

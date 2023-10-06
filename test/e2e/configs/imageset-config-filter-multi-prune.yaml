@@ -6,7 +6,7 @@ storageConfig:
     path: DATA_TMP
 mirror:
   operators:
-  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest-CATALOG_ARCH
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest
     packages:
       - name: foo
       - name: bar

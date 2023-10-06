@@ -7,4 +7,4 @@ storageConfig:
     skipTLS: true
 mirror:
   operators:
-  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest-CATALOG_ARCH
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest

@@ -35,7 +35,6 @@ function check_bundles() {
   tar xvf $extraction_dir/temp.tar bin/opm
   mv bin/opm "${extraction_dir}"
   chmod +x $opm_path
- 
 
   $opm_path validate $index_dir
 

@@ -45,7 +45,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 
 	logFile, err := os.OpenFile(".oc-mirror.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0600)
 	if err == nil {
-		fmt.Println("Logging to .oc-mirror.log")
+		klog.Errorf("Logging to .oc-mirror.log")
 		klog.SetOutput(io.MultiWriter(o.IOStreams.Out, logFile))
 	} else {
 		fmt.Printf("Failed to open .oc-mirror.log for writing. Err: %s. Running without logging.\n",

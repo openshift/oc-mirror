@@ -22,8 +22,10 @@ MIRROR_OCI_DIR="${DATA_TMP}/mirror_oci"
 OCI_CTLG_PATH="oc-mirror-dev.tgz"
 WORKSPACE="oc-mirror-workspace"
 CATALOGREGISTRY="quay.io"
-CATALOGORG="${ENV_CATALOGORG:?skhoury}"
-CATALOGNAMESPACE="${ENV_CATALOGNAMESPACE:?skhoury/oc-mirror-dev}"
+
+# Redirect to a different catalog
+CATALOGORG="${ENV_CATALOGORG:-skhoury}"
+CATALOGNAMESPACE="${ENV_CATALOGNAMESPACE:-skhoury/oc-mirror-dev}"
 REGISTRY_CONN_PORT=5000
 REGISTRY_DISCONN_PORT=5001
 METADATA_REGISTRY="localhost.localdomain:$REGISTRY_CONN_PORT"

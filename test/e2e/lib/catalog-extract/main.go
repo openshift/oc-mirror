@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -48,7 +49,18 @@ func getCraneOpts(ctx context.Context, insecure bool) []crane.Option {
 		opts = append(opts, crane.Insecure)
 	}
 
-	platform := v1.Platform{Architecture: "amd64", OS: "linux"}
+	// The test catalogs are linux/amd64.
+	// When running on non amd64 arches, it implies the local arch not amd64, and errors out.
+	var platform v1.Platform
+	if runtime.GOARCH == "ppc64le" {
+		platform = v1.Platform{Architecture: "ppc64le", OS: "linux"}
+	} else if runtime.GOARCH == "arm64" {
+		platform = v1.Platform{Architecture: "arm64", OS: "linux"}
+	} else if runtime.GOARCH == "s390x" {
+		platform = v1.Platform{Architecture: "s390x", OS: "linux"}
+	} else {
+		platform = v1.Platform{Architecture: "amd64", OS: "linux"}
+	}
 	opts = append(opts, crane.WithPlatform(&platform))
 	return opts
 }
