@@ -265,8 +265,12 @@ type ImageRefSchema struct {
 
 // CopyImageSchema
 type CopyImageSchema struct {
-	Source      string
+	// Source: from where to copy the image
+	Source string
+	// Destination: to where should the image be copied
 	Destination string
+	// Origin: Original reference to the image
+	Origin string
 }
 
 // SignatureContentSchema

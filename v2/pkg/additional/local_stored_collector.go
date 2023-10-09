@@ -106,7 +106,7 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
+			allImages = append(allImages, v1alpha3.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest})
 		}
 	}
 	return allImages, nil

@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
+	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	"github.com/openshift/oc-mirror/v2/pkg/diff"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -87,6 +88,7 @@ type ExecutorSchema struct {
 	Diff             diff.DiffInterface
 	LocalStorage     registry.Registry
 	LocalStorageFQDN string
+	ClusterResources clusterresources.GeneratorInterface
 }
 
 // NewMirrorCmd - cobra entry point
@@ -340,6 +342,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.ClusterResources = clusterresources.New(o.Log, o.Config, o.Opts)
 
 }
 
@@ -432,6 +435,19 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 
 	//call the batch worker
 	err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
+	if err != nil {
+		cleanUp()
+		return err
+	}
+
+	//create IDMS/ITMS
+	if o.Opts.Mode == diskToMirror {
+		err = o.ClusterResources.IDMSGenerator(cmd.Context(), allRelatedImages, o.Opts)
+		if err != nil {
+			cleanUp()
+			return err
+		}
+	}
 	mirrorFinish := time.Now()
 	o.Log.Info("start time: %v\ncollection time: %v\nmirror time: %v", startTime, collectionFinish, mirrorFinish)
 	if err != nil {

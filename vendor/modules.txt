@@ -971,6 +971,7 @@ github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2
 github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3
 github.com/openshift/oc-mirror/v2/pkg/batch
 github.com/openshift/oc-mirror/v2/pkg/cli
+github.com/openshift/oc-mirror/v2/pkg/clusterresources
 github.com/openshift/oc-mirror/v2/pkg/config
 github.com/openshift/oc-mirror/v2/pkg/diff
 github.com/openshift/oc-mirror/v2/pkg/log
