@@ -48,7 +48,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 	var allImages []v1alpha3.CopyImageSchema
 	var imageIndexDir string
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.Mode == mirrorToDisk || o.Opts.Mode == prepare {
 		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
 
 		releasesForFilter := releasesForFilter{
@@ -85,7 +85,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 				}
-
 				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)

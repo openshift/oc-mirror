@@ -42,6 +42,7 @@ const (
 	fileProtocol            string = "file://"
 	diskToMirror            string = "diskToMirror"
 	mirrorToDisk            string = "mirrorToDisk"
+	prepare                 string = "prepare"
 	releaseImageDir         string = "release-images"
 	logsDir                 string = "logs"
 	workingDir              string = "working-dir"
@@ -149,7 +150,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			}
 		},
 	}
-
+	cmd.AddCommand(NewPrepareCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
@@ -475,4 +476,216 @@ func cleanUp() {
 	}
 	// clean up logs directory
 	os.RemoveAll(logsDir)
+}
+
+func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
+	global := &mirror.GlobalOptions{
+		TlsVerify:      false,
+		InsecurePolicy: true,
+	}
+
+	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
+	flagDepTLS, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	flagSrcOpts, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	flagDestOpts, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	flagRetryOpts, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+	}
+
+	ex := &ExecutorSchema{
+		Log:  log,
+		Opts: opts,
+	}
+	cmd := &cobra.Command{
+		Use:   "prepare",
+		Short: "Queries Cincinatti for the required releases to mirror, and verifies their existance in the local cache",
+		Run: func(cmd *cobra.Command, args []string) {
+			err := ex.ValidatePrepare(args)
+			if err != nil {
+				log.Error("%v ", err)
+				os.Exit(1)
+			}
+			ex.CompletePrepare(args)
+			// prepare internal storage
+			err = ex.PrepareStorageAndLogs()
+			if err != nil {
+				log.Error(" %v ", err)
+				os.Exit(1)
+			}
+
+			err = ex.RunPrepare(cmd, args)
+			if err != nil {
+				log.Error("%v ", err)
+				os.Exit(1)
+			}
+		},
+	}
+	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
+	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
+	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
+	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
+	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
+	cmd.Flags().MarkHidden("v2")
+	cmd.Flags().AddFlagSet(&flagSharedOpts)
+	cmd.Flags().AddFlagSet(&flagRetryOpts)
+	cmd.Flags().AddFlagSet(&flagDepTLS)
+	cmd.Flags().AddFlagSet(&flagSrcOpts)
+	cmd.Flags().AddFlagSet(&flagDestOpts)
+	return cmd
+}
+
+// Validate - cobra validation
+func (o *ExecutorSchema) ValidatePrepare(dest []string) error {
+	if len(o.Opts.Global.ConfigPath) == 0 {
+		return fmt.Errorf("use the --config flag it is mandatory")
+	}
+	if o.Opts.Global.From == "" {
+		return fmt.Errorf("with prepare command, the --from argument become mandatory(prefix : file://)")
+	}
+	return nil
+}
+
+func (o *ExecutorSchema) CompletePrepare(args []string) {
+	// override log level
+	o.Log.Level(o.Opts.Global.LogLevel)
+	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
+	// read the ImageSetConfiguration
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
+	if err != nil {
+		o.Log.Error("imagesetconfig %v ", err)
+	}
+	o.Log.Trace("imagesetconfig : %v ", cfg)
+
+	// update all dependant modules
+	mc := mirror.NewMirrorCopy()
+	o.Manifest = manifest.New(o.Log)
+	o.Mirror = mirror.New(mc, nil)
+	o.Config = cfg
+
+	dest := filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
+
+	o.Opts.Global.Dir = dest
+
+	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
+	o.Opts.Mode = prepare
+	o.Log.Info("mode %s ", o.Opts.Mode)
+	client, _ := release.NewOCPClient(uuid.New())
+
+	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
+	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
+	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
+	// o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	// o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+
+}
+
+func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
+
+	// clean up logs directory
+	os.RemoveAll(logsDir)
+
+	// create logs directory
+	err := os.MkdirAll(logsDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+	err = os.MkdirAll(workingDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// create signatures directory
+	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.Dir+"/"+signaturesDir)
+	err = os.MkdirAll(o.Opts.Global.Dir+"/"+signaturesDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// create release-images directory
+	o.Log.Trace("creating release images directory %s ", o.Opts.Global.Dir+"/"+releaseImageDir)
+	err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// create release cache dir
+	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.Dir+"/"+releaseImageExtractDir)
+	err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageExtractDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// create operator cache dir
+	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.Dir+"/"+operatorImageExtractDir)
+	err = os.MkdirAll(o.Opts.Global.Dir+"/"+operatorImageExtractDir, 0755)
+	if err != nil {
+		o.Log.Error(" %v ", err)
+		return err
+	}
+
+	// creating file for storing list of chached images
+	cachedImagesFilePath := filepath.Join(logsDir, "cached-images.txt")
+	cachedImagesFile, err := os.Create(cachedImagesFilePath)
+	if err != nil {
+		return err
+	}
+	defer cachedImagesFile.Close()
+
+	var allRelatedImages []v1alpha3.CopyImageSchema
+
+	// do releases
+	imgs, err := o.Release.ReleaseImageCollector(cmd.Context())
+	if err != nil {
+		cleanUp()
+		return err
+	}
+	o.Log.Info("total release images to copy %d ", len(imgs))
+	o.Opts.ImageType = "release"
+	allRelatedImages = mergeImages(allRelatedImages, imgs)
+	imagesAvailable := map[string]bool{}
+	atLeastOneMissing := false
+	var buff bytes.Buffer
+	for _, img := range allRelatedImages {
+		buff.WriteString(img.Destination + "\n")
+		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, &o.Opts)
+		if err != nil {
+			o.Log.Warn("unable to check existance of %s in local cache: %v", img.Destination, err)
+		}
+		if err != nil || !exists {
+			atLeastOneMissing = true
+		}
+		imagesAvailable[img.Destination] = exists
+
+	}
+
+	_, err = cachedImagesFile.Write(buff.Bytes())
+	if err != nil {
+		return err
+	}
+	if atLeastOneMissing {
+		o.Log.Error("missing images: ")
+		for img, exists := range imagesAvailable {
+			if !exists {
+				o.Log.Error("%s", img)
+			}
+		}
+		return fmt.Errorf("all images necessary for mirroring are not available in the cache. \nplease re-run the mirror to disk process")
+	}
+
+	o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", len(imagesAvailable))
+	o.Log.Info("full list in : %s", cachedImagesFilePath)
+	return nil
 }
