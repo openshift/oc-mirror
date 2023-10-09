@@ -680,6 +680,8 @@ func copyBlob(ctx context.Context, plan *workPlan, c *repositoryBlobCopy, blob d
 		}
 		if err != distribution.ErrBlobUnknown {
 			klog.V(5).Infof("Server was unable to check whether blob exists %s: %v", blob.Digest, err)
+		} else {
+			klog.Infof("OCPBUGS-7465: unknown blob is expected because target registery may not have it yet")
 		}
 	}
 
@@ -687,6 +689,7 @@ func copyBlob(ctx context.Context, plan *workPlan, c *repositoryBlobCopy, blob d
 	var options []distribution.BlobCreateOption
 	if !skipMount {
 		if repo, ok := c.parent.parent.MountFrom(blob.Digest); ok {
+			klog.Infof("OCPBUGS-7465: Mount from begins")
 			expectMount = repo
 			canonicalFrom, err := reference.WithName(repo)
 			if err != nil {
@@ -697,33 +700,40 @@ func copyBlob(ctx context.Context, plan *workPlan, c *repositoryBlobCopy, blob d
 				return fmt.Errorf("unexpected error building named digest: %v", err)
 			}
 			options = append(options, client.WithMountFrom(blobSource), WithDescriptor(blob))
+			klog.Infof("OCPBUGS-7465: Mount from completes")
+		} else {
+			klog.Infof("OCPBUGS-7465: mount from is not ok")
 		}
 	}
 
 	from := &descriptorBlobSource{client: referentialClient, blobs: c.from}
+	klog.Infof("OCPBUGS-7465: BLOB: %+v", blob)
 
 	// if the object is small enough, put directly
 	if blob.Size > 0 && blob.Size < 16384 {
+		klog.Infof("OCPBUGS-7465: SMALL BLOB - fromRef: %s", c.fromRef.String())
 		data, err := from.Get(ctx, blob)
 		if err != nil {
-			return fmt.Errorf("unable to push %s: failed to retrieve blob %s: %s", c.fromRef, blob.Digest, err)
+			return fmt.Errorf("SMALL BLOB - %v:\n unable to push %s: failed to retrieve blob %s: %s", from, c.fromRef, blob.Digest, err)
 		}
 		desc, err := c.to.Put(ctx, blob.MediaType, data)
 		if err != nil {
-			return fmt.Errorf("unable to push %s: failed to upload blob %s: %s", c.fromRef, blob.Digest, err)
+			return fmt.Errorf("SMALL BLOB -unable to push %s: failed to upload blob %s mediatype: %s: %s", c.fromRef, blob.Digest, blob.MediaType, err)
 		}
 		if desc.Digest != blob.Digest {
-			return fmt.Errorf("unable to push %s: tried to copy blob %s and got back a different digest %s", c.fromRef, blob.Digest, desc.Digest)
+			return fmt.Errorf("SMALL BLOB - %v:\n unable to push %s: tried to copy blob %s and got back a different digest %s", from, c.fromRef, blob.Digest, desc.Digest)
 		}
 		plan.BytesCopied(blob.Size)
 		return nil
 	}
 
+	klog.Infof("OCPBUGS-7465: Large blob: fromRef: %s", c.fromRef.String())
 	if c.toRef.Type != imagesource.DestinationRegistry {
 		options = append(options, WithDescriptor(blob))
 	}
 
 	copyfn := func() error {
+		klog.Infof("OCPBUGS-7465: copyfn is executed")
 		w, err := c.to.Create(ctx, options...)
 		// no-op
 		if err == ErrAlreadyExists {
@@ -776,6 +786,7 @@ func copyBlob(ctx context.Context, plan *workPlan, c *repositoryBlobCopy, blob d
 	return retry.OnError(
 		retry.DefaultRetry,
 		func(err error) bool {
+			klog.Infof("OCPBUGS-7465: RETRY ERROR: %v", err)
 			return strings.Contains(err.Error(), "REFUSED_STREAM")
 		},
 		copyfn,

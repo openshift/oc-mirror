@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/distribution/distribution/v3/registry/client/auth"
 	"github.com/docker/docker/api/types"
@@ -62,37 +64,34 @@ func NewDynamicCredentialStore(auth *types.AuthConfig) auth.CredentialStore {
 }
 
 func (dcs DynamicCredentialStore) Basic(*url.URL) (string, string) {
-	fmt.Println("DynamicCredentialStore Basic func")
-	fmt.Println("Current time: ", time.Now())
+
 	if dcs.authConfig == nil {
 		return "", ""
 	}
 	dcs.mutex.Lock()
 	defer dcs.mutex.Unlock()
 
+	klog.Infof("OCPBUGS-7465: Creds: Basic")
 	return dcs.authConfig.Username, dcs.authConfig.Password
 }
 
 func (dcs DynamicCredentialStore) RefreshToken(*url.URL, string) string {
-	fmt.Println("DynamicCredentialStore RefreshToken func")
-	fmt.Println("Current time: ", time.Now())
 	if dcs.authConfig == nil {
 		return ""
 	}
 	dcs.mutex.Lock()
 	defer dcs.mutex.Unlock()
 
+	klog.Infof("OCPBUGS-7465: Creds: RefreshToken")
 	return dcs.authConfig.IdentityToken
 }
 
 func (dcs DynamicCredentialStore) SetRefreshToken(u *url.URL, service, token string) {
-	fmt.Println("DynamicCredentialStore SetRefreshToken func")
-	fmt.Printf("service: %s token: %s", service, token)
-	fmt.Println("Current time: ", time.Now())
 	if dcs.authConfig != nil {
 		dcs.mutex.Lock()
 		defer dcs.mutex.Unlock()
 
+		klog.Infof("OCPBUGS-7465: Creds: SetRefreshToken")
 		dcs.authConfig.IdentityToken = token
 	}
 }
