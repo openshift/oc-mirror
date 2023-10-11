@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/pkg/version"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -47,7 +47,7 @@ import (
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 )
 
-func NewNewOptions(streams genericclioptions.IOStreams) *NewOptions {
+func NewNewOptions(streams genericiooptions.IOStreams) *NewOptions {
 	return &NewOptions{
 		IOStreams:       streams,
 		ParallelOptions: imagemanifest.ParallelOptions{MaxPerRegistry: 4},
@@ -59,7 +59,7 @@ func NewNewOptions(streams genericclioptions.IOStreams) *NewOptions {
 	}
 }
 
-func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewRelease(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewNewOptions(streams)
 	cmd := &cobra.Command{
 		Use:   "new [SRC=DST ...]",
@@ -96,7 +96,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 			registry.example.com.
 		`),
 		Example: templates.Examples(`
-			# Create a release from the latest origin images and push to a DockerHub repo
+			# Create a release from the latest origin images and push to a DockerHub repository
 			oc adm release new --from-image-stream=4.11 -n origin --to-image docker.io/mycompany/myrepo:latest
 
 			# Create a new release with updated metadata from a previous release
@@ -113,7 +113,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(f, cmd, args))
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run())
+			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
 	}
 	flags := cmd.Flags()
@@ -163,7 +163,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 }
 
 type NewOptions struct {
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 
 	SecurityOptions imagemanifest.SecurityOptions
 	ParallelOptions imagemanifest.ParallelOptions
@@ -311,7 +311,7 @@ func (o *NewOptions) cleanup() {
 	o.cleanupFns = nil
 }
 
-func (o *NewOptions) Run() error {
+func (o *NewOptions) Run(ctx context.Context) error {
 	defer o.cleanup()
 
 	// check parameters
@@ -369,7 +369,7 @@ func (o *NewOptions) Run() error {
 		var imageReferencesData, releaseMetadata []byte
 
 		buf := &bytes.Buffer{}
-		extractOpts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
+		extractOpts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
 		extractOpts.ParallelOptions = o.ParallelOptions
 		extractOpts.SecurityOptions = o.SecurityOptions
 		if o.KeepManifestList {
@@ -717,7 +717,7 @@ func (o *NewOptions) Run() error {
 	}
 
 	if len(o.Mirror) > 0 {
-		if err := o.mirrorImages(is); err != nil {
+		if err := o.mirrorImages(ctx, is); err != nil {
 			return err
 		}
 	}
@@ -955,7 +955,7 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 
 	verifier := imagemanifest.NewVerifier()
 	var lock sync.Mutex
-	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
 	if o.KeepManifestList {
@@ -1084,10 +1084,10 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 	return nil
 }
 
-func (o *NewOptions) mirrorImages(is *imageapi.ImageStream) error {
+func (o *NewOptions) mirrorImages(ctx context.Context, is *imageapi.ImageStream) error {
 	klog.V(4).Infof("Mirroring release contents to %s", o.Mirror)
 	copied := is.DeepCopy()
-	opts := NewMirrorOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := NewMirrorOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.DryRun = o.DryRun
 	opts.ImageStream = copied
 	opts.To = o.Mirror
@@ -1096,7 +1096,7 @@ func (o *NewOptions) mirrorImages(is *imageapi.ImageStream) error {
 	opts.SecurityOptions = o.SecurityOptions
 	opts.KeepManifestList = o.KeepManifestList
 
-	if err := opts.Run(); err != nil {
+	if err := opts.Run(ctx); err != nil {
 		return err
 	}
 
@@ -1223,7 +1223,7 @@ func (o *NewOptions) write(r io.Reader, is *imageapi.ImageStream, now time.Time)
 		}
 
 		verifier := imagemanifest.NewVerifier()
-		options := imageappend.NewAppendImageOptions(genericclioptions.IOStreams{Out: ioutil.Discard, ErrOut: o.ErrOut})
+		options := imageappend.NewAppendImageOptions(genericiooptions.IOStreams{Out: ioutil.Discard, ErrOut: o.ErrOut})
 		options.ParallelOptions = o.ParallelOptions
 		options.SecurityOptions = o.SecurityOptions
 		options.DryRun = o.DryRun

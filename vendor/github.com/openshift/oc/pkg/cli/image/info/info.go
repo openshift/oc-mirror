@@ -12,15 +12,15 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/distribution"
-	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/manifest/manifestlist"
 	units "github.com/docker/go-units"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -33,13 +33,13 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/workqueue"
 )
 
-func NewInfoOptions(streams genericclioptions.IOStreams) *InfoOptions {
+func NewInfoOptions(streams genericiooptions.IOStreams) *InfoOptions {
 	return &InfoOptions{
 		IOStreams: streams,
 	}
 }
 
-func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewInfo(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewInfoOptions(streams)
 	cmd := &cobra.Command{
 		Use:   "info IMAGE [...]",
@@ -86,7 +86,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 }
 
 type InfoOptions struct {
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 
 	SecurityOptions imagemanifest.SecurityOptions
 	FilterOptions   imagemanifest.FilterOptions

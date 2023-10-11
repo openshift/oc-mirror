@@ -21,8 +21,8 @@ import (
 
 	"github.com/MakeNowJust/heredoc"
 	"github.com/blang/semver"
-	"github.com/docker/distribution"
-	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/manifest/manifestlist"
 	units "github.com/docker/go-units"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
@@ -50,7 +51,7 @@ import (
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 )
 
-func NewInfoOptions(streams genericclioptions.IOStreams) *InfoOptions {
+func NewInfoOptions(streams genericiooptions.IOStreams) *InfoOptions {
 	return &InfoOptions{
 		IOStreams:              streams,
 		KubeTemplatePrintFlags: *genericclioptions.NewKubeTemplatePrintFlags(),
@@ -58,7 +59,7 @@ func NewInfoOptions(streams genericclioptions.IOStreams) *InfoOptions {
 	}
 }
 
-func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewInfo(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewInfoOptions(streams)
 	cmd := &cobra.Command{
 		Use:   "info IMAGE [--changes-from=IMAGE] [--verify|--commits|--pullspecs]",
@@ -113,7 +114,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --pullspecs
 
 			# Show information about linux/s390x image
-			# Note: Wildcard filter is not supported. Pass a single os/arch to extract
+			# Note: Wildcard filter is not supported; pass a single os/arch to extract
 			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --filter-by-os=linux/s390x
 
 		`),
@@ -134,6 +135,8 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 	flags.BoolVar(&o.Verify, "verify", o.Verify, "Generate bug listings from the changelogs in the git repositories extracted to this path.")
 
 	flags.StringVar(&o.ICSPFile, "icsp-file", o.ICSPFile, "Path to an ImageContentSourcePolicy file. If set, data from this file will be used to find alternative locations for images.")
+	flags.MarkDeprecated("icsp-file", "support for it will be removed in a future release. Use --idms-file instead.")
+	flags.StringVar(&o.IDMSFile, "idms-file", o.IDMSFile, "Path to an ImageDigestMirrorSet file. If set, data from this file will be used to find alternative locations for images.")
 
 	flags.BoolVar(&o.ShowContents, "contents", o.ShowContents, "Display the contents of a release.")
 	flags.BoolVar(&o.ShowCommit, "commits", o.ShowCommit, "Display information about the source an image was created with.")
@@ -151,7 +154,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 }
 
 type InfoOptions struct {
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 	genericclioptions.KubeTemplatePrintFlags
 
 	Images  []string
@@ -168,6 +171,7 @@ type InfoOptions struct {
 	ShowSize      bool
 	Verify        bool
 	ICSPFile      string
+	IDMSFile      string
 
 	ChangelogDir string
 	BugsDir      string
@@ -452,6 +456,10 @@ func (o *InfoOptions) Validate() error {
 	}
 	if len(o.From) > 0 && len(o.Images) != 1 {
 		return fmt.Errorf("must specify a single release image as argument when comparing to another release image")
+	}
+
+	if len(o.ICSPFile) > 0 && len(o.IDMSFile) > 0 {
+		return fmt.Errorf("icsp-file and idms-file are mutually exclusive")
 	}
 
 	return o.FilterOptions.Validate()
@@ -764,11 +772,12 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	}
 
 	verifier := imagemanifest.NewVerifier()
-	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.SecurityOptions = o.SecurityOptions
 	opts.FilterOptions = o.FilterOptions
 	opts.FileDir = o.FileDir
 	opts.ICSPFile = o.ICSPFile
+	opts.IDMSFile = o.IDMSFile
 
 	release := &ReleaseInfo{
 		Image:    image,
