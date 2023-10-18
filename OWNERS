@@ -1,10 +1,10 @@
 reviewers:
-  - jpower432
-  - afflom
-  - dinhxuanvu
+  - lmzuccarelli
+  - sherine-k
+  - aguidirh
 approvers:
-  - jpower432
-  - afflom
-  - soltysh
-  - dinhxuanvu
-component: "oc-mirror"
+  - lmzuccarelli
+  - sherine-k
+  - jerpeter1
+component: oc
+subcomponent: oc-mirror
