@@ -182,36 +182,28 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
-			// TODO Make this more complete
-			// This logic will be useful for operators and releases
-			// strip the domain name from the img.Name
 			var src string
 			var dest string
 
-			domainAndPathComps := img.Image
-			// pathComponents := img.Name
-			// temporarily strip out the transport
-			transportAndRef := strings.Split(domainAndPathComps, "://")
+			imgRef := img.Image
+			transportAndRef := strings.Split(imgRef, "://")
 			if len(transportAndRef) > 1 {
-				domainAndPathComps = transportAndRef[1]
+				imgRef = transportAndRef[1]
 			}
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
 
-			if isImageByDigest(img.Image) {
-				dest = strings.Join([]string{o.Opts.Destination, imageName(img.Image) + ":" + imageHash(img.Image)[:hashTruncLen]}, "/")
+			pathWithoutDNS, err := pathWithoutDNS(imgRef)
+			if err != nil {
+				o.Log.Error("%s", err.Error())
+				return nil, err
+			}
+
+			if isImageByDigest(imgRef) {
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
 			} else {
-				dest = strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
 			}
-
-			// the following is for having the destination without the initial domain name => later
-			// domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
-			// if len(domainAndPathCompsArray) > 2 {
-			// 	pathComponents = strings.Join(domainAndPathCompsArray[1:], "/")
-			// } else {
-			// 	return allImages, fmt.Errorf("unable to parse image %s correctly", img.Name)
-			// }
-			// src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents}, "/")
-			// dst = strings.Join([]string{o.Opts.Destination, pathComponents}, "/") // already has a transport protocol
 
 			if src == "" || dest == "" {
 				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
@@ -232,19 +224,24 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 			imgRef := img.Image
 			var src string
 			var dest string
-			// no transport was provided, assume docker://
-			if !strings.Contains(src, "://") {
+			if !strings.Contains(imgRef, "://") {
 				src = dockerProtocol + imgRef
 			} else {
+				src = imgRef
 				transportAndRef := strings.Split(imgRef, "://")
-				// because we are reusing this to construct dest
 				imgRef = transportAndRef[1]
 			}
 
+			pathWithoutDNS, err := pathWithoutDNS(imgRef)
+			if err != nil {
+				o.Log.Error("%s", err.Error())
+				return nil, err
+			}
+
 			if isImageByDigest(imgRef) {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imageName(imgRef) + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
 			} else {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgRef}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 			}
 
 			o.Log.Debug("source %s", src)
@@ -260,14 +257,23 @@ func isImageByDigest(imgRef string) bool {
 	return strings.Contains(imgRef, "@")
 }
 
-func imageName(imgRef string) string {
-	var imageName string
-	imgSplit := strings.Split(imgRef, "@")
-	if len(imgSplit) > 1 {
-		imageName = imgSplit[0]
+func pathWithoutDNS(imgRef string) (string, error) {
+
+	var imageName []string
+	if isImageByDigest(imgRef) {
+		imageNameSplit := strings.Split(imgRef, "@")
+		imageName = strings.Split(imageNameSplit[0], "/")
+	} else {
+		imageName = strings.Split(imgRef, "/")
 	}
 
-	return imageName
+	if len(imageName) > 2 {
+		return strings.Join(imageName[1:], "/"), nil
+	} else if len(imageName) == 1 {
+		return imageName[0], nil
+	} else {
+		return "", fmt.Errorf("unable to parse image %s correctly", imgRef)
+	}
 }
 
 func imageHash(imgRef string) string {
