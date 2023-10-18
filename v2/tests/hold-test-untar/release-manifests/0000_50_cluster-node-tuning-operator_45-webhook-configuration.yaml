@@ -1,0 +1,59 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    service.beta.openshift.io/serving-cert-secret-name: performance-addon-operator-webhook-cert
+  labels:
+    name: performance-addon-operator-service
+  name: performance-addon-operator-service
+  namespace: openshift-cluster-node-tuning-operator
+spec:
+  ports:
+    - name: "443"
+      port: 443
+      protocol: TCP
+      targetPort: 4343
+  selector:
+    name: cluster-node-tuning-operator
+  type: ClusterIP
+
+---
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    service.beta.openshift.io/inject-cabundle: "true"
+  name: performance-addon-operator
+webhooks:
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: performance-addon-operator-service
+        namespace: openshift-cluster-node-tuning-operator
+        path: /validate-performance-openshift-io-v2-performanceprofile
+        port: 443
+    failurePolicy: Fail
+    matchPolicy: Equivalent
+    name: vwb.performance.openshift.io
+    rules:
+      - apiGroups:
+          - performance.openshift.io
+        apiVersions:
+          - v2
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - performanceprofiles
+        scope: '*'
+    sideEffects: None
+    timeoutSeconds: 10

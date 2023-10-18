@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: TechPreviewNoUpgrade
+  labels:
+    app: webhooks
+  name: platform-operators-rukpak-webhooks
+  namespace: openshift-platform-operators
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webhooks
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 25%
+  template:
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+      labels:
+        app: webhooks
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: webhooks
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - command:
+        - /webhooks
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:5be59eba6970435d4d886f5b17ba117df5d24c84150406de4f30194534df7f0d
+        imagePullPolicy: IfNotPresent
+        name: webhooks
+        ports:
+        - containerPort: 8080
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: platform-operators-rukpak-webhooks-admin
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: platform-operators-rukpak-webhook-tls

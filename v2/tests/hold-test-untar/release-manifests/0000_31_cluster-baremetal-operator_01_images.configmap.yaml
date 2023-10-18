@@ -1,0 +1,24 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-baremetal-operator-images
+  namespace: openshift-machine-api
+  annotations:
+    capability.openshift.io/name: baremetal
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+data:
+  images.json: >
+    {
+      "clusterBaremetalOperator": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4e5f13cd4d2a9556b980a8a6790c237685b007f7ea7723191bf1633d8d88e27",
+      "kubeRBACProxy": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c28f27a3a10df13e5e8c074e8734683a6603ebaccd9d67e2095070fb6859b1d6",
+      "baremetalOperator": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:e6f0b3103d68b12a1bf4b9058f60e9a7de52c27f58cab199c9000fdbc754c2c3",
+      "baremetalIronic": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:30328143480d6598d0b52d41a6b755bb0f4dfe04c4b7aa7aefd02ea793a2c52b",
+      "baremetalMachineOsDownloader": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1d705b2e2406512e5cb28239d92bb062ce3152880d74644a8f2728a27c28a6aa",
+      "baremetalStaticIpManager": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c62cd5fac0f7f8ae25b2498a02ebdc79b4af10c4246c1ac3da0b1d3a46407ec",
+      "baremetalIronicAgent": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:920ffbcfe14f5b2122d1fe7c079fa1d45df63c0e6b50ce9c953dcc2d482bcc82",
+      "imageCustomizationController": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:0b64eced17c0ca3122c2f2b0992c10608cc51b19db6945f693c3f60df599052a",
+      "machineOSImages": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d4b0cfad345fbb97c2d092268dc53cdec17c5e3115212fefcfb58c7ac4652717"
+    }
+

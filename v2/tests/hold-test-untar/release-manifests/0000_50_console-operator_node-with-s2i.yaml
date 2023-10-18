@@ -1,0 +1,151 @@
+﻿apiVersion: console.openshift.io/v1
+kind: ConsoleQuickStart
+metadata:
+  name: node-with-s2i
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: 'true'
+    include.release.openshift.io/self-managed-high-availability: 'true'
+    include.release.openshift.io/single-node-developer: 'true'
+    capability.openshift.io/name: Console
+spec:
+  description: 'Import a Node Application from git, build, and deploy it onto OpenShift.'
+  displayName: Get started with Node
+  durationMinutes: 10
+  icon: >-
+    data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDIwLjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCAzMiAzMiIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgMzIgMzI7IiB4bWw6c3BhY2U9InByZXNlcnZlIj4KPHN0eWxlIHR5cGU9InRleHQvY3NzIj4KCS5zdDB7ZmlsbDojNjk5RjYzO30KCS5zdDF7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMzMzMzMzO30KCS5zdDJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojNjk5RjYzO30KCS5zdDN7Y2xpcC1wYXRoOnVybCgjWE1MSURfNV8pO30KCS5zdDR7ZmlsbDpub25lO30KCS5zdDV7ZmlsbDp1cmwoI1NWR0lEXzFfKTt9Cgkuc3Q2e2ZpbGw6dXJsKCNTVkdJRF8yXyk7fQoJLnN0N3tmaWxsOnVybCgjU1ZHSURfM18pO30KCS5zdDh7ZmlsbDp1cmwoI1NWR0lEXzRfKTt9Cgkuc3Q5e2ZpbGw6dXJsKCNTVkdJRF81Xyk7fQoJLnN0MTB7ZmlsbDp1cmwoI1NWR0lEXzZfKTt9Cjwvc3R5bGU+CjxnPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE1LjgyLDI1LjY1Yy0wLjExLDAtMC4yMS0wLjAzLTAuMy0wLjA4TDE0LjU1LDI1Yy0wLjE0LTAuMDgtMC4wNy0wLjExLTAuMDMtMC4xMwoJCQljMC4xOS0wLjA3LDAuMjMtMC4wOCwwLjQ0LTAuMmMwLjAyLTAuMDEsMC4wNS0wLjAxLDAuMDcsMC4wMWwwLjc0LDAuNDRjMC4wMywwLjAxLDAuMDYsMC4wMSwwLjA5LDBsMi44OS0xLjY3CgkJCWMwLjAzLTAuMDIsMC4wNC0wLjA1LDAuMDQtMC4wOHYtMy4zNGMwLTAuMDMtMC4wMi0wLjA2LTAuMDQtMC4wOGwtMi44OS0xLjY3Yy0wLjAzLTAuMDItMC4wNi0wLjAyLTAuMDksMGwtMi44OSwxLjY3CgkJCWMtMC4wMywwLjAyLTAuMDUsMC4wNS0wLjA1LDAuMDh2My4zNGMwLDAuMDMsMC4wMiwwLjA2LDAuMDUsMC4wOGwwLjc5LDAuNDZjMC40MywwLjIxLDAuNjktMC4wNCwwLjY5LTAuMjl2LTMuMjkKCQkJYzAtMC4wNSwwLjA0LTAuMDgsMC4wOC0wLjA4aDAuMzdjMC4wNSwwLDAuMDgsMC4wNCwwLjA4LDAuMDh2My4yOWMwLDAuNTctMC4zMSwwLjktMC44NiwwLjljLTAuMTcsMC0wLjMsMC0wLjY3LTAuMThsLTAuNzYtMC40NAoJCQljLTAuMTktMC4xMS0wLjMtMC4zMS0wLjMtMC41M3YtMy4zNGMwLTAuMjIsMC4xMi0wLjQyLDAuMy0wLjUzbDIuODktMS42N2MwLjE4LTAuMSwwLjQzLTAuMSwwLjYxLDBsMi44OSwxLjY3CgkJCWMwLjE5LDAuMTEsMC4zLDAuMzEsMC4zLDAuNTN2My4zNGMwLDAuMjItMC4xMiwwLjQyLTAuMywwLjUzbC0yLjg5LDEuNjdDMTYuMDMsMjUuNjIsMTUuOTIsMjUuNjUsMTUuODIsMjUuNjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE2LjcxLDIzLjM1Yy0xLjI2LDAtMS41My0wLjU4LTEuNTMtMS4wN2MwLTAuMDUsMC4wNC0wLjA4LDAuMDgtMC4wOGgwLjM3YzAuMDQsMCwwLjA4LDAuMDMsMC4wOCwwLjA3CgkJCWMwLjA2LDAuMzgsMC4yMiwwLjU3LDAuOTksMC41N2MwLjYxLDAsMC44Ny0wLjE0LDAuODctMC40NmMwLTAuMTktMC4wNy0wLjMyLTEuMDItMC40MmMtMC43OS0wLjA4LTEuMjgtMC4yNS0xLjI4LTAuODkKCQkJYzAtMC41OCwwLjQ5LTAuOTMsMS4zMi0wLjkzYzAuOTMsMCwxLjM4LDAuMzIsMS40NCwxLjAxYzAsMC4wMi0wLjAxLDAuMDUtMC4wMiwwLjA2Yy0wLjAyLDAuMDItMC4wNCwwLjAzLTAuMDYsMC4wM2gtMC4zOAoJCQljLTAuMDQsMC0wLjA3LTAuMDMtMC4wOC0wLjA3Yy0wLjA5LTAuNC0wLjMxLTAuNTMtMC45LTAuNTNjLTAuNjYsMC0wLjc0LDAuMjMtMC43NCwwLjQxYzAsMC4yMSwwLjA5LDAuMjcsMC45OSwwLjM5CgkJCWMwLjg5LDAuMTIsMS4zMSwwLjI4LDEuMzEsMC45MUMxOC4xNSwyMi45OSwxNy42MiwyMy4zNSwxNi43MSwyMy4zNXoiLz4KCTwvZz4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMC44OCwxOS44NmMwLDAuMzEtMC4yNSwwLjU2LTAuNTYsMC41NmMtMC4zLDAtMC41Ni0wLjI1LTAuNTYtMC41NmMwLTAuMzIsMC4yNi0wLjU2LDAuNTYtMC41NgoJCQlDMjAuNjIsMTkuMywyMC44OCwxOS41NCwyMC44OCwxOS44NnogTTE5Ljg1LDE5Ljg2YzAsMC4yNiwwLjIxLDAuNDcsMC40NywwLjQ3YzAuMjYsMCwwLjQ3LTAuMjEsMC40Ny0wLjQ3CgkJCWMwLTAuMjYtMC4yMS0wLjQ3LTAuNDctMC40N0MyMC4wNiwxOS4zOSwxOS44NSwxOS41OSwxOS44NSwxOS44NnogTTIwLjExLDE5LjU0aDAuMjJjMC4wNywwLDAuMjIsMCwwLjIyLDAuMTcKCQkJYzAsMC4xMS0wLjA3LDAuMTQtMC4xMiwwLjE1YzAuMDksMC4wMSwwLjA5LDAuMDYsMC4xLDAuMTRjMC4wMSwwLjA1LDAuMDEsMC4xNCwwLjAzLDAuMTZoLTAuMTNjMC0wLjAzLTAuMDItMC4xOS0wLjAyLTAuMgoJCQljLTAuMDEtMC4wNC0wLjAyLTAuMDUtMC4wNi0wLjA1aC0wLjExdjAuMjVoLTAuMTJWMTkuNTR6IE0yMC4yMywxOS44MmgwLjFjMC4wOCwwLDAuMDktMC4wNiwwLjA5LTAuMDkKCQkJYzAtMC4wOS0wLjA2LTAuMDktMC4wOS0wLjA5aC0wLjFWMTkuODJ6Ii8+Cgk8L2c+Cgk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNi44NywxMi42YzAtMC4xMy0wLjA3LTAuMjYtMC4xOS0wLjMybC0zLjA2LTEuNzZjLTAuMDUtMC4wMy0wLjExLTAuMDUtMC4xNy0wLjA1Yy0wLjAxLDAtMC4wMywwLTAuMDMsMAoJCWMtMC4wNiwwLTAuMTIsMC4wMi0wLjE3LDAuMDVsLTMuMDYsMS43NkMwLjA3LDEyLjM1LDAsMTIuNDcsMCwxMi42bDAuMDEsNC43NWMwLDAuMDcsMC4wMywwLjEzLDAuMDksMC4xNgoJCWMwLjA2LDAuMDMsMC4xMywwLjAzLDAuMTgsMGwxLjgyLTEuMDRjMC4xMi0wLjA3LDAuMTktMC4xOSwwLjE5LTAuMzJ2LTIuMjJjMC0wLjEzLDAuMDctMC4yNSwwLjE4LTAuMzJsMC43OC0wLjQ1CgkJYzAuMDYtMC4wMywwLjEyLTAuMDUsMC4xOS0wLjA1YzAuMDYsMCwwLjEzLDAuMDIsMC4xOCwwLjA1bDAuNzgsMC40NWMwLjExLDAuMDcsMC4xOSwwLjE5LDAuMTksMC4zMnYyLjIyCgkJYzAsMC4xMywwLjA3LDAuMjUsMC4xOSwwLjMybDEuODIsMS4wNGMwLjA2LDAuMDMsMC4xMywwLjAzLDAuMTksMGMwLjA2LTAuMDMsMC4wOS0wLjA5LDAuMDktMC4xNkw2Ljg3LDEyLjZ6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjEuNjEsNi4wOGMtMC4wNi0wLjAzLTAuMTMtMC4wMy0wLjE4LDBjLTAuMDYsMC4wMy0wLjA5LDAuMDktMC4wOSwwLjE2djQuN2MwLDAuMDUtMC4wMiwwLjA5LTAuMDYsMC4xMQoJCWMtMC4wNCwwLjAyLTAuMDksMC4wMi0wLjEzLDBsLTAuNzctMC40NGMtMC4xMS0wLjA3LTAuMjYtMC4wNy0wLjM3LDBsLTMuMDcsMS43N2MtMC4xMSwwLjA3LTAuMTksMC4xOS0wLjE5LDAuMzJ2My41NAoJCWMwLDAuMTMsMC4wNywwLjI1LDAuMTksMC4zMkwyMCwxOC4zM2MwLjExLDAuMDcsMC4yNiwwLjA3LDAuMzcsMGwzLjA3LTEuNzdjMC4xMS0wLjA3LDAuMTktMC4xOSwwLjE5LTAuMzJWNy40MgoJCWMwLTAuMTMtMC4wNy0wLjI2LTAuMTktMC4zMkwyMS42MSw2LjA4eiBNMjEuMzMsMTUuMDhjMCwwLjAzLTAuMDIsMC4wNi0wLjA1LDAuMDhsLTEuMDUsMC42MWMtMC4wMywwLjAyLTAuMDYsMC4wMi0wLjA5LDAKCQlsLTEuMDUtMC42MWMtMC4wMy0wLjAyLTAuMDUtMC4wNS0wLjA1LTAuMDh2LTEuMjJjMC0wLjAzLDAuMDItMC4wNiwwLjA1LTAuMDhsMS4wNS0wLjYxYzAuMDMtMC4wMiwwLjA2LTAuMDIsMC4wOSwwbDEuMDUsMC42MQoJCWMwLjAzLDAuMDIsMC4wNSwwLjA1LDAuMDUsMC4wOFYxNS4wOHoiLz4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zMS44MiwxMy44M2MwLjExLTAuMDcsMC4xOC0wLjE5LDAuMTgtMC4zMnYtMC44NmMwLTAuMTMtMC4wNy0wLjI1LTAuMTgtMC4zMmwtMy4wNS0xLjc3CgkJCWMtMC4xMS0wLjA3LTAuMjYtMC4wNy0wLjM3LDBsLTMuMDYsMS43N2MtMC4xMSwwLjA3LTAuMTksMC4xOS0wLjE5LDAuMzJ2My41NGMwLDAuMTMsMC4wNywwLjI2LDAuMTksMC4zMmwzLjA0LDEuNzQKCQkJYzAuMTEsMC4wNiwwLjI1LDAuMDYsMC4zNiwwbDEuODQtMS4wMmMwLjA2LTAuMDMsMC4wOS0wLjA5LDAuMS0wLjE2YzAtMC4wNy0wLjA0LTAuMTMtMC4wOS0wLjE2bC0zLjA4LTEuNzcKCQkJYy0wLjA2LTAuMDMtMC4wOS0wLjA5LTAuMDktMC4xNnYtMS4xMWMwLTAuMDcsMC4wNC0wLjEzLDAuMDktMC4xNmwwLjk2LTAuNTVjMC4wNi0wLjAzLDAuMTMtMC4wMywwLjE4LDBsMC45NiwwLjU1CgkJCWMwLjA2LDAuMDMsMC4wOSwwLjA5LDAuMDksMC4xNnYwLjg3YzAsMC4wNywwLjA0LDAuMTMsMC4wOSwwLjE2YzAuMDYsMC4wMywwLjEzLDAuMDMsMC4xOSwwTDMxLjgyLDEzLjgzeiIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yOC41NCwxMy42NmMwLjAyLTAuMDEsMC4wNS0wLjAxLDAuMDcsMEwyOS4yLDE0YzAuMDIsMC4wMSwwLjA0LDAuMDQsMC4wNCwwLjA2djAuNjgKCQkJYzAsMC4wMy0wLjAxLDAuMDUtMC4wNCwwLjA2bC0wLjU5LDAuMzRjLTAuMDIsMC4wMS0wLjA1LDAuMDEtMC4wNywwbC0wLjU5LTAuMzRjLTAuMDItMC4wMS0wLjA0LTAuMDQtMC4wNC0wLjA2di0wLjY4CgkJCWMwLTAuMDMsMC4wMS0wLjA1LDAuMDQtMC4wNkwyOC41NCwxMy42NnoiLz4KCTwvZz4KCTxnPgoJCTxkZWZzPgoJCQk8cGF0aCBpZD0iWE1MSURfMTQzXyIgZD0iTTExLjk5LDEwLjU4Yy0wLjExLTAuMDctMC4yNS0wLjA3LTAuMzcsMGwtMy4wNSwxLjc2Yy0wLjExLDAuMDctMC4xOCwwLjE5LTAuMTgsMC4zMnYzLjUyCgkJCQljMCwwLjEzLDAuMDcsMC4yNSwwLjE4LDAuMzJsMy4wNSwxLjc2YzAuMTEsMC4wNywwLjI1LDAuMDcsMC4zNywwbDMuMDUtMS43NmMwLjExLTAuMDcsMC4xOC0wLjE5LDAuMTgtMC4zMnYtMy41MgoJCQkJYzAtMC4xMy0wLjA3LTAuMjUtMC4xOC0wLjMyTDExLjk5LDEwLjU4eiIvPgoJCTwvZGVmcz4KCQk8bGluZWFyR3JhZGllbnQgaWQ9IlhNTElEXzRfIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjEzLjA0OTQiIHkxPSIxMS44OTE3IiB4Mj0iMTAuMjk1OSIgeTI9IjE3LjUwODkiPgoJCQk8c3RvcCAgb2Zmc2V0PSIwIiBzdHlsZT0ic3RvcC1jb2xvcjojNDE4NzNGIi8+CgkJCTxzdG9wICBvZmZzZXQ9IjAuMzI4OCIgc3R5bGU9InN0b3AtY29sb3I6IzQxOEIzRCIvPgoJCQk8c3RvcCAgb2Zmc2V0PSIwLjYzNTIiIHN0eWxlPSJzdG9wLWNvbG9yOiM0MTk2MzciLz4KCQkJPHN0b3AgIG9mZnNldD0iMC45MzE5IiBzdHlsZT0ic3RvcC1jb2xvcjojM0ZBOTJEIi8+CgkJCTxzdG9wICBvZmZzZXQ9IjEiIHN0eWxlPSJzdG9wLWNvbG9yOiMzRkFFMkEiLz4KCQk8L2xpbmVhckdyYWRpZW50PgoJCTx1c2UgeGxpbms6aHJlZj0iI1hNTElEXzE0M18iICBzdHlsZT0ib3ZlcmZsb3c6dmlzaWJsZTtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjWE1MSURfNF8pOyIvPgoJCTxjbGlwUGF0aCBpZD0iWE1MSURfNV8iPgoJCQk8dXNlIHhsaW5rOmhyZWY9IiNYTUxJRF8xNDNfIiAgc3R5bGU9Im92ZXJmbG93OnZpc2libGU7Ii8+CgkJPC9jbGlwUGF0aD4KCQk8ZyBjbGFzcz0ic3QzIj4KCQkJPHBhdGggY2xhc3M9InN0NCIgZD0iTTExLjYyLDEwLjU4bC0zLjI0LDEuNzZDOC4yNywxMi40MSw4LDEyLjUzLDgsMTIuNjZ2My41MmMwLDAuMDksMC4yMiwwLjE3LDAuMjgsMC4yM2wzLjUyLTUuODcKCQkJCUMxMS43MSwxMC41MiwxMS43LDEwLjUzLDExLjYyLDEwLjU4eiIvPgoJCQk8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNMTEuOTEsMTguMjljMC4wMy0wLjAxLDAuMDYtMC4wMiwwLjA5LTAuMDRsMy40My0xLjc2YzAuMTEtMC4wNywwLjU3LTAuMTksMC41Ny0wLjMydi0zLjUyCgkJCQljMC0wLjEtMC40Mi0wLjE5LTAuNDktMC4yNkwxMS45MSwxOC4yOXoiLz4KCQkJPGxpbmVhckdyYWRpZW50IGlkPSJTVkdJRF8xXyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIHgxPSIxMS4zNDYzIiB5MT0iMTQuODMxNCIgeDI9IjE5LjA3MjQiIHkyPSI5LjEyMjkiPgoJCQkJPHN0b3AgIG9mZnNldD0iMC4xMzc2IiBzdHlsZT0ic3RvcC1jb2xvcjojNDE4NzNGIi8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjQwMzIiIHN0eWxlPSJzdG9wLWNvbG9yOiM1NEEwNDQiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuNzEzNiIgc3R5bGU9InN0b3AtY29sb3I6IzY2Qjg0OCIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC45MDgxIiBzdHlsZT0ic3RvcC1jb2xvcjojNkNDMDRBIi8+CgkJCTwvbGluZWFyR3JhZGllbnQ+CgkJCTxwYXRoIGNsYXNzPSJzdDUiIGQ9Ik0xNS4wNSwxMi4zNGwtMy4wNi0xLjc2Yy0wLjAzLTAuMDItMC4wNi0wLjAzLTAuMS0wLjA0bC0zLjQzLDUuODdjMC4wMywwLjAzLDAuMDYsMC4wNiwwLjEsMC4wOGwzLjA2LDEuNzYKCQkJCWMwLjA5LDAuMDUsMC4xOSwwLjA2LDAuMjgsMC4wNGwzLjIyLTUuODlDMTUuMTEsMTIuMzgsMTUuMDgsMTIuMzYsMTUuMDUsMTIuMzR6Ii8+CgkJPC9nPgoJCTxnIGNsYXNzPSJzdDMiPgoJCQk8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNMTYsMTYuMTh2LTMuNTJjMC0wLjEzLTAuNDYtMC4yNS0wLjU3LTAuMzJsLTMuMjUtMS43NmMtMC4wNC0wLjAyLTAuMTctMC4wMy0wLjIxLTAuMDRsMy42OCw1LjcyCgkJCQlDMTUuNjYsMTYuMjQsMTYsMTYuMjEsMTYsMTYuMTh6Ii8+CgkJCTxwYXRoIGNsYXNzPSJzdDQiIGQ9Ik04LjM4LDEyLjM0QzguMjcsMTIuNDEsOCwxMi41Myw4LDEyLjY2djMuNTJjMCwwLjEzLDAuMjcsMC4yNSwwLjM4LDAuMzJsMy4xNSwxLjc2CgkJCQljMC4wNywwLjA0LDAuMiwwLjA2LDAuMjgsMC4wNWwtMy4zNS01Ljk3TDguMzgsMTIuMzR6Ii8+CgkJCTxsaW5lYXJHcmFkaWVudCBpZD0iU1ZHSURfMl8iIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4MT0iOC4yODY3IiB5MT0iOS45NDczIiB4Mj0iMTUuMzMzNiIgeTI9IjkuOTQ3MyI+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjA5MTkiIHN0eWxlPSJzdG9wLWNvbG9yOiM2Q0MwNEEiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuMjg2NCIgc3R5bGU9InN0b3AtY29sb3I6IzY2Qjg0OCIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC41OTY4IiBzdHlsZT0ic3RvcC1jb2xvcjojNTRBMDQ0Ii8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjg2MjQiIHN0eWxlPSJzdG9wLWNvbG9yOiM0MTg3M0YiLz4KCQkJPC9saW5lYXJHcmFkaWVudD4KCQkJPHBvbHlnb24gY2xhc3M9InN0NiIgcG9pbnRzPSIxMS41Miw5Ljk0IDExLjQ4LDkuOTYgMTEuNTQsOS45NiAJCQkiLz4KCQkJPGxpbmVhckdyYWRpZW50IGlkPSJTVkdJRF8zXyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIHgxPSI4LjI4NjciIHkxPSIxNC40MTkiIHgyPSIxNS4zMzM2IiB5Mj0iMTQuNDE5Ij4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuMDkxOSIgc3R5bGU9InN0b3AtY29sb3I6IzZDQzA0QSIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC4yODY0IiBzdHlsZT0ic3RvcC1jb2xvcjojNjZCODQ4Ii8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjU5NjgiIHN0eWxlPSJzdG9wLWNvbG9yOiM1NEEwNDQiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuODYyNCIgc3R5bGU9InN0b3AtY29sb3I6IzQxODczRiIvPgoJCQk8L2xpbmVhckdyYWRpZW50PgoJCQk8cGF0aCBjbGFzcz0ic3Q3IiBkPSJNMTUuMDUsMTYuNWMwLjA5LTAuMDUsMC4xNi0wLjE0LDAuMTgtMC4yM2wtMy4zNS01LjcyYy0wLjA5LTAuMDItMC4xOCwwLTAuMjYsMC4wNGwtMy4wNCwxLjc1bDMuMjgsNS45NwoJCQkJYzAuMDUtMC4wMSwwLjA5LTAuMDIsMC4xMy0wLjA1TDE1LjA1LDE2LjV6Ii8+CgkJCTxsaW5lYXJHcmFkaWVudCBpZD0iU1ZHSURfNF8iIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4MT0iOC4yODY3IiB5MT0iMTYuNDMwNyIgeDI9IjE1LjMzMzYiIHkyPSIxNi40MzA3Ij4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuMDkxOSIgc3R5bGU9InN0b3AtY29sb3I6IzZDQzA0QSIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC4yODY0IiBzdHlsZT0ic3RvcC1jb2xvcjojNjZCODQ4Ii8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjU5NjgiIHN0eWxlPSJzdG9wLWNvbG9yOiM1NEEwNDQiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuODYyNCIgc3R5bGU9InN0b3AtY29sb3I6IzQxODczRiIvPgoJCQk8L2xpbmVhckdyYWRpZW50PgoJCQk8cG9seWdvbiBjbGFzcz0ic3Q4IiBwb2ludHM9IjE1LjMzLDE2LjQ0IDE1LjMxLDE2LjQxIDE1LjMxLDE2LjQ1IAkJCSIvPgoJCQk8bGluZWFyR3JhZGllbnQgaWQ9IlNWR0lEXzVfIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjcuNTc0NyIgeTE9IjE3LjM0IiB4Mj0iMTYuMDI0MiIgeTI9IjE3LjM0Ij4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuMDkxOSIgc3R5bGU9InN0b3AtY29sb3I6IzZDQzA0QSIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC4yODY0IiBzdHlsZT0ic3RvcC1jb2xvcjojNjZCODQ4Ii8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjU5NjgiIHN0eWxlPSJzdG9wLWNvbG9yOiM1NEEwNDQiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuODYyNCIgc3R5bGU9InN0b3AtY29sb3I6IzQxODczRiIvPgoJCQk8L2xpbmVhckdyYWRpZW50PgoJCQk8cGF0aCBjbGFzcz0ic3Q5IiBkPSJNMTUuMDUsMTYuNUwxMiwxOC4yNmMtMC4wNCwwLjAyLTAuMDksMC4wNC0wLjEzLDAuMDVsMC40LDAuMTFMMTYsMTYuNDV2LTAuMDVsLTAuNDMtMC4xNAoJCQkJQzE1LjU1LDE2LjM2LDE1LjE0LDE2LjQ1LDE1LjA1LDE2LjV6Ii8+CgkJCTxsaW5lYXJHcmFkaWVudCBpZD0iU1ZHSURfNl8iIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4MT0iMTYuODExNyIgeTE9IjExLjUwNDUiIHgyPSIxMi4yODg2IiB5Mj0iMjAuNzMxNiI+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwIiBzdHlsZT0ic3RvcC1jb2xvcjojNDE4NzNGIi8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIwLjMyODgiIHN0eWxlPSJzdG9wLWNvbG9yOiM0MThCM0QiLz4KCQkJCTxzdG9wICBvZmZzZXQ9IjAuNjM1MiIgc3R5bGU9InN0b3AtY29sb3I6IzQxOTYzNyIvPgoJCQkJPHN0b3AgIG9mZnNldD0iMC45MzE5IiBzdHlsZT0ic3RvcC1jb2xvcjojM0ZBOTJEIi8+CgkJCQk8c3RvcCAgb2Zmc2V0PSIxIiBzdHlsZT0ic3RvcC1jb2xvcjojM0ZBRTJBIi8+CgkJCTwvbGluZWFyR3JhZGllbnQ+CgkJCTxwYXRoIGNsYXNzPSJzdDEwIiBkPSJNMTUuMDUsMTYuNUwxMiwxOC4yNmMtMC4wNCwwLjAyLTAuMDksMC4wNC0wLjEzLDAuMDVsMC40LDAuMTFMMTYsMTYuNDV2LTAuMDVsLTAuNDMtMC4xNAoJCQkJQzE1LjU1LDE2LjM2LDE1LjE0LDE2LjQ1LDE1LjA1LDE2LjV6Ii8+CgkJPC9nPgoJPC9nPgo8L2c+Cjwvc3ZnPg==
+  introduction: >-
+    **Node.js** is based on the V8 JavaScript engine and allows you to write server-side JavaScript applications. It provides an I/O model based on events and non-blocking operations that enables you to write efficient applications.
+    
+    - The Node.js runtime enables you to run Node.js applications and services on OpenShift while providing all the advantages and conveniences of the OpenShift platform such as:
+    
+      - Rolling updates
+    
+      - Continuous delivery pipelines
+      
+      - Service discovery
+    
+      - Externalized configuration
+    
+      - Load balancing
+    
+    OpenShift also makes it easier for your applications to implement common microservice patterns such as externalized configuration, health check, circuit breaker, and failover.
+
+  tasks:
+    - description: >-
+        To create a Node application:
+        
+        1. Click on the [perspective switcher]{{highlight qs-perspective-switcher}} at the top of the navigation, and select **Developer**.
+        
+        1. In the navigation menu, click [Add]{{highlight qs-nav-add}}.
+        
+        1. Click the **Project** dropdown menu and select **Create Project** to create a project for your Node application.
+
+        1. In the **Name** field, enter a name for your new project. Then click **Create**.
+        
+        1. On the **+Add page**, click **Import from Git** on the **Git Repository** tile. 
+        
+        1. In the **Git Repo URL** field, add 
+        
+          ```
+            https://github.com/nodeshift-starters/nodejs-rest-http
+          ``` 
+        
+        1. At the end of the form, click **Create**. 
+
+      review:
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+        instructions: |-
+          The application is represented by the light grey area with the white border.  The deployment is a white circle.  Verify that the application was successfully created:
+          
+          - Can you identify a **nodejs-rest-http-app** application?
+          
+          - Can you identify a **nodejs-rest-http** deployment?
+
+      summary:
+        failed: Try the steps again.
+        success: Your Node application has been deployed onto OpenShift.
+      title: Create a Node application
+    - description: >-
+        To view the build status of your Node application:
+        
+        1. To view build status in a tooltip, hover over the status icon on the bottom left quadrant of the **nodejs-rest-http** deployment.
+        
+        1. Click on the icon for quick access to the build log.  
+        
+            - You should be able to see the log stream of the **nodejs-rest-http-1** build on the **Build Details** page.
+          
+            - The application and its dependencies will be built into a container image and pushed to the OpenShift container registry.
+
+      review:
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+        instructions: >-
+          Verify the build is complete:
+
+          - This build may take a few minutes. When it's finished, a **Complete** badge will surface on the page header beside build name **nodejsrest-http-redhat-1**. Did this badge appear?
+
+      summary:
+        failed: Try the steps again.
+        success: Your build is complete.
+      title: View the build status
+    - description: >-
+        To view the associated code:
+        
+        1. In the navigation menu, click [Topology]{{highlight qs-nav-topology}}.
+        
+        1. The icon on the bottom right quadrant of the **nodejs-rest-http** deployment either represents the Git repository of the associated code, OR if the appropriate operators are installed, it will bring up the associated code in your IDE.
+                  
+        1. If the icon shown is Bitbucket, GitHub, GitLab or generic Git, click it to navigate to the associate Git repository. Otherwise, if the icon shown is CodeReady Workspaces or Eclipse Che, click it to bring up the associated code in your IDE.
+
+      review:
+        failedTaskHelp: >- 
+          This task isn’t verified yet. Try the task again.
+        instructions: >-
+          Verify that you can see the code associated with your deployment:
+          
+          - Was a new browser tab opened either to your associated Git repository or to your IDE?
+
+      summary:
+        failed: Try the steps again.
+        success: You viewed the code associated with the **nodejs-rest-http** deployment.
+      title: View the associated code
+
+    - description: >-
+        To view the pod status:
+
+        1. Hover over the pod donut to see the pod status in a tooltip.
+
+             - Notice that the **nodejs-rest-http** deployment has a pod donut imposed on the circle, representing the pod status (i.e. blue = running).
+        
+              - The color of the donut indicates the pod status.  
+
+      review:
+        failedTaskHelp: >-
+          This task isn’t verified yet. Try the task again.
+        instructions: |-
+          Verify you see the pod status:
+          
+          - Do you see the number of associated pods and their statuses?
+
+      summary:
+        failed: Try the steps again.
+        success: Your deployment has one running pod.
+      title: View the pod status
+
+    - description: >-
+        The external link icon on the top right quadrant of the **nodejs-rest-http** deployment represents the route URL.
+        
+        1. Click the external link icon to open the URL and run the application in a new browser tab.
+      review:
+        failedTaskHelp: >-
+          This task isn’t verified yet. Try the task again.
+        instructions: |-
+          Verify your Node application is running:
+          
+          - Is the new tab titled **API Level 0 Example - Node.js**?
+
+      summary:
+        failed: Try the steps again.
+        success: Your Node application is running.
+      title: Run the Node application
+  conclusion: >-
+    Your Node application is deployed and ready.
