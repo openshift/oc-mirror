@@ -4,6 +4,10 @@ ifdef OS_GIT_VERSION
 SOURCE_GIT_TAG := ${OS_GIT_VERSION}
 endif
 
+
+export GO_COMPLIANCE_INFO=0
+export GO_COMPLIANCE_DEBUG=0
+
 SOURCE_GIT_COMMIT := $(shell git rev-parse HEAD)
 
 GO_LD_EXTRAFLAGS :=-X k8s.io/component-base/version.gitMajor="0" \

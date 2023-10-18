@@ -5,6 +5,9 @@ set -eu
 source test/lib.sh
 source test/testcases.sh
 
+export GO_COMPLIANCE_INFO=0
+export GO_COMPLIANCE_DEBUG=0
+
 CMD="${1:?cmd bin path is required}"
 CMD="$(cd "$(dirname "$CMD")" && pwd)/$(basename "$CMD")"
 

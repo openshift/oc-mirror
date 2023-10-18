@@ -2,11 +2,12 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.10 AS builder
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
+ENV GO_COMPLIANCE_INFO=0
 RUN make build
 
 FROM registry.ci.openshift.org/ocp/4.10:base
 COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/
-
+ENV GO_COMPLIANCE_INFO=0
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
       io.openshift.tags="openshift,cli,mirror" \
