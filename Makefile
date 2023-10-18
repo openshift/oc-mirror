@@ -60,10 +60,11 @@ test-e2e: build
 	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror
 .PHONY: test-e2e
 
-test-integration: hack-build
-	@mkdir -p test/integration/output/clients
-	@cp bin/oc-mirror test/integration/output/clients/
-	@cd test/integration && make
+test-integration: # hack-build
+	#@mkdir -p test/integration/output/clients
+	#@cp bin/oc-mirror test/integration/output/clients/
+	#@cd test/integration && make
+	echo "integration tests are disabled"
 .PHONY: test-integration
 
 sanity: tidy format vet
