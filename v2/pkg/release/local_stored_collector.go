@@ -185,39 +185,36 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, img := range images {
-		// TODO Make this more complete
-		// This logic will be useful for operators and releases
-		// strip the domain name from the img.Name
-		src := ""
-		dst := ""
+		var src string
+		var dest string
 
-		domainAndPathComps := img.Image
-		// pathComponents := img.Name
-		// temporarily strip out the transport
-		transportAndRef := strings.Split(domainAndPathComps, "://")
+		imgRef := img.Image
+		transportAndRef := strings.Split(imgRef, "://")
 		if len(transportAndRef) > 1 {
-			domainAndPathComps = transportAndRef[1]
+			imgRef = transportAndRef[1]
 		}
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, domainAndPathComps}, "/")
-		dst = strings.Join([]string{o.Opts.Destination, domainAndPathComps}, "/")
 
-		// the following is for having the destination without the initial domain name => later
-		// domainAndPathCompsArray := strings.Split(domainAndPathComps, "/")
-		// if len(domainAndPathCompsArray) > 2 {
-		// 	pathComponents = strings.Join(domainAndPathCompsArray[1:], "/")
-		// } else {
-		// 	return allImages, fmt.Errorf("unable to parse image %s correctly", img.Name)
-		// }
-		// src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents}, "/")
-		// dst = strings.Join([]string{o.Opts.Destination, pathComponents}, "/") // already has a transport protocol
+		pathWithoutDNS, err := pathWithoutDNS(imgRef)
+		if err != nil {
+			o.Log.Error("%s", err.Error())
+			return nil, err
+		}
 
-		if src == "" || dst == "" {
-			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dst, img.Name)
+		if isImageByDigest(imgRef) {
+			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + "@sha256:" + imageHash(imgRef)}, "/")
+			dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + "@sha256:" + imageHash(imgRef)}, "/")
+		} else {
+			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+			dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
+		}
+
+		if src == "" || dest == "" {
+			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
 		}
 
 		o.Log.Debug("source %s", src)
-		o.Log.Debug("destination %s", dst)
-		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dst})
+		o.Log.Debug("destination %s", dest)
+		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest})
 
 	}
 	return result, nil
@@ -226,21 +223,68 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, images []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, img := range images {
-		imgName := img.Image
-		src := ""
-		if !strings.Contains(src, "://") { // no transport was provided, assume docker://
-			src = dockerProtocol + imgName
+		imgRef := img.Image
+		var src string
+		var dest string
+
+		if !strings.Contains(imgRef, "://") {
+			src = dockerProtocol + imgRef
 		} else {
-			transportAndRef := strings.Split(imgName, "://")
-			imgName = transportAndRef[1] // because we are reusing this to construct dest
+			src = imgRef
+			transportAndRef := strings.Split(imgRef, "://")
+			imgRef = transportAndRef[1]
 		}
 
-		dest := dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgName}, "/")
+		pathWithoutDNS, err := pathWithoutDNS(imgRef)
+		if err != nil {
+			o.Log.Error("%s", err.Error())
+			return nil, err
+		}
+
+		if isImageByDigest(imgRef) {
+			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + "@sha256:" + imageHash(imgRef)}, "/")
+		} else {
+			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+		}
+
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
 		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
 	}
 	return result, nil
+}
+
+func isImageByDigest(imgRef string) bool {
+	return strings.Contains(imgRef, "@")
+}
+
+func pathWithoutDNS(imgRef string) (string, error) {
+
+	var imageName []string
+	if isImageByDigest(imgRef) {
+		imageNameSplit := strings.Split(imgRef, "@")
+		imageName = strings.Split(imageNameSplit[0], "/")
+	} else {
+		imageName = strings.Split(imgRef, "/")
+	}
+
+	if len(imageName) > 2 {
+		return strings.Join(imageName[1:], "/"), nil
+	} else if len(imageName) == 1 {
+		return imageName[0], nil
+	} else {
+		return "", fmt.Errorf("unable to parse image %s correctly", imgRef)
+	}
+}
+
+func imageHash(imgRef string) string {
+	var hash string
+	imgSplit := strings.Split(imgRef, "@")
+	if len(imgSplit) > 1 {
+		hash = strings.Split(imgSplit[1], ":")[1]
+	}
+
+	return hash
 }
 
 func (o *LocalStorageCollector) identifyReleases() ([]v1alpha3.RelatedImage, []string, error) {
