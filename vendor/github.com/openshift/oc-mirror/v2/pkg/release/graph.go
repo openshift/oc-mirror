@@ -1,6 +1,7 @@
 package release
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -18,6 +19,52 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func saveWithUidGid(content []byte, outputFile string, mod int, uid, gid int) error {
+	gzipReader, err := gzip.NewReader(bytes.NewReader(content))
+	defer gzipReader.Close()
+	if err != nil {
+		return err
+	}
+	tarReader := tar.NewReader(gzipReader)
+
+	f, err := os.Create(outputFile)
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+	tarWriter := tar.NewWriter(f)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		header.Uid = uid
+		header.Gid = gid
+
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(tarWriter, tarReader); err != nil {
+			return err
+		}
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Chmod(outputFile, os.FileMode(mod)); err != nil {
+		return err
+	}
+
+	return nil
+}
 func untar(src, dest string) error {
 	file, err := os.Open(src)
 	if err != nil {
@@ -67,8 +114,8 @@ func untar(src, dest string) error {
 	return nil
 }
 
-func createGraphImage(localStorageFQDN string) (string, error) {
-
+func (o *LocalStorageCollector) createGraphImage() (string, error) {
+	o.Log.Info("Creating graph image - start")
 	// HTTP Get the graph updates from api endpoint
 	resp, err := http.Get(graphURL)
 	if err != nil {
@@ -81,18 +128,19 @@ func createGraphImage(localStorageFQDN string) (string, error) {
 		return "", err
 	}
 
-	// save graph data to tar.gz file
-	err = os.WriteFile(outputFile, body, 0644)
+	err = saveWithUidGid(body, graphArchive, 0644, 0, 0)
+	// save graph data to tar.gz file modifying UID and GID to root
+	//err = os.WriteFile(outputFile, body, 0644)
 	if err != nil {
 		return "", err
 	}
-
+	o.Log.Info("saved cinncinati graph data to tar file")
 	// create a container image
-	graphDataUntarFolder := "graph-data-untarred"
-	err = untar(outputFile, graphDataUntarFolder)
-	if err != nil {
-		return "", err
-	}
+	// graphDataUntarFolder := "graph-data-untarred"
+	// err = untar(outputFile, graphDataUntarFolder)
+	// if err != nil {
+	// 	return "", err
+	// }
 
 	logger := logrus.New()
 	//TODO take log level from localStoreCollection options
@@ -111,10 +159,13 @@ func createGraphImage(localStorageFQDN string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	o.Log.Info("creating a storage for buildah builder")
+
 	buildStore, err := storage.GetStore(buildStoreOptions)
 	if err != nil {
 		return "", err
 	}
+	o.Log.Info("created a storage for buildah builder")
 	defer buildStore.Shutdown(false)
 
 	builderOpts := buildah.BuilderOptions{
@@ -122,27 +173,29 @@ func createGraphImage(localStorageFQDN string) (string, error) {
 		Capabilities: capabilitiesForRoot,
 		Logger:       logger,
 	}
+	o.Log.Info("Before creating buildah builder")
 	builder, err := buildah.NewBuilder(context.TODO(), buildStore, builderOpts)
 	if err != nil {
 		return "", err
 	}
 	defer builder.Delete()
+	o.Log.Info("Created buildah builder")
+	addOptions := buildah.AddAndCopyOptions{Chown: "0:0", PreserveOwnership: true}
 
-	addOptions := buildah.AddAndCopyOptions{PreserveOwnership: true}
-
-	err = builder.Add(graphDataDir, false, addOptions, graphDataUntarFolder)
+	err = builder.Add(graphDataDir, false, addOptions, graphArchive)
 	if err != nil {
 		return "", err
 	}
+	o.Log.Info("Added graph data to buildah builder")
 	builder.SetCmd([]string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", graphDataDir, graphDataMountPath)})
-	imageRef, err := alltransports.ParseImageName("docker://" + filepath.Join(localStorageFQDN, graphImageName))
+	imageRef, err := alltransports.ParseImageName("docker://" + filepath.Join(o.LocalStorageFQDN, graphImageName))
 	if err != nil {
 		return "", err
 	}
 
-	_, _, digest, err := builder.Commit(context.TODO(), imageRef, buildah.CommitOptions{})
+	_, _, digest, err := builder.Commit(context.TODO(), imageRef, buildah.CommitOptions{SystemContext: o.Opts.Global.NewSystemContext()})
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(localStorageFQDN, graphImageName) + "@" + digest.String(), nil
+	return filepath.Join(o.LocalStorageFQDN, graphImageName) + "@" + digest.String(), nil
 }

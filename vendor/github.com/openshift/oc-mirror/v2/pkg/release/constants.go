@@ -4,7 +4,7 @@ const (
 	graphPreparationDir         string = "graph-preparation"
 	graphBaseImage              string = "registry.access.redhat.com/ubi9/ubi:latest"
 	graphURL                    string = "https://api.openshift.com/api/upgrades_info/graph-data"
-	outputFile                  string = "cincinnati-graph-data.tar.gz"
+	graphArchive                string = "cincinnati-graph-data.tar"
 	graphDataDir                string = "/var/lib/cincinnati-graph-data/"
 	graphDataMountPath          string = "/var/lib/cincinnati/graph-data"
 	graphImageName              string = "graph-image"

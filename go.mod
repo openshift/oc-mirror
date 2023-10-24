@@ -44,6 +44,8 @@ require (
 require golang.org/x/sys v0.13.0 // indirect
 
 require (
+	github.com/containers/buildah v1.30.0
+	github.com/containers/storage v1.48.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044
 	github.com/otiai10/copy v1.2.0
@@ -86,11 +88,9 @@ require (
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/containernetworking/cni v1.1.2 // indirect
 	github.com/containernetworking/plugins v1.3.0 // indirect
-	github.com/containers/buildah v1.30.0 // indirect
 	github.com/containers/common v0.55.1 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
 	github.com/containers/ocicrypt v1.1.7 // indirect
-	github.com/containers/storage v1.48.0 // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20230514072755-504adb8a8af1 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

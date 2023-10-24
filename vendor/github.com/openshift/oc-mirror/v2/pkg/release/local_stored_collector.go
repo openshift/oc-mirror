@@ -147,7 +147,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		}
 		if o.Config.Mirror.Platform.Graph {
 			o.Log.Info("creating graph data image")
-			graphImage, err := createGraphImage(o.LocalStorageFQDN)
+			graphImage, err := o.createGraphImage()
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
