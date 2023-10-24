@@ -3,17 +3,11 @@ package main
 import (
 	"os"
 
-	"github.com/containers/buildah"
-	"github.com/containers/storage/pkg/unshare"
 	cli "github.com/openshift/oc-mirror/v2/pkg/cli"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 )
 
 func main() {
-	if buildah.InitReexec() {
-		return
-	}
-	unshare.MaybeReexecUsingUserNamespace(false)
 
 	// setup pluggable logger
 	// feel free to plugin you own logger
