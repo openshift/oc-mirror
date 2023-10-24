@@ -145,6 +145,26 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			allImages = append(allImages, tmpAllImages...)
 
 		}
+		if o.Config.Mirror.Platform.Graph {
+			o.Log.Info("creating graph data image")
+			graphImage, err := createGraphImage(o.LocalStorageFQDN)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+			o.Log.Info("graph image %s created and pushed to cache.", graphImage)
+			// graphImages := []v1alpha3.RelatedImage{
+			// 	{
+			// 		Image: graphImage,
+			// 		Name:  graphImage,
+			// 	},
+			// }
+			// tmpGraphImages, err := o.prepareM2DCopyBatch(o.Log, graphImages)
+			// if err != nil {
+			// 	return []v1alpha3.CopyImageSchema{}, err
+			// }
+			// allImages = append(allImages, tmpGraphImages...)
+
+		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
 		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
@@ -172,13 +192,24 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			}
 			allRelatedImages = append(allRelatedImages, releaseRelatedImages...)
 		}
+		if o.Config.Mirror.Platform.Graph {
+			o.Log.Info("adding graph data image")
+			graphRelatedImage := v1alpha3.RelatedImage{
+				Name: graphImageName,
+				// Supposing that the mirror to disk saved the image with the latest tag
+				// If this supposition is false, then we need to implement a mechanism to save
+				// the digest of the graph image and use it here
+				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+			}
+			allRelatedImages = append(allRelatedImages, graphRelatedImage)
+		}
 		allImages, err = o.prepareD2MCopyBatch(o.Log, allRelatedImages)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
 		}
 
 	}
-
+	o.Log.Debug("List of images to copy %v", allImages)
 	return allImages, nil
 }
 

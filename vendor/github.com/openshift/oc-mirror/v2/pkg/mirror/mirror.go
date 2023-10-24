@@ -16,7 +16,7 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 )
 
 type Mode string

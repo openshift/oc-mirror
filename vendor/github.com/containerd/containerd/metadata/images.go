@@ -19,7 +19,6 @@ package metadata
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -33,6 +32,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -56,17 +56,17 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
 		bkt := getImagesBucket(tx, namespace)
 		if bkt == nil {
-			return fmt.Errorf("image %q: %w", name, errdefs.ErrNotFound)
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
 		}
 
 		ibkt := bkt.Bucket([]byte(name))
 		if ibkt == nil {
-			return fmt.Errorf("image %q: %w", name, errdefs.ErrNotFound)
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
 		}
 
 		image.Name = name
 		if err := readImage(&image, ibkt); err != nil {
-			return fmt.Errorf("image %q: %w", name, err)
+			return errors.Wrapf(err, "image %q", name)
 		}
 
 		return nil
@@ -85,7 +85,7 @@ func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, er
 
 	filter, err := filters.ParseAll(fs...)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", err.Error(), errdefs.ErrInvalidArgument)
+		return nil, errors.Wrap(errdefs.ErrInvalidArgument, err.Error())
 	}
 
 	var m []images.Image
@@ -141,7 +141,7 @@ func (s *imageStore) Create(ctx context.Context, image images.Image) (images.Ima
 				return err
 			}
 
-			return fmt.Errorf("image %q: %w", image.Name, errdefs.ErrAlreadyExists)
+			return errors.Wrapf(errdefs.ErrAlreadyExists, "image %q", image.Name)
 		}
 
 		image.CreatedAt = time.Now().UTC()
@@ -161,7 +161,7 @@ func (s *imageStore) Update(ctx context.Context, image images.Image, fieldpaths 
 	}
 
 	if image.Name == "" {
-		return images.Image{}, fmt.Errorf("image name is required for update: %w", errdefs.ErrInvalidArgument)
+		return images.Image{}, errors.Wrapf(errdefs.ErrInvalidArgument, "image name is required for update")
 	}
 
 	var updated images.Image
@@ -174,11 +174,11 @@ func (s *imageStore) Update(ctx context.Context, image images.Image, fieldpaths 
 
 		ibkt := bkt.Bucket([]byte(image.Name))
 		if ibkt == nil {
-			return fmt.Errorf("image %q: %w", image.Name, errdefs.ErrNotFound)
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", image.Name)
 		}
 
 		if err := readImage(&updated, ibkt); err != nil {
-			return fmt.Errorf("image %q: %w", image.Name, err)
+			return errors.Wrapf(err, "image %q", image.Name)
 		}
 		createdat := updated.CreatedAt
 		updated.Name = image.Name
@@ -216,7 +216,7 @@ func (s *imageStore) Update(ctx context.Context, image images.Image, fieldpaths 
 				case "annotations":
 					updated.Target.Annotations = image.Target.Annotations
 				default:
-					return fmt.Errorf("cannot update %q field on image %q: %w", path, image.Name, errdefs.ErrInvalidArgument)
+					return errors.Wrapf(errdefs.ErrInvalidArgument, "cannot update %q field on image %q", path, image.Name)
 				}
 			}
 		} else {
@@ -247,12 +247,12 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 	return update(ctx, s.db, func(tx *bolt.Tx) error {
 		bkt := getImagesBucket(tx, namespace)
 		if bkt == nil {
-			return fmt.Errorf("image %q: %w", name, errdefs.ErrNotFound)
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
 		}
 
 		if err = bkt.DeleteBucket([]byte(name)); err != nil {
 			if err == bolt.ErrBucketNotFound {
-				err = fmt.Errorf("image %q: %w", name, errdefs.ErrNotFound)
+				err = errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
 			}
 			return err
 		}
@@ -265,12 +265,12 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 
 func validateImage(image *images.Image) error {
 	if image.Name == "" {
-		return fmt.Errorf("image name must not be empty: %w", errdefs.ErrInvalidArgument)
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "image name must not be empty")
 	}
 
 	for k, v := range image.Labels {
 		if err := labels.Validate(k, v); err != nil {
-			return fmt.Errorf("image.Labels: %w", err)
+			return errors.Wrapf(err, "image.Labels")
 		}
 	}
 
@@ -281,15 +281,15 @@ func validateTarget(target *ocispec.Descriptor) error {
 	// NOTE(stevvooe): Only validate fields we actually store.
 
 	if err := target.Digest.Validate(); err != nil {
-		return fmt.Errorf("Target.Digest %q invalid: %v: %w", target.Digest, err, errdefs.ErrInvalidArgument)
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "Target.Digest %q invalid: %v", target.Digest, err)
 	}
 
 	if target.Size <= 0 {
-		return fmt.Errorf("Target.Size must be greater than zero: %w", errdefs.ErrInvalidArgument)
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "Target.Size must be greater than zero")
 	}
 
 	if target.MediaType == "" {
-		return fmt.Errorf("Target.MediaType must be set: %w", errdefs.ErrInvalidArgument)
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "Target.MediaType must be set")
 	}
 
 	return nil
@@ -341,11 +341,11 @@ func writeImage(bkt *bolt.Bucket, image *images.Image) error {
 	}
 
 	if err := boltutil.WriteLabels(bkt, image.Labels); err != nil {
-		return fmt.Errorf("writing labels for image %v: %w", image.Name, err)
+		return errors.Wrapf(err, "writing labels for image %v", image.Name)
 	}
 
 	if err := boltutil.WriteAnnotations(bkt, image.Target.Annotations); err != nil {
-		return fmt.Errorf("writing Annotations for image %v: %w", image.Name, err)
+		return errors.Wrapf(err, "writing Annotations for image %v", image.Name)
 	}
 
 	// write the target bucket

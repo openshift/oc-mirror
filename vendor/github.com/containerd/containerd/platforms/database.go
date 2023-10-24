@@ -21,6 +21,13 @@ import (
 	"strings"
 )
 
+// isLinuxOS returns true if the operating system is Linux.
+//
+// The OS value should be normalized before calling this function.
+func isLinuxOS(os string) bool {
+	return os == "linux"
+}
+
 // These function are generated from https://golang.org/src/go/build/syslist.go.
 //
 // We use switch statements because they are slightly faster than map lookups
@@ -31,7 +38,7 @@ import (
 // The OS value should be normalized before calling this function.
 func isKnownOS(os string) bool {
 	switch os {
-	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "ios", "js", "linux", "nacl", "netbsd", "openbsd", "plan9", "solaris", "windows", "zos":
+	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "js", "linux", "nacl", "netbsd", "openbsd", "plan9", "solaris", "windows", "zos":
 		return true
 	}
 	return false
@@ -53,7 +60,7 @@ func isArmArch(arch string) bool {
 // The arch value should be normalized before being passed to this function.
 func isKnownArch(arch string) bool {
 	switch arch {
-	case "386", "amd64", "amd64p32", "arm", "armbe", "arm64", "arm64be", "ppc64", "ppc64le", "loong64", "mips", "mipsle", "mips64", "mips64le", "mips64p32", "mips64p32le", "ppc", "riscv", "riscv64", "s390", "s390x", "sparc", "sparc64", "wasm":
+	case "386", "amd64", "amd64p32", "arm", "armbe", "arm64", "arm64be", "ppc64", "ppc64le", "mips", "mipsle", "mips64", "mips64le", "mips64p32", "mips64p32le", "ppc", "riscv", "riscv64", "s390", "s390x", "sparc", "sparc64", "wasm":
 		return true
 	}
 	return false
@@ -79,11 +86,9 @@ func normalizeArch(arch, variant string) (string, string) {
 	case "i386":
 		arch = "386"
 		variant = ""
-	case "x86_64", "x86-64", "amd64":
+	case "x86_64", "x86-64":
 		arch = "amd64"
-		if variant == "v1" {
-			variant = ""
-		}
+		variant = ""
 	case "aarch64", "arm64":
 		arch = "arm64"
 		switch variant {

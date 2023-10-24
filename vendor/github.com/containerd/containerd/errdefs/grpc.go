@@ -18,9 +18,9 @@ package errdefs
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -68,9 +68,9 @@ func ToGRPC(err error) error {
 // ToGRPCf maps the error to grpc error codes, assembling the formatting string
 // and combining it with the target error string.
 //
-// This is equivalent to errdefs.ToGRPC(fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err))
+// This is equivalent to errors.ToGRPC(errors.Wrapf(err, format, args...))
 func ToGRPCf(err error, format string, args ...interface{}) error {
-	return ToGRPC(fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err))
+	return ToGRPC(errors.Wrapf(err, format, args...))
 }
 
 // FromGRPC returns the underlying error from a grpc service based on the grpc error code
@@ -104,9 +104,9 @@ func FromGRPC(err error) error {
 
 	msg := rebaseMessage(cls, err)
 	if msg != "" {
-		err = fmt.Errorf("%s: %w", msg, cls)
+		err = errors.Wrap(cls, msg)
 	} else {
-		err = cls
+		err = errors.WithStack(cls)
 	}
 
 	return err

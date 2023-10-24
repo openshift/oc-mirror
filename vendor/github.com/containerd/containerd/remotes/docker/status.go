@@ -17,22 +17,16 @@
 package docker
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/moby/locker"
+	"github.com/pkg/errors"
 )
 
 // Status of a content operation
 type Status struct {
 	content.Status
-
-	Committed bool
-
-	// ErrClosed contains error encountered on close.
-	ErrClosed error
 
 	// UploadUUID is used by the Docker registry to reference blob uploads
 	UploadUUID string
@@ -44,24 +38,15 @@ type StatusTracker interface {
 	SetStatus(string, Status)
 }
 
-// StatusTrackLocker to track status of operations with lock
-type StatusTrackLocker interface {
-	StatusTracker
-	Lock(string)
-	Unlock(string)
-}
-
 type memoryStatusTracker struct {
 	statuses map[string]Status
 	m        sync.Mutex
-	locker   *locker.Locker
 }
 
 // NewInMemoryTracker returns a StatusTracker that tracks content status in-memory
-func NewInMemoryTracker() StatusTrackLocker {
+func NewInMemoryTracker() StatusTracker {
 	return &memoryStatusTracker{
 		statuses: map[string]Status{},
-		locker:   locker.New(),
 	}
 }
 
@@ -70,7 +55,7 @@ func (t *memoryStatusTracker) GetStatus(ref string) (Status, error) {
 	defer t.m.Unlock()
 	status, ok := t.statuses[ref]
 	if !ok {
-		return Status{}, fmt.Errorf("status for ref %v: %w", ref, errdefs.ErrNotFound)
+		return Status{}, errors.Wrapf(errdefs.ErrNotFound, "status for ref %v", ref)
 	}
 	return status, nil
 }
@@ -79,12 +64,4 @@ func (t *memoryStatusTracker) SetStatus(ref string, status Status) {
 	t.m.Lock()
 	t.statuses[ref] = status
 	t.m.Unlock()
-}
-
-func (t *memoryStatusTracker) Lock(ref string) {
-	t.locker.Lock(ref)
-}
-
-func (t *memoryStatusTracker) Unlock(ref string) {
-	t.locker.Unlock(ref)
 }

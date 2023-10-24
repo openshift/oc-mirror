@@ -18,11 +18,11 @@ package namespaces
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/identifiers"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -69,10 +69,10 @@ func Namespace(ctx context.Context) (string, bool) {
 func NamespaceRequired(ctx context.Context) (string, error) {
 	namespace, ok := Namespace(ctx)
 	if !ok || namespace == "" {
-		return "", fmt.Errorf("namespace is required: %w", errdefs.ErrFailedPrecondition)
+		return "", errors.Wrapf(errdefs.ErrFailedPrecondition, "namespace is required")
 	}
 	if err := identifiers.Validate(namespace); err != nil {
-		return "", fmt.Errorf("namespace validation: %w", err)
+		return "", errors.Wrap(err, "namespace validation")
 	}
 	return namespace, nil
 }

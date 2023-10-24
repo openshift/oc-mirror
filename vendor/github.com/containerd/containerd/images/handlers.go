@@ -18,7 +18,6 @@ package images
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
@@ -33,17 +33,13 @@ import (
 var (
 	// ErrSkipDesc is used to skip processing of a descriptor and
 	// its descendants.
-	ErrSkipDesc = errors.New("skip descriptor")
+	ErrSkipDesc = fmt.Errorf("skip descriptor")
 
 	// ErrStopHandler is used to signify that the descriptor
 	// has been handled and should not be handled further.
 	// This applies only to a single descriptor in a handler
 	// chain and does not apply to descendant descriptors.
-	ErrStopHandler = errors.New("stop handler")
-
-	// ErrEmptyWalk is used when the WalkNotEmpty handlers return no
-	// children (e.g.: they were filtered out).
-	ErrEmptyWalk = errors.New("image might be filtered out")
+	ErrStopHandler = fmt.Errorf("stop handler")
 )
 
 // Handler handles image manifests
@@ -102,36 +98,6 @@ func Walk(ctx context.Context, handler Handler, descs ...ocispec.Descriptor) err
 				return err
 			}
 		}
-	}
-	return nil
-}
-
-// WalkNotEmpty works the same way Walk does, with the exception that it ensures that
-// some children are still found by Walking the descriptors (for example, not all of
-// them have been filtered out by one of the handlers). If there are no children,
-// then an ErrEmptyWalk error is returned.
-func WalkNotEmpty(ctx context.Context, handler Handler, descs ...ocispec.Descriptor) error {
-	isEmpty := true
-	var notEmptyHandler HandlerFunc = func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-		children, err := handler.Handle(ctx, desc)
-		if err != nil {
-			return children, err
-		}
-
-		if len(children) > 0 {
-			isEmpty = false
-		}
-
-		return children, nil
-	}
-
-	err := Walk(ctx, notEmptyHandler, descs...)
-	if err != nil {
-		return err
-	}
-
-	if isEmpty {
-		return ErrEmptyWalk
 	}
 
 	return nil
@@ -308,7 +274,7 @@ func LimitManifests(f HandlerFunc, m platforms.MatchComparer, n int) HandlerFunc
 
 			if n > 0 {
 				if len(children) == 0 {
-					return children, fmt.Errorf("no match for platform in manifest: %w", errdefs.ErrNotFound)
+					return children, errors.Wrap(errdefs.ErrNotFound, "no match for platform in manifest")
 				}
 				if len(children) > n {
 					children = children[:n]

@@ -18,8 +18,6 @@ package local
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,6 +28,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/log"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 )
 
 // writer represents a write transaction against the blob store.
@@ -89,30 +88,30 @@ func (w *writer) Commit(ctx context.Context, size int64, expected digest.Digest,
 	w.fp = nil
 
 	if fp == nil {
-		return fmt.Errorf("cannot commit on closed writer: %w", errdefs.ErrFailedPrecondition)
+		return errors.Wrap(errdefs.ErrFailedPrecondition, "cannot commit on closed writer")
 	}
 
 	if err := fp.Sync(); err != nil {
 		fp.Close()
-		return fmt.Errorf("sync failed: %w", err)
+		return errors.Wrap(err, "sync failed")
 	}
 
 	fi, err := fp.Stat()
 	closeErr := fp.Close()
 	if err != nil {
-		return fmt.Errorf("stat on ingest file failed: %w", err)
+		return errors.Wrap(err, "stat on ingest file failed")
 	}
 	if closeErr != nil {
-		return fmt.Errorf("failed to close ingest file: %w", closeErr)
+		return errors.Wrap(err, "failed to close ingest file")
 	}
 
 	if size > 0 && size != fi.Size() {
-		return fmt.Errorf("unexpected commit size %d, expected %d: %w", fi.Size(), size, errdefs.ErrFailedPrecondition)
+		return errors.Wrapf(errdefs.ErrFailedPrecondition, "unexpected commit size %d, expected %d", fi.Size(), size)
 	}
 
 	dgst := w.digester.Digest()
 	if expected != "" && expected != dgst {
-		return fmt.Errorf("unexpected commit digest %s, expected %s: %w", dgst, expected, errdefs.ErrFailedPrecondition)
+		return errors.Wrapf(errdefs.ErrFailedPrecondition, "unexpected commit digest %s, expected %s", dgst, expected)
 	}
 
 	var (
@@ -128,9 +127,9 @@ func (w *writer) Commit(ctx context.Context, size int64, expected digest.Digest,
 	if _, err := os.Stat(target); err == nil {
 		// collision with the target file!
 		if err := os.RemoveAll(w.path); err != nil {
-			log.G(ctx).WithField("ref", w.ref).WithField("path", w.path).Error("failed to remove ingest directory")
+			log.G(ctx).WithField("ref", w.ref).WithField("path", w.path).Errorf("failed to remove ingest directory")
 		}
-		return fmt.Errorf("content %v: %w", dgst, errdefs.ErrAlreadyExists)
+		return errors.Wrapf(errdefs.ErrAlreadyExists, "content %v", dgst)
 	}
 
 	if err := os.Rename(ingest, target); err != nil {
@@ -143,17 +142,17 @@ func (w *writer) Commit(ctx context.Context, size int64, expected digest.Digest,
 
 	commitTime := time.Now()
 	if err := os.Chtimes(target, commitTime, commitTime); err != nil {
-		log.G(ctx).WithField("digest", dgst).Error("failed to change file time to commit time")
+		log.G(ctx).WithField("digest", dgst).Errorf("failed to change file time to commit time")
 	}
 
 	// clean up!!
 	if err := os.RemoveAll(w.path); err != nil {
-		log.G(ctx).WithField("ref", w.ref).WithField("path", w.path).Error("failed to remove ingest directory")
+		log.G(ctx).WithField("ref", w.ref).WithField("path", w.path).Errorf("failed to remove ingest directory")
 	}
 
 	if w.s.ls != nil && base.Labels != nil {
 		if err := w.s.ls.Set(dgst, base.Labels); err != nil {
-			log.G(ctx).WithField("digest", dgst).Error("failed to set labels")
+			log.G(ctx).WithField("digest", dgst).Errorf("failed to set labels")
 		}
 	}
 
@@ -166,7 +165,7 @@ func (w *writer) Commit(ctx context.Context, size int64, expected digest.Digest,
 	// NOTE: Windows does not support this operation
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(target, (fi.Mode()&os.ModePerm)&^0333); err != nil {
-			log.G(ctx).WithField("ref", w.ref).Error("failed to make readonly")
+			log.G(ctx).WithField("ref", w.ref).Errorf("failed to make readonly")
 		}
 	}
 
