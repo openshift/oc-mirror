@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	// oc-mirror runs in rootless mode. It is therefore necessary to
+	// ensure that oc-mirror is re-executed in a user namespace where
+	// it has root privileges.
 	if buildah.InitReexec() {
 		return
 	}
