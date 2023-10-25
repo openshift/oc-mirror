@@ -290,7 +290,7 @@ func isImageByDigest(imgRef string) bool {
 }
 
 func pathWithoutDNS(imgRef string) (string, error) {
-
+	//localhost:6000/graph-image:latest
 	var imageName []string
 	if isImageByDigest(imgRef) {
 		imageNameSplit := strings.Split(imgRef, "@")
@@ -299,7 +299,7 @@ func pathWithoutDNS(imgRef string) (string, error) {
 		imageName = strings.Split(imgRef, "/")
 	}
 
-	if len(imageName) > 2 {
+	if len(imageName) >= 2 {
 		return strings.Join(imageName[1:], "/"), nil
 	} else if len(imageName) == 1 {
 		return imageName[0], nil

@@ -13,7 +13,6 @@ import (
 	"compress/gzip"
 
 	"github.com/containers/buildah"
-	"github.com/containers/common/pkg/config"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/storage"
 	"github.com/sirupsen/logrus"
@@ -65,57 +64,11 @@ func saveWithUidGid(content []byte, outputFile string, mod int, uid, gid int) er
 
 	return nil
 }
-func untar(src, dest string) error {
-	file, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 
-	gzipReader, err := gzip.NewReader(file)
-	if err != nil {
-		return err
-	}
-	defer gzipReader.Close()
-
-	tarReader := tar.NewReader(gzipReader)
-
-	for {
-		header, err := tarReader.Next()
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return err
-		}
-
-		path := filepath.Join(dest, header.Name)
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(path, 0755); err != nil {
-				return err
-			}
-		case tar.TypeReg:
-			file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			if _, err := io.Copy(file, tarReader); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
+// createGraphImage creates a graph image from the graph data
+// and returns the image reference.
+// it follows https://docs.openshift.com/container-platform/4.13/updating/updating-restricted-network-cluster/restricted-network-update-osus.html#update-service-graph-data_updating-restricted-network-cluster-osus
 func (o *LocalStorageCollector) createGraphImage() (string, error) {
-	o.Log.Info("Creating graph image - start")
 	// HTTP Get the graph updates from api endpoint
 	resp, err := http.Get(graphURL)
 	if err != nil {
@@ -128,71 +81,65 @@ func (o *LocalStorageCollector) createGraphImage() (string, error) {
 		return "", err
 	}
 
+	// save graph data to tar file modifying UID and GID to root.
+	// tar file needs to be in current working directory, so that
+	// buildah can add it to the image
 	err = saveWithUidGid(body, graphArchive, 0644, 0, 0)
-	// save graph data to tar.gz file modifying UID and GID to root
-	//err = os.WriteFile(outputFile, body, 0644)
 	if err != nil {
 		return "", err
 	}
-	o.Log.Info("saved cinncinati graph data to tar file")
-	// create a container image
-	// graphDataUntarFolder := "graph-data-untarred"
-	// err = untar(outputFile, graphDataUntarFolder)
-	// if err != nil {
-	// 	return "", err
-	// }
+	defer os.Remove(graphArchive)
 
-	logger := logrus.New()
-	//TODO take log level from localStoreCollection options
-	logger.Level = logrus.DebugLevel
+	// Begin buildah setup
+	// Buildah's builder needs a storage.Store to work with:
+	// intermediate and result images are stored there.
+	// Done following https://github.com/containers/buildah/blob/main/docs/tutorials/04-include-in-your-build-tool.md
 	buildStoreOptions, err := storage.DefaultStoreOptionsAutoDetectUID()
 	if err != nil {
 		return "", err
 	}
-
-	conf, err := config.Default()
-	if err != nil {
-		return "", err
-	}
-
-	capabilitiesForRoot, err := conf.Capabilities("root", nil, nil)
-	if err != nil {
-		return "", err
-	}
-	o.Log.Info("creating a storage for buildah builder")
-
 	buildStore, err := storage.GetStore(buildStoreOptions)
 	if err != nil {
 		return "", err
 	}
-	o.Log.Info("created a storage for buildah builder")
 	defer buildStore.Shutdown(false)
 
-	builderOpts := buildah.BuilderOptions{
-		FromImage:    graphBaseImage,
-		Capabilities: capabilitiesForRoot,
-		Logger:       logger,
+	logger := logrus.New()
+	if o.Opts.Global.LogLevel == "debug" {
+		logger.Level = logrus.DebugLevel
 	}
-	o.Log.Info("Before creating buildah builder")
+	builderOpts := buildah.BuilderOptions{
+		FromImage: graphBaseImage,
+		Logger:    logger,
+	}
 	builder, err := buildah.NewBuilder(context.TODO(), buildStore, builderOpts)
 	if err != nil {
 		return "", err
 	}
 	defer builder.Delete()
-	o.Log.Info("Created buildah builder")
+	// End buildah setup
+
+	// While adding the layer, we want to preserve the ownership of the files:
+	// tar file contents are owned by root, so we need to preserve that.
 	addOptions := buildah.AddAndCopyOptions{Chown: "0:0", PreserveOwnership: true}
 
-	err = builder.Add(graphDataDir, false, addOptions, graphArchive)
+	// Adding graphArchive contents to the image under /var/lib/cincinnati-graph-data/
+	// Second parameter instructs the builder to extract the tar file contents before adding them
+	err = builder.Add(graphDataDir, true, addOptions, graphArchive)
 	if err != nil {
 		return "", err
 	}
-	o.Log.Info("Added graph data to buildah builder")
+
+	// Update the CMD of the image, according to the documentation
 	builder.SetCmd([]string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", graphDataDir, graphDataMountPath)})
+
+	//Preparing the image reference to build to
 	imageRef, err := alltransports.ParseImageName("docker://" + filepath.Join(o.LocalStorageFQDN, graphImageName))
 	if err != nil {
 		return "", err
 	}
 
+	// Run commit the build: this will push the image to the imgRef, instead of only to the buidah storage
 	_, _, digest, err := builder.Commit(context.TODO(), imageRef, buildah.CommitOptions{SystemContext: o.Opts.Global.NewSystemContext()})
 	if err != nil {
 		return "", err

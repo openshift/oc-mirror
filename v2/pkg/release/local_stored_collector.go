@@ -145,6 +145,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			allImages = append(allImages, tmpAllImages...)
 
 		}
+
 		if o.Config.Mirror.Platform.Graph {
 			o.Log.Info("creating graph data image")
 			graphImage, err := o.createGraphImage()
@@ -152,19 +153,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 			o.Log.Info("graph image %s created and pushed to cache.", graphImage)
-			// graphImages := []v1alpha3.RelatedImage{
-			// 	{
-			// 		Image: graphImage,
-			// 		Name:  graphImage,
-			// 	},
-			// }
-			// tmpGraphImages, err := o.prepareM2DCopyBatch(o.Log, graphImages)
-			// if err != nil {
-			// 	return []v1alpha3.CopyImageSchema{}, err
-			// }
-			// allImages = append(allImages, tmpGraphImages...)
-
 		}
+
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
 		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
@@ -290,7 +280,6 @@ func isImageByDigest(imgRef string) bool {
 }
 
 func pathWithoutDNS(imgRef string) (string, error) {
-
 	var imageName []string
 	if isImageByDigest(imgRef) {
 		imageNameSplit := strings.Split(imgRef, "@")
@@ -299,7 +288,7 @@ func pathWithoutDNS(imgRef string) (string, error) {
 		imageName = strings.Split(imgRef, "/")
 	}
 
-	if len(imageName) > 2 {
+	if len(imageName) >= 2 {
 		return strings.Join(imageName[1:], "/"), nil
 	} else if len(imageName) == 1 {
 		return imageName[0], nil
