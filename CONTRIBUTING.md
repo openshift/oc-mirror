@@ -8,6 +8,7 @@ Contributing to `oc-mirror`
     - [Requesting Enhancements](#requesting-enhancements)
     - [Your First Code Contribution](#your-first-code-contribution)
       - [Getting Started](#getting-started)
+      - [Debugging oc-mirror](#debugging-oc-mirror)
     - [Pull Requests](#pull-requests)
     - [Docs Contributions](#docs-contributions)
   - [Testing](#testing)
@@ -41,6 +42,17 @@ Please submit bug reports as GitHub Issues. When submitting bug reports, please 
 
 #### Getting Started
 Please refer to the [developer docs](./docs/dev/getting-started.md) for information on getting started with developing on `oc-mirror`.
+
+#### Debugging oc-mirror
+Since end of November 2023, and PR [#721](https://github.com/openshift/oc-mirror/pull/721), oc-mirror's v2 implementation is relying on [Buildah](https://github.com/containers/buildah) in order to
+build Cincinnati graph images. 
+
+Since oc-mirror needs to run rootless, it is now re-executing itself in a separate user namespace where buildah can have root privileges.
+
+This modifies the debugging process: In order to debug you should launch dlv debugger for oc-mirror in a user namespace: 
+```
+podman unshare dlv debug cmd/oc-mirror/main.go -- --v2 -c cfe-969.yml --from file:///home/skhoury/release docker://localhost:5000/cfe971/ --dest-tls-verify=false
+```
 
 ### Pull Requests
 When submitting pull requests, please ensure the following:
