@@ -17,10 +17,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-type CollectorInterface interface {
-	ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
-}
-
 func New(log clog.PluggableLoggerInterface,
 	config v1alpha2.ImageSetConfiguration,
 	opts mirror.CopyOptions,

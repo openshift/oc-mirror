@@ -68,7 +68,7 @@ func saveWithUidGid(content []byte, outputFile string, mod int, uid, gid int) er
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
 // it follows https://docs.openshift.com/container-platform/4.13/updating/updating-restricted-network-cluster/restricted-network-update-osus.html#update-service-graph-data_updating-restricted-network-cluster-osus
-func (o *LocalStorageCollector) createGraphImage() (string, error) {
+func (o *LocalStorageCollector) CreateGraphImage() (string, error) {
 	// HTTP Get the graph updates from api endpoint
 	resp, err := http.Get(graphURL)
 	if err != nil {

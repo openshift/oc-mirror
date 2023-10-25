@@ -68,7 +68,7 @@ func saveWithUidGid(content []byte, outputFile string, mod int, uid, gid int) er
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
 // it follows https://docs.openshift.com/container-platform/4.13/updating/updating-restricted-network-cluster/restricted-network-update-osus.html#update-service-graph-data_updating-restricted-network-cluster-osus
-func (o *LocalStorageCollector) createGraphImage() (string, error) {
+func (o *LocalStorageCollector) CreateGraphImage() (string, error) {
 	// HTTP Get the graph updates from api endpoint
 	resp, err := http.Get(graphURL)
 	if err != nil {
@@ -93,6 +93,7 @@ func (o *LocalStorageCollector) createGraphImage() (string, error) {
 	// Begin buildah setup
 	// Buildah's builder needs a storage.Store to work with:
 	// intermediate and result images are stored there.
+	// Done following https://github.com/containers/buildah/blob/main/docs/tutorials/04-include-in-your-build-tool.md
 	buildStoreOptions, err := storage.DefaultStoreOptionsAutoDetectUID()
 	if err != nil {
 		return "", err
@@ -103,30 +104,13 @@ func (o *LocalStorageCollector) createGraphImage() (string, error) {
 	}
 	defer buildStore.Shutdown(false)
 
-	// Preparing builder configuration and options
-	// Default config seems enough for our needs
-	// conf, err := config.Default()
-	// if err != nil {
-	// 	return "", err
-	// }
-
-	// If you need to RUN a command as part of the dockerfile build
-	// capabilitiesForRoot will be used (not used, since we only add a layer)
-	// but still a needed struct for builderOpts
-
-	// capabilitiesForRoot, err := conf.Capabilities("root", nil, nil)
-	// if err != nil {
-	// 	return "", err
-	// }
-
 	logger := logrus.New()
 	if o.Opts.Global.LogLevel == "debug" {
 		logger.Level = logrus.DebugLevel
 	}
 	builderOpts := buildah.BuilderOptions{
 		FromImage: graphBaseImage,
-		// Capabilities: capabilitiesForRoot,
-		Logger: logger,
+		Logger:    logger,
 	}
 	builder, err := buildah.NewBuilder(context.TODO(), buildStore, builderOpts)
 	if err != nil {
