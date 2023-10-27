@@ -51,7 +51,32 @@ Since oc-mirror needs to run rootless, it is now re-executing itself in a separa
 
 This modifies the debugging process: In order to debug you should launch dlv debugger for oc-mirror in a user namespace: 
 ```
-podman unshare dlv debug cmd/oc-mirror/main.go -- --v2 -c cfe-969.yml --from file:///home/skhoury/release docker://localhost:5000/cfe971/ --dest-tls-verify=false
+podman unshare dlv debug --headless --listen=:43987 cmd/oc-mirror/main.go -- --v2 -c cfe-969.yml --from file:///home/skhoury/release docker://localhost:5000/cfe971/ --dest-tls-verify=false
+``````
+
+Once the command above is triggered it is possible to use delve to debug (either using dlv directly or attaching to it with a client).
+
+If you use VSCode, it is possible to attach it to the dlv process running in the background, in order to do that it is necessary to add the following code to the configurations[] inside of the launch.json:
+
+``````
+{
+    "name": "Attach Package",
+    "type": "go",
+    "debugAdapter": "dlv-dap",
+    "request": "attach",
+    "mode": "remote",
+    "host": "localhost",
+    "port": 43987,
+},
+{
+    "name": "Attach Tests",
+    "type": "go",
+    "debugAdapter": "dlv-dap",
+    "request": "attach",
+    "mode": "remote",
+    "host": "localhost",
+    "port": 43987,
+}
 ```
 
 ### Pull Requests
