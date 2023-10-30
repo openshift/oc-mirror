@@ -17,35 +17,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-const (
-	indexJson                   string = "manifest.json"
-	operatorImageExtractDir     string = "hold-operator"
-	workingDir                  string = "working-dir"
-	dockerProtocol              string = "docker://"
-	ociProtocol                 string = "oci://"
-	ociProtocolTrimmed          string = "oci:"
-	dirProtocol                 string = "dir://"
-	dirProtocolTrimmed          string = "dir:"
-	releaseImageDir             string = "release-images"
-	releaseIndex                string = "release-index"
-	releaseFiltersDir           string = "release-filters"
-	operatorImageDir            string = "operator-images"
-	releaseImageExtractDir      string = "hold-release"
-	releaseManifests            string = "release-manifests"
-	imageReferences             string = "image-references"
-	releaseImageExtractFullPath string = releaseManifests + "/" + imageReferences
-	blobsDir                    string = "blobs/sha256"
-	errMsg                      string = "[ReleaseImageCollector] %v "
-	diskToMirror                string = "diskToMirror"
-	mirrorToDisk                string = "mirrorToDisk"
-	prepare                     string = "prepare"
-	logFile                     string = "logs/release.log"
-)
-
-type CollectorInterface interface {
-	ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
-}
-
 func New(log clog.PluggableLoggerInterface,
 	config v1alpha2.ImageSetConfiguration,
 	opts mirror.CopyOptions,
