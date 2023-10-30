@@ -150,11 +150,11 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		}
 		if o.Config.Mirror.Platform.Graph {
 			o.Log.Info("creating graph data image")
-			graphImage, err := o.CreateGraphImage(ctx)
+			err := o.CreateGraphImage(ctx)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
-			o.Log.Info("graph image %s created and pushed to cache.", graphImage)
+			o.Log.Info("graph image created and pushed to cache.")
 		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow

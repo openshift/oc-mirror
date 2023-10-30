@@ -11,5 +11,5 @@ type CollectorInterface interface {
 }
 
 type GraphBuilderInterface interface {
-	CreateGraphImage(ctx context.Context) (string, error)
+	CreateGraphImage(ctx context.Context) error
 }
