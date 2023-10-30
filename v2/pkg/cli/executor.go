@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	"github.com/openshift/oc-mirror/v2/pkg/diff"
+	"github.com/openshift/oc-mirror/v2/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -90,6 +91,7 @@ type ExecutorSchema struct {
 	LocalStorage     registry.Registry
 	LocalStorageFQDN string
 	ClusterResources clusterresources.GeneratorInterface
+	ImageBuilder     imagebuilder.ImageBuilderInterface
 }
 
 // NewMirrorCmd - cobra entry point
@@ -338,13 +340,14 @@ func (o *ExecutorSchema) Complete(args []string) {
 
 	client, _ := release.NewOCPClient(uuid.New())
 
+	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, o.Opts)
+
 	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
-	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
+	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Config, o.Opts)
-
 }
 
 // Run - start the mirror functionality
@@ -581,9 +584,9 @@ func (o *ExecutorSchema) CompletePrepare(args []string) {
 
 	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
-	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN)
-	// o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	// o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 
 }
 

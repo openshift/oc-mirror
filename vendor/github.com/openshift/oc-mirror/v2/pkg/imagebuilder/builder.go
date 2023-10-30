@@ -5,12 +5,17 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -21,6 +26,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/oc-mirror/v2/pkg/log"
+	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
@@ -40,14 +46,58 @@ func (e ErrInvalidReference) Error() string {
 }
 
 // NewImageBuilder creates a new instance of an ImageBuilder.
-func NewBuilder(nameOpts []name.Option, remoteOpts []remote.Option, logger log.PluggableLoggerInterface) *ImageBuilder {
-	b := &ImageBuilder{
-		NameOpts:   nameOpts,
-		RemoteOpts: remoteOpts,
-		Logger:     logger,
+func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) ImageBuilderInterface {
+	// preparing name options for pulling the ubi9 image:
+	// - no need to set defaultRegistry because we are using a fully qualified image name
+	nameOptions := []name.Option{
+		name.StrictValidation,
+	}
+	remoteOptions := []remote.Option{
+		remote.WithAuthFromKeychain(authn.DefaultKeychain), // this will try to find .docker/config first, $XDG_RUNTIME_DIR/containers/auth.json second
+		remote.WithContext(context.TODO()),
+		// doesn't seem possible to use registries.conf here.
+		// TODO test what happens if registries.conf is specified
+	}
+	if !opts.Global.TlsVerify {
+		nameOptions = append(nameOptions, name.Insecure)
+		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
+
+	} else {
+		// create our own roundTripper to pass insecure=true
+		insecureRoundTripper := createInsecureRoundTripper()
+		remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
+
 	}
 
-	return b
+	return &ImageBuilder{
+		NameOpts:   nameOptions,
+		RemoteOpts: remoteOptions,
+		Logger:     logger,
+	}
+}
+
+func createInsecureRoundTripper() http.RoundTripper {
+	// create a custom transport that will allow us to use a custom TLS config
+	// this will allow us to disable TLS verification
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			// By default, we wrap the transport in retries, so reduce the
+			// default dial timeout to 5s to avoid 5x 30s of connection
+			// timeouts when doing the "ping" on certain http registries.
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+			MinVersion:         tls.VersionTLS12,
+		},
+	}
 }
 
 // Run modifies and pushes the catalog image existing in an OCI layout. The image configuration will be updated
@@ -64,6 +114,8 @@ func NewBuilder(nameOpts []name.Option, remoteOpts []remote.Option, logger log.P
 func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
 
 	var v2format bool
+
+	b.RemoteOpts = append(b.RemoteOpts, remote.WithContext(ctx))
 
 	// Target can't have a digest since we are
 	// adding layers and possibly updating the
@@ -272,6 +324,7 @@ func (b *ImageBuilder) processImageIndex(ctx context.Context, idx v1.ImageIndex,
 // SaveImageLayoutToDir saves the image layout of the specified image reference to the specified directory.
 // It returns the path to the saved layout and any error encountered during the process.
 func (b *ImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {
+	b.RemoteOpts = append(b.RemoteOpts, remote.WithContext(ctx))
 
 	ref, err := name.ParseReference(imgRef, b.NameOpts...)
 	if err != nil {
