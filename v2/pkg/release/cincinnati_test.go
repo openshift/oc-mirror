@@ -18,7 +18,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 
 	log := clog.New("trace")
 
-	global := &mirror.GlobalOptions{TlsVerify: false, InsecurePolicy: true}
+	global := &mirror.GlobalOptions{TlsVerify: false, SecurePolicy: false}
 
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()

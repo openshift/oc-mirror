@@ -13,7 +13,7 @@ import (
 
 func TestMirror(t *testing.T) {
 
-	global := &GlobalOptions{TlsVerify: false, InsecurePolicy: true}
+	global := &GlobalOptions{TlsVerify: false, SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()

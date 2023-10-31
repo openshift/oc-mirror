@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
-	"github.com/openshift/oc-mirror/v2/pkg/diff"
 	"github.com/openshift/oc-mirror/v2/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
@@ -79,7 +78,6 @@ var (
 type ExecutorSchema struct {
 	Log              clog.PluggableLoggerInterface
 	Config           v1alpha2.ImageSetConfiguration
-	MetaData         diff.SequenceSchema
 	Opts             mirror.CopyOptions
 	Operator         operator.CollectorInterface
 	Release          release.CollectorInterface
@@ -87,7 +85,6 @@ type ExecutorSchema struct {
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
 	Batch            batch.BatchInterface
-	Diff             diff.DiffInterface
 	LocalStorage     registry.Registry
 	LocalStorageFQDN string
 	ClusterResources clusterresources.GeneratorInterface
@@ -98,8 +95,8 @@ type ExecutorSchema struct {
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
+		TlsVerify:    false,
+		SecurePolicy: false,
 	}
 
 	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
@@ -161,6 +158,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
+	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
+	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
@@ -364,6 +363,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if o.Opts.Mode == mirrorToDisk {
+
 		// ensure working dir exists
 		err := os.MkdirAll(workingDir, 0755)
 		if err != nil {
@@ -483,8 +483,8 @@ func cleanUp() {
 
 func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	global := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
+		TlsVerify:    false,
+		SecurePolicy: false,
 	}
 
 	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
@@ -508,7 +508,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:   "prepare",
-		Short: "Queries Cincinatti for the required releases to mirror, and verifies their existance in the local cache",
+		Short: "Queries Cincinnati for the required releases to mirror, and verifies their existence in the local cache",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := ex.ValidatePrepare(args)
 			if err != nil {
@@ -536,6 +536,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
+	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
@@ -665,7 +666,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 		buff.WriteString(img.Destination + "\n")
 		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, &o.Opts)
 		if err != nil {
-			o.Log.Warn("unable to check existance of %s in local cache: %v", img.Destination, err)
+			o.Log.Warn("unable to check existence of %s in local cache: %v", img.Destination, err)
 		}
 		if err != nil || !exists {
 			atLeastOneMissing = true

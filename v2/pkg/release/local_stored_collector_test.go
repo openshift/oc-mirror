@@ -18,17 +18,17 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 	log := clog.New("trace")
 	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
-		Dir:            t.TempDir(),
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Dir:          t.TempDir(),
 	}
 
 	tmpDir := t.TempDir()
 	globalD2M := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
-		Dir:            tmpDir + "/working-dir",
-		From:           tmpDir,
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Dir:          tmpDir + "/working-dir",
+		From:         tmpDir,
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
