@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -30,8 +31,9 @@ func NewWithLocalStorage(log clog.PluggableLoggerInterface,
 	manifest manifest.ManifestInterface,
 	cincinnati CincinnatiInterface,
 	localStorageFQDN string,
+	imageBuilder imagebuilder.ImageBuilderInterface,
 ) CollectorInterface {
-	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN}
+	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
 }
 
 type LocalStorageCollector struct {
@@ -42,6 +44,7 @@ type LocalStorageCollector struct {
 	Opts             mirror.CopyOptions
 	Cincinnati       CincinnatiInterface
 	LocalStorageFQDN string
+	ImageBuilder     imagebuilder.ImageBuilderInterface
 }
 
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
@@ -145,6 +148,14 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			allImages = append(allImages, tmpAllImages...)
 
 		}
+		if o.Config.Mirror.Platform.Graph {
+			o.Log.Info("creating graph data image")
+			err := o.CreateGraphImage(ctx)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+			o.Log.Info("graph image created and pushed to cache.")
+		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
 		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
@@ -171,6 +182,17 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
 			allRelatedImages = append(allRelatedImages, releaseRelatedImages...)
+		}
+		if o.Config.Mirror.Platform.Graph {
+			o.Log.Info("adding graph data image")
+			graphRelatedImage := v1alpha3.RelatedImage{
+				Name: graphImageName,
+				// Supposing that the mirror to disk saved the image with the latest tag
+				// If this supposition is false, then we need to implement a mechanism to save
+				// the digest of the graph image and use it here
+				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+			}
+			allRelatedImages = append(allRelatedImages, graphRelatedImage)
 		}
 		allImages, err = o.prepareD2MCopyBatch(o.Log, allRelatedImages)
 		if err != nil {
