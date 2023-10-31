@@ -33,7 +33,7 @@ type GlobalOptions struct {
 	LogLevel           string        // one of info, debug, trace
 	TlsVerify          bool          // Require HTTPS and verify certificates (for docker: and docker-daemon:)
 	PolicyPath         string        // Path to a signature verification policy file
-	InsecurePolicy     bool          // Use an "allow everything" signature verification policy
+	SecurePolicy       bool          // Use an "allow everything" signature verification policy
 	RegistriesDirPath  string        // Path to a "registries.d" registry configuration directory
 	OverrideArch       string        // Architecture to use for choosing images, instead of the runtime one
 	OverrideOS         string        // OS to use for choosing images, instead of the runtime one
@@ -251,7 +251,7 @@ func RetryFlags() (pflag.FlagSet, *retry.Options) {
 func (opts *GlobalOptions) GetPolicyContext() (*signature.PolicyContext, error) {
 	var policy *signature.Policy // This could be cached across calls in opts.
 	var err error
-	if opts.InsecurePolicy {
+	if !opts.SecurePolicy {
 		policy = &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
 	} else if opts.PolicyPath == "" {
 		policy, err = signature.DefaultPolicy(nil)

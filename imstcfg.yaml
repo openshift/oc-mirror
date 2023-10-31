@@ -4,24 +4,24 @@ storageConfig:
   local:
     path: /tmp/storageBackend
 
-
 mirror:
-  # platform:
-  #   channels:
-  #   - name: stable-4.12
-  #     type: ocp
-  #   graph: false 
-  operators:
+  platform:
+    channels:
+    - name: stable-4.13
+      type: ocp
+      minVersion: 4.13.1
+      maxVersion: 4.13.1
+  #operators:
   #rhop
   #- catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
   # now pushing from FBC catalog
-  - catalog: oci:///home/skhoury/oci-catalog2
+  #- catalog: oci:///home/skhoury/oci-catalog2
   # redhatgov
   # - catalog: quay.io/redhatgov/oc-mirror-dev:test-catalog-latest
   # now pushing from FBC catalog
   # - catalog: oci:///tmp/oci-catalog/oc-mirror-dev
   #   originalRef: quay.io/redhatgov/oc-mirror-dev:test-catalog-latest 
-    packages:
-    - name: aws-load-balancer-operator
-  # additionalImages:
-  # - name: registry.redhat.io/ubi8/ubi:latest
+  #  packages:
+  #  - name: aws-load-balancer-operator
+  #additionalImages:
+  #- name: registry.access.redhat.com/ubi8/ubi:latest

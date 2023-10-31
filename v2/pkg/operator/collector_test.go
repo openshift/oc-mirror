@@ -17,9 +17,9 @@ func TestOperatorImageCollector(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
-		Dir:            "tests",
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Dir:          "tests",
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()

@@ -20,6 +20,7 @@ v2/launch.json
 v2/logs/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
+isc*.yaml
 
 # Logs.
 **/.oc-mirror.log

@@ -17,10 +17,10 @@ func TestIDMSGenerator(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	globalD2M := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
-		Dir:            tmpDir + "/working-dir",
-		From:           tmpDir,
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Dir:          tmpDir + "/working-dir",
+		From:         tmpDir,
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
