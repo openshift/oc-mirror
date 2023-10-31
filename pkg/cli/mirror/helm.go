@@ -3,10 +3,14 @@ package mirror
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -64,7 +68,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 	c := downloader.ChartDownloader{
 		Out:     h.Out,
 		Keyring: defaultKeyring(),
-		Verify:  downloader.VerifyLater,
+		Verify:  downloader.VerifyNever,
 		Getters: getter.All(h.settings),
 		Options: []getter.Option{
 			getter.WithInsecureSkipVerifyTLS(h.insecure),
@@ -90,28 +94,74 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 			return nil, err
 		}
 
+		if repo.Charts == nil {
+			if repo.Charts, err = IndexFile(repo.URL); err != nil {
+				return nil, err
+			}
+		}
+		var errs []error
 		for _, chart := range repo.Charts {
 			klog.Infof("Pulling chart %s", chart.Name)
 			ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
 			dest := filepath.Join(h.Dir, config.SourceDir, config.HelmDir)
 			path, _, err := c.DownloadTo(ref, chart.Version, dest)
 			if err != nil {
-				return nil, fmt.Errorf("error pulling chart %q: %v", ref, err)
+				errs = append(errs, err)
+				klog.Infof("error pulling chart %v:%v", ref, err)
+				continue
 			}
 
 			// find images associations with chart (default values)
 			img, err := findImages(path, chart.ImagePaths...)
 			if err != nil {
-				return nil, err
+				errs = append(errs, err)
+				// return nil, err
 			}
-
-			images = append(images, img...)
+			for _, image := range img {
+				if image.Name != "NAME:latest" {
+					images = append(images, image)
+				}
+			}
 		}
 	}
 
 	// Image download planning
+	h.MirrorOptions.SkipMissing = true
 	additional := NewAdditionalOptions(h.MirrorOptions)
+	additional.ContinueOnError = true
 	return additional.Plan(ctx, images)
+}
+
+func IndexFile(indexURL string) ([]v1alpha2.Chart, error) {
+	var charts []v1alpha2.Chart
+	var indexFile helmrepo.IndexFile
+	httpClient := http.Client{Timeout: time.Duration(5) * time.Second}
+	if !strings.HasSuffix(indexURL, "/index.yaml") {
+		indexURL += "/index.yaml"
+	}
+	resp, err := httpClient.Get(indexURL)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, errors.New(fmt.Sprintf("Response for %v returned %v with status code %v", indexURL, resp, resp.StatusCode))
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	err = yaml.Unmarshal(body, &indexFile)
+	if err != nil {
+		return nil, err
+	}
+	for key, chartVersions := range indexFile.Entries {
+		for _, chartVersion := range chartVersions {
+			if chartVersion.Type != "library" {
+				charts = append(charts, v1alpha2.Chart{Name: key, Version: chartVersion.Version})
+			}
+		}
+	}
+	return charts, nil
 }
 
 // FindImages will download images found in a Helm chart on disk

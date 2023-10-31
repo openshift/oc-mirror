@@ -18,6 +18,11 @@ type AdditionalOptions struct {
 	*MirrorOptions
 }
 
+type ErrorImage struct {
+	image  v1alpha2.Image
+	reason string
+}
+
 func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 	opts := &AdditionalOptions{MirrorOptions: mo}
 	return opts
@@ -30,6 +35,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 	if err != nil {
 		return nil, fmt.Errorf("error creating image resolver: %v", err)
 	}
+	var errorImageList []ErrorImage
 	for _, img := range imageList {
 		// Get source image information
 		srcRef, err := image.ParseReference(img.Name)
@@ -50,6 +56,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 				if !isSkipErr(err) {
 					return mmappings, err
 				}
+				errorImageList = append(errorImageList, ErrorImage{image: img, reason: err.Error()})
 				klog.Warning(err)
 				continue
 			}
@@ -68,6 +75,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 
 		mmappings.Add(srcRef, dstRef, v1alpha2.TypeGeneric)
 	}
-
+	// Create a new tar archive for writing
+	klog.Infof("error image list %s", errorImageList)
 	return mmappings, nil
 }

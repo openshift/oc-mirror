@@ -25,6 +25,7 @@ TESTCASES[19]="m2m_oci_catalog"
 TESTCASES[20]="m2m_release_with_oci_catalog"
 TESTCASES[21]="headsonly_diff_with_target"
 TESTCASES[22]="m2d2m_oci_catalog"
+TESTCASES[23]="helm_repository"
 
 
 # Test full catalog mode.
@@ -230,6 +231,13 @@ function helm_local {
     check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
 }
 
+
+# Test helm chart with URL
+function helm_repository {
+    workflow_helm_repository imageset-config-helm-repository.yaml
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea"
+}
+
 # Test no updates
 function no_updates_exist {
     workflow_no_updates imageset-config-headsonly.yaml "test-catalog-latest" --diff -c="--source-use-http --source-skip-tls"
@@ -260,12 +268,12 @@ function m2m_release_with_oci_catalog {
     # ensure cincinnati client does not reject the rquest - due to untrusted CA Authority
     export SSL_CERT_FILE=test/e2e/graph/server.crt
     # build and start the service
-    
-    #v2 workspace required change
-    #go build -mod=readonly -o test/e2e/graph test/e2e/graph/main.go 
 
-    go build -o test/e2e/graph test/e2e/graph/main.go 
-    test/e2e/graph/main & PID_GO=$! 
+    #v2 workspace required change
+    #go build -mod=readonly -o test/e2e/graph test/e2e/graph/main.go
+
+    go build -o test/e2e/graph test/e2e/graph/main.go
+    test/e2e/graph/main & PID_GO=$!
     echo -e "go cincinnatti web service PID: ${PID_GO}"
     # copy relevant files and start the mirror process
     workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy"

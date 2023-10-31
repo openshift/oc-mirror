@@ -16,14 +16,18 @@ function cleanup_all() {
     # check the PID's before 'killing'
     if [[ -n $PID_DISCONN ]];
     then
-        kill $PID_DISCONN
+      if ps ax | grep -v grep | grep $PID_DISCONN > /dev/null; then
+        kill  -9 $PID_DISCONN
         PID_DISONN=""
+      fi
     fi
 
     if [[ -n $PID_CONN ]];
     then
-        kill $PID_CONN
+      if ps ax | grep -v grep | grep $PID_CONN > /dev/null; then
+        kill -9 $PID_CONN
         PID_CON=""
+      fi
     fi
 
     if [[ -n $PID_GO ]];
@@ -195,6 +199,27 @@ function setup_helm_testdata() {
   mkdir -p "$OUTPUT_DIR"
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   cp "${DIR}/artifacts/${CHART_PATH}" "${DATA_DIR}/"
+  find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
+}
+
+# setup_helm_repository_testdata will move required
+# files in place to do helm testing
+function setup_helm_repository_testdata() {
+  local DATA_DIR="${1:?DATA_DIR required}"
+  local OUTPUT_DIR="${2:?OUTPUT_DIR required}"
+  local CONFIG_PATH="${3:?CONFIG_PATH required}"
+  export HELM_CACHE_HOME=$DATA_DIR
+  export XDG_DATA_HOME=$DATA_DIR
+  export XDG_CACHE_HOME=$DATA_DIR
+  export HELM_CONFIG_HOME=$DATA_DIR
+  export HELM_REPOSITORY_CACHE=$DATA_DIR
+  echo -e "\nSetting up test directory in $DATA_DIR"
+  mkdir -p "$OUTPUT_DIR"
+  curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
+  chmod +x ./helm
+  ./helm repo add sbo https://redhat-developer.github.io/service-binding-operator-helm-chart/
+  cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
+  cp -a "${DIR}/artifacts/." "${DATA_DIR}/"
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
 }
 
