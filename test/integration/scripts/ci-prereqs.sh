@@ -22,6 +22,7 @@ dnf_provides=(
     [gcc]=/usr/bin/gcc
     [libffi-devel]=/usr/include/ffi.h
     [openssl-devel]=/usr/include/openssl/ssl.h
+    [skopeo]=/usr/bin/skopeo
 )
 
 # Map which packages need installed
