@@ -18,9 +18,6 @@
 
 `oc-mirror` is an OpenShift Client (oc) plugin that manages OpenShift release, operator catalog, helm charts, and associated container images for mirror registries that support OpenShift environments.
 
-## Community
-Please join us for our oc-mirror weekly community meeting fortnightly on Thursdays at 12pm EST https://zoom.us/meeting/tJ0lcOiqpzMpE9OQ8gwJktuKL7ZWAr3Ofe4s/ics?icsToken=98tyKuChpjwrGN2dsxCARox5Go_Cd-rxmFxej_pyrUfiFApYdhbdGrV4BZNtQ_fW .  
- 
 ## Usage
 [![asciicast](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9.svg)](https://asciinema.org/a/uToc11VnzG0RMZrht2dsaTfo9)
 
