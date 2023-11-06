@@ -146,15 +146,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 			allImages = append(allImages, tmpAllImages...)
-
-		}
-		if o.Config.Mirror.Platform.Graph {
-			o.Log.Info("creating graph data image")
-			err := o.CreateGraphImage(ctx)
-			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, err
-			}
-			o.Log.Info("graph image created and pushed to cache.")
 		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
@@ -162,6 +153,14 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinnati response: %v", err)
 		}
+	} else if o.Opts.Mode == mirrorToDisk && o.Config.Mirror.Platform.Graph {
+		o.Log.Info("creating graph data image")
+		err := o.CreateGraphImage(ctx)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
+		}
+		o.Log.Info("graph image created and pushed to cache.")
+
 	} else if o.Opts.Mode == diskToMirror {
 
 		releaseImages, releaseFolders, err := o.identifyReleases()
