@@ -1,0 +1,40 @@
+apiVersion: config.openshift.io/v1
+kind: ClusterOperator
+metadata:
+  name: kube-controller-manager
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec: {}
+status:
+  versions:
+    - name: operator
+      version: "4.12.0"
+    - name: raw-internal
+      version: "4.12.0"
+    - name: kube-controller-manager
+      version: "1.25.4"
+  relatedObjects:
+    - group: operator.openshift.io
+      name: cluster
+      resource: kubecontrollermanagers
+    - group: ""
+      name: openshift-config
+      resource: namespaces
+    - group: ""
+      name: openshift-config-managed
+      resource: namespaces
+    - group: ""
+      name: openshift-kube-controller-manager
+      resource: namespaces
+    - group: ""
+      name: openshift-kube-controller-manager-operator
+      resource: namespaces
+    - group: ""
+      name: kube-system
+      resource: namespaces
+    - group: ""
+      resource: nodes
+    - group: "certificates.k8s.io"
+      resource: "certificatesigningrequests"

@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: openshift-apiserver-operator
+  name: openshift-apiserver-operator
+  labels:
+    app: openshift-apiserver-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openshift-apiserver-operator
+  template:
+    metadata:
+      name: openshift-apiserver-operator
+      labels:
+        app: openshift-apiserver-operator
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: openshift-apiserver-operator
+      containers:
+      - name: openshift-apiserver-operator
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:87666cc451e16c135276f6405cd7d0c2ce76fd5f19f02a9654c23bb9651c54b3
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        command: ["cluster-openshift-apiserver-operator", "operator"]
+        args:
+        - "--config=/var/run/configmaps/config/config.yaml"
+        resources:
+          requests:
+            memory: 50Mi
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /var/run/configmaps/config
+          name: config
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+        env:
+        - name: IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:47bc752254f826905ac36cc2eb1819373a3045603e5dfa03c7f9e6d73c3fd9f9
+        - name: OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:87666cc451e16c135276f6405cd7d0c2ce76fd5f19f02a9654c23bb9651c54b3
+        - name: OPERATOR_IMAGE_VERSION
+          value: "4.12.0"
+        - name: OPERAND_IMAGE_VERSION
+          value: "4.12.0"
+        - name: KUBE_APISERVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:9ed61d19216d71cc5692c22402961b0f865ed8629f5d64f1687aa47af601c018
+      volumes:
+      - name: serving-cert
+        secret:
+          secretName: openshift-apiserver-operator-serving-cert
+          optional: true
+      - name: config
+        configMap:
+          name: openshift-apiserver-operator-config
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      priorityClassName: "system-cluster-critical"
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120

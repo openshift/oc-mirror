@@ -1,0 +1,100 @@
+apiVersion: console.openshift.io/v1
+kind: ConsoleQuickStart
+metadata:
+  name: odf-install-tour
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Console
+spec:
+  displayName: Install OpenShift Data Foundation
+  durationMinutes: 5
+  icon: data:image/svg+xml;base64,PHN2ZyBlbmFibGUtYmFja2dyb3VuZD0ibmV3IDAgMCAxMDAgMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHdpZHRoPSIxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0ibTY2LjcgNTUuOGM2LjYgMCAxNi4xLTEuNCAxNi4xLTkuMiAwLS42IDAtMS4yLS4yLTEuOGwtMy45LTE3Yy0uOS0zLjctMS43LTUuNC04LjMtOC43LTUuMS0yLjYtMTYuMi02LjktMTkuNS02LjktMy4xIDAtNCA0LTcuNiA0LTMuNSAwLTYuMS0yLjktOS40LTIuOS0zLjIgMC01LjIgMi4xLTYuOCA2LjYgMCAwLTQuNCAxMi41LTUgMTQuMy0uMS4zLS4xLjctLjEgMSAuMSA0LjcgMTkuMiAyMC42IDQ0LjcgMjAuNm0xNy4xLTZjLjkgNC4zLjkgNC44LjkgNS4zIDAgNy40LTguMyAxMS40LTE5LjEgMTEuNC0yNC42IDAtNDYuMS0xNC40LTQ2LjEtMjMuOSAwLTEuMy4zLTIuNi44LTMuOS04LjkuNS0yMC4zIDIuMS0yMC4zIDEyLjIgMCAxNi41IDM5LjIgMzYuOSA3MC4yIDM2LjkgMjMuOCAwIDI5LjgtMTAuNyAyOS44LTE5LjIgMC02LjctNS44LTE0LjMtMTYuMi0xOC44IiBmaWxsPSIjZWQxYzI0Ii8+PHBhdGggZD0ibTgzLjggNDkuOGMuOSA0LjMuOSA0LjguOSA1LjMgMCA3LjQtOC4zIDExLjQtMTkuMSAxMS40LTI0LjYgMC00Ni4xLTE0LjQtNDYuMS0yMy45IDAtMS4zLjMtMi42LjgtMy45bDEuOS00LjhjLS4xLjMtLjEuNy0uMSAxIDAgNC44IDE5LjEgMjAuNyA0NC43IDIwLjcgNi42IDAgMTYuMS0xLjQgMTYuMS05LjIgMC0uNiAwLTEuMi0uMi0xLjh6IiBmaWxsPSIjMDEwMTAxIi8+PC9zdmc+
+  description: Install the OpenShift Data Foundation (ODF) operator and create a storage system.
+  introduction: >- 
+    **Red Hat OpenShift® Data Foundation** is persistent software-defined storage integrated with and optimized for Red Hat OpenShift Container Platform. 
+    
+      Dynamic, stateful, and highly available container-native storage can be provisioned and de-provisioned on demand as an integral part of the OpenShift administrator console.
+  accessReviewResources:
+  - group: operators.coreos.com
+    resource: operatorgroups
+    verb: list
+  - group: packages.operators.coreos.com
+    resource: packagemanifests
+    verb: list
+  - group: operators.coreos.com
+    resource: subscriptions
+    verb: create
+    namespace: openshift-storage
+  tasks:
+  - title: Install OpenShift Data Foundation
+    description: |- 
+      The OperatorHub is where you can find a catalog of available Operators to install on your cluster.
+      
+      To install OpenShift Data Foundation, follow these steps:
+
+      1. Enter the administrator perspective: In the main navigation, select the dropdown menu and select **Administrator**.
+
+      1. In the main navigation menu, select [Operators]{{highlight qs-nav-operators}} and select **OperatorHub**
+
+      1. In the **Filter by keyword** field, type `OpenShift Data Foundation`
+
+      1. Select **OpenShift Data Foundation** tile to initiate the operator installation on your cluster.
+      
+      1. In the panel that appears, select **Install.** 
+      
+      1. On the operator installation page, fill out the Operator Subscription form. 
+      
+      1. Select **Install.**
+    review:
+      instructions: |-
+        ####  Verify that the OpenShift Data Foundation operator is installed:
+
+        In the navigation menu, select **Operators > Installed Operators**. 
+        
+        Does the **Status** column for **OpenShift Data Foundation** show **Succeeded**?
+      failedTaskHelp: This task isn’t verified yet. Try the task again.
+    summary:
+      success:  Great work! You installed the OpenShift Data Foundation operator.
+      failed: Try the steps again.
+  - title: Create a StorageSystem
+    description: |-
+      A **StorageSystem** includes a CephCluster, Multicloud Object Gateway, and required storage resources.
+
+      To create a StorageSystem:
+
+      1. Select [perspective switcher]{{highlight qs-perspective-switcher}} at the top of the navigation, and select **Administrator.**
+
+      2. In the main navigation menu, select [Operators]{{highlight qs-nav-operators}} and select **Installed Operators.**
+      
+      3. From your list of installed operators, select **OpenShift Data Foundation.**
+      
+      4. On the StorageSystem tile, select **Create Instance.**
+      
+      5. Select your **Backing Storage**
+          - **Use an existing StorageClass.**
+              
+          - **Create a new StorageClass using local storage devices:** Use on any platform with devices attached to nodes using the Local Storage Operator (LSO).
+          
+          - **Connect an external storage platform:** Use on bare-metal infrastructures where nodes have access to an external storage array, such as Fibre Channel or iSCSI.) For this backing storage option, a third-party CSI driver leveraging the external storage array (such as IBM Block CSI Driver) provides the StorageClass infrastructure.
+
+      6. Follow the on-screen instructions to create the StorageSystem.
+      
+      7. Once your StorageSystem reaches a **Ready** status, you’re ready to start using storage resources like StorageCluster and BucketClass, and allow ODF to manage your storage.
+    review:
+      instructions: |-
+        #### Verify that the StorageSystem is created:
+
+        On the StorageSystem details page, is the state of the system **Ready** ?
+      failedTaskHelp: This task isn’t verified yet. Try the task again.
+    summary:
+      success: Great work! You installed the OpenShift Data Foundation operator.
+      failed: Try the steps again.
+  conclusion: >- 
+    Congratulations! **OpenShift Data Foundation** is ready to use. 
+    
+    
+    To learn how you can manage your storage space effectively, take the Getting Started with OpenShift Data Foundation Quick Start.
+  nextQuickStart:
+    - "getting-started-odf"

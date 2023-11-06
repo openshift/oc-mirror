@@ -1,0 +1,97 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+  name: dns-operator
+  namespace: openshift-dns-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: dns-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: dns-operator
+    spec:
+      containers:
+      - command:
+        - dns-operator
+        env:
+        - name: RELEASE_VERSION
+          value: 4.12.0
+        - name: IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:dfdf833d03dac36b747951107a25ab6424eb387bb140f344d4be8d8c7f4e895f
+        - name: OPENSHIFT_CLI_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1fc458ece66c8d4184b45b5c495a372a96b47432ae5a39844cd5837e3981685b
+        - name: KUBE_RBAC_PROXY_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c28f27a3a10df13e5e8c074e8734683a6603ebaccd9d67e2095070fb6859b1d6
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:da1dec5c084b77969ed1b7995a292c7ac431cdd711a708bfbe1f40628515466c
+        name: dns-operator
+        resources:
+          requests:
+            cpu: 10m
+            memory: 29Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePolicy: FallbackToLogsOnError
+      - args:
+        - --logtostderr
+        - --secure-listen-address=:9393
+        - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+        - --upstream=http://127.0.0.1:60000/
+        - --tls-cert-file=/etc/tls/private/tls.crt
+        - --tls-private-key-file=/etc/tls/private/tls.key
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c28f27a3a10df13e5e8c074e8734683a6603ebaccd9d67e2095070fb6859b1d6
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 9393
+          name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 40Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/tls/private
+          name: metrics-tls
+          readOnly: true
+      dnsPolicy: Default
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: dns-operator
+      terminationGracePeriodSeconds: 2
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      volumes:
+      - name: metrics-tls
+        secret:
+          secretName: metrics-tls

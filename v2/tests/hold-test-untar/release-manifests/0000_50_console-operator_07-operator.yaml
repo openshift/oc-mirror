@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-operator
+  namespace: openshift-console-operator
+  annotations:
+    config.openshift.io/inject-proxy: console-operator
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: console-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: console-operator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 120
+      priorityClassName: system-cluster-critical
+      serviceAccountName: console-operator
+      containers:
+      - name: console-operator
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:98d4eee0edefa5f976980e36667e217efa0575e91252a99c98bb5a7e4f1bed1f
+        ports:
+        - containerPort: 60000
+          name: metrics
+        command:
+        - console
+        - operator
+        args:
+        - "-v=2"
+        - "--config=/var/run/configmaps/config/controller-config.yaml"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /var/run/configmaps/config
+          name: config
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+        env:
+        - name: CONSOLE_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:45ce25aa01ce77d2d7ad8cc2914686e07e71489c8ec625bc920f14ef83b94f33
+        - name: DOWNLOADS_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2823d5f6c6f9145b1c817f20ebfb1be4b72656086d58182356e911c324efebaf
+        - name: RELEASE_VERSION
+          value: "4.12.0"
+        - name: OPERATOR_NAME
+          value: "console-operator"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "10m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8443
+            scheme: HTTPS
+      - name: conversion-webhook-server
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:98d4eee0edefa5f976980e36667e217efa0575e91252a99c98bb5a7e4f1bed1f
+        ports:
+        - containerPort: 9443
+          name: webhook
+        command:
+        - console
+        - crdconvert
+        args:
+        - "--port=9443"
+        - "--tls-cert-file=/var/run/secrets/webhook-serving-cert/tls.crt"
+        - "--tls-private-key-file=/var/run/secrets/webhook-serving-cert/tls.key"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /var/run/configmaps/config
+          name: config
+        - mountPath: /var/run/secrets/webhook-serving-cert
+          name: webhook-serving-cert
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "10m"
+        livenessProbe:
+          httpGet:
+            path: /readyz
+            port: 9443
+            scheme: HTTPS
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9443
+            scheme: HTTPS
+      volumes:
+      - name: config
+        configMap:
+          name: console-operator-config
+      - name: serving-cert
+        secret:
+          secretName: serving-cert
+          optional: true
+      - name: webhook-serving-cert
+        secret:
+          secretName: webhook-serving-cert
+          optional: true

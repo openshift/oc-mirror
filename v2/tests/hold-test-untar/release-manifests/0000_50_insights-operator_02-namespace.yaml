@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-insights
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    openshift.io/node-selector: ""
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    workload.openshift.io/allowed: "management"
+    capability.openshift.io/name: Insights
+  labels:
+    openshift.io/cluster-monitoring: "true"
+    openshift.io/run-level: "" # specify no run-level turns it off on install and upgrades
+    name: openshift-insights

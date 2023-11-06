@@ -1,0 +1,160 @@
+# The image streams in this file will be the canonical reference points
+# for consumers within the cluster to loosely reference these images.
+#
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: cli
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1fc458ece66c8d4184b45b5c495a372a96b47432ae5a39844cd5837e3981685b
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: cli-artifacts
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2823d5f6c6f9145b1c817f20ebfb1be4b72656086d58182356e911c324efebaf
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: installer
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1739c7cf0844140d041edce5e99654e9276ca9b2542ec00c4fd327495dbd6cf5
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: installer-artifacts
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:948a67096a43e8a08556145d4ab6efb8447780c7956baf8feec1756cd2b8df3f
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: tests
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7233826e59b2b730c43c257f81971b8f517df42ba43469af61822fdd88ebff32
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: tools
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+  - name: latest
+    importPolicy:
+      scheduled: true
+    from:
+      kind: DockerImage
+      name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d4edb2f3ffbd1a017d150cd1d6fca7f3cdc6a1a4e34c21a6aee0ab0366920bf0
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: must-gather
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+    - name: latest
+      importPolicy:
+        scheduled: true
+      from:
+        kind: DockerImage
+        name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:07d359641e4827bc34e31a5cefaf986acf4e78064fef531124cac0ed6da3e94c
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: oauth-proxy
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  tags:
+    - name: v4.4
+      importPolicy:
+        scheduled: true
+      from:
+        kind: DockerImage
+        name: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f968922564c3eea1c69d6bbe529d8970784d6cae8935afaf674d9fa7c0f72ea3
+---
+# we have to remove imagestreams here not via deletion, but per a CVO annotation
+# in order to properly conform with its conventions
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  namespace: openshift
+  name: hello-openshift
+  annotations:
+    release.openshift.io/delete: "true"
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: latest
+      importPolicy:
+        scheduled: true
+      from:
+        kind: DockerImage
+        name: quay.io/openshift/origin-hello-openshift:latest

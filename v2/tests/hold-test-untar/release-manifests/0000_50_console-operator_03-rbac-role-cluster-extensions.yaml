@@ -1,0 +1,26 @@
+# any logged-in user authenticated through the
+# console needs READONLY access to these resources
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: console-extensions-reader
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Console
+rules:
+- apiGroups:
+  - console.openshift.io
+  resources:
+  - consolelinks
+  - consolenotifications
+  - consoleexternalloglinks
+  - consoleclidownloads
+  - consoleyamlsamples
+  - consolequickstarts
+  - consoleplugins
+  verbs:
+  - get
+  - list
+  - watch

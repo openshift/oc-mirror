@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-autoscaler-operator-ca
+  namespace: openshift-machine-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    release.openshift.io/delete: "true"
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cluster-autoscaler-operator-rules
+  namespace: openshift-machine-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    release.openshift.io/delete: "true"

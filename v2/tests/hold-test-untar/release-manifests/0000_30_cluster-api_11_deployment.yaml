@@ -1,0 +1,74 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-capi-operator
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-set: "TechPreviewNoUpgrade"
+  labels:
+    k8s-app: cluster-capi-operator
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cluster-capi-operator
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        k8s-app: cluster-capi-operator
+    spec:
+      serviceAccountName: cluster-capi-operator
+      containers:
+      - name: cluster-capi-operator
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:bbbcd1a09bf0fbf8d8d94985738cd7676b6565ed77ae2f924b4a917fd8d40786
+        command:
+        - ./cluster-capi-operator
+        args:
+          - --images-json=/etc/cluster-api-config-images/images.json
+          - --providers-yaml=/etc/cluster-api-config-providers/providers-list.yaml
+        env:
+        - name: RELEASE_VERSION
+          value: "4.12.0"
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        volumeMounts:
+        - name: images
+          mountPath: /etc/cluster-api-config-images/
+        - name: providers
+          mountPath: /etc/cluster-api-config-providers/
+        - name: cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: images
+        configMap:
+          defaultMode: 420
+          name: cluster-capi-operator-images
+      - name: providers
+        configMap:
+          defaultMode: 420
+          name: cluster-capi-operator-providers
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: cluster-capi-operator-webhook-service-cert
