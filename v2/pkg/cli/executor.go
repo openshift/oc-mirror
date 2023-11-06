@@ -177,7 +177,9 @@ func (o *ExecutorSchema) Validate(dest []string) error {
 	}
 	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
 		return fmt.Errorf("when destination is file://, diskToMirror workflow is assumed, and the --from argument become mandatory")
-
+	}
+	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, fileProtocol) {
+		return fmt.Errorf("when --from is used, it must have file:// prefix")
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -552,6 +554,9 @@ func (o *ExecutorSchema) ValidatePrepare(dest []string) error {
 	}
 	if o.Opts.Global.From == "" {
 		return fmt.Errorf("with prepare command, the --from argument become mandatory(prefix : file://)")
+	}
+	if !strings.Contains(o.Opts.Global.From, fileProtocol) {
+		return fmt.Errorf("when --from is used, it must have file:// prefix")
 	}
 	return nil
 }
