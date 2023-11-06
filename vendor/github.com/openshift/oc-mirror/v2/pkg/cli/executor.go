@@ -153,7 +153,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
-	cmd.Flags().StringVar(&opts.Global.From, "from", "working-dir", "local storage directory for disk to mirror workflow")
+	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
@@ -175,7 +175,7 @@ func (o *ExecutorSchema) Validate(dest []string) error {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
 	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
-		return fmt.Errorf("when destination is file://, diskToMirror workflow is assumed, and the --from argument become mandatory")
+		return fmt.Errorf("when destination is docker://, diskToMirror workflow is assumed, and the --from argument become mandatory")
 	}
 	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, fileProtocol) {
 		return fmt.Errorf("when --from is used, it must have file:// prefix")
