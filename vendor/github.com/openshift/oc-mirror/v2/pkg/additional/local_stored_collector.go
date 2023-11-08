@@ -7,6 +7,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -28,11 +29,11 @@ type LocalStorageCollector struct {
 // AdditionalImagesCollector - this looks into the additional images field
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded in oci format
-func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
 
 	var allImages []v1alpha3.CopyImageSchema
 
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgRef := img.Name
 			var src string
@@ -45,14 +46,14 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 				imgRef = transportAndRef[1]
 			}
 
-			pathWithoutDNS, err := pathWithoutDNS(imgRef)
+			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
 				return nil, err
 			}
 
-			if isImageByDigest(imgRef) {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+			if image.IsImageByDigest(imgRef) {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 			}
@@ -64,7 +65,7 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 		}
 	}
 
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.IsDiskToMirror() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			var src string
 			var dest string
@@ -77,15 +78,15 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 					imgRef = transportAndRef[1]
 				}
 
-				pathWithoutDNS, err := pathWithoutDNS(imgRef)
+				pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 				if err != nil {
 					o.Log.Error("%s", err.Error())
 					return nil, err
 				}
 
-				if isImageByDigest(imgRef) {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+				if image.IsImageByDigest(imgRef) {
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 				} else {
 					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
@@ -107,37 +108,4 @@ func (o *LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (
 		}
 	}
 	return allImages, nil
-}
-
-func isImageByDigest(imgRef string) bool {
-	return strings.Contains(imgRef, "@")
-}
-
-func pathWithoutDNS(imgRef string) (string, error) {
-
-	var imageName []string
-	if isImageByDigest(imgRef) {
-		imageNameSplit := strings.Split(imgRef, "@")
-		imageName = strings.Split(imageNameSplit[0], "/")
-	} else {
-		imageName = strings.Split(imgRef, "/")
-	}
-
-	if len(imageName) > 2 {
-		return strings.Join(imageName[1:], "/"), nil
-	} else if len(imageName) == 1 {
-		return imageName[0], nil
-	} else {
-		return "", fmt.Errorf("unable to parse image %s correctly", imgRef)
-	}
-}
-
-func imageHash(imgRef string) string {
-	var hash string
-	imgSplit := strings.Split(imgRef, "@")
-	if len(imgSplit) > 1 {
-		hash = strings.Split(imgSplit[1], ":")[1]
-	}
-
-	return hash
 }

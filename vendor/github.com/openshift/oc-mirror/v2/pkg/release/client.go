@@ -11,6 +11,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var (
+	_ Client = &ocpClient{}
+	_ Client = &okdClient{}
+)
+
 // Client is a Cincinnati client which can be used to fetch update graphs from
 // an upstream Cincinnati stack.
 type Client interface {
@@ -20,9 +25,13 @@ type Client interface {
 	GetTransport() *http.Transport
 }
 
-var _ Client = &ocpClient{}
-
 type ocpClient struct {
+	id        uuid.UUID
+	transport *http.Transport
+	url       url.URL
+}
+
+type okdClient struct {
 	id        uuid.UUID
 	transport *http.Transport
 	url       url.URL
@@ -54,21 +63,21 @@ func NewOCPClient(id uuid.UUID) (Client, error) {
 	return &ocpClient{id: id, transport: transport, url: *upstream}, nil
 }
 
-func (c *ocpClient) GetURL() *url.URL {
-	return &c.url
+func (o *ocpClient) GetURL() *url.URL {
+	return &o.url
 }
 
-func (c *ocpClient) GetTransport() *http.Transport {
-	return c.transport
+func (o *ocpClient) GetTransport() *http.Transport {
+	return o.transport
 }
 
-func (c *ocpClient) GetID() uuid.UUID {
-	return c.id
+func (o *ocpClient) GetID() uuid.UUID {
+	return o.id
 }
 
-func (c *ocpClient) SetQueryParams(arch, channel, version string) {
-	queryParams := c.url.Query()
-	queryParams.Add("id", c.id.String())
+func (o *ocpClient) SetQueryParams(arch, channel, version string) {
+	queryParams := o.url.Query()
+	queryParams.Add("id", o.id.String())
 	params := map[string]string{
 		"arch":    arch,
 		"channel": channel,
@@ -79,15 +88,7 @@ func (c *ocpClient) SetQueryParams(arch, channel, version string) {
 			queryParams.Add(key, value)
 		}
 	}
-	c.url.RawQuery = queryParams.Encode()
-}
-
-var _ Client = &okdClient{}
-
-type okdClient struct {
-	id        uuid.UUID
-	transport *http.Transport
-	url       url.URL
+	o.url.RawQuery = queryParams.Encode()
 }
 
 // NewOKDClient creates a new OKD Cincinnati client with the given client identifier.
@@ -109,19 +110,19 @@ func NewOKDClient(id uuid.UUID) (Client, error) {
 	return &okdClient{id: id, transport: transport, url: *upstream}, nil
 }
 
-func (c *okdClient) GetURL() *url.URL {
-	return &c.url
+func (o *okdClient) GetURL() *url.URL {
+	return &o.url
 }
 
-func (c *okdClient) GetID() uuid.UUID {
-	return c.id
+func (o *okdClient) GetID() uuid.UUID {
+	return o.id
 }
 
-func (c *okdClient) GetTransport() *http.Transport {
-	return c.transport
+func (o *okdClient) GetTransport() *http.Transport {
+	return o.transport
 }
 
-func (c *okdClient) SetQueryParams(_, _, _ string) {
+func (o *okdClient) SetQueryParams(_, _, _ string) {
 	// Do nothing
 }
 

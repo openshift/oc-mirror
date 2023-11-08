@@ -35,14 +35,6 @@ type MirrorDeleteInterface interface {
 	DeleteImage(ctx context.Context, image string, opts *CopyOptions) error
 }
 
-const (
-	mirrorToDisk      = "mirrorToDisk"
-	diskToMirror      = "diskToMirror"
-	CopyMode     Mode = "copy"
-	DeleteMode   Mode = "delete"
-	CheckMode    Mode = "check"
-)
-
 // Mirror
 type Mirror struct {
 	mc   MirrorCopyInterface

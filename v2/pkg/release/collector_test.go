@@ -14,6 +14,27 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
+// setup mocks
+// we need to mock Manifest, Mirror, Cincinnati
+
+type MockMirror struct {
+	Fail bool
+}
+
+type MockManifest struct {
+	Log               clog.PluggableLoggerInterface
+	FailImageIndex    bool
+	FailImageManifest bool
+	FailExtract       bool
+}
+
+type MockCincinnati struct {
+	Config v1alpha2.ImageSetConfiguration
+	Opts   mirror.CopyOptions
+	Client Client
+	Fail   bool
+}
+
 func TestReleaseImageCollector(t *testing.T) {
 
 	log := clog.New("trace")
@@ -38,7 +59,7 @@ func TestReleaseImageCollector(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "oci://test",
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	cfg := v1alpha2.ImageSetConfiguration{
@@ -121,15 +142,15 @@ func TestReleaseImageCollector(t *testing.T) {
 		},
 	}
 
-	cincinnati := &Cincinnati{Config: cfg, Opts: opts}
+	cincinnati := &MockCincinnati{Config: cfg, Opts: opts}
 	ctx := context.Background()
 
 	// this test should cover over 80%
 	t.Run("Testing ReleaseImageCollector : should pass", func(t *testing.T) {
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &Collector{
 			Log:        log,
-			Mirror:     &Mirror{Fail: false},
+			Mirror:     &MockMirror{Fail: false},
 			Config:     cfg,
 			Manifest:   manifest,
 			Opts:       opts,
@@ -145,10 +166,10 @@ func TestReleaseImageCollector(t *testing.T) {
 	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
 		os.RemoveAll("../../tests/hold-release/")
 		os.RemoveAll("../../tests/release-images")
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &Collector{
 			Log:        log,
-			Mirror:     &Mirror{Fail: true},
+			Mirror:     &MockMirror{Fail: true},
 			Config:     cfg,
 			Manifest:   manifest,
 			Opts:       opts,
@@ -162,10 +183,10 @@ func TestReleaseImageCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image index", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailImageIndex: true}
+		manifest := &MockManifest{Log: log, FailImageIndex: true}
 		ex := &Collector{
 			Log:        log,
-			Mirror:     &Mirror{Fail: false},
+			Mirror:     &MockMirror{Fail: false},
 			Config:     cfg,
 			Manifest:   manifest,
 			Opts:       opts,
@@ -179,10 +200,10 @@ func TestReleaseImageCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image manifest", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailImageManifest: true}
+		manifest := &MockManifest{Log: log, FailImageManifest: true}
 		ex := &Collector{
 			Log:        log,
-			Mirror:     &Mirror{Fail: false},
+			Mirror:     &MockMirror{Fail: false},
 			Config:     cfg,
 			Manifest:   manifest,
 			Opts:       opts,
@@ -196,10 +217,10 @@ func TestReleaseImageCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail extract", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailExtract: true}
+		manifest := &MockManifest{Log: log, FailExtract: true}
 		ex := &Collector{
 			Log:        log,
-			Mirror:     &Mirror{Fail: false},
+			Mirror:     &MockMirror{Fail: false},
 			Config:     cfg,
 			Manifest:   manifest,
 			Opts:       opts,
@@ -213,47 +234,26 @@ func TestReleaseImageCollector(t *testing.T) {
 	})
 }
 
-// setup mocks
-// we need to mock Manifest, Mirror, Cincinnati
-
-type Mirror struct {
-	Fail bool
-}
-
-type Manifest struct {
-	Log               clog.PluggableLoggerInterface
-	FailImageIndex    bool
-	FailImageManifest bool
-	FailExtract       bool
-}
-
-type Cincinnati struct {
-	Config v1alpha2.ImageSetConfiguration
-	Opts   mirror.CopyOptions
-	Client Client
-	Fail   bool
-}
-
-func (o *Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, out bufio.Writer) error {
+func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, out bufio.Writer) error {
 	if o.Fail {
 		return fmt.Errorf("forced mirror run fail")
 	}
 	return nil
 }
 
-func (o *Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
 	return true, nil
 }
 
-func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
+func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
 	return nil, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
+func (o MockManifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
 	return nil, nil
 }
 
-func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
+func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
 	relatedImages := []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -263,7 +263,7 @@ func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, e
 	return relatedImages, nil
 }
 
-func (o *Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	if o.FailImageIndex {
 		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -279,7 +279,7 @@ func (o *Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o *Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
 	if o.FailImageManifest {
 		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -301,7 +301,7 @@ func (o *Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error) {
+func (o MockManifest) GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error) {
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	relatedImages["abc"] = []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -310,30 +310,30 @@ func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string) (map[stri
 	return relatedImages, nil
 }
 
-func (o *Manifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
 	return nil
 }
 
-func (o *Cincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
+func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
 	var res []v1alpha3.CopyImageSchema
 	res = append(res, v1alpha3.CopyImageSchema{Source: "test", Destination: "test"})
 	return res
 }
 
-func (o *Cincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
+func (o MockCincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
 	if o.Fail {
 		return o.Client, fmt.Errorf("forced cincinnati client error")
 	}
 	return o.Client, nil
 }
 
-func (o *Cincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
+func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
 	return o.Client, nil
 }
 
-func (o *Cincinnati) GenerateReleaseSignatures(context.Context, []v1alpha3.RelatedImage) {
+func (o MockCincinnati) GenerateReleaseSignatures(context.Context, []v1alpha3.RelatedImage) {
 	fmt.Println("test release signature")
 }

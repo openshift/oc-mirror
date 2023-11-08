@@ -14,6 +14,10 @@ import (
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
 
+type mockSignature struct {
+	Log clog.PluggableLoggerInterface
+}
+
 func TestGetReleaseReferenceImages(t *testing.T) {
 
 	log := clog.New("trace")
@@ -34,7 +38,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "oci:test",
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	cfg := v1alpha2.ImageSetConfiguration{
@@ -83,7 +87,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfg, &opts, c, false, signature)
+		sch := NewCincinnati(log, &cfg, opts, c, false, signature)
 		res := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -109,7 +113,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfg, &opts, c, true, signature)
+		sch := NewCincinnati(log, &cfg, opts, c, true, signature)
 		res := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -119,11 +123,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 }
 
-type mockSignature struct {
-	Log clog.PluggableLoggerInterface
-}
-
-func (o *mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error) {
+func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error) {
 	o.Log.Info("signature verification (mock)")
 	return []v1alpha3.CopyImageSchema{}, nil
 }

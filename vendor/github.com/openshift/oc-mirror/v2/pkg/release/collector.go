@@ -17,16 +17,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-func New(log clog.PluggableLoggerInterface,
-	config v1alpha2.ImageSetConfiguration,
-	opts mirror.CopyOptions,
-	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
-	cincinnati CincinnatiInterface,
-) CollectorInterface {
-	return &Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati}
-}
-
 type Collector struct {
 	Log        clog.PluggableLoggerInterface
 	Mirror     mirror.MirrorInterface
@@ -45,7 +35,7 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
 	var allImages []v1alpha3.CopyImageSchema
 	var imageIndexDir string
 
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
 		f, err := os.Create(logFile)
 		if err != nil {
@@ -128,7 +118,7 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
 			allImages = append(allImages, tmpImages...)
 		}
 	}
-	if o.Opts.Mode == diskToMirror && strings.Contains(o.Config.Mirror.Platform.Release, dirProtocol) {
+	if o.Opts.IsDiskToMirror() && strings.Contains(o.Config.Mirror.Platform.Release, dirProtocol) {
 		// we know the directory format is
 		// release-images/name/version/
 		// we can do some replacing from the directory passed as string

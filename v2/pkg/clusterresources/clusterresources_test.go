@@ -37,7 +37,7 @@ func TestIDMSGenerator(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "docker://localhost:5000/test",
 		Dev:                 false,
-		Mode:                "diskToMirror",
+		Mode:                mirror.DiskToMirror,
 	}
 
 	cfgd2m := v1alpha2.ImageSetConfiguration{

@@ -47,7 +47,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "file://test",
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	d2mOpts := mirror.CopyOptions{
@@ -58,7 +58,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "docker://localhost:5000/test",
 		Dev:                 false,
-		Mode:                diskToMirror,
+		Mode:                mirror.DiskToMirror,
 	}
 
 	cfgd2m := v1alpha2.ImageSetConfiguration{
@@ -157,15 +157,15 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		},
 	}
 
-	cincinnati := &Cincinnati{Config: cfgm2d, Opts: m2dOpts}
+	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
 	ctx := context.Background()
 
 	// this test should cover over 80% M2D
 	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -199,10 +199,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgd2m,
 			Manifest:         manifest,
 			Opts:             d2mOpts,
@@ -224,10 +224,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
 		os.RemoveAll(m2dOpts.Global.Dir)
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: true},
+			Mirror:           &MockMirror{Fail: true},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -243,10 +243,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image index", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailImageIndex: true}
+		manifest := &MockManifest{Log: log, FailImageIndex: true}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -262,10 +262,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image manifest", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailImageManifest: true}
+		manifest := &MockManifest{Log: log, FailImageManifest: true}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -281,10 +281,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail extract", func(t *testing.T) {
-		manifest := &Manifest{Log: log, FailExtract: true}
+		manifest := &MockManifest{Log: log, FailExtract: true}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,

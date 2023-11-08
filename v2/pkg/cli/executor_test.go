@@ -36,7 +36,7 @@ func TestExecutor(t *testing.T) {
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	// read the ImageSetConfiguration
@@ -64,7 +64,7 @@ func TestExecutor(t *testing.T) {
 		res := &cobra.Command{}
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
-		ex.Opts.Mode = "mirrorToDisk"
+		ex.Opts.Mode = mirror.MirrorToDisk
 		err := ex.Run(res, []string{"file://test"})
 		if err != nil {
 			log.Error(" %v ", err)
@@ -88,7 +88,7 @@ func TestExecutor(t *testing.T) {
 		res := &cobra.Command{}
 		res.SilenceUsage = true
 		res.SetContext(context.Background())
-		ex.Opts.Mode = "mirrorToDisk"
+		ex.Opts.Mode = mirror.MirrorToDisk
 		err := ex.Run(res, []string{"docker://test"})
 		if err == nil {
 			t.Fatalf("should fail")
@@ -112,7 +112,7 @@ func TestExecutor(t *testing.T) {
 		res := &cobra.Command{}
 		res.SilenceUsage = true
 		res.SetContext(context.Background())
-		ex.Opts.Mode = "mirrorToDisk"
+		ex.Opts.Mode = mirror.MirrorToDisk
 		err := ex.Run(res, []string{"oci://test"})
 		if err == nil {
 			t.Fatalf("should fail")
@@ -136,7 +136,7 @@ func TestExecutor(t *testing.T) {
 		res := &cobra.Command{}
 		res.SilenceUsage = true
 		res.SetContext(context.Background())
-		ex.Opts.Mode = "mirrorToDisk"
+		ex.Opts.Mode = mirror.MirrorToDisk
 		err := ex.Run(res, []string{"oci://test"})
 		if err == nil {
 			t.Fatalf("should fail")

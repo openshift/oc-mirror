@@ -34,11 +34,11 @@ type Collector struct {
 // AdditionalImagesCollector - this looks into the additional images field
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded in oci format
-func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
 
 	var allImages []v1alpha3.CopyImageSchema
 
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			irs, err := customImageParser(img.Name)
 			if err != nil {
@@ -62,7 +62,7 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 		}
 	}
 
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.IsDiskToMirror() {
 		regex, e := regexp.Compile(indexJson)
 		if e != nil {
 			o.Log.Error("%v", e)
