@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
@@ -183,6 +184,15 @@ func (o ExecutorSchema) Validate(dest []string) error {
 		return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
 	}
 }
+func (o *ExecutorSchema) CacheRootDir() string {
+	rootDir := ""
+	if o.Opts.IsMirrorToDisk() {
+		rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
+	} else {
+		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
+	}
+	return rootDir
+}
 
 func (o *ExecutorSchema) PrepareStorageAndLogs() error {
 
@@ -226,13 +236,7 @@ health:
     threshold: 3
 `
 
-	rootDir := ""
-
-	if o.Opts.IsMirrorToDisk() {
-		rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
-	} else {
-		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
-	}
+	rootDir := o.CacheRootDir()
 
 	if rootDir == "" {
 		// something went wrong
@@ -361,6 +365,9 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// make sure we always get multi-arch images
+	o.Opts.MultiArch = "all"
+
 	if o.Opts.IsMirrorToDisk() {
 
 		// ensure working dir exists
@@ -435,9 +442,16 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
 	collectionFinish := time.Now()
-
+	ctx := cmd.Context()
+	blobGatherer := archive.NewStoreBlobGatherer(o.CacheRootDir())
+	blobs, err := blobGatherer.GatherBlobs(allRelatedImages[0].Destination)
+	if err != nil {
+		cleanUp()
+		return err
+	}
+	o.Log.Info("blobs for %s:\n %v ", allRelatedImages[0].Destination, blobs)
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allRelatedImages, o.Opts)
+	err = o.Batch.Worker(ctx, allRelatedImages, o.Opts)
 	if err != nil {
 		cleanUp()
 		return err
