@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -504,7 +504,7 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	}
 
 	// Parse the graph.
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return graph, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
 	}

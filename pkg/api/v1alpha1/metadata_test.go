@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -39,7 +39,7 @@ foo: bar
 			data := []byte(s.inline)
 			if len(data) == 0 {
 				var err error
-				data, err = ioutil.ReadFile(s.file)
+				data, err = os.ReadFile(s.file)
 				require.NoError(t, err)
 			}
 

@@ -3,7 +3,6 @@ package bundle
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -129,7 +128,7 @@ func prepFiles(root string, paths []string, files []string) error {
 	}
 	d1 := []byte("hello\ngo\n")
 	for _, file := range files {
-		if err := ioutil.WriteFile(filepath.Join(root, file), d1, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, file), d1, 0644); err != nil {
 			return err
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -54,7 +53,7 @@ func (o *RootOptions) LogfilePreRun(cmd *cobra.Command, _ []string) {
 	}
 
 	// Setup logrus for use with operator-registry
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 
 	var logrusLevel logrus.Level
 	switch o.LogLevel {
