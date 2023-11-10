@@ -15,6 +15,13 @@ import (
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
 
+var _ Client = &mockClient{}
+
+type mockClient struct {
+	url  *url.URL
+	Fail bool
+}
+
 func TestGetUpdates(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
@@ -474,13 +481,6 @@ func TestHandleBlockedEdges(t *testing.T) {
 		})
 	}
 }
-
-type mockClient struct {
-	url  *url.URL
-	Fail bool
-}
-
-var _ Client = &mockClient{}
 
 func (c mockClient) GetID() uuid.UUID {
 	return uuid.MustParse("01234567-0123-0123-0123-0123456789ab")

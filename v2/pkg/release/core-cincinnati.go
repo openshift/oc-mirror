@@ -43,13 +43,29 @@ type Error struct {
 	cause error
 }
 
-// Error serializes the error as a string, to satisfy the error interface.
-func (err *Error) Error() string {
-	return fmt.Sprintf("%s: %s", err.Reason, err.Message)
-}
-
 // Update is a single node from the update graph.
 type Update node
+
+type graph struct {
+	Nodes []node
+	Edges []edge
+}
+
+type node struct {
+	Version  semver.Version    `json:"version"`
+	Image    string            `json:"payload"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+type edge struct {
+	Origin      int
+	Destination int
+}
+
+// Error serializes the error as a string, to satisfy the error interface.
+func (o Error) Error() string {
+	return fmt.Sprintf("%s: %s", o.Reason, o.Message)
+}
 
 // GetUpdates fetches the requested update payload from the specified
 // upstream Cincinnati stack given the current version, architecture, and channel.
@@ -517,26 +533,10 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	return graph, nil
 }
 
-type graph struct {
-	Nodes []node
-	Edges []edge
-}
-
-type node struct {
-	Version  semver.Version    `json:"version"`
-	Image    string            `json:"payload"`
-	Metadata map[string]string `json:"metadata,omitempty"`
-}
-
-type edge struct {
-	Origin      int
-	Destination int
-}
-
 // UnmarshalJSON unmarshals an edge in the update graph. The edge's JSON
 // representation is a two-element array of indices, but Go's representation is
 // a struct with two elements so this custom unmarshal method is required.
-func (e *edge) UnmarshalJSON(data []byte) error {
+func (o *edge) UnmarshalJSON(data []byte) error {
 	var fields []int
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
@@ -546,8 +546,8 @@ func (e *edge) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("expected 2 fields, found %d", len(fields))
 	}
 
-	e.Origin = fields[0]
-	e.Destination = fields[1]
+	o.Origin = fields[0]
+	o.Destination = fields[1]
 
 	return nil
 }

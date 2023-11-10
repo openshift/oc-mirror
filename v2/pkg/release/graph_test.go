@@ -11,6 +11,9 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
+type mockImageBuilder struct {
+}
+
 func TestCreateGraphImage(t *testing.T) {
 
 	log := clog.New("trace")
@@ -34,7 +37,7 @@ func TestCreateGraphImage(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "file://test",
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	cfgm2d := v1alpha2.ImageSetConfiguration{
@@ -117,16 +120,16 @@ func TestCreateGraphImage(t *testing.T) {
 		},
 	}
 
-	cincinnati := &Cincinnati{Config: cfgm2d, Opts: m2dOpts}
+	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
 
 	ctx := context.Background()
 
 	// this test should cover over 80% M2D
 	t.Run("Testing CreateGraphImage - Mirror to disk: should pass", func(t *testing.T) {
-		manifest := &Manifest{Log: log}
+		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &Mirror{Fail: false},
+			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -135,7 +138,7 @@ func TestCreateGraphImage(t *testing.T) {
 			ImageBuilder:     &mockImageBuilder{},
 		}
 
-		err := ex.CreateGraphImage(ctx)
+		_, err := ex.CreateGraphImage(ctx)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -143,12 +146,9 @@ func TestCreateGraphImage(t *testing.T) {
 	})
 }
 
-type mockImageBuilder struct {
-}
-
-func (m *mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
+func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
 	return nil
 }
-func (m *mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {
+func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {
 	return layout.FromPath("../../tests/test-untar")
 }

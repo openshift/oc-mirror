@@ -31,7 +31,7 @@ func TestWorker(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "oci:test",
 		Dev:                 false,
-		Mode:                "mirrorToDisk",
+		Mode:                mirror.MirrorToDisk,
 	}
 
 	w := New(log, &Mirror{}, &Manifest{})

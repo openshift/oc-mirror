@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -161,7 +162,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	}
 	o.Log.Info("images to copy (before duplicates) %d ", count)
 	// check the mode
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
@@ -169,7 +170,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		}
 	}
 
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.IsDiskToMirror() {
 		allImages, err = o.prepareD2MCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
@@ -178,7 +179,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	return allImages, nil
 }
 
-func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
+func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
@@ -191,15 +192,15 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 				imgRef = transportAndRef[1]
 			}
 
-			pathWithoutDNS, err := pathWithoutDNS(imgRef)
+			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
 				return nil, err
 			}
 
-			if isImageByDigest(imgRef) {
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
-				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+			if image.IsImageByDigest(imgRef) {
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 			} else {
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
@@ -217,7 +218,7 @@ func (o *LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInte
 	return result, nil
 }
 
-func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
+func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
@@ -232,14 +233,14 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 				imgRef = transportAndRef[1]
 			}
 
-			pathWithoutDNS, err := pathWithoutDNS(imgRef)
+			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
 				return nil, err
 			}
 
-			if isImageByDigest(imgRef) {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + imageHash(imgRef)[:hashTruncLen]}, "/")
+			if image.IsImageByDigest(imgRef) {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 			}
@@ -251,37 +252,4 @@ func (o *LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInte
 		}
 	}
 	return result, nil
-}
-
-func isImageByDigest(imgRef string) bool {
-	return strings.Contains(imgRef, "@")
-}
-
-func pathWithoutDNS(imgRef string) (string, error) {
-
-	var imageName []string
-	if isImageByDigest(imgRef) {
-		imageNameSplit := strings.Split(imgRef, "@")
-		imageName = strings.Split(imageNameSplit[0], "/")
-	} else {
-		imageName = strings.Split(imgRef, "/")
-	}
-
-	if len(imageName) > 2 {
-		return strings.Join(imageName[1:], "/"), nil
-	} else if len(imageName) == 1 {
-		return imageName[0], nil
-	} else {
-		return "", fmt.Errorf("unable to parse image %s correctly", imgRef)
-	}
-}
-
-func imageHash(imgRef string) string {
-	var hash string
-	imgSplit := strings.Split(imgRef, "@")
-	if len(imgSplit) > 1 {
-		hash = strings.Split(imgSplit[1], ":")[1]
-	}
-
-	return hash
 }

@@ -28,7 +28,7 @@ func TestMirror(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Destination:         "oci:test",
 		Dev:                 false,
-		Mode:                mirrorToDisk,
+		Mode:                MirrorToDisk,
 		MultiArch:           "all",
 		Format:              "oci",
 		SignPassphraseFile:  "test-digest",

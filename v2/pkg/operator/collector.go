@@ -58,7 +58,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 	}
 
 	// check the mode
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 		f, err := os.Create(logsFile)
 		if err != nil {
 			o.Log.Error(errMsg, err)
@@ -167,7 +167,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 		}
 	}
 
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.IsDiskToMirror() {
 		// check the directory to copy
 		regex, e := regexp.Compile(indexJson)
 		if e != nil {

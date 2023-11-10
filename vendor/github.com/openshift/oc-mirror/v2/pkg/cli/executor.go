@@ -40,9 +40,6 @@ const (
 	ociProtocol             string = "oci://"
 	dirProtocol             string = "dir://"
 	fileProtocol            string = "file://"
-	diskToMirror            string = "diskToMirror"
-	mirrorToDisk            string = "mirrorToDisk"
-	prepare                 string = "prepare"
 	releaseImageDir         string = "release-images"
 	logsDir                 string = "logs"
 	workingDir              string = "working-dir"
@@ -170,7 +167,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 }
 
 // Validate - cobra validation
-func (o *ExecutorSchema) Validate(dest []string) error {
+func (o ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
@@ -231,7 +228,7 @@ health:
 
 	rootDir := ""
 
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 		rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
 	} else {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
@@ -325,12 +322,12 @@ func (o *ExecutorSchema) Complete(args []string) {
 	// logic to check mode
 	var dest string
 	if strings.Contains(args[0], fileProtocol) {
-		o.Opts.Mode = mirrorToDisk
+		o.Opts.Mode = mirror.MirrorToDisk
 		dest = filepath.Join(strings.Split(args[0], "://")[1], workingDir)
 		o.Log.Debug("destination %s ", dest)
 	} else if strings.Contains(args[0], dockerProtocol) {
 		dest = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
-		o.Opts.Mode = diskToMirror
+		o.Opts.Mode = mirror.DiskToMirror
 	} else {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
@@ -343,9 +340,9 @@ func (o *ExecutorSchema) Complete(args []string) {
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, o.Opts)
 
-	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
-	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
+	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
+	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Config, o.Opts)
@@ -364,7 +361,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if o.Opts.Mode == mirrorToDisk {
+	if o.Opts.IsMirrorToDisk() {
 
 		// ensure working dir exists
 		err := os.MkdirAll(workingDir, 0755)
@@ -447,7 +444,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	//create IDMS/ITMS
-	if o.Opts.Mode == diskToMirror {
+	if o.Opts.IsDiskToMirror() {
 		err = o.ClusterResources.IDMSGenerator(cmd.Context(), allRelatedImages, o.Opts)
 		if err != nil {
 			cleanUp()
@@ -549,7 +546,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 }
 
 // Validate - cobra validation
-func (o *ExecutorSchema) ValidatePrepare(dest []string) error {
+func (o ExecutorSchema) ValidatePrepare(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
@@ -584,13 +581,13 @@ func (o *ExecutorSchema) CompletePrepare(args []string) {
 	o.Opts.Global.Dir = dest
 
 	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
-	o.Opts.Mode = prepare
+	o.Opts.Mode = mirror.Prepare
 	o.Log.Info("mode %s ", o.Opts.Mode)
 	client, _ := release.NewOCPClient(uuid.New())
 
-	signature := release.NewSignatureClient(o.Log, &o.Config, &o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, &o.Opts, client, false, signature)
-	o.Release = release.NewWithLocalStorage(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
+	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
+	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 
