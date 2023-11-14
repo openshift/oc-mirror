@@ -59,10 +59,9 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) Im
 		// TODO test what happens if registries.conf is specified
 	}
 	if !opts.Global.TlsVerify {
-		nameOptions = append(nameOptions, name.Insecure)
 		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
-
 	} else {
+		nameOptions = append(nameOptions, name.Insecure)
 		// create our own roundTripper to pass insecure=true
 		insecureRoundTripper := createInsecureRoundTripper()
 		remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
