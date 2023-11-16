@@ -24,14 +24,12 @@ func NewStoreBlobGatherer(localStorageLocation string) BlobsGatherer {
 }
 func (o StoreBlobGatherer) GatherBlobs(imgRef string) (map[string]string, error) {
 	blobs := map[string]string{}
-	imageWithoutTransport := image.RefWithoutTransport(imgRef)
-	imageWithoutDNS, err := image.PathWithoutDNS(imageWithoutTransport)
+	imgSpec, err := image.ParseRef(imgRef)
 	if err != nil {
 		return nil, err
 	}
-	imageSubPath := image.PathWithoutDigestNorTag(imageWithoutDNS)
 
-	imagePath := filepath.Join(o.localStorage, repositoriesSubFolder, imageSubPath)
+	imagePath := filepath.Join(o.localStorage, repositoriesSubFolder, imgSpec.PathComponent)
 
 	err = filepath.Walk(imagePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

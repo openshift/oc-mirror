@@ -13,10 +13,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-const (
-	hashTruncLen int = 12
-)
-
 type LocalStorageCollector struct {
 	Log              clog.PluggableLoggerInterface
 	Mirror           mirror.MirrorInterface
@@ -35,26 +31,19 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	if o.Opts.IsMirrorToDisk() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
-			imgRef := img.Name
-			var src string
-			var dest string
-			if !strings.Contains(imgRef, "://") {
-				src = dockerProtocol + imgRef
-			} else {
-				src = imgRef
-				imgRef = image.RefWithoutTransport(imgRef)
-			}
-			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
+			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
 				return nil, err
 			}
+			var src string
+			var dest string
+			src = imgSpec.ReferenceWithTransport
 
-			if image.IsImageByDigest(imgRef) {
-				pathWithoutDNSNoDigest := image.PathWithoutDigest(pathWithoutDNS)
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+			if imgSpec.IsImageByDigest() {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
 			} else {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			}
 
 			o.Log.Debug("source %s", src)
@@ -70,22 +59,18 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			var dest string
 
 			if !strings.HasPrefix(img.Name, ociProtocol) {
-
-				imgRef := image.RefWithoutTransport(img.Name)
-
-				pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
+				imgSpec, err := image.ParseRef(img.Name)
 				if err != nil {
 					o.Log.Error("%s", err.Error())
 					return nil, err
 				}
 
-				if image.IsImageByDigest(imgRef) {
-					pathWithoutDNSNoDigest := image.PathWithoutDigest(pathWithoutDNS)
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+				if imgSpec.IsImageByDigest() {
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
 				} else {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 				}
 
 			} else {
