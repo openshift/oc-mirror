@@ -42,10 +42,8 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 				src = dockerProtocol + imgRef
 			} else {
 				src = imgRef
-				transportAndRef := strings.Split(imgRef, "://")
-				imgRef = transportAndRef[1]
+				imgRef = image.RefWithoutTransport(imgRef)
 			}
-
 			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
@@ -53,7 +51,8 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			}
 
 			if image.IsImageByDigest(imgRef) {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+				pathWithoutDNSNoDigest := image.PathWithoutDigest(pathWithoutDNS)
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 			}
@@ -72,11 +71,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			if !strings.HasPrefix(img.Name, ociProtocol) {
 
-				imgRef := img.Name
-				transportAndRef := strings.Split(imgRef, "://")
-				if len(transportAndRef) > 1 {
-					imgRef = transportAndRef[1]
-				}
+				imgRef := image.RefWithoutTransport(img.Name)
 
 				pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 				if err != nil {
@@ -85,8 +80,9 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 				}
 
 				if image.IsImageByDigest(imgRef) {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+					pathWithoutDNSNoDigest := image.PathWithoutDigest(pathWithoutDNS)
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNSNoDigest + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
 				} else {
 					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 					dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")

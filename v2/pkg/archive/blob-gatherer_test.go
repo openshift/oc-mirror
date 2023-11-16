@@ -6,58 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStoreBlobGatherer_imagePathComponents(t *testing.T) {
-	imgRefs := []string{
-		"docker://localhost:5000/ubi8/ubi:latest",
-		"docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-		"docker://registry.redhat.io/ubi8/ubi:latest",
-		"docker://registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-		"localhost:5000/ubi8/ubi:latest",
-		"localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-		"file:///tmp/ubi8/ubi",
-		"oci:///tmp/ubi8/ubi",
-	}
-	expectedPathComponents := []string{
-		"ubi8/ubi",
-		"ubi8/ubi",
-		"ubi8/ubi",
-		"ubi8/ubi",
-		"ubi8/ubi",
-		"ubi8/ubi",
-		"tmp/ubi8/ubi",
-		"tmp/ubi8/ubi",
-	}
-
-	for i, imgRef := range imgRefs {
-		actualPathComponents, err := imagePathComponents(imgRef)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if actualPathComponents != expectedPathComponents[i] {
-			t.Errorf("imagePathComponents() returned unexpected value for %q: got %q, want %q", imgRef, actualPathComponents, expectedPathComponents[i])
-		}
-	}
-}
-
-func TestStoreBlobGatherer_isImageByDigest(t *testing.T) {
-	imgRefs := []string{
-		"docker://localhost:5000/ubi8/ubi:latest",
-		"docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-	}
-	expectedisByDigest := []bool{
-		false,
-		true,
-	}
-
-	for i, imgRef := range imgRefs {
-		actualIsByDigest := isImageByDigest(imgRef)
-
-		if actualIsByDigest != expectedisByDigest[i] {
-			t.Errorf("isImageByDigest() returned unexpected value for %q: got %v, want %v", imgRef, actualIsByDigest, expectedisByDigest[i])
-		}
-	}
-}
-
 func TestStoreBlobGatherer_GatherBlobs(t *testing.T) {
 
 	// Create a new StoreBlobGatherer with the temporary directory as the local storage location

@@ -207,11 +207,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 		var src string
 		var dest string
 
-		imgRef := img.Image
-		transportAndRef := strings.Split(imgRef, "://")
-		if len(transportAndRef) > 1 {
-			imgRef = transportAndRef[1]
-		}
+		imgRef := image.RefWithoutTransport(img.Name)
 
 		pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
 		if err != nil {
@@ -219,13 +215,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 			return nil, err
 		}
 
-		if image.IsImageByDigest(imgRef) {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + "@sha256:" + image.Hash(imgRef)}, "/")
-			dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + "@sha256:" + image.Hash(imgRef)}, "/")
-		} else {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
-			dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
-		}
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+		dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
 
 		if src == "" || dest == "" {
 			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
@@ -250,8 +241,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			src = dockerProtocol + imgRef
 		} else {
 			src = imgRef
-			transportAndRef := strings.Split(imgRef, "://")
-			imgRef = transportAndRef[1]
+			imgRef = image.RefWithoutTransport(imgRef)
 		}
 
 		pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
@@ -260,11 +250,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			return nil, err
 		}
 
-		if image.IsImageByDigest(imgRef) {
-			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + "@sha256:" + image.Hash(imgRef)}, "/")
-		} else {
-			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
-		}
+		dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)

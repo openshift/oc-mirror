@@ -81,7 +81,6 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 			Mirror: v1alpha2.Mirror{
 				Platform: v1alpha2.Platform{
-					Graph: true,
 					Channels: []v1alpha2.ReleaseChannel{
 						{
 							Name: "stable-4.7",
