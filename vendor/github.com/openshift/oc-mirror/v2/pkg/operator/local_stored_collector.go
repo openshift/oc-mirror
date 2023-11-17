@@ -203,7 +203,11 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 			} else {
 				src = img.Image
 				transportAndPath := strings.Split(img.Image, "://")
-				dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+				if len(transportAndPath) == 2 {
+					dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+				} else { // no transport prefix
+					dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+				}
 			}
 
 			if src == "" || dest == "" {

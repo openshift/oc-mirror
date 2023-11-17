@@ -45,9 +45,11 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	if strings.Contains(imgRef, "://") {
 		imgSpec.ReferenceWithTransport = imgRef
 		imgSplit := strings.Split(imgRef, "://")
-		imgSpec.Transport = imgSplit[0] + "://"
-		imgSpec.Reference = imgSplit[1]
-		imgSpec.Name = imgSplit[1]
+		if len(imgSplit) == 2 {
+			imgSpec.Transport = imgSplit[0] + "://"
+			imgSpec.Reference = imgSplit[1]
+			imgSpec.Name = imgSplit[1]
+		}
 	} else {
 		imgSpec.Transport = "docker://"
 		imgSpec.Reference = imgRef
