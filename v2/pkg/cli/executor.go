@@ -361,6 +361,9 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// make sure we always get multi-arch images
+	o.Opts.MultiArch = "all"
+
 	if o.Opts.IsMirrorToDisk() {
 
 		// ensure working dir exists
