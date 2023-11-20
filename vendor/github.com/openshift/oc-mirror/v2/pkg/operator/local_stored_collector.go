@@ -185,29 +185,33 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
+			if !strings.HasPrefix(img.Image, ociProtocol) {
 
-			imgRef := img.Image
-			transportAndRef := strings.Split(imgRef, "://")
-			if len(transportAndRef) > 1 {
-				imgRef = transportAndRef[1]
-			}
+				imgSpec, err := image.ParseRef(img.Image)
+				if err != nil {
+					o.Log.Error("%s", err.Error())
+					return nil, err
+				}
 
-			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
-			if err != nil {
-				o.Log.Error("%s", err.Error())
-				return nil, err
-			}
-
-			if image.IsImageByDigest(imgRef) {
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
-				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+				if imgSpec.IsImageByDigest() {
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+				} else {
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				}
 			} else {
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
-				dest = strings.Join([]string{o.Opts.Destination, pathWithoutDNS}, "/")
+				src = img.Image
+				transportAndPath := strings.Split(img.Image, "://")
+				if len(transportAndPath) == 2 {
+					dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+				} else { // no transport prefix
+					dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, img.Image}, "/")
+				}
 			}
 
 			if src == "" || dest == "" {
-				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
+				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Image)
 			}
 
 			o.Log.Debug("source %s", src)
@@ -222,27 +226,19 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
-			imgRef := img.Image
 			var src string
 			var dest string
-			if !strings.Contains(imgRef, "://") {
-				src = dockerProtocol + imgRef
-			} else {
-				src = imgRef
-				transportAndRef := strings.Split(imgRef, "://")
-				imgRef = transportAndRef[1]
-			}
-
-			pathWithoutDNS, err := image.PathWithoutDNS(imgRef)
+			imgSpec, err := image.ParseRef(img.Image)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
 				return nil, err
 			}
+			src = imgSpec.ReferenceWithTransport
 
-			if image.IsImageByDigest(imgRef) {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS + ":" + image.Hash(imgRef)[:hashTruncLen]}, "/")
+			if imgSpec.IsImageByDigest() {
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
 			} else {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathWithoutDNS}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			}
 
 			o.Log.Debug("source %s", src)

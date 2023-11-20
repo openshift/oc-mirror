@@ -18,9 +18,9 @@ func TestCreateGraphImage(t *testing.T) {
 
 	log := clog.New("trace")
 	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:      false,
-		InsecurePolicy: true,
-		Dir:            t.TempDir(),
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Dir:          t.TempDir(),
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
