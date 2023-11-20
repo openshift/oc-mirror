@@ -550,6 +550,20 @@ func TestPruneImages(t *testing.T) {
 				"repo1|digest5",
 			},
 		},
+		{
+			desc: "Success/MissingImages",
+			images: map[string][]string{
+				"repo1": {"digest1", "digest2", "digest3", "missing1", "missing2"},
+			},
+			expInvocation: 5,
+			exp: []string{
+				"repo1|digest1",
+				"repo1|digest2",
+				"repo1|digest3",
+				"repo1|missing1",
+				"repo1|missing2",
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -576,6 +590,9 @@ func (p *fakeManifestDeleter) DeleteManifest(repo, manifest string) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.invocations.Insert(fmt.Sprintf("%s|%s", repo, manifest))
+	if strings.HasPrefix(manifest, "missing") {
+		p.err = &transport.Error{StatusCode: 404}
+	}
 	return p.err
 }
 
