@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,7 +169,7 @@ func ReadMetadataFromFile(ctx context.Context, archivePath string) (v1alpha2.Met
 	}
 
 	// Create workspace to work from
-	tmpdir, err := ioutil.TempDir(".", "metadata")
+	tmpdir, err := os.MkdirTemp(".", "metadata")
 	if err != nil {
 		return meta, err
 	}

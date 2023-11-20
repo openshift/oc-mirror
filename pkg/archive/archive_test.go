@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,7 +105,7 @@ func writeFiles() error {
 	d1 := []byte("hello\ngo\n")
 
 	for i := 0; i < 100; i++ {
-		if err := ioutil.WriteFile(fmt.Sprintf("test%d", i), d1, 0644); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("test%d", i), d1, 0644); err != nil {
 			return err
 		}
 	}

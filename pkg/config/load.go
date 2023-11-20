@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,7 +21,7 @@ import (
 // and loads it into a v1alpha2.ImageSetConfiguration instance for processing and validation.
 func ReadConfig(configPath string) (c v1alpha2.ImageSetConfiguration, err error) {
 
-	data, err := ioutil.ReadFile(filepath.Clean(configPath))
+	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
 		return c, err
 	}
