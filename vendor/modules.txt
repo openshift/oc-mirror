@@ -969,7 +969,6 @@ github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
 github.com/openshift/oc-mirror/v2/pkg/additional
 github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2
 github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3
-github.com/openshift/oc-mirror/v2/pkg/archive
 github.com/openshift/oc-mirror/v2/pkg/batch
 github.com/openshift/oc-mirror/v2/pkg/cli
 github.com/openshift/oc-mirror/v2/pkg/clusterresources

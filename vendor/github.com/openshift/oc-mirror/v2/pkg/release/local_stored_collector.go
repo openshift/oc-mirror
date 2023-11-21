@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	digest "github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -105,10 +107,15 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			if len(oci.Manifests) == 0 {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
 			}
-			manifest := strings.Split(oci.Manifests[0].Digest, ":")[1]
+			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] invalid digest for image index %s: %v", oci.Manifests[0].Digest, err)
+			}
+
+			manifest := validDigest.Hex()
 			o.Log.Debug("image index %v", manifest)
 
-			manifestDir := strings.Join([]string{dir, blobsDir, manifest}, "/")
+			manifestDir := filepath.Join(dir, blobsDir, manifest)
 			mfst, err := o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
@@ -213,8 +220,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 			return nil, err
 		}
 		if imgSpec.IsImageByDigest() {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@sha256:" + imgSpec.Digest}, "/")
-			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + "@sha256:" + imgSpec.Digest}, "/")
+			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
+			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
 		} else {
 			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
@@ -244,7 +251,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		}
 		src = imgSpec.ReferenceWithTransport
 		if imgSpec.IsImageByDigest() {
-			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@sha256:" + imgSpec.Digest}, "/")
+			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
 		} else {
 			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
 

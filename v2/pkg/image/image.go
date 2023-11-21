@@ -3,6 +3,8 @@ package image
 import (
 	"fmt"
 	"strings"
+
+	digest "github.com/opencontainers/go-digest"
 )
 
 // specification is sourced from github.com/containers/image/blob/main/docker/reference/reference.go
@@ -35,6 +37,7 @@ type ImageSpec struct {
 	Domain                 string
 	PathComponent          string
 	Tag                    string
+	Algorithm              string
 	Digest                 string
 }
 
@@ -59,7 +62,12 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	if strings.Contains(imgSpec.Name, "@") {
 		imgSplit := strings.Split(imgSpec.Name, "@")
 		if len(imgSplit) > 1 {
-			imgSpec.Digest = strings.Split(imgSplit[1], ":")[1]
+			validDigest, err := digest.Parse(imgSplit[1])
+			if err != nil {
+				return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly, invalid digest: %v", imgRef, err)
+			}
+			imgSpec.Digest = validDigest.Hex()
+			imgSpec.Algorithm = validDigest.Algorithm().String()
 			imgSpec.Name = imgSplit[0]
 		}
 	} else if strings.Contains(imgSpec.Name, ":") {

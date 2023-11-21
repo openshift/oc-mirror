@@ -11,18 +11,19 @@ import (
 )
 
 type ImageBlobGatherer struct {
+	BlobsGatherer
 	ctx  context.Context
 	opts *mirror.CopyOptions
 }
 
-func NewImageBlobGatherer(ctx context.Context, opts *mirror.CopyOptions) *ImageBlobGatherer {
+func NewImageBlobGatherer(ctx context.Context, opts *mirror.CopyOptions) BlobsGatherer {
 	return &ImageBlobGatherer{
 		ctx:  ctx,
 		opts: opts,
 	}
 }
-func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs []string, retErr error) {
-	blobs = []string{}
+func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs map[string]string, retErr error) {
+	blobs = map[string]string{}
 	o.opts.DeprecatedTLSVerify.WarnIfUsed([]string{"--src-tls-verify", "--dest-tls-verify"})
 	// o.opts.All = true
 	o.opts.RemoveSignatures, _ = strconv.ParseBool("true")
@@ -38,70 +39,74 @@ func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs []string, retErr e
 
 	srcRef, err := alltransports.ParseImageName(imgRef)
 	if err != nil {
-		return blobs, fmt.Errorf("invalid source name %s: %v", imgRef, err)
+		return nil, fmt.Errorf("invalid source name %s: %v", imgRef, err)
 	}
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
-		return blobs, err
+		return nil, err
 	}
 
 	img, err := srcRef.NewImageSource(o.ctx, sourceCtx)
 	if err != nil {
-		return blobs, err
+		return nil, err
 	}
 
 	manifestBytes, mime, err := img.GetManifest(o.ctx, nil)
 	if err != nil {
-		return blobs, err
+		return nil, err
 	}
 
 	digest, err := manifest.Digest(manifestBytes)
 	if err != nil {
-		return blobs, err
+		return nil, err
 	}
-	blobs = append(blobs, digest.String())
+	blobs[digest.String()] = ""
 
 	if manifest.MIMETypeIsMultiImage(mime) {
 		manifestList, err := manifest.ListFromBlob(manifestBytes, mime)
 		if err != nil {
-			return blobs, err
+			return nil, err
 		}
 		instances := manifestList.Instances()
 		for _, digest := range instances {
-			blobs = append(blobs, digest.String())
+			blobs[digest.String()] = ""
 			singleArchManifest, singleArchMime, err := img.GetManifest(o.ctx, &digest)
 			if err != nil {
-				return blobs, err
+				return nil, err
 			}
 			singleArchBlobs, err := o.getBlobsOfManifest(singleArchManifest, singleArchMime)
 			if err != nil {
-				return blobs, err
+				return nil, err
 			}
-			blobs = append(blobs, singleArchBlobs...)
+			for _, digest := range singleArchBlobs {
+				blobs[digest] = ""
+			}
 			if err != nil {
-				return blobs, err
+				return nil, err
 			}
 		}
 	} else {
 
 		manifestBlobs, err := o.getBlobsOfManifest(manifestBytes, mime)
 		if err != nil {
-			return blobs, err
+			return nil, err
 		}
-		blobs = append(blobs, manifestBlobs...)
+		for _, digest := range manifestBlobs {
+			blobs[digest] = ""
+		}
 	}
 	return blobs, nil
 }
 
 func (o *ImageBlobGatherer) getBlobsOfManifest(manifestBytes []byte, mimeType string) ([]string, error) {
 	blobs := []string{}
-	s2v2man, err := manifest.FromBlob(manifestBytes, mimeType)
+	singleArchManifest, err := manifest.FromBlob(manifestBytes, mimeType)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling manifest: %v", err)
 	}
-	for _, layer := range s2v2man.LayerInfos() {
+	for _, layer := range singleArchManifest.LayerInfos() {
 		blobs = append(blobs, layer.Digest.String())
 	}
-	blobs = append(blobs, s2v2man.ConfigInfo().Digest.String())
+	blobs = append(blobs, singleArchManifest.ConfigInfo().Digest.String())
 	return blobs, nil
 }
