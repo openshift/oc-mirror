@@ -63,22 +63,22 @@ func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (ma MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error) {
+func (o MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error) {
 
 	// 1 - Add files and directories under the cache's docker/v2/repositories to the archive
-	repositoriesDir := filepath.Join(ma.cacheDir, cacheRepositoriesDir)
-	err := ma.addAllFolder(repositoriesDir, ma.cacheDir)
+	repositoriesDir := filepath.Join(o.cacheDir, cacheRepositoriesDir)
+	err := o.addAllFolder(repositoriesDir, o.cacheDir)
 	if err != nil {
 		return "", fmt.Errorf("unable to add cache repositories to the archive : %v", err)
 	}
 	// 2- Add working-dir contents to archive
-	err = ma.addAllFolder(ma.workingDir, filepath.Dir(ma.workingDir))
+	err = o.addAllFolder(o.workingDir, filepath.Dir(o.workingDir))
 	if err != nil {
 		return "", fmt.Errorf("unable to add working-dir to the archive : %v", err)
 	}
 	// 3 - Add imageSetConfig
-	iscName := imageSetConfigPrefix + time.Now().Format(time.RFC3339)
-	err = ma.addFile(ma.iscPath, iscName)
+	iscName := imageSetConfigPrefix + time.Now().UTC().Format(time.RFC3339)
+	err = o.addFile(o.iscPath, iscName)
 	if err != nil {
 		return "", fmt.Errorf("unable to add image set configuration to the archive : %v", err)
 	}
@@ -86,26 +86,26 @@ func (ma MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema)
 	// TODO Read history file
 	blobsInHistory := make(map[string]string, 0)
 	blobsInHistory["sha256:e1cb992e7555fa2b8405f96330d856d798e8f9fa2e2b78fdbb7cde084dfb010a"] = ""
-	// blobsInHistory, err := ma.history.Read(since?)
+	// blobsInHistory, err := o.history.Read(since?)
 	/*addedBlobs*/
-	_, err = ma.addImagesDiff(collectedImages, blobsInHistory, ma.cacheDir)
+	_, err = o.addImagesDiff(collectedImages, blobsInHistory, o.cacheDir)
 	if err != nil {
 		return "", fmt.Errorf("unable to add image blobs to the archive : %v", err)
 	}
 	//5 - update history file with addedBlobs
-	// _, err = ma.history.Append(addedBlobs)
-	return ma.archiveFile.Name(), nil
+	// _, err = o.history.Append(addedBlobs)
+	return o.archiveFile.Name(), nil
 }
 
-func (ma MirrorArchive) addImagesDiff(collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
+func (o MirrorArchive) addImagesDiff(collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
 	allAddedBlobs := map[string]string{}
 	for _, img := range collectedImages {
-		imgBlobs, err := ma.blobGatherer.GatherBlobs(img.Destination)
+		imgBlobs, err := o.blobGatherer.GatherBlobs(img.Destination)
 		if err != nil {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %v", img.Destination, err)
 		}
 
-		addedBlobs, err := ma.addBlobsDiff(imgBlobs, historyBlobs)
+		addedBlobs, err := o.addBlobsDiff(imgBlobs, historyBlobs)
 		if err != nil {
 			return nil, fmt.Errorf("unable to add blobs corresponding to %s: %v", img.Destination, err)
 		}
@@ -119,7 +119,7 @@ func (ma MirrorArchive) addImagesDiff(collectedImages []v1alpha3.CopyImageSchema
 	return allAddedBlobs, nil
 }
 
-func (ma MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string) (map[string]string, error) {
+func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string) (map[string]string, error) {
 	blobsInDiff := map[string]string{}
 	for hash := range collectedBlobs {
 		if _, exists := historyBlobs[hash]; !exists {
@@ -130,8 +130,8 @@ func (ma MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 			if err != nil {
 				return nil, err
 			}
-			blobPath := filepath.Join(ma.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Hex()[:2], d.Hex())
-			err = ma.addAllFolder(blobPath, ma.cacheDir)
+			blobPath := filepath.Join(o.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Hex()[:2], d.Hex())
+			err = o.addAllFolder(blobPath, o.cacheDir)
 			if err != nil {
 				return nil, err
 			}
@@ -141,7 +141,7 @@ func (ma MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 	return blobsInDiff, nil
 }
 
-func (ma MirrorArchive) addFile(pathToFile string, pathInTar string) error {
+func (o MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	fi, err := os.Stat(pathToFile)
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func (ma MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	}
 	header.Name = pathInTar
 
-	if err := ma.tarWriter.WriteHeader(header); err != nil {
+	if err := o.tarWriter.WriteHeader(header); err != nil {
 		return err
 	}
 	// Open the file for reading
@@ -163,12 +163,12 @@ func (ma MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	defer file.Close()
 
 	// Copy the file contents to the tar archive
-	if _, err := io.Copy(ma.tarWriter, file); err != nil {
+	if _, err := io.Copy(o.tarWriter, file); err != nil {
 		return err
 	}
 	return nil
 }
-func (ma MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error {
+func (o MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error {
 	return filepath.Walk(folderToAdd, func(path string, info os.FileInfo, incomingError error) error {
 		if incomingError != nil {
 			return incomingError
@@ -192,7 +192,7 @@ func (ma MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) erro
 		}
 
 		// Write the header to the tar archive
-		if err := ma.tarWriter.WriteHeader(header); err != nil {
+		if err := o.tarWriter.WriteHeader(header); err != nil {
 			return err
 		}
 
@@ -204,7 +204,7 @@ func (ma MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) erro
 		defer file.Close()
 
 		// Copy the file contents to the tar archive
-		if _, err := io.Copy(ma.tarWriter, file); err != nil {
+		if _, err := io.Copy(o.tarWriter, file); err != nil {
 			return err
 		}
 
@@ -212,10 +212,10 @@ func (ma MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) erro
 	})
 }
 
-func (ma MirrorArchive) Close() error {
+func (o MirrorArchive) Close() error {
 
-	err1 := ma.archiveFile.Close()
-	err2 := ma.tarWriter.Close()
+	err1 := o.archiveFile.Close()
+	err2 := o.tarWriter.Close()
 
 	if err1 != nil {
 		return err1
