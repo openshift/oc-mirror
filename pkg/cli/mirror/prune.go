@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -162,7 +163,9 @@ func (o *MirrorOptions) pruneImages(deleter imageprune.ManifestDeleter, manifest
 
 				for _, manifest := range manifests {
 					err := deleter.DeleteManifest(k, manifest)
-					if err != nil {
+					if structuredErr, ok := err.(*transport.Error); ok && structuredErr.StatusCode == http.StatusNotFound {
+						klog.Infof("Manifest %s not found in repo %s", manifest, k)
+					} else if err != nil {
 						err = fmt.Errorf("repo %q manifest %s: %w", k, manifest, err)
 						errorsCh <- err
 					}
