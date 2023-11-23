@@ -10,3 +10,8 @@ type Archiver interface {
 	BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error)
 	Close() error
 }
+
+type UnArchiver interface {
+	Close() error
+	Unarchive() error
+}
