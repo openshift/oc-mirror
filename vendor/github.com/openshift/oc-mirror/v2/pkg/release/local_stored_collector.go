@@ -112,7 +112,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] invalid digest for image index %s: %v", oci.Manifests[0].Digest, err)
 			}
 
-			manifest := validDigest.Hex()
+			manifest := validDigest.Encoded()
 			o.Log.Debug("image index %v", manifest)
 
 			manifestDir := filepath.Join(dir, blobsDir, manifest)

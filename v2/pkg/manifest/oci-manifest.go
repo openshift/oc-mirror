@@ -146,7 +146,7 @@ func (o *Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha
 			if err != nil {
 				return fmt.Errorf("the digest format is not correct %s ", blob.Digest)
 			}
-			f, err := os.Open(fromPath + "/" + validDigest.Hex())
+			f, err := os.Open(fromPath + "/" + validDigest.Encoded())
 			if err != nil {
 				return err
 			}

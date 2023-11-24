@@ -110,7 +110,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to be incorrect for %s ", op.Catalog)
 			}
 
-			manifest := validDigest.Hex()
+			manifest := validDigest.Encoded()
 			o.Log.Info("manifest %v", manifest)
 
 			// read the operator image manifest
@@ -126,7 +126,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to be incorrect for %s ", op.Catalog)
 			}
-			catalogDir := filepath.Join(dir, blobsDir, configDigest.Hex())
+			catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 			ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err

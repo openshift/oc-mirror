@@ -66,7 +66,7 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 			if err != nil {
 				return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly, invalid digest: %v", imgRef, err)
 			}
-			imgSpec.Digest = validDigest.Hex()
+			imgSpec.Digest = validDigest.Encoded()
 			imgSpec.Algorithm = validDigest.Algorithm().String()
 			imgSpec.Name = imgSplit[0]
 		}

@@ -3,6 +3,7 @@ package archive
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,23 +12,25 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/history"
+	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
 type MirrorArchive struct {
 	Archiver
-	destination string
-	iscPath     string
-	workingDir  string
-	cacheDir    string
-	archiveFile *os.File
-	tarWriter   *tar.Writer
-	//history history.History
+	destination  string
+	iscPath      string
+	workingDir   string
+	cacheDir     string
+	archiveFile  *os.File
+	tarWriter    *tar.Writer
+	history      history.History
 	blobGatherer BlobsGatherer
 }
 
 // The caller must call Close!
-func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string) (MirrorArchive, error) {
+func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, logg clog.PluggableLoggerInterface) (MirrorArchive, error) {
 	//TODO handle several chunks
 	chunk := 1
 	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
@@ -39,17 +42,23 @@ func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination
 		return MirrorArchive{}, err
 	}
 
+	// create the history interface
+	history, err := history.NewHistory(workingDir, time.Time{}, logg, history.OSFileCreator{})
+	if err != nil {
+		return MirrorArchive{}, err
+	}
+
 	// Create a new tar writer
 	// to be closed by BuildArchive
 	tarWriter := tar.NewWriter(archiveFile)
 
 	bg := NewImageBlobGatherer(ctx, opts)
-	// history := history.NewHistory(ctx, options)
+
 	ma := MirrorArchive{
-		destination: destination,
-		archiveFile: archiveFile,
-		tarWriter:   tarWriter,
-		//history:history
+		destination:  destination,
+		archiveFile:  archiveFile,
+		tarWriter:    tarWriter,
+		history:      history,
 		blobGatherer: bg,
 		workingDir:   workingDir,
 		cacheDir:     cacheDir,
@@ -83,17 +92,21 @@ func (o MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) 
 		return "", fmt.Errorf("unable to add image set configuration to the archive : %v", err)
 	}
 	// 4 - Add blobs
-	// TODO Read history file
-	blobsInHistory := make(map[string]string, 0)
-	blobsInHistory["sha256:e1cb992e7555fa2b8405f96330d856d798e8f9fa2e2b78fdbb7cde084dfb010a"] = ""
-	// blobsInHistory, err := o.history.Read(since?)
-	/*addedBlobs*/
-	_, err = o.addImagesDiff(collectedImages, blobsInHistory, o.cacheDir)
+	blobsInHistory, err := o.history.Read()
+	if err != nil && !errors.Is(err, &history.EmptyHistoryError{}) {
+		return "", fmt.Errorf("unable to read history metadata from working-dir : %v", err)
+	}
+	// ignoring the error otherwise: continuing with an empty map in blobsInHistory
+
+	addedBlobs, err := o.addImagesDiff(collectedImages, blobsInHistory, o.cacheDir)
 	if err != nil {
 		return "", fmt.Errorf("unable to add image blobs to the archive : %v", err)
 	}
 	//5 - update history file with addedBlobs
-	// _, err = o.history.Append(addedBlobs)
+	_, err = o.history.Append(addedBlobs)
+	if err != nil {
+		return "", fmt.Errorf("unable to update history metadata: %v", err)
+	}
 	return o.archiveFile.Name(), nil
 }
 
@@ -130,7 +143,7 @@ func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]stri
 			if err != nil {
 				return nil, err
 			}
-			blobPath := filepath.Join(o.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Hex()[:2], d.Hex())
+			blobPath := filepath.Join(o.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Encoded()[:2], d.Encoded())
 			err = o.addAllFolder(blobPath, o.cacheDir)
 			if err != nil {
 				return nil, err

@@ -67,8 +67,8 @@ func TestRead(t *testing.T) {
 			caseName:      "invalid working dir",
 			workingDir:    "./invalid-workindir",
 			before:        time.Time{},
-			expectedError: "open ./invalid-workindir: no such file or directory",
-			expectedHist:  nil,
+			expectedError: "no history metadata found under invalid-workindir",
+			expectedHist:  map[string]string{},
 		},
 	}
 
@@ -128,11 +128,16 @@ func TestAppend(t *testing.T) {
 			},
 		},
 		{
-			caseName:      "invalid working dir",
-			workingDir:    "./invalid-workindir",
-			before:        time.Time{},
-			expectedError: "open ./invalid-workindir: no such file or directory",
-			expectedHist:  nil,
+			caseName:   "empty working dir - error is ignored",
+			workingDir: "./empty-workindir",
+			before:     time.Time{},
+			blobsToAppend: map[string]string{
+				"sha256:20f695d2a913": "",
+			},
+			expectedError: "",
+			expectedHist: map[string]string{
+				"sha256:20f695d2a913": "",
+			},
 		},
 	}
 

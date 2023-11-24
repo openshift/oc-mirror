@@ -7,6 +7,6 @@ type BlobsGatherer interface {
 }
 
 type Archiver interface {
-	BuildArchive(iscPath string, workingDir string, cacheDir string, collectedImages []v1alpha3.CopyImageSchema) (string, error)
+	BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error)
 	Close() error
 }

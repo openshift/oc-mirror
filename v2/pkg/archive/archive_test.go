@@ -1,16 +1,28 @@
 package archive
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/history"
+	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockBlobGatherer struct{}
+type MockFileCreator struct {
+	Buffer *bytes.Buffer
+}
+
+type nopCloser struct {
+	io.Writer
+}
 
 func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	ctx := context.Background()
@@ -36,13 +48,13 @@ func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	}
 	cfg := "../../tests/isc.yaml"
 
-	ma, err := NewMirrorArchive(ctx, &opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake")
+	ma, err := NewMirrorArchive(ctx, &opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", clog.New("trace"))
 	if err != nil {
 		return MirrorArchive{}, err
 	}
 
-	ma = ma.WithFakes()
-	return ma, nil
+	ma, err = ma.WithFakes()
+	return ma, err
 }
 func TestArchive_BuildArchive(t *testing.T) {
 	// Create a temporary test folder
@@ -117,9 +129,11 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 }
 
 // //////     Mocks       ////////
-func (ma MirrorArchive) WithFakes() MirrorArchive {
+func (ma MirrorArchive) WithFakes() (MirrorArchive, error) {
 	ma.blobGatherer = mockBlobGatherer{}
-	return ma
+	h, err := history.NewHistory(ma.workingDir, time.Time{}, clog.New("trace"), MockFileCreator{})
+	ma.history = h
+	return ma, err
 }
 
 func (mbg mockBlobGatherer) GatherBlobs(imgRef string) (map[string]string, error) {
@@ -139,3 +153,10 @@ func (mbg mockBlobGatherer) GatherBlobs(imgRef string) (map[string]string, error
 	}
 	return blobs, nil
 }
+
+func (m MockFileCreator) Create(name string) (io.WriteCloser, error) {
+	m.Buffer = new(bytes.Buffer)
+	return nopCloser{m.Buffer}, nil
+}
+
+func (nopCloser) Close() error { return nil }
