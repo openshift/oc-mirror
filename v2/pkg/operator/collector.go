@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	digest "github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -99,16 +101,16 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
-
 			//read the link to the manifest
 			if len(oci.Manifests) == 0 {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] no manifests found for %s ", op.Catalog)
-			} else {
-				if !strings.Contains(oci.Manifests[0].Digest, "sha256") {
-					return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to incorrect for %s ", op.Catalog)
-				}
 			}
-			manifest := strings.Split(oci.Manifests[0].Digest, ":")[1]
+			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to be incorrect for %s ", op.Catalog)
+			}
+
+			manifest := validDigest.Encoded()
 			o.Log.Info("manifest %v", manifest)
 
 			// read the operator image manifest
@@ -120,7 +122,11 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 
 			// read the config digest to get the detailed manifest
 			// looking for the lable to search for a specific folder
-			catalogDir := strings.Join([]string{dir, blobsDir, strings.Split(oci.Config.Digest, ":")[1]}, "/")
+			configDigest, err := digest.Parse(oci.Config.Digest)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to be incorrect for %s ", op.Catalog)
+			}
+			catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 			ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err

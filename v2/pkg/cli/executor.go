@@ -23,7 +23,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
-	"github.com/openshift/oc-mirror/v2/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
@@ -450,15 +449,15 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Prepare tar.gz when mirror to disk
-	if o.Opts.IsMirrorToDisk() {
-		blobGatherer := archive.NewImageBlobGatherer(ctx, &o.Opts)
-		blobs, err := blobGatherer.GatherBlobs(allRelatedImages[0].Destination)
-		if err != nil {
-			cleanUp()
-			return err
-		}
-		o.Log.Info("blobs for %s:\n %v ", allRelatedImages[0].Destination, blobs)
-	}
+	// if o.Opts.IsMirrorToDisk() {
+	// 	blobGatherer := archive.NewImageBlobGatherer(ctx, &o.Opts)
+	// 	blobs, err := blobGatherer.GatherBlobs(allRelatedImages[0].Destination)
+	// 	if err != nil {
+	// 		cleanUp()
+	// 		return err
+	// 	}
+	// 	o.Log.Info("blobs for %s:\n %v ", allRelatedImages[0].Destination, blobs)
+	// }
 
 	//create IDMS/ITMS
 	if o.Opts.IsDiskToMirror() {

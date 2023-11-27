@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	digest "github.com/opencontainers/go-digest"
+
 	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
@@ -140,10 +142,11 @@ func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, o
 func (o *Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3.OCISchema) error {
 	if _, err := os.Stat(toPath + "/" + label); errors.Is(err, os.ErrNotExist) {
 		for _, blob := range oci.Layers {
-			if !strings.Contains(blob.Digest, "sha256") {
+			validDigest, err := digest.Parse(blob.Digest)
+			if err != nil {
 				return fmt.Errorf("the digest format is not correct %s ", blob.Digest)
 			}
-			f, err := os.Open(fromPath + "/" + strings.Split(blob.Digest, ":")[1])
+			f, err := os.Open(fromPath + "/" + validDigest.Encoded())
 			if err != nil {
 				return err
 			}

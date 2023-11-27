@@ -319,7 +319,7 @@ func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1al
 
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
 	var res []v1alpha3.CopyImageSchema
-	res = append(res, v1alpha3.CopyImageSchema{Source: "test", Destination: "test"})
+	res = append(res, v1alpha3.CopyImageSchema{Source: "docker://localhost:9999/openshift/graph-image:latest", Destination: "docker://localhost:9999/openshift/graph-image:latest"})
 	return res
 }
 

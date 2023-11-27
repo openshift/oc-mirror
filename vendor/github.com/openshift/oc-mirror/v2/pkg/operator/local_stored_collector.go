@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
@@ -98,16 +101,16 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		//read the link to the manifest
 		if len(oci.Manifests) == 0 {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] no manifests found for %s ", op.Catalog)
-		} else {
-			if !strings.Contains(oci.Manifests[0].Digest, "sha256") {
-				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgets seems to incorrect for %s ", op.Catalog)
-			}
 		}
-		manifest := strings.Split(oci.Manifests[0].Digest, ":")[1]
-		o.Log.Info("manifest %v", manifest)
+		validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgests seem to incorrect for %s: %v ", op.Catalog, err)
+		}
 
+		manifest := validDigest.Encoded()
+		o.Log.Info("manifest %v", manifest)
 		// read the operator image manifest
-		manifestDir := strings.Join([]string{dir, blobsDir, manifest}, "/")
+		manifestDir := filepath.Join(dir, blobsDir, manifest)
 		oci, err = o.Manifest.GetImageManifest(manifestDir)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
@@ -115,7 +118,11 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 
 		// read the config digest to get the detailed manifest
 		// looking for the lable to search for a specific folder
-		catalogDir := strings.Join([]string{dir, blobsDir, strings.Split(oci.Config.Digest, ":")[1]}, "/")
+		configDigest, err := digest.Parse(oci.Config.Digest)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgests seem to be incorrect for %s: %v ", op.Catalog, err)
+		}
+		catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 		ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
