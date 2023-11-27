@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -39,6 +40,8 @@ func TestExecutor(t *testing.T) {
 		Mode:                mirror.MirrorToDisk,
 	}
 
+	fakeStorageInterruptChan := make(chan error)
+	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 	// read the ImageSetConfiguration
 	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
 	if err != nil {
@@ -51,14 +54,17 @@ func TestExecutor(t *testing.T) {
 	t.Run("Testing Executor : should pass", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		archiver := MockArchiver{opts.Destination}
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         collector,
-			Release:          collector,
-			AdditionalImages: collector,
-			Batch:            batch,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Batch:                        batch,
+			MirrorArchiver:               archiver,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
 		res := &cobra.Command{}
@@ -76,13 +82,14 @@ func TestExecutor(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: true}
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         collector,
-			Release:          collector,
-			AdditionalImages: collector,
-			Batch:            batch,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Batch:                        batch,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
 		res := &cobra.Command{}
@@ -100,13 +107,14 @@ func TestExecutor(t *testing.T) {
 		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         operatorCollector,
-			Release:          releaseCollector,
-			AdditionalImages: releaseCollector,
-			Batch:            batch,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     operatorCollector,
+			Release:                      releaseCollector,
+			AdditionalImages:             releaseCollector,
+			Batch:                        batch,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
 		res := &cobra.Command{}
@@ -124,13 +132,14 @@ func TestExecutor(t *testing.T) {
 		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         operatorCollector,
-			Release:          releaseCollector,
-			AdditionalImages: releaseCollector,
-			Batch:            batch,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     operatorCollector,
+			Release:                      releaseCollector,
+			AdditionalImages:             releaseCollector,
+			Batch:                        batch,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
 		res := &cobra.Command{}
@@ -145,9 +154,10 @@ func TestExecutor(t *testing.T) {
 
 	t.Run("Testing Executor : should pass", func(t *testing.T) {
 		ex := &ExecutorSchema{
-			Log:    log,
-			Config: cfg,
-			Opts:   opts,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)
 		res.SilenceUsage = true
@@ -161,9 +171,10 @@ func TestExecutor(t *testing.T) {
 
 	t.Run("Testing Executor : should fail", func(t *testing.T) {
 		ex := &ExecutorSchema{
-			Log:    log,
-			Config: cfg,
-			Opts:   opts,
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)
 		res.SilenceUsage = true
@@ -200,6 +211,10 @@ type Diff struct {
 	Opts   mirror.CopyOptions
 	Mirror Mirror
 	Fail   bool
+}
+
+type MockArchiver struct {
+	destination string
 }
 
 func (o *Diff) DeleteImages(ctx context.Context) error {
@@ -260,4 +275,19 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 	}
 	return test, nil
+}
+
+func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
+	return filepath.Join(o.destination, "mirror_000001.tar"), nil
+}
+
+func (o MockArchiver) Close() error {
+	return nil
+}
+
+func skipSignalsToInterruptStorage(errchan chan error) {
+	err := <-errchan
+	if err != nil {
+		fmt.Printf("registry communication channel received %v", err)
+	}
 }

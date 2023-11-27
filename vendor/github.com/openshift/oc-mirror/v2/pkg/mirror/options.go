@@ -41,7 +41,7 @@ type GlobalOptions struct {
 	CommandTimeout     time.Duration // Timeout for the command execution
 	RegistriesConfPath string        // Path to the "registries.conf" file
 	TmpDir             string        // Path to use for big temporary files
-	Dir                string        // working directory
+	WorkingDir         string        // working directory
 	From               string        // local storage for diskToMirror workflow
 	Port               uint16        // HTTP port used by oc-mirror's local storage instance
 	ConfigPath         string        // Path to use for imagesetconfig

@@ -45,7 +45,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		digest := strings.Split(image.Source, ":")[1]
 		// check if the image is in the cache else
 		// do a lookup and download it to cache
-		data, err = os.ReadFile(o.Opts.Global.Dir + SignatureDir + digest)
+		data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
 		if err != nil {
 			if os.IsNotExist(err) {
 				o.Log.Warn("signature for %s not in cache", digest)
@@ -137,7 +137,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			o.Log.Info("public Key : %s", strings.ToUpper(fmt.Sprintf("%x", md.SignedBy.PublicKey.Fingerprint)))
 
 			// write signature to cache
-			ferr := os.WriteFile(o.Opts.Global.Dir+SignatureDir+digest, data, 0644)
+			ferr := os.WriteFile(o.Opts.Global.WorkingDir+SignatureDir+digest, data, 0644)
 			if ferr != nil {
 				o.Log.Error("%v", ferr)
 			}

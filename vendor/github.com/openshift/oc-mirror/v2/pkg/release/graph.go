@@ -28,7 +28,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context) (string, e
 	}
 
 	// save graph data in a container layer modifying UID and GID to root.
-	archiveDestination := filepath.Join(o.Opts.Global.Dir, graphArchive)
+	archiveDestination := filepath.Join(o.Opts.Global.WorkingDir, graphArchive)
 	graphLayer, err := imagebuilder.LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
 	if err != nil {
 		return "", err
@@ -36,7 +36,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context) (string, e
 	defer os.Remove(archiveDestination)
 
 	// Create a local directory for saving the OCI image layout of UBI9
-	layoutDir := filepath.Join(o.Opts.Global.Dir, graphPreparationDir)
+	layoutDir := filepath.Join(o.Opts.Global.WorkingDir, graphPreparationDir)
 	if err := os.MkdirAll(layoutDir, os.ModePerm); err != nil {
 		return "", err
 	}
