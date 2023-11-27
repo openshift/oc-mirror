@@ -42,7 +42,7 @@ func TestReleaseImageCollector(t *testing.T) {
 	global := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		Dir:          "../../tests",
+		WorkingDir:   "../../tests",
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()

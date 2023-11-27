@@ -68,8 +68,8 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		o.Log.Info("copying operator image %v", op.Catalog)
 		hld := strings.Split(op.Catalog, "/")
 		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
-		cacheDir := strings.Join([]string{o.Opts.Global.Dir, operatorImageExtractDir, imageIndexDir}, "/")
-		dir = strings.Join([]string{o.Opts.Global.Dir, operatorImageDir, imageIndexDir}, "/")
+		cacheDir := strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir}, "/")
+		dir = strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir}, "/")
 		if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) {
 			err := os.MkdirAll(dir, 0755)
 			if err != nil {

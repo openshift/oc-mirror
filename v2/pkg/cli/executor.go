@@ -149,7 +149,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(NewPrepareCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
@@ -332,7 +332,7 @@ func (o *ExecutorSchema) Complete(args []string) {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
 	o.Opts.Destination = args[0]
-	o.Opts.Global.Dir = dest
+	o.Opts.Global.WorkingDir = dest
 	o.Log.Info("mode %s ", o.Opts.Mode)
 	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 
@@ -374,32 +374,32 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		}
 
 		// create signatures directory
-		o.Log.Trace("creating signatures directory %s ", o.Opts.Global.Dir+"/"+signaturesDir)
-		err = os.MkdirAll(o.Opts.Global.Dir+"/"+signaturesDir, 0755)
+		o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
+		err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
 		if err != nil {
 			o.Log.Error(" %v ", err)
 			return err
 		}
 
 		// create release-images directory
-		o.Log.Trace("creating release images directory %s ", o.Opts.Global.Dir+"/"+releaseImageDir)
-		err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageDir, 0755)
+		o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
+		err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
 		if err != nil {
 			o.Log.Error(" %v ", err)
 			return err
 		}
 
 		// create release cache dir
-		o.Log.Trace("creating release cache directory %s ", o.Opts.Global.Dir+"/"+releaseImageExtractDir)
-		err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageExtractDir, 0755)
+		o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
+		err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
 		if err != nil {
 			o.Log.Error(" %v ", err)
 			return err
 		}
 
 		// create operator cache dir
-		o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.Dir+"/"+operatorImageExtractDir)
-		err = os.MkdirAll(o.Opts.Global.Dir+"/"+operatorImageExtractDir, 0755)
+		o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
+		err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
 		if err != nil {
 			o.Log.Error(" %v ", err)
 			return err
@@ -547,7 +547,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.Dir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
@@ -594,7 +594,7 @@ func (o *ExecutorSchema) CompletePrepare(args []string) {
 
 	dest := filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
 
-	o.Opts.Global.Dir = dest
+	o.Opts.Global.WorkingDir = dest
 
 	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 	o.Opts.Mode = mirror.Prepare
@@ -627,32 +627,32 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	}
 
 	// create signatures directory
-	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.Dir+"/"+signaturesDir)
-	err = os.MkdirAll(o.Opts.Global.Dir+"/"+signaturesDir, 0755)
+	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
+	err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
 	// create release-images directory
-	o.Log.Trace("creating release images directory %s ", o.Opts.Global.Dir+"/"+releaseImageDir)
-	err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageDir, 0755)
+	o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
+	err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
 	// create release cache dir
-	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.Dir+"/"+releaseImageExtractDir)
-	err = os.MkdirAll(o.Opts.Global.Dir+"/"+releaseImageExtractDir, 0755)
+	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
+	err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
 	// create operator cache dir
-	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.Dir+"/"+operatorImageExtractDir)
-	err = os.MkdirAll(o.Opts.Global.Dir+"/"+operatorImageExtractDir, 0755)
+	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
+	err = os.MkdirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err

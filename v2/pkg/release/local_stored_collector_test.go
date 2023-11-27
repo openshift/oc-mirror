@@ -20,14 +20,14 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	globalM2D := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		Dir:          t.TempDir(),
+		WorkingDir:   t.TempDir(),
 	}
 
 	tmpDir := t.TempDir()
 	globalD2M := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		Dir:          tmpDir + "/working-dir",
+		WorkingDir:   tmpDir + "/working-dir",
 		From:         tmpDir,
 	}
 
@@ -184,12 +184,12 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/release-images")
 		os.RemoveAll("../../tests/tmp/")
 		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(d2mOpts.Global.Dir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(d2mOpts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 		//copy tests/release-filters-fake to working-dir
-		err = copy.Copy("../../tests/working-dir-fake/release-filters/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.Dir, releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
+		err = copy.Copy("../../tests/working-dir-fake/release-filters/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.WorkingDir, releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -218,7 +218,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		log.Debug("completed test related images %v ", res)
 	})
 	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
-		os.RemoveAll(m2dOpts.Global.Dir)
+		os.RemoveAll(m2dOpts.Global.WorkingDir)
 		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,

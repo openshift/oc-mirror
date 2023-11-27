@@ -20,7 +20,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
-		Dir:          "tests",
+		WorkingDir:   "tests",
 	}
 	global.TlsVerify = false
 

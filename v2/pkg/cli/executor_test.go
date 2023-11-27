@@ -21,7 +21,7 @@ func TestExecutor(t *testing.T) {
 		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
-		Dir:          "tests",
+		WorkingDir:   "tests",
 	}
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()

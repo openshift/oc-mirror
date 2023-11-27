@@ -20,7 +20,7 @@ func TestCreateGraphImage(t *testing.T) {
 	globalM2D := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		Dir:          t.TempDir(),
+		WorkingDir:   t.TempDir(),
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()

@@ -19,7 +19,7 @@ func TestIDMSGenerator(t *testing.T) {
 	globalD2M := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		Dir:          tmpDir + "/working-dir",
+		WorkingDir:   tmpDir + "/working-dir",
 		From:         tmpDir,
 	}
 
@@ -103,12 +103,12 @@ func TestIDMSGenerator(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 
-		_, err = os.Stat(filepath.Join(d2mOpts.Global.Dir, clusterResourcesDir))
+		_, err = os.Stat(filepath.Join(d2mOpts.Global.WorkingDir, clusterResourcesDir))
 		if err != nil {
 			t.Fatalf("output folder should exist")
 		}
 
-		idmsFiles, err := os.ReadDir(filepath.Join(d2mOpts.Global.Dir, clusterResourcesDir))
+		idmsFiles, err := os.ReadDir(filepath.Join(d2mOpts.Global.WorkingDir, clusterResourcesDir))
 		if err != nil {
 			t.Fatalf("ls output folder should not fail")
 		}
