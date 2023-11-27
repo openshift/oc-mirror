@@ -25,7 +25,6 @@ type nopCloser struct {
 }
 
 func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
-	ctx := context.Background()
 	global := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
@@ -48,7 +47,7 @@ func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	}
 	cfg := "../../tests/isc.yaml"
 
-	ma, err := NewMirrorArchive(ctx, &opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", clog.New("trace"))
+	ma, err := NewMirrorArchive(&opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", clog.New("trace"))
 	if err != nil {
 		return MirrorArchive{}, err
 	}
@@ -73,7 +72,7 @@ func TestArchive_BuildArchive(t *testing.T) {
 			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
 		},
 	}
-	archName, err := ma.BuildArchive(images)
+	archName, err := ma.BuildArchive(context.Background(), images)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +135,7 @@ func (ma MirrorArchive) WithFakes() (MirrorArchive, error) {
 	return ma, err
 }
 
-func (mbg mockBlobGatherer) GatherBlobs(imgRef string) (map[string]string, error) {
+func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (map[string]string, error) {
 	blobs := map[string]string{
 		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
 		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",

@@ -59,9 +59,9 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gatherer := NewImageBlobGatherer(ctx, &opts)
+	gatherer := NewImageBlobGatherer(&opts)
 
-	blobs, err := gatherer.GatherBlobs("docker://" + u.Host + "/test:latest")
+	blobs, err := gatherer.GatherBlobs(ctx, "docker://"+u.Host+"/test:latest")
 	if err != nil {
 		t.Fatalf("GatherBlobs failed: %v", err)
 	}

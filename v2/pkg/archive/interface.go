@@ -1,13 +1,17 @@
 package archive
 
-import "github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+import (
+	"context"
+
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+)
 
 type BlobsGatherer interface {
-	GatherBlobs(imgRef string) (map[string]string, error)
+	GatherBlobs(ctx context.Context, imgRef string) (map[string]string, error)
 }
 
 type Archiver interface {
-	BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error)
+	BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error)
 	Close() error
 }
 

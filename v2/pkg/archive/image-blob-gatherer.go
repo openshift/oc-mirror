@@ -12,17 +12,15 @@ import (
 
 type ImageBlobGatherer struct {
 	BlobsGatherer
-	ctx  context.Context
 	opts *mirror.CopyOptions
 }
 
-func NewImageBlobGatherer(ctx context.Context, opts *mirror.CopyOptions) BlobsGatherer {
+func NewImageBlobGatherer(opts *mirror.CopyOptions) BlobsGatherer {
 	return &ImageBlobGatherer{
-		ctx:  ctx,
 		opts: opts,
 	}
 }
-func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs map[string]string, retErr error) {
+func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs map[string]string, retErr error) {
 	blobs = map[string]string{}
 	o.opts.DeprecatedTLSVerify.WarnIfUsed([]string{"--src-tls-verify", "--dest-tls-verify"})
 	// o.opts.All = true
@@ -46,12 +44,12 @@ func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs map[string]string,
 		return nil, err
 	}
 
-	img, err := srcRef.NewImageSource(o.ctx, sourceCtx)
+	img, err := srcRef.NewImageSource(ctx, sourceCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	manifestBytes, mime, err := img.GetManifest(o.ctx, nil)
+	manifestBytes, mime, err := img.GetManifest(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +68,7 @@ func (o *ImageBlobGatherer) GatherBlobs(imgRef string) (blobs map[string]string,
 		instances := manifestList.Instances()
 		for _, digest := range instances {
 			blobs[digest.String()] = ""
-			singleArchManifest, singleArchMime, err := img.GetManifest(o.ctx, &digest)
+			singleArchManifest, singleArchMime, err := img.GetManifest(ctx, &digest)
 			if err != nil {
 				return nil, err
 			}

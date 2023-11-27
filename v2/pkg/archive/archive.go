@@ -30,7 +30,7 @@ type MirrorArchive struct {
 }
 
 // The caller must call Close!
-func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, logg clog.PluggableLoggerInterface) (MirrorArchive, error) {
+func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, logg clog.PluggableLoggerInterface) (MirrorArchive, error) {
 	//TODO handle several chunks
 	chunk := 1
 	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
@@ -52,7 +52,7 @@ func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination
 	// to be closed by BuildArchive
 	tarWriter := tar.NewWriter(archiveFile)
 
-	bg := NewImageBlobGatherer(ctx, opts)
+	bg := NewImageBlobGatherer(opts)
 
 	ma := MirrorArchive{
 		destination:  destination,
@@ -72,7 +72,7 @@ func NewMirrorArchive(ctx context.Context, opts *mirror.CopyOptions, destination
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (o MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) (string, error) {
+func (o MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
 
 	// 1 - Add files and directories under the cache's docker/v2/repositories to the archive
 	repositoriesDir := filepath.Join(o.cacheDir, cacheRepositoriesDir)
@@ -98,7 +98,7 @@ func (o MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) 
 	}
 	// ignoring the error otherwise: continuing with an empty map in blobsInHistory
 
-	addedBlobs, err := o.addImagesDiff(collectedImages, blobsInHistory, o.cacheDir)
+	addedBlobs, err := o.addImagesDiff(ctx, collectedImages, blobsInHistory, o.cacheDir)
 	if err != nil {
 		return "", fmt.Errorf("unable to add image blobs to the archive : %v", err)
 	}
@@ -110,10 +110,10 @@ func (o MirrorArchive) BuildArchive(collectedImages []v1alpha3.CopyImageSchema) 
 	return o.archiveFile.Name(), nil
 }
 
-func (o MirrorArchive) addImagesDiff(collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
+func (o MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
 	allAddedBlobs := map[string]string{}
 	for _, img := range collectedImages {
-		imgBlobs, err := o.blobGatherer.GatherBlobs(img.Destination)
+		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
 		if err != nil {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %v", img.Destination, err)
 		}
