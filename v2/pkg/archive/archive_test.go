@@ -18,23 +18,15 @@ import (
 type mockBlobGatherer struct{}
 type mockHistory struct{}
 
-// type MockFileCreator struct {
-// 	Buffer *bytes.Buffer
-// }
-
-// type nopCloser struct {
-// 	io.Writer
-// }
-
 var expectedTarContents = []string{
-	// "docker/registry/v2/blobs/sha256/2e/2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644/data",
-	// "docker/registry/v2/blobs/sha256/4c/4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b/data",
-	// "docker/registry/v2/blobs/sha256/53/53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee/data",
+	// is in history // "docker/registry/v2/blobs/sha256/2e/2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644/data",
+	// is in history // "docker/registry/v2/blobs/sha256/4c/4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b/data",
+	// is in history // "docker/registry/v2/blobs/sha256/53/53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee/data",
 	"docker/registry/v2/blobs/sha256/63/6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98/data",
 	"docker/registry/v2/blobs/sha256/6e/6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7/data",
-	// "docker/registry/v2/blobs/sha256/94/94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18/data",
+	// is in history // "docker/registry/v2/blobs/sha256/94/94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18/data",
 	"docker/registry/v2/blobs/sha256/9b/9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769/data",
-	// "docker/registry/v2/blobs/sha256/cf/cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb/data",
+	// is in history // "docker/registry/v2/blobs/sha256/cf/cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb/data",
 	"docker/registry/v2/blobs/sha256/db/db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed/data",
 	"docker/registry/v2/blobs/sha256/e1/e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874/data",
 	"docker/registry/v2/blobs/sha256/e6/e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66/data",
@@ -222,13 +214,6 @@ func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (map
 	}
 	return blobs, nil
 }
-
-// func (m MockFileCreator) Create(name string) (io.WriteCloser, error) {
-// 	m.Buffer = new(bytes.Buffer)
-// 	return nopCloser{m.Buffer}, nil
-// }
-
-// func (nopCloser) Close() error { return nil }
 
 func (m mockHistory) Read() (map[string]string, error) {
 	historyMap := map[string]string{

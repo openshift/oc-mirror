@@ -1,11 +1,17 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/otiai10/copy"
+
+	"github.com/distribution/distribution/v3/configuration"
+	"github.com/distribution/distribution/v3/registry"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
@@ -15,14 +21,22 @@ import (
 )
 
 func TestExecutor(t *testing.T) {
+	testFolder := t.TempDir()
+	defer os.RemoveAll(testFolder)
 
+	workDir := filepath.Join(testFolder, "tests")
+	//copy tests/hold-test-fake to working-dir
+	err := copy.Copy("../../tests/working-dir-fake", workDir)
+	if err != nil {
+		t.Fatalf("should not fail to copy: %v", err)
+	}
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
-		WorkingDir:   "tests",
+		WorkingDir:   workDir,
 	}
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
@@ -40,8 +54,18 @@ func TestExecutor(t *testing.T) {
 		Mode:                mirror.MirrorToDisk,
 	}
 
+	// storage cache for test
+	regCfg, err := setupRegForTest(testFolder)
+	if err != nil {
+		t.Errorf("storage cache error: %v ", err)
+	}
+	reg, err := registry.NewRegistry(context.Background(), regCfg)
+	if err != nil {
+		t.Errorf("storage cache error: %v ", err)
+	}
 	fakeStorageInterruptChan := make(chan error)
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
+
 	// read the ImageSetConfiguration
 	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
 	if err != nil {
@@ -64,6 +88,7 @@ func TestExecutor(t *testing.T) {
 			AdditionalImages:             collector,
 			Batch:                        batch,
 			MirrorArchiver:               archiver,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -71,7 +96,7 @@ func TestExecutor(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"file://test"})
+		err := ex.Run(res, []string{"file://" + testFolder})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -89,6 +114,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      collector,
 			AdditionalImages:             collector,
 			Batch:                        batch,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -114,6 +140,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      releaseCollector,
 			AdditionalImages:             releaseCollector,
 			Batch:                        batch,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -139,6 +166,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      releaseCollector,
 			AdditionalImages:             releaseCollector,
 			Batch:                        batch,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -157,6 +185,7 @@ func TestExecutor(t *testing.T) {
 			Log:                          log,
 			Config:                       cfg,
 			Opts:                         opts,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)
@@ -174,6 +203,7 @@ func TestExecutor(t *testing.T) {
 			Log:                          log,
 			Config:                       cfg,
 			Opts:                         opts,
+			LocalStorage:                 *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)
@@ -290,4 +320,42 @@ func skipSignalsToInterruptStorage(errchan chan error) {
 	if err != nil {
 		fmt.Printf("registry communication channel received %v", err)
 	}
+}
+
+func setupRegForTest(testFolder string) (*configuration.Configuration, error) {
+	configYamlV0_1 := `
+version: 0.1
+log:
+  accesslog:
+    disabled: true
+  level: error
+  formatter: text
+  fields:
+    service: registry
+storage:
+  cache:
+    blobdescriptor: inmemory
+  filesystem:
+    rootdirectory: %v
+http:
+  addr: :%d
+  headers:
+    X-Content-Type-Options: [nosniff]
+      #auth:
+      #htpasswd:
+      #realm: basic-realm
+      #path: /etc/registry
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3
+`
+	configYamlV0_1 = fmt.Sprintf(configYamlV0_1, testFolder, 6000)
+	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
+
+	if err != nil {
+		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV0_1)
+	}
+	return config, nil
 }

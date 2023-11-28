@@ -29,7 +29,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	var allImages []v1alpha3.CopyImageSchema
 
-	if o.Opts.IsMirrorToDisk() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
