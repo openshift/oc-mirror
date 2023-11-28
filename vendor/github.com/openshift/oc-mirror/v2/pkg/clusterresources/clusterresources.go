@@ -42,7 +42,7 @@ func (c *ClusterResourcesGenerator) IDMSGenerator(ctx context.Context, allRelate
 	name := "idms_" + time.Now().Format(time.RFC3339)
 
 	// locate the output directory
-	idmsFileName := filepath.Join(opts.Global.Dir, clusterResourcesDir, name+".yaml")
+	idmsFileName := filepath.Join(opts.Global.WorkingDir, clusterResourcesDir, name+".yaml")
 
 	// create a IDMS struct
 	idms := confv1.ImageDigestMirrorSet{

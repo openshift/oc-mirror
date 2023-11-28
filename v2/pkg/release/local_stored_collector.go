@@ -61,8 +61,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
 			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
-			cacheDir := filepath.Join(o.Opts.Global.Dir, releaseImageExtractDir, imageIndexDir)
-			dir := filepath.Join(o.Opts.Global.Dir, releaseImageDir, imageIndexDir)
+			cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
+			dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
 			//Save to releasesForFilter so that we can reuse it during Disk To Mirror flow
 			src := dockerProtocol + value.Source
@@ -145,7 +145,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
-		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.Dir, releaseFiltersDir))
+		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir))
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinnati response: %v", err)
 		}
@@ -270,7 +270,7 @@ func (o LocalStorageCollector) identifyReleases() ([]v1alpha3.RelatedImage, []st
 	}
 	filter := fmt.Sprintf("%v", rff.Filter)
 	filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
-	filterFilePath := filepath.Join(o.Opts.Global.Dir, releaseFiltersDir, filterFileName)
+	filterFilePath := filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir, filterFileName)
 	dat, err := os.ReadFile(filterFilePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to read file %s: %v", filterFilePath, err)

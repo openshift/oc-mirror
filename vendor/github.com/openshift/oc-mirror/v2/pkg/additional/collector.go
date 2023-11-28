@@ -44,7 +44,7 @@ func (o Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.Co
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
-			cacheDir := strings.Join([]string{o.Opts.Global.Dir, additionalImagesDir, irs.Namespace, irs.Component}, "/")
+			cacheDir := strings.Join([]string{o.Opts.Global.WorkingDir, additionalImagesDir, irs.Namespace, irs.Component}, "/")
 			if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) {
 				err := os.MkdirAll(cacheDir, 0755)
 				if err != nil {
