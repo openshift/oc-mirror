@@ -88,7 +88,7 @@ func TestExecutor(t *testing.T) {
 			AdditionalImages:             collector,
 			Batch:                        batch,
 			MirrorArchiver:               archiver,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -114,7 +114,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      collector,
 			AdditionalImages:             collector,
 			Batch:                        batch,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -140,7 +140,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      releaseCollector,
 			AdditionalImages:             releaseCollector,
 			Batch:                        batch,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -166,7 +166,7 @@ func TestExecutor(t *testing.T) {
 			Release:                      releaseCollector,
 			AdditionalImages:             releaseCollector,
 			Batch:                        batch,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 
@@ -185,7 +185,7 @@ func TestExecutor(t *testing.T) {
 			Log:                          log,
 			Config:                       cfg,
 			Opts:                         opts,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)
@@ -203,7 +203,7 @@ func TestExecutor(t *testing.T) {
 			Log:                          log,
 			Config:                       cfg,
 			Opts:                         opts,
-			LocalStorage:                 *reg,
+			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 		}
 		res := NewMirrorCmd(log)

@@ -46,6 +46,8 @@ const (
 	releaseImageDir         string = "release-images"
 	logsDir                 string = "logs"
 	workingDir              string = "working-dir"
+	cacheRelativePath       string = ".oc-mirror/.cache"
+	cacheEnvVar             string = "OC_MIRROR_CACHE"
 	additionalImages        string = "additional-images"
 	releaseImageExtractDir  string = "hold-release"
 	operatorImageExtractDir string = "hold-operator"
@@ -85,9 +87,10 @@ type ExecutorSchema struct {
 	Mirror                       mirror.MirrorInterface
 	Manifest                     manifest.ManifestInterface
 	Batch                        batch.BatchInterface
-	LocalStorage                 registry.Registry
+	LocalStorageService          registry.Registry
 	localStorageInterruptChannel chan error
 	LocalStorageFQDN             string
+	LocalStorageDisk             string
 	ClusterResources             clusterresources.GeneratorInterface
 	ImageBuilder                 imagebuilder.ImageBuilderInterface
 	MirrorArchiver               archive.Archiver
@@ -239,19 +242,11 @@ health:
     threshold: 3
 `
 
-	rootDir := ""
-
-	if o.Opts.IsMirrorToDisk() {
-		rootDir = strings.TrimPrefix(o.Opts.Destination, fileProtocol)
-	} else {
-		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
-	}
-
-	if rootDir == "" {
+	if _, err := os.Stat(o.LocalStorageDisk); err != nil {
 		// something went wrong
-		return fmt.Errorf("error determining the local storage folder to use")
+		return fmt.Errorf("error using the local storage folder for caching")
 	}
-	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", rootDir, 1)
+	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", o.LocalStorageDisk, 1)
 	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
 	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
 	if o.Opts.Global.LogLevel == "debug" {
@@ -292,7 +287,7 @@ health:
 	if err != nil {
 		return err
 	}
-	o.LocalStorage = *reg
+	o.LocalStorageService = *reg
 	o.localStorageInterruptChannel = errchan
 
 	go panicOnRegistryError(errchan)
@@ -354,6 +349,12 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	err = o.setupLocalStorageDir()
+	if err != nil {
+		return err
+	}
+
 	client, _ := release.NewOCPClient(uuid.New())
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, o.Opts)
@@ -366,15 +367,36 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.ClusterResources = clusterresources.New(o.Log, o.Config, o.Opts)
 
 	if o.Opts.IsMirrorToDisk() {
-		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, rootDir, o.Log)
+		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Log)
 		if err != nil {
 			return err
 		}
 	} else if o.Opts.IsDiskToMirror() { // if added so that the unArchiver is not instanciated for the prepare workflow
-		o.MirrorUnArchiver, err = archive.NewArchiveExtractor(rootDir, o.Opts.Global.WorkingDir, rootDir)
+		o.MirrorUnArchiver, err = archive.NewArchiveExtractor(rootDir, o.Opts.Global.WorkingDir, o.LocalStorageDisk)
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (o *ExecutorSchema) setupLocalStorageDir() error {
+
+	requestedCachePath := os.Getenv(cacheEnvVar)
+	if requestedCachePath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		// ensure cache dir exists
+		o.LocalStorageDisk = filepath.Join(homeDir, cacheRelativePath)
+	} else {
+		o.LocalStorageDisk = filepath.Join(requestedCachePath, cacheRelativePath)
+	}
+	err := os.MkdirAll(o.LocalStorageDisk, 0755)
+	if err != nil {
+		o.Log.Error("unable to setp folder for oc-mirror local storage: %v ", err)
+		return err
 	}
 	return nil
 }
@@ -447,7 +469,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	startTime := time.Now()
 
 	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorage, o.localStorageInterruptChannel)
+	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	allImages, err := o.CollectAll(cmd.Context())
 	if err != nil {
@@ -496,7 +518,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 	// start the local storage registry
 	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorage, o.localStorageInterruptChannel)
+	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect
 	allImages, err := o.CollectAll(cmd.Context())
@@ -727,7 +749,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	defer cachedImagesFile.Close()
 
 	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorage, o.localStorageInterruptChannel)
+	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	allImages, err := o.CollectAll(cmd.Context())
 	if err != nil {
