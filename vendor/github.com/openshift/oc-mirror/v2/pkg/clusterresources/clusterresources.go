@@ -39,7 +39,11 @@ func (c *ClusterResourcesGenerator) IDMSGenerator(ctx context.Context, allRelate
 
 	// determine the name of the IDMS resource
 	// TODO determine name (based on date?)
-	name := "idms_" + time.Now().Format(time.RFC3339)
+	dateTime := time.Now().UTC().Format(time.RFC3339)
+	// replace all : by -
+	dateTime = strings.ReplaceAll(dateTime, ":", "-")
+	dateTime = strings.ToLower(dateTime)
+	name := "idms-" + dateTime
 
 	// locate the output directory
 	idmsFileName := filepath.Join(opts.Global.WorkingDir, clusterResourcesDir, name+".yaml")

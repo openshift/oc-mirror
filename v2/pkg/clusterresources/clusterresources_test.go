@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -116,7 +118,22 @@ func TestIDMSGenerator(t *testing.T) {
 		if len(idmsFiles) != 1 {
 			t.Fatalf("output folder should contain 1 idms yaml file")
 		}
+		// check idmsFile has a name that is
+		//compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(idmsFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("IDMS custom resource name %s doesn't  respect RFC1123", idmsFiles[0].Name())
+		}
 	})
+}
+
+func isValidRFC1123(name string) bool {
+	// Regular expression to match RFC1123 compliant names
+	rfc1123Regex := "^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]$"
+	match, _ := regexp.MatchString(rfc1123Regex, name)
+	return match && len(name) <= 63
 }
 
 func TestGenerateImageMirrors(t *testing.T) {
