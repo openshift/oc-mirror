@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -15,20 +16,142 @@ import (
 )
 
 func TestReleaseLocalStoredCollector(t *testing.T) {
-
 	log := clog.New("trace")
-	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:    false,
-		SecurePolicy: false,
-		WorkingDir:   t.TempDir(),
-	}
 
-	tmpDir := t.TempDir()
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	// this test should cover over 80% M2D
+	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
+		ctx := context.Background()
+		manifest := &MockManifest{Log: log}
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+
+		res, err := ex.ReleaseImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
+
+		os.RemoveAll("../../tests/hold-release/")
+		os.RemoveAll("../../tests/release-images")
+		os.RemoveAll("../../tests/tmp/")
+		ex := setupCollector_DiskToMirror(tempDir, log)
+		//copy tests/hold-test-fake to working-dir
+		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		//copy tests/release-filters-fake to working-dir
+		err = copy.Copy("../../tests/working-dir-fake/release-filters/", filepath.Join(ex.Opts.Global.WorkingDir, releaseFiltersDir))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		res, err := ex.ReleaseImageCollector(context.Background())
+		if err != nil {
+			t.Fatalf("should not fail: %v", err)
+		}
+		if len(res) == 0 {
+			t.Fatalf("should contain at least 1 image")
+		}
+		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+			t.Fatalf("source images should be from local storage")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing ReleaseImageCollector : should fail image index", func(t *testing.T) {
+		manifest := &MockManifest{Log: log, FailImageIndex: true}
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+		res, err := ex.ReleaseImageCollector(context.Background())
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing ReleaseImageCollector : should fail image manifest", func(t *testing.T) {
+		manifest := &MockManifest{Log: log, FailImageManifest: true}
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+
+		res, err := ex.ReleaseImageCollector(context.Background())
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing ReleaseImageCollector : should fail extract", func(t *testing.T) {
+		manifest := &MockManifest{Log: log, FailExtract: true}
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+
+		res, err := ex.ReleaseImageCollector(context.Background())
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+}
+
+func TestGraphImage(t *testing.T) {
+	log := clog.New("trace")
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	t.Run("Testing GraphImage : should pass", func(t *testing.T) {
+		ex := setupCollector_DiskToMirror(tempDir, log)
+
+		res, err := ex.GraphImage()
+		if err != nil {
+			t.Fatalf("should pass")
+		}
+		assert.Equal(t, "localhost:9999/openshift/graph-image:latest", res)
+	})
+}
+
+func TestReleaseImage(t *testing.T) {
+	log := clog.New("trace")
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	t.Run("Testing ReleaseImage : should pass", func(t *testing.T) {
+		os.RemoveAll("../../tests/hold-release/")
+		os.RemoveAll("../../tests/release-images")
+		os.RemoveAll("../../tests/tmp/")
+		ex := setupCollector_DiskToMirror(tempDir, log)
+		//copy tests/hold-test-fake to working-dir
+		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		//copy tests/release-filters-fake to working-dir
+		err = copy.Copy("../../tests/working-dir-fake/release-filters/", filepath.Join(ex.Opts.Global.WorkingDir, releaseFiltersDir))
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		res, err := ex.ReleaseImage()
+		if err != nil {
+			t.Fatalf("should pass: %v", err)
+		}
+		assert.Contains(t, res, "quay.io/openshift-release-dev/ocp-release")
+	})
+}
+
+func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
+	manifest := &MockManifest{Log: log}
+
 	globalD2M := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		WorkingDir:   tmpDir + "/working-dir",
-		From:         tmpDir,
+		WorkingDir:   tempDir + "/working-dir",
+		From:         tempDir,
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
@@ -36,19 +159,6 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	_, srcOptsD2M := mirror.ImageSrcFlags(globalD2M, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
 	_, destOptsD2M := mirror.ImageDestFlags(globalD2M, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
-	_, srcOptsM2D := mirror.ImageSrcFlags(globalM2D, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOptsM2D := mirror.ImageDestFlags(globalM2D, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-
-	m2dOpts := mirror.CopyOptions{
-		Global:              globalM2D,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOptsM2D,
-		DestImage:           destOptsM2D,
-		RetryOpts:           retryOpts,
-		Destination:         "file://test",
-		Dev:                 false,
-		Mode:                mirror.MirrorToDisk,
-	}
 
 	d2mOpts := mirror.CopyOptions{
 		Global:              globalD2M,
@@ -73,10 +183,50 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 							MaxVersion: "4.13.10",
 						},
 					},
+					Graph: true,
 				},
 			},
 		},
 	}
+
+	ex := &LocalStorageCollector{
+		Log:              log,
+		Mirror:           &MockMirror{Fail: false},
+		Config:           cfgd2m,
+		Manifest:         manifest,
+		Opts:             d2mOpts,
+		Cincinnati:       nil,
+		LocalStorageFQDN: "localhost:9999",
+	}
+
+	return ex
+}
+
+func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *LocalStorageCollector {
+
+	globalM2D := &mirror.GlobalOptions{
+		TlsVerify:    false,
+		SecurePolicy: false,
+		WorkingDir:   tempDir,
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, retryOpts := mirror.RetryFlags()
+	_, srcOptsM2D := mirror.ImageSrcFlags(globalM2D, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOptsM2D := mirror.ImageDestFlags(globalM2D, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+
+	m2dOpts := mirror.CopyOptions{
+		Global:              globalM2D,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOptsM2D,
+		DestImage:           destOptsM2D,
+		RetryOpts:           retryOpts,
+		Destination:         "file://test",
+		Dev:                 false,
+		Mode:                mirror.MirrorToDisk,
+	}
+
 	cfgm2d := v1alpha2.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 			Mirror: v1alpha2.Mirror{
@@ -95,6 +245,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 							Type: v1alpha2.TypeOKD,
 						},
 					},
+					Graph: true,
 				},
 				Operators: []v1alpha2.Operator{
 					{
@@ -157,141 +308,15 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	}
 
 	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
-	ctx := context.Background()
-
-	// this test should cover over 80% M2D
-	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
-		manifest := &MockManifest{Log: log}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
-			Config:           cfgm2d,
-			Manifest:         manifest,
-			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-
-	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
-		os.RemoveAll("../../tests/hold-release/")
-		os.RemoveAll("../../tests/release-images")
-		os.RemoveAll("../../tests/tmp/")
-		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(d2mOpts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-		//copy tests/release-filters-fake to working-dir
-		err = copy.Copy("../../tests/working-dir-fake/release-filters/d5f8153de54b0327ad20d24d4dbba7a6", filepath.Join(d2mOpts.Global.WorkingDir, releaseFiltersDir, "d5f8153de54b0327ad20d24d4dbba7a6"))
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
-		manifest := &MockManifest{Log: log}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
-			Config:           cfgd2m,
-			Manifest:         manifest,
-			Opts:             d2mOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-		if len(res) == 0 {
-			t.Fatalf("should contain at least 1 image")
-		}
-		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
-			t.Fatalf("source images should be from local storage")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-	t.Run("Testing ReleaseImageCollector : should fail mirror", func(t *testing.T) {
-		os.RemoveAll(m2dOpts.Global.WorkingDir)
-		manifest := &MockManifest{Log: log}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: true},
-			Config:           cfgm2d,
-			Manifest:         manifest,
-			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-
-	t.Run("Testing ReleaseImageCollector : should fail image index", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailImageIndex: true}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
-			Config:           cfgm2d,
-			Manifest:         manifest,
-			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-
-	t.Run("Testing ReleaseImageCollector : should fail image manifest", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailImageManifest: true}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
-			Config:           cfgm2d,
-			Manifest:         manifest,
-			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-
-	t.Run("Testing ReleaseImageCollector : should fail extract", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailExtract: true}
-		ex := &LocalStorageCollector{
-			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
-			Config:           cfgm2d,
-			Manifest:         manifest,
-			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
-			LocalStorageFQDN: "localhost:9999",
-		}
-
-		res, err := ex.ReleaseImageCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-		log.Debug("completed test related images %v ", res)
-	})
-
+	ex := &LocalStorageCollector{
+		Log:              log,
+		Mirror:           &MockMirror{Fail: false},
+		Config:           cfgm2d,
+		Manifest:         manifest,
+		Opts:             m2dOpts,
+		Cincinnati:       cincinnati,
+		LocalStorageFQDN: "localhost:9999",
+		ImageBuilder:     &mockImageBuilder{},
+	}
+	return ex
 }

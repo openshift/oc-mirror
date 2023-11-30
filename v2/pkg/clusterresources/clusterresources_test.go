@@ -1,65 +1,26 @@
 package clusterresources
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
-	"github.com/openshift/oc-mirror/v2/pkg/mirror"
+	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/yaml"
 )
 
 func TestIDMSGenerator(t *testing.T) {
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	globalD2M := &mirror.GlobalOptions{
-		TlsVerify:    false,
-		SecurePolicy: false,
-		WorkingDir:   tmpDir + "/working-dir",
-		From:         tmpDir,
-	}
+	workingDir := tmpDir + "/working-dir"
 
-	_, sharedOpts := mirror.SharedImageFlags()
-	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	_, srcOptsD2M := mirror.ImageSrcFlags(globalD2M, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOptsD2M := mirror.ImageDestFlags(globalD2M, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-	_, retryOpts := mirror.RetryFlags()
-
-	d2mOpts := mirror.CopyOptions{
-		Global:              globalD2M,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOptsD2M,
-		DestImage:           destOptsD2M,
-		RetryOpts:           retryOpts,
-		Destination:         "docker://localhost:5000/test",
-		Dev:                 false,
-		Mode:                mirror.DiskToMirror,
-	}
-
-	cfgd2m := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
-					Architectures: []string{"amd64"},
-					Channels: []v1alpha2.ReleaseChannel{
-						{
-							Name:       "stable-4.13",
-							MinVersion: "4.13.9",
-							MaxVersion: "4.13.10",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	ctx := context.Background()
+	defer os.RemoveAll(tmpDir)
 
 	imageList := []v1alpha3.CopyImageSchema{
 		{
@@ -96,21 +57,20 @@ func TestIDMSGenerator(t *testing.T) {
 
 	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
-			Log:    log,
-			Config: cfgd2m,
-			Opts:   d2mOpts,
+			Log:        log,
+			WorkingDir: workingDir,
 		}
-		err := cr.IDMSGenerator(ctx, imageList, d2mOpts)
+		err := cr.IDMSGenerator(imageList)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 
-		_, err = os.Stat(filepath.Join(d2mOpts.Global.WorkingDir, clusterResourcesDir))
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
 		if err != nil {
 			t.Fatalf("output folder should exist")
 		}
 
-		idmsFiles, err := os.ReadDir(filepath.Join(d2mOpts.Global.WorkingDir, clusterResourcesDir))
+		idmsFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
 		if err != nil {
 			t.Fatalf("ls output folder should not fail")
 		}
@@ -189,5 +149,57 @@ func TestGenerateImageMirrors(t *testing.T) {
 		if idm[0] != "myregistry/mynamespace/quay.io/openshift-release-dev" {
 			t.Fatalf("returned mirror does not match expected: %s", idm[0])
 		}
+	})
+}
+
+func TestUpdateServiceGenerator(t *testing.T) {
+	log := clog.New("trace")
+
+	tmpDir := t.TempDir()
+	workingDir := tmpDir + "/working-dir"
+
+	releaseImage := "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"
+	graphImage := "localhost:5000/openshift/graph-image:latest"
+
+	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+		}
+		err := cr.UpdateServiceGenerator(graphImage, releaseImage)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		resourceFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(resourceFiles) != 1 {
+			t.Fatalf("output folder should contain 1 updateservice.yaml file")
+		}
+
+		assert.Equal(t, updateServiceFilename, resourceFiles[0].Name())
+
+		// Read the contents of resourceFiles[0]
+		filePath := filepath.Join(workingDir, clusterResourcesDir, resourceFiles[0].Name())
+		fileContents, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		actualOSUS := updateservicev1.UpdateService{}
+		err = yaml.Unmarshal(fileContents, &actualOSUS)
+		if err != nil {
+			t.Fatalf("failed to unmarshall file: %v", err)
+		}
+
+		assert.Equal(t, graphImage, actualOSUS.Spec.GraphDataImage)
+		assert.Equal(t, "quay.io/openshift-release-dev/ocp-release", actualOSUS.Spec.Releases)
 	})
 }
