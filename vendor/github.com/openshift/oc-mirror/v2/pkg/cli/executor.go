@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -164,7 +165,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
-	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
+	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
@@ -343,6 +344,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Opts.Destination = args[0]
 	o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
 	o.Log.Info("mode %s ", o.Opts.Mode)
+	if o.isLocalStoragePortBound() {
+		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
+	}
 	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 
 	err = o.setupWorkingDir()
@@ -380,6 +384,16 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	return nil
 }
 
+func (o *ExecutorSchema) isLocalStoragePortBound() bool {
+
+	// Check if the port is already bound
+	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", o.Opts.Global.Port))
+	if err != nil {
+		return true
+	}
+	listener.Close()
+	return false
+}
 func (o *ExecutorSchema) setupLocalStorageDir() error {
 
 	requestedCachePath := os.Getenv(cacheEnvVar)
@@ -719,6 +733,9 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 
 	o.Opts.Global.WorkingDir = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
 
+	if o.isLocalStoragePortBound() {
+		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
+	}
 	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 	o.Opts.Mode = mirror.Prepare
 	o.Log.Info("mode %s ", o.Opts.Mode)
