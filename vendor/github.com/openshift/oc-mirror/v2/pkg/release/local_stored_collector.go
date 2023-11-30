@@ -28,6 +28,7 @@ type releasesForFilter struct {
 }
 
 type LocalStorageCollector struct {
+	CollectorInterface
 	Log              clog.PluggableLoggerInterface
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
@@ -36,6 +37,8 @@ type LocalStorageCollector struct {
 	Cincinnati       CincinnatiInterface
 	LocalStorageFQDN string
 	ImageBuilder     imagebuilder.ImageBuilderInterface
+	Releases         []string
+	GraphDataImage   string
 }
 
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
@@ -172,6 +175,11 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		if err != nil {
 			return allImages, err
 		}
+		o.Releases = []string{}
+		for _, img := range releaseImages {
+			o.Releases = append(o.Releases, img.Image)
+		}
+
 		allRelatedImages := []v1alpha3.RelatedImage{}
 
 		// add the releaseImages so that they are added to the list of images to copy
@@ -196,6 +204,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				// the digest of the graph image and use it here
 				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
 			}
+			o.GraphDataImage = graphRelatedImage.Image
 			allRelatedImages = append(allRelatedImages, graphRelatedImage)
 		}
 		allImages, err = o.prepareD2MCopyBatch(o.Log, allRelatedImages)
@@ -321,4 +330,36 @@ func (o LocalStorageCollector) saveReleasesForFilter(r releasesForFilter, to str
 		return err
 	}
 	return nil
+}
+
+// assumes this is called during DiskToMirror workflow.
+// this method doesn't verify if the graphImage has been generated
+// by the collector.
+func (o *LocalStorageCollector) GraphImage() (string, error) {
+	if o.GraphDataImage == "" {
+		o.GraphDataImage = filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+	}
+	return o.GraphDataImage, nil
+}
+
+// assumes that this is called during DiskToMirror workflow.
+// it relies on the previously saved release-filters in order
+// to get the list of releases to mirror (saved during mirrorToDisk
+// after the call to cincinnati API)
+func (o *LocalStorageCollector) ReleaseImage() (string, error) {
+	if len(o.Releases) == 0 {
+		releaseImages, _, err := o.identifyReleases()
+		if err != nil {
+			return "", err
+		}
+		o.Releases = []string{}
+		for _, img := range releaseImages {
+			o.Releases = append(o.Releases, img.Image)
+		}
+	}
+	if len(o.Releases) > 0 {
+		return o.Releases[0], nil
+	} else {
+		return "", fmt.Errorf("collector could not established the list of releases to mirror")
+	}
 }
