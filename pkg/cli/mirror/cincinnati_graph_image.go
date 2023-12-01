@@ -9,11 +9,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	archiver "github.com/mholt/archiver/v3"
 	"github.com/openshift/library-go/pkg/image/reference"
+	"github.com/openshift/library-go/pkg/verify/util"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"k8s.io/klog/v2"
@@ -22,6 +24,7 @@ import (
 	"github.com/openshift/oc-mirror/pkg/config"
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/image/builder"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // This is a temporary solution until this data is distributed as container images
@@ -54,7 +57,7 @@ func (o *MirrorOptions) unpackRelease(dstDir string, filesInArchive map[string]s
 }
 
 // buildGraphImage builds and publishes an image containing the unpacked Cincinnati graph data
-func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (image.TypedImageMapping, error) {
+func (o *MirrorOptions) buildGraphImage(ctx context.Context, srcSignatureDir string, dstDir string) (image.TypedImageMapping, error) {
 	refs := image.TypedImageMapping{}
 
 	var destInsecure bool
@@ -97,6 +100,11 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, dstDir string) (ima
 		return nil, fmt.Errorf("failed to extract tarball %v", err)
 	}
 
+	// Copy the signature to graph data directory
+	err = copySignatureForUpdateGraph(srcSignatureDir, graphDataFolder)
+	if err != nil {
+		return refs, fmt.Errorf("error copying signatures to Cincinnati graph data directory: %v", err)
+	}
 	add, err := builder.LayerFromPath(graphDataDir, graphDataFolder)
 	if err != nil {
 		return refs, fmt.Errorf("error creating add layer: %v", err)
@@ -183,4 +191,71 @@ func downloadGraphData(ctx context.Context, dir string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func copySignatureForUpdateGraph(srcSigDir string, dstGraphDataDir string) error {
+
+	//Go through the files in srcSignaturePath and parse the json files.
+	files, err := os.ReadDir(srcSigDir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		//Read the file
+		signatureRawBytes, err := os.ReadFile(filepath.Join(srcSigDir, file.Name()))
+		if err != nil {
+			return err
+		}
+		//Parse the file
+		cmObj, err := util.ReadConfigMap(signatureRawBytes)
+		if err != nil {
+			continue
+		}
+		if cmObj == nil {
+			continue
+		}
+		//Copy the signature to graph data directory
+		err = copySignatureToGraphDataDir(dstGraphDataDir, cmObj)
+		if err != nil {
+			return fmt.Errorf("error copying signatures to Cincinnati graph data directory: %v", err)
+		}
+	}
+	return nil
+}
+
+// copySignatureToGraphDataDir() will copy the signatures to cincinnati graph data directory
+// with signatures/{algorithm}/{digest}/signature-{number} schema.
+func copySignatureToGraphDataDir(graphDataSignatureDir string, cmObj *corev1.ConfigMap) error {
+
+	sigDirPath := filepath.Join(graphDataSignatureDir, "signatures")
+
+	//iterate through the cmObj.BinaryData map
+	for key, value := range cmObj.BinaryData {
+		//example key:value -> key = sha256-73946971c03b43a0dc6f7b0946b26a177c2f3c9d37105441315b4e3359373a55-1
+		v := strings.Split(key, "-")
+		if len(v) == 0 {
+			return fmt.Errorf("invalid signature key %s", key)
+		}
+		algo := v[0]
+		digest := v[1]
+		signatureNumber := v[2]
+
+		//create the signature directory
+		sigDirPath := filepath.Join(sigDirPath, algo, digest)
+		err := os.MkdirAll(sigDirPath, 0755)
+		if err != nil {
+			return fmt.Errorf("error creating directory %s: %s", sigDirPath, err)
+		}
+
+		// Write the signature file
+		sigFilePath := filepath.Join(sigDirPath, fmt.Sprintf("signature-%s", signatureNumber))
+		err = os.WriteFile(sigFilePath, []byte(value), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing to the %s: %s", sigFilePath, err)
+		}
+	}
+	return nil
 }

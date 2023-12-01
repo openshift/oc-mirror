@@ -737,7 +737,10 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	// process Cincinnati graph data image
 	if len(cfg.Mirror.Platform.Channels) > 0 {
 		if cfg.Mirror.Platform.Graph {
-			graphRef, err := o.buildGraphImage(ctx, filepath.Join(o.Dir, config.SourceDir))
+
+			// copy signatures to Cincinnati graph data directory
+			srcSignatureDir := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
+			graphRef, err := o.buildGraphImage(ctx, srcSignatureDir, filepath.Join(o.Dir, config.SourceDir))
 			if err != nil {
 				return fmt.Errorf("error building cincinnati graph image: %v", err)
 			}

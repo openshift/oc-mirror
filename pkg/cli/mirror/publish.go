@@ -354,7 +354,10 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 	}
 
 	if found {
-		graphRef, err := o.buildGraphImage(ctx, dir)
+
+		// copy signatures to Cincinnati graph data directory before building the graph data image
+		srcSignatureDir := filepath.Join(o.OutputDir, config.ReleaseSignatureDir)
+		graphRef, err := o.buildGraphImage(ctx, srcSignatureDir, dir)
 		if err != nil {
 			return allMappings, fmt.Errorf("error building cincinnati graph image: %v", err)
 		}
