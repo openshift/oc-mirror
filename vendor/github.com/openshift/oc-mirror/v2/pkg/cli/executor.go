@@ -686,7 +686,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
-	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 5000, "HTTP port used by oc-mirror's local storage instance")
+	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
@@ -744,7 +744,10 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 	if err != nil {
 		return err
 	}
-
+	err = o.setupLocalStorageDir()
+	if err != nil {
+		return err
+	}
 	client, _ := release.NewOCPClient(uuid.New())
 
 	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
