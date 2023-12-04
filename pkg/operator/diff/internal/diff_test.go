@@ -3805,7 +3805,108 @@ func TestSetDefaultChannelRange(t *testing.T) {
 							property.MustBuildPackage("ibm-mq", "1.7.0"),
 						},
 					},
+				},
+			},
+		},
+
+		{
+			name:   "ibm-mq-test/Valid/OverrideDefaultChannel",
+			oldCfg: declcfg.DeclarativeConfig{},
+			newCfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: declcfg.SchemaPackage, Name: "ibm-mq", DefaultChannel: "v1.8"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: declcfg.SchemaChannel, Name: "v1.8", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
+						{Name: "ibm-mq.v1.8.1"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("v1.8", 3),
+						},
+					},
+					{Schema: declcfg.SchemaChannel, Name: "v1.7", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
+						{Name: "ibm-mq.v1.7.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("v1.7", 1),
+						},
+					},
+					{Schema: declcfg.SchemaChannel, Name: "v1.6", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
+						{Name: "ibm-mq.v1.6.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("v1.6", 2),
+						},
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "ibm-mq.v1.6.0",
+						Package: "ibm-mq",
+						Image:   "reg/ibm-mq:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("ibm-mq", "1.6.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "ibm-mq.v1.7.0",
+						Package: "ibm-mq",
+						Image:   "reg/ibm-mq:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("ibm-mq", "1.7.0"),
+						},
+					},
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "ibm-mq.v1.8.1",
+						Package: "ibm-mq",
+						Image:   "reg/ibm-mq:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("ibm-mq", "1.8.1"),
+						},
+					},
 				}},
+			g: &DiffGenerator{
+				IncludeAdditively: false,
+				HeadsOnly:         false,
+				SkipDependencies:  true,
+				Includer: DiffIncluder{
+					Packages: []DiffIncludePackage{
+						{
+							Name: "ibm-mq",
+							Channels: []DiffIncludeChannel{
+								{
+									Name: "v1.7",
+								},
+							},
+							OverrideDefaultChannel: true,
+						},
+					},
+				},
+			},
+			expCfg: declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{
+					{Schema: declcfg.SchemaPackage, Name: "ibm-mq", DefaultChannel: "v1.7"},
+				},
+				Channels: []declcfg.Channel{
+					{Schema: declcfg.SchemaChannel, Name: "v1.7", Package: "ibm-mq", Entries: []declcfg.ChannelEntry{
+						{Name: "ibm-mq.v1.7.0"}},
+						Properties: []property.Property{
+							property.MustBuildChannelPriority("v1.7", 1),
+						},
+					},
+				},
+				Bundles: []declcfg.Bundle{
+					{
+						Schema:  declcfg.SchemaBundle,
+						Name:    "ibm-mq.v1.7.0",
+						Package: "ibm-mq",
+						Image:   "reg/ibm-mq:latest",
+						Properties: []property.Property{
+							property.MustBuildPackage("ibm-mq", "1.7.0"),
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -3815,9 +3916,6 @@ func TestSetDefaultChannelRange(t *testing.T) {
 				s.assertion = require.NoError
 			}
 
-			//oldModel, err := declcfg.ConvertToModel(s.oldCfg)
-			//require.NoError(t, err)
-
 			newModel, err := declcfg.ConvertToModel(s.newCfg)
 			require.NoError(t, err)
 
@@ -3826,7 +3924,6 @@ func TestSetDefaultChannelRange(t *testing.T) {
 
 			if err := outputModel.Validate(); err != nil {
 				fmt.Println(err)
-				//return nil, err
 			}
 
 			outputCfg := declcfg.ConvertFromModel(outputModel)

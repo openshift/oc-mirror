@@ -51,6 +51,11 @@ type DiffIncludePackage struct {
 	// HeadsOnly is the mode that selects the head of the channels only.
 	// This setting will be overridden by any versions or bundles in the channels.
 	HeadsOnly bool
+	// New field added for OCPBUGS default channel setting
+	// (optional) - If used a warning meesage will be displayed
+	// that this feature is for advanced users that understand
+	// the fallout from not including the defaultChannel
+	OverrideDefaultChannel bool `json:"overrideDefaultChannel"`
 }
 
 // DiffIncludeChannel specifies a channel, and optionally bundles and bundle versions
