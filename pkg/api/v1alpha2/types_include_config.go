@@ -27,6 +27,13 @@ type IncludePackage struct {
 
 	// All channels containing these bundles are parsed for an upgrade graph.
 	IncludeBundle `json:",inline"`
+
+	// New field added due to the following filed cases for oc-mirror
+	// - CASE03657982
+	// - CASE03655018
+	// - CASE03676821
+	// Ability to override default channel.
+	OverrideDefaultChannel bool `json:"overrideDefaultChannel"`
 }
 
 // IncludeChannel contains a name (required) and versions (optional)
@@ -66,7 +73,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfi
 			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 		}
 
-		dpkg := diff.DiffIncludePackage{Name: pkg.Name}
+		dpkg := diff.DiffIncludePackage{Name: pkg.Name, OverrideDefaultChannel: pkg.OverrideDefaultChannel}
 		switch {
 		case pkg.MinVersion != "" && pkg.MaxVersion != "":
 			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
@@ -80,6 +87,12 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfi
 			dpkg.Range = fmt.Sprintf("<=%s", pkg.MaxVersion)
 		case pkg.MinBundle != "":
 			dpkg.Bundles = []string{pkg.MinBundle}
+		}
+
+		if pkg.OverrideDefaultChannel {
+			if len(pkg.Channels) != 1 {
+				return dic, fmt.Errorf("package %s: with 'overrideDefaulChannel: true' has to have exactly one channel set", pkg.Name)
+			}
 		}
 
 		for chIdx, ch := range pkg.Channels {
