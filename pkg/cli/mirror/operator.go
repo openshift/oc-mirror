@@ -551,19 +551,12 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 
 		mirrorToDisk := len(o.OutputDir) > 0 && o.From == ""
 		mirrorToMirror := len(o.ToMirror) > 0 && len(o.ConfigPath) > 0
-		// Case of MirrorToDisk workflow, the location is on disk, and should be under
-		// a folder structure with catalogNamespace/catalogName
+		// Case of MirrorToDisk workflow, the location is on disk
 		// as in vendor/github.com/openshift/oc/pkg/cli/admin/catalog/mirrorer.go, function mount.
 		// for the case of mirrorToDisk, it's as if we wanted to call mount with dest=file:// and
 		// maxComponents=0
 		if mirrorToDisk && !mirrorToMirror {
 			targetLocation = filePrefix
-			if ctlgRef.Ref.Namespace != "" {
-				targetLocation += ctlgRef.Ref.Namespace
-			}
-			if ctlgRef.Ref.Name != "" {
-				targetLocation += "/" + ctlgRef.Ref.Name
-			}
 		}
 
 		// create mappings for the related images that will moved from the workspace to the final destination
@@ -653,7 +646,6 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 			return nil, err
 		}
 	}
-
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
 	for srcRef, dstRef := range mappings {
 		newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
@@ -666,7 +658,6 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		dstRef.Ref.Name = tmpRef.Name
 		mappings[srcRef] = dstRef
 	}
-
 	return mappings, validateMapping(*dc, mappings)
 }
 
