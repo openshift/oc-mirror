@@ -30,6 +30,7 @@ type releasesForFilter struct {
 type LocalStorageCollector struct {
 	CollectorInterface
 	Log              clog.PluggableLoggerInterface
+	LogsDir          string
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
 	Config           v1alpha2.ImageSetConfiguration
@@ -54,7 +55,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			Releases: []v1alpha3.CopyImageSchema{},
 		}
 
-		f, err := os.Create(logFile)
+		f, err := os.Create(filepath.Join(o.LogsDir, logFile))
 		if err != nil {
 			o.Log.Error("[ReleaseImageCollector] %v", err)
 		}

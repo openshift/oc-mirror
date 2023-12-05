@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,7 +19,7 @@ import (
 
 const (
 	BATCH_SIZE int    = 8
-	logFile    string = "logs/worker-{batch}.log"
+	logFile    string = "worker-{batch}.log"
 )
 
 type BatchInterface interface {
@@ -26,14 +27,16 @@ type BatchInterface interface {
 }
 
 func New(log clog.PluggableLoggerInterface,
+	logsDir string,
 	mirror mirror.MirrorInterface,
 	manifest manifest.ManifestInterface,
 ) BatchInterface {
-	return &Batch{Log: log, Mirror: mirror, Manifest: manifest}
+	return &Batch{Log: log, LogsDir: logsDir, Mirror: mirror, Manifest: manifest}
 }
 
 type Batch struct {
 	Log      clog.PluggableLoggerInterface
+	LogsDir  string
 	Mirror   mirror.MirrorInterface
 	Manifest manifest.ManifestInterface
 }
@@ -75,7 +78,9 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 	wg.Add(b.BatchSize)
 	for i := 0; i < b.Count; i++ {
 		// create a log file for each batch
-		f[i], err = os.Create(strings.Replace(logFile, "{batch}", strconv.Itoa(i), -1))
+		batchFileName := strings.Replace(logFile, "{batch}", strconv.Itoa(i), -1)
+		batchFilePath := filepath.Join(o.LogsDir, batchFileName)
+		f[i], err = os.Create(batchFilePath)
 		if err != nil {
 			o.Log.Error("[Worker] %v", err)
 		}

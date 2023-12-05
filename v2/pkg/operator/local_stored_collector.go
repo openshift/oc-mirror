@@ -25,6 +25,7 @@ const (
 
 type LocalStorageCollector struct {
 	Log              clog.PluggableLoggerInterface
+	LogsDir          string
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
 	Config           v1alpha2.ImageSetConfiguration
@@ -57,7 +58,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			}
 		}
 	}
-	f, err := os.Create(logsFile)
+	f, err := os.Create(filepath.Join(o.LogsDir, logsFile))
 	if err != nil {
 		o.Log.Error(errMsg, err)
 	}
