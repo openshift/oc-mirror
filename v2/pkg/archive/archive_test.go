@@ -151,7 +151,7 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": "",
 		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": "",
 	}
-	actualAddedBlobs, err := ma.addBlobsDiff(collectedBlobs, historyBlobs)
+	actualAddedBlobs, err := ma.addBlobsDiff(collectedBlobs, historyBlobs, map[string]string{})
 	assert.NoError(t, err, "call addBlobsDiff should not return an error")
 	assert.Equal(t, expectedAddedBlobs, actualAddedBlobs)
 
