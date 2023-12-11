@@ -6,5 +6,6 @@ approvers:
   - lmzuccarelli
   - sherine-k
   - jerpeter1
+  - aguidirh
 component: oc
 subcomponent: oc-mirror
