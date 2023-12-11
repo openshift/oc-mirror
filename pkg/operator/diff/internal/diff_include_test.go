@@ -29,7 +29,14 @@ func TestFindIntersectingBundles(t *testing.T) {
 		{"foo.v2.1.0", "foo.v2.0.0", nil},
 		{"foo.v3.0.0", "foo.v1.1.0", []string{"foo.v2.0.0", "foo.v2.1.0"}},
 	}
-
+	inputBundles2 := []bundleSpec{
+		{"jaeger-operator.v1.30.2", "", nil},
+		{"jaeger-operator.v1.34.1-5", "jaeger-operator.v1.30.2", nil},
+		{"jaeger-operator.v1.42.0-5", "", nil},
+		{"jaeger-operator.v1.42.0-5-0.1687199951.p", "jaeger-operator.v1.34.1-5", []string{"jaeger-operator.v1.42.0-5"}},
+		{"jaeger-operator.v1.47.1-5", "jaeger-operator.v1.42.0-5-0.1687199951.p", nil},
+		{"jaeger-operator.v1.51.0-1", "jaeger-operator.v1.47.1-5", nil},
+	}
 	type spec struct {
 		name            string
 		pkgName         string
@@ -42,6 +49,33 @@ func TestFindIntersectingBundles(t *testing.T) {
 	}
 
 	specs := []spec{
+		{
+			name:         "Jaeger-product OCPBUGS-23158 - bundle to patch",
+			inputBundles: inputBundles2,
+			start:        bundleSpec{"jaeger-operator.v1.42.0-5", "", nil},
+			end:          bundleSpec{"jaeger-operator.v1.51.0-1", "jaeger-operator.v1.47.1-5", nil},
+			headName:     "jaeger-operator.v1.51.0-1",
+			assertion:    require.True,
+			expIntersecting: []bundleSpec{
+				{"jaeger-operator.v1.51.0-1", "jaeger-operator.v1.47.1-5", nil},
+				{"jaeger-operator.v1.47.1-5", "jaeger-operator.v1.42.0-5-0.1687199951.p", nil},
+				{"jaeger-operator.v1.42.0-5-0.1687199951.p", "jaeger-operator.v1.34.1-5", []string{"jaeger-operator.v1.42.0-5"}},
+				{"jaeger-operator.v1.42.0-5", "", nil},
+			},
+		},
+		{
+			name:         "Jaeger-product OCPBUGS-23158 - patch bundle",
+			inputBundles: inputBundles2,
+			start:        bundleSpec{"jaeger-operator.v1.42.0-5-0.1687199951.p", "jaeger-operator.v1.34.1-5", []string{"jaeger-operator.v1.42.0-5"}},
+			end:          bundleSpec{"jaeger-operator.v1.51.0-1", "jaeger-operator.v1.47.1-5", nil},
+			headName:     "jaeger-operator.v1.51.0-1",
+			assertion:    require.True,
+			expIntersecting: []bundleSpec{
+				{"jaeger-operator.v1.51.0-1", "jaeger-operator.v1.47.1-5", nil},
+				{"jaeger-operator.v1.47.1-5", "jaeger-operator.v1.42.0-5-0.1687199951.p", nil},
+				{"jaeger-operator.v1.42.0-5-0.1687199951.p", "jaeger-operator.v1.34.1-5", []string{"jaeger-operator.v1.42.0-5"}},
+			},
+		},
 		{
 			name:            "Success/StartEndEqual",
 			inputBundles:    inputBundles1,
@@ -128,8 +162,11 @@ func TestFindIntersectingBundles(t *testing.T) {
 	for _, s := range specs {
 		t.Run(s.name, func(t *testing.T) {
 			// Construct test
-			pkg := &model.Package{Name: "foo"}
-			ch := &model.Channel{Name: "stable", Bundles: make(map[string]*model.Bundle, len(s.inputBundles))}
+			pkg := &model.Package{Name: "jaeger-product"}
+			ch := &model.Channel{
+				Name:    "stable",
+				Bundles: make(map[string]*model.Bundle, len(s.inputBundles)),
+			}
 			ch.Package = pkg
 			for _, b := range s.inputBundles {
 				ch.Bundles[b.name] = newReplacingBundle(b.name, b.replaces, b.skips, ch, pkg)

@@ -389,6 +389,39 @@ func makeUpgradeGraph(ch *model.Channel) map[string][]*model.Bundle {
 	return graph
 }
 
+func getPredecessorOf(ch *model.Channel, bundleName string) *model.Bundle {
+	var predecessor *model.Bundle
+	b, exists := ch.Bundles[bundleName]
+	if exists {
+		if b.Replaces != "" {
+			predecessor = ch.Bundles[b.Replaces]
+		}
+
+		if predecessor == nil {
+			for _, b := range ch.Bundles {
+				for _, skippedBundle := range b.Skips {
+					if skippedBundle == bundleName && b.Replaces != bundleName {
+						predecessor = getPredecessorOf(ch, b.Name)
+					}
+				}
+			}
+		}
+	}
+	return predecessor
+}
+
+func getPredecessorsMap(ch *model.Channel, bundleName string) map[string]*model.Bundle {
+	chain := map[string]*model.Bundle{bundleName: nil}
+	predecessor := getPredecessorOf(ch, bundleName)
+	chain[bundleName] = predecessor
+	for predecessor != nil {
+		p := getPredecessorOf(ch, predecessor.Name)
+		chain[predecessor.Name] = p
+		predecessor = p
+	}
+	return chain
+}
+
 // findIntersectingBundles finds the intersecting bundle of start and end in the
 // replaces upgrade graph graph by traversing down to the lowest graph node,
 // then returns every bundle higher than the intersection. It is possible
@@ -404,10 +437,11 @@ func findIntersectingBundles(ch *model.Channel, start, end *model.Bundle, graph 
 	}
 
 	// Construct start's replaces chain for comparison against end's.
-	startChain := map[string]*model.Bundle{start.Name: nil}
-	for curr := start; curr != nil && curr.Replaces != ""; curr = ch.Bundles[curr.Replaces] {
-		startChain[curr.Replaces] = curr
-	}
+	// needs to account for the start bundle mentionned in `skips`
+	//startChain := map[string]*model.Bundle{start.Name: nil}
+	// startChain := getPredecessorOf(ch, start.Name)
+	// fmt.Printf("%v", startChain)
+	startChain := getPredecessorsMap(ch, start.Name)
 
 	// Trace end's replaces chain until it intersects with start's, or the root is reached.
 	var intersection string
