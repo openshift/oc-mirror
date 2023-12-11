@@ -200,3 +200,11 @@ func findRelatedImage(name string, imgs []v1alpha3.RelatedImage) string {
 	}
 	return ""
 }
+
+func (o *Collector) GraphImage() (string, error) {
+	return "", NotImplementedErrorf("not implemented")
+}
+
+func (o *Collector) ReleaseImage() (string, error) {
+	return "", NotImplementedErrorf("not implemented")
+}

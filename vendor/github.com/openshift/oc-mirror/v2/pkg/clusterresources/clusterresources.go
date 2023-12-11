@@ -1,7 +1,7 @@
 package clusterresources
 
 import (
-	"context"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,32 +10,26 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
-	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
 
-const (
-	clusterResourcesDir string = "cluster-resources"
-)
-
 func New(log clog.PluggableLoggerInterface,
-	config v1alpha2.ImageSetConfiguration,
-	opts mirror.CopyOptions,
+	workingDir string,
 ) GeneratorInterface {
-	return &ClusterResourcesGenerator{Log: log, Config: config, Opts: opts}
+	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir}
 }
 
 type ClusterResourcesGenerator struct {
-	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
-	Opts   mirror.CopyOptions
+	Log        clog.PluggableLoggerInterface
+	WorkingDir string
 }
 
-func (c *ClusterResourcesGenerator) IDMSGenerator(ctx context.Context, allRelatedImages []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {
+func (o *ClusterResourcesGenerator) IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
 
 	// determine the name of the IDMS resource
 	// TODO determine name (based on date?)
@@ -46,7 +40,7 @@ func (c *ClusterResourcesGenerator) IDMSGenerator(ctx context.Context, allRelate
 	name := "idms-" + dateTime
 
 	// locate the output directory
-	idmsFileName := filepath.Join(opts.Global.WorkingDir, clusterResourcesDir, name+".yaml")
+	idmsFileName := filepath.Join(o.WorkingDir, clusterResourcesDir, name+".yaml")
 
 	// create a IDMS struct
 	idms := confv1.ImageDigestMirrorSet{
@@ -83,18 +77,18 @@ func (c *ClusterResourcesGenerator) IDMSGenerator(ctx context.Context, allRelate
 
 	// save IDMS struct to file
 	if _, err := os.Stat(idmsFileName); errors.Is(err, os.ErrNotExist) {
-		c.Log.Info("%s does not exist, creating it", idmsFileName)
+		o.Log.Info("%s does not exist, creating it", idmsFileName)
 		err := os.MkdirAll(filepath.Dir(idmsFileName), 0755)
 		if err != nil {
 			return err
 		}
-		c.Log.Info("%s dir created", filepath.Dir(idmsFileName))
+		o.Log.Info("%s dir created", filepath.Dir(idmsFileName))
 	}
 	idmsFile, err := os.Create(idmsFileName)
 	if err != nil {
 		return err
 	}
-	c.Log.Info("%s file created", idmsFileName)
+	o.Log.Info("%s file created", idmsFileName)
 
 	defer idmsFile.Close()
 
@@ -146,4 +140,58 @@ func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[stri
 		}
 	}
 	return mirrors, nil
+}
+
+func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImage, releaseImageRef string) error {
+	// truncate tag or digest from release image
+	// according to https://docs.openshift.com/container-platform/4.14/updating/updating_a_cluster/updating_disconnected_cluster/disconnected-update-osus.html#update-service-create-service-cli_updating-restricted-network-cluster-osus
+	releaseImage, err := image.ParseRef(releaseImageRef)
+	if err != nil {
+		return err
+	}
+	releaseImageName := releaseImage.Name
+	osus := updateservicev1.UpdateService{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: updateservicev1.GroupVersion.String(),
+			Kind:       updateServiceResourceKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: updateServiceResourceName,
+		},
+		Spec: updateservicev1.UpdateServiceSpec{
+			Replicas:       2,
+			Releases:       releaseImageName,
+			GraphDataImage: graphImage,
+		},
+	}
+
+	// put UpdateService in yaml
+	osusBytes, err := yaml.Marshal(osus)
+	if err != nil {
+		return err
+	}
+	// creationTimestamp is a struct, omitempty does not apply
+	osusBytes = bytes.ReplaceAll(osusBytes, []byte("  creationTimestamp: null\n"), []byte(""))
+
+	// save UpdateService struct to file
+	osusPath := filepath.Join(o.WorkingDir, clusterResourcesDir, updateServiceFilename)
+
+	if _, err := os.Stat(osusPath); errors.Is(err, os.ErrNotExist) {
+		o.Log.Info("%s does not exist, creating it", osusPath)
+		err := os.MkdirAll(filepath.Dir(osusPath), 0755)
+		if err != nil {
+			return err
+		}
+		o.Log.Info("%s dir created", filepath.Dir(osusPath))
+	}
+	osusFile, err := os.Create(osusPath)
+	if err != nil {
+		return err
+	}
+	o.Log.Info("%s file created", osusPath)
+
+	defer osusFile.Close()
+
+	_, err = osusFile.Write(osusBytes)
+	return err
 }

@@ -51,7 +51,7 @@ var expectedTarContents = []string{
 	"isc",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/release-metadata",
-	"working-dir-fake/release-filters/d5f8153de54b0327ad20d24d4dbba7a6"}
+	"working-dir-fake/release-filters/690d64d2ebd41f1834c80e632f041b5b"}
 
 func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	global := &mirror.GlobalOptions{
