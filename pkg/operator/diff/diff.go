@@ -128,11 +128,13 @@ type DiffIncludePackage struct {
 	// and cannot combined with `Range` in `DiffIncludeChannel`.
 	// Range setting is mutually exclusive with channel versions/bundles/range settings.
 	Range string `json:"range,omitempty" yaml:"range,omitempty"`
-	// New field added for OCPBUGS default channel setting
-	// (optional) - If used a warning message will be displayed
-	// that this feature is for advanced users that understand
-	// the fallout from not including the defaultChannel
-	OverrideDefaultChannel bool `json:"overrideDefaultChannel"`
+	// New field added due to the following filed cases for oc-mirror
+	// - CASE03657982
+	// - CASE03655018
+	// - CASE03676821
+	// - OCPBUGS-385
+	// Ability to override default channel.
+	SetDefaultChannel string `json:"setDefaultChannel,omitempty" yaml:"setDefaultChannel,omitempty"`
 }
 
 // DiffIncludeChannel contains a name (required) and versions (optional)
@@ -206,7 +208,7 @@ func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInternal.
 	for pkgI, cpkg := range c.Packages {
 		pkg := &includer.Packages[pkgI]
 		pkg.Name = cpkg.Name
-		pkg.OverrideDefaultChannel = cpkg.OverrideDefaultChannel
+		pkg.SetDefaultChannel = cpkg.SetDefaultChannel
 		pkg.AllChannels.Versions = cpkg.Versions
 		pkg.AllChannels.Bundles = cpkg.Bundles
 		if cpkg.Range != "" {
