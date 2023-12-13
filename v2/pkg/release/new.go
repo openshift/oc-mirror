@@ -9,6 +9,7 @@ import (
 )
 
 func New(log clog.PluggableLoggerInterface,
+	logsDir string,
 	config v1alpha2.ImageSetConfiguration,
 	opts mirror.CopyOptions,
 	mirror mirror.MirrorInterface,
@@ -18,8 +19,8 @@ func New(log clog.PluggableLoggerInterface,
 	imageBuilder imagebuilder.ImageBuilderInterface,
 ) CollectorInterface {
 	if localStorageFQDN != "" {
-		return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
+		return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
 	} else {
-		return &Collector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati}
+		return &Collector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati}
 	}
 }

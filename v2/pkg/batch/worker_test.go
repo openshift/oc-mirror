@@ -3,6 +3,7 @@ package batch
 import (
 	"bufio"
 	"context"
+	"os"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -33,8 +34,10 @@ func TestWorker(t *testing.T) {
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
 	}
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
 
-	w := New(log, &Mirror{}, &Manifest{})
+	w := New(log, tempDir, &Mirror{}, &Manifest{})
 
 	// this is a facade to get code coverage up
 	t.Run("Testing Worker : should pass", func(t *testing.T) {

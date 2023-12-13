@@ -27,6 +27,7 @@ const (
 
 type Collector struct {
 	Log      clog.PluggableLoggerInterface
+	LogsDir  string
 	Mirror   mirror.MirrorInterface
 	Manifest manifest.ManifestInterface
 	Config   v1alpha2.ImageSetConfiguration
@@ -61,7 +62,7 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 
 	// check the mode
 	if o.Opts.IsMirrorToDisk() {
-		f, err := os.Create(logsFile)
+		f, err := os.Create(filepath.Join(o.LogsDir, logsFile))
 		if err != nil {
 			o.Log.Error(errMsg, err)
 		}

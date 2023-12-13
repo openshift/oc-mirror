@@ -53,7 +53,7 @@ const (
 	releaseImageExtractDir  string = "hold-release"
 	operatorImageExtractDir string = "hold-operator"
 	signaturesDir           string = "signatures"
-	registryLogFilename     string = "logs/registry.log"
+	registryLogFilename     string = "registry.log"
 )
 
 var (
@@ -75,11 +75,12 @@ var (
 		oc-mirror oci:mirror --config mirror-config.yaml
 		`,
 	)
-	registryLogFile *os.File
 )
 
 type ExecutorSchema struct {
 	Log                          clog.PluggableLoggerInterface
+	LogsDir                      string
+	registryLogFile              *os.File
 	Config                       v1alpha2.ImageSetConfiguration
 	Opts                         mirror.CopyOptions
 	Operator                     operator.CollectorInterface
@@ -147,7 +148,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				os.Exit(1)
 			}
 			// prepare internal storage
-			err = ex.PrepareStorageAndLogs()
+			err = ex.setupLocalStorage()
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
@@ -201,17 +202,7 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 }
 
-func (o *ExecutorSchema) PrepareStorageAndLogs() error {
-
-	// clean up logs directory
-	os.RemoveAll(logsDir)
-
-	// create logs directory
-	err := os.MkdirAll(logsDir, 0755)
-	if err != nil {
-		o.Log.Error(" %v ", err)
-		return err
-	}
+func (o *ExecutorSchema) setupLocalStorage() error {
 
 	//create config file for local registry
 	configYamlV0_1 := `
@@ -264,13 +255,14 @@ health:
 
 	regLogger := logrus.New()
 	// prepare the logger
-	registryLogFile, err = os.Create(registryLogFilename)
+	registryLogPath := filepath.Join(o.LogsDir, registryLogFilename)
+	o.registryLogFile, err = os.Create(registryLogPath)
 	if err != nil {
 		regLogger.Warn("Failed to create log file for local storage registry, using default stderr")
 	} else {
-		regLogger.Out = registryLogFile
+		regLogger.Out = o.registryLogFile
 	}
-	absPath, err := filepath.Abs(registryLogFilename)
+	absPath, err := filepath.Abs(registryLogPath)
 	o.Log.Info("local storage registry will log to %s", absPath)
 	if err != nil {
 		o.Log.Error(err.Error())
@@ -309,10 +301,7 @@ func panicOnRegistryError(errchan chan error) {
 
 // Complete - do the final setup of modules
 func (o *ExecutorSchema) Complete(args []string) error {
-	err := o.setupLogsLevelAndDir()
-	if err != nil {
-		return err
-	}
+
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
 	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
@@ -327,7 +316,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, md)
 	o.Config = cfg
-	o.Batch = batch.New(o.Log, o.Mirror, o.Manifest)
 
 	// logic to check mode
 	var rootDir string
@@ -344,6 +332,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Opts.Destination = args[0]
 	o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
 	o.Log.Info("mode %s ", o.Opts.Mode)
+
+	// setup logs level, and logsDir under workingDir
+	err = o.setupLogsLevelAndDir()
+	if err != nil {
+		return err
+	}
+
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
@@ -365,10 +360,11 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.Release = release.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir)
+	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
 		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Log)
@@ -472,11 +468,11 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	}
 	if err != nil {
 		// o.Log.Error(" %v ", err)
-		cleanUp()
+		o.closeAll()
 		return err
 	}
 
-	defer cleanUp()
+	defer o.closeAll()
 	return nil
 }
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
@@ -581,11 +577,13 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 	// override log level
 	o.Log.Level(o.Opts.Global.LogLevel)
+	// set up location of logs dir
+	o.LogsDir = filepath.Join(o.Opts.Global.WorkingDir, logsDir)
 	// clean up logs directory
-	os.RemoveAll(logsDir)
+	os.RemoveAll(o.LogsDir)
 
 	// create logs directory
-	err := os.MkdirAll(logsDir, 0755)
+	err := os.MkdirAll(o.LogsDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
@@ -598,7 +596,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 	// do releases
 	imgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
-		cleanUp()
+		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
 	o.Log.Info("total release images to copy %d ", len(imgs))
@@ -608,7 +606,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 	// do operators
 	imgs, err = o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
-		cleanUp()
+		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
 	o.Log.Info("total operator images to copy %d ", len(imgs))
@@ -618,7 +616,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 	// do additionalImages
 	imgs, err = o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
-		cleanUp()
+		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
 	o.Log.Info("total additional images to copy %d ", len(imgs))
@@ -634,15 +632,13 @@ func mergeImages(base, in []v1alpha3.CopyImageSchema) []v1alpha3.CopyImageSchema
 	return base
 }
 
-// cleanUp - utility to clean directories
-func cleanUp() {
+// closeAll - utility to close any open files
+func (o *ExecutorSchema) closeAll() {
 	// close registry log file
-	err := registryLogFile.Close()
+	err := o.registryLogFile.Close()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error closing log file %s: %v\n", registryLogFilename, err)
 	}
-	// clean up logs directory
-	os.RemoveAll(logsDir)
 }
 
 func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
@@ -685,7 +681,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 				os.Exit(1)
 			}
 			// prepare internal storage
-			err = ex.PrepareStorageAndLogs()
+			err = ex.setupLocalStorage()
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
@@ -729,10 +725,7 @@ func (o ExecutorSchema) ValidatePrepare(dest []string) error {
 }
 
 func (o *ExecutorSchema) CompletePrepare(args []string) error {
-	err := o.setupLogsLevelAndDir()
-	if err != nil {
-		return err
-	}
+
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
 	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
@@ -749,6 +742,11 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 
 	o.Opts.Global.WorkingDir = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
 
+	// setup logs level, and logsDir under workingDir
+	err = o.setupLogsLevelAndDir()
+	if err != nil {
+		return err
+	}
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
@@ -768,8 +766,8 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 
 	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.Release = release.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	return nil
 }
@@ -777,7 +775,7 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 
 	// creating file for storing list of cached images
-	cachedImagesFilePath := filepath.Join(logsDir, "cached-images.txt")
+	cachedImagesFilePath := filepath.Join(o.LogsDir, "cached-images.txt")
 	cachedImagesFile, err := os.Create(cachedImagesFilePath)
 	if err != nil {
 		return err

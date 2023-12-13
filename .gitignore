@@ -13,7 +13,7 @@ oc-mirror-workspace/
 v2/working-dir/
 v2/tests/hold-test-untar
 v2/tests/tmp
-v2/tests/results/cover.*
+v2/tests/results
 v2/build/
 v2/cmd/mirror/logs/
 v2/cmd/mirror/working-dir/
