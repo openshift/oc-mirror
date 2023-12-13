@@ -124,7 +124,7 @@ func (o MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1al
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %v", img.Destination, err)
 		}
 
-		addedBlobs, err := o.addBlobsDiff(imgBlobs, historyBlobs)
+		addedBlobs, err := o.addBlobsDiff(imgBlobs, historyBlobs, allAddedBlobs)
 		if err != nil {
 			return nil, fmt.Errorf("unable to add blobs corresponding to %s: %v", img.Destination, err)
 		}
@@ -138,12 +138,13 @@ func (o MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1al
 	return allAddedBlobs, nil
 }
 
-func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string) (map[string]string, error) {
+func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string, alreadyAddedBlobs map[string]string) (map[string]string, error) {
 	blobsInDiff := map[string]string{}
 	for hash := range collectedBlobs {
-		if _, exists := historyBlobs[hash]; !exists {
-			// hash does not exist in historyBlobs
-			// Blob not yet mirrored
+		_, alreadyMirrored := historyBlobs[hash]
+		_, previouslyAdded := alreadyAddedBlobs[hash]
+		skip := alreadyMirrored || previouslyAdded
+		if !skip {
 			// Add to tar
 			d, err := digest.Parse(hash)
 			if err != nil {
