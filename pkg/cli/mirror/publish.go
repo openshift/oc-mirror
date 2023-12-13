@@ -182,8 +182,10 @@ func (o *MirrorOptions) handleMetadata(ctx context.Context, tmpdir string, files
 
 	// Read in current metadata, if present
 	berr := backend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
-	if err := o.checkSequence(incoming, curr, berr); err != nil {
-		return backend, incoming, curr, err
+	if !o.SkipPruning {
+		if err := o.checkSequence(incoming, curr, berr); err != nil {
+			return backend, incoming, curr, err
+		}
 	}
 	return backend, incoming, curr, nil
 }
