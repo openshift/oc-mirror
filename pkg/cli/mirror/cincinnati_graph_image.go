@@ -151,16 +151,6 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, srcSignatureDir str
 
 // downloadsGraphData will download the current Cincinnati graph data
 func downloadGraphData(ctx context.Context, dir string) error {
-	// TODO(jpower432): It would be helpful to validate
-	// the source of this downloaded file before processing
-	// it further
-	graphArchive := filepath.Join(dir, outputFile)
-	out, err := os.Create(filepath.Clean(graphArchive))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
 	req, err := http.NewRequest("GET", graphURL, nil)
 	if err != nil {
 		return err
@@ -189,6 +179,15 @@ func downloadGraphData(ctx context.Context, dir string) error {
 		return fmt.Errorf("unexpected HTTP status: %s", resp.Status)
 	}
 
+	// TODO(jpower432): It would be helpful to validate
+	// the source of this downloaded file before processing
+	// it further
+	graphArchive := filepath.Join(dir, outputFile)
+	out, err := os.Create(filepath.Clean(graphArchive))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
