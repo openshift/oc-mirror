@@ -9,6 +9,21 @@ import (
 
 type CollectorInterface interface {
 	ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
+	// Returns the graphImage if generated, especially with the reference to the image
+	// on the destination repository
+	// Returns an error if the graph image was not generated (graph : false)
+	// This is especially useful for generating UpdateService during
+	// DiskToMirror workflow
+	GraphImage() (string, error)
+	// Returns "a" release image that was mirrored
+	// This is especially useful for generating UpdateService during
+	// DiskToMirror workflow when `graph : true`.
+	// The reason this method returns any release image is because
+	// the updateServiceGenerator is only interrested in the repository
+	// of the image, rather than the exact digest or tag.
+	// This works because oc-mirror doesn't know how to mix OKD and OCP
+	// release mirroring.
+	ReleaseImage() (string, error)
 }
 
 type GraphBuilderInterface interface {

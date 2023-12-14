@@ -292,6 +292,14 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyI
 	return test, nil
 }
 
+func (o *Collector) GraphImage() (string, error) {
+	return "localhost:5000/openshift/graph-image:latest", nil
+}
+
+func (o *Collector) ReleaseImage() (string, error) {
+	return "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", nil
+}
+
 func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
 	if o.Fail {
 		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error release collector")

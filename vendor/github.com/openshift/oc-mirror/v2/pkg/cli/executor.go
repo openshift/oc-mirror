@@ -368,7 +368,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Release = release.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.ClusterResources = clusterresources.New(o.Log, o.Config, o.Opts)
+	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir)
 
 	if o.Opts.IsMirrorToDisk() {
 		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Log)
@@ -547,9 +547,25 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	//create IDMS/ITMS
-	err = o.ClusterResources.IDMSGenerator(cmd.Context(), allImages, o.Opts)
+	err = o.ClusterResources.IDMSGenerator(allImages)
 	if err != nil {
 		return err
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage()
+		if err != nil {
+			return err
+		}
+		err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+		if err != nil {
+			return err
+		}
 	}
 
 	mirrorFinish := time.Now()
