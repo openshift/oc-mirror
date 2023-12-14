@@ -88,8 +88,7 @@ mirror:
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
     packages:
-    - setDefaultChannel: ""
-      name: serverless-operator
+    - name: serverless-operator
       channels:
       - name: stable
   additionalImages:
@@ -125,8 +124,7 @@ mirror:
               {
                 "name": "stable"
               }
-            ],
-            "setDefaultChannel": ""
+            ]
           }
         ],
         "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.11"
@@ -167,8 +165,7 @@ mirror:
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
     packages:
-    - setDefaultChannel: ""
-      name: serverless-operator
+    - name: serverless-operator
       channels:
       - name: stable
   additionalImages:
@@ -205,8 +202,7 @@ mirror:
               {
                 "name": "stable"
               }
-            ],
-            "setDefaultChannel": ""
+            ]
           }
         ],
         "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.11"
@@ -250,8 +246,7 @@ mirror:
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
     packages:
-    - setDefaultChannel: ""
-      name: serverless-operator
+    - name: serverless-operator
       channels:
       - name: stable
   additionalImages:

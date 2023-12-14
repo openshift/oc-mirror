@@ -134,7 +134,7 @@ type DiffIncludePackage struct {
 	// - CASE03676821
 	// - OCPBUGS-385
 	// Ability to override default channel.
-	SetDefaultChannel string `json:"setDefaultChannel,omitempty" yaml:"setDefaultChannel,omitempty"`
+	DefaultChannel string `json:"defaultChannel,omitempty" yaml:"defaultChannel,omitempty"`
 }
 
 // DiffIncludeChannel contains a name (required) and versions (optional)
@@ -208,7 +208,7 @@ func convertIncludeConfigToIncluder(c DiffIncludeConfig) (includer diffInternal.
 	for pkgI, cpkg := range c.Packages {
 		pkg := &includer.Packages[pkgI]
 		pkg.Name = cpkg.Name
-		pkg.SetDefaultChannel = cpkg.SetDefaultChannel
+		pkg.DefaultChannel = cpkg.DefaultChannel
 		pkg.AllChannels.Versions = cpkg.Versions
 		pkg.AllChannels.Bundles = cpkg.Bundles
 		if cpkg.Range != "" {

@@ -3878,7 +3878,7 @@ func TestSetDefaultChannelRange(t *testing.T) {
 									Name: "v1.7",
 								},
 							},
-							SetDefaultChannel: "v1.7",
+							DefaultChannel: "v1.7",
 						},
 					},
 				},

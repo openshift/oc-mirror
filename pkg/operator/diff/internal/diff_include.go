@@ -56,7 +56,7 @@ type DiffIncludePackage struct {
 	// - CASE03655018
 	// - CASE03676821
 	// ability to override default channel
-	SetDefaultChannel string `json:"setDefaultChannel,omitempty"`
+	DefaultChannel string `json:"defaultChannel,omitempty"`
 }
 
 // DiffIncludeChannel specifies a channel, and optionally bundles and bundle versions
