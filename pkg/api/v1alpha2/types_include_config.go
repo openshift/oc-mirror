@@ -33,7 +33,7 @@ type IncludePackage struct {
 	// - CASE03655018
 	// - CASE03676821
 	// Ability to override default channel.
-	SetDefaultChannel string `json:"setDefaultChannel"`
+	DefaultChannel string `json:"defaultChannel,omitempty"`
 }
 
 // IncludeChannel contains a name (required) and versions (optional)
@@ -73,7 +73,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfi
 			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 		}
 
-		dpkg := diff.DiffIncludePackage{Name: pkg.Name, SetDefaultChannel: pkg.SetDefaultChannel}
+		dpkg := diff.DiffIncludePackage{Name: pkg.Name, DefaultChannel: pkg.DefaultChannel}
 		switch {
 		case pkg.MinVersion != "" && pkg.MaxVersion != "":
 			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
