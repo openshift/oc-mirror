@@ -162,13 +162,28 @@ func (s *packageStrategy) UpdateIncludeConfig(dc declcfg.DeclarativeConfig, prev
 		// Check if the package is new or has
 		// version configuration set at the package level
 		// if not process at the channel level.
-		icPkg, found := currPackages[mpkg.Name]
-		if !found || !includePackageVersionsSet(icPkg) {
+		icPkg, pkgFound := currPackages[mpkg.Name]
+		if !pkgFound || !includePackageVersionsSet(icPkg) {
 			prevPkg, found := prevPackages[mpkg.Name]
 			if !found {
 				chWithHeads, err := getChannelHeads(*mpkg)
 				if err != nil {
 					return ic, err
+				}
+				// OCPBUGS-21865: We need to keep the MaxVersion
+				// set by the user in the includeChannel, otherwise
+				// more bundles will be retrieved (up to the channel head)
+				if pkgFound { //put an upper bound on includeChannels
+					for _, c := range icPkg.Channels {
+						if c.MaxVersion == c.MinVersion {
+							for i, cwh := range chWithHeads {
+								if c.Name == cwh.Name {
+									cwh.MaxVersion = cwh.MinVersion
+									chWithHeads[i] = cwh
+								}
+							}
+						}
+					}
 				}
 				icPkg = v1alpha2.IncludePackage{
 					Name:     mpkg.Name,
