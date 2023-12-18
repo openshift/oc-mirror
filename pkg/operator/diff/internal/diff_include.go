@@ -51,6 +51,12 @@ type DiffIncludePackage struct {
 	// HeadsOnly is the mode that selects the head of the channels only.
 	// This setting will be overridden by any versions or bundles in the channels.
 	HeadsOnly bool
+	// New field added due to the following filed cases for oc-mirror
+	// - CASE03657982
+	// - CASE03655018
+	// - CASE03676821
+	// ability to override default channel
+	DefaultChannel string `json:"defaultChannel,omitempty"`
 }
 
 // DiffIncludeChannel specifies a channel, and optionally bundles and bundle versions

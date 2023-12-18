@@ -27,6 +27,13 @@ type IncludePackage struct {
 
 	// All channels containing these bundles are parsed for an upgrade graph.
 	IncludeBundle `json:",inline"`
+
+	// New field added due to the following filed cases for oc-mirror
+	// - CASE03657982
+	// - CASE03655018
+	// - CASE03676821
+	// Ability to override default channel.
+	DefaultChannel string `json:"defaultChannel,omitempty"`
 }
 
 // IncludeChannel contains a name (required) and versions (optional)
@@ -66,7 +73,7 @@ func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfi
 			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
 		}
 
-		dpkg := diff.DiffIncludePackage{Name: pkg.Name}
+		dpkg := diff.DiffIncludePackage{Name: pkg.Name, DefaultChannel: pkg.DefaultChannel}
 		switch {
 		case pkg.MinVersion != "" && pkg.MaxVersion != "":
 			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
