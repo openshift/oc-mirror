@@ -306,7 +306,7 @@ func (o *MirrorOptions) Validate() error {
 					}
 					if !valid {
 						// if we get here it means that the channel has not been set with the same value as defaultChannel
-						return fmt.Errorf("defaultChannel has been set with '%s', please ensure that '%s' is decalred in the channels section for the package '%s' in the config ", pkg.DefaultChannel, pkg.DefaultChannel, pkg.Name)
+						return fmt.Errorf("defaultChannel has been set with '%s', please ensure that '%s' is declared in the channels section for the package '%s' in the config ", pkg.DefaultChannel, pkg.DefaultChannel, pkg.Name)
 					}
 				}
 			}
