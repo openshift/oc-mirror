@@ -681,8 +681,10 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 
 	var curr v1alpha2.Metadata
 	berr := targetBackend.ReadMetadata(ctx, &curr, config.MetadataBasePath)
-	if err := o.checkSequence(meta, curr, berr); err != nil {
-		return err
+	if !o.SkipPruning {
+		if err := o.checkSequence(meta, curr, berr); err != nil {
+			return err
+		}
 	}
 
 	// Change the destination to registry
