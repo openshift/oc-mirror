@@ -264,13 +264,21 @@ func (o *MirrorOptions) Validate() error {
 	if o.IncludeLocalOCICatalogs && diskToMirror {
 		return fmt.Errorf("oci feature cannot be used when publishing from a local archive to a registry")
 	}
-	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
-	if mirrorToMirror {
-		bIsFBOCI := false
-		cfg, err := config.ReadConfig(o.ConfigPath)
+
+	var cfg v1alpha2.ImageSetConfiguration
+	var err error
+
+	if mirrorToMirror || mirrorToDisk {
+		cfg, err = config.ReadConfig(o.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
+	}
+
+	// mirrorToMirror workflow using the oci feature must have at least on operator set with oci:// prefix
+	if mirrorToMirror {
+		bIsFBOCI := false
+
 		for _, op := range cfg.Mirror.Operators {
 			if op.IsFBCOCI() {
 				bIsFBOCI = true
@@ -283,8 +291,29 @@ func (o *MirrorOptions) Validate() error {
 			return fmt.Errorf("use of OCI FBC catalogs (prefix oci://) in configuration file is authorized only with flag --include-local-oci-catalogs")
 		}
 	}
+
 	if !o.IncludeLocalOCICatalogs && len(o.OCIRegistriesConfig) > 0 {
 		return fmt.Errorf("oci-registries-config flag can only be used with the --include-local-oci-catalog flag")
+	}
+
+	// check for defaultChannel
+	for _, op := range cfg.Mirror.Operators {
+		for _, pkg := range op.Packages {
+			if len(pkg.DefaultChannel) > 0 {
+				valid := false
+				for _, ch := range pkg.Channels {
+					// check that it's set in the channel stanza
+					if pkg.DefaultChannel == ch.Name {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					// if we get here it means that the channel has not been set with the same value as defaultChannel
+					return fmt.Errorf("defaultChannel has been set with '%s', please ensure that '%s' is declared in the channels section for the package '%s' in the config ", pkg.DefaultChannel, pkg.DefaultChannel, pkg.Name)
+				}
+			}
+		}
 	}
 
 	if o.SkipPruning {
