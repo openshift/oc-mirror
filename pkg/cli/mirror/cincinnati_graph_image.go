@@ -176,6 +176,7 @@ func downloadGraphData(ctx context.Context, dir string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		klog.Errorf("call to Cincinatti API returned with status HTTP %s", resp.Status)
 		return fmt.Errorf("unexpected HTTP status: %s", resp.Status)
 	}
 
@@ -188,7 +189,8 @@ func downloadGraphData(ctx context.Context, dir string) error {
 		return err
 	}
 	defer out.Close()
-	_, err = io.Copy(out, resp.Body)
+	bytesWritten, err := io.Copy(out, resp.Body)
+	klog.V(5).Infof("HTTP body for request to Cincinnati API is %d bytes, and was written to %s", bytesWritten, graphArchive)
 	return err
 }
 
