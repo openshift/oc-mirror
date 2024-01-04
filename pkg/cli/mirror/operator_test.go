@@ -164,7 +164,8 @@ func TestPinImages(t *testing.T) {
 func TestVerifyDC(t *testing.T) {
 
 	mo := &MirrorOptions{
-		RootOptions: &cli.RootOptions{},
+		RootOptions:     &cli.RootOptions{},
+		ContinueOnError: true,
 	}
 	o := NewOperatorOptions(mo)
 	o.complete()
