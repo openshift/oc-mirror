@@ -26,7 +26,8 @@ const (
 	// UpdateURL is the Cincinnati endpoint for the OpenShift platform.
 	UpdateURL = "https://api.openshift.com/api/upgrades_info/v1/graph"
 	// OkdUpdateURL is the Cincinnati endpoint for the OKD platform.
-	OkdUpdateURL = "https://origin-release.ci.openshift.org/graph"
+	OkdUpdateURL                = "https://origin-release.ci.openshift.org/graph"
+	extendedUpdateSupportPrefix = "eus-"
 )
 
 // Error is returned when are unable to get updates.
@@ -233,7 +234,11 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 	}
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
-	source.Minor++
+	if strings.HasPrefix(sourceChannel, extendedUpdateSupportPrefix) {
+		source.Minor += 2
+	} else {
+		source.Minor++
+	}
 	currChannel := fmt.Sprintf("%s-%v.%v", prefix, source.Major, source.Minor)
 
 	var targetVer semver.Version
