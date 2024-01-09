@@ -15,6 +15,7 @@
     - [Mirroring](#mirroring)
       - [Fully Disconnected](#fully-disconnected)
       - [Partially Disconnected](#partially-disconnected)
+      - [Fully Disconnected Enclaves](#fully-disconnected-enclaves)
     - [Additional Features](#additional-features)
   - [Mirroring Process](#mirroring-process)
     - [Running `oc-mirror` For First Time](#running-oc-mirror-for-first-time)
@@ -108,6 +109,11 @@ between the last `oc mirror` run and provided configuration to show what new ver
      ```sh
     oc-mirror --config imageset-config.yaml docker://localhost:5000
     ```
+
+#### Fully disconnected Enclaves
+
+See [Enclave Support](./enclave_support.md)
+
 ### Additional Features
 - Get information on your imageset using `describe`
     ```sh
