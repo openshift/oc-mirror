@@ -139,7 +139,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
 			//add the release image itself
-			allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source})
+			allRelatedImages = append(allRelatedImages, v1alpha3.RelatedImage{Image: value.Source, Name: value.Source, Type: v1alpha2.TypeOCPRelease})
 			tmpAllImages, err := o.prepareM2DCopyBatch(o.Log, allRelatedImages)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
@@ -165,6 +165,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				Source:      graphImgRef,
 				Destination: graphImgRef,
 				Origin:      graphImgRef,
+				Type:        v1alpha2.TypeCincinnatiGraph,
 			}
 			allImages = append(allImages, graphCopy)
 		}
@@ -203,6 +204,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				// If this supposition is false, then we need to implement a mechanism to save
 				// the digest of the graph image and use it here
 				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+				Type:  v1alpha2.TypeCincinnatiGraph,
 			}
 			o.GraphDataImage = graphRelatedImage.Image
 			allRelatedImages = append(allRelatedImages, graphRelatedImage)
@@ -241,7 +243,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest})
+		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
 
 	}
 	return result, nil
@@ -267,7 +269,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		}
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
+		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Type: img.Type})
 	}
 	return result, nil
 }
@@ -298,7 +300,7 @@ func (o LocalStorageCollector) identifyReleases() ([]v1alpha3.RelatedImage, []st
 		releasePath = strings.TrimPrefix(releasePath, ociProtocolTrimmed)
 		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
 		releaseFolders = append(releaseFolders, releaseHoldPath)
-		releaseImages = append(releaseImages, v1alpha3.RelatedImage{Name: copy.Source, Image: copy.Source})
+		releaseImages = append(releaseImages, v1alpha3.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v1alpha2.TypeOCPRelease})
 	}
 	return releaseImages, releaseFolders, nil
 }
