@@ -445,8 +445,15 @@ func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.Decla
 		klog.V(2).Infof("Checking for package: %s", pkg)
 
 		if !dcMap[pkg.Name] {
-			// The operator package wasn't found. Log the error and continue on.
-			o.Logger.Errorf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
+			// The operator package wasn't found.
+			// OCPBUGS-25003 - request is to exit immediately
+			// Log the error and continue if --continue-on-error flag is set
+			msg := fmt.Sprintf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
+			if !o.MirrorOptions.ContinueOnError {
+				return fmt.Errorf(msg)
+			} else {
+				o.Logger.Errorf(msg)
+			}
 		}
 	}
 
