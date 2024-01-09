@@ -10,6 +10,7 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -102,6 +103,12 @@ func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[stri
 	for _, relatedImage := range allRelatedImages {
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
+		}
+		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph {
+			// cincinnati graph image doesn't need to be in the IDMS file.
+			// it has been generated from scratch by oc-mirror and will be copied to the destination registry.
+			// The updateservice.yaml file will instruct the cluster to use it.
+			continue
 		}
 		// locate source namespace
 		// strip away protocol

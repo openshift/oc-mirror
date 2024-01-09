@@ -9,5 +9,5 @@ const (
 	operatorImageDir        string = "operator-images"
 	blobsDir                string = "blobs/sha256" // TODO blobsDir should not make assumptions about algorithm
 	errMsg                  string = "[OperatorImageCollector] %v "
-	logsFile                string = "logs/operator.log"
+	logsFile                string = "operator.log"
 )
