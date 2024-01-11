@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -47,6 +48,12 @@ func getCraneOpts(ctx context.Context, insecure bool) []crane.Option {
 	if insecure {
 		opts = append(opts, crane.Insecure)
 	}
+	// The test catalogs are multi-arch capable
+	platform := v1.Platform{
+		Architecture: runtime.GOARCH,
+		OS:           runtime.GOOS,
+	}
+	opts = append(opts, crane.WithPlatform(&platform))
 	return opts
 }
 

@@ -51,6 +51,7 @@ function install_deps() {
   then
     pushd ${DATA_TMP}
     GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    mv ~/go/bin/crane $GOBIN/
     popd
     crane export registry:2 registry2.tar
     tar xvf registry2.tar bin/registry
@@ -117,15 +118,15 @@ function setup_reg() {
 # prep_registry will copy the needed catalog image
 # to the connected registry
 function prep_registry() {
-   local CATALOGTAG="${1:?CATALOGTAG required}"
+  local CATALOGTAG="${1:?CATALOGTAG required}"
+  local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
   # Copy target catalog to connected registry
-    crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
+  crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
+    --platform linux/${CATALOG_ARCH} \
     localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
 
-    CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
+  CATALOGDIGEST=$(crane digest --insecure --platform linux/${CATALOG_ARCH} localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
-
-
 
 # parse_args will parse common arguments
 # for each workflow function
