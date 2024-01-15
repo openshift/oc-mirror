@@ -10,6 +10,7 @@ In V1, filtering of the operators catalog based on the configuration in ImageSet
 * When several channels are specified in the filtering, and a maxVersion is specified for a channel, but that version is not the head of that channel, the head is still included (ignoring user instructions) in an attempt to facilitate cross channel upgrades.
 * constructs a filtered FBC based on the filtered content
 * compares that filtered FBC to the filtered FBC from the previous mirroring: in order to take into account only the delta images.
+* tries to determine GVK or bundle dependencies,  in order to mirror those dependencies as well
 
 This implementation is not ideal for users, because :
 * the mirrored bundles don't always allow a smooth upgrade of operators
@@ -24,9 +25,11 @@ When selecting bundles for mirroring, oc-mirorr V2 will not verify if the bundle
 
 When selecting bundles for mirroring, oc-mirror V2 will not attempt to bridge the graph between 2 channels, or between one catalog and the other. It will strictly respect the client's instructions given by the imageSetConfig.
 
+When selecting bundles for mirroring, oc-mirror V2 will not attempt to figure out GVK or bundle dependencies, and will not add them to the mirroring set. It is respecting strictly the client's instructions. So the client will need to explicitly add dependant packages and their versions if needed.
+
 Regarding the way to determine the list of bundles included in the filtering. several solutions were studied, described below.
 
-For a complete list of use cases that are accounted for, please see [below](#acceptance-criteria-set-for-v2).
+For a complete list of use cases that are accounted for, please see [below](#annex---acceptance-criteria-set-for-v2).
 
 :warning: In this document, we do not discuss if/how the catalog would be rebuilt with the filtered content. We are separating the two discussions, even though we are aware that according to the solution chosen here, the filtered FBC catalog might not be considered as valid from the standpoint of OLM, or might not allow an operator to be upgraded correctly with such a filtered FBC catalog.
 
@@ -96,18 +99,26 @@ If an introspection tool is able, and can provide at least the list of bundle ve
 
 ![Proposal](../../../v2/assets/S4-ISC_V2.jpg).
 
+In this solution, as illustrated in the above diagram, the introspection tool would :
+* Take an input in yaml format, with a schema close to the ImageSetConfig filtering (yaml at the top left side of the diagram)
+* And output a list of bundles that fit the filter (yaml list on the top right side of the diagram)
+* The user would copy the list to the ImageSetConfig of oc-mirror
+* oc-mirror simply mirrors the list of bundles set in its ImageSetConfig
+
 This solution guarantees that the bundles selected are inline with what OLM would expect on an actual cluster. The mirrored bundles are sure to allow an update of the operator. 
 
 This solution is still under discussion though. There is little chance it would be productized in time for oc-mirror to use it for 4.16. 
 
+A solution where oc-mirror can call the introspection API directly, without change to the ImageSetConfig API, and without needing the user's intervention can be designed. 
+
 It can be looked at as the longer term definitive solution.
 
-## Solution selected - rationale
+## Conclusion - rationale
 
 
 | Solution | Pros | Cons |
 |---|---|---|
-|S1 - SemVer|* Simple to implement<br>* Works for most cases| * No guarantees for upgrades on the cluster<br>* Mirrored volume possibly greater
+|**S1 - SemVer (SELECTED SOLUTION)**|* **Simple to implement**<br>* **Works for most cases**| * **No guarantees for upgrades on the cluster**<br>* **Mirrored volume possibly greater** |
 |S2 - Use `render-graph`|* Partially delegates graph generation to OPM| * Low performance due to multiple pulls of the >1G catalogs<br>* Still requires processing of mermaid format graph<br>* No guarantees for upgrades on the cluster side
 |S3 - Use `skip`, `skipRange`, `replace`|* Is closer in terms of algorithm to what OLM does on a cluster|* Remains a best effort to approach the OLM algorithm, with no guarantees<br>* complexity|
 |S4 - API v2 |* Inline with OLM expectations<br>* Idempotent<br>* Fastest path for upgrades (smaller mirroring volume)|* Not ready for the 4.16 timeline<br>* API break for ImageSetConfig |
@@ -115,7 +126,7 @@ It can be looked at as the longer term definitive solution.
 **From what we see in the table above, there is no perfect fit.
 The team proposes to use S1 - SemVer for 4.16, and actively work with the OLM team towards S4 and an API bump.** 
 
-## Acceptance criteria set for V2
+## Annex - Acceptance criteria set for V2
 
 Below is a list of scenarios, and the expected outcomes. The use cases where outcome will be different from V1 are when :
 * the filtering by checking `replaces` gives different values than the V2 algorithm
