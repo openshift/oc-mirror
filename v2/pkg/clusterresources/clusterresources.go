@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -30,75 +29,157 @@ type ClusterResourcesGenerator struct {
 	WorkingDir string
 }
 
-func (o *ClusterResourcesGenerator) IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+type imageMirrorsGeneratorMode int
+type mirrorCategory int
 
-	// determine the name of the IDMS resource
-	dateTime := time.Now().UTC().Format(time.RFC3339)
-	// replace all : by -
-	dateTime = strings.ReplaceAll(dateTime, ":", "-")
-	dateTime = strings.ToLower(dateTime)
-	name := "idms-" + dateTime
+type categorizedMirrors struct {
+	category mirrorCategory
+	mirrors  map[string][]confv1.ImageMirror
+}
 
-	// locate the output directory
-	idmsFileName := filepath.Join(o.WorkingDir, clusterResourcesDir, name+".yaml")
+const (
+	DigestsOnlyMode = iota
+	TagsOnlyMode
 
-	// create a IDMS struct
-	idms := confv1.ImageDigestMirrorSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: confv1.GroupVersion.String(),
-			Kind:       "ImageDigestMirrorSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: confv1.ImageDigestMirrorSetSpec{
-			ImageDigestMirrors: []confv1.ImageDigestMirrors{},
-		},
-	}
-	// populate IDMS from allRelatedImages
-	mirrors, err := generateImageMirrors(allRelatedImages)
+	releaseCategory = iota
+	operatorCategory
+	genericCategory
+
+	idmsFileName = "idms-oc-mirror.yaml"
+	itmsFileName = "itms-oc-mirror.yaml"
+)
+
+func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
+	// byDigestMirrors
+	byDigestMirrors, err := o.generateImageMirrors(allRelatedImages, DigestsOnlyMode, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
 
-	for source, imgMirrors := range mirrors {
-		idm := confv1.ImageDigestMirrors{
-			Source:  source,
-			Mirrors: imgMirrors,
-		}
-		idms.Spec.ImageDigestMirrors = append(idms.Spec.ImageDigestMirrors, idm)
-	}
-
-	// put IDMS in yaml
-	bytes, err := yaml.Marshal(idms)
+	//byTagMirrors
+	byTagMirrors, err := o.generateImageMirrors(allRelatedImages, TagsOnlyMode, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
 
-	// save IDMS struct to file
-	if _, err := os.Stat(idmsFileName); errors.Is(err, os.ErrNotExist) {
-		o.Log.Info("%s does not exist, creating it", idmsFileName)
-		err := os.MkdirAll(filepath.Dir(idmsFileName), 0755)
+	idmsList, err := o.generateIDMS(byDigestMirrors)
+	if err != nil {
+		return err
+	}
+
+	err = writeMirrorSet(idmsList, o.WorkingDir, idmsFileName, o.Log)
+	if err != nil {
+		return err
+	}
+
+	// if byTagMirrors not empty
+	if len(byTagMirrors) > 0 {
+		itmsList, err := o.generateITMS(byTagMirrors)
 		if err != nil {
 			return err
 		}
-		o.Log.Info("%s dir created", filepath.Dir(idmsFileName))
+		err = writeMirrorSet(itmsList, o.WorkingDir, itmsFileName, o.Log)
+		if err != nil {
+			return err
+		}
 	}
-	idmsFile, err := os.Create(idmsFileName)
+	return nil
+}
+
+func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorizedMirrors) ([]confv1.ImageTagMirrorSet, error) {
+	// fill itmsList content
+	itmsList := make([]confv1.ImageTagMirrorSet, len(mirrorsByCategory))
+	for index, catMirrors := range mirrorsByCategory {
+		itmsList[index] = confv1.ImageTagMirrorSet{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: confv1.GroupVersion.String(),
+				Kind:       "ImageTagMirrorSet",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "itms-" + catMirrors.category.toString() + "-0",
+			},
+			Spec: confv1.ImageTagMirrorSetSpec{
+				ImageTagMirrors: []confv1.ImageTagMirrors{},
+			},
+		}
+		for source, imgMirrors := range catMirrors.mirrors {
+			itm := confv1.ImageTagMirrors{
+				Source:  source,
+				Mirrors: imgMirrors,
+			}
+			itmsList[index].Spec.ImageTagMirrors = append(itmsList[index].Spec.ImageTagMirrors, itm)
+		}
+	}
+
+	return itmsList, nil
+}
+
+func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mirrorSetsList []T, workingDir, fileName string, log clog.PluggableLoggerInterface) error {
+	msFilePath := filepath.Join(workingDir, clusterResourcesDir, fileName)
+	msAggregation := []byte{}
+	for _, ms := range mirrorSetsList {
+		msBytes, err := yaml.Marshal(ms)
+		if err != nil {
+			return err
+		}
+		msAggregation = append(msAggregation, []byte("---\n")...)
+		msAggregation = append(msAggregation, msBytes...)
+	}
+	// save IDMS struct to file
+	if _, err := os.Stat(msFilePath); errors.Is(err, os.ErrNotExist) {
+		log.Debug("%s does not exist, creating it", idmsFileName)
+		err := os.MkdirAll(filepath.Dir(msFilePath), 0755)
+		if err != nil {
+			return err
+		}
+		log.Debug("%s dir created", filepath.Dir(msFilePath))
+	}
+	msFile, err := os.Create(msFilePath)
 	if err != nil {
 		return err
 	}
-	o.Log.Info("%s file created", idmsFileName)
+	log.Info("%s file created", msFilePath)
 
-	defer idmsFile.Close()
+	defer msFile.Close()
 
-	_, err = idmsFile.Write(bytes)
+	_, err = msFile.Write(msAggregation)
 	return err
 }
 
-func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[string][]confv1.ImageMirror, error) {
-	mirrors := make(map[string][]confv1.ImageMirror, 0)
+func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorizedMirrors) ([]confv1.ImageDigestMirrorSet, error) {
 
+	// create a IDMS struct
+	idmsList := make([]confv1.ImageDigestMirrorSet, len(mirrorsByCategory))
+	for index, catMirrors := range mirrorsByCategory {
+		idmsList[index] = confv1.ImageDigestMirrorSet{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: confv1.GroupVersion.String(),
+				Kind:       "ImageDigestMirrorSet",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "idms-" + catMirrors.category.toString() + "-0",
+			},
+			Spec: confv1.ImageDigestMirrorSetSpec{
+				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
+			},
+		}
+		for source, imgMirrors := range catMirrors.mirrors {
+			idm := confv1.ImageDigestMirrors{
+				Source:  source,
+				Mirrors: imgMirrors,
+			}
+			idmsList[index].Spec.ImageDigestMirrors = append(idmsList[index].Spec.ImageDigestMirrors, idm)
+		}
+	}
+
+	return idmsList, nil
+}
+
+func (o *ClusterResourcesGenerator) CatalogSourceGenerator(catalogImage string) error {
+	return nil
+}
+func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema, mode imageMirrorsGeneratorMode, forceRepositoryScope bool) ([]categorizedMirrors, error) {
+	mirrorsByCategory := make(map[mirrorCategory]categorizedMirrors)
 	for _, relatedImage := range allRelatedImages {
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
@@ -109,43 +190,71 @@ func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[stri
 			// The updateservice.yaml file will instruct the cluster to use it.
 			continue
 		}
-		// locate source namespace
-		// strip away protocol
-		originRef := relatedImage.Origin
-		srcTransportAndPath := strings.Split(relatedImage.Origin, "://")
-		if len(srcTransportAndPath) > 1 {
-			originRef = srcTransportAndPath[1]
+		srcImgSpec, err := image.ParseRef(relatedImage.Origin)
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate IDMS/ITMS: %v", err)
 		}
-		srcPathComponents := strings.Split(originRef, "/")
-		srcNs := filepath.Join(srcPathComponents[:len(srcPathComponents)-1]...)
-
-		// locate mirror namespace
-		destRef := relatedImage.Destination
-		// strip away protocol
-		destTransportAndPath := strings.Split(destRef, "://")
-		if len(destTransportAndPath) > 1 {
-			destRef = destTransportAndPath[1]
+		dstImgSpec, err := image.ParseRef(relatedImage.Destination)
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate IDMS/ITMS: %v", err)
 		}
-		destPathComponents := strings.Split(destRef, "/")
-		destNs := filepath.Join(destPathComponents[:len(destPathComponents)-1]...)
+		toBeAdded := true
+		switch mode {
+		case TagsOnlyMode:
+			if srcImgSpec.IsImageByDigest() {
+				toBeAdded = false
+			}
+		case DigestsOnlyMode:
+			if !srcImgSpec.IsImageByDigest() {
+				toBeAdded = false
+			}
+		}
+		if !toBeAdded {
+			continue
+		}
+		source := ""
+		if forceRepositoryScope {
+			source = repositoryScope(srcImgSpec)
+		} else {
+			source = namespaceScope(srcImgSpec)
+		}
+		mirror := ""
+		if forceRepositoryScope {
+			mirror = repositoryScope(dstImgSpec)
+		} else {
+			mirror = namespaceScope(dstImgSpec)
+		}
 
+		categoryOfImage := imageTypeToCategory(relatedImage.Type)
+		if _, ok := mirrorsByCategory[categoryOfImage]; !ok {
+			mirrorsByCategory[categoryOfImage] = categorizedMirrors{
+				category: categoryOfImage,
+				mirrors:  make(map[string][]confv1.ImageMirror),
+			}
+		}
+
+		mirrors := mirrorsByCategory[categoryOfImage].mirrors
 		// add entry to map
-		if mirrors[srcNs] == nil {
-			mirrors[srcNs] = []confv1.ImageMirror{confv1.ImageMirror(destNs)}
+		if mirrors[source] == nil {
+			mirrors[source] = []confv1.ImageMirror{confv1.ImageMirror(mirror)}
 		} else {
 			alreadyAdded := false
-			for _, m := range mirrors[srcNs] {
-				if m == confv1.ImageMirror(destNs) {
+			for _, m := range mirrors[source] {
+				if m == confv1.ImageMirror(mirror) {
 					alreadyAdded = true
 					break
 				}
 			}
 			if !alreadyAdded {
-				mirrors[srcNs] = append(mirrors[srcNs], confv1.ImageMirror(destNs))
+				mirrors[source] = append(mirrors[source], confv1.ImageMirror(mirror))
 			}
 		}
 	}
-	return mirrors, nil
+	categorizedMirrorsList := make([]categorizedMirrors, 0, len(mirrorsByCategory))
+	for _, mirrors := range mirrorsByCategory {
+		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
+	}
+	return categorizedMirrorsList, nil
 }
 
 func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releaseImageRef string) error {
@@ -206,4 +315,50 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 
 	_, err = osusFile.Write(osusBytes)
 	return err
+}
+
+func namespaceScope(imgSpec image.ImageSpec) string {
+	pathComponents := strings.Split(imgSpec.PathComponent, "/")
+	ns := strings.Join(pathComponents[:len(pathComponents)-1], "/")
+	return imgSpec.Domain + "/" + ns
+}
+
+func repositoryScope(imgSpec image.ImageSpec) string {
+	return imgSpec.Name
+}
+
+func (m mirrorCategory) toString() string {
+	switch m {
+	case releaseCategory:
+		return "release"
+	case operatorCategory:
+		return "operator"
+	case genericCategory:
+		return "generic"
+	default:
+		return "generic"
+	}
+}
+
+func imageTypeToCategory(imageType v1alpha2.ImageType) mirrorCategory {
+	switch imageType {
+	case v1alpha2.TypeCincinnatiGraph:
+		return releaseCategory
+	case v1alpha2.TypeGeneric:
+		return genericCategory
+	case v1alpha2.TypeOCPRelease:
+		return releaseCategory
+	case v1alpha2.TypeOCPReleaseContent:
+		return releaseCategory
+	case v1alpha2.TypeOperatorBundle:
+		return operatorCategory
+	case v1alpha2.TypeOperatorCatalog:
+		return operatorCategory
+	case v1alpha2.TypeOperatorRelatedImage:
+		return operatorCategory
+	case v1alpha2.TypeInvalid:
+		return genericCategory
+	default:
+		return genericCategory
+	}
 }
