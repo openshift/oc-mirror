@@ -105,15 +105,16 @@ func TestGraphImage(t *testing.T) {
 
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
-	t.Run("Testing GraphImage : should pass", func(t *testing.T) {
+	t.Run("Testing GraphImage : should fail", func(t *testing.T) {
 		ex := setupCollector_DiskToMirror(tempDir, log)
 
 		res, err := ex.GraphImage()
 		if err != nil {
 			t.Fatalf("should pass")
 		}
-		assert.Equal(t, "localhost:9999/openshift/graph-image:latest", res)
+		assert.Equal(t, ex.Opts.Destination+"/"+graphImageName+":latest", res)
 	})
+
 }
 
 func TestReleaseImage(t *testing.T) {
@@ -140,7 +141,7 @@ func TestReleaseImage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should pass: %v", err)
 		}
-		assert.Contains(t, res, "quay.io/openshift-release-dev/ocp-release")
+		assert.Contains(t, res, "localhost:5000/test/openshift-release-dev/ocp-release")
 	})
 }
 

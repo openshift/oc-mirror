@@ -10,6 +10,7 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -103,6 +104,12 @@ func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[stri
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
 		}
+		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph {
+			// cincinnati graph image doesn't need to be in the IDMS file.
+			// it has been generated from scratch by oc-mirror and will be copied to the destination registry.
+			// The updateservice.yaml file will instruct the cluster to use it.
+			continue
+		}
 		// locate source namespace
 		// strip away protocol
 		originRef := relatedImage.Origin
@@ -142,7 +149,7 @@ func generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema) (map[stri
 	return mirrors, nil
 }
 
-func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImage, releaseImageRef string) error {
+func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releaseImageRef string) error {
 	// truncate tag or digest from release image
 	// according to https://docs.openshift.com/container-platform/4.14/updating/updating_a_cluster/updating_disconnected_cluster/disconnected-update-osus.html#update-service-create-service-cli_updating-restricted-network-cluster-osus
 	releaseImage, err := image.ParseRef(releaseImageRef)
@@ -150,6 +157,12 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImage, releaseIm
 		return err
 	}
 	releaseImageName := releaseImage.Name
+
+	graphImage, err := image.ParseRef(graphImageRef)
+	if err != nil {
+		return err
+	}
+
 	osus := updateservicev1.UpdateService{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: updateservicev1.GroupVersion.String(),
@@ -161,7 +174,7 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImage, releaseIm
 		Spec: updateservicev1.UpdateServiceSpec{
 			Replicas:       2,
 			Releases:       releaseImageName,
-			GraphDataImage: graphImage,
+			GraphDataImage: graphImage.Reference,
 		},
 	}
 

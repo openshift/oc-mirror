@@ -3,6 +3,7 @@ package v1alpha3
 import (
 	"time"
 
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
 
@@ -233,6 +234,9 @@ type Bundle struct {
 type RelatedImage struct {
 	Name  string `json:"name"`
 	Image string `json:"image"`
+	// Type: metadata to explain why this image is being copied
+	// it doesn't need to be persisted to JSON
+	Type v1alpha2.ImageType `json:"-"`
 }
 
 // DeclarativeConfig this updates the existing dclrcfg
@@ -271,6 +275,9 @@ type CopyImageSchema struct {
 	Destination string
 	// Origin: Original reference to the image
 	Origin string
+	// Type: metadata to explain why this image is being copied
+	// it doesn´t need to be persisted to json
+	Type v1alpha2.ImageType `json:"-"`
 }
 
 // SignatureContentSchema
