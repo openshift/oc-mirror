@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: machine-approver
+  name: cluster-machine-approver
+  namespace: openshift-cluster-machine-approver
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+spec:
+  endpoints:
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      port: https
+      scheme: https
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: machine-approver.openshift-cluster-machine-approver.svc
+  namespaceSelector:
+    matchNames:
+      - openshift-cluster-machine-approver
+  selector:
+    matchLabels:
+      app: machine-approver

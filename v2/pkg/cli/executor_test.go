@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/otiai10/copy"
@@ -18,9 +20,12 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestExecutor(t *testing.T) {
+// TestExecutorMirroring - test both mirrorToDisk
+// and diskToMirror, using mocks
+func TestExecutorMirroring(t *testing.T) {
 	testFolder := t.TempDir()
 	defer os.RemoveAll(testFolder)
 
@@ -52,6 +57,7 @@ func TestExecutor(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		Destination:         workDir,
 	}
 
 	// storage cache for test
@@ -73,12 +79,14 @@ func TestExecutor(t *testing.T) {
 	}
 	log.Debug("imagesetconfig : %v", cfg)
 
-	// this test should cover over 80%
+	nie := NormalStorageInterruptError{}
+	nie.Is(fmt.Errorf("interrupt error"))
 
-	t.Run("Testing Executor : should pass", func(t *testing.T) {
+	t.Run("Testing Executor : mirrorToDisk should pass", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: opts}
 		archiver := MockArchiver{opts.Destination}
+
 		ex := &ExecutorSchema{
 			Log:                          log,
 			Config:                       cfg,
@@ -90,6 +98,7 @@ func TestExecutor(t *testing.T) {
 			MirrorArchiver:               archiver,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
+			MakeDir:                      MakeDir{},
 		}
 
 		res := &cobra.Command{}
@@ -103,9 +112,13 @@ func TestExecutor(t *testing.T) {
 		}
 	})
 
-	t.Run("Testing Executor : should fail (batch worker)", func(t *testing.T) {
+	t.Run("Testing Executor : diskToMirror should pass", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: true}
+		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		archiver := MockMirrorUnArchiver{}
+		cr := MockClusterResources{}
+		cfg.Mirror.Platform.Graph = true
+
 		ex := &ExecutorSchema{
 			Log:                          log,
 			Config:                       cfg,
@@ -114,104 +127,537 @@ func TestExecutor(t *testing.T) {
 			Release:                      collector,
 			AdditionalImages:             collector,
 			Batch:                        batch,
+			MirrorUnArchiver:             archiver,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
+			ClusterResources:             cr,
+			MakeDir:                      MakeDir{},
 		}
 
 		res := &cobra.Command{}
-		res.SilenceUsage = true
 		res.SetContext(context.Background())
-		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"docker://test"})
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-	})
-
-	t.Run("Testing Executor : should fail (release collector)", func(t *testing.T) {
-		releaseCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
-		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
-		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     operatorCollector,
-			Release:                      releaseCollector,
-			AdditionalImages:             releaseCollector,
-			Batch:                        batch,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-		}
-
-		res := &cobra.Command{}
 		res.SilenceUsage = true
-		res.SetContext(context.Background())
-		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"oci://test"})
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-	})
-
-	t.Run("Testing Executor : should fail (operator collector)", func(t *testing.T) {
-		releaseCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		operatorCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts, Fail: false}
-		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     operatorCollector,
-			Release:                      releaseCollector,
-			AdditionalImages:             releaseCollector,
-			Batch:                        batch,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-		}
-
-		res := &cobra.Command{}
-		res.SilenceUsage = true
-		res.SetContext(context.Background())
-		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"oci://test"})
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-	})
-
-	t.Run("Testing Executor : should pass", func(t *testing.T) {
-		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-		}
-		res := NewMirrorCmd(log)
-		res.SilenceUsage = true
-		ex.Opts.Global.ConfigPath = "hello"
-		err := ex.Validate([]string{"file://test"})
+		ex.Opts.Mode = mirror.DiskToMirror
+		err := ex.Run(res, []string{"docker://test/test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
 	})
 
-	t.Run("Testing Executor : should fail", func(t *testing.T) {
+	t.Run("Testing Executor : diskToMirror should fail", func(t *testing.T) {
+		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		archiver := MockMirrorUnArchiver{Fail: true}
+		cr := MockClusterResources{}
+		cfg.Mirror.Platform.Graph = true
+
 		ex := &ExecutorSchema{
 			Log:                          log,
 			Config:                       cfg,
 			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Batch:                        batch,
+			MirrorUnArchiver:             archiver,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
+			ClusterResources:             cr,
+			MakeDir:                      MakeDir{},
 		}
-		res := NewMirrorCmd(log)
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
 		res.SilenceUsage = true
-		err := ex.Validate([]string{"test"})
+		ex.Opts.Mode = mirror.DiskToMirror
+		err := ex.Run(res, []string{"docker://test/test"})
 		if err == nil {
 			t.Fatalf("should fail")
 		}
+	})
+
+}
+
+// TestNewMirrorCommand this covers both NewMirrorCmd and NewPrepareCommand
+// we ignore any return values - we are only intersted in code coverage
+func TestExecutorNewMirrorCommand(t *testing.T) {
+	t.Run("Testing Executor : new mirror command should pass", func(t *testing.T) {
+		log := clog.New("trace")
+		NewMirrorCmd(log)
+	})
+}
+
+// TestExecutorValidate
+func TestExecutorValidate(t *testing.T) {
+	t.Run("Testing Executor : validate should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "test"
+
+		ex := &ExecutorSchema{
+			Log:  log,
+			Opts: opts,
+		}
+
+		err := ex.Validate([]string{"file://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		// check for config path error
+		opts.Global.ConfigPath = ""
+		err = ex.Validate([]string{"file://test"})
+		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
+
+		// check when using docker protocol --from should be used
+		opts.Global.ConfigPath = "test"
+		err = ex.Validate([]string{"docker://test"})
+		assert.Equal(t, "when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory", err.Error())
+
+		// check when using file protocol --from should not be used
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "test"
+		err = ex.Validate([]string{"file://test"})
+		assert.Equal(t, "when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed", err.Error())
+
+		// check when using --from protocol must be of type file://
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "test"
+		err = ex.Validate([]string{"docker://test"})
+		assert.Equal(t, "when --from is used, it must have file:// prefix", err.Error())
+
+		// check destination protocol
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		err = ex.Validate([]string{"test"})
+		assert.Equal(t, "destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes", err.Error())
+
+	})
+}
+
+// TestExecutorComplete
+func TestExecutorComplete(t *testing.T) {
+	t.Run("Testing Executor : complete should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+
+		ex := &ExecutorSchema{
+			Log:     log,
+			Opts:    opts,
+			MakeDir: MakeDir{},
+		}
+
+		// file protocol
+		err := ex.Complete([]string{"file://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		// docker protocol
+		err = ex.Complete([]string{"docker://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+	})
+}
+
+// TestExecutorValidatePrepare
+func TestExecutorValidatePrepare(t *testing.T) {
+	t.Run("Testing Executor : validate prepare should pass", func(t *testing.T) {
+
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+		opts.Global.From = "file://test"
+
+		ex := &ExecutorSchema{
+			Log:  log,
+			Opts: opts,
+		}
+
+		err := ex.ValidatePrepare([]string{"file://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		// check for config path error
+		opts.Global.ConfigPath = ""
+		err = ex.ValidatePrepare([]string{"file://test"})
+		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
+
+		// check when from is used it should not be empty
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+		opts.Global.From = ""
+		err = ex.ValidatePrepare([]string{"docker://test"})
+		assert.Equal(t, "with prepare command, the --from argument is mandatory (prefix : file://)", err.Error())
+
+		// check when from is used it should have file protocol
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+		opts.Global.From = "test"
+		err = ex.ValidatePrepare([]string{"docker://test"})
+		assert.Equal(t, "when --from is used, it must have file:// prefix", err.Error())
+	})
+}
+
+// TestExecutorCompletePrepare
+func TestExecutorCompletePrepare(t *testing.T) {
+	t.Run("Testing Executor : complete prepare should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+		opts.Global.From = "file://test"
+
+		ex := &ExecutorSchema{
+			Log:     log,
+			Opts:    opts,
+			MakeDir: MakeDir{},
+		}
+
+		err := ex.CompletePrepare([]string{"file://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+	})
+}
+
+// TestExecutorRunPrepare
+func TestExecutorRunPrepare(t *testing.T) {
+	t.Run("Testing Executor : run prepare should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "../../tests/isc.yaml"
+		opts.Global.From = "file://test"
+
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+
+		// storage cache for test
+		regCfg, err := setupRegForTest(testFolder)
+		if err != nil {
+			t.Errorf("storage cache error: %v ", err)
+		}
+		reg, err := registry.NewRegistry(context.Background(), regCfg)
+		if err != nil {
+			t.Errorf("storage cache error: %v ", err)
+		}
+		fakeStorageInterruptChan := make(chan error)
+		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
+
+		// read the ImageSetConfiguration
+		cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+		if err != nil {
+			log.Error("imagesetconfig %v ", err)
+		}
+
+		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+		mockMirror := Mirror{}
+
+		ex := &ExecutorSchema{
+			Log:                          log,
+			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Mirror:                       mockMirror,
+			LocalStorageService:          *reg,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
+		}
+
+		res := &cobra.Command{}
+		res.SilenceUsage = true
+		res.SetContext(context.Background())
+
+		err = ex.RunPrepare(res, []string{"file://test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+	})
+}
+
+// TestExecutorLocalStorage
+func TestExecutorSetupLocalStorage(t *testing.T) {
+	t.Run("Testing Executor : setup local storage should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+			Port:         7777,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			Opts:             opts,
+			LocalStorageDisk: "../../tests/cache-fake",
+			MakeDir:          MockMakeDir{},
+		}
+		err := ex.setupLocalStorage()
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+	})
+}
+
+// TestExecutorSetupWorkingDir
+func TestExecutorSetupWorkingDir(t *testing.T) {
+	t.Run("Testing Executor : setup working dir should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+			WorkingDir:   "/root",
+		}
+
+		opts := mirror.CopyOptions{
+			Global: global,
+		}
+
+		mkdir := MockMakeDir{}
+
+		ex := &ExecutorSchema{
+			Log:     log,
+			Opts:    opts,
+			MakeDir: mkdir,
+		}
+
+		err := ex.setupWorkingDir()
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: ""}
+		err = ex.setupWorkingDir()
+		assert.Equal(t, "forced mkdir working-dir error", err.Error())
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: signaturesDir}
+		err = ex.setupWorkingDir()
+		assert.Equal(t, "forced mkdir signatures error", err.Error())
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: releaseImageDir}
+		err = ex.setupWorkingDir()
+		assert.Equal(t, "forced mkdir release-images error", err.Error())
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: releaseImageExtractDir}
+		err = ex.setupWorkingDir()
+		assert.Equal(t, "forced mkdir hold-release error", err.Error())
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: operatorImageExtractDir}
+		err = ex.setupWorkingDir()
+		assert.Equal(t, "forced mkdir hold-operator error", err.Error())
+
+	})
+}
+
+// TestExecutorSetupLogsLevelAndDir
+func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
+	t.Run("Testing Executor : setup logs level and dir should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+		}
+
+		opts := mirror.CopyOptions{
+			Global: global,
+		}
+
+		mkdir := MockMakeDir{}
+
+		ex := &ExecutorSchema{
+			Log:     log,
+			LogsDir: "logs",
+			Opts:    opts,
+			MakeDir: mkdir,
+		}
+
+		err := ex.setupLogsLevelAndDir()
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		ex.MakeDir = MockMakeDir{Fail: true, Dir: "logs"}
+		err = ex.setupLogsLevelAndDir()
+		assert.Equal(t, "forced mkdir logs error", err.Error())
+
+	})
+}
+
+// TestExecutorCollectAll
+func TestExecutorCollectAll(t *testing.T) {
+	t.Run("Testing Executor : colelct all should pass", func(t *testing.T) {
+		log := clog.New("trace")
+		global := &mirror.GlobalOptions{
+			TlsVerify:    false,
+			SecurePolicy: false,
+			Force:        true,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+			Mode:                mirror.MirrorToDisk,
+		}
+
+		// read the ImageSetConfiguration
+		cfg, _ := config.ReadConfig("../../tests/isc.yaml")
+		failCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
+		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+
+		mkdir := MockMakeDir{}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			LogsDir:          "logs",
+			Opts:             opts,
+			MakeDir:          mkdir,
+			Operator:         collector,
+			Release:          failCollector,
+			AdditionalImages: collector,
+		}
+
+		// force release error
+		_, err := ex.CollectAll(context.Background())
+		assert.Equal(t, "forced error release collector", err.Error())
+
+		// force operator error
+		ex.Operator = failCollector
+		ex.Release = collector
+		_, err = ex.CollectAll(context.Background())
+		assert.Equal(t, "forced error operator collector", err.Error())
+
+		// force additionalImages error
+		ex.Operator = collector
+		ex.Release = collector
+		ex.AdditionalImages = failCollector
+		_, err = ex.CollectAll(context.Background())
+		assert.Equal(t, "forced error additionalImages collector", err.Error())
+
 	})
 }
 
@@ -226,6 +672,7 @@ type Collector struct {
 	Config v1alpha2.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Fail   bool
+	Name   string
 }
 
 type Batch struct {
@@ -245,6 +692,56 @@ type Diff struct {
 
 type MockArchiver struct {
 	destination string
+}
+
+type MockMirrorUnArchiver struct {
+	Fail bool
+}
+
+type MockClusterResources struct {
+}
+
+type MockMakeDir struct {
+	Fail bool
+	Dir  string
+}
+
+func (o MockMakeDir) makeDirAll(dir string, mode os.FileMode) error {
+	if o.Fail && len(o.Dir) == 0 {
+		return fmt.Errorf("forced mkdir working-dir error")
+	}
+	if o.Fail && strings.Contains(dir, o.Dir) {
+		return fmt.Errorf("forced mkdir %s error", o.Dir)
+	}
+	return nil
+}
+
+func (o Mirror) Check(ctx context.Context, dest string, opts *mirror.CopyOptions) (bool, error) {
+	return true, nil
+}
+
+func (o Mirror) Run(context.Context, string, string, mirror.Mode, *mirror.CopyOptions, bufio.Writer) error {
+	return nil
+}
+
+func (o MockMirrorUnArchiver) Unarchive() error {
+	if o.Fail {
+		return fmt.Errorf("forced unarchive error")
+	}
+	return nil
+}
+
+func (o MockMirrorUnArchiver) Close() error {
+
+	return nil
+}
+
+func (o MockClusterResources) IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+	return nil
+}
+
+func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage string) error {
+	return nil
 }
 
 func (o *Diff) DeleteImages(ctx context.Context) error {
@@ -302,7 +799,7 @@ func (o *Collector) ReleaseImage() (string, error) {
 
 func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
 	if o.Fail {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error release collector")
+		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error additionalImages collector")
 	}
 	test := []v1alpha3.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -349,15 +846,9 @@ http:
   addr: :%d
   headers:
     X-Content-Type-Options: [nosniff]
-      #auth:
-      #htpasswd:
-      #realm: basic-realm
-      #path: /etc/registry
 health:
   storagedriver:
-    enabled: true
-    interval: 10s
-    threshold: 3
+    enabled: false
 `
 	configYamlV0_1 = fmt.Sprintf(configYamlV0_1, testFolder, 6000)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))

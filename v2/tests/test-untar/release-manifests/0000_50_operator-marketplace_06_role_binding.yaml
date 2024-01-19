@@ -1,0 +1,36 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: marketplace-operator
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: "marketplace"
+subjects:
+- kind: ServiceAccount
+  name: marketplace-operator
+  namespace: openshift-marketplace
+roleRef:
+  kind: ClusterRole
+  name: marketplace-operator
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: marketplace-operator
+  namespace: openshift-marketplace
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: "marketplace"
+subjects:
+- kind: ServiceAccount
+  name: marketplace-operator
+  namespace: openshift-marketplace
+roleRef:
+  kind: Role
+  name: marketplace-operator
+  apiGroup: rbac.authorization.k8s.io

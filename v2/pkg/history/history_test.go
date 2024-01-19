@@ -3,6 +3,7 @@ package history
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -155,5 +156,35 @@ func TestAppend(t *testing.T) {
 			}
 		})
 	}
+}
 
+// TestOSCreator
+func TestOSCreator(t *testing.T) {
+	t.Run("Testing OSCreator : should pass", func(t *testing.T) {
+		dir := t.TempDir()
+		defer os.RemoveAll(dir)
+		osc := OSFileCreator{}
+		_, err := osc.Create(dir + "/test.txt")
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+
+		dir = "/root"
+		_, err = osc.Create(dir + "/test.txt")
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+	})
+}
+
+// TestGetHistoryFile
+func TestGetHistoryFile(t *testing.T) {
+	t.Run("Testing getHistoryFile : should fail", func(t *testing.T) {
+		h := history{
+			historyDir: "nada",
+			before:     time.Now(),
+		}
+		_, err := h.getHistoryFile(time.Now())
+		assert.Contains(t, err.Error(), "no such file or directory")
+	})
 }

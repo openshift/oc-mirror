@@ -1,0 +1,169 @@
+# Account for the operator itself.
+# permissions.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-node-tuning-operator
+  namespace: openshift-cluster-node-tuning-operator
+
+---
+
+# Cluster role for the operator itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-node-tuning-operator
+rules:
+# We own (the right to perform anything with) tuned.openshift.io
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["tuneds"]
+  verbs: ["create","get","delete","list","update","watch","patch"]
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["tuneds/finalizers"]
+  verbs: ["update"]
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["profiles"]
+  verbs: ["create","get","delete","list","update","watch","patch"]
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["profiles/finalizers"]
+  verbs: ["update"]
+# The operator oversees tuned daemonset.  It even needs to be able
+# to delete it when the operator is put into "Removed" state.
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  verbs: ["create","get","delete","list","update","watch"]
+- apiGroups: ["security.openshift.io"]
+  resources: ["securitycontextconstraints"]
+  verbs: ["use"]
+# ConfigMaps and Events manipulation is needed by the leader election code.
+# "" indicates the core API group
+- apiGroups: [""]
+  resources: ["configmaps","events"]
+  verbs: ["create","get","delete","list","update","watch","patch"]
+# The pod-matching functionality will likely be deprecated in the
+# future.  When it is, remove "pods" below.
+- apiGroups: [""]
+  resources: ["nodes","pods"]
+  verbs: ["get","list","watch"]
+# Necessary for the implementation of metrics.
+- apiGroups: [""]
+  resources: ["nodes/metrics","nodes/specs"]
+  verbs: ["get"]
+# Needed by every CVO-managed operator.
+# infrastructures needed for the leader election code to get infra topology
+- apiGroups: ["config.openshift.io"]
+  resources: ["clusteroperators", "infrastructures"]
+  verbs: ["create","get","list","watch"]
+# Needed by every CVO-managed operator.
+- apiGroups: ["config.openshift.io"]
+  resources: ["clusteroperators/status","clusteroperators/finalizers"]
+  verbs: ["update"]
+# Needed by the core operator functionality.
+- apiGroups: ["machineconfiguration.openshift.io"]
+  resources: ["kubeletconfigs", "machineconfigs"]
+  verbs: ["create","get","delete","list","update","watch"]
+# Needed by the core operator functionality.
+- apiGroups: ["machineconfiguration.openshift.io"]
+  resources: ["machineconfigpools"]
+  verbs: ["get","list","watch"]
+# Needed by the leases mechanism.
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create","get","update","patch"]
+# Needed by the performance-addon-controller.
+# The PAO creates runtime class for each profile that can be used under pods to
+# extend CRI-O functionality.
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
+  verbs: ["create","get","delete","list","update","watch"]
+- apiGroups: ["performance.openshift.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["operators.coreos.com"]
+  resources: ["clusterserviceversions","operatorgroups","subscriptions"]
+  verbs: ["get","delete","list","update","watch"] 
+---
+
+# Bind the operator cluster role to its Service Account.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-node-tuning-operator
+subjects:
+- kind: ServiceAccount
+  name: cluster-node-tuning-operator
+  namespace: openshift-cluster-node-tuning-operator
+roleRef:
+  kind: ClusterRole
+  name: cluster-node-tuning-operator
+userNames:
+- "system:serviceaccount:openshift-cluster-node-tuning-operator:cluster-node-tuning-operator"
+
+---
+
+# Account for the operand.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: tuned
+  namespace: openshift-cluster-node-tuning-operator
+
+---
+
+# Cluster role for the operand.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-node-tuning:tuned
+rules:
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["tuneds"]
+  verbs: ["get","list","watch"]
+- apiGroups: ["tuned.openshift.io"]
+  resources: ["profiles"]
+  verbs: ["get","list","update","watch","patch"]
+- apiGroups: ["security.openshift.io"]
+  resources: ["securitycontextconstraints"]
+  verbs: ["use"]
+  resourceNames: ["privileged"]
+
+---
+
+# Bind the operand cluster role to its Service Account.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  name: cluster-node-tuning:tuned
+roleRef:
+  kind: ClusterRole
+  name: cluster-node-tuning:tuned
+subjects:
+- kind: ServiceAccount
+  name: tuned
+  namespace: openshift-cluster-node-tuning-operator
+userNames:
+- system:serviceaccount:openshift-cluster-node-tuning-operator:tuned

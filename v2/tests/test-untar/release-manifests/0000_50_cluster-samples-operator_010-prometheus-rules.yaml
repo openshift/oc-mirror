@@ -1,0 +1,107 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    name: samples-operator-alerts
+  name: samples-operator-alerts
+  namespace: openshift-cluster-samples-operator
+  annotations:
+    capability.openshift.io/name: openshift-samples
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  groups:
+  - name: SamplesOperator
+    rules:
+    - alert: SamplesRetriesMissingOnImagestreamImportFailing
+      expr: sum(openshift_samples_failed_imagestream_import_info) > sum(openshift_samples_retry_imagestream_import_total) - sum(openshift_samples_retry_imagestream_import_total offset 30m)
+      for: 2h
+      labels:
+        namespace: openshift-cluster-samples-operator
+        severity: warning
+      annotations:
+        summary: Samples operator is having problems with imagestream imports and its retries.
+        description: |
+          Samples operator is detecting problems with imagestream image imports, and the periodic retries of those
+          imports are not occurring.  Contact support.  You can look at the "openshift-samples" ClusterOperator object
+          for details. Most likely there are issues with the external image registry hosting the images that need to
+          be investigated.  The list of ImageStreams that have failing imports are:
+          {{ range query "openshift_samples_failed_imagestream_import_info > 0" }}
+            {{ .Labels.name }}
+          {{ end }}
+          However, the list of ImageStreams for which samples operator is retrying imports is:
+          retrying imports:
+          {{ range query "openshift_samples_retry_imagestream_import_total > 0" }}
+             {{ .Labels.imagestreamname }}
+          {{ end }}
+    - alert: SamplesImagestreamImportFailing
+      expr: sum(openshift_samples_retry_imagestream_import_total) - sum(openshift_samples_retry_imagestream_import_total offset 30m) > sum(openshift_samples_failed_imagestream_import_info)
+      for: 2h
+      labels:
+        namespace: openshift-cluster-samples-operator
+        severity: warning
+      annotations:
+        summary: Samples operator is detecting problems with imagestream image imports
+        description: |
+          Samples operator is detecting problems with imagestream image imports.  You can look at the "openshift-samples"
+          ClusterOperator object for details. Most likely there are issues with the external image registry hosting
+          the images that needs to be investigated.  Or you can consider marking samples operator Removed if you do not
+          care about having sample imagestreams available.  The list of ImageStreams for which samples operator is
+          retrying imports:
+          {{ range query "openshift_samples_retry_imagestream_import_total > 0" }}
+             {{ .Labels.imagestreamname }}
+          {{ end }}
+    - alert: SamplesDegraded
+      expr: openshift_samples_degraded_info == 1
+      for: 2h
+      labels:
+        severity: warning
+      annotations:
+        summary: Samples operator is degraded.
+        description: |
+          Samples could not be deployed and the operator is degraded. Review the "openshift-samples" ClusterOperator object for further details.
+    - alert: SamplesInvalidConfig
+      expr: openshift_samples_invalidconfig_info == 1
+      for: 2h
+      labels:
+        severity: warning
+      annotations:
+        summary: Samples operator Invalid configuration
+        description: |
+          Samples operator has been given an invalid configuration.
+    - alert: SamplesMissingSecret
+      expr: openshift_samples_invalidsecret_info{reason="missing_secret"} == 1
+      for: 2h
+      labels:
+        severity: warning
+      annotations:
+        summary: Samples operator is not able to find secret
+        description: |
+          Samples operator cannot find the samples pull secret in the openshift namespace.
+    - alert: SamplesMissingTBRCredential
+      expr: openshift_samples_invalidsecret_info{reason="missing_tbr_credential"} == 1
+      for: 2h
+      labels:
+        severity: warning
+      annotations:
+        summary: Samples operator is not able to find the credentials for registry
+        description: |
+          The samples operator cannot find credentials for 'registry.redhat.io'. Many of the sample ImageStreams will fail to import unless the 'samplesRegistry' in the operator configuration is changed.
+    - alert: SamplesTBRInaccessibleOnBoot
+      expr: openshift_samples_tbr_inaccessible_info == 1
+      for: 2d
+      labels:
+        severity: info
+      annotations:
+        summary: Samples operator is not able to access the registry on boot
+        description: |
+          One of two situations has occurred.  Either
+          samples operator could not access 'registry.redhat.io' during its initial installation and it bootstrapped as removed.
+          If this is expected, and stems from installing in a restricted network environment, please note that if you
+          plan on mirroring images associated with sample imagestreams into a registry available in your restricted
+          network environment, and subsequently moving samples operator back to 'Managed' state, a list of the images
+          associated with each image stream tag from the samples catalog is
+          provided in the 'imagestreamtag-to-image' config map in the 'openshift-cluster-samples-operator' namespace to
+          assist the mirroring process.
+          Or, the use of allowed registries or blocked registries with global imagestream configuration will not allow
+          samples operator to create imagestreams using the default image registry 'registry.redhat.io'.

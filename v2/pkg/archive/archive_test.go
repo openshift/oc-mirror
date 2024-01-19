@@ -84,6 +84,7 @@ func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	ma, err = ma.WithFakes()
 	return ma, err
 }
+
 func TestArchive_BuildArchive(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
@@ -107,6 +108,86 @@ func TestArchive_BuildArchive(t *testing.T) {
 	}
 	assert.FileExists(t, archName, "archive should exist")
 	assertContents(t, archName, expectedTarContents)
+}
+
+func TestArchive_CacheDirError(t *testing.T) {
+	// Create a temporary test folder
+	testFolder := t.TempDir()
+	ma, err := newMirrorArchiveWithMocks(testFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ma.Close()
+	defer os.RemoveAll(testFolder)
+
+	images := []v1alpha3.CopyImageSchema{
+		{
+			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+		},
+	}
+	// force error for addAllFolder
+	ma.cacheDir = "none"
+	ma.workingDir = "../../tests/working-dir-fake"
+
+	_, err = ma.BuildArchive(context.Background(), images)
+	if err == nil {
+		t.Fatal("should fail")
+	}
+}
+
+func TestArchive_WorkingDirError(t *testing.T) {
+	// Create a temporary test folder
+	testFolder := t.TempDir()
+	ma, err := newMirrorArchiveWithMocks(testFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ma.Close()
+	defer os.RemoveAll(testFolder)
+
+	images := []v1alpha3.CopyImageSchema{
+		{
+			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+		},
+	}
+	// force error for addAllFolder
+	ma.cacheDir = "../../tests/cache-fake"
+	ma.workingDir = "none"
+
+	_, err = ma.BuildArchive(context.Background(), images)
+	if err == nil {
+		t.Fatal("should fail")
+	}
+}
+
+func TestArchive_FileError(t *testing.T) {
+	// Create a temporary test folder
+	testFolder := t.TempDir()
+	ma, err := newMirrorArchiveWithMocks(testFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ma.Close()
+	defer os.RemoveAll(testFolder)
+
+	images := []v1alpha3.CopyImageSchema{
+		{
+			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+		},
+	}
+	// force error for addFile
+	ma.iscPath = "none"
+
+	_, err = ma.BuildArchive(context.Background(), images)
+	if err == nil {
+		t.Fatal("should fail")
+	}
 }
 
 func TestArchive_AddBlobsDiff(t *testing.T) {

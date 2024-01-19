@@ -254,6 +254,26 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			if err != nil {
 				return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
 			}
+			err = os.MkdirAll(absCachePath, 0777)
+			if err != nil {
+				return fmt.Errorf("mkdir absCachePath %v", err)
+			}
+			err = os.Chmod(absCachePath, 0777)
+			if err != nil {
+				return fmt.Errorf("chmod absCachePath %v", err)
+			}
+			err = os.Chown(absCachePath, 0, 0)
+			if err != nil {
+				return fmt.Errorf("chown absCachePath %v", err)
+			}
+			err = os.Chmod(absConfigPath, 0755)
+			if err != nil {
+				return fmt.Errorf("absConfigPath %v", err)
+			}
+			err = os.Chown(absConfigPath, 1001, 0)
+			if err != nil {
+				return fmt.Errorf("chown absConfigPath %v", err)
+			}
 			cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
@@ -292,6 +312,9 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			} else { // this means that no cache was found in the original catalog (old catalog with opm < 1.25)
 				cfg.Config.Cmd = []string{"serve", "/configs"}
 			}
+			// uncomment for debugging
+			// cfg.Config.Entrypoint = []string{"/bin/bash"}
+			// cfg.Config.Cmd = []string{}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)

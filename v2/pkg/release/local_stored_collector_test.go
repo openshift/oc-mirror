@@ -1,19 +1,40 @@
 package release
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/otiai10/copy"
-	"github.com/stretchr/testify/assert"
-
+	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
+	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/assert"
 )
+
+type MockMirror struct {
+	Fail bool
+}
+
+type MockManifest struct {
+	Log               clog.PluggableLoggerInterface
+	FailImageIndex    bool
+	FailImageManifest bool
+	FailExtract       bool
+}
+
+type MockCincinnati struct {
+	Config v1alpha2.ImageSetConfiguration
+	Opts   mirror.CopyOptions
+	Client Client
+	Fail   bool
+}
 
 func TestReleaseLocalStoredCollector(t *testing.T) {
 	log := clog.New("trace")
@@ -319,4 +340,108 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		ImageBuilder:     &mockImageBuilder{},
 	}
 	return ex
+}
+
+func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, out bufio.Writer) error {
+	if o.Fail {
+		return fmt.Errorf("forced mirror run fail")
+	}
+	return nil
+}
+
+func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+	return true, nil
+}
+
+func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
+	return nil, nil
+}
+
+func (o MockManifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
+	return nil, nil
+}
+
+func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
+	relatedImages := []v1alpha3.RelatedImage{
+		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "testD", Image: "sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+	}
+	return relatedImages, nil
+}
+
+func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
+	if o.FailImageIndex {
+		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+	}
+	return &v1alpha3.OCISchema{
+		SchemaVersion: 2,
+		Manifests: []v1alpha3.OCIManifest{
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				Size:      567,
+			},
+		},
+	}, nil
+}
+
+func (o MockManifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
+	if o.FailImageManifest {
+		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+	}
+
+	return &v1alpha3.OCISchema{
+		SchemaVersion: 2,
+		Manifests: []v1alpha3.OCIManifest{
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				Size:      567,
+			},
+		},
+		Config: v1alpha3.OCIManifest{
+			MediaType: "application/vnd.oci.image.manifest.v1+json",
+			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+			Size:      567,
+		},
+	}, nil
+}
+
+func (o MockManifest) GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error) {
+	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	relatedImages["abc"] = []v1alpha3.RelatedImage{
+		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+	}
+	return relatedImages, nil
+}
+
+func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+	if o.FailExtract {
+		return fmt.Errorf("forced extract oci fail")
+	}
+	return nil
+}
+
+func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
+	var res []v1alpha3.CopyImageSchema
+	res = append(res, v1alpha3.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})
+	return res
+}
+
+func (o MockCincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
+	if o.Fail {
+		return o.Client, fmt.Errorf("forced cincinnati client error")
+	}
+	return o.Client, nil
+}
+
+func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
+	return o.Client, nil
+}
+
+func (o MockCincinnati) GenerateReleaseSignatures(context.Context, []v1alpha3.RelatedImage) {
+	fmt.Println("test release signature")
 }

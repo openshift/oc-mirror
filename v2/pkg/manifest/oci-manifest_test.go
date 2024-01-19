@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"os"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -172,9 +173,23 @@ func TestExtractOCILayers(t *testing.T) {
 			},
 		}
 		manifest := &Manifest{Log: log}
-		err := manifest.ExtractLayersOCI("../../tests/test-untar/blobs/sha256", "../../tests/hold-test-untar", "release-manifests/", oci)
+		// this should do a nop (directory exists)
+		err := manifest.ExtractLayersOCI("../../tests/test-untar/blobs/sha256", "../../tests/test-untar", "release-manifests/", oci)
 		if err != nil {
-			log.Error(" %v ", err)
+			t.Fatal("should not fail")
+		}
+		_, err = os.Stat("../../tests/hold-test-untar/release-manifests/")
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+
+		err = manifest.ExtractLayersOCI("../../tests/test-untar/blobs/sha256", "../../tests/hold-test-untar", "release-manifests/", oci)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		defer os.RemoveAll("../../tests/hold-test-untar")
+		_, err = os.Stat("../../tests/hold-test-untar/release-manifests/")
+		if err != nil {
 			t.Fatalf("should not fail")
 		}
 	})

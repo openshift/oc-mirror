@@ -362,6 +362,7 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 		if !info.IsDir() {
 			hdr.Size = info.Size()
 		}
+
 		hdr.ChangeTime = time.Now()
 		if info.Mode().IsDir() {
 			hdr.Typeflag = tar.TypeDir
@@ -404,6 +405,11 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 				Name: filepath.Join(targetPath, filepath.ToSlash(rel)),
 				Mode: int64(info.Mode()),
 			}
+			// OCPBUGS-26078 ensure "/configs" dir has correct permissions
+			// if umask is set to 0077 it could cause the /configs dir to be created
+			// with 700 which is undesirable
+			hdr.Mode = int64(0755)
+
 			if uid != -1 {
 				hdr.Uid = uid
 			}
@@ -426,6 +432,13 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 			Name: filepath.Join(targetPath, filepath.ToSlash(base)),
 			Mode: int64(pathInfo.Mode()),
 		}
+
+		// OCPBUGS-26078 ensure "/configs" dir has correct permissions
+		// if umask is set to 0077 it could cause the /configs dir to be created
+		// with 700 which is undesirable
+		//if targetPath == "/configs" {
+		hdr.Mode = int64(0755)
+		//}
 		if uid != -1 { // uid was specified in the input param
 			hdr.Uid = uid
 		}

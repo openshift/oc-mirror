@@ -1,0 +1,1 @@
+{"filter":{"graph":true,"channels":[{"name":"stable-4.7","type":"ocp"},{"name":"stable-4.6","type":"ocp","minVersion":"4.6.3","maxVersion":"4.6.13"},{"name":"okd","type":"okd"}]},"releases":[{"Source":"docker://quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64","Destination":"oci:../../tests/release-images/ocp-release/4.13.10-x86_64","Origin":""}]}

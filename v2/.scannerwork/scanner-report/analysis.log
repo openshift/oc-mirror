@@ -1,0 +1,40 @@
+Plugins:
+Bundled analyzers:
+  - Python Code Quality and Security 3.24.0.10784 (python)
+  - Go Code Quality and Security 1.11.0.3905 (go)
+  - JaCoCo 1.3.0.1538 (jacoco)
+  - Kotlin Code Quality and Security 2.12.0.1956 (kotlin)
+  - IaC Code Quality and Security 1.11.0.2847 (iac)
+  - JavaScript/TypeScript/CSS Code Quality and Security 9.13.0.20537 (javascript)
+  - Ruby Code Quality and Security 1.11.0.3905 (ruby)
+  - Scala Code Quality and Security 1.11.0.3905 (sonarscala)
+  - C# Code Quality and Security 8.51.0.59060 (csharp)
+  - Java Code Quality and Security 7.16.0.30901 (java)
+  - HTML Code Quality and Security 3.7.1.3306 (web)
+  - Flex Code Quality and Security 2.8.0.3166 (flex)
+  - XML Code Quality and Security 2.7.0.3820 (xml)
+  - PHP Code Quality and Security 3.27.1.9352 (php)
+  - Text Code Quality and Security 2.0.1.611 (text)
+  - VB.NET Code Quality and Security 8.51.0.59060 (vbnet)
+  - Configuration detection fot Code Quality and Security 1.2.0.267 (config)
+Global server settings:
+  - sonar.core.id=147B411E-AYZVUJHJA8Kt6V57Hq1W
+  - sonar.core.startTime=2024-01-19T16:36:02+0100
+  - sonar.forceAuthentication=true
+Project server settings:
+Project scanner properties:
+  - sonar.exclusions=cmd/**,vendor/**,pkg/**/*_test.go,tests/**,internal/**,pkg/api/**, pkg/mirror/u*,*.json,*.txt,*.yml,*.xml,*.sh,Dockerfile,*.properties,*.html
+  - sonar.go.coverage.reportPaths=tests/results/cover.out
+  - sonar.host.url=http://192.168.0.22:9000
+  - sonar.language=go
+  - sonar.login=******
+  - sonar.projectBaseDir=/home/lzuccarelli/go/src/github.com/openshift/oc-mirror/v2
+  - sonar.projectKey=oc-mirror
+  - sonar.projectName=oc-mirror
+  - sonar.projectVersion=2.0.0-dev
+  - sonar.scanner.app=ScannerCLI
+  - sonar.scanner.appVersion=4.8.0.2856
+  - sonar.sourceEncoding=UTF-8
+  - sonar.sources=.
+  - sonar.verbose=true
+  - sonar.working.directory=/home/lzuccarelli/go/src/github.com/openshift/oc-mirror/v2/.scannerwork

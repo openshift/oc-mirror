@@ -1,0 +1,10 @@
+apiVersion: operator.openshift.io/v1
+kind: Etcd
+metadata:
+  name: cluster
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/create-only: "true"
+spec:
+  managementState: Managed

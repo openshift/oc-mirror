@@ -1,0 +1,133 @@
+﻿apiVersion: console.openshift.io/v1
+kind: ConsoleQuickStart
+metadata:
+  name: quarkus-with-helm
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: 'true'
+    include.release.openshift.io/self-managed-high-availability: 'true'
+    include.release.openshift.io/single-node-developer: 'true'
+    capability.openshift.io/name: Console
+spec:
+  description: 'Deploy a Quarkus application using a Helm Chart.'
+  displayName: Get started with Quarkus using a Helm Chart
+  durationMinutes: 10
+  icon: >-
+    data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJMYXllcl8xIiBkYXRhLW5hbWU9IkxheWVyIDEiIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiPjxkZWZzPjxzdHlsZT4uY2xzLTF7ZmlsbDojNDY5NWViO30uY2xzLTJ7ZmlsbDojZmYwMDRhO30uY2xzLTN7ZmlsbDojZmZmO308L3N0eWxlPjwvZGVmcz48dGl0bGU+cXVhcmt1c19pY29uX3JnYl8xMDI0cHhfcmV2ZXJzZTwvdGl0bGU+PHBvbHlnb24gY2xhc3M9ImNscy0xIiBwb2ludHM9IjY2OS4zNCAxODAuNTcgNTEyIDI3MS40MSA2NjkuMzQgMzYyLjI1IDY2OS4zNCAxODAuNTciLz48cG9seWdvbiBjbGFzcz0iY2xzLTIiIHBvaW50cz0iMzU0LjY2IDE4MC41NyAzNTQuNjYgMzYyLjI1IDUxMiAyNzEuNDEgMzU0LjY2IDE4MC41NyIvPjxwb2x5Z29uIGNsYXNzPSJjbHMtMyIgcG9pbnRzPSI2NjkuMzQgMzYyLjI1IDUxMiAyNzEuNDEgMzU0LjY2IDM2Mi4yNSA1MTIgNDUzLjA5IDY2OS4zNCAzNjIuMjUiLz48cG9seWdvbiBjbGFzcz0iY2xzLTEiIHBvaW50cz0iMTg4Ljc2IDQ2Ny45MyAzNDYuMSA1NTguNzYgMzQ2LjEgMzc3LjA5IDE4OC43NiA0NjcuOTMiLz48cG9seWdvbiBjbGFzcz0iY2xzLTIiIHBvaW50cz0iMzQ2LjEgNzQwLjQ0IDUwMy40MyA2NDkuNiAzNDYuMSA1NTguNzYgMzQ2LjEgNzQwLjQ0Ii8+PHBvbHlnb24gY2xhc3M9ImNscy0zIiBwb2ludHM9IjM0Ni4xIDM3Ny4wOSAzNDYuMSA1NTguNzYgNTAzLjQzIDY0OS42IDUwMy40MyA0NjcuOTMgMzQ2LjEgMzc3LjA5Ii8+PHBvbHlnb24gY2xhc3M9ImNscy0xIiBwb2ludHM9IjY3Ny45IDc0MC40NCA2NzcuOSA1NTguNzYgNTIwLjU3IDY0OS42IDY3Ny45IDc0MC40NCIvPjxwb2x5Z29uIGNsYXNzPSJjbHMtMiIgcG9pbnRzPSI4MzUuMjQgNDY3LjkzIDY3Ny45IDM3Ny4wOSA2NzcuOSA1NTguNzYgODM1LjI0IDQ2Ny45MyIvPjxwb2x5Z29uIGNsYXNzPSJjbHMtMyIgcG9pbnRzPSI1MjAuNTcgNjQ5LjYgNjc3LjkgNTU4Ljc2IDY3Ny45IDM3Ny4wOSA1MjAuNTcgNDY3LjkzIDUyMC41NyA2NDkuNiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTg1My40NywxSDE3MC41M0M3Ny4yOSwxLDEsNzcuMjksMSwxNzAuNTNWODUzLjQ3QzEsOTQ2LjcxLDc3LjI5LDEwMjMsMTcwLjUzLDEwMjNoNDY3LjdMNTEyLDcxNi4zOSw0MjAuNDIsOTEwSDE3MC41M0MxMzkuOSw5MTAsMTE0LDg4NC4xLDExNCw4NTMuNDdWMTcwLjUzQzExNCwxMzkuOSwxMzkuOSwxMTQsMTcwLjUzLDExNEg4NTMuNDdDODg0LjEsMTE0LDkxMCwxMzkuOSw5MTAsMTcwLjUzVjg1My40N0M5MTAsODg0LjEsODg0LjEsOTEwLDg1My40Nyw5MTBINzA1LjI4bDQ2LjUyLDExM0g4NTMuNDdjOTMuMjQsMCwxNjkuNTMtNzYuMjksMTY5LjUzLTE2OS41M1YxNzAuNTNDMTAyMyw3Ny4yOSw5NDYuNzEsMSw4NTMuNDcsMVoiLz48L3N2Zz4K
+  introduction: >-
+    **Quarkus** is a Cloud Native, (Linux) Container First framework for writing Java applications.
+
+    - **Container First**: Minimal footprint Java applications that are optimal for running in containers.
+
+    - **Cloud Native**: Embraces 12 factor architecture in environments like Kubernetes.
+
+    - **Unify imperative and reactive**: Brings under one programming model non-blocking and imperative styles of development.
+
+    - **Standards-based**: Based on the standards and frameworks you love and use: RESTEasy and JAX-RS, Hibernate ORM and JPA, Netty, Eclipse Vert.x, Eclipse MicroProfile, Apache Camel.
+
+    - **A great choice for microservices and serverless**: Brings lightning fast startup time and code turnaround to Java apps.
+
+    - **Developer Joy**: Development centric experience bringing your amazing apps to life in no time.
+
+  tasks:
+    - description: >-
+        To create a Quarkus application:
+        
+        1. Click on the [perspective switcher]{{highlight qs-perspective-switcher}} at the top of the navigation, and select **Developer**.
+        
+        1. In the navigation menu, click [Add]{{highlight qs-nav-add}}.
+                
+        1. Click the **Project** dropdown menu and select **Create Project** to create a project for your Quarkus application.
+
+        1. In the **Name** field, enter a name for your new project. Then click **Create**.
+        
+        1. On the **+Add** page, click **Helm Chart**. 
+        
+        1. In the Helm Chart catalog, click the **Quarkus** tile.
+        
+            - The side panel displays information about the Quarkus chart
+        
+        1. Click **Install Helm Chart**
+        
+            - Some form sections are collapsed by default. No changes to these sections are needed to proceed. Click the accordion above a collapsed section to expand and view its content.
+        
+        1. At the bottom of the form, click **Install** to create the Quarkus application using the Helm Chart.
+      review:
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+        instructions: |-
+          The Helm Release is represented by the light grey shape with a darker grey dashed border.  The deployment is a white circle containing the Quarkus logo.  Verify the application was successfully created:
+          
+          - Do you see a **quarkus** Helm Release?
+          
+          - Do you see a **quarkus** deployment?
+
+      summary:
+        failed: Try the steps again.
+        success: Your Quarkus application has been deployed onto OpenShift.
+      title: Create a Quarkus application from a Helm Chart
+
+    - description: >-
+        To view the build status of the Quarkus application:
+        
+        1. Hover over the icon on the bottom left quadrant of the **quarkus** deployment to see the build status in a tooltip.
+        
+        1. Click on the icon for quick access to the build log.  
+        
+            - The log stream of the **quarkus-1** build is shown on the **Build Details** page.
+        
+            - The application and its dependencies will be built into a container image and pushed to the OpenShift container registry.
+      review:
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+        instructions: >-
+          Verify the build is complete:
+
+          - This build may take a few minutes. When it's finished, a **Complete** badge will surface on the page header beside build name **quarkus-1**. Did this badge appear?
+
+      summary:
+        failed: Try the steps again.
+        success: Your build is complete.
+      title: View the build status
+    - description: >-
+        To view the pod status:
+
+        1. In the navigation menu, click [Topology]{{highlight qs-nav-topology}}.
+        
+        1. Hover over the pod donut to see the pod status in a tooltip.
+
+              - Notice that the **quarkus** deployment has a pod donut imposed on the circle, representing the pod status (i.e. blue = running).  
+
+              - The color of the donut indicates the pod status.  
+
+      review:
+        failedTaskHelp: >-
+          This task isn’t verified yet. Try the task again.
+        instructions: |-
+          Verify you see the pod status:
+          
+          - Do you see the number of associated pods and their statuses?
+
+      summary:
+        failed: Try the steps again.
+        success: Your deployment has one running pod.
+      title: View the pod status
+    - description: >-
+
+        The external link icon on the top right quadrant of the **quarkus** deployment represents the route URL.  
+        
+        1. Click on the external link icon to open the URL and run the application in a new browser tab.
+
+        1. Learn more about deploying Quarkus applications on OpenShift at
+         [quarkus.io](https://quarkus.io).
+
+      review:
+        failedTaskHelp: This task isn’t verified yet. Try the task again.
+        instructions: >-
+          Verify your Quarkus application is running:
+
+          - Is the new tab titled **Your new
+          Cloud-Native application is ready!**?
+      summary:
+        failed: Try the steps again.
+        success: Your Quarkus application is running.
+      title: Run the Quarkus application
+  conclusion: >-
+    Your Quarkus application is deployed and ready.

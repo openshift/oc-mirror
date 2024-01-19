@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -12,6 +13,7 @@ import (
 )
 
 type mockImageBuilder struct {
+	Fail bool
 }
 
 func TestCreateGraphImage(t *testing.T) {
@@ -138,17 +140,67 @@ func TestCreateGraphImage(t *testing.T) {
 			ImageBuilder:     &mockImageBuilder{},
 		}
 
-		_, err := ex.CreateGraphImage(ctx)
+		// just to ensure we cover new.go
+		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, &MockManifest{}, cincinnati, "localhost:9999", &mockImageBuilder{})
+
+		_, err := ex.CreateGraphImage(ctx, graphURL)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 
 	})
+
+	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
+		manifest := &MockManifest{Log: log}
+		ex := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &MockMirror{Fail: false},
+			Config:           cfgm2d,
+			Manifest:         manifest,
+			Opts:             m2dOpts,
+			Cincinnati:       cincinnati,
+			LocalStorageFQDN: "localhost:9999",
+			ImageBuilder:     &mockImageBuilder{},
+		}
+
+		_, err := ex.CreateGraphImage(ctx, "nada")
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+
+	})
+
+	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
+		manifest := &MockManifest{Log: log}
+		ex := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &MockMirror{Fail: false},
+			Config:           cfgm2d,
+			Manifest:         manifest,
+			Opts:             m2dOpts,
+			Cincinnati:       cincinnati,
+			LocalStorageFQDN: "localhost:9999",
+			ImageBuilder:     &mockImageBuilder{Fail: true},
+		}
+
+		_, err := ex.CreateGraphImage(ctx, graphURL)
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+
+	})
+
 }
 
 func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
+	if o.Fail {
+		return fmt.Errorf("forced error")
+	}
 	return nil
 }
 func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {
+	if o.Fail {
+		return layout.Path(""), fmt.Errorf("forced error")
+	}
 	return layout.FromPath("../../tests/test-untar")
 }

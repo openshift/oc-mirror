@@ -1,0 +1,134 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-storage-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: cluster-storage-operator
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: cluster-storage-operator
+    spec:
+      containers:
+      - args:
+        - start
+        - -v=2
+        - --guest-kubeconfig=/etc/guest-kubeconfig/kubeconfig
+        command:
+        - cluster-storage-operator
+        - start
+        env:
+        - name: OPERATOR_IMAGE_VERSION
+          value: 4.12.0
+        - name: OPERAND_IMAGE_VERSION
+          value: 4.12.0
+        - name: AWS_EBS_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4e596cc1ded888a6fb4e8cbb9135b18b016ab8edcca1c0818d0231f7ec9a8908
+        - name: AWS_EBS_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d6b0a4a7f205d5e52404797b190b7ef5063a999f3f91680e02229b22790b916
+        - name: GCP_PD_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:0a6f39d0633539f922b48117cea4291e76cefc654d715862a574cc9d09cabb63
+        - name: GCP_PD_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:df2a341e8ff6aeedbcbeca3a1ec6d55d96b41b9398064c7fc4d0a376e714b34f
+        - name: OPENSTACK_CINDER_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:58433407a13004176dd3285def578cf18e1625c46c92e408dc4605607897fd24
+        - name: OPENSTACK_CINDER_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:06e9c50a2a02577e1edd074072d58cb18ebc6ab74fb07238111b28af065a12cb
+        - name: OVIRT_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:925d8dc47e1602c31785a7e8c2c43f06e210c80867ceebadb052351e553c13e9
+        - name: OVIRT_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6836669f4cd027feee475175af282686fc1ad2ed8862e54726e2c897865f8d21
+        - name: MANILA_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:aaecefa40eb4268ee5f4a0b4e8218274e52d3ea88a6e894bb1337287a69fc43f
+        - name: MANILA_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:135115519e10a95daff127891836d8627e391b2a09ebaee81c8a51f5118d107b
+        - name: MANILA_NFS_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1b0dd1e20bcaaf0a9529db8d12c9d9ccf22244aa84cb49b30703ffb5813b4172
+        - name: PROVISIONER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:12be6984e3a56cbc5b2a5272a872a40b242cce8a0f167993107c6de6bf776c53
+        - name: ATTACHER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:ab4b9ad5114d8fc53ec73045e973a8be2faa0975195113e96e07fcf8ad86a7e2
+        - name: RESIZER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f18e0cf76a2ac840c9f66f89f1b47aced70650021e7931199659aef9cbca31e0
+        - name: SNAPSHOTTER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:e8262cb60ae8fbf0bf565a5f624693daa9e6f396970dcdbba5d1ca55eb525ec0
+        - name: NODE_DRIVER_REGISTRAR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6bd9d4dc813a01257767fb3b16395e8aee044feec410ed8e93ee1e82daf5a744
+        - name: LIVENESS_PROBE_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:836d284f0c24a1d400cebc0f25e8172c28e7476879bfffe1071fb9ceb169c9ce
+        - name: VSPHERE_PROBLEM_DETECTOR_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:80a6200b0c18486bad5abe5804a62bed7436daa56f0296e7b19c18f84b3b8b1b
+        - name: AZURE_DISK_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c5c3f5b2c958ccb083a36414baa947580291be035053864da379c1cf131bf1ce
+        - name: AZURE_DISK_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:af1f30a0f3480ac0622da94639a09de309175f8b97adbf70426dd57a558dfb43
+        - name: AZURE_FILE_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d8309eb45097f821a093a912212d8571a4f79221474daba24c5c21e62c587ec5
+        - name: AZURE_FILE_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:ebfadb579d329d6ba3297bfafb66cf41ea5d84ea61523273792e7e6337f4f2fa
+        - name: KUBE_RBAC_PROXY_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c28f27a3a10df13e5e8c074e8734683a6603ebaccd9d67e2095070fb6859b1d6
+        - name: VMWARE_VSPHERE_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:1ddea003dd0de85bb4f6d7e9106c54125858a162fe1fda1f238258418fcb52e8
+        - name: VMWARE_VSPHERE_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:e0c13c6d2ab5436bf18211b15bf2ca9d3798964f5e03ed761c0e4708cf8d4e88
+        - name: VMWARE_VSPHERE_SYNCER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:89cea54cc62014f0c2709b27942fdae5f7613e8f1540ea51b44328cf166b987f
+        - name: CLUSTER_CLOUD_CONTROLLER_MANAGER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:13397fef9671257021455712bf8242685325c97dbc6700c988bd6ab5e68ff57e
+        - name: SHARED_RESOURCE_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d89776062a025fd41dc10b828f8cd4c66577d66ef54d57e2a634a843e243b020
+        - name: SHARED_RESOURCE_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:614817eab19b746ab9967aa1da46f0ff5c23756dcff3bd0eef772513ad9f8e77
+        - name: SHARED_RESOURCE_DRIVER_WEBHOOK_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:5d263154d6c3f7d75486020633bab805257bc250308840ec3f387f96c5681489
+        - name: ALIBABA_DISK_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:98ed09f9be29ab5b1055e118ab98687eb09fbaa5fbde2d41fc20eb8da7b544f1
+        - name: ALIBABA_CLOUD_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f02f76546aa186ed6516417d4298b820d269516ae6278e339c94c0277cbe8580
+        - name: IBM_VPC_BLOCK_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c10a40e725a753741a94948c2e8889214650ec564a7959df85b8bbf4be2a3b03
+        - name: IBM_VPC_BLOCK_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6a39c87357c77e9a95115229c673c0194ac0d343ffc61fb057516c00306442e7
+        - name: IBM_VPC_NODE_LABEL_UPDATER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c3370a5e63eecf56ccdc17e8523a0ed836c8a5c775d1ce1bfe6b63042bba098a
+        - name: POWERVS_BLOCK_CSI_DRIVER_OPERATOR_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c263b11dcd5304d779999f2540a30ea190b3a0f760a2e246c96d37a92c0f3492
+        - name: POWERVS_BLOCK_CSI_DRIVER_IMAGE
+          value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:924e1f8672e3d6bf42997489edab26998999e960d81cd0e0491ac39d278fe48f
+        - name: HYPERSHIFT_IMAGE
+          value: quay.io/openshift/origin-control-plane:latest
+        image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:a1a9ffe4c3d12fd672271f098a10a111ab5b3d145b7e2da447ef1aaab5189c12
+        imagePullPolicy: IfNotPresent
+        name: cluster-storage-operator
+        ports:
+        - containerPort: 8443
+          name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/guest-kubeconfig
+          name: guest-kubeconfig
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: cluster-storage-operator
+      volumes:
+      - name: guest-kubeconfig
+        secret:
+          secretName: service-network-admin-kubeconfig

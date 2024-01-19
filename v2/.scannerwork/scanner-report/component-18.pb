@@ -1,0 +1,1 @@
+ 2goXhr:pkg/clusterresources/updateservice/v1/groupversion_info.go

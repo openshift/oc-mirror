@@ -1,0 +1,46 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus
+  namespace: openshift-cluster-storage-operator
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    capability.openshift.io/name: Storage
+  labels:
+    role: alert-rules
+spec:
+  groups:
+    - name: default-storage-classes.rules
+      rules:
+      - alert: MultipleDefaultStorageClasses
+        expr:  max_over_time(default_storage_class_count[5m]) > 1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than one default StorageClass detected."
+          description: |
+            Cluster storage operator monitors all storage classes configured in the cluster
+            and checks there is not more than one default StorageClass configured.
+          message: "StorageClass count check is failing (there should not be more than one default StorageClass)"
+
+    - name: storage-operations.rules
+      rules:
+      - alert: PodStartupStorageOperationsFailing
+        # There was at least one failing operation in past 5 minutes *and* there was no successful one.
+        # Focus on attach and mount operations - they have the same diagnostic steps and are the most common.
+        expr: |
+          increase(storage_operation_duration_seconds_count{status != "success", operation_name =~"volume_attach|volume_mount"}[5m]) > 0
+          and on() increase(storage_operation_duration_seconds_count{status = "success", operation_name =~"volume_attach|volume_mount"}[5m]) == 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Pods can't start because {{ $labels.operation_name }} of volume plugin {{ $labels.volume_plugin }} is permanently failing on node {{ $labels.node }}."
+          description: |
+            Failing storage operation "{{ $labels.operation_name }}" of volume plugin {{ $labels.volume_plugin }} was preventing Pods on node {{ $labels.node }}
+            from starting for past 5 minutes.
+            Please investigate Pods that are "ContainerCreating" on the node: "oc get pod --field-selector=spec.nodeName=ip-10-0-130-168.ec2.internal --all-namespaces | grep ContainerCreating".
+            Events of the Pods should contain exact error message: "oc describe pod -n <pod namespace> <pod name>".
