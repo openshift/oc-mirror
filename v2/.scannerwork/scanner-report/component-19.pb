@@ -1,1 +1,0 @@
- 2goX0hr<pkg/clusterresources/updateservice/v1/updateservice_types.go

@@ -20,6 +20,7 @@ v2/cmd/mirror/working-dir/
 v2/launch.json
 v2/logs/
 v2/pkg/release/release.log
+v2/.scannerwork/
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 isc*.yaml

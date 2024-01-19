@@ -1,1 +1,0 @@
-	 2goXhrpkg/operator/new.go
