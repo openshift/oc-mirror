@@ -6,27 +6,37 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"unicode"
 
 	confv1 "github.com/openshift/api/config/v1"
+	ofv1alpha1 "github.com/openshift/oc-mirror/v2/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
+)
+
+const (
+	hashTruncLen int = 12
 )
 
 func New(log clog.PluggableLoggerInterface,
 	workingDir string,
+	conf v1alpha2.ImageSetConfiguration,
 ) GeneratorInterface {
-	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir}
+	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, Config: conf}
 }
 
 type ClusterResourcesGenerator struct {
 	Log        clog.PluggableLoggerInterface
 	WorkingDir string
+	Config     v1alpha2.ImageSetConfiguration
 }
 
 type imageMirrorsGeneratorMode int
@@ -146,6 +156,156 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 	return err
 }
 
+func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+	for _, copyImage := range allRelatedImages {
+		if copyImage.Type == v1alpha2.TypeOperatorCatalog {
+			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
+			template := o.getCSTemplate(copyImage.Origin)
+			err := o.generateCatalogSource(copyImage.Destination, template)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (o *ClusterResourcesGenerator) getCSTemplate(catalogRef string) string {
+	for _, op := range o.Config.ImageSetConfigurationSpec.Mirror.Operators {
+		if strings.Contains(catalogRef, op.Catalog) {
+			return op.TargetCatalogSourceTemplate
+		}
+	}
+	return ""
+}
+
+func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, catalogSourceTemplateFile string) error {
+
+	catalogSpec, err := image.ParseRef(catalogRef)
+	if err != nil {
+		return err
+	}
+
+	csSuffix := "0" // default value
+	if catalogSpec.IsImageByDigest() {
+		if len(catalogSpec.Digest) >= hashTruncLen {
+			csSuffix = catalogSpec.Digest[:hashTruncLen]
+		} else {
+			csSuffix = catalogSpec.Digest
+		}
+	} else {
+		tag := catalogSpec.Tag
+		csSuffix = strings.Map(toRFC1035, tag)
+	}
+
+	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
+	catalogRepository := pathComponents[len(pathComponents)-1]
+	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
+	errs := validation.IsDNS1035Label(catalogSourceName)
+	if len(errs) != 0 && isValidRFC1123(catalogSourceName) {
+		return fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))
+	}
+
+	var obj ofv1alpha1.CatalogSource
+	generateWithoutTemplate := false
+	if catalogSourceTemplateFile != "" {
+		obj, err = catalogSourceContentFromTemplate(catalogSourceTemplateFile, catalogSourceName, catalogSpec.Reference)
+		if err != nil {
+			generateWithoutTemplate = true
+			o.Log.Error("error generating catalog source from template. Fall back to generating catalog source without template: %v", err)
+		}
+	}
+	if generateWithoutTemplate || catalogSourceTemplateFile == "" {
+		obj = ofv1alpha1.CatalogSource{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+				Kind:       "CatalogSource",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      catalogSourceName,
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1alpha1.CatalogSourceSpec{
+				SourceType: "grpc",
+				Image:      catalogSpec.Reference,
+			},
+		}
+	}
+	bytes, err := yaml.Marshal(obj)
+	if err != nil {
+		return fmt.Errorf("unable to marshal CatalogSource yaml: %v", err)
+	}
+
+	csFileName := filepath.Join(o.WorkingDir, clusterResourcesDir, catalogSourceName+".yaml")
+	// save IDMS struct to file
+	if _, err := os.Stat(csFileName); errors.Is(err, os.ErrNotExist) {
+		o.Log.Debug("%s does not exist, creating it", csFileName)
+		err := os.MkdirAll(filepath.Dir(csFileName), 0755)
+		if err != nil {
+			return err
+		}
+		o.Log.Debug("%s dir created", filepath.Dir(csFileName))
+	}
+	csFile, err := os.Create(csFileName)
+	if err != nil {
+		return err
+	}
+
+	defer csFile.Close()
+
+	_, err = csFile.Write(bytes)
+	o.Log.Info("%s file created", csFileName)
+
+	return err
+}
+
+func catalogSourceContentFromTemplate(templateFile, catalogSourceName, image string) (ofv1alpha1.CatalogSource, error) {
+	// Initializing catalogSource `obj` from template
+	var obj ofv1alpha1.CatalogSource
+	_, err := os.Stat(templateFile)
+	if os.IsNotExist(err) {
+		return obj, fmt.Errorf("error during CatalogSource generation using template: targetCatalogSourceTemplate does not exist: %s : %v", templateFile, err)
+	}
+	if err != nil {
+		return obj, fmt.Errorf("error during CatalogSource generation using template: error accessing targetCatalogSourceTemplate file %s: %v", templateFile, err)
+	}
+	bytesRead, err := os.ReadFile(templateFile)
+	if err != nil {
+		return obj, fmt.Errorf("error during CatalogSource generation using template: error reading targetCatalogSourceTemplate file %s: %v", templateFile, err)
+	}
+	err = yaml.Unmarshal(bytesRead, &obj)
+	if err != nil {
+		return obj, fmt.Errorf("error during CatalogSource generation using template: %s is not a valid catalog source template and could not be unmarshaled: %v", templateFile, err)
+	}
+
+	// validate that the catalogSource is grpc, otherwise fail
+	if obj.APIVersion != "operators.coreos.com/v1alpha1" {
+		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: catalog template does not correspond to the apiVersion operators.coreos.com/v1alpha1 : %s", obj.APIVersion)
+	}
+	if obj.Kind != "CatalogSource" {
+		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: catalog template does not correspond to Kind CatalogSource : %s", obj.Kind)
+	}
+	if obj.Spec.SourceType != "" && obj.Spec.SourceType != "grpc" {
+		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: catalog template is not of sourceType grpc")
+	}
+	if obj.Spec.ConfigMap != "" {
+		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: catalog template should not have a configMap specified")
+	}
+	// fill obj with the values for this catalog
+	obj.Name = catalogSourceName
+	obj.Namespace = "openshift-marketplace"
+	obj.Spec.SourceType = "grpc"
+	obj.Spec.Image = image
+
+	//verify that the resulting obj is a valid CatalogSource object
+	_, err = yaml.Marshal(obj)
+	if err != nil {
+		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: %v", err)
+	}
+
+	return obj, nil
+}
+
 func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorizedMirrors) ([]confv1.ImageDigestMirrorSet, error) {
 
 	// create a IDMS struct
@@ -175,9 +335,6 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 	return idmsList, nil
 }
 
-func (o *ClusterResourcesGenerator) CatalogSourceGenerator(catalogImage string) error {
-	return nil
-}
 func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema, mode imageMirrorsGeneratorMode, forceRepositoryScope bool) ([]categorizedMirrors, error) {
 	mirrorsByCategory := make(map[mirrorCategory]categorizedMirrors)
 	for _, relatedImage := range allRelatedImages {
@@ -360,5 +517,27 @@ func imageTypeToCategory(imageType v1alpha2.ImageType) mirrorCategory {
 		return genericCategory
 	default:
 		return genericCategory
+	}
+}
+
+func isValidRFC1123(name string) bool {
+	// Regular expression to match RFC1123 compliant names
+	rfc1123Regex := "^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]$"
+	match, _ := regexp.MatchString(rfc1123Regex, name)
+	return match && len(name) <= 63
+}
+
+func toRFC1035(r rune) rune {
+	r = unicode.ToLower(r)
+	switch {
+	case r >= 'a' && r <= 'z':
+		return r
+	case r >= '0' && r <= '9':
+		return r
+	case r == '-':
+		return r
+	default:
+		// convert unacceptable character
+		return '-'
 	}
 }

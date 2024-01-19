@@ -560,11 +560,6 @@ github.com/opencontainers/selinux/pkg/pwalkdir
 # github.com/openshift/api v0.0.0-20230223193310-d964c7a58d75
 ## explicit; go 1.19
 github.com/openshift/api/config/v1
-# github.com/openshift/library-go v0.0.0-20230308200407-f3277c772011
-## explicit; go 1.19
-github.com/openshift/library-go/pkg/image/internal/digest
-github.com/openshift/library-go/pkg/image/internal/reference
-github.com/openshift/library-go/pkg/image/reference
 # github.com/operator-framework/operator-registry v1.26.4
 ## explicit; go 1.19
 github.com/operator-framework/operator-registry/alpha/property

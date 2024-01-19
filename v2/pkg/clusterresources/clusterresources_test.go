@@ -3,16 +3,18 @@ package clusterresources
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	ofv1alpha1 "github.com/openshift/oc-mirror/v2/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -408,11 +410,290 @@ func TestGenerateITMS(t *testing.T) {
 		})
 	}
 }
-func isValidRFC1123(name string) bool {
-	// Regular expression to match RFC1123 compliant names
-	rfc1123Regex := "^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]$"
-	match, _ := regexp.MatchString(rfc1123Regex, name)
-	return match && len(name) <= 63
+
+func TestCatalogSourceGenerator(t *testing.T) {
+	log := clog.New("trace")
+
+	tmpDir := t.TempDir()
+	workingDir := tmpDir + "/working-dir"
+
+	defer os.RemoveAll(tmpDir)
+	imageList := []v1alpha3.CopyImageSchema{
+		{
+			Source:      "docker://localhost:5000/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Destination: "docker://myregistry/mynamespace/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Type:        v1alpha2.TypeOCPRelease,
+		},
+		{
+			Source:      "docker://localhost:5000/redhat/redhat-operator-index:v4.15",
+			Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+			Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.15",
+			Type:        v1alpha2.TypeOperatorCatalog,
+		},
+		{
+			Source:      "docker://localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Destination: "docker://myregistry/mynamespace/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Type:        v1alpha2.TypeOperatorRelatedImage,
+		},
+		{
+			Source:      "docker://localhost:5000/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Destination: "docker://myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Origin:      "docker://quay.io/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Type:        v1alpha2.TypeOperatorBundle,
+		},
+	}
+
+	t.Run("Testing GenerateCatalogSource : should pass", func(t *testing.T) {
+
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(csFiles) != 1 {
+			t.Fatalf("output folder should contain 1 idms yaml file")
+		}
+
+		expectedCSName := "cs-redhat-operator-index-v4-15"
+		// check idmsFile has a name that is
+		//compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
+		}
+		assert.Equal(t, expectedCSName, customResourceName)
+		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		var actualCS ofv1alpha1.CatalogSource
+		err = yaml.Unmarshal(bytes, &actualCS)
+		if err != nil {
+			t.Fatalf("failed to unmarshal catalogsource: %v", err)
+		}
+		expectedCS := ofv1alpha1.CatalogSource{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+				Kind:       "CatalogSource",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      expectedCSName,
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1alpha1.CatalogSourceSpec{
+				SourceType: "grpc",
+				Image:      "myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+			},
+		}
+
+		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+
+	})
+
+	t.Run("Testing GenerateCatalogSource with template: should pass", func(t *testing.T) {
+
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+			Config: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+								TargetCatalogSourceTemplate: "../../tests/catalog-source_template.yaml",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(csFiles) != 1 {
+			t.Fatalf("output folder should contain 1 catalogSource yaml file")
+		}
+		// check idmsFile has a name that is
+		//compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
+		}
+		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		var actualCS ofv1alpha1.CatalogSource
+		err = yaml.Unmarshal(bytes, &actualCS)
+		if err != nil {
+			t.Fatalf("failed to unmarshal catalogsource: %v", err)
+		}
+		expectedCS := ofv1alpha1.CatalogSource{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+				Kind:       "CatalogSource",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1alpha1.CatalogSourceSpec{
+				SourceType: "grpc",
+				Image:      "myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+				UpdateStrategy: &ofv1alpha1.UpdateStrategy{
+					RegistryPoll: &ofv1alpha1.RegistryPoll{
+						RawInterval: "30m0s",
+						Interval: &metav1.Duration{
+							Duration: time.Minute * 30,
+						},
+
+						ParsingError: "",
+					},
+				},
+			},
+		}
+
+		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+
+	})
+
+	templateFailCases := []ClusterResourcesGenerator{
+		{
+			Log:        log,
+			WorkingDir: workingDir,
+			Config: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+								TargetCatalogSourceTemplate: "../../tests/catalog-source_template_KO.yaml",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Log:        log,
+			WorkingDir: workingDir,
+			Config: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+								TargetCatalogSourceTemplate: "doesnt_exist.yaml",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Log:        log,
+			WorkingDir: workingDir,
+			Config: v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+								TargetCatalogSourceTemplate: "../../tests/catalog-source_template_KO2.yaml",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	t.Run("Testing GenerateCatalogSource with KO template: should not fail", func(t *testing.T) {
+
+		for _, tc := range templateFailCases {
+			err := tc.CatalogSourceGenerator(imageList)
+			if err != nil {
+				t.Fatalf("should not fail")
+			}
+			_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+			if err != nil {
+				t.Fatalf("output folder should exist")
+			}
+
+			csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+			if err != nil {
+				t.Fatalf("ls output folder should not fail")
+			}
+
+			if len(csFiles) != 1 {
+				t.Fatalf("output folder should contain 1 catalogSource yaml file")
+			}
+			// check idmsFile has a name that is
+			//compliant with Kubernetes requested
+			// RFC-1035 + RFC1123
+			// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+			customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+			if !isValidRFC1123(customResourceName) {
+				t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
+			}
+			bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+			if err != nil {
+				t.Fatalf("failed to read file: %v", err)
+			}
+			var actualCS ofv1alpha1.CatalogSource
+			err = yaml.Unmarshal(bytes, &actualCS)
+			if err != nil {
+				t.Fatalf("failed to unmarshal catalogsource: %v", err)
+			}
+			expectedCS := ofv1alpha1.CatalogSource{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+					Kind:       "CatalogSource",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
+					Namespace: "openshift-marketplace",
+				},
+				Spec: ofv1alpha1.CatalogSourceSpec{
+					SourceType: "grpc",
+					Image:      "myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+				},
+			}
+
+			assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+
+		}
+	})
 }
 
 func TestGenerateImageMirrors(t *testing.T) {

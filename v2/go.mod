@@ -15,7 +15,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc3
 	github.com/openshift/api v0.0.0-20230223193310-d964c7a58d75
-	github.com/openshift/library-go v0.0.0-20230308200407-f3277c772011
 	github.com/operator-framework/operator-registry v1.26.4
 	github.com/otiai10/copy v1.2.0
 	github.com/sirupsen/logrus v1.9.3
@@ -24,6 +23,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	golang.org/x/crypto v0.10.0
+	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.26.3
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubectl v0.26.3
@@ -158,7 +158,6 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.26.3 // indirect
 	k8s.io/client-go v0.26.3 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

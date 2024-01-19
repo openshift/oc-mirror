@@ -276,7 +276,19 @@ func getRelatedImageByDefaultChannel(log clog.PluggableLoggerInterface, olm []v1
 			if bundles[obj.Name] {
 				log.Debug("config bundle: %d %v", i, obj.Name)
 				log.Trace("config relatedImages: %d %v", i, obj.RelatedImages)
-				relatedImages[obj.Name] = obj.RelatedImages
+				riList := relatedImages[obj.Name]
+				if riList == nil {
+					riList = []v1alpha3.RelatedImage{}
+				}
+				for _, ri := range obj.RelatedImages {
+					if ri.Image == obj.Image {
+						ri.Type = v1alpha2.TypeOperatorBundle
+					} else {
+						ri.Type = v1alpha2.TypeOperatorRelatedImage
+					}
+					riList = append(riList, ri)
+				}
+				relatedImages[obj.Name] = riList
 			}
 		case obj.Schema == "olm.package":
 			log.Debug("Config package: %v", obj.Name)
@@ -316,14 +328,27 @@ func getRelatedImageByFilter(log clog.PluggableLoggerInterface, olm []v1alpha3.D
 				bundles[name] = true
 			}
 		case obj.Schema == "olm.bundle":
+			toBeAdded := false
 			if bundles[obj.Name] && !pkg.Full {
 				log.Debug("config bundle: %d %v", i, obj.Name)
 				log.Trace("config relatedImages: %d %v", i, obj.RelatedImages)
-				relatedImages[obj.Name] = obj.RelatedImages
+				toBeAdded = true
 			}
 			// add all bundles
-			if pkg.Full {
-				relatedImages[obj.Name] = obj.RelatedImages
+			if pkg.Full || toBeAdded {
+				riList := relatedImages[obj.Name]
+				if riList == nil {
+					riList = []v1alpha3.RelatedImage{}
+				}
+				for _, ri := range obj.RelatedImages {
+					if ri.Image == obj.Image {
+						ri.Type = v1alpha2.TypeOperatorBundle
+					} else {
+						ri.Type = v1alpha2.TypeOperatorRelatedImage
+					}
+					riList = append(riList, ri)
+				}
+				relatedImages[obj.Name] = riList
 			}
 		case obj.Schema == "olm.package":
 			log.Debug("config package: %v", obj.Name)

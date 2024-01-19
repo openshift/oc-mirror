@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: totalRubbish
+  namespace: openshift-marketplace
+spec:
+  image: totalRubbish
+  sourceType: grpc
+  updateStrategy:
+    registryPoll:
+      interval: 30m0s
