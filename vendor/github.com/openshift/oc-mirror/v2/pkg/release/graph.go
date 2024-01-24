@@ -14,9 +14,9 @@ import (
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
 // it follows https://docs.openshift.com/container-platform/4.13/updating/updating-restricted-network-cluster/restricted-network-update-osus.html#update-service-graph-data_updating-restricted-network-cluster-osus
-func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context) (string, error) {
+func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string) (string, error) {
 	// HTTP Get the graph updates from api endpoint
-	resp, err := http.Get(graphURL)
+	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
 	}

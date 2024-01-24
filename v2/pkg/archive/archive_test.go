@@ -51,7 +51,9 @@ var expectedTarContents = []string{
 	"isc",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/release-metadata",
-	"working-dir-fake/release-filters/690d64d2ebd41f1834c80e632f041b5b"}
+	"working-dir-fake/release-filters/690d64d2ebd41f1834c80e632f041b5b",
+	"working-dir-fake/hold-operator/redhat-operator-index/v4.14/configs/node-observability-operator/catalog.json",
+}
 
 func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
 	global := &mirror.GlobalOptions{

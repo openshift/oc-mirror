@@ -85,7 +85,7 @@ type CopyOptions struct {
 // whether or not the value actually ends up being used.
 // DO NOT ADD ANY NEW USES OF THIS; just call dockerImageFlags with an appropriate, possibly empty, flagPrefix.
 type DeprecatedTLSVerifyOption struct {
-	tlsVerify commonFlag.OptionalBool // FIXME FIXME: Warn if this is used, or even if it is ignored.
+	tlsVerify commonFlag.OptionalBool // Warn if this is used, or even if it is ignored.
 }
 
 // sharedImageOptions collects CLI flags which are image-related, but do not change across images.

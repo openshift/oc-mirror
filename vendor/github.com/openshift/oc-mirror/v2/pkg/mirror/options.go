@@ -19,7 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/term"
 )
 
 const defaultUserAgent string = "skopeo/v.19.5"
@@ -86,7 +85,7 @@ type CopyOptions struct {
 // whether or not the value actually ends up being used.
 // DO NOT ADD ANY NEW USES OF THIS; just call dockerImageFlags with an appropriate, possibly empty, flagPrefix.
 type DeprecatedTLSVerifyOption struct {
-	tlsVerify commonFlag.OptionalBool // FIXME FIXME: Warn if this is used, or even if it is ignored.
+	tlsVerify commonFlag.OptionalBool // Warn if this is used, or even if it is ignored.
 }
 
 // sharedImageOptions collects CLI flags which are image-related, but do not change across images.
@@ -115,7 +114,7 @@ type dockerImageOptions struct {
 // imageOptions collects CLI flags which are the same across subcommands, but may be different for each image
 // (e.g. may differ between the source and destination of a copy)
 type imageOptions struct {
-	dockerImageOptions
+	*dockerImageOptions
 	sharedBlobDir    string // A directory to use for OCI blobs, shared across repositories
 	dockerDaemonHost string // docker-daemon: host to connect to
 }
@@ -212,7 +211,7 @@ func SharedImageFlags() (pflag.FlagSet, *SharedImageOptions) {
 // writing into imageOptions, and the managed imageOptions structure.
 func dockerImageFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageOptions) {
 	flags := imageOptions{
-		dockerImageOptions: dockerImageOptions{
+		dockerImageOptions: &dockerImageOptions{
 			global:              global,
 			shared:              shared,
 			deprecatedTLSVerify: deprecatedTLSVerify,
@@ -370,51 +369,6 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
 	return ctx, nil
 }
 
-// imageDestFlags prepares a collection of CLI flags writing into imageDestOptions, and the managed imageDestOptions structure.
-func ImageDestFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageDestOptions) {
-	fs := pflag.FlagSet{}
-	genericFlags, genericOptions := dockerImageFlags(global, shared, deprecatedTLSVerify, flagPrefix, credsOptionAlias)
-	opts := imageDestOptions{imageOptions: genericOptions}
-	fs.AddFlagSet(&genericFlags)
-	fs.BoolVar(&opts.dirForceCompression, flagPrefix+"compress", false, "Compress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
-	fs.BoolVar(&opts.dirForceDecompression, flagPrefix+"decompress", false, "Decompress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
-	fs.BoolVar(&opts.ociAcceptUncompressedLayers, flagPrefix+"oci-accept-uncompressed-layers", false, "Allow uncompressed image layers when saving to an OCI image using the 'oci' transport. (default is to compress things that aren't compressed)")
-	fs.StringVar(&opts.compressionFormat, flagPrefix+"compress-format", "", "`FORMAT` to use for the compression")
-	fs.Var(commonFlag.NewOptionalIntValue(&opts.compressionLevel), flagPrefix+"compress-level", "`LEVEL` to use for the compression")
-	fs.BoolVar(&opts.precomputeDigests, flagPrefix+"precompute-digests", false, "Precompute digests to prevent uploading layers already on the registry using the 'docker' transport.")
-	fs.StringVar(&opts.sharedBlobDir, flagPrefix+"shared-blob-dir", "", "`DIRECTORY` to use to share blobs across OCI repositories")
-	fs.StringVar(&opts.dockerDaemonHost, flagPrefix+"daemon-host", "", "use docker daemon host at `HOST` (docker-daemon: only)")
-	return fs, &opts
-}
-
-/*
-// newSystemContext returns a *types.SystemContext corresponding to opts.
-// It is guaranteed to return a fresh instance, so it is safe to make additional updates to it.
-func (opts *imageDestOptions) newSystemContext() (*types.SystemContext, error) {
-	ctx, err := opts.imageOptions.NewSystemContext()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx.DirForceCompress = opts.dirForceCompression
-	ctx.DirForceDecompress = opts.dirForceDecompression
-	ctx.OCIAcceptUncompressedLayers = opts.ociAcceptUncompressedLayers
-	if opts.compressionFormat != "" {
-		cf, err := compression.AlgorithmByName(opts.compressionFormat)
-		if err != nil {
-			return nil, err
-		}
-		ctx.CompressionFormat = &cf
-	}
-	if opts.compressionLevel.Present() {
-		value := opts.compressionLevel.Value()
-		ctx.CompressionLevel = &value
-	}
-	ctx.DockerRegistryPushPrecomputeDigests = opts.precomputeDigests
-	return ctx, err
-}
-*/
-
 func parseCreds(creds string) (string, string, error) {
 	if creds == "" {
 		return "", "", errors.New("credentials can't be empty")
@@ -440,21 +394,22 @@ func getDockerAuth(creds string) (*types.DockerAuthConfig, error) {
 	}, nil
 }
 
-/*
-// parseImageSource converts image URL-like string to an ImageSource.
-// The caller must call .Close() on the returned ImageSource.
-func parseImageSource(ctx context.Context, opts *imageOptions, name string) (types.ImageSource, error) {
-	ref, err := alltransports.ParseImageName(name)
-	if err != nil {
-		return nil, err
-	}
-	sys, err := opts.NewSystemContext()
-	if err != nil {
-		return nil, err
-	}
-	return ref.NewImageSource(ctx, sys)
+// imageDestFlags prepares a collection of CLI flags writing into imageDestOptions, and the managed imageDestOptions structure.
+func ImageDestFlags(global *GlobalOptions, shared *SharedImageOptions, deprecatedTLSVerify *DeprecatedTLSVerifyOption, flagPrefix, credsOptionAlias string) (pflag.FlagSet, *imageDestOptions) {
+	fs := pflag.FlagSet{}
+	genericFlags, genericOptions := dockerImageFlags(global, shared, deprecatedTLSVerify, flagPrefix, credsOptionAlias)
+	opts := imageDestOptions{imageOptions: genericOptions}
+	fs.AddFlagSet(&genericFlags)
+	fs.BoolVar(&opts.dirForceCompression, flagPrefix+"compress", false, "Compress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
+	fs.BoolVar(&opts.dirForceDecompression, flagPrefix+"decompress", false, "Decompress tarball image layers when saving to directory using the 'dir' transport. (default is same compression type as source)")
+	fs.BoolVar(&opts.ociAcceptUncompressedLayers, flagPrefix+"oci-accept-uncompressed-layers", false, "Allow uncompressed image layers when saving to an OCI image using the 'oci' transport. (default is to compress things that aren't compressed)")
+	fs.StringVar(&opts.compressionFormat, flagPrefix+"compress-format", "", "`FORMAT` to use for the compression")
+	fs.Var(commonFlag.NewOptionalIntValue(&opts.compressionLevel), flagPrefix+"compress-level", "`LEVEL` to use for the compression")
+	fs.BoolVar(&opts.precomputeDigests, flagPrefix+"precompute-digests", false, "Precompute digests to prevent uploading layers already on the registry using the 'docker' transport.")
+	fs.StringVar(&opts.sharedBlobDir, flagPrefix+"shared-blob-dir", "", "`DIRECTORY` to use to share blobs across OCI repositories")
+	fs.StringVar(&opts.dockerDaemonHost, flagPrefix+"daemon-host", "", "use docker daemon host at `HOST` (docker-daemon: only)")
+	return fs, &opts
 }
-*/
 
 // parseManifestFormat parses format parameter for copy and sync command.
 // It returns string value to use as manifest MIME type
@@ -469,48 +424,4 @@ func ParseManifestFormat(manifestFormat string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown format %q. Choose one of the supported formats: 'oci', 'v2s1', or 'v2s2'", manifestFormat)
 	}
-}
-
-/*
-// usageTemplate returns the usage template for skopeo commands
-// This blocks the displaying of the global options. The main skopeo
-// command should not use this.
-const usageTemplate = `Usage:{{if .Runnable}}
-{{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-{{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
-Aliases:
-{{.NameAndAliases}}{{end}}{{if .HasExample}}
-Examples:
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
-Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-{{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
-{{end}}
-`
-*/
-
-/*
-// adjustUsage uses usageTemplate template to get rid the GlobalOption from usage
-// and disable [flag] at the end of command usage
-func adjustUsage(c *cobra.Command) {
-	c.SetUsageTemplate(usageTemplate)
-	c.DisableFlagsInUseLine = true
-}
-*/
-
-// promptForPassphrase interactively prompts for a passphrase related to privateKeyFile
-func PromptForPassphrase(privateKeyFile string, stdin, stdout *os.File) (string, error) {
-	stdinFd := int(stdin.Fd())
-	if !term.IsTerminal(stdinFd) {
-		return "", fmt.Errorf("Cannot prompt for a passphrase for key %s, standard input is not a TTY", privateKeyFile)
-	}
-
-	fmt.Fprintf(stdout, "Passphrase for key %s: ", privateKeyFile)
-	passphrase, err := term.ReadPassword(stdinFd)
-	if err != nil {
-		return "", fmt.Errorf("Error reading password: %w", err)
-	}
-	fmt.Fprintf(stdout, "\n")
-	return string(passphrase), nil
 }

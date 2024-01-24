@@ -24,7 +24,7 @@ const (
 	releaseManifests            = "release-manifests"
 	imageReferences             = "image-references"
 	releaseImageExtractFullPath = releaseManifests + "/" + imageReferences
-	blobsDir                    = "blobs/sha256" // TODO blobsDir should not take assumptions about algorithm
+	blobsDir                    = "blobs/sha256"
 	errMsg                      = "[ReleaseImageCollector] %v "
 	logFile                     = "release.log"
 )

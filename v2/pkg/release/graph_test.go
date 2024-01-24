@@ -198,9 +198,14 @@ func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, la
 	}
 	return nil
 }
+
 func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {
 	if o.Fail {
 		return layout.Path(""), fmt.Errorf("forced error")
 	}
 	return layout.FromPath("../../tests/test-untar")
+}
+
+func (o mockImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error) {
+	return nil, nil
 }

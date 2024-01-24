@@ -105,7 +105,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		}
 		validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgests seem to incorrect for %s: %v ", op.Catalog, err)
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the digests seem to be incorrect for %s: %v ", op.Catalog, err)
 		}
 
 		manifest := validDigest.Encoded()
@@ -121,7 +121,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		// looking for the lable to search for a specific folder
 		configDigest, err := digest.Parse(oci.Config.Digest)
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the disgests seem to be incorrect for %s: %v ", op.Catalog, err)
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the digests seem to be incorrect for %s: %v ", op.Catalog, err)
 		}
 		catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 		ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
@@ -169,9 +169,9 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		count = count + len(v)
 	}
 	o.Log.Info("images to copy (before duplicates) %d ", count)
+
 	// check the mode
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
-
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err

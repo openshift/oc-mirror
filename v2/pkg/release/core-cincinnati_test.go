@@ -243,23 +243,25 @@ func TestGetUpdatesInRange(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
 	tests := []struct {
-		name string
-
+		name          string
 		expectedQuery string
 		versions      []Update
 		releaseRange  semver.Range
 		err           string
-	}{{
-		name:          "Valid/OneChannel",
-		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
-		versions: []Update{
-			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-			{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
-			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+	}{
+		{
+			name:          "Valid/OneChannel",
+			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			versions: []Update{
+				{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+				{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+				{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
+				{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+			},
+			releaseRange: semver.MustParseRange(">=4.0.0-5"),
 		},
-		releaseRange: semver.MustParseRange(">=4.0.0-5"),
-	}}
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 1)
@@ -478,6 +480,62 @@ func TestHandleBlockedEdges(t *testing.T) {
 			} else {
 				require.EqualError(t, err, test.err)
 			}
+		})
+	}
+}
+
+func TestGetChannels(t *testing.T) {
+	channelName := "stable-4.0"
+	tests := []struct {
+		name          string
+		expectedQuery string
+		versions      []Update
+		releaseRange  semver.Range
+		err           string
+	}{
+		{
+			name:          "Valid/OneChannel",
+			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			versions: []Update{
+				{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
+				{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+			},
+			releaseRange: semver.MustParseRange(">=4.0.0-5"),
+		},
+	}
+
+	for _, test := range tests {
+		// ensure there are no errors
+		t.Run(test.name, func(t *testing.T) {
+			requestQuery := make(chan string, 1)
+			defer close(requestQuery)
+
+			handler := getHandlerMulti(t, requestQuery)
+
+			ts := httptest.NewServer(http.HandlerFunc(handler))
+			t.Cleanup(ts.Close)
+
+			endpoint, err := url.Parse(ts.URL)
+			require.NoError(t, err)
+			c := &mockClient{url: endpoint}
+
+			_, err = GetChannels(context.TODO(), c, channelName)
+			if test.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, test.err)
+			}
+
+			actualQuery := ""
+			select {
+			case actualQuery = <-requestQuery:
+			default:
+				t.Fatal("no request received at upstream URL")
+			}
+			_, err = url.ParseQuery(test.expectedQuery)
+			require.NoError(t, err)
+			_, err = url.ParseQuery(actualQuery)
+			require.NoError(t, err)
 		})
 	}
 }

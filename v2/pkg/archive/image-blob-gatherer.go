@@ -31,7 +31,6 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 		return blobs, err
 	}
 
-	// TODO should we verify signatures while gathering blobs?
 	// More broadly, should we include anything in the archive to
 	// help with signature verification after the archive is untarred
 	// inside the enclave?

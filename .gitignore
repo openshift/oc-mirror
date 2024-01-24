@@ -21,6 +21,9 @@ v2/launch.json
 v2/logs/
 v2/pkg/release/release.log
 v2/.scannerwork/
+v2/imagebuilder/test/
+v2/pkg/cli/registry.log
+v2/tests/graph-staging/cincinnati-graph-data.tar
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 isc*.yaml

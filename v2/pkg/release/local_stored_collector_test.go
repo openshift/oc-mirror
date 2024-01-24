@@ -61,6 +61,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/hold-release/")
 		os.RemoveAll("../../tests/release-images")
 		os.RemoveAll("../../tests/tmp/")
+
 		ex := setupCollector_DiskToMirror(tempDir, log)
 		//copy tests/hold-test-fake to working-dir
 		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
@@ -146,6 +147,7 @@ func TestReleaseImage(t *testing.T) {
 		os.RemoveAll("../../tests/hold-release/")
 		os.RemoveAll("../../tests/release-images")
 		os.RemoveAll("../../tests/tmp/")
+
 		ex := setupCollector_DiskToMirror(tempDir, log)
 		//copy tests/hold-test-fake to working-dir
 		err := copy.Copy("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
@@ -218,6 +220,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		Opts:             d2mOpts,
 		Cincinnati:       nil,
 		LocalStorageFQDN: "localhost:9999",
+		LogsDir:          "/tmp/",
 	}
 
 	return ex
@@ -338,6 +341,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		Cincinnati:       cincinnati,
 		LocalStorageFQDN: "localhost:9999",
 		ImageBuilder:     &mockImageBuilder{},
+		LogsDir:          "/tmp/",
 	}
 	return ex
 }

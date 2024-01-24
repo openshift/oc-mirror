@@ -32,7 +32,6 @@ type ClusterResourcesGenerator struct {
 func (o *ClusterResourcesGenerator) IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
 
 	// determine the name of the IDMS resource
-	// TODO determine name (based on date?)
 	dateTime := time.Now().UTC().Format(time.RFC3339)
 	// replace all : by -
 	dateTime = strings.ReplaceAll(dateTime, ":", "-")

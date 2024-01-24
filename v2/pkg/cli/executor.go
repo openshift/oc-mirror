@@ -54,6 +54,7 @@ const (
 	operatorImageExtractDir string = "hold-operator"
 	signaturesDir           string = "signatures"
 	registryLogFilename     string = "registry.log"
+	startMessage            string = "starting local storage on localhost:%v"
 )
 
 var (
@@ -178,7 +179,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(NewPrepareCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
@@ -323,8 +324,9 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 // a local (distribution) registry
 func (o *ExecutorSchema) setupLocalStorage() error {
 
-	//create config file for local registry
-	configYamlV0_1 := `
+	// create config file for local registry
+	// sonarqube scanner variable declaration convention
+	configYamlV01 := `
 version: 0.1
 log:
   accesslog:
@@ -357,19 +359,19 @@ health:
 		// something went wrong
 		return fmt.Errorf("error using the local storage folder for caching")
 	}
-	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ROOT$$", o.LocalStorageDisk, 1)
-	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
-	configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
+	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ROOT$$", o.LocalStorageDisk, 1)
+	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
+	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
 	if o.Opts.Global.LogLevel == "debug" {
-		configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
+		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
 	} else {
-		configYamlV0_1 = strings.Replace(configYamlV0_1, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "true", 1)
+		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "true", 1)
 	}
 
-	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
 
 	if err != nil {
-		return fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV0_1)
+		return fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV01)
 	}
 
 	regLogger := logrus.New()
@@ -450,7 +452,7 @@ func (o *ExecutorSchema) setupLocalStorageDir() error {
 	}
 	err := os.MkdirAll(o.LocalStorageDisk, 0755)
 	if err != nil {
-		o.Log.Error("unable to setp folder for oc-mirror local storage: %v ", err)
+		o.Log.Error("unable to setup folder for oc-mirror local storage: %v ", err)
 		return err
 	}
 	return nil
@@ -504,7 +506,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
-	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
+	o.Log.Info(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	allImages, err := o.CollectAll(cmd.Context())
@@ -554,7 +556,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	defer o.MirrorUnArchiver.Close()
 
 	// start the local storage registry
-	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
+	o.Log.Info(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect
@@ -730,7 +732,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", "working-dir", "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE it. V2 is still under development and it is not ready to be used.")
@@ -818,7 +820,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	}
 	defer cachedImagesFile.Close()
 
-	o.Log.Info("starting local storage on localhost:%v", o.Opts.Global.Port)
+	o.Log.Info(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	allImages, err := o.CollectAll(cmd.Context())

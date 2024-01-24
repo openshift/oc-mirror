@@ -89,7 +89,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				}
 				o.Log.Debug("copied release index image %s ", value.Source)
 
-				// TODO: create common function to show logs
 				f, _ := os.ReadFile(logFile)
 				lines := strings.Split(string(f), "\n")
 				for _, s := range lines {

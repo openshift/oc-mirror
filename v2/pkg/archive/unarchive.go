@@ -19,7 +19,6 @@ type MirrorUnArchiver struct {
 }
 
 func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArchiver, error) {
-	//TODO handle several chunks
 	chunk := 1
 	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
 	chunkPath := filepath.Join(archivePath, archiveFileName)
@@ -57,12 +56,12 @@ func (o MirrorUnArchiver) Unarchive() error {
 		// make sure workingDir exists
 		err := os.MkdirAll(o.workingDir, 0755)
 		if err != nil {
-			return fmt.Errorf("unable to create folder %s: %v", o.workingDir, err)
+			return fmt.Errorf(errMessageFolder, o.workingDir, err)
 		}
 		// make sure cacheDir exists
 		err = os.MkdirAll(o.cacheDir, 0755)
 		if err != nil {
-			return fmt.Errorf("unable to create folder %s: %v", o.cacheDir, err)
+			return fmt.Errorf(errMessageFolder, o.cacheDir, err)
 		}
 		for {
 			header, err := reader.Next()
@@ -83,6 +82,12 @@ func (o MirrorUnArchiver) Unarchive() error {
 			// because we are considering that all parent folders will be
 			// created recursively, and that, to the best of our knowledge
 			// the archive doesn't include any symbolic links
+
+			// for the moment we ignore imageSetConfig that is
+			// included in the tar
+			// as well as any other files that are not
+			// working-dir or cache
+
 			if header.Typeflag == tar.TypeReg {
 				descriptor := ""
 				// case file belongs to working-dir
@@ -93,16 +98,12 @@ func (o MirrorUnArchiver) Unarchive() error {
 					// case file belongs to the cache
 					descriptor = filepath.Join(o.cacheDir, header.Name)
 				} else {
-					// for the moment we ignore imageSetConfig that is
-					// included in the tar
-					// as well as any other files that are not
-					// working-dir or cache
 					continue
 				}
 				// make sure all the parent directories exist
 				descriptorParent := filepath.Dir(descriptor)
 				if err := os.MkdirAll(descriptorParent, 0755); err != nil {
-					return fmt.Errorf("unable to create folder %s: %v", descriptorParent, err)
+					return fmt.Errorf(errMessageFolder, descriptorParent, err)
 				}
 				// if it's a file create it, making sure it's at least writable and executable by the user
 				// since with every UnArchive, we should be able to rewrite the file

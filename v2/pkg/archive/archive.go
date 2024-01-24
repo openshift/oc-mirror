@@ -31,7 +31,6 @@ type MirrorArchive struct {
 
 // The caller must call Close!
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, logg clog.PluggableLoggerInterface) (MirrorArchive, error) {
-	//TODO handle several chunks
 	chunk := 1
 	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
 	err := os.MkdirAll(destination, 0755)

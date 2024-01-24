@@ -16,6 +16,8 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
+
+	// nolint
 	"golang.org/x/crypto/openpgp"
 )
 
@@ -35,6 +37,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	var data []byte
 	var err error
 	var imgs []v1alpha3.CopyImageSchema
+	var digest string
 	// set up http object
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
@@ -42,17 +45,21 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	httpClient := &http.Client{Transport: tr}
 
 	for _, image := range images {
-		digest := strings.Split(image.Source, ":")[1]
-		// check if the image is in the cache else
-		// do a lookup and download it to cache
-		data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
-		if err != nil {
-			if os.IsNotExist(err) {
-				o.Log.Warn("signature for %s not in cache", digest)
+		sha := strings.Split(image.Source, ":")
+		if len(sha) >= 2 {
+			digest = sha[1]
+			o.Log.Info("signature %s", digest)
+			// check if the image is in the cache else
+			// do a lookup and download it to cache
+			data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
+			if err != nil {
+				if os.IsNotExist(err) {
+					o.Log.Warn("signature for %s not in cache", digest)
+				}
 			}
+		} else {
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("parsing image digest")
 		}
-
-		o.Log.Info("signature %s", digest)
 
 		// we have the current digest in cache
 		if len(data) == 0 {

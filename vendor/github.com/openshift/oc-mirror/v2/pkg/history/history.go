@@ -22,7 +22,6 @@ type history struct {
 	fileCreator FileCreator
 }
 
-// TODO : @aguidirh remove fileCreator from arguments
 func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerInterface, fileCreator FileCreator) (History, error) {
 	if logg == nil {
 		log = clog.New("error")
@@ -55,7 +54,6 @@ func (o history) Read() (map[string]string, error) {
 
 	file, err := os.Open(historyFile)
 	if err != nil {
-		log.Error("unable to open history file: %s", err.Error())
 		return nil, err
 	}
 	defer file.Close()
@@ -68,7 +66,6 @@ func (o history) Read() (map[string]string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Error("unable to read history file: %s", err.Error())
 		return nil, err
 	}
 
@@ -79,7 +76,6 @@ func (o history) getHistoryFile(before time.Time) (string, error) {
 	historyFilePath := ""
 	historyFiles, err := os.ReadDir(o.historyDir)
 	if err != nil {
-		log.Error("unable to read history directory: %s", err.Error())
 		return "", err
 	}
 
@@ -173,8 +169,5 @@ func (o history) newFileName() string {
 
 func (OSFileCreator) Create(filename string) (io.WriteCloser, error) {
 	file, err := os.Create(filename)
-	if err != nil {
-		log.Error("unable to create file: %s", err.Error())
-	}
 	return file, err
 }

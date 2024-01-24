@@ -56,7 +56,6 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) Im
 		remote.WithAuthFromKeychain(authn.DefaultKeychain), // this will try to find .docker/config first, $XDG_RUNTIME_DIR/containers/auth.json second
 		remote.WithContext(context.TODO()),
 		// doesn't seem possible to use registries.conf here.
-		// TODO test what happens if registries.conf is specified
 	}
 	if !opts.Global.TlsVerify {
 		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
@@ -65,7 +64,6 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) Im
 		// create our own roundTripper to pass insecure=true
 		insecureRoundTripper := createInsecureRoundTripper()
 		remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
-
 	}
 
 	return &ImageBuilder{
@@ -142,7 +140,7 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	originalIdxManifest = originalIdxManifest.DeepCopy()
 
 	// process the image index for updates to images discovered along the way
-	resultIdx, err := b.processImageIndex(ctx, idx, &v2format, cmd, targetRef, layers...)
+	resultIdx, err := b.ProcessImageIndex(ctx, idx, &v2format, cmd, targetRef, layers...)
 	if err != nil {
 		return err
 	}
@@ -196,7 +194,7 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	return remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
 }
 
-// processImageIndex is a recursive helper function that allows for traversal of the hierarchy of
+// ProcessImageIndex is a recursive helper function that allows for traversal of the hierarchy of
 // parent/child indexes that can exist for a multi arch image. There's always
 // at least one index at the root since this is an OCI layout that we're dealing with.
 // In theory there can be "infinite levels" of "index indirection" for multi arch images, but typically
@@ -217,7 +215,7 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 // # Returns
 // • v1.ImageIndex: The resulting image index after processing has completed. Will be nil if an error occurs, otherwise non-nil.
 // • error: non-nil if an error occurs, nil otherwise
-func (b *ImageBuilder) processImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error) {
+func (b *ImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error) {
 	var resultIdx v1.ImageIndex
 	resultIdx = idx
 	idxManifest, err := idx.IndexManifest()
@@ -233,7 +231,7 @@ func (b *ImageBuilder) processImageIndex(ctx context.Context, idx v1.ImageIndex,
 				return nil, err
 			}
 			// recursive call
-			processedIdx, err := b.processImageIndex(ctx, innerIdx, v2format, cmd, targetRef, layers...)
+			processedIdx, err := b.ProcessImageIndex(ctx, innerIdx, v2format, cmd, targetRef, layers...)
 			if err != nil {
 				return nil, err
 			}

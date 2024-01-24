@@ -203,9 +203,10 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		if err != nil {
 			return Update{}, Update{}, nil, err
 		}
+
+		// If blocked path is found, just return the requested version and any accumulated
+		// upgrades to the caller
 		if isBlocked {
-			// If blocked path is found, just return the requested version and any accumulated
-			// upgrades to the caller
 			klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 			return GetUpdates(ctx, c, arch, targetChannel, reqVer, reqVer)
 		}
@@ -492,7 +493,8 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	if transport != nil && transport.TLSClientConfig != nil {
 		if c.GetTransport().TLSClientConfig.ClientCAs == nil {
 			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
-		} //else {
+		}
+		//else {
 		//klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
 		//}
 	}

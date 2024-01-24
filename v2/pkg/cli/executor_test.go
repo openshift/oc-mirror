@@ -28,6 +28,7 @@ import (
 func TestExecutorMirroring(t *testing.T) {
 	testFolder := t.TempDir()
 	defer os.RemoveAll(testFolder)
+	defer os.Remove("../../pkg/cli/registry.log")
 
 	workDir := filepath.Join(testFolder, "tests")
 	//copy tests/hold-test-fake to working-dir
@@ -99,6 +100,7 @@ func TestExecutorMirroring(t *testing.T) {
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
+			LogsDir:                      "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -132,6 +134,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
+			LogsDir:                      "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -165,6 +168,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
+			LogsDir:                      "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -215,8 +219,9 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.ConfigPath = "test"
 
 		ex := &ExecutorSchema{
-			Log:  log,
-			Opts: opts,
+			Log:     log,
+			Opts:    opts,
+			LogsDir: "/tmp/",
 		}
 
 		err := ex.Validate([]string{"file://test"})
@@ -285,20 +290,26 @@ func TestExecutorComplete(t *testing.T) {
 			Log:     log,
 			Opts:    opts,
 			MakeDir: MakeDir{},
+			LogsDir: "/tmp/",
 		}
 
+		os.Setenv(cacheEnvVar, "/tmp/")
+
 		// file protocol
-		err := ex.Complete([]string{"file://test"})
+		err := ex.Complete([]string{"file:///tmp/test"})
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 
 		// docker protocol
-		err = ex.Complete([]string{"docker://test"})
+		err = ex.Complete([]string{"docker:///tmp/test"})
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
 
+		defer os.RemoveAll("../../pkg/cli/test")
+		defer os.RemoveAll("../../pkg/cli/tmp")
+		defer os.RemoveAll("../../pkg/cli/working-dir")
 	})
 }
 
@@ -331,9 +342,14 @@ func TestExecutorValidatePrepare(t *testing.T) {
 		opts.Global.From = "file://test"
 
 		ex := &ExecutorSchema{
-			Log:  log,
-			Opts: opts,
+			Log:     log,
+			Opts:    opts,
+			LogsDir: "/tmp/",
 		}
+
+		defer os.RemoveAll("../../pkg/cli/test")
+		defer os.RemoveAll("../../pkg/cli/tmp")
+		defer os.RemoveAll("../../pkg/cli/working-dir")
 
 		err := ex.ValidatePrepare([]string{"file://test"})
 		if err != nil {
@@ -390,7 +406,14 @@ func TestExecutorCompletePrepare(t *testing.T) {
 			Log:     log,
 			Opts:    opts,
 			MakeDir: MakeDir{},
+			LogsDir: "/tmp/",
 		}
+
+		os.Setenv(cacheEnvVar, "/tmp/")
+
+		defer os.RemoveAll("../../pkg/cli/test")
+		defer os.RemoveAll("../../pkg/cli/tmp")
+		defer os.RemoveAll("../../pkg/cli/working-dir")
 
 		err := ex.CompletePrepare([]string{"file://test"})
 		if err != nil {
@@ -460,6 +483,7 @@ func TestExecutorRunPrepare(t *testing.T) {
 			Mirror:                       mockMirror,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
+			LogsDir:                      "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -504,6 +528,7 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 			Opts:             opts,
 			LocalStorageDisk: "../../tests/cache-fake",
 			MakeDir:          MockMakeDir{},
+			LogsDir:          "/tmp/",
 		}
 		err := ex.setupLocalStorage()
 		if err != nil {
@@ -581,7 +606,7 @@ func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 
 		ex := &ExecutorSchema{
 			Log:     log,
-			LogsDir: "logs",
+			LogsDir: "/tmp/",
 			Opts:    opts,
 			MakeDir: mkdir,
 		}
@@ -633,7 +658,7 @@ func TestExecutorCollectAll(t *testing.T) {
 
 		ex := &ExecutorSchema{
 			Log:              log,
-			LogsDir:          "logs",
+			LogsDir:          "/tmp/",
 			Opts:             opts,
 			MakeDir:          mkdir,
 			Operator:         collector,
@@ -828,7 +853,7 @@ func skipSignalsToInterruptStorage(errchan chan error) {
 }
 
 func setupRegForTest(testFolder string) (*configuration.Configuration, error) {
-	configYamlV0_1 := `
+	configYamlV01 := `
 version: 0.1
 log:
   accesslog:
@@ -850,11 +875,11 @@ health:
   storagedriver:
     enabled: false
 `
-	configYamlV0_1 = fmt.Sprintf(configYamlV0_1, testFolder, 6000)
-	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, 6000)
+	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
 
 	if err != nil {
-		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV0_1)
+		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV01)
 	}
 	return config, nil
 }

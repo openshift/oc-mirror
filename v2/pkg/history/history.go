@@ -22,7 +22,6 @@ type history struct {
 	fileCreator FileCreator
 }
 
-// TODO : @aguidirh remove fileCreator from arguments
 func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerInterface, fileCreator FileCreator) (History, error) {
 	if logg == nil {
 		log = clog.New("error")

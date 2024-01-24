@@ -61,7 +61,7 @@ func NewMirrorDelete() MirrorDeleteInterface {
 // Run - method to copy images from source to destination
 func (o *Mirror) Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions, stdout bufio.Writer) (retErr error) {
 	if mode == DeleteMode {
-		return o.delete(ctx, src, opts)
+		return o.delete(ctx, dest, opts)
 	}
 	return o.copy(ctx, src, dest, opts, stdout)
 }
@@ -121,26 +121,8 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		}
 	}
 
-	/*
-		for _, image := range opts.AdditionalTags {
-			ref, err := reference.ParseNormalizedNamed(image)
-			if err != nil {
-				return fmt.Errorf("error parsing additional-tag '%s': %v", image, err)
-			}
-			namedTagged, isNamedTagged := ref.(reference.NamedTagged)
-			if !isNamedTagged {
-				return fmt.Errorf("additional-tag '%s' must be a tagged reference", image)
-			}
-			destinationCtx.DockerArchiveAdditionalTags = append(destinationCtx.DockerArchiveAdditionalTags, namedTagged)
-		}
-	*/
-
 	ctx, cancel := opts.Global.CommandTimeoutContext()
 	defer cancel()
-
-	//if opts.Quiet {
-	//	stdout = nil
-	//}
 
 	imageListSelection := copy.CopySystemImage
 	if len(opts.MultiArch) > 0 && opts.All {
@@ -161,40 +143,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
 	}
-
-	/*
-		var encLayers *[]int
-		var encConfig *encconfig.EncryptConfig
-		var decConfig *encconfig.DecryptConfig
-
-		if len(opts.EncryptLayer) > 0 && len(opts.EncryptionKeys) == 0 {
-			return fmt.Errorf("--encrypt-layer can only be used with --encryption-key")
-		}
-
-		if len(opts.EncryptionKeys) > 0 {
-			// encryption
-			p := opts.EncryptLayer
-			encLayers = &p
-			encryptionKeys := opts.EncryptionKeys
-			ecc, err := enchelpers.CreateCryptoConfig(encryptionKeys, []string{})
-			if err != nil {
-				return fmt.Errorf("Invalid encryption keys: %v", err)
-			}
-			cc := encconfig.CombineCryptoConfigs([]encconfig.CryptoConfig{ecc})
-			encConfig = cc.EncryptConfig
-		}
-
-		if len(opts.DecryptionKeys) > 0 {
-			// decryption
-			decryptionKeys := opts.DecryptionKeys
-			dcc, err := enchelpers.CreateCryptoConfig([]string{}, decryptionKeys)
-			if err != nil {
-				return fmt.Errorf("Invalid decryption keys: %v", err)
-			}
-			cc := encconfig.CombineCryptoConfigs([]encconfig.CryptoConfig{dcc})
-			decConfig = cc.DecryptConfig
-		}
-	*/
 
 	// c/image/copy.Image does allow creating both simple signing and sigstore signatures simultaneously,
 	// with independent passphrases, but that would make the CLI probably too confusing.
@@ -221,7 +169,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		}
 	}
 
-	//opts.DigestFile = "test-digest"
 	writer := io.Writer(&out)
 
 	co := &copy.Options{
@@ -237,9 +184,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		PreserveDigests:                  opts.PreserveDigests,
-		//OciDecryptConfig:                 decConfig,
-		//OciEncryptLayers:                 encLayers,
-		//OciEncryptConfig:                 encConfig,
 	}
 
 	return retry.IfNecessary(ctx, func() error {
