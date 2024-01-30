@@ -286,7 +286,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
-		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Log)
+		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 		if err != nil {
 			return err
 		}
@@ -554,7 +554,6 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		o.Log.Error(" %v ", err)
 		return err
 	}
-	defer o.MirrorUnArchiver.Close()
 
 	// start the local storage registry
 	o.Log.Info(startMessage, o.Opts.Global.Port)

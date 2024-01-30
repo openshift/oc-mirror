@@ -19,36 +19,44 @@ import (
 
 type MirrorArchive struct {
 	Archiver
-	destination  string
-	iscPath      string
-	workingDir   string
-	cacheDir     string
-	archiveFile  *os.File
-	tarWriter    *tar.Writer
-	history      history.History
-	blobGatherer BlobsGatherer
+	destination        string
+	iscPath            string
+	workingDir         string
+	cacheDir           string
+	archiveFile        *os.File
+	tarWriter          *tar.Writer
+	history            history.History
+	blobGatherer       BlobsGatherer
+	maxArchiveSize     int64
+	currentChunkId     int
+	sizeOfCurrentChunk int64
 }
 
+const (
+	segMultiplier  int64 = 1024 * 1024 * 1024
+	defaultSegSize int64 = 500
+)
+
 // The caller must call Close!
-func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, logg clog.PluggableLoggerInterface) (MirrorArchive, error) {
+func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
 	chunk := 1
 	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
 	err := os.MkdirAll(destination, 0755)
 	if err != nil {
-		return MirrorArchive{}, err
+		return &MirrorArchive{}, err
 	}
 	archivePath := filepath.Join(destination, archiveFileName)
 	// Create a new tar archive file
 	// to be closed by BuildArchive
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
-		return MirrorArchive{}, err
+		return &MirrorArchive{}, err
 	}
 
 	// create the history interface
 	history, err := history.NewHistory(workingDir, time.Time{}, logg, history.OSFileCreator{})
 	if err != nil {
-		return MirrorArchive{}, err
+		return &MirrorArchive{}, err
 	}
 
 	// Create a new tar writer
@@ -57,17 +65,25 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 
 	bg := NewImageBlobGatherer(opts)
 
-	ma := MirrorArchive{
-		destination:  destination,
-		archiveFile:  archiveFile,
-		tarWriter:    tarWriter,
-		history:      history,
-		blobGatherer: bg,
-		workingDir:   workingDir,
-		cacheDir:     cacheDir,
-		iscPath:      iscPath,
+	if maxSize == 0 {
+		maxSize = defaultSegSize
 	}
-	return ma, nil
+	maxSize *= segMultiplier
+
+	ma := MirrorArchive{
+		destination:        destination,
+		archiveFile:        archiveFile,
+		tarWriter:          tarWriter,
+		history:            history,
+		blobGatherer:       bg,
+		workingDir:         workingDir,
+		cacheDir:           cacheDir,
+		iscPath:            iscPath,
+		maxArchiveSize:     maxSize,
+		currentChunkId:     chunk,
+		sizeOfCurrentChunk: int64(0),
+	}
+	return &ma, nil
 }
 
 // BuildArchive creates an archive that contains:
@@ -75,7 +91,7 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (o MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
+func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
 
 	// 1 - Add files and directories under the cache's docker/v2/repositories to the archive
 	repositoriesDir := filepath.Join(o.cacheDir, cacheRepositoriesDir)
@@ -115,7 +131,7 @@ func (o MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1alp
 	return o.archiveFile.Name(), nil
 }
 
-func (o MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
+func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
 	allAddedBlobs := map[string]string{}
 	for _, img := range collectedImages {
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
@@ -137,7 +153,7 @@ func (o MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1al
 	return allAddedBlobs, nil
 }
 
-func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string, alreadyAddedBlobs map[string]string) (map[string]string, error) {
+func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]string, alreadyAddedBlobs map[string]string) (map[string]string, error) {
 	blobsInDiff := map[string]string{}
 	for hash := range collectedBlobs {
 		_, alreadyMirrored := historyBlobs[hash]
@@ -160,10 +176,23 @@ func (o MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]stri
 	return blobsInDiff, nil
 }
 
-func (o MirrorArchive) addFile(pathToFile string, pathInTar string) error {
+func (o *MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	fi, err := os.Stat(pathToFile)
 	if err != nil {
 		return err
+	}
+
+	// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
+	// therefore we should stop
+	if fi.Size() > o.maxArchiveSize {
+		return fmt.Errorf("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, fi.Name(), fi.Size()/segMultiplier)
+	}
+	// check if we should add this file to the archive without exceeding the maxArchiveSize
+	if fi.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
+		err = o.nextChunk()
+		if err != nil {
+			return err
+		}
 	}
 	header, err := tar.FileInfoHeader(fi, fi.Name())
 	if err != nil {
@@ -185,16 +214,28 @@ func (o MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	if _, err := io.Copy(o.tarWriter, file); err != nil {
 		return err
 	}
+	o.sizeOfCurrentChunk += fi.Size()
 	return nil
 }
-
-func (o MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error {
+func (o *MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error {
 	return filepath.Walk(folderToAdd, func(path string, info os.FileInfo, incomingError error) error {
 		if incomingError != nil {
 			return incomingError
 		}
 		if info.IsDir() { // skip directories
 			return nil
+		}
+		// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
+		// therefore we should stop
+		if info.Size() > o.maxArchiveSize {
+			return fmt.Errorf("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, info.Name(), info.Size()/segMultiplier)
+		}
+		// check if we should add this file to the archive without exceeding the maxArchiveSize
+		if info.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
+			err := o.nextChunk()
+			if err != nil {
+				return err
+			}
 		}
 
 		header, err := tar.FileInfoHeader(info, info.Name())
@@ -228,11 +269,40 @@ func (o MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error
 			return err
 		}
 
+		o.sizeOfCurrentChunk += info.Size()
 		return nil
 	})
 }
 
-func (o MirrorArchive) Close() error {
+func (o *MirrorArchive) nextChunk() error {
+	// close the current archive
+	err := o.tarWriter.Close()
+	if err != nil {
+		return err
+	}
+	err = o.archiveFile.Close()
+	if err != nil {
+		return err
+	}
+
+	// next chunk init
+	o.currentChunkId += 1
+	o.sizeOfCurrentChunk = 0
+
+	// Create a new tar archive file
+	// to be closed by BuildArchive
+	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, o.currentChunkId)
+	archivePath := filepath.Join(o.destination, archiveFileName)
+
+	o.archiveFile, err = os.Create(archivePath)
+	if err != nil {
+		return err
+	}
+	o.tarWriter = tar.NewWriter(o.archiveFile)
+	return nil
+}
+
+func (o *MirrorArchive) Close() error {
 
 	err1 := o.archiveFile.Close()
 	err2 := o.tarWriter.Close()

@@ -16,6 +16,5 @@ type Archiver interface {
 }
 
 type UnArchiver interface {
-	Close() error
 	Unarchive() error
 }

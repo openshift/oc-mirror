@@ -302,7 +302,10 @@ func TestExecutorComplete(t *testing.T) {
 		}
 
 		// docker protocol
-		err = ex.Complete([]string{"docker:///tmp/test"})
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+		ex.Opts.Global.From = "file://" + testFolder
+		err = ex.Complete([]string{"docker://tmp/test"})
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -753,11 +756,6 @@ func (o MockMirrorUnArchiver) Unarchive() error {
 	if o.Fail {
 		return fmt.Errorf("forced unarchive error")
 	}
-	return nil
-}
-
-func (o MockMirrorUnArchiver) Close() error {
-
 	return nil
 }
 
