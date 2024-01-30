@@ -13,9 +13,9 @@ In this context, enclave users are interested in:
 * **keeping the volume** of data transfered from one network stage to the other **to a strict minimum**, avoiding to transfer a blob or an image more than one time from one stage to another.
 
 ## When can I use the feature?
-:warning: **The Enclave support feature is still an MVP and should not be used in production.**
+:warning: **The Enclave support feature is an MVP in Developer Preview and should not be used in production.**
 
-In the 4.15 release, the enclave workflow is still an MVP (Minimal Viable Product). It will be graduating to Tech Preview in 4.16. 
+In the OpenShift 4.15 release, the enclave workflow is a Developer Preview MVP (Minimal Viable Product). It is intended to graduate it to Tech Preview in OpenShift 4.16. 
 
 After GA, this new mirroring technique is intended to replace the existing oc-mirror. 
 
