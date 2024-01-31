@@ -18,9 +18,5 @@ func New(log clog.PluggableLoggerInterface,
 	localStorageFQDN string,
 	imageBuilder imagebuilder.ImageBuilderInterface,
 ) CollectorInterface {
-	if localStorageFQDN != "" {
-		return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
-	} else {
-		return &Collector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati}
-	}
+	return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
 }

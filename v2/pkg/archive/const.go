@@ -7,4 +7,5 @@ const (
 	cacheBlobsDir        = "docker/registry/v2/blobs"
 	cacheFilePrefix      = "docker/registry/v2"
 	workingDirectory     = "working-dir"
+	errMessageFolder     = "unable to create folder %s: %v"
 )

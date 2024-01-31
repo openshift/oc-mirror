@@ -243,23 +243,25 @@ func TestGetUpdatesInRange(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
 	tests := []struct {
-		name string
-
+		name          string
 		expectedQuery string
 		versions      []Update
 		releaseRange  semver.Range
 		err           string
-	}{{
-		name:          "Valid/OneChannel",
-		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
-		versions: []Update{
-			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
-			{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
-			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+	}{
+		{
+			name:          "Valid/OneChannel",
+			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
+			versions: []Update{
+				{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+				{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
+				{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
+				{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+			},
+			releaseRange: semver.MustParseRange(">=4.0.0-5"),
 		},
-		releaseRange: semver.MustParseRange(">=4.0.0-5"),
-	}}
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			requestQuery := make(chan string, 1)

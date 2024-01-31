@@ -13,10 +13,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 )
 
-// TODO(estroz): create interface scheme such that configuration and metadata
-// versions do not matter to the caller.
-// See https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/config/config.go
-
 // ReadConfig opens an imageset configuration file at the given path
 // and loads it into a v1alpha2.ImageSetConfiguration instance for processing and validation.
 func ReadConfig(configPath string) (c v1alpha2.ImageSetConfiguration, err error) {

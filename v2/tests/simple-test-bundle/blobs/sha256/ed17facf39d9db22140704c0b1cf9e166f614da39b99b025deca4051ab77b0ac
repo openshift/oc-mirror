@@ -1,0 +1,161 @@
+{
+  "architecture": "amd64",
+  "created": "2024-01-17T19:18:30.590168908Z",
+  "history": [
+    {
+      "created": "2024-01-17T19:18:25.526214227Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:f74dfa5d345e76f1f4d9df6077b0cdeaa5b5171f6b548ed1cac475f14515a809 in / ",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:26.980388143Z",
+      "created_by": "/bin/sh -c mv -f /etc/yum.repos.d/ubi.repo /tmp || :",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.22515211Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:ecc29a1455ca1b7c82018555e16e2e802135974523df6748e431f8707e759ddd in /tmp/tls-ca-bundle.pem ",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.555834076Z",
+      "created_by": "/bin/sh -c #(nop) ADD multi:655128808f9801300e5f5790b55c073636035214aee6c75e0582afd288da8973 in /etc/yum.repos.d/ ",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.55586854Z",
+      "created_by": "/bin/sh -c #(nop) LABEL maintainer=\"Red Hat, Inc.\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.555949122Z",
+      "created_by": "/bin/sh -c #(nop) LABEL com.redhat.component=\"ubi9-minimal-container\"       name=\"ubi9-minimal\"       version=\"9.3\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.555969463Z",
+      "created_by": "/bin/sh -c #(nop) LABEL com.redhat.license_terms=\"https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556013677Z",
+      "created_by": "/bin/sh -c #(nop) LABEL summary=\"Provides the latest release of the minimal Red Hat Universal Base Image 9.\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556072703Z",
+      "created_by": "/bin/sh -c #(nop) LABEL description=\"The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556102498Z",
+      "created_by": "/bin/sh -c #(nop) LABEL io.k8s.display-name=\"Red Hat Universal Base Image 9 Minimal\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556117861Z",
+      "created_by": "/bin/sh -c #(nop) LABEL io.openshift.expose-services=\"\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556136301Z",
+      "created_by": "/bin/sh -c #(nop) LABEL io.openshift.tags=\"minimal rhel9\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556148288Z",
+      "created_by": "/bin/sh -c #(nop) ENV container oci",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556182445Z",
+      "created_by": "/bin/sh -c #(nop) ENV PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:27.556188374Z",
+      "created_by": "/bin/sh -c #(nop) CMD [\"/bin/bash\"]",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:28.265447162Z",
+      "created_by": "/bin/sh -c rm -rf /var/log/*",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:28.265489242Z",
+      "created_by": "/bin/sh -c #(nop) LABEL release=1552",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:28.52676676Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:ef91ccf9344b424c8ead898c7856a891de97edf7461478fa846b6deffe2e8379 in /root/buildinfo/content_manifests/ubi9-minimal-container-9.3-1552.json ",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:28.770043369Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:75532600b86e8dbdc355d76b86fe28e825754c0d0a529f9282427ca23ab066ef in /root/buildinfo/Dockerfile-ubi9-minimal-9.3-1552 ",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:28.770181066Z",
+      "created_by": "/bin/sh -c #(nop) LABEL \"distribution-scope\"=\"public\" \"vendor\"=\"Red Hat, Inc.\" \"build-date\"=\"2024-01-17T19:05:39\" \"architecture\"=\"x86_64\" \"vcs-type\"=\"git\" \"vcs-ref\"=\"e8510c65a9be4b0635372fd09bee126ce7e08bc7\" \"io.k8s.description\"=\"The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.\" \"url\"=\"https://access.redhat.com/containers/#/registry.access.redhat.com/ubi9-minimal/images/9.3-1552\"",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:29.412787398Z",
+      "created_by": "/bin/sh -c rm -f '/etc/yum.repos.d/repo-cbf3a.repo' '/etc/yum.repos.d/repo-a4968.repo'",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:29.999628515Z",
+      "created_by": "/bin/sh -c rm -f /tmp/tls-ca-bundle.pem",
+      "empty_layer": true
+    },
+    {
+      "created": "2024-01-17T19:18:31.183039267Z",
+      "created_by": "/bin/sh -c mv -fZ /tmp/ubi.repo /etc/yum.repos.d/ubi.repo || :"
+    },
+    {
+      "created": "0001-01-01T00:00:00Z"
+    }
+  ],
+  "os": "linux",
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": [
+      "sha256:0d725b91398ed3db11249808d89e688e62e511bbd4a2e875ed8493ce1febdb2c"
+    ]
+  },
+  "config": {
+    "Cmd": [
+      "ls -la"
+    ],
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "container=oci"
+    ],
+    "Labels": {
+      "architecture": "x86_64",
+      "build-date": "2024-01-17T19:05:39",
+      "com.redhat.component": "ubi9-minimal-container",
+      "com.redhat.license_terms": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI",
+      "description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+      "distribution-scope": "public",
+      "io.buildah.version": "1.29.0",
+      "io.k8s.description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+      "io.k8s.display-name": "Red Hat Universal Base Image 9 Minimal",
+      "io.openshift.expose-services": "",
+      "io.openshift.tags": "minimal rhel9",
+      "maintainer": "Red Hat, Inc.",
+      "name": "ubi9-minimal",
+      "release": "1552",
+      "summary": "Provides the latest release of the minimal Red Hat Universal Base Image 9.",
+      "url": "https://access.redhat.com/containers/#/registry.access.redhat.com/ubi9-minimal/images/9.3-1552",
+      "vcs-ref": "e8510c65a9be4b0635372fd09bee126ce7e08bc7",
+      "vcs-type": "git",
+      "vendor": "Red Hat, Inc.",
+      "version": "9.3"
+    }
+  }
+}

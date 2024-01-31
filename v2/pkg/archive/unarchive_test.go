@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnArchiver_UnArchive(t *testing.T) {
@@ -34,6 +36,60 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestUnArchiver_NoArchive(t *testing.T) {
+	o, err := NewArchiveExtractor("none", "dst", "none")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = o.Unarchive()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnArchiver_WorkingDirError(t *testing.T) {
+	testFolder := t.TempDir()
+	defer os.RemoveAll(testFolder)
+
+	// Create a new tar archive file
+	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+	archivePath := filepath.Join(testFolder, archiveFileName)
+	// to be closed by BuildArchive
+	_, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+
+	o, err := NewArchiveExtractor(testFolder, filepath.Join("/", "dst"), filepath.Join(testFolder, "dst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = o.Unarchive()
+	assert.Equal(t, "unable to create folder /dst: mkdir /dst: permission denied", err.Error())
+}
+
+func TestUnArchiver_CacheDirError(t *testing.T) {
+	testFolder := t.TempDir()
+	defer os.RemoveAll(testFolder)
+
+	// Create a new tar archive file
+	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+	archivePath := filepath.Join(testFolder, archiveFileName)
+	// to be closed by BuildArchive
+	_, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+
+	o, err := NewArchiveExtractor(testFolder, filepath.Join(testFolder, "dst"), filepath.Join("/", "dst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = o.Unarchive()
+	assert.Equal(t, "unable to create folder /dst: mkdir /dst: permission denied", err.Error())
 }
 
 func prepareFakeTar(tarFile *os.File) error {

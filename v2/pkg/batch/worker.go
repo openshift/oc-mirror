@@ -125,7 +125,7 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 		}
 		// output the logs to console
 		if !opts.Global.Quiet {
-			consoleLogFromFile(o.Log)
+			consoleLogFromFile(o.Log, o.LogsDir)
 		}
 		o.Log.Info("[Worker] successfully completed all batches")
 	}
@@ -133,8 +133,8 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 }
 
 // consoleLogFromFile
-func consoleLogFromFile(log clog.PluggableLoggerInterface) {
-	dir, _ := os.ReadDir("logs")
+func consoleLogFromFile(log clog.PluggableLoggerInterface, path string) {
+	dir, _ := os.ReadDir(path)
 	for _, f := range dir {
 		if strings.Contains(f.Name(), "worker") {
 			log.Debug("[batch] %s ", f.Name())

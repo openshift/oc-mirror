@@ -16,7 +16,7 @@ func TestWorker(t *testing.T) {
 
 	log := clog.New("trace")
 
-	global := &mirror.GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &mirror.GlobalOptions{TlsVerify: false, SecurePolicy: false, Quiet: false}
 
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
@@ -48,6 +48,9 @@ func TestWorker(t *testing.T) {
 			{Source: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
+			{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
+			{Source: "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
+			{Source: "docker://registry/name/namespace/sometestimage-i@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		}
 		err := w.Worker(context.Background(), relatedImages, opts)
 		if err != nil {

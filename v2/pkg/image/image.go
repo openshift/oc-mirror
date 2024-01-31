@@ -41,6 +41,11 @@ type ImageSpec struct {
 	Digest                 string
 }
 
+const (
+	dockerProtocol  = "docker://"
+	errMessageImage = "unable to parse image %s correctly"
+)
+
 // It expects the image reference not to have the transport prefix.
 // Otherwise, it will return an error.
 func ParseRef(imgRef string) (ImageSpec, error) {
@@ -54,7 +59,7 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 			imgSpec.Name = imgSplit[1]
 		}
 	} else {
-		imgSpec.Transport = "docker://"
+		imgSpec.Transport = dockerProtocol
 		imgSpec.Reference = imgRef
 		imgSpec.Name = imgRef
 		imgSpec.ReferenceWithTransport = imgSpec.Transport + imgRef
@@ -77,13 +82,13 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	}
 
 	if imgSpec.Name == "" {
-		return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly", imgRef)
+		return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
 	}
-	if imgSpec.Transport == "docker://" && imgSpec.Tag == "" && imgSpec.Digest == "" {
-		return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly", imgRef)
+	if imgSpec.Transport == dockerProtocol && imgSpec.Tag == "" && imgSpec.Digest == "" {
+		return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
 	}
 
-	if imgSpec.Transport == "docker://" {
+	if imgSpec.Transport == dockerProtocol {
 		imageNameComponents := strings.Split(imgSpec.Name, "/")
 		if len(imageNameComponents) > 2 {
 			imgSpec.PathComponent = strings.Join(imageNameComponents[1:], "/")
@@ -91,7 +96,7 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 		} else if len(imageNameComponents) == 1 {
 			imgSpec.PathComponent = imageNameComponents[0]
 		} else {
-			return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly", imgRef)
+			return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
 		}
 	} else {
 		imgSpec.PathComponent = imgSpec.Name
@@ -100,9 +105,6 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	return imgSpec, nil
 }
 
-// TODO this might need to change when implementing OCI images
-// because the digest is not in the ImageSpec, but there should be
-// a way to find it
 func (i ImageSpec) IsImageByDigest() bool {
 	return i.Digest != ""
 }

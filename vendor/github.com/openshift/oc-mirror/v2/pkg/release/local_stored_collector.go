@@ -89,7 +89,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				}
 				o.Log.Debug("copied release index image %s ", value.Source)
 
-				// TODO: create common function to show logs
 				f, _ := os.ReadFile(logFile)
 				lines := strings.Split(string(f), "\n")
 				for _, s := range lines {
@@ -156,7 +155,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 
 		if !o.Opts.IsPrepare() && o.Config.Mirror.Platform.Graph {
 			o.Log.Info("creating graph data image")
-			graphImgRef, err := o.CreateGraphImage(ctx)
+			graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}

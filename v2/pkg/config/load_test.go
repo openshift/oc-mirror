@@ -10,7 +10,6 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	// TODO(estroz): expected config.
 	type spec struct {
 		name      string
 		file      string
@@ -208,7 +207,6 @@ mirror:
 }
 
 func TestLoadMetadata(t *testing.T) {
-	// TODO(estroz): expected metadata.
 	type spec struct {
 		name      string
 		file      string

@@ -70,6 +70,23 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		},
 	}
 
+	cfgNoChannels := v1alpha2.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+			Mirror: v1alpha2.Mirror{
+				Platform: v1alpha2.Platform{
+					Architectures: []string{"amd64"},
+					Graph:         true,
+					Channels: []v1alpha2.ReleaseChannel{
+						{
+							Type: v1alpha2.TypeOKD,
+							Name: "stable-4.0",
+						},
+					},
+				},
+			},
+		},
+	}
+
 	t.Run("TestGetReleaseReferenceImages should pass", func(t *testing.T) {
 
 		c := &mockClient{}
@@ -88,6 +105,32 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 		sch := NewCincinnati(log, &cfg, opts, c, false, signature)
+		res := sch.GetReleaseReferenceImages(context.Background())
+
+		log.Debug("result from cincinnati %v", res)
+		if res == nil {
+			t.Fatalf("should return a related images")
+		}
+	})
+
+	t.Run("TestGetReleaseReferenceImages should pass (no channels)", func(t *testing.T) {
+
+		c := &mockClient{}
+		signature := &mockSignature{Log: log}
+		requestQuery := make(chan string, 1)
+		defer close(requestQuery)
+
+		handler := getHandlerMulti(t, requestQuery)
+
+		ts := httptest.NewServer(http.HandlerFunc(handler))
+		t.Cleanup(ts.Close)
+
+		endpoint, err := url.Parse(ts.URL)
+		if err != nil {
+			t.Fatalf("should not fail endpoint parse")
+		}
+		c.url = endpoint
+		sch := NewCincinnati(log, &cfgNoChannels, opts, c, false, signature)
 		res := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)

@@ -15,9 +15,5 @@ func New(log clog.PluggableLoggerInterface,
 	manifest manifest.ManifestInterface,
 	localStorageFQDN string,
 ) CollectorInterface {
-	if localStorageFQDN != "" {
-		return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
-	} else {
-		return &Collector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest}
-	}
+	return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localStorageFQDN}
 }
