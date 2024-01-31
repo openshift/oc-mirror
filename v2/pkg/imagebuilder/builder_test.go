@@ -1,10 +1,12 @@
 package imagebuilder
 
 import (
+	"bufio"
 	"context"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -49,6 +51,7 @@ func TestImageBuilder(t *testing.T) {
 		Destination:         "docker://localhost:5000/test",
 		Dev:                 false,
 		Mode:                mirror.DiskToMirror,
+		All:                 true,
 	}
 
 	t.Run("Testing NewImageBuilder : should pass", func(t *testing.T) {
@@ -62,7 +65,7 @@ func TestImageBuilder(t *testing.T) {
 
 	})
 
-	t.Run("Testing All : should pass", func(t *testing.T) {
+	t.Run("Testing NewImageBuilder All : should pass", func(t *testing.T) {
 
 		// Set up a fake registry.
 		s := httptest.NewServer(registry.New())
@@ -102,20 +105,36 @@ func TestImageBuilder(t *testing.T) {
 		}
 
 		// expect errors from SaveImageLayout
-		_, err = ex.SaveImageLayoutToDir(context.Background(), "broken", graphStaging)
+		_, err = ex.SaveImageLayoutToDir(context.Background(), "broken", graphPreparation)
 		if err == nil {
 			t.Fatalf("should fail")
 		}
 
-		// use lightweight simple image reference for testing
-		// quay.io/podman/hello:latest
-		lp, err := ex.SaveImageLayoutToDir(context.Background(), "quay.io/podman/hello:latest", graphPreparation)
+		// setup graphPreparation
+		_ = os.Mkdir(graphPreparation, 0755)
+		// ensure directories are cleaned up after test
+		defer os.RemoveAll(opts.Global.WorkingDir)
+		defer os.Remove(archiveDestination)
+		defer os.RemoveAll(graphPreparation)
+
+		imageAbsolutePath, err := filepath.Abs("../../tests/simple-test-bundle")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		defer os.RemoveAll(opts.Global.WorkingDir)
-		defer os.Remove(archiveDestination)
+		src := "oci://" + imageAbsolutePath
+		dest := "docker://" + u.Host + "/simple-test-bundle:latest"
+
+		err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// use lightweight simple image reference for testing
+		lp, err := ex.SaveImageLayoutToDir(context.Background(), u.Host+"/simple-test-bundle:latest", graphPreparation)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		err = ex.BuildAndPush(ctx, u.Host+"/new-build:latest", lp, []string{"ls -la"}, graphLayer)
 		if err != nil {

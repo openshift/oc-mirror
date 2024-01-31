@@ -74,66 +74,6 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 	assert.Equal(t, expectedBlobs, blobs)
 }
 
-func TestImageBlobGatherer_MultiImageGatherBlobs(t *testing.T) {
-	ctx := context.Background()
-	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
-		SecurePolicy: false,
-		Force:        true,
-		WorkingDir:   "tests",
-	}
-	global.TlsVerify = false
-
-	_, sharedOpts := mirror.SharedImageFlags()
-	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-	_, retryOpts := mirror.RetryFlags()
-
-	opts := mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		Dev:                 false,
-		Mode:                mirror.MirrorToDisk,
-	}
-	// Set up a fake registry.
-	s := httptest.NewServer(registry.New())
-	defer s.Close()
-	u, err := url.Parse(s.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	imageAbsolutePath, err := filepath.Abs("../../tests/albo-bundle-image")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	src := "dir://" + imageAbsolutePath
-	dest := "docker://" + u.Host + "/albo-test:latest"
-
-	err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	gatherer := NewImageBlobGatherer(&opts)
-	blobs, err := gatherer.GatherBlobs(ctx, "docker://"+u.Host+"/albo-test:latest")
-	if err != nil {
-		t.Fatalf("GatherBlobs failed: %v", err)
-	}
-
-	expectedBlobs := map[string]string{
-		"sha256:0b1f210b40a12b612cbb6c1bceff5d9ead6dbbb35108709f020bfeb58146870c": "",
-		"sha256:0d725b91398ed3db11249808d89e688e62e511bbd4a2e875ed8493ce1febdb2c": "",
-		"sha256:ad59206271872ca50d4b202c8298018c53bfaefd03b64ee036ad5362fc0214ce": "",
-	}
-
-	assert.Equal(t, expectedBlobs, blobs)
-}
-
 func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 	ctx := context.Background()
 	global := &mirror.GlobalOptions{

@@ -394,34 +394,6 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 	return Vers[len(Vers)-1], nil
 }
 
-// GetChannels fetches the channels containing update payloads from the specified
-// upstream Cincinnati stack.
-func GetChannels(ctx context.Context, c Client, channel string) (map[string]struct{}, error) {
-	// Prepare parametrized cincinnati query.
-	c.SetQueryParams("", channel, "")
-
-	graph, err := getGraphData(ctx, c)
-	if err != nil {
-		return nil, &Error{
-			Reason:  "APIRequestError",
-			Message: fmt.Sprintf(ChannelInfo, channel, err),
-			cause:   err,
-		}
-	}
-
-	channels := make(map[string]struct{})
-
-	for _, node := range graph.Nodes {
-		values := node.Metadata["io.openshift.upgrades.graph.release.channels"]
-
-		for _, value := range strings.Split(values, ",") {
-			channels[value] = struct{}{}
-		}
-	}
-
-	return channels, nil
-}
-
 // GetVersions will return all update payloads from the specified
 // upstream Cincinnati stack given architecture and channel.
 func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.Version, error) {
