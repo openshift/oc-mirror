@@ -761,11 +761,13 @@ func (o MockMirrorUnArchiver) Close() error {
 	return nil
 }
 
-func (o MockClusterResources) IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
 	return nil
 }
-
 func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage string) error {
+	return nil
+}
+func (o MockClusterResources) CatalogSourceGenerator(catalogImage string) error {
 	return nil
 }
 

@@ -50,6 +50,7 @@ type GlobalOptions struct {
 	Quiet              bool          // Suppress output information when copying images
 	Force              bool          // Force the copy/mirror even if there is nothing to update
 	V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
+	MaxNestedPaths     int           // Sets the maximum allowed path-components on the destination registry
 }
 
 type CopyOptions struct {

@@ -221,5 +221,80 @@ func TestImage_TestParseRef(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestImage_TestWithMaxNestedPaths(t *testing.T) {
+	type testCase struct {
+		caseName       string
+		imgRef         string
+		maxNestedPaths int
+		expectedOutRef string
+		expectedError  string
+	}
+	testCases := []testCase{
+		{
+			caseName:       "WithMaxNestedPaths(2) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 2,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release-gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(3) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 3,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(4) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 4,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(5) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 5,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images-gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(6) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 6,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(0) : should pass",
+			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			maxNestedPaths: 0,
+			expectedOutRef: "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedError:  "",
+		},
+		{
+			caseName:       "WithMaxNestedPaths(2) invalid ref : should fail",
+			imgRef:         "whatever",
+			maxNestedPaths: 2,
+			expectedOutRef: "",
+			expectedError:  "unable to parse image whatever correctly",
+		},
+	}
+	for _, aTestCase := range testCases {
+		t.Run(aTestCase.caseName, func(t *testing.T) {
+			outRef, err := WithMaxNestedPaths(aTestCase.imgRef, aTestCase.maxNestedPaths)
+			if aTestCase.expectedError != "" && err == nil {
+				t.Errorf("ParseRef() expected to fail for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
+			}
+			if err != nil {
+				if aTestCase.expectedError != err.Error() {
+					t.Errorf("ParseRef() returned unexpected error for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
+				}
+			} else {
+				require.Equal(t, aTestCase.expectedOutRef, outRef)
+			}
+		})
+	}
 }

@@ -5,6 +5,7 @@ import (
 )
 
 type GeneratorInterface interface {
-	IDMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error
+	IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error
 	UpdateServiceGenerator(graphImage, releaseImage string) error
+	CatalogSourceGenerator(catalogImage string) error
 }

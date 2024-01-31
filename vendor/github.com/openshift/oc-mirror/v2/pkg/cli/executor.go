@@ -19,9 +19,8 @@ import (
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	distversion "github.com/distribution/distribution/v3/version"
-	"github.com/sirupsen/logrus"
-
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
@@ -30,6 +29,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
 	"github.com/openshift/oc-mirror/v2/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
@@ -186,6 +186,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
+	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -566,13 +567,21 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 	collectionFinish := time.Now()
 
+	// Apply max-nested-paths processing if MaxNestedPaths>0
+	if o.Opts.Global.MaxNestedPaths > 0 {
+		allImages, err = withMaxNestedPaths(allImages, o.Opts.Global.MaxNestedPaths)
+		if err != nil {
+			return err
+		}
+	}
 	//call the batch worker
 	err = o.Batch.Worker(cmd.Context(), allImages, o.Opts)
 	if err != nil {
 		return err
 	}
 	//create IDMS/ITMS
-	err = o.ClusterResources.IDMSGenerator(allImages)
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
@@ -673,6 +682,19 @@ func (o *ExecutorSchema) closeAll() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error closing log file %s: %v\n", registryLogFilename, err)
 	}
+}
+
+func withMaxNestedPaths(in []v1alpha3.CopyImageSchema, maxNestedPaths int) ([]v1alpha3.CopyImageSchema, error) {
+	out := []v1alpha3.CopyImageSchema{}
+	for _, img := range in {
+		dst, err := image.WithMaxNestedPaths(img.Destination, maxNestedPaths)
+		if err != nil {
+			return nil, err
+		}
+		img.Destination = dst
+		out = append(out, img)
+	}
+	return out, nil
 }
 
 // NewPrepareCommand - setup all the relevant support structs

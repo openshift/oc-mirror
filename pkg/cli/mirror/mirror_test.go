@@ -519,10 +519,10 @@ func TestNestedPaths(t *testing.T) {
 		},
 	}
 
-	t.Run("Testing processNestedPaths (2) : should fail", func(t *testing.T) {
+	t.Run("Testing processNestedPaths (2) : should pass", func(t *testing.T) {
 		res := o.processNestedPaths(img)
 		dst := strings.Join([]string{res.Ref.Registry, res.Ref.Namespace, res.Ref.Name}, "/")
-		require.NotEqual(t, "localhost:5000/ocpbugs-11922/mirror-release/gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
+		require.Equal(t, "localhost:5000/ocpbugs-11922/mirror-release-gitlab-org-ci-cd-gitlab-runner-ubi-images-gitlab-runner-helper-ocp", dst)
 	})
 	o.MaxNestedPaths = 3
 	t.Run("Testing processNestedPaths (3) : should pass", func(t *testing.T) {
