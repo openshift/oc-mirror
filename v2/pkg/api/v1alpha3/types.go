@@ -236,6 +236,9 @@ type RelatedImage struct {
 	Image string `json:"image"`
 	// Type: metadata to explain why this image is being copied
 	// it doesn't need to be persisted to JSON
+	// This field doesn't exist in the catalog declarativeConfig.
+	// ToDo: maybe create a different type, derived from RelatedImage
+	// that contains Type?
 	Type v1alpha2.ImageType `json:"-"`
 }
 
@@ -243,6 +246,7 @@ type RelatedImage struct {
 type DeclarativeConfig struct {
 	Schema         string              `json:"schema"`
 	Name           string              `json:"name"`
+	Image          string              `json:"image,omitempty"`
 	Package        string              `json:"package"`
 	Properties     []property.Property `json:"properties,omitempty" hash:"set"`
 	RelatedImages  []RelatedImage      `json:"relatedImages,omitempty" hash:"set"`

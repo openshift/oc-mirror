@@ -176,9 +176,9 @@ kind: ImageSetConfiguration
 mirror:
   operators:
   - catalog: registry.com/ns/foo:v1.2
-    targetName: bar
+    targetCatalog: ns/bar
   - catalog: registry.com/ns/bar:v1.2
-    targetName: foo
+    targetCatalog: ns/foo
     targetTag: v1.3
   - catalog: registry.com/ns/baz:v1.2
     targetTag: v1.3
@@ -190,12 +190,12 @@ mirror:
 	require.Len(t, cfg.Mirror.Operators, 4)
 	ctlgOne, err := cfg.Mirror.Operators[0].GetUniqueName()
 	require.NoError(t, err)
-	require.Equal(t, ctlgOne, "registry.com/ns/bar:v1.2")
+	require.Equal(t, "registry.com/ns/bar:v1.2", ctlgOne)
 	require.NotEqual(t, ctlgOne, cfg.Mirror.Operators[0].Catalog)
 	ctlgTwo, err := cfg.Mirror.Operators[1].GetUniqueName()
 	require.NoError(t, err)
-	require.Equal(t, ctlgTwo, "registry.com/ns/foo:v1.3")
-	require.NotEqual(t, ctlgTwo, cfg.Mirror.Operators[1].Catalog)
+	require.Equal(t, "registry.com/ns/foo:v1.3", ctlgTwo)
+	require.NotEqual(t, cfg.Mirror.Operators[1].Catalog, ctlgTwo)
 	ctlgThree, err := cfg.Mirror.Operators[2].GetUniqueName()
 	require.NoError(t, err)
 	require.Equal(t, ctlgThree, "registry.com/ns/baz:v1.3")

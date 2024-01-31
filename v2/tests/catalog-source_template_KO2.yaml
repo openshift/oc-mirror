@@ -1,0 +1,11 @@
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: totalRubbish
+  namespace: openshift-marketplace
+spec:
+image: totalRubbish
+  sourceType: grpc
+  updateStrategy:
+    registryPoll:
+      interval: 30m0s

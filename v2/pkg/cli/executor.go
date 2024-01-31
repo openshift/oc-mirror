@@ -282,7 +282,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir)
+	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
 	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
@@ -582,6 +582,11 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	//create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
 	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
+	if err != nil {
+		return err
+	}
+
+	err = o.ClusterResources.CatalogSourceGenerator(allImages)
 	if err != nil {
 		return err
 	}

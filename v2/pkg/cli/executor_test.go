@@ -767,7 +767,7 @@ func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.Cop
 func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage string) error {
 	return nil
 }
-func (o MockClusterResources) CatalogSourceGenerator(catalogImage string) error {
+func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
 	return nil
 }
 

@@ -24,10 +24,10 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "test-catalog1",
+								Catalog: "test-catalog1:latest",
 							},
 							{
-								Catalog: "test-catalog2",
+								Catalog: "test-catalog2:latest",
 							},
 						},
 					},
@@ -41,12 +41,12 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog:    "test-catalog",
-								TargetName: "test1",
+								Catalog:       "test-catalog:latest",
+								TargetCatalog: "test1",
 							},
 							{
-								Catalog:    "test-catalog",
-								TargetName: "test2",
+								Catalog:       "test-catalog:latest",
+								TargetCatalog: "test2",
 							},
 						},
 					},
@@ -80,16 +80,16 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog: "test-catalog",
+								Catalog: "test-catalog:latest",
 							},
 							{
-								Catalog: "test-catalog",
+								Catalog: "test-catalog:latest",
 							},
 						},
 					},
 				},
 			},
-			expError: "invalid configuration: catalog \"test-catalog\": duplicate found in configuration",
+			expError: "invalid configuration: catalog \"test-catalog:latest\": duplicate found in configuration",
 		},
 		{
 			name: "Invalid/DuplicateCatalogsWithTarget",
@@ -98,18 +98,18 @@ func TestValidate(t *testing.T) {
 					Mirror: v1alpha2.Mirror{
 						Operators: []v1alpha2.Operator{
 							{
-								Catalog:    "test-catalog1",
-								TargetName: "test",
+								Catalog:       "test-catalog1:latest",
+								TargetCatalog: "test",
 							},
 							{
-								Catalog:    "test-catalog2",
-								TargetName: "test",
+								Catalog:       "test-catalog2:latest",
+								TargetCatalog: "test",
 							},
 						},
 					},
 				},
 			},
-			expError: "invalid configuration: catalog \"test\": duplicate found in configuration",
+			expError: "invalid configuration: catalog \"test:latest\": duplicate found in configuration",
 		},
 		{
 			name: "Invalid/DuplicateChannels",

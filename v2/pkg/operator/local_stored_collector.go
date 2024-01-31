@@ -159,6 +159,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			{
 				Name:  "index",
 				Image: op.Catalog,
+				Type:  v1alpha2.TypeOperatorCatalog,
 			},
 		}
 	}
@@ -224,7 +225,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest})
+			result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
 		}
 	}
 	return result, nil
@@ -251,7 +252,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
+			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
 
 		}
 	}

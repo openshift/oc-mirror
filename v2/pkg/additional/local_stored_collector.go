@@ -48,7 +48,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest})
+			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v1alpha2.TypeGeneric})
 
 		}
 	}
@@ -85,7 +85,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest})
+			allImages = append(allImages, v1alpha3.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest, Type: v1alpha2.TypeGeneric})
 		}
 	}
 	return allImages, nil
