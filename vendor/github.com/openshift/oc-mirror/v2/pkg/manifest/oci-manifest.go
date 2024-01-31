@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
@@ -30,8 +32,8 @@ type ManifestInterface interface {
 	GetImageIndex(dir string) (*v1alpha3.OCISchema, error)
 	GetImageManifest(file string) (*v1alpha3.OCISchema, error)
 	GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error)
-	GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error)
-	GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error)
+	GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
+	GetRelatedImagesFromCatalogByFilter(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
 	ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error
 	GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error)
 }
@@ -85,57 +87,6 @@ func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchem
 		return nil, err
 	}
 	return ocs, nil
-}
-
-// operatorImageExtractDir + "/" + label
-// GetRelatedImagesFromCatalog
-func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	files, err := os.ReadDir(filePath)
-	if err != nil {
-		return relatedImages, err
-	}
-	for _, file := range files {
-		// the catalog.json - does not really conform to json standards
-		// this needs some thorough testing
-		olm, err := readOperatorCatalog(filePath + "/" + file.Name())
-		if err != nil {
-			return relatedImages, err
-		}
-		ri, err := getRelatedImageByDefaultChannel(o.Log, olm)
-		if err != nil {
-			return relatedImages, err
-		}
-		// append to relatedImages map
-		for k, v := range ri {
-			relatedImages[k] = v
-		}
-	}
-	return relatedImages, nil
-}
-
-// GetRelatedImagesFromCatalogByFilter
-func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	for _, pkg := range op.Packages {
-		// the catalog.json - does not really conform to json standards
-		// this needs some thorough testing
-		olm, err := readOperatorCatalog(filePath + "/" + label + "/" + pkg.Name)
-		if err != nil {
-			return relatedImages, err
-		}
-
-		ri, err := getRelatedImageByFilter(o.Log, olm, mp[pkg.Name])
-		if err != nil {
-			return relatedImages, err
-		}
-		// append to reletedImages map
-		for k, v := range ri {
-			relatedImages[k] = v
-		}
-		o.Log.Trace("related images %v", relatedImages)
-	}
-	return relatedImages, nil
 }
 
 // ExtractLayersOCI
@@ -231,12 +182,57 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 	return nil
 }
 
-// readOperatorCatalog - simple function tha treads the specific catalog.json file
-// and unmarshals it to DeclarativeConfig struct
-func readOperatorCatalog(path string) ([]v1alpha3.DeclarativeConfig, error) {
-	// the catalog.json - dos not really conform to json standards
-	// this needs some thorough testing
-	// operatorImageExtractDir + "/" + label + "/" + name + "/" + catalogJson
+// operatorImageExtractDir + "/" + label
+// GetRelatedImagesFromCatalog
+func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	operators, err := os.ReadDir(filePath + label)
+	if err != nil {
+		return relatedImages, err
+	}
+	for _, operator := range operators {
+		// the catalog.json - does not really conform to json standards
+		// this needs some thorough testing
+		operatorConfig, err := readOperatorConfig(filepath.Join(filePath, label, operator.Name()))
+		if err != nil {
+			return relatedImages, err
+		}
+		ri, err := getRelatedImages(o.Log, operatorConfig, v1alpha2.IncludePackage{}, ctlgInIsc.Full)
+		if err != nil {
+			return relatedImages, err
+		}
+
+		for k, v := range ri {
+			relatedImages[k] = v
+		}
+	}
+	return relatedImages, nil
+}
+
+// GetRelatedImagesFromCatalogByFilter
+func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	for _, iscOperator := range ctlgInIsc.Packages {
+		operatorConfig, err := readOperatorConfig(filepath.Join(filePath, label, iscOperator.Name))
+		if err != nil {
+			return relatedImages, err
+		}
+
+		ri, err := getRelatedImages(o.Log, operatorConfig, iscOperator, ctlgInIsc.Full)
+		if err != nil {
+			return relatedImages, err
+		}
+
+		for k, v := range ri {
+			relatedImages[k] = v
+		}
+		o.Log.Trace("related images %v", relatedImages)
+	}
+	return relatedImages, nil
+}
+
+// readOperatorConfig - reads the catalog.json and unmarshals it to DeclarativeConfig struct
+func readOperatorConfig(path string) ([]v1alpha3.DeclarativeConfig, error) {
 	var olm []v1alpha3.DeclarativeConfig
 	data, err := os.ReadFile(path + "/" + catalogJson)
 	if err != nil {
@@ -251,181 +247,184 @@ func readOperatorCatalog(path string) ([]v1alpha3.DeclarativeConfig, error) {
 	return olm, nil
 }
 
-// getRelatedImageByDefaultChannel - get the DeclarativeConfig for the default channel
-// it returns the HEAD (latest version of the bundles relatedImages)
-func getRelatedImageByDefaultChannel(log clog.PluggableLoggerInterface, olm []v1alpha3.DeclarativeConfig) (map[string][]v1alpha3.RelatedImage, error) {
-	// relevant variables
+// getRelatedImages - get the packages' related images of a catalog.
+func getRelatedImages(log clog.PluggableLoggerInterface, operatorConfig []v1alpha3.DeclarativeConfig, iscOperator v1alpha2.IncludePackage, full bool) (map[string][]v1alpha3.RelatedImage, error) {
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	bundles := make(map[string]bool)
 	var defaultChannel string
 
-	// iterate through the catalog objects
-	for i, obj := range olm {
+	if isInvalidFiltering(iscOperator, full) {
+		return nil, fmt.Errorf("cannot use channels/full and min/max versions at the same time")
+	}
+
+	for i, obj := range operatorConfig {
 		switch {
 		case obj.Schema == "olm.channel":
-			if defaultChannel == obj.Name {
-				log.Debug("found channel : %v", obj)
-				log.Debug("bundle image to use : %v", obj.Entries[0].Name)
-				name, err := semverFindMax(obj.Entries)
-				if err != nil {
-					log.Error(errorSemver, err)
+			if len(iscOperator.Channels) > 0 {
+				if found, idx := containsChannel(iscOperator.Channels, obj.Name); found {
+					log.Debug("found channel : %v", obj)
+					filteredBundles, err := filterBundles(obj.Entries, iscOperator.Channels[idx].IncludeBundle.MinVersion, iscOperator.Channels[idx].IncludeBundle.MaxVersion, full)
+					if err != nil {
+						log.Error(errorSemver, err)
+					}
+					for _, b := range filteredBundles {
+						bundles[b] = true
+					}
 				}
-				bundles[name] = true
+			} else {
+				if defaultChannel == obj.Name {
+					filteredBundles, err := filterBundles(obj.Entries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
+					if err != nil {
+						log.Error(errorSemver, err)
+					}
+					log.Debug("adding bundles : %s", filteredBundles)
+					for _, b := range filteredBundles {
+						bundles[b] = true
+					}
+				}
 			}
 		case obj.Schema == "olm.bundle":
-			if bundles[obj.Name] {
+			if bundles[obj.Name] && !full {
 				log.Debug("config bundle: %d %v", i, obj.Name)
 				log.Trace("config relatedImages: %d %v", i, obj.RelatedImages)
-				riList := relatedImages[obj.Name]
-				if riList == nil {
-					riList = []v1alpha3.RelatedImage{}
-				}
-				for _, ri := range obj.RelatedImages {
-					if ri.Image == obj.Image {
-						ri.Type = v1alpha2.TypeOperatorBundle
-					} else {
-						ri.Type = v1alpha2.TypeOperatorRelatedImage
+				relatedImages[obj.Name] = addTypeToRelatedImages(obj)
+			}
+			// add all bundles
+			if full {
+				if len(bundles) > 0 && len(iscOperator.Channels) > 0 {
+					if bundles[obj.Name] {
+						relatedImages[obj.Name] = addTypeToRelatedImages(obj)
 					}
-					riList = append(riList, ri)
+				} else {
+					relatedImages[obj.Name] = addTypeToRelatedImages(obj)
 				}
-				relatedImages[obj.Name] = riList
 			}
 		case obj.Schema == "olm.package":
-			log.Debug("Config package: %v", obj.Name)
+			log.Debug("config package: %v", obj.Name)
+			bundles[obj.DefaultChannel] = true
 			defaultChannel = obj.DefaultChannel
 		}
 	}
 	return relatedImages, nil
 }
 
-// getRelatedImageByFilter - get the DeclarativeConfig for a specifc channel with
-// min,max version if set
-func getRelatedImageByFilter(log clog.PluggableLoggerInterface, olm []v1alpha3.DeclarativeConfig, pkg v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
-	// relevant variables
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	bundles := make(map[string]bool)
-	// iterate through the catalog objects
-	for i, obj := range olm {
-		switch {
-		case obj.Schema == "olm.channel":
-			if len(pkg.Channel) > 0 {
-				if pkg.Channel == obj.Name {
-					log.Debug("found channel : %v", obj)
-					name, err := semverFindRange(obj.Entries, pkg.MinVersion, pkg.MaxVersion)
-					if err != nil {
-						log.Error(errorSemver, err)
-					}
-					for _, x := range name {
-						bundles[x] = true
-					}
-				}
-			} else {
-				name, err := semverFindMax(obj.Entries)
-				if err != nil {
-					log.Error(errorSemver, err)
-				}
-				log.Debug("adding channel : %s", name)
-				bundles[name] = true
-			}
-		case obj.Schema == "olm.bundle":
-			toBeAdded := false
-			if bundles[obj.Name] && !pkg.Full {
-				log.Debug("config bundle: %d %v", i, obj.Name)
-				log.Trace("config relatedImages: %d %v", i, obj.RelatedImages)
-				toBeAdded = true
-			}
-			// add all bundles
-			if pkg.Full || toBeAdded {
-				riList := relatedImages[obj.Name]
-				if riList == nil {
-					riList = []v1alpha3.RelatedImage{}
-				}
-				for _, ri := range obj.RelatedImages {
-					if ri.Image == obj.Image {
-						ri.Type = v1alpha2.TypeOperatorBundle
-					} else {
-						ri.Type = v1alpha2.TypeOperatorRelatedImage
-					}
-					riList = append(riList, ri)
-				}
-				relatedImages[obj.Name] = riList
-			}
-		case obj.Schema == "olm.package":
-			log.Debug("config package: %v", obj.Name)
-			bundles[obj.DefaultChannel] = true
-		}
-	}
-	return relatedImages, nil
+func isInvalidFiltering(pkg v1alpha2.IncludePackage, full bool) bool {
+	return (len(pkg.Channels) > 0 && (pkg.MinVersion != "" || pkg.MaxVersion != "")) ||
+		full && (pkg.MinVersion != "" || pkg.MaxVersion != "")
 }
 
-// semverFindMax - finds the max bundle version
-func semverFindMax(entries []v1alpha3.ChannelEntry) (string, error) {
-	var max semver.Version
-	var index int
-	for id, s := range entries {
-		hld := strings.Split(s.Name, ".")
-		// we are only interested in 1,2,3 positions
-		if len(hld) < 4 {
-			return "", fmt.Errorf("versioning of string is not correct %s ", s.Name)
-		}
-		hld[1] = strings.Replace(hld[1], "v", "", -1)
-		end := strings.Split(hld[3], "-")
-		semStr := strings.Join([]string{hld[1], hld[2], end[0]}, ".")
-		version, err := semver.Parse(semStr)
-		if err != nil {
-			return "", err
-		}
-
-		if version.Compare(max) == 1 {
-			max = version
-			index = id
+func containsChannel(channels []v1alpha2.IncludeChannel, name string) (bool, int) {
+	for idx, channel := range channels {
+		if channel.Name == name {
+			return true, idx
 		}
 	}
-	return entries[index].Name, nil
+	return false, -1
 }
 
-// semverFindRange - finds the bundles between ranges version
-func semverFindRange(entries []v1alpha3.ChannelEntry, min, max string) ([]string, error) {
-
-	var minVersion semver.Version
-	var maxVersion semver.Version
+func filterBundles(channelEntries []v1alpha3.ChannelEntry, min string, max string, full bool) ([]string, error) {
+	var minVersion, maxVersion semver.Version
 	var err error
-	var results []string
 
-	// parse the min max strings
-	if len(min) > 0 {
-		minVersion, err = semver.Parse(min)
+	if min != "" {
+		minVersion, err = semver.ParseTolerant(min)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
-	} else {
-		minVersion, _ = semver.Parse("0.0.0")
-	}
-	if len(max) > 0 {
-		maxVersion, err = semver.Parse(max)
-		if err != nil {
-			return []string{}, err
-		}
-	} else {
-		maxVersion, _ = semver.Parse("9.9.9")
 	}
 
-	for _, s := range entries {
-		hld := strings.Split(s.Name, ".")
-		// we are only interested in 1,2,3 positions
-		if len(hld) < 4 {
-			return []string{}, fmt.Errorf("versioning of string is not correct %s ", s.Name)
-		}
-		hld[1] = strings.Replace(hld[1], "v", "", -1)
-		end := strings.Split(hld[3], "-")
-		semStr := strings.Join([]string{hld[1], hld[2], end[0]}, ".")
-		version, err := semver.Parse(semStr)
+	if max != "" {
+		maxVersion, err = semver.ParseTolerant(max)
 		if err != nil {
-			return []string{}, err
-		}
-		if version.Compare(maxVersion) <= 0 && version.Compare(minVersion) >= 1 {
-			results = append(results, s.Name)
+			return nil, err
 		}
 	}
-	return results, nil
+
+	var filtered []string
+	currentHead := semver.MustParse("0.0.0")
+	var currentHeadName string
+
+	for _, chEntry := range channelEntries {
+
+		version, err := getChannelEntrySemVer(chEntry.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		// preReleases that skip the current head of a channel should be considered as head.
+		// even if from the semver perspective, they are LT(currentHead)
+		if version.GT(currentHead) || isPreReleaseHead(version, chEntry, currentHeadName) {
+			currentHead = version
+			currentHeadName = chEntry.Name
+		}
+
+		//Include this bundle to the filtered list if:
+		// * its version is prerelease of an already included bundle
+		// * its version is between min and max (both defined)
+		// * its version is greater than min (defined), and no max is defined (which means up to channel head)
+		// * its version is under max (defined) and no min is defined
+		if ((min == "" || version.GTE(minVersion)) && (max == "" || version.LTE(maxVersion))) || isPreReleaseOfFilteredVersion(version, filtered) {
+			// In case full == false and min and max are empty, do not include this bundle:
+			// this is the case where there is no filtering, and where only the channel's head shall be included in the output filter.
+			if min == "" && max == "" && !full {
+				continue
+			}
+			filtered = append(filtered, chEntry.Name)
+		}
+	}
+
+	if min == "" && max == "" && currentHead.String() != "0.0.0" && !full {
+		return []string{currentHeadName}, nil
+	}
+
+	return filtered, nil
+}
+
+func getChannelEntrySemVer(chEntryName string) (semver.Version, error) {
+	nameSplit := strings.Split(chEntryName, ".")
+	if len(nameSplit) < 4 {
+		return semver.Version{}, fmt.Errorf("incorrect version format %s ", chEntryName)
+	}
+	end := nameSplit[3]
+	if strings.Contains(nameSplit[3], "-") {
+		end = strings.Join(nameSplit[3:], ".")
+	}
+	semStr := strings.Join([]string{nameSplit[1], nameSplit[2], end}, ".")
+
+	version, err := semver.ParseTolerant(semStr)
+	if err != nil {
+		return semver.Version{}, err
+	}
+
+	return version, err
+}
+
+func isPreReleaseHead(version semver.Version, channelEntry v1alpha3.ChannelEntry, currentHead string) bool {
+	return len(version.Pre) > 0 && slices.Contains(channelEntry.Skips, currentHead)
+}
+
+func isPreReleaseOfFilteredVersion(semver semver.Version, filteredVersions []string) bool {
+	if len(semver.Pre) > 0 {
+		for _, filteredVersion := range filteredVersions {
+			if strings.Contains(filteredVersion, fmt.Sprintf("%d.%d.%d", semver.Major, semver.Minor, semver.Patch)) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func addTypeToRelatedImages(dlcg v1alpha3.DeclarativeConfig) []v1alpha3.RelatedImage {
+	var relatedImages []v1alpha3.RelatedImage
+
+	for _, ri := range dlcg.RelatedImages {
+		if ri.Image == dlcg.Image {
+			ri.Type = v1alpha2.TypeOperatorBundle
+		} else {
+			ri.Type = v1alpha2.TypeOperatorRelatedImage
+		}
+		relatedImages = append(relatedImages, ri)
+	}
+	return relatedImages
 }
