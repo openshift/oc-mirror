@@ -79,7 +79,7 @@ func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchem
 	return ocs, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator, mp map[string]v1alpha3.ISCPackage) (map[string][]v1alpha3.RelatedImage, error) {
+func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
 	return nil, nil
 }
 
@@ -124,7 +124,7 @@ func (o *Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string) (map[string][]v1alpha3.RelatedImage, error) {
+func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	relatedImages["abc"] = []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},

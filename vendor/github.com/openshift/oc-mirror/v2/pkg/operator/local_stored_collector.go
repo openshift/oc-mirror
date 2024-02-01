@@ -44,20 +44,8 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		label     string
 		dir       string
 	)
-	compare := make(map[string]v1alpha3.ISCPackage)
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 
-	// compile a map to compare channels,min & max versions
-	for _, ops := range o.Config.Mirror.Operators {
-		o.Log.Info("isc operators: %s\n", ops.Catalog)
-		for _, pkg := range ops.Packages {
-			o.Log.Info("catalog packages: %s \n", pkg.Name)
-			for _, channel := range pkg.Channels {
-				compare[pkg.Name] = v1alpha3.ISCPackage{Channel: channel.Name, MinVersion: channel.MinVersion, MaxVersion: channel.MaxVersion, Full: ops.Full}
-				o.Log.Info("channels: %v \n", compare)
-			}
-		}
-	}
 	f, err := os.Create(filepath.Join(o.LogsDir, logsFile))
 	if err != nil {
 		o.Log.Error(errMsg, err)
@@ -144,13 +132,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		// this is the equivalent of the headOnly mode
 		// only the latest version of each operator will be selected
 		if len(op.Packages) == 0 {
-			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(cacheDir, label)
+			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(cacheDir, label, op)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 		} else {
 			// iterate through each package
-			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalogByFilter(cacheDir, label, op, compare)
+			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalogByFilter(cacheDir, label, op)
 			if err != nil {
 				return []v1alpha3.CopyImageSchema{}, err
 			}
