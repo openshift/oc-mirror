@@ -285,11 +285,33 @@ func (o *MirrorOptions) Validate() error {
 		if err != nil {
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
+
 		for _, op := range cfg.Mirror.Operators {
 			if op.IsFBCOCI() {
 				break
 			}
 		}
+
+		// check for defaultChannel
+		for _, op := range cfg.Mirror.Operators {
+			for _, pkg := range op.Packages {
+				if len(pkg.DefaultChannel) > 0 {
+					valid := false
+					for _, ch := range pkg.Channels {
+						// check that it's set in the channel stanza
+						if pkg.DefaultChannel == ch.Name {
+							valid = true
+							break
+						}
+					}
+					if !valid {
+						// if we get here it means that the channel has not been set with the same value as defaultChannel
+						return fmt.Errorf("defaultChannel has been set with '%s', please ensure that '%s' is declared in the channels section for the package '%s' in the config ", pkg.DefaultChannel, pkg.DefaultChannel, pkg.Name)
+					}
+				}
+			}
+		}
+
 	}
 
 	if o.SkipPruning {
