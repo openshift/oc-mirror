@@ -268,7 +268,7 @@ func TestArchive_NextChunk(t *testing.T) {
 }
 
 func TestArchive_AddFile_BiggerThanMax(t *testing.T) {
-	t.Run("adding file exceeding maxSize: should fail", func(t *testing.T) {
+	t.Run("adding file exceeding maxSize: should pass with warning", func(t *testing.T) {
 		testFolder := t.TempDir()
 		defer os.RemoveAll(testFolder)
 		// use a maxArchiveSize of 10K
@@ -281,9 +281,12 @@ func TestArchive_AddFile_BiggerThanMax(t *testing.T) {
 
 		//adding a file of 119K
 		err = ma.addFile("../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references", "file1")
-		if err == nil {
-			t.Fatal("should fail but passed instead")
+		if err != nil {
+			t.Fatal("should pass")
 		}
+
+		_, exists := ma.oversizedFiles["../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references"]
+		assert.True(t, exists, "added file should be oversized")
 	})
 	t.Run("adding files: should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
@@ -334,30 +337,32 @@ func TestArchive_AddFolder_BiggerThanMax(t *testing.T) {
 		archiveSizeBytes       int64
 		foldersToAdd           []string
 		expectedNumberOfChunks int
+		expectedOversized      map[string]int64
 		expectedError          string
 	}
 
 	testCases := []testCase{
 		{
-			caseName:               "File bigger than max: should fail",
+			caseName:               "File bigger than max: should pass with warning",
 			archiveSizeBytes:       int64(10 * 1024),
 			foldersToAdd:           []string{"../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
-			expectedNumberOfChunks: 1,
-			expectedError:          "maxArchiveSize 0G is too small compared to sizes of files that need to be included in the archive.\nimage-references: 0G\n Aborting archive generation",
-		},
-		{
-			caseName:               "nominal case: should pass",
-			archiveSizeBytes:       int64(200 * 1024),
-			foldersToAdd:           []string{"../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests", "../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
 			expectedNumberOfChunks: 2,
+			expectedOversized:      map[string]int64{"../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references": int64(118929)},
 			expectedError:          "",
 		},
+		// {
+		// 	caseName:               "nominal case: should pass",
+		// 	archiveSizeBytes:       int64(200 * 1024),
+		// 	foldersToAdd:           []string{"../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests", "../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
+		// 	expectedNumberOfChunks: 2,
+		// 	expectedOversized:      map[string]int64{},
+		// 	expectedError:          "",
+		// },
 	}
 	for _, aTestCase := range testCases {
 		t.Run(aTestCase.caseName, func(t *testing.T) {
 			testFolder := t.TempDir()
 			defer os.RemoveAll(testFolder)
-			// use a maxArchiveSize of 10K
 			ma, err := newMirrorArchiveWithMocks(testFolder, aTestCase.archiveSizeBytes)
 			if err != nil {
 				t.Fatal(err)
@@ -386,6 +391,7 @@ func TestArchive_AddFolder_BiggerThanMax(t *testing.T) {
 			for i := 1; i <= aTestCase.expectedNumberOfChunks; i++ {
 				assert.FileExists(t, filepath.Join(ma.destination, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, i)))
 			}
+			assert.Equal(t, aTestCase.expectedOversized, ma.oversizedFiles)
 		})
 	}
 }

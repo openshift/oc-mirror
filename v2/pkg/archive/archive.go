@@ -30,6 +30,8 @@ type MirrorArchive struct {
 	maxArchiveSize     int64
 	currentChunkId     int
 	sizeOfCurrentChunk int64
+	oversizedFiles     map[string]int64
+	logger             clog.PluggableLoggerInterface
 }
 
 const (
@@ -82,6 +84,8 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 		maxArchiveSize:     maxSize,
 		currentChunkId:     chunk,
 		sizeOfCurrentChunk: int64(0),
+		oversizedFiles:     make(map[string]int64),
+		logger:             logg,
 	}
 	return &ma, nil
 }
@@ -128,6 +132,20 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1al
 	}
 	o.tarWriter.Flush()
 	o.tarWriter.Close()
+	// create a warning with the archiveSize that should be set, and the list of files that
+	// were exceeding the max
+	if len(o.oversizedFiles) > 0 {
+		recommendedSize := int64(0)
+		o.logger.Warn("The following files exceed the archiveSize configured: ")
+		for f, s := range o.oversizedFiles {
+			o.logger.Warn("%s: %d", f, s/segMultiplier)
+			if s > recommendedSize {
+				recommendedSize = s
+			}
+		}
+		recommendedSize /= segMultiplier
+		o.logger.Warn("Please consider updating archiveSize to at least %d", recommendedSize)
+	}
 	return o.archiveFile.Name(), nil
 }
 
@@ -183,12 +201,16 @@ func (o *MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	}
 
 	// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
-	// therefore we should stop
+	// therefore we create a warning, and make an exception for a bigger chunk
 	if fi.Size() > o.maxArchiveSize {
-		return fmt.Errorf("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, fi.Name(), fi.Size()/segMultiplier)
-	}
-	// check if we should add this file to the archive without exceeding the maxArchiveSize
-	if fi.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
+		o.logger.Warn("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, fi.Name(), fi.Size()/segMultiplier)
+		o.oversizedFiles[pathToFile] = fi.Size()
+		err = o.nextChunk()
+		if err != nil {
+			return err
+		}
+	} else if fi.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize { // check if we should add this file to the archive without exceeding the maxArchiveSize
+		// we only check this if the file size isn't exceeding the max, so that we don't create 2 new chunks
 		err = o.nextChunk()
 		if err != nil {
 			return err
@@ -217,6 +239,7 @@ func (o *MirrorArchive) addFile(pathToFile string, pathInTar string) error {
 	o.sizeOfCurrentChunk += fi.Size()
 	return nil
 }
+
 func (o *MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) error {
 	return filepath.Walk(folderToAdd, func(path string, info os.FileInfo, incomingError error) error {
 		if incomingError != nil {
@@ -226,12 +249,16 @@ func (o *MirrorArchive) addAllFolder(folderToAdd string, relativeTo string) erro
 			return nil
 		}
 		// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
-		// therefore we should stop
-		if info.Size() > o.maxArchiveSize {
-			return fmt.Errorf("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, info.Name(), info.Size()/segMultiplier)
-		}
-		// check if we should add this file to the archive without exceeding the maxArchiveSize
-		if info.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
+		// therefore we create a warning, and make an exception for a bigger chunk
+		if info.Size() > o.maxArchiveSize && o.sizeOfCurrentChunk != 0 {
+			o.logger.Warn("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, info.Name(), info.Size()/segMultiplier)
+			o.oversizedFiles[path] = info.Size()
+			err := o.nextChunk()
+			if err != nil {
+				return err
+			}
+		} else if info.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize { // check if we should add this file to the archive without exceeding the maxArchiveSize
+			// we only check this if the file size isn't exceeding the max, so that we don't create 2 new chunks
 			err := o.nextChunk()
 			if err != nil {
 				return err
