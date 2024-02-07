@@ -837,13 +837,14 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 	return test, nil
 }
 
-func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
-	return filepath.Join(o.destination, "mirror_000001.tar"), nil
-}
-
-func (o MockArchiver) Close() error {
+func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error {
+	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
 }
+
+// func (o MockArchiver) Close() error {
+// 	return nil
+// }
 
 func skipSignalsToInterruptStorage(errchan chan error) {
 	err := <-errchan
