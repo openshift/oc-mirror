@@ -237,6 +237,63 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 
 }
 
+func TestArchive_RemovePastMirrors(t *testing.T) {
+	type testCase struct {
+		caseName      string
+		destination   string
+		expectedError string
+	}
+
+	testFolder1 := t.TempDir()
+	defer os.RemoveAll(testFolder1)
+
+	testFolder2 := t.TempDir()
+	defer os.RemoveAll(testFolder2)
+
+	file, err := os.Create(filepath.Join(testFolder2, "mirror_000001.tar"))
+	if err != nil {
+		t.Fatalf("should not fail : %v", err)
+	}
+	defer file.Close()
+
+	testCases := []testCase{
+		{
+			caseName:      "destination exists, nothing to remove: pass",
+			destination:   testFolder1,
+			expectedError: "",
+		},
+		{
+			caseName:      "destination doesnt exist: pass",
+			destination:   "testFolder3",
+			expectedError: "",
+		},
+		{
+			caseName:      "destination exists and contains files: pass",
+			destination:   testFolder2,
+			expectedError: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.caseName, func(t *testing.T) {
+			err := removePastArchives(tc.destination)
+			if err != nil {
+				assert.Equal(t, tc.expectedError, err.Error())
+			} else {
+				if tc.expectedError != "" {
+					t.Fatal("should fail but passed instead")
+				}
+			}
+			if _, err := os.Stat(tc.destination); err == nil {
+				entries, err := os.ReadDir(tc.destination)
+				if err != nil {
+					t.Fatal("should not fail")
+				}
+				assert.Empty(t, entries)
+			}
+		})
+	}
+}
 func assertContents(t *testing.T, archiveFile string, expectedTarContents []string) bool {
 	actualTarContents := []string{}
 	chunkFile, err := os.Open(archiveFile)

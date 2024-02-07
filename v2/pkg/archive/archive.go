@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -35,6 +36,10 @@ const (
 // cause the BuildArchive method to stop and return in error.
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
 
+	err := removePastArchives(destination)
+	if err != nil {
+		logg.Warn("unable to delete past archives from %s: %v", destination, err)
+	}
 	// create the history interface
 	history, err := history.NewHistory(workingDir, time.Time{}, logg, history.OSFileCreator{})
 	if err != nil {
@@ -188,4 +193,21 @@ func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 		}
 	}
 	return blobsInDiff, nil
+}
+
+func removePastArchives(destination string) error {
+	_, err := os.Stat(destination)
+	if err == nil {
+		files, err := filepath.Glob(filepath.Join(destination, "mirror_*.tar"))
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			err := os.Remove(file)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
