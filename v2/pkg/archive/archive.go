@@ -36,7 +36,7 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 		logg.Warn("unable to delete past archives from %s: %v", destination, err)
 	}
 	// create the history interface
-	history, err := history.NewHistory(workingDir, time.Time{}, logg, history.OSFileCreator{})
+	history, err := history.NewHistory(workingDir, opts.Global.Since, logg, history.OSFileCreator{})
 	if err != nil {
 		return &MirrorArchive{}, err
 	}

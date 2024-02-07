@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/otiai10/copy"
 
@@ -257,6 +258,17 @@ func TestExecutorValidate(t *testing.T) {
 		err = ex.Validate([]string{"test"})
 		assert.Equal(t, "destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes", err.Error())
 
+		// check that since is a valid date
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		opts.Global.SinceString = "2024-01-01"
+		assert.NoError(t, ex.Validate([]string{"file://test"}))
+
+		// check error is returned when since is an invalid date
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		opts.Global.SinceString = "224-44-01"
+		assert.Equal(t, "--since flag needs to be in format yyyy-MM-dd", ex.Validate([]string{"file://test"}).Error())
 	})
 }
 
@@ -309,6 +321,20 @@ func TestExecutorComplete(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
+
+		ex.Opts.Global.SinceString = "2024-01-01"
+		err = ex.Complete([]string{"file:///tmp/test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		expectedSince, err := time.Parse(time.DateOnly, "2024-01-01")
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		assert.Equal(t, expectedSince, ex.Opts.Global.Since)
+
+		ex.Opts.Global.SinceString = "12345"
+		assert.Error(t, ex.Complete([]string{"file:///tmp/test"}))
 
 		defer os.RemoveAll("../../pkg/cli/test")
 		defer os.RemoveAll("../../pkg/cli/tmp")
