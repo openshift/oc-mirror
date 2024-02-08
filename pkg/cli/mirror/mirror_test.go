@@ -338,7 +338,7 @@ func TestMirrorValidate(t *testing.T) {
 			name: "Valid/MirrortoDisk",
 			opts: &MirrorOptions{
 				OutputDir:  t.TempDir(),
-				ConfigPath: "foo",
+				ConfigPath: "testdata/configs/iscfg.yaml",
 			},
 			expError: "",
 		},
