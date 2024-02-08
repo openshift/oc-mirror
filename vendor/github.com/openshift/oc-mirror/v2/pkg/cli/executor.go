@@ -187,7 +187,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
-	cmd.Flags().BoolVar(&opts.Global.ContinueOnError, "continue-on-error", false, "If an error occurs, keep going and attempt to complete operations if possible")
+	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
 
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
@@ -288,7 +288,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
-		if !o.Opts.Global.ContinueOnError {
+		if o.Opts.Global.StrictArchiving {
 			o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 			if err != nil {
 				return err

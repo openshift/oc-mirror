@@ -26,11 +26,6 @@ type MirrorArchive struct {
 	blobGatherer BlobsGatherer
 }
 
-const (
-	segMultiplier  int64 = 1024 * 1024 * 1024
-	defaultSegSize int64 = 500
-)
-
 // NewMirrorArchive creates a new MirrorArchive instance with strictAdder:
 // any files that exceed the maxArchiveSize specified in the imageSetConfig will
 // cause the BuildArchive method to stop and return in error.

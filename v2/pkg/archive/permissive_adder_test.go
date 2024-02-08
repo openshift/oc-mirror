@@ -27,7 +27,7 @@ func TestPermissiveAdder_NextChunk(t *testing.T) {
 	}
 	assert.Equal(t, 2, ma.currentChunkId)
 	assert.Equal(t, int64(0), ma.sizeOfCurrentChunk)
-	assert.Equal(t, filepath.Join(testFolder, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 2)), ma.archiveFile.Name())
+	assert.Equal(t, filepath.Join(testFolder, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 2)), ma.archiveFile.Name())
 }
 
 func TestPermissiveAdder_ExceptionChunk(t *testing.T) {
@@ -53,7 +53,7 @@ func TestPermissiveAdder_ExceptionChunk(t *testing.T) {
 	}
 	assert.Equal(t, 3, ma.currentChunkId)
 	assert.Equal(t, int64(5*1024), ma.sizeOfCurrentChunk)
-	assert.FileExists(t, filepath.Join(testFolder, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 3)))
+	assert.FileExists(t, filepath.Join(testFolder, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 3)))
 }
 
 func TestPermissiveAdder_AddFile_BiggerThanMax(t *testing.T) {
@@ -75,7 +75,7 @@ func TestPermissiveAdder_AddFile_BiggerThanMax(t *testing.T) {
 		}
 		_, markedOversized := ma.oversizedFiles["../../tests/working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references"]
 		assert.True(t, markedOversized)
-		assert.FileExists(t, filepath.Join(testFolder, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)))
+		assert.FileExists(t, filepath.Join(testFolder, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)))
 
 	})
 	t.Run("adding files: should pass", func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestPermissiveAdder_AddFolder_BiggerThanMax(t *testing.T) {
 			}
 			assert.Equal(t, aTestCase.expectedNumberOfChunks, ma.currentChunkId)
 			for i := 1; i <= aTestCase.expectedNumberOfChunks; i++ {
-				assert.FileExists(t, filepath.Join(ma.destination, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, i)))
+				assert.FileExists(t, filepath.Join(ma.destination, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, i)))
 			}
 		})
 	}

@@ -3,7 +3,6 @@ package archive
 import (
 	"archive/tar"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -26,7 +25,7 @@ type strictAdder struct {
 // and returns in error.
 func newStrictAdder(maxSize int64, destination string, logger clog.PluggableLoggerInterface) (*strictAdder, error) {
 	chunk := 1
-	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
+	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, chunk)
 	err := os.MkdirAll(destination, 0755)
 	if err != nil {
 		return &strictAdder{}, err
@@ -92,26 +91,11 @@ func (o *strictAdder) addFile(pathToFile string, pathInTar string) error {
 			return err
 		}
 	}
-	header, err := tar.FileInfoHeader(fi, fi.Name())
+	err = addFileToWriter(fi, pathToFile, pathInTar, o.tarWriter)
 	if err != nil {
 		return err
 	}
-	header.Name = pathInTar
 
-	if err := o.tarWriter.WriteHeader(header); err != nil {
-		return err
-	}
-	// Open the file for reading
-	file, err := os.Open(pathToFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Copy the file contents to the tar archive
-	if _, err := io.Copy(o.tarWriter, file); err != nil {
-		return err
-	}
 	o.sizeOfCurrentChunk += fi.Size()
 	return nil
 }
@@ -142,35 +126,17 @@ func (o *strictAdder) addAllFolder(folderToAdd string, relativeTo string) error 
 				return err
 			}
 		}
-
-		header, err := tar.FileInfoHeader(info, info.Name())
-		if err != nil {
-			return err
-		}
-
 		// Use full path as name (FileInfoHeader only takes the basename)
 		// If we don't do this the directory strucuture would
 		// not be preserved
 		// https://golang.org/src/archive/tar/common.go?#L626
-		header.Name, err = filepath.Rel(relativeTo, path)
+		pathInTar, err := filepath.Rel(relativeTo, path)
 		if err != nil {
 			return err
 		}
 
-		// Write the header to the tar archive
-		if err := o.tarWriter.WriteHeader(header); err != nil {
-			return err
-		}
-
-		// Open the file for reading
-		file, err := os.Open(path)
+		err = addFileToWriter(info, path, pathInTar, o.tarWriter)
 		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		// Copy the file contents to the tar archive
-		if _, err := io.Copy(o.tarWriter, file); err != nil {
 			return err
 		}
 
@@ -200,7 +166,7 @@ func (o *strictAdder) nextChunk() error {
 
 	// Create a new tar archive file
 	// to be closed by BuildArchive
-	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, o.currentChunkId)
+	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, o.currentChunkId)
 	archivePath := filepath.Join(o.destination, archiveFileName)
 
 	o.archiveFile, err = os.Create(archivePath)

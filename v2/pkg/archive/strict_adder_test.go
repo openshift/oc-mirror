@@ -27,7 +27,7 @@ func TestStrictAdder_NextChunk(t *testing.T) {
 	}
 	assert.Equal(t, 2, ma.currentChunkId)
 	assert.Equal(t, int64(0), ma.sizeOfCurrentChunk)
-	assert.Equal(t, filepath.Join(testFolder, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 2)), ma.archiveFile.Name())
+	assert.Equal(t, filepath.Join(testFolder, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 2)), ma.archiveFile.Name())
 }
 
 func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
@@ -147,7 +147,7 @@ func TestStrictAdder_AddFolder_BiggerThanMax(t *testing.T) {
 			}
 			assert.Equal(t, aTestCase.expectedNumberOfChunks, ma.currentChunkId)
 			for i := 1; i <= aTestCase.expectedNumberOfChunks; i++ {
-				assert.FileExists(t, filepath.Join(ma.destination, fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, i)))
+				assert.FileExists(t, filepath.Join(ma.destination, fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, i)))
 			}
 		})
 	}

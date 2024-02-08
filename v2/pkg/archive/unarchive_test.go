@@ -17,7 +17,7 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 
 		// Create a new tar archive file : for working-dir
-		archive1FileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+		archive1FileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
 		archive1Path := filepath.Join(testFolder, archive1FileName)
 		// to be closed by BuildArchive
 		archive1File, err := os.Create(archive1Path)
@@ -30,7 +30,7 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 		}
 
 		// Create a new tar archive file : for cache-dir
-		archive2FileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 2)
+		archive2FileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 2)
 		archive2Path := filepath.Join(testFolder, archive2FileName)
 		// to be closed by BuildArchive
 		archive2File, err := os.Create(archive2Path)
@@ -61,7 +61,7 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 
 		// Create a new tar archive file
-		archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+		archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
 		archivePath := filepath.Join(testFolder, archiveFileName)
 		// to be closed by BuildArchive
 		archiveFile, err := os.Create(archivePath)
@@ -106,7 +106,7 @@ func TestUnArchiver_WorkingDirError(t *testing.T) {
 	defer os.RemoveAll(testFolder)
 
 	// Create a new tar archive file
-	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
 	archivePath := filepath.Join(testFolder, archiveFileName)
 	// to be closed by BuildArchive
 	_, err := os.Create(archivePath)
@@ -127,7 +127,7 @@ func TestUnArchiver_CacheDirError(t *testing.T) {
 	defer os.RemoveAll(testFolder)
 
 	// Create a new tar archive file
-	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, 1)
+	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
 	archivePath := filepath.Join(testFolder, archiveFileName)
 	// to be closed by BuildArchive
 	_, err := os.Create(archivePath)
