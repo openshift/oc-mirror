@@ -11,11 +11,15 @@ type BlobsGatherer interface {
 }
 
 type Archiver interface {
-	BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error)
-	Close() error
+	BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error
 }
 
 type UnArchiver interface {
-	Close() error
 	Unarchive() error
+}
+
+type archiveAdder interface {
+	addFile(pathToFile string, pathInTar string) error
+	addAllFolder(folderToAdd string, relativeTo string) error
+	close() error
 }

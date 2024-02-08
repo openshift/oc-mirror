@@ -187,6 +187,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
+	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
+
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -286,9 +288,16 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
-		o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Log)
-		if err != nil {
-			return err
+		if o.Opts.Global.StrictArchiving {
+			o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
+			if err != nil {
+				return err
+			}
+		} else {
+			o.MirrorArchiver, err = archive.NewPermissiveMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
+			if err != nil {
+				return err
+			}
 		}
 	} else if o.Opts.IsDiskToMirror() { // if added so that the unArchiver is not instanciated for the prepare workflow
 		o.MirrorUnArchiver, err = archive.NewArchiveExtractor(rootDir, o.Opts.Global.WorkingDir, o.LocalStorageDisk)
@@ -528,12 +537,11 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	o.localStorageInterruptChannel <- interruptSig
 
 	// Next, generate the archive
-	archiveFile, err := o.MirrorArchiver.BuildArchive(cmd.Context(), allImages)
+	err = o.MirrorArchiver.BuildArchive(cmd.Context(), allImages)
 	if err != nil {
 		return err
 	}
-	defer o.MirrorArchiver.Close()
-	o.Log.Info("archive file generated: %v ", archiveFile)
+
 	mirrorFinish := time.Now()
 	o.Log.Info("start time      : %v", startTime)
 	o.Log.Info("collection time : %v", collectionFinish)
@@ -554,7 +562,6 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		o.Log.Error(" %v ", err)
 		return err
 	}
-	defer o.MirrorUnArchiver.Close()
 
 	// start the local storage registry
 	o.Log.Info(startMessage, o.Opts.Global.Port)

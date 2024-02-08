@@ -7,54 +7,53 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 type MirrorUnArchiver struct {
 	UnArchiver
-	workingDir         string
-	cacheDir           string
-	archiveFile        *os.File
-	hasNoFilesToUnpack bool
+	workingDir   string
+	cacheDir     string
+	archiveFiles []string
 }
 
 func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArchiver, error) {
-	chunk := 1
-	archiveFileName := fmt.Sprintf("%s_%06d.tar", archiveFilePrefix, chunk)
-	chunkPath := filepath.Join(archivePath, archiveFileName)
-
-	hasNoFilesToUnpack := false
-
-	chunkFile, err := os.Open(chunkPath)
+	ae := MirrorUnArchiver{
+		workingDir: workingDir,
+		cacheDir:   cacheDir,
+	}
+	files, err := os.ReadDir(archivePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			hasNoFilesToUnpack = true
-		} else {
-			return MirrorUnArchiver{}, err
+		return MirrorUnArchiver{}, err
+	}
+
+	rxp, err := regexp.Compile(archiveFilePrefix + "_[0-9]{6}\\.tar")
+	if err != nil {
+		return MirrorUnArchiver{}, err
+	}
+	for _, chunk := range files {
+
+		if rxp.MatchString(chunk.Name()) {
+			ae.archiveFiles = append(ae.archiveFiles, filepath.Join(archivePath, chunk.Name()))
 		}
 	}
-
-	ae := MirrorUnArchiver{
-		workingDir:         workingDir,
-		cacheDir:           cacheDir,
-		archiveFile:        chunkFile,
-		hasNoFilesToUnpack: hasNoFilesToUnpack,
-	}
 	return ae, nil
-}
-
-func (o MirrorUnArchiver) Close() error {
-	return o.archiveFile.Close()
 }
 
 // Unarchive extracts:
 // * docker/v2* to cacheDir
 // * working-dir to workingDir
 func (o MirrorUnArchiver) Unarchive() error {
-	if !o.hasNoFilesToUnpack {
-		reader := tar.NewReader(o.archiveFile)
+	for _, chunkPath := range o.archiveFiles {
+		chunkFile, err := os.Open(chunkPath)
+		if err != nil {
+			return err
+		}
+		defer chunkFile.Close()
+		reader := tar.NewReader(chunkFile)
 		// make sure workingDir exists
-		err := os.MkdirAll(o.workingDir, 0755)
+		err = os.MkdirAll(o.workingDir, 0755)
 		if err != nil {
 			return fmt.Errorf(errMessageFolder, o.workingDir, err)
 		}
@@ -72,7 +71,7 @@ func (o MirrorUnArchiver) Unarchive() error {
 			}
 
 			if err != nil {
-				return fmt.Errorf("error reading archive %s: %v", o.archiveFile.Name(), err)
+				return fmt.Errorf("error reading archive %s: %v", chunkFile.Name(), err)
 			}
 
 			if header == nil {
@@ -122,7 +121,7 @@ func (o MirrorUnArchiver) Unarchive() error {
 
 			}
 		}
-		return nil
 	}
+
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -55,71 +56,67 @@ var expectedTarContents = []string{
 	"working-dir-fake/hold-operator/redhat-operator-index/v4.14/configs/node-observability-operator/catalog.json",
 }
 
-func newMirrorArchiveWithMocks(testFolder string) (MirrorArchive, error) {
-	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
-		SecurePolicy: false,
-		Force:        true,
-		WorkingDir:   "tests",
-	}
-	_, sharedOpts := mirror.SharedImageFlags()
-	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-	_, retryOpts := mirror.RetryFlags()
-	opts := mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		Dev:                 false,
-		Mode:                mirror.MirrorToDisk,
-	}
-	cfg := "../../tests/isc.yaml"
-
-	ma, err := NewMirrorArchive(&opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", clog.New("trace"))
-	if err != nil {
-		return MirrorArchive{}, err
-	}
-
-	ma, err = ma.WithFakes()
-	return ma, err
-}
-
 func TestArchive_BuildArchive(t *testing.T) {
-	// Create a temporary test folder
-	testFolder := t.TempDir()
-	ma, err := newMirrorArchiveWithMocks(testFolder)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ma.Close()
-	defer os.RemoveAll(testFolder)
+	t.Run("use strict adder: pass", func(t *testing.T) {
+		// Create a temporary test folder
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(testFolder)
 
-	images := []v1alpha3.CopyImageSchema{
-		{
-			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
-		},
-	}
-	archName, err := ma.BuildArchive(context.Background(), images)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.FileExists(t, archName, "archive should exist")
-	assertContents(t, archName, expectedTarContents)
+		images := []v1alpha3.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
+				Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			},
+		}
+		err = ma.BuildArchive(context.Background(), images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archName := filepath.Join(testFolder, "mirror_000001.tar")
+		assert.FileExists(t, archName, "archive should exist")
+		assertContents(t, archName, expectedTarContents)
+	})
+	t.Run("use permissive adder: pass", func(t *testing.T) {
+		// Create a temporary test folder
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(testFolder)
+
+		images := []v1alpha3.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
+				Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			},
+		}
+		err = ma.BuildArchive(context.Background(), images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archName := filepath.Join(testFolder, "mirror_000001.tar")
+		assert.FileExists(t, archName, "archive should exist")
+		assertContents(t, archName, expectedTarContents)
+	})
 }
 
 func TestArchive_CacheDirError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	ma, err := newMirrorArchiveWithMocks(testFolder)
+	defer os.RemoveAll(testFolder)
+	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ma.Close()
 	defer os.RemoveAll(testFolder)
 
 	images := []v1alpha3.CopyImageSchema{
@@ -133,7 +130,7 @@ func TestArchive_CacheDirError(t *testing.T) {
 	ma.cacheDir = "none"
 	ma.workingDir = "../../tests/working-dir-fake"
 
-	_, err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), images)
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -142,11 +139,11 @@ func TestArchive_CacheDirError(t *testing.T) {
 func TestArchive_WorkingDirError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	ma, err := newMirrorArchiveWithMocks(testFolder)
+	defer os.RemoveAll(testFolder)
+	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ma.Close()
 	defer os.RemoveAll(testFolder)
 
 	images := []v1alpha3.CopyImageSchema{
@@ -160,7 +157,7 @@ func TestArchive_WorkingDirError(t *testing.T) {
 	ma.cacheDir = "../../tests/cache-fake"
 	ma.workingDir = "none"
 
-	_, err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), images)
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -169,11 +166,11 @@ func TestArchive_WorkingDirError(t *testing.T) {
 func TestArchive_FileError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	ma, err := newMirrorArchiveWithMocks(testFolder)
+	defer os.RemoveAll(testFolder)
+	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ma.Close()
 	defer os.RemoveAll(testFolder)
 
 	images := []v1alpha3.CopyImageSchema{
@@ -186,7 +183,7 @@ func TestArchive_FileError(t *testing.T) {
 	// force error for addFile
 	ma.iscPath = "none"
 
-	_, err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), images)
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -195,11 +192,11 @@ func TestArchive_FileError(t *testing.T) {
 func TestArchive_AddBlobsDiff(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	ma, err := newMirrorArchiveWithMocks(testFolder)
+	defer os.RemoveAll(testFolder)
+	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ma.Close()
 	defer os.RemoveAll(testFolder)
 
 	collectedBlobs := map[string]string{
@@ -240,6 +237,63 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 
 }
 
+func TestArchive_RemovePastMirrors(t *testing.T) {
+	type testCase struct {
+		caseName      string
+		destination   string
+		expectedError string
+	}
+
+	testFolder1 := t.TempDir()
+	defer os.RemoveAll(testFolder1)
+
+	testFolder2 := t.TempDir()
+	defer os.RemoveAll(testFolder2)
+
+	file, err := os.Create(filepath.Join(testFolder2, "mirror_000001.tar"))
+	if err != nil {
+		t.Fatalf("should not fail : %v", err)
+	}
+	defer file.Close()
+
+	testCases := []testCase{
+		{
+			caseName:      "destination exists, nothing to remove: pass",
+			destination:   testFolder1,
+			expectedError: "",
+		},
+		{
+			caseName:      "destination doesnt exist: pass",
+			destination:   "testFolder3",
+			expectedError: "",
+		},
+		{
+			caseName:      "destination exists and contains files: pass",
+			destination:   testFolder2,
+			expectedError: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.caseName, func(t *testing.T) {
+			err := removePastArchives(tc.destination)
+			if err != nil {
+				assert.Equal(t, tc.expectedError, err.Error())
+			} else {
+				if tc.expectedError != "" {
+					t.Fatal("should fail but passed instead")
+				}
+			}
+			if _, err := os.Stat(tc.destination); err == nil {
+				entries, err := os.ReadDir(tc.destination)
+				if err != nil {
+					t.Fatal("should not fail")
+				}
+				assert.Empty(t, entries)
+			}
+		})
+	}
+}
 func assertContents(t *testing.T, archiveFile string, expectedTarContents []string) bool {
 	actualTarContents := []string{}
 	chunkFile, err := os.Open(archiveFile)
@@ -274,7 +328,48 @@ func assertContents(t *testing.T, archiveFile string, expectedTarContents []stri
 }
 
 // //////     Mocks       ////////
-func (ma MirrorArchive) WithFakes() (MirrorArchive, error) {
+
+func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissive bool) (*MirrorArchive, error) {
+	global := &mirror.GlobalOptions{
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Force:        true,
+		WorkingDir:   "tests",
+	}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+		Mode:                mirror.MirrorToDisk,
+	}
+	cfg := "../../tests/isc.yaml"
+	var ma *MirrorArchive
+	if permissive {
+		m, err := NewPermissiveMirrorArchive(&opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", 0, clog.New("trace"))
+		if err != nil {
+			return &MirrorArchive{}, err
+		}
+		ma = m
+	} else {
+		m, err := NewMirrorArchive(&opts, testFolder, cfg, "../../tests/working-dir-fake", "../../tests/cache-fake", 0, clog.New("trace"))
+		if err != nil {
+			return &MirrorArchive{}, err
+		}
+		ma = m
+	}
+	ma, err := ma.WithFakes(maxArchiveSize)
+	return ma, err
+}
+
+func (ma *MirrorArchive) WithFakes(maxArchiveSize int64) (*MirrorArchive, error) {
 	ma.blobGatherer = mockBlobGatherer{}
 	ma.history = mockHistory{}
 	return ma, nil

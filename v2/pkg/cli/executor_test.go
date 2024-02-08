@@ -302,7 +302,10 @@ func TestExecutorComplete(t *testing.T) {
 		}
 
 		// docker protocol
-		err = ex.Complete([]string{"docker:///tmp/test"})
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+		ex.Opts.Global.From = "file://" + testFolder
+		err = ex.Complete([]string{"docker://tmp/test"})
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -756,11 +759,6 @@ func (o MockMirrorUnArchiver) Unarchive() error {
 	return nil
 }
 
-func (o MockMirrorUnArchiver) Close() error {
-
-	return nil
-}
-
 func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
 	return nil
 }
@@ -839,13 +837,14 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 	return test, nil
 }
 
-func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) (string, error) {
-	return filepath.Join(o.destination, "mirror_000001.tar"), nil
-}
-
-func (o MockArchiver) Close() error {
+func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error {
+	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
 }
+
+// func (o MockArchiver) Close() error {
+// 	return nil
+// }
 
 func skipSignalsToInterruptStorage(errchan chan error) {
 	err := <-errchan
