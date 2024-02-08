@@ -254,7 +254,3 @@ func (o *permissiveAdder) exceptionChunk(oversizedFileInfo fs.FileInfo, oversize
 
 	return nil
 }
-
-func (o *permissiveAdder) getOversizedFiles() map[string]int64 {
-	return o.oversizedFiles
-}

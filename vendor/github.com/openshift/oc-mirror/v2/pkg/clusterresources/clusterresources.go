@@ -186,7 +186,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 		return err
 	}
 
-	csSuffix := "0" // default value
+	var csSuffix string
 	if catalogSpec.IsImageByDigest() {
 		if len(catalogSpec.Digest) >= hashTruncLen {
 			csSuffix = catalogSpec.Digest[:hashTruncLen]
@@ -196,6 +196,10 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	} else {
 		tag := catalogSpec.Tag
 		csSuffix = strings.Map(toRFC1035, tag)
+	}
+
+	if csSuffix == "" {
+		csSuffix = "0" // default value
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
