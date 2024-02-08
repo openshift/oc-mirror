@@ -52,7 +52,8 @@ type GlobalOptions struct {
 	V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
 	MaxNestedPaths     int           // Sets the maximum allowed path-components on the destination registry
 	StrictArchiving    bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
-
+	SinceString        string        // Sets the date since which all content mirrored after is included in the archive
+	Since              time.Time     // Sets the date since which all content mirrored after is included in the archive
 }
 
 type CopyOptions struct {

@@ -188,7 +188,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
-
+	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -212,6 +212,14 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, fileProtocol) {
 		return fmt.Errorf("when --from is used, it must have file:// prefix")
+	}
+	if len(o.Opts.Global.From) > 0 && o.Opts.Global.SinceString != "" {
+		o.Log.Warn("since flag is only taken into account during mirrorToDisk workflow")
+	}
+	if o.Opts.Global.SinceString != "" {
+		if _, err := time.Parse(time.DateOnly, o.Opts.Global.SinceString); err != nil {
+			return fmt.Errorf("--since flag needs to be in format yyyy-MM-dd")
+		}
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -254,6 +262,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
 	o.Log.Info("mode %s ", o.Opts.Mode)
 
+	if o.Opts.Global.SinceString != "" {
+		o.Opts.Global.Since, err = time.Parse(time.DateOnly, o.Opts.Global.SinceString)
+		if err != nil {
+			// this should not happen, as should be caught by Validate
+			return fmt.Errorf("unable to parse since flag: %v. Expected format is yyyy-MM.dd", err)
+		}
+	}
 	// setup logs level, and logsDir under workingDir
 	err = o.setupLogsLevelAndDir()
 	if err != nil {
