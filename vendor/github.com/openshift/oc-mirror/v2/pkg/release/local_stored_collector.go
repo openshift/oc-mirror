@@ -1,7 +1,6 @@
 package release
 
 import (
-	"bufio"
 	"context"
 	"crypto/md5"
 	"encoding/json"
@@ -43,6 +42,8 @@ type LocalStorageCollector struct {
 }
 
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+	o.Opts.MultiArch = "system" // we just care for 1 platform release, in order to read release images
+	o.Log.Debug("setting copy option multiArch=system for retrieving release image")
 	var allImages []v1alpha3.CopyImageSchema
 	var imageIndexDir string
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
@@ -55,13 +56,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			Releases: []v1alpha3.CopyImageSchema{},
 		}
 
-		f, err := os.Create(filepath.Join(o.LogsDir, logFile))
-		if err != nil {
-			o.Log.Error("[ReleaseImageCollector] %v", err)
-		}
-
-		writer := bufio.NewWriter(f)
-		defer f.Close()
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
 			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
@@ -83,7 +77,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 				}
-				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
+				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts)
 				if err != nil {
 					return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 				}
@@ -148,7 +142,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		}
 		// save the releasesForFilter to json cache,
 		// so that it can be used during diskToMirror flow
-		err = o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir))
+		err := o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir))
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinnati response: %v", err)
 		}

@@ -9,11 +9,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 
@@ -35,7 +35,6 @@ func NewSignatureClient(log clog.PluggableLoggerInterface, config v1alpha2.Image
 func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error) {
 
 	var data []byte
-	var err error
 	var imgs []v1alpha3.CopyImageSchema
 	var digest string
 	// set up http object
@@ -44,10 +43,14 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	}
 	httpClient := &http.Client{Transport: tr}
 
-	for _, image := range images {
-		sha := strings.Split(image.Source, ":")
-		if len(sha) >= 2 {
-			digest = sha[1]
+	for _, img := range images {
+		imgSpec, err := image.ParseRef(img.Source)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("parsing image digest")
+		}
+		digest = imgSpec.Digest
+
+		if digest != "" {
 			o.Log.Info("signature %s", digest)
 			// check if the image is in the cache else
 			// do a lookup and download it to cache
@@ -82,8 +85,10 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		}
 
 		if len(data) > 0 {
-			keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader([]byte(pk)))
-			//keyring, err := openpgp.ReadKeyRing(bytes.NewReader([]byte(data)))
+			pkBytes := []byte(defaultPK)
+
+			keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(pkBytes))
+			// keyring, err := openpgp.ReadKeyRing(bytes.NewReader([]byte(pkBytes)))
 			if err != nil {
 				o.Log.Error("%v", err)
 			}
@@ -139,19 +144,19 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				o.Log.Error("could not unmarshal json %v", err)
 				return []v1alpha3.CopyImageSchema{}, err
 			}
-			image.Source = signSchema.Critical.Identity.DockerReference
+			img.Source = signSchema.Critical.Identity.DockerReference
 			o.Log.Info("image found : %s", signSchema.Critical.Identity.DockerReference)
-			o.Log.Info("public Key : %s", strings.ToUpper(fmt.Sprintf("%x", md.SignedBy.PublicKey.Fingerprint)))
+			// o.Log.Info("public Key : %s", strings.ToUpper(fmt.Sprintf("%x", md.SignedBy.PublicKey.Fingerprint)))
 
 			// write signature to cache
 			ferr := os.WriteFile(o.Opts.Global.WorkingDir+SignatureDir+digest, data, 0644)
 			if ferr != nil {
 				o.Log.Error("%v", ferr)
 			}
-			imgs = append(imgs, image)
+			imgs = append(imgs, img)
 		} else {
 			o.Log.Warn("no signature found for %s", digest)
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, image.Source)
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)
 		}
 	}
 	return imgs, nil

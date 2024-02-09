@@ -74,7 +74,7 @@ func TestReleaseSignature(t *testing.T) {
 		assert.Equal(t, "parsing image digest", err.Error())
 
 		newImgs = append(newImgs, v1alpha3.CopyImageSchema{
-			Source:      "quay.io/openshift-release-dev/ocp-release:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
 		})
 
@@ -85,9 +85,9 @@ func TestReleaseSignature(t *testing.T) {
 		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
 
 		// signature not found
-		newImgs[0].Source = "quay.io/openshift-release-dev/ocp-release:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e345"
+		newImgs[0].Source = "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577"
 		_, err = ex.GenerateReleaseSignatures(context.Background(), newImgs)
-		assert.Equal(t, "no signature found for 37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e345 image quay.io/openshift-release-dev/ocp-release:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e345", err.Error())
+		assert.Equal(t, "no signature found for 37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577 image quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577", err.Error())
 
 		// write file error
 		opts.Global.WorkingDir = "none"

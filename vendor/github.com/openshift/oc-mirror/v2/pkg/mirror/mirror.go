@@ -1,12 +1,9 @@
 package mirror
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/containers/common/pkg/retry"
@@ -23,7 +20,7 @@ type Mode string
 
 // MirrorInterface  used to mirror images with container/images (skopeo)
 type MirrorInterface interface {
-	Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions, stdout bufio.Writer) (retErr error)
+	Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions) (retErr error)
 	Check(ctx context.Context, image string, opts *CopyOptions) (bool, error)
 }
 
@@ -59,11 +56,11 @@ func NewMirrorDelete() MirrorDeleteInterface {
 }
 
 // Run - method to copy images from source to destination
-func (o *Mirror) Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions, stdout bufio.Writer) (retErr error) {
+func (o *Mirror) Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions) (retErr error) {
 	if mode == DeleteMode {
 		return o.delete(ctx, dest, opts)
 	}
-	return o.copy(ctx, src, dest, opts, stdout)
+	return o.copy(ctx, src, dest, opts)
 }
 
 func (o *MirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyContext, destRef, srcRef types.ImageReference, co *copy.Options) ([]byte, error) {
@@ -75,11 +72,7 @@ func (o *MirrorDelete) DeleteImage(ctx context.Context, image string, co *CopyOp
 }
 
 // copy - copy images setup and execute
-func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, out bufio.Writer) (retErr error) {
-
-	opts.DeprecatedTLSVerify.WarnIfUsed([]string{"--src-tls-verify", "--dest-tls-verify"})
-
-	opts.RemoveSignatures, _ = strconv.ParseBool("true")
+func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) (retErr error) {
 
 	if err := ReexecIfNecessaryForImages([]string{src, dest}...); err != nil {
 		return err
@@ -108,6 +101,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 	if err != nil {
 		return err
 	}
+
 	destinationCtx, err := opts.DestImage.NewSystemContext()
 	if err != nil {
 		return err
@@ -169,8 +163,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		}
 	}
 
-	writer := io.Writer(&out)
-
 	co := &copy.Options{
 		RemoveSignatures:                 opts.RemoveSignatures,
 		SignBy:                           opts.SignByFingerprint,
@@ -178,7 +170,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		SignBySigstorePrivateKeyFile:     opts.SignBySigstorePrivateKey,
 		SignSigstorePrivateKeyPassphrase: []byte(passphrase),
 		SignIdentity:                     signIdentity,
-		ReportWriter:                     writer,
+		ReportWriter:                     opts.Stdout,
 		SourceCtx:                        sourceCtx,
 		DestinationCtx:                   destinationCtx,
 		ForceManifestMIMEType:            manifestType,
@@ -193,7 +185,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions, 
 		if err != nil {
 			return err
 		}
-		out.Flush()
 		if opts.DigestFile != "" {
 			manifestDigest, err := manifest.Digest(manifestBytes)
 			if err != nil {

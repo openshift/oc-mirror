@@ -1,7 +1,6 @@
 package imagebuilder
 
 import (
-	"bufio"
 	"context"
 	"net/http/httptest"
 	"net/url"
@@ -125,7 +124,7 @@ func TestImageBuilder(t *testing.T) {
 		src := "oci://" + imageAbsolutePath
 		dest := "docker://" + u.Host + "/simple-test-bundle:latest"
 
-		err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
+		err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts)
 		if err != nil {
 			t.Fatal(err)
 		}

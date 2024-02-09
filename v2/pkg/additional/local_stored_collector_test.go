@@ -1,7 +1,6 @@
 package additional
 
 import (
-	"bufio"
 	"context"
 	"testing"
 
@@ -110,7 +109,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	})
 }
 
-func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, stdout bufio.Writer) error {
+func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
 	return nil
 }
 

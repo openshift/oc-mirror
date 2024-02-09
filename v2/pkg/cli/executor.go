@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -196,6 +197,13 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().AddFlagSet(&flagSrcOpts)
 	cmd.Flags().AddFlagSet(&flagDestOpts)
 	HideFlags(cmd)
+
+	if ex.Opts.Global.LogLevel == "debug" || ex.Opts.Global.LogLevel == "trace" {
+		ex.Opts.Stdout = cmd.OutOrStdout()
+	} else {
+		ex.Opts.Stdout = io.Discard
+	}
+
 	return cmd
 }
 
@@ -263,6 +271,10 @@ func (o ExecutorSchema) Validate(dest []string) error {
 // Complete - do the final setup of modules
 func (o *ExecutorSchema) Complete(args []string) error {
 
+	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
+		o.Opts.Global.RegistriesConfPath = envOverride
+	}
+
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
 	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
@@ -301,6 +313,12 @@ func (o *ExecutorSchema) Complete(args []string) error {
 			return fmt.Errorf("unable to parse since flag: %v. Expected format is yyyy-MM.dd", err)
 		}
 	}
+
+	// make sure we always get multi-arch images
+	o.Opts.MultiArch = "all"
+	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
+	o.Opts.RemoveSignatures = true
+
 	// setup logs level, and logsDir under workingDir
 	err = o.setupLogsLevelAndDir()
 	if err != nil {
@@ -358,7 +376,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 // Run - start the mirror functionality
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	var err error
-	o.Opts.MultiArch = "all"
 	if o.Opts.IsMirrorToDisk() {
 		err = o.RunMirrorToDisk(cmd, args)
 
@@ -403,11 +420,6 @@ http:
       #htpasswd:
       #realm: basic-realm
       #path: /etc/registry
-health:
-  storagedriver:
-    enabled: true
-    interval: 10s
-    threshold: 3
 `
 
 	if _, err := os.Stat(o.LocalStorageDisk); err != nil {

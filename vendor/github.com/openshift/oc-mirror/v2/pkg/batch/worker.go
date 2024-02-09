@@ -1,13 +1,10 @@
 package batch
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -55,8 +52,8 @@ type BatchSchema struct {
 func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {
 
 	var errArray []error
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	var err error
 
 	var b *BatchSchema
 	imgs := len(images)
@@ -72,37 +69,27 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 	o.Log.Info("batch size %d ", b.BatchSize)
 	o.Log.Info("remainder size %d ", b.Remainder)
 
-	f := make([]*os.File, b.Count)
-	//f, err := make([]os.File)
 	// prepare batching
 	wg.Add(b.BatchSize)
 	for i := 0; i < b.Count; i++ {
-		// create a log file for each batch
-		batchFileName := strings.Replace(logFile, "{batch}", strconv.Itoa(i), -1)
-		batchFilePath := filepath.Join(o.LogsDir, batchFileName)
-		f[i], err = os.Create(batchFilePath)
-		if err != nil {
-			o.Log.Error("[Worker] %v", err)
-		}
-		writer := bufio.NewWriter(f[i])
+
 		o.Log.Info(fmt.Sprintf("starting batch %d ", i))
 		for x := 0; x < b.BatchSize; x++ {
 			index := (i * b.BatchSize) + x
 			o.Log.Debug("source %s ", images[index].Source)
 			o.Log.Debug("destination %s ", images[index].Destination)
-			go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions, writer bufio.Writer) {
+			go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions) {
 				defer wg.Done()
-				err := o.Mirror.Run(ctx, src, dest, "copy", opts, writer)
+				err := o.Mirror.Run(ctx, src, dest, "copy", opts)
 				if err != nil {
+					mu.Lock()
 					errArray = append(errArray, err)
+					defer mu.Unlock()
 				}
-			}(ctx, images[index].Source, images[index].Destination, &opts, *writer)
+			}(ctx, images[index].Source, images[index].Destination, &opts)
 		}
 		wg.Wait()
-		// rather than use defer Close we intentianally close the log files
-		for _, f := range f {
-			f.Close()
-		}
+
 		o.Log.Info("completed batch %d", i)
 		if b.Count > 1 {
 			wg.Add(BATCH_SIZE)

@@ -1,7 +1,6 @@
 package mirror
 
 import (
-	"bufio"
 	"context"
 	"net/http/httptest"
 	"net/url"
@@ -49,33 +48,32 @@ func TestMirrorCopy(t *testing.T) {
 	md := &mockMirrorDelete{}
 	m := New(mm, md)
 
-	writer := bufio.NewWriter(os.Stdout)
 	t.Run("Testing Mirror : copy should pass", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/test", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/test", "oci:test", "copy", &opts)
 		if err != nil {
 			t.Fatal("should pass")
 		}
 	})
 
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "broken", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "broken", "oci:test", "copy", &opts)
 		assert.Equal(t, "Invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "broken", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "broken", "copy", &opts)
 		assert.Equal(t, "Invalid destination name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	opts.MultiArch = "other"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
 	})
 
 	opts.All = true
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "Cannot use --all and --multi-arch flags together", err.Error())
 	})
 
@@ -84,7 +82,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.EncryptionKeys = []string{"test"}
 	opts.DecryptionKeys = []string{"test"}
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "--encryption-key and --decryption-key cannot be specified together", err.Error())
 	})
 
@@ -96,7 +94,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.SignByFingerprint = "test"
 	opts.SignBySigstorePrivateKey = "test"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts, *writer)
+		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "Only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file", err.Error())
 	})
 }
@@ -143,7 +141,7 @@ func TestMirrorCheck(t *testing.T) {
 
 	src := "dir://" + imageAbsolutePath
 	dest := "docker://" + u.Host + "/albo-test:latest"
-	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
+	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,25 +198,25 @@ func TestMirrorDelete(t *testing.T) {
 
 	src := "dir://" + imageAbsolutePath
 	dest := "docker://" + u.Host + "/albo-test:latest"
-	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
+	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("Testing Mirror : delete should pass", func(t *testing.T) {
-		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "delete", &opts, *bufio.NewWriter(os.Stdout))
+		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "delete", &opts)
 		if err != nil {
 			t.Fatal("should not fail")
 		}
 	})
 
 	t.Run("Testing Mirror : delete should fail", func(t *testing.T) {
-		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, "broken", "delete", &opts, *bufio.NewWriter(os.Stdout))
+		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, "broken", "delete", &opts)
 		assert.Equal(t, "Invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	t.Run("Testing Mirror : delete should fail", func(t *testing.T) {
-		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, src, "delete", &opts, *bufio.NewWriter(os.Stdout))
+		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, src, "delete", &opts)
 		assert.Equal(t, "Deleting images not implemented for dir: images", err.Error())
 	})
 }

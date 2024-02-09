@@ -81,6 +81,7 @@ type CopyOptions struct {
 	Destination              string    // what to target to
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
+	Stdout                   io.Writer
 }
 
 // deprecatedTLSVerifyOption represents a deprecated --tls-verify option,
