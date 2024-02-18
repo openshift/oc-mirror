@@ -174,7 +174,6 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 			}
 
 		}
-
 	}
 
 	if !g.SkipDependencies {
@@ -185,22 +184,40 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 	}
 
 	// Default channel may not have been copied, so set it to the new default channel here.
-	for _, outputPkg := range outputModel {
+	for idx, outputPkg := range outputModel {
+		overrideSet := false
 		newPkg, found := newModel[outputPkg.Name]
 		if !found {
 			return nil, fmt.Errorf("package %s not present in the diff new model", outputPkg.Name)
 		}
 		var outputHasDefault bool
 		outputPkg.DefaultChannel, outputHasDefault = outputPkg.Channels[newPkg.DefaultChannel.Name]
-		if !outputHasDefault {
-			// Set the defaultChannel using the priority of a channel when the default got filtered out
-			// If no channels with the Priority property, raise an error
-			if err := setDefaultChannel(outputPkg, newPkg.DefaultChannel.Name); err != nil {
-				return nil, err
+		if !outputHasDefault && !overrideSet {
+			// OCPBUGS-385
+			// check if selectedDefaultChannel is the same as the channel being looked at
+			// if yes the then set it, this ensures we select the correct override for the selected
+			// package
+			for _, pkg := range g.Includer.Packages {
+				// check if the selectedDefaultChannel is valid
+				if len(pkg.DefaultChannel) > 0 {
+					overrideDefaultChannel, isValid := newPkg.Channels[pkg.DefaultChannel]
+					if pkg.Name == newPkg.Name && isValid {
+						outputModel[idx].DefaultChannel = overrideDefaultChannel
+						overrideSet = true
+						// no use continuing
+						break
+					}
+				}
+			}
+			if !overrideSet {
+				// Set the defaultChannel using the priority of a channel when the default got filtered out
+				// If no channels with the Priority property, raise an error
+				if err := setDefaultChannel(outputPkg, newPkg.DefaultChannel.Name); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-
 	return outputModel, nil
 }
 
@@ -262,7 +279,7 @@ This can be resolved by one of the following changes:
 3) by changing the ImageSetConfiguration to filter channels or packages in such as way that it will include a package version that exists in the current default channel`)
 
 	// include a short message that does not mention any of the above to keep things simple
-	return fmt.Errorf("the current default channel %q for package %q could not be determined... ensure that your ImageSetConfiguration filtering criteria results in a package version that exists in the current default channel", newPackageDefaultChannelName, outputPkg.Name)
+	return fmt.Errorf("the current default channel %q for package %q could not be determined... ensure that your ImageSetConfiguration filtering criteria results in a package version that exists in the current default channel or use the 'defaultChannel' field ", newPackageDefaultChannelName, outputPkg.Name)
 }
 
 // pruneOldFromNewPackage prune any bundles and channels from newPkg that

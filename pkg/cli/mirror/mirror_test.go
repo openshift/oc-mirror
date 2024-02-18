@@ -299,15 +299,15 @@ func TestMirrorValidate(t *testing.T) {
 			expError: "",
 		},
 		{
-			name: "Valid/MirrortoDisk",
+			name: "Valid/MirrorToDisk",
 			opts: &MirrorOptions{
-				ConfigPath: "foo",
+				ConfigPath: "testdata/configs/iscfg.yaml",
 				ToMirror:   u.Host,
 			},
 			expError: "",
 		},
 		{
-			name: "Valid/DisktoMirror",
+			name: "Valid/DiskToMirror",
 			opts: &MirrorOptions{
 				From:     t.TempDir(),
 				ToMirror: u.Host,
@@ -317,7 +317,7 @@ func TestMirrorValidate(t *testing.T) {
 		{
 			name: "Valid/MirrorToMirror",
 			opts: &MirrorOptions{
-				ConfigPath: "foo",
+				ConfigPath: "testdata/configs/iscfg.yaml",
 				ToMirror:   u.Host,
 			},
 			expError: "",
