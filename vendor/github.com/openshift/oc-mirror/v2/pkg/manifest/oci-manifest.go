@@ -3,12 +3,12 @@ package manifest
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -18,24 +18,15 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"k8s.io/klog/v2"
 )
 
-const (
-	index                   string = "index.json"
-	catalogJson             string = "catalog.json"
-	operatorImageExtractDir string = "hold-operator"
-	errorSemver             string = " semver %v "
-)
-
-type ManifestInterface interface {
-	GetImageIndex(dir string) (*v1alpha3.OCISchema, error)
-	GetImageManifest(file string) (*v1alpha3.OCISchema, error)
-	GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error)
-	GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
-	GetRelatedImagesFromCatalogByFilter(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
-	ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error
-	GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error)
+type OperatorCatalog struct {
+	Packages            map[string]declcfg.Package
+	Channels            map[string][]declcfg.Channel
+	ChannelEntries      map[string]map[string]map[string]declcfg.ChannelEntry
+	BundlesByPkgAndName map[string]map[string]declcfg.Bundle
 }
 
 type Manifest struct {
@@ -47,7 +38,7 @@ func New(log clog.PluggableLoggerInterface) ManifestInterface {
 }
 
 // GetImageIndex - used to get the oci index.json
-func (o *Manifest) GetImageIndex(dir string) (*v1alpha3.OCISchema, error) {
+func (o Manifest) GetImageIndex(dir string) (*v1alpha3.OCISchema, error) {
 	var oci *v1alpha3.OCISchema
 	indx, err := os.ReadFile(dir + "/" + index)
 	if err != nil {
@@ -62,7 +53,7 @@ func (o *Manifest) GetImageIndex(dir string) (*v1alpha3.OCISchema, error) {
 
 // GetImageManifest used to ge the manifest in the oci blobs/sha254
 // directory - found in index.json
-func (o *Manifest) GetImageManifest(file string) (*v1alpha3.OCISchema, error) {
+func (o Manifest) GetImageManifest(file string) (*v1alpha3.OCISchema, error) {
 	var oci *v1alpha3.OCISchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
@@ -76,7 +67,7 @@ func (o *Manifest) GetImageManifest(file string) (*v1alpha3.OCISchema, error) {
 }
 
 // GetOperatorConfig used to parse the operator json
-func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
+func (o Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
 	var ocs *v1alpha3.OperatorConfigSchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
@@ -90,7 +81,7 @@ func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchem
 }
 
 // ExtractLayersOCI
-func (o *Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3.OCISchema) error {
 	if _, err := os.Stat(toPath + "/" + label); errors.Is(err, os.ErrNotExist) {
 		for _, blob := range oci.Layers {
 			validDigest, err := digest.Parse(blob.Digest)
@@ -113,7 +104,7 @@ func (o *Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha
 }
 
 // GetReleaseSchema
-func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
+func (o Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
 	var release = v1alpha3.ReleaseSchema{}
 
 	file, err := os.ReadFile(filePath)
@@ -182,129 +173,158 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 	return nil
 }
 
-// operatorImageExtractDir + "/" + label
-// GetRelatedImagesFromCatalog
-func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	operators, err := os.ReadDir(filePath + label)
-	if err != nil {
-		return relatedImages, err
+func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
+	cfg, err := declcfg.LoadFS(context.Background(), os.DirFS(filePath))
+
+	operatorCatalog := newOperatorCatalog()
+
+	for _, p := range cfg.Packages {
+		operatorCatalog.Packages[p.Name] = p
 	}
-	for _, operator := range operators {
-		// the catalog.json - does not really conform to json standards
-		// this needs some thorough testing
-		operatorConfig, err := readOperatorConfig(filepath.Join(filePath, label, operator.Name()))
-		if err != nil {
-			return relatedImages, err
-		}
-		ri, err := getRelatedImages(o.Log, operatorConfig, v1alpha2.IncludePackage{}, ctlgInIsc.Full)
-		if err != nil {
-			return relatedImages, err
+
+	for _, c := range cfg.Channels {
+		operatorCatalog.Channels[c.Package] = append(operatorCatalog.Channels[c.Package], c)
+		for _, e := range c.Entries {
+			if _, ok := operatorCatalog.ChannelEntries[c.Package]; !ok {
+				operatorCatalog.ChannelEntries[c.Package] = make(map[string]map[string]declcfg.ChannelEntry)
+			}
+			if _, ok := operatorCatalog.ChannelEntries[c.Package][c.Name]; !ok {
+				operatorCatalog.ChannelEntries[c.Package][c.Name] = make(map[string]declcfg.ChannelEntry)
+			}
+
+			operatorCatalog.ChannelEntries[c.Package][c.Name][e.Name] = e
 		}
 
-		for k, v := range ri {
-			relatedImages[k] = v
+	}
+
+	for _, b := range cfg.Bundles {
+		if _, ok := operatorCatalog.BundlesByPkgAndName[b.Package]; !ok {
+			operatorCatalog.BundlesByPkgAndName[b.Package] = make(map[string]declcfg.Bundle)
+		}
+
+		if _, ok := operatorCatalog.BundlesByPkgAndName[b.Package][b.Name]; !ok {
+			operatorCatalog.BundlesByPkgAndName[b.Package][b.Name] = b
 		}
 	}
+
+	return operatorCatalog, err
+}
+
+func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+
+	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+
+	if len(ctlgInIsc.Packages) == 0 {
+		for operatorName := range operatorCatalog.Packages {
+
+			operatorConfig := parseOperatorCatalogByOperator(operatorName, operatorCatalog)
+
+			ri, err := getRelatedImages(o.Log, operatorName, operatorConfig, v1alpha2.IncludePackage{}, ctlgInIsc.Full)
+
+			if err != nil {
+				return relatedImages, err
+			}
+
+			//TODO GOLANG 1.21 required - replace the for loop below with maps.Copy
+			//maps.Copy(relatedImages, ri)
+
+			for k, v := range ri {
+				relatedImages[k] = v
+			}
+		}
+	} else {
+		for _, iscOperator := range ctlgInIsc.Packages {
+			operatorConfig := parseOperatorCatalogByOperator(iscOperator.Name, operatorCatalog)
+
+			ri, err := getRelatedImages(o.Log, iscOperator.Name, operatorConfig, iscOperator, ctlgInIsc.Full)
+			if err != nil {
+				return relatedImages, err
+			}
+
+			//TODO GOLANG 1.21 required - replace the for loop with maps.Copy
+			//maps.Copy(relatedImages, ri)
+
+			for k, v := range ri {
+				relatedImages[k] = v
+			}
+			o.Log.Trace("related images %v", relatedImages)
+		}
+	}
+
+	for k := range relatedImages {
+		o.Log.Debug("bundle after filtered : %s", k)
+	}
+
 	return relatedImages, nil
 }
 
-// GetRelatedImagesFromCatalogByFilter
-func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	for _, iscOperator := range ctlgInIsc.Packages {
-		operatorConfig, err := readOperatorConfig(filepath.Join(filePath, label, iscOperator.Name))
-		if err != nil {
-			return relatedImages, err
-		}
-
-		ri, err := getRelatedImages(o.Log, operatorConfig, iscOperator, ctlgInIsc.Full)
-		if err != nil {
-			return relatedImages, err
-		}
-
-		for k, v := range ri {
-			relatedImages[k] = v
-		}
-		o.Log.Trace("related images %v", relatedImages)
+func newOperatorCatalog() OperatorCatalog {
+	operatorConfig := OperatorCatalog{
+		Packages:            make(map[string]declcfg.Package),
+		Channels:            make(map[string][]declcfg.Channel),
+		ChannelEntries:      make(map[string]map[string]map[string]declcfg.ChannelEntry),
+		BundlesByPkgAndName: make(map[string]map[string]declcfg.Bundle),
 	}
-	return relatedImages, nil
+
+	return operatorConfig
 }
 
-// readOperatorConfig - reads the catalog.json and unmarshals it to DeclarativeConfig struct
-func readOperatorConfig(path string) ([]v1alpha3.DeclarativeConfig, error) {
-	var olm []v1alpha3.DeclarativeConfig
-	data, err := os.ReadFile(path + "/" + catalogJson)
-	if err != nil {
-		return []v1alpha3.DeclarativeConfig{}, err
-	}
-	tmp := strings.NewReplacer(" ", "").Replace(string(data))
-	updatedJson := "[" + strings.ReplaceAll(tmp, "}\n{", "},{") + "]"
-	err = json.Unmarshal([]byte(updatedJson), &olm)
-	if err != nil {
-		return []v1alpha3.DeclarativeConfig{}, err
-	}
-	return olm, nil
+func parseOperatorCatalogByOperator(operatorName string, operatorCatalog OperatorCatalog) OperatorCatalog {
+	operatorConfig := newOperatorCatalog()
+	operatorConfig.Packages[operatorName] = operatorCatalog.Packages[operatorName]
+	operatorConfig.Channels[operatorName] = operatorCatalog.Channels[operatorName]
+	operatorConfig.ChannelEntries[operatorName] = operatorCatalog.ChannelEntries[operatorName]
+	operatorConfig.BundlesByPkgAndName[operatorName] = operatorCatalog.BundlesByPkgAndName[operatorName]
+
+	return operatorConfig
 }
 
-// getRelatedImages - get the packages' related images of a catalog.
-func getRelatedImages(log clog.PluggableLoggerInterface, operatorConfig []v1alpha3.DeclarativeConfig, iscOperator v1alpha2.IncludePackage, full bool) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	bundles := make(map[string]bool)
-	var defaultChannel string
-
+func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, operatorConfig OperatorCatalog, iscOperator v1alpha2.IncludePackage, full bool) (map[string][]v1alpha3.RelatedImage, error) {
 	if isInvalidFiltering(iscOperator, full) {
 		return nil, fmt.Errorf("cannot use channels/full and min/max versions at the same time")
 	}
 
-	for i, obj := range operatorConfig {
-		switch {
-		case obj.Schema == "olm.channel":
-			if len(iscOperator.Channels) > 0 {
-				if found, idx := containsChannel(iscOperator.Channels, obj.Name); found {
-					log.Debug("found channel : %v", obj)
-					filteredBundles, err := filterBundles(obj.Entries, iscOperator.Channels[idx].IncludeBundle.MinVersion, iscOperator.Channels[idx].IncludeBundle.MaxVersion, full)
-					if err != nil {
-						log.Error(errorSemver, err)
-					}
-					for _, b := range filteredBundles {
-						bundles[b] = true
-					}
+	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	var filteredBundles []string
+	defaultChannel := operatorConfig.Packages[operatorName].DefaultChannel
+
+	if len(iscOperator.Channels) > 0 {
+		for _, iscChannel := range iscOperator.Channels {
+			log.Debug("found channel : %v", iscChannel)
+			chEntries := operatorConfig.ChannelEntries[operatorName][iscChannel.Name]
+			bundles, err := filterBundles(chEntries, iscChannel.IncludeBundle.MinVersion, iscChannel.IncludeBundle.MaxVersion, full)
+			if err != nil {
+				log.Error(errorSemver, err)
+			}
+			log.Debug("adding bundles : %s", bundles)
+			filteredBundles = append(filteredBundles, bundles...)
+		}
+	} else {
+		chEntries := operatorConfig.ChannelEntries[operatorName][defaultChannel]
+		bundles, err := filterBundles(chEntries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
+		if err != nil {
+			log.Error(errorSemver, err)
+		}
+		log.Debug("adding bundles : %s", bundles)
+		filteredBundles = append(filteredBundles, bundles...)
+	}
+
+	for _, bundle := range operatorConfig.BundlesByPkgAndName[operatorName] {
+		if full {
+			if len(filteredBundles) > 0 && len(iscOperator.Channels) > 0 {
+				if slices.Contains(filteredBundles, bundle.Name) {
+					relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
 				}
 			} else {
-				if defaultChannel == obj.Name {
-					filteredBundles, err := filterBundles(obj.Entries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
-					if err != nil {
-						log.Error(errorSemver, err)
-					}
-					log.Debug("adding bundles : %s", filteredBundles)
-					for _, b := range filteredBundles {
-						bundles[b] = true
-					}
-				}
+				relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
 			}
-		case obj.Schema == "olm.bundle":
-			if bundles[obj.Name] && !full {
-				log.Debug("config bundle: %d %v", i, obj.Name)
-				log.Trace("config relatedImages: %d %v", i, obj.RelatedImages)
-				relatedImages[obj.Name] = addTypeToRelatedImages(obj)
+		} else {
+			if slices.Contains(filteredBundles, bundle.Name) {
+				relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
 			}
-			// add all bundles
-			if full {
-				if len(bundles) > 0 && len(iscOperator.Channels) > 0 {
-					if bundles[obj.Name] {
-						relatedImages[obj.Name] = addTypeToRelatedImages(obj)
-					}
-				} else {
-					relatedImages[obj.Name] = addTypeToRelatedImages(obj)
-				}
-			}
-		case obj.Schema == "olm.package":
-			log.Debug("config package: %v", obj.Name)
-			bundles[obj.DefaultChannel] = true
-			defaultChannel = obj.DefaultChannel
 		}
 	}
+
 	return relatedImages, nil
 }
 
@@ -313,16 +333,7 @@ func isInvalidFiltering(pkg v1alpha2.IncludePackage, full bool) bool {
 		full && (pkg.MinVersion != "" || pkg.MaxVersion != "")
 }
 
-func containsChannel(channels []v1alpha2.IncludeChannel, name string) (bool, int) {
-	for idx, channel := range channels {
-		if channel.Name == name {
-			return true, idx
-		}
-	}
-	return false, -1
-}
-
-func filterBundles(channelEntries []v1alpha3.ChannelEntry, min string, max string, full bool) ([]string, error) {
+func filterBundles(channelEntries map[string]declcfg.ChannelEntry, min string, max string, full bool) ([]string, error) {
 	var minVersion, maxVersion semver.Version
 	var err error
 
@@ -343,6 +354,7 @@ func filterBundles(channelEntries []v1alpha3.ChannelEntry, min string, max strin
 	var filtered []string
 	currentHead := semver.MustParse("0.0.0")
 	var currentHeadName string
+	preReleases := make(map[string]declcfg.ChannelEntry)
 
 	for _, chEntry := range channelEntries {
 
@@ -351,9 +363,19 @@ func filterBundles(channelEntries []v1alpha3.ChannelEntry, min string, max strin
 			return nil, err
 		}
 
+		if isPreRelease(version) {
+			pre := make([]string, len(version.Pre))
+			for i, pr := range version.Pre {
+				pre[i] = pr.String()
+			}
+			preString := strings.Join(pre, ".")
+
+			preReleases[fmt.Sprintf("%d.%d.%d-%s", version.Major, version.Minor, version.Patch, preString)] = chEntry
+		}
+
 		// preReleases that skip the current head of a channel should be considered as head.
 		// even if from the semver perspective, they are LT(currentHead)
-		if version.GT(currentHead) || isPreReleaseHead(version, chEntry, currentHeadName) {
+		if version.GT(currentHead) {
 			currentHead = version
 			currentHeadName = chEntry.Name
 		}
@@ -363,13 +385,26 @@ func filterBundles(channelEntries []v1alpha3.ChannelEntry, min string, max strin
 		// * its version is between min and max (both defined)
 		// * its version is greater than min (defined), and no max is defined (which means up to channel head)
 		// * its version is under max (defined) and no min is defined
-		if ((min == "" || version.GTE(minVersion)) && (max == "" || version.LTE(maxVersion))) || isPreReleaseOfFilteredVersion(version, filtered) {
+		if (min == "" || version.GTE(minVersion)) && (max == "" || version.LTE(maxVersion)) {
 			// In case full == false and min and max are empty, do not include this bundle:
 			// this is the case where there is no filtering, and where only the channel's head shall be included in the output filter.
 			if min == "" && max == "" && !full {
 				continue
 			}
 			filtered = append(filtered, chEntry.Name)
+		}
+	}
+
+	if len(preReleases) > 0 {
+		for version, chEntry := range preReleases {
+			if isPreReleaseHead(chEntry, currentHeadName) {
+				currentHeadName = chEntry.Name
+
+			}
+
+			if isPreReleaseOfFilteredVersion(version, chEntry.Name, filtered) {
+				filtered = append(filtered, chEntry.Name)
+			}
 		}
 	}
 
@@ -385,13 +420,8 @@ func getChannelEntrySemVer(chEntryName string) (semver.Version, error) {
 	if len(nameSplit) < 4 {
 		return semver.Version{}, fmt.Errorf("incorrect version format %s ", chEntryName)
 	}
-	end := nameSplit[3]
-	if strings.Contains(nameSplit[3], "-") {
-		end = strings.Join(nameSplit[3:], ".")
-	}
-	semStr := strings.Join([]string{nameSplit[1], nameSplit[2], end}, ".")
 
-	version, err := semver.ParseTolerant(semStr)
+	version, err := semver.ParseTolerant(strings.Join(nameSplit[1:], "."))
 	if err != nil {
 		return semver.Version{}, err
 	}
@@ -399,32 +429,43 @@ func getChannelEntrySemVer(chEntryName string) (semver.Version, error) {
 	return version, err
 }
 
-func isPreReleaseHead(version semver.Version, channelEntry v1alpha3.ChannelEntry, currentHead string) bool {
-	return len(version.Pre) > 0 && slices.Contains(channelEntry.Skips, currentHead)
+func isPreRelease(version semver.Version) bool {
+	return len(version.Pre) > 0
 }
 
-func isPreReleaseOfFilteredVersion(semver semver.Version, filteredVersions []string) bool {
-	if len(semver.Pre) > 0 {
-		for _, filteredVersion := range filteredVersions {
-			if strings.Contains(filteredVersion, fmt.Sprintf("%d.%d.%d", semver.Major, semver.Minor, semver.Patch)) {
-				return true
-			}
+func isPreReleaseHead(channelEntry declcfg.ChannelEntry, currentHead string) bool {
+	return slices.Contains(channelEntry.Skips, currentHead) || channelEntry.Replaces == currentHead
+}
+
+func isPreReleaseOfFilteredVersion(version string, chEntryName string, filteredVersions []string) bool {
+	if slices.Contains(filteredVersions, chEntryName) {
+		return false
+	}
+
+	for _, filteredVersion := range filteredVersions {
+		if strings.Contains(filteredVersion, strings.Split(version, "-")[0]) {
+			return true
 		}
 	}
 
 	return false
 }
 
-func addTypeToRelatedImages(dlcg v1alpha3.DeclarativeConfig) []v1alpha3.RelatedImage {
+func addTypeToRelatedImages(bundle declcfg.Bundle) []v1alpha3.RelatedImage {
 	var relatedImages []v1alpha3.RelatedImage
 
-	for _, ri := range dlcg.RelatedImages {
-		if ri.Image == dlcg.Image {
-			ri.Type = v1alpha2.TypeOperatorBundle
+	for _, ri := range bundle.RelatedImages {
+		relateImage := v1alpha3.RelatedImage{}
+		if ri.Image == bundle.Image {
+			relateImage.Name = ri.Name
+			relateImage.Image = ri.Image
+			relateImage.Type = v1alpha2.TypeOperatorBundle
 		} else {
-			ri.Type = v1alpha2.TypeOperatorRelatedImage
+			relateImage.Name = ri.Name
+			relateImage.Image = ri.Image
+			relateImage.Type = v1alpha2.TypeOperatorRelatedImage
 		}
-		relatedImages = append(relatedImages, ri)
+		relatedImages = append(relatedImages, relateImage)
 	}
 	return relatedImages
 }

@@ -2,13 +2,14 @@ package manifest
 
 import (
 	"errors"
-	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetAllManifests(t *testing.T) {
@@ -122,7 +123,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 		},
 		{
-			caseName: "packages with no Min/Max version (no channels) - 1 bundle, corresponding to the head version of the default channel for each package - should pass",
+			caseName: "packages with no Min Max version (no channels) - 1 bundle, corresponding to the head version of the default channel for each package - should pass",
 			cfg: v1alpha2.Operator{
 				IncludeConfig: v1alpha2.IncludeConfig{
 					Packages: []v1alpha2.IncludePackage{
@@ -459,7 +460,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 		},
 		{
-			caseName: "packages with MinVersion/MaxVersion with channels - Error: filtering by channel and by package min/max should not be allowed - should pass",
+			caseName: "packages with MinVersion MaxVersion with channels - Error: filtering by channel and by package min max should not be allowed - should pass",
 			cfg: v1alpha2.Operator{
 				IncludeConfig: v1alpha2.IncludeConfig{
 					Packages: []v1alpha2.IncludePackage{
@@ -503,24 +504,21 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 	}
 
 	log := clog.New("debug")
+	manifest := &Manifest{Log: log}
+
+	operatorCatalog, err := manifest.GetCatalog(filepath.Join("../../tests/", "configs"))
+	assert.NoError(t, err)
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 
-			manifest := &Manifest{Log: log}
-
 			var res map[string][]v1alpha3.RelatedImage
 			var err error
 
-			if len(testCase.cfg.Packages) == 0 {
-				res, err = manifest.GetRelatedImagesFromCatalog("../../tests/", "configs", testCase.cfg)
-			} else {
-				res, err = manifest.GetRelatedImagesFromCatalogByFilter("../../tests", "configs/", testCase.cfg)
-			}
+			res, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
 
-			if err != nil && testCase.expectedError == nil {
-				log.Error(" %v ", err)
-				t.Fatalf("should not fail")
+			if testCase.expectedError == nil {
+				assert.NoError(t, err)
 			}
 
 			allPresent := true
@@ -531,12 +529,11 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 				}
 			}
 
-			if !allPresent || len(res) != len(testCase.expectedBundles) {
-				t.Fatalf("Not all expected bundles are present in the result")
-			}
+			assert.True(t, allPresent, "Not all expected bundles are present in the result")
+			assert.Equal(t, len(testCase.expectedBundles), len(res), "the number of expected bundles is different from the one returned")
 
 			if testCase.expectedError != nil && err.Error() != testCase.expectedError.Error() {
-				t.Fatalf("was expected the error %s got %s", testCase.expectedError.Error(), err.Error())
+				assert.EqualError(t, err, testCase.expectedError.Error())
 			}
 
 			log.Debug("completed test  %v ", res)
@@ -562,30 +559,24 @@ func TestTypesOnRelatedImages(t *testing.T) {
 
 	log := clog.New("debug")
 
+	manifest := &Manifest{Log: log}
+
+	operatorCatalog, err := manifest.GetCatalog(filepath.Join("../../tests/", "configs"))
+	assert.NoError(t, err)
+
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-
-			manifest := &Manifest{Log: log}
 
 			var bundles map[string][]v1alpha3.RelatedImage
 			var err error
 
-			test := v1alpha3.RelatedImage{}
-			fmt.Println(test)
-			fmt.Println(test.Type)
+			bundles, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
 
-			bundles, err = manifest.GetRelatedImagesFromCatalog("../../tests/", "configs", testCase.cfg)
-
-			if err != nil {
-				log.Error(" %v ", err)
-				t.Fatalf("should not fail")
-			}
+			assert.NoError(t, err)
 
 			for _, relatedImages := range bundles {
 				for _, ri := range relatedImages {
-					if ri.Type == v1alpha2.TypeInvalid {
-						t.Fatalf("Type should be catalog")
-					}
+					assert.NotEqual(t, v1alpha2.TypeInvalid, ri.Type, "Type should be catalog")
 				}
 			}
 

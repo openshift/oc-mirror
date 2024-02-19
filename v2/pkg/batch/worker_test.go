@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
@@ -79,10 +80,6 @@ func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchem
 	return ocs, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalogByFilter(filePath, label string, op v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	return nil, nil
-}
-
 func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
 	relatedImages := []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -124,7 +121,11 @@ func (o *Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalog(filePath, label string, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+func (o Manifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
+	return manifest.OperatorCatalog{}, nil
+}
+
+func (o *Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	relatedImages["abc"] = []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},

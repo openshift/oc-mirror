@@ -7,12 +7,6 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
 
-const (
-	SchemaPackage = "olm.package"
-	SchemaChannel = "olm.channel"
-	SchemaBundle  = "olm.bundle"
-)
-
 // ReleaseSchema
 type ReleaseSchema struct {
 	Kind       string   `json:"kind"`
@@ -185,51 +179,6 @@ type Icon struct {
 	MediaType string `json:"mediatype"`
 }
 
-// Channel used in parsing channel data
-type Channel struct {
-	Schema     string              `json:"schema"`
-	Name       string              `json:"name"`
-	Package    string              `json:"package"`
-	Entries    []ChannelEntry      `json:"entries"`
-	Properties []property.Property `json:"properties,omitempty" hash:"set"`
-}
-
-// ChannelEntry used in the Channel struct
-type ChannelEntry struct {
-	Name      string   `json:"name"`
-	Replaces  string   `json:"replaces,omitempty"`
-	Skips     []string `json:"skips,omitempty"`
-	SkipRange string   `json:"skipRange,omitempty"`
-}
-
-// Bundle specifies all metadata and data of a bundle object.
-// Top-level fields are the source of truth, i.e. not CSV values.
-//
-// Notes:
-//   - Any field slice type field or type containing a slice somewhere
-//     where two types/fields are equal if their contents are equal regardless
-//     of order must have a `hash:"set"` field tag for bundle comparison.
-//   - Any fields that have a `json:"-"` tag must be included in the equality
-//     evaluation in bundlesEqual().
-type Bundle struct {
-	Schema        string              `json:"schema"`
-	Name          string              `json:"name"`
-	Package       string              `json:"package"`
-	Image         string              `json:"image"`
-	Properties    []property.Property `json:"properties,omitempty" hash:"set"`
-	RelatedImages []RelatedImage      `json:"relatedImages,omitempty" hash:"set"`
-
-	// These fields are present so that we can continue serving
-	// the GRPC API the way packageserver expects us to in a
-	// backwards-compatible way. These are populated from
-	// any `olm.bundle.object` properties.
-	//
-	// These fields will never be persisted in the bundle blob as
-	// first class fields.
-	CsvJSON string   `json:"-"`
-	Objects []string `json:"-"`
-}
-
 // RelatedImage - used to index images
 type RelatedImage struct {
 	Name  string `json:"name"`
@@ -237,38 +186,7 @@ type RelatedImage struct {
 	// Type: metadata to explain why this image is being copied
 	// it doesn't need to be persisted to JSON
 	// This field doesn't exist in the catalog declarativeConfig.
-	// ToDo: maybe create a different type, derived from RelatedImage
-	// that contains Type?
 	Type v1alpha2.ImageType `json:"-"`
-}
-
-// DeclarativeConfig this updates the existing dclrcfg
-type DeclarativeConfig struct {
-	Schema         string              `json:"schema"`
-	Name           string              `json:"name"`
-	Image          string              `json:"image,omitempty"`
-	Package        string              `json:"package"`
-	Properties     []property.Property `json:"properties,omitempty" hash:"set"`
-	RelatedImages  []RelatedImage      `json:"relatedImages,omitempty" hash:"set"`
-	Entries        []ChannelEntry      `json:"entries"`
-	DefaultChannel string              `json:"defaultChannel"`
-	Description    string              `json:"description,omitempty"`
-}
-
-// ISCPackage used in the map to check for
-// min and max version
-type ISCPackage struct {
-	Channel    string
-	MinVersion string
-	MaxVersion string
-	Full       bool
-}
-
-// ImageRefSchema used to return parsed Image data
-type ImageRefSchema struct {
-	Repository string
-	Namespace  string
-	Component  string
 }
 
 // CopyImageSchema

@@ -128,21 +128,16 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			return []v1alpha3.CopyImageSchema{}, err
 		}
 
-		// select all packages
-		// this is the equivalent of the headOnly mode
-		// only the latest version of each operator will be selected
-		if len(op.Packages) == 0 {
-			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(cacheDir, label, op)
-			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, err
-			}
-		} else {
-			// iterate through each package
-			relatedImages, err = o.Manifest.GetRelatedImagesFromCatalogByFilter(cacheDir, label, op)
-			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, err
-			}
+		operatorCatalog, err := o.Manifest.GetCatalog(filepath.Join(cacheDir, label))
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
 		}
+
+		relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(operatorCatalog, op)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
+		}
+
 		relatedImages["index"] = []v1alpha3.RelatedImage{
 			{
 				Name:  "index",
