@@ -59,7 +59,6 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/hold-operator/")
 		os.RemoveAll("../../tests/operator-images")
 		os.RemoveAll("../../tests/tmp/")
-		os.RemoveAll("../tests")
 		ex := setupCollector_DiskToMirror(tempDir, log)
 		//copy tests/hold-test-fake to working-dir
 		err := copy.Copy("../../tests/working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(ex.Opts.Global.WorkingDir, operatorImageExtractDir, "ocp-release/4.13.9-x86_64"))
@@ -137,7 +136,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	globalM2D := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		WorkingDir:   tempDir,
+		WorkingDir:   tempDir + "/working-dir",
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
@@ -205,6 +204,9 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 					},
 					{
 						Catalog: "community-operators:v4.7",
+					},
+					{
+						Catalog: "oci://../../tests/simple-test-bundle",
 					},
 				},
 				AdditionalImages: []v1alpha2.Image{

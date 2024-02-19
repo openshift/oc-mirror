@@ -5,9 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	digest "github.com/opencontainers/go-digest"
 
@@ -17,6 +20,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
+	"github.com/otiai10/copy"
 )
 
 const (
@@ -59,24 +63,41 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
 		cacheDir := strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir}, "/")
 		dir = strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir}, "/")
-		if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) {
-			err := os.MkdirAll(dir, 0755)
-			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, err
+
+		// CLID-27 ensure we pick up oci:// (on disk) catalogs
+		if strings.Contains(op.Catalog, ociProtocol) {
+			// truncate the prefix to get the directory
+			ociDir := strings.Split(op.Catalog, ociProtocol)
+			if len(ociDir) > 0 {
+				// delete the existing directory and untarred cache contents
+				os.RemoveAll(dir)
+				os.RemoveAll(cacheDir)
+				// copy all contents to the working dir
+				err := copy.Copy(ociDir[1], dir)
+				if err != nil {
+					return []v1alpha3.CopyImageSchema{}, err
+				}
 			}
-			src := dockerProtocol + op.Catalog
-			dest := ociProtocolTrimmed + dir
-			err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
-			writer.Flush()
-			if err != nil {
-				o.Log.Error(errMsg, err)
-			}
-			// read the logs
-			f, _ := os.ReadFile(logsFile)
-			lines := strings.Split(string(f), "\n")
-			for _, s := range lines {
-				if len(s) > 0 {
-					o.Log.Debug("%s ", strings.ToLower(s))
+		} else {
+			if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) {
+				err := os.MkdirAll(dir, 0755)
+				if err != nil {
+					return []v1alpha3.CopyImageSchema{}, err
+				}
+				src := dockerProtocol + op.Catalog
+				dest := ociProtocolTrimmed + dir
+				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
+				writer.Flush()
+				if err != nil {
+					o.Log.Error(errMsg, err)
+				}
+				// read the logs
+				f, _ := os.ReadFile(logsFile)
+				lines := strings.Split(string(f), "\n")
+				for _, s := range lines {
+					if len(s) > 0 {
+						o.Log.Debug("%s ", strings.ToLower(s))
+					}
 				}
 			}
 		}
@@ -220,17 +241,36 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-			imgSpec, err := image.ParseRef(img.Image)
-			if err != nil {
-				o.Log.Error("%s", err.Error())
-				return nil, err
-			}
-			src = imgSpec.ReferenceWithTransport
-
-			if imgSpec.IsImageByDigest() {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+			if strings.HasPrefix(img.Image, ociProtocol) {
+				transportAndPath := strings.Split(img.Image, "://")
+				src = ociProtocolTrimmed + transportAndPath[1]
+				if len(transportAndPath) == 2 {
+					// generate a random hex string to use as a tag
+					var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+					hex := strconv.FormatUint(rnd.Uint64(), 16)
+					var hexTag string
+					if len(hex) > hashTruncLen {
+						hexTag = hex[:hashTruncLen]
+					} else {
+						hexTag = hex
+					}
+					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, transportAndPath[1] + ":" + hexTag}, "/")
+				} else {
+					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
+				}
 			} else {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				imgSpec, err := image.ParseRef(img.Image)
+				if err != nil {
+					o.Log.Error("%s", err.Error())
+					return nil, err
+				}
+				src = imgSpec.ReferenceWithTransport
+
+				if imgSpec.IsImageByDigest() {
+					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+				} else {
+					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				}
 			}
 
 			o.Log.Debug("source %s", src)
