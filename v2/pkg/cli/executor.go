@@ -190,13 +190,45 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
 	// nolint: errcheck
-	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
 	cmd.Flags().AddFlagSet(&flagDepTLS)
 	cmd.Flags().AddFlagSet(&flagSrcOpts)
 	cmd.Flags().AddFlagSet(&flagDestOpts)
+	HideFlags(cmd)
 	return cmd
+}
+
+func HideFlags(cmd *cobra.Command) {
+	cmd.Flags().MarkHidden("v2")
+	cmd.Flags().MarkHidden("dest-authfile")
+	cmd.Flags().MarkHidden("dest-cert-dir")
+	cmd.Flags().MarkHidden("dest-compress")
+	cmd.Flags().MarkHidden("dest-compress-format")
+	cmd.Flags().MarkHidden("dest-compress-level")
+	cmd.Flags().MarkHidden("dest-creds")
+	cmd.Flags().MarkHidden("dest-daemon-host")
+	cmd.Flags().MarkHidden("dest-decompress")
+	cmd.Flags().MarkHidden("dest-no-creds")
+	cmd.Flags().MarkHidden("dest-oci-accept-uncompressed-layers")
+	cmd.Flags().MarkHidden("dest-password")
+	cmd.Flags().MarkHidden("dest-precompute-digests")
+	cmd.Flags().MarkHidden("dest-registry-token")
+	cmd.Flags().MarkHidden("dest-shared-blob-dir")
+	cmd.Flags().MarkHidden("dest-username")
+	cmd.Flags().MarkHidden("dir")
+	cmd.Flags().MarkHidden("force")
+	cmd.Flags().MarkHidden("quiet")
+	cmd.Flags().MarkHidden("retry-times")
+	cmd.Flags().MarkHidden("src-authfile")
+	cmd.Flags().MarkHidden("src-cert-dir")
+	cmd.Flags().MarkHidden("src-creds")
+	cmd.Flags().MarkHidden("src-daemon-host")
+	cmd.Flags().MarkHidden("src-no-creds")
+	cmd.Flags().MarkHidden("src-password")
+	cmd.Flags().MarkHidden("src-registry-token")
+	cmd.Flags().MarkHidden("src-shared-blob-dir")
+	cmd.Flags().MarkHidden("src-username")
 }
 
 // Validate - cobra validation
