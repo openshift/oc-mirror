@@ -52,6 +52,15 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 		log.Debug("completed test related images %v ", res)
+
+		// test with TargetTag
+		ex.Config.Mirror.Operators[3].TargetTag = "v4.14"
+		res, err = ex.OperatorImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetTag set) related images %v ", res)
+
 	})
 
 	t.Run("Testing OperatorImageCollector - Disk to mirror : should pass", func(t *testing.T) {
@@ -60,6 +69,7 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/operator-images")
 		os.RemoveAll("../../tests/tmp/")
 		ex := setupCollector_DiskToMirror(tempDir, log)
+
 		//copy tests/hold-test-fake to working-dir
 		err := copy.Copy("../../tests/working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(ex.Opts.Global.WorkingDir, operatorImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
@@ -77,6 +87,7 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 			t.Fatalf("source images should be from local storage")
 		}
 		log.Debug("completed test related images %v ", res)
+
 	})
 }
 

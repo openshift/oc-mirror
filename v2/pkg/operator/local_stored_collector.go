@@ -5,12 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	digest "github.com/opencontainers/go-digest"
 
@@ -44,9 +42,11 @@ type LocalStorageCollector struct {
 func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
 
 	var (
-		allImages []v1alpha3.CopyImageSchema
-		label     string
-		dir       string
+		allImages      []v1alpha3.CopyImageSchema
+		label          string
+		dir            string
+		imageReference string
+		imageName      string
 	)
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 
@@ -65,18 +65,27 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		dir = strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir}, "/")
 
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
-		if strings.Contains(op.Catalog, ociProtocol) {
-			// truncate the prefix to get the directory
-			ociDir := strings.Split(op.Catalog, ociProtocol)
-			if len(ociDir) > 0 {
-				// delete the existing directory and untarred cache contents
-				os.RemoveAll(dir)
-				os.RemoveAll(cacheDir)
-				// copy all contents to the working dir
-				err := copy.Copy(ociDir[1], dir)
-				if err != nil {
-					return []v1alpha3.CopyImageSchema{}, err
-				}
+		imgSpec, err := image.ParseRef(op.Catalog)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
+		}
+		if imgSpec.Transport == ociProtocol {
+			// delete the existing directory and untarred cache contents
+			os.RemoveAll(dir)
+			os.RemoveAll(cacheDir)
+			// copy all contents to the working dir
+			err := copy.Copy(imgSpec.PathComponent, dir)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+			// check if we have TargetTag set
+			imageReference = imgSpec.ReferenceWithTransport
+			name := path.Base(imgSpec.Reference)
+			if len(op.TargetTag) > 0 {
+				// add it as an annotation
+				imageName = name + annotation + op.TargetTag
+			} else {
+				imageName = name
 			}
 		} else {
 			if _, err := os.Stat(cacheDir); errors.Is(err, os.ErrNotExist) {
@@ -100,6 +109,8 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 					}
 				}
 			}
+			imageReference = op.Catalog
+			imageName = "index"
 		}
 
 		// it's in oci format so we can go directly to the index.json file
@@ -159,10 +170,14 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			return []v1alpha3.CopyImageSchema{}, err
 		}
 
+		// we add the manifest digest if we don't have the TargetTag as annotation
+		if !strings.Contains(imageName, annotation) {
+			imageName = imageName + annotation + validDigest.String()
+		}
 		relatedImages["index"] = []v1alpha3.RelatedImage{
 			{
-				Name:  "index",
-				Image: op.Catalog,
+				Name:  imageName,
+				Image: imageReference,
 				Type:  v1alpha2.TypeOperatorCatalog,
 			},
 		}
@@ -241,31 +256,28 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-			if strings.HasPrefix(img.Image, ociProtocol) {
-				transportAndPath := strings.Split(img.Image, "://")
-				src = ociProtocolTrimmed + transportAndPath[1]
-				if len(transportAndPath) == 2 {
-					// generate a random hex string to use as a tag
-					var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
-					hex := strconv.FormatUint(rnd.Uint64(), 16)
-					var hexTag string
-					if len(hex) > hashTruncLen {
-						hexTag = hex[:hashTruncLen]
-					} else {
-						hexTag = hex
-					}
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, transportAndPath[1] + ":" + hexTag}, "/")
-				} else {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Image}, "/")
-				}
-			} else {
-				imgSpec, err := image.ParseRef(img.Image)
-				if err != nil {
-					o.Log.Error("%s", err.Error())
-					return nil, err
-				}
+			imgSpec, err := image.ParseRef(img.Image)
+			if err != nil {
+				return nil, err
+			}
+			if imgSpec.Transport == ociProtocol {
 				src = imgSpec.ReferenceWithTransport
-
+				// as we have annotated the image name with a tag, we can do some informative tagging
+				// remove our annotation add the TargetTag or digest
+				name := strings.Split(img.Name, annotation)
+				var nameAndTag string
+				if len(name) < 2 {
+					return nil, fmt.Errorf("could not find '-annotation-' in image name for oci fbc catalog")
+				}
+				if strings.Contains(name[1], sha256) {
+					tag := strings.Split(name[1], sha256)[1]
+					nameAndTag = name[0] + ":" + tag[:hashTruncLen]
+				} else {
+					nameAndTag = name[0] + ":" + name[1]
+				}
+				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, nameAndTag}, "/")
+			} else {
+				src = imgSpec.ReferenceWithTransport
 				if imgSpec.IsImageByDigest() {
 					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
 				} else {
