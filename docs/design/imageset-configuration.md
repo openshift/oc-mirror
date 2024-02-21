@@ -17,7 +17,7 @@ Design: oc-mirror Imageset Configuration
 
 ## Platforms
 
-Release channels for container management platforms can be specified for mirroring. 
+Release channels for container management platforms can be specified for mirroring.
 Currently, OpenShift Container Platform is supported by all `oc-mirror` commands.
 OKD is a supported type in the imageset configuration, but not by the `oc-mirror` list commands.
 
@@ -55,8 +55,20 @@ mirror:
         charts:
           - name: podinfo
             version: 5.0.0
-            imagePaths: 
+            imagePaths:
             - "{.spec.template.spec.custom[*].image}"
+```
+
+If you want to mirror all charts present in a repository you can just specify the url. Example:
+
+```
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+mirror:
+  helm:
+    repositories:
+      - name: podinfo
+        url: https://stefanprodan.github.io/podinfo
 ```
 
 # Limitations
@@ -70,7 +82,7 @@ OKD is supported by the mirroring process but not the discovery `list` tools.
 
 ## Helm Charts
 
-- Private repositories are currently not supported. 
+- Private repositories are currently not supported.
 - Helm charts that require alterations to the `values.yaml` to render are not currently supported.
 
 

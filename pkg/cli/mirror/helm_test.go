@@ -161,3 +161,9 @@ func TestFindImages(t *testing.T) {
 		t.Errorf(`in %s, expect to get "%s", got "%s"`, "", want, imgs)
 	}
 }
+
+func TestIndexFile(t *testing.T) {
+	charts, err := IndexFile("https://charts.openshift.io/")
+	require.NoError(t, err)
+	require.NotNil(t, charts)
+}
