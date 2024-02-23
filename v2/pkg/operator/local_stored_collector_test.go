@@ -61,6 +61,15 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		}
 		log.Debug("completed test (with TargetTag set) related images %v ", res)
 
+		// test with TargetCatalog
+		ex.Config.Mirror.Operators[3].TargetTag = ""
+		ex.Config.Mirror.Operators[3].TargetCatalog = "test-catalog:v4.14"
+		res, err = ex.OperatorImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
+
 	})
 
 	t.Run("Testing OperatorImageCollector - Disk to mirror : should pass", func(t *testing.T) {
@@ -87,6 +96,15 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 			t.Fatalf("source images should be from local storage")
 		}
 		log.Debug("completed test related images %v ", res)
+
+		// test with TargetCatalog
+		ex.Config.Mirror.Operators[1].TargetTag = ""
+		ex.Config.Mirror.Operators[1].TargetCatalog = "test-catalog:v4.14"
+		res, err = ex.OperatorImageCollector(context.Background())
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
 
 	})
 }
@@ -124,6 +142,9 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 				Operators: []v1alpha2.Operator{
 					{
 						Catalog: "redhat-operator-index:v4.14",
+					},
+					{
+						Catalog: "oci://../../tests/simple-test-bundle",
 					},
 				},
 			},
