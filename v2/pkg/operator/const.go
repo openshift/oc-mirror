@@ -10,4 +10,6 @@ const (
 	blobsDir                string = "blobs/sha256"
 	errMsg                  string = "[OperatorImageCollector] %v "
 	logsFile                string = "operator.log"
+	sha256                  string = "sha256:"
+	annotation              string = "-annotation-"
 )

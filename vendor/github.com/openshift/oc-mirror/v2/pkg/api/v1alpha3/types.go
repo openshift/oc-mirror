@@ -187,6 +187,12 @@ type RelatedImage struct {
 	// it doesn't need to be persisted to JSON
 	// This field doesn't exist in the catalog declarativeConfig.
 	Type v1alpha2.ImageType `json:"-"`
+	// Used to keep specific tag info for the related image
+	// if set should be used when mirroring
+	TargetTag string `json:"targetTag"`
+	// Used to keep specific naming info for the related image
+	// if set should be used when mirroring
+	TargetName string `json:"tagetName"`
 }
 
 // CopyImageSchema

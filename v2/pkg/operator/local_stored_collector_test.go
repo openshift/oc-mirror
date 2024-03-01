@@ -52,6 +52,24 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 		log.Debug("completed test related images %v ", res)
+
+		// test with TargetTag
+		ex.Config.Mirror.Operators[3].TargetTag = "v4.14"
+		res, err = ex.OperatorImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetTag set) related images %v ", res)
+
+		// test with TargetCatalog
+		ex.Config.Mirror.Operators[3].TargetTag = ""
+		ex.Config.Mirror.Operators[3].TargetCatalog = "test-catalog:v4.14"
+		res, err = ex.OperatorImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
+
 	})
 
 	t.Run("Testing OperatorImageCollector - Disk to mirror : should pass", func(t *testing.T) {
@@ -59,8 +77,8 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		os.RemoveAll("../../tests/hold-operator/")
 		os.RemoveAll("../../tests/operator-images")
 		os.RemoveAll("../../tests/tmp/")
-		os.RemoveAll("../tests")
 		ex := setupCollector_DiskToMirror(tempDir, log)
+
 		//copy tests/hold-test-fake to working-dir
 		err := copy.Copy("../../tests/working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(ex.Opts.Global.WorkingDir, operatorImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
@@ -78,6 +96,16 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 			t.Fatalf("source images should be from local storage")
 		}
 		log.Debug("completed test related images %v ", res)
+
+		// test with TargetCatalog
+		ex.Config.Mirror.Operators[1].TargetTag = ""
+		ex.Config.Mirror.Operators[1].TargetCatalog = "test-catalog:v4.14"
+		res, err = ex.OperatorImageCollector(context.Background())
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
+
 	})
 }
 
@@ -115,6 +143,9 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 					{
 						Catalog: "redhat-operator-index:v4.14",
 					},
+					{
+						Catalog: "oci://../../tests/simple-test-bundle",
+					},
 				},
 			},
 		},
@@ -137,7 +168,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	globalM2D := &mirror.GlobalOptions{
 		TlsVerify:    false,
 		SecurePolicy: false,
-		WorkingDir:   tempDir,
+		WorkingDir:   tempDir + "/working-dir",
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
@@ -205,6 +236,9 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 					},
 					{
 						Catalog: "community-operators:v4.7",
+					},
+					{
+						Catalog: "oci://../../tests/simple-test-bundle",
 					},
 				},
 				AdditionalImages: []v1alpha2.Image{
