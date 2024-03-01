@@ -130,3 +130,12 @@ func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	}
 	return strings.Replace(imageRef, spec.PathComponent, pathWithMaxNexted, 1), nil
 }
+
+func (i ImageSpec) ComponentName() string {
+	if strings.Contains(i.PathComponent, "/") {
+		pathComponents := strings.Split(i.PathComponent, "/")
+		return pathComponents[len(pathComponents)-1]
+	} else {
+		return i.PathComponent
+	}
+}
