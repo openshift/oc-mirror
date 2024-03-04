@@ -177,9 +177,12 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			return []v1alpha3.CopyImageSchema{}, err
 		}
 
-		relatedImages, err = o.Manifest.GetRelatedImagesFromCatalog(operatorCatalog, op)
+		ri, err := o.Manifest.GetRelatedImagesFromCatalog(operatorCatalog, op)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
+		}
+		for k, v := range ri {
+			relatedImages[k] = v
 		}
 
 		// this ensures we either enforce using targetTag or targetCatalog
@@ -197,7 +200,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				targetTag = validDigest.Encoded()[:hashTruncLen]
 			}
 		}
-		relatedImages["index"] = []v1alpha3.RelatedImage{
+		relatedImages[imgSpec.ComponentName()+"."+imgSpec.Tag] = []v1alpha3.RelatedImage{
 			{
 				Name:       catalogName,
 				Image:      op.Catalog,
