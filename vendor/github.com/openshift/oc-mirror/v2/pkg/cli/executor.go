@@ -83,7 +83,7 @@ type ExecutorSchema struct {
 	LogsDir                      string
 	registryLogFile              *os.File
 	Config                       v1alpha2.ImageSetConfiguration
-	Opts                         mirror.CopyOptions
+	Opts                         *mirror.CopyOptions
 	Operator                     operator.CollectorInterface
 	Release                      release.CollectorInterface
 	AdditionalImages             additional.CollectorInterface
@@ -126,7 +126,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	flagDestOpts, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	flagRetryOpts, retryOpts := mirror.RetryFlags()
 
-	opts := mirror.CopyOptions{
+	opts := &mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 		SrcImage:            srcOpts,
@@ -324,24 +324,24 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	client, _ := release.NewOCPClient(uuid.New())
 
-	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, o.Opts)
+	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 
-	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
+	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
+	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
 	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
-			o.MirrorArchiver, err = archive.NewMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
+			o.MirrorArchiver, err = archive.NewMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 			if err != nil {
 				return err
 			}
 		} else {
-			o.MirrorArchiver, err = archive.NewPermissiveMirrorArchive(&o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
+			o.MirrorArchiver, err = archive.NewPermissiveMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 			if err != nil {
 				return err
 			}
@@ -357,10 +357,8 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 // Run - start the mirror functionality
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
-
-	// make sure we always get multi-arch images
-	o.Opts.MultiArch = "all"
 	var err error
+	o.Opts.MultiArch = "all"
 	if o.Opts.IsMirrorToDisk() {
 		err = o.RunMirrorToDisk(cmd, args)
 
@@ -573,7 +571,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	collectionFinish := time.Now()
 
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allImages, o.Opts)
+	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
 	if err != nil {
 		return err
 	}
@@ -629,7 +627,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		}
 	}
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allImages, o.Opts)
+	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
 	if err != nil {
 		return err
 	}
@@ -770,7 +768,7 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	flagDestOpts, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	flagRetryOpts, retryOpts := mirror.RetryFlags()
 
-	opts := mirror.CopyOptions{
+	opts := &mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 		SrcImage:            srcOpts,
@@ -882,11 +880,11 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 	}
 	client, _ := release.NewOCPClient(uuid.New())
 
-	signature := release.NewSignatureClient(o.Log, o.Config, o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.AdditionalImages = additional.New(o.Log, o.Config, o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
+	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
+	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	return nil
 }
 
@@ -914,7 +912,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	var buff bytes.Buffer
 	for _, img := range allImages {
 		buff.WriteString(img.Destination + "\n")
-		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, &o.Opts)
+		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, o.Opts)
 		if err != nil {
 			o.Log.Warn("unable to check existence of %s in local cache: %v", img.Destination, err)
 		}

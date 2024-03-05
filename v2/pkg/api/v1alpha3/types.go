@@ -82,16 +82,16 @@ type Status struct {
 // OCISchema
 type OCISchema struct {
 	SchemaVersion int           `json:"schemaVersion"`
-	MediaType     string        `json:"mediaType"`
+	MediaType     string        `json:"mediaType,omitempty"`
 	Manifests     []OCIManifest `json:"manifests"`
-	Config        OCIManifest   `json:"config"`
-	Layers        []OCIManifest `json:"layers"`
+	Config        OCIManifest   `json:"config,omitempty"`
+	Layers        []OCIManifest `json:"layers,omitempty"`
 }
 
 type OCIManifest struct {
-	MediaType string `json:"mediaType"`
-	Digest    string `json:"digest"`
-	Size      int    `json:"size"`
+	MediaType string `json:"mediaType,omitempty"`
+	Digest    string `json:"digest,omitempty"`
+	Size      int    `json:"size,omitempty"`
 }
 
 // OperatorConfigSchema

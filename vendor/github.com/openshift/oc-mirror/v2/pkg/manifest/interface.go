@@ -13,4 +13,5 @@ type ManifestInterface interface {
 	GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
 	ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error
 	GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error)
+	ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error
 }

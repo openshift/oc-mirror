@@ -90,7 +90,6 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 			index := (i * b.BatchSize) + x
 			o.Log.Debug("source %s ", images[index].Source)
 			o.Log.Debug("destination %s ", images[index].Destination)
-			opts.MultiArch = "all"
 			go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions, writer bufio.Writer) {
 				defer wg.Done()
 				err := o.Mirror.Run(ctx, src, dest, "copy", opts, writer)

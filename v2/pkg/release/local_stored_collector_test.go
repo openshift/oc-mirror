@@ -431,6 +431,10 @@ func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1al
 	return nil
 }
 
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+	return nil
+}
+
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
 	var res []v1alpha3.CopyImageSchema
 	res = append(res, v1alpha3.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})

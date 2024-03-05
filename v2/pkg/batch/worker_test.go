@@ -65,22 +65,22 @@ func TestWorker(t *testing.T) {
 type Mirror struct{}
 type Manifest struct{}
 
-func (o *Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, stdout bufio.Writer) error {
+func (o Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, stdout bufio.Writer) error {
 	return nil
 }
 
-func (o *Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+func (o Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
 	return true, nil
 }
 
-func (o *Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
+func (o Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
 	opcl := v1alpha3.OperatorLabels{OperatorsOperatorframeworkIoIndexConfigsV1: "/configs"}
 	opc := v1alpha3.OperatorConfig{Labels: opcl}
 	ocs := &v1alpha3.OperatorConfigSchema{Config: opc}
 	return ocs, nil
 }
 
-func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
+func (o Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
 	relatedImages := []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -90,7 +90,7 @@ func (o *Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, e
 	return relatedImages, nil
 }
 
-func (o *Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
+func (o Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	return &v1alpha3.OCISchema{
 		SchemaVersion: 2,
 		Manifests: []v1alpha3.OCIManifest{
@@ -103,7 +103,7 @@ func (o *Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o *Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
+func (o Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
 	return &v1alpha3.OCISchema{
 		SchemaVersion: 2,
 		Manifests: []v1alpha3.OCIManifest{
@@ -125,7 +125,7 @@ func (o Manifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) 
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o *Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	relatedImages["abc"] = []v1alpha3.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -134,10 +134,14 @@ func (o *Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.Operator
 	return relatedImages, nil
 }
 
-func (o *Manifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
 	return nil
 }
 
-func (o *Manifest) ExtractLayers(filePath, name, label string) error {
+func (o Manifest) ExtractLayers(filePath, name, label string) error {
+	return nil
+}
+
+func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
 	return nil
 }
