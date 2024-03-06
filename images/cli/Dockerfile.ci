@@ -9,7 +9,7 @@ WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/4.15:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.15:base
 COPY --from=builder_rhel8 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel8
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel9
