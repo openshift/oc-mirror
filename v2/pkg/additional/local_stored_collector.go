@@ -20,6 +20,18 @@ type LocalStorageCollector struct {
 	Config           v1alpha2.ImageSetConfiguration
 	Opts             mirror.CopyOptions
 	LocalStorageFQDN string
+	destReg          string
+}
+
+func (o LocalStorageCollector) destinationRegistry() string {
+	if o.destReg == "" {
+		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+		} else {
+			o.destReg = o.LocalStorageFQDN
+		}
+	}
+	return o.destReg
 }
 
 // AdditionalImagesCollector - this looks into the additional images field
@@ -31,7 +43,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	o.Log.Debug("multiArch=%v for additional images collections", o.Opts.MultiArch)
 
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
@@ -43,9 +55,9 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			src = imgSpec.ReferenceWithTransport
 
 			if imgSpec.IsImageByDigest() {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 			} else {
-				dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			}
 
 			o.Log.Debug("source %s", src)
