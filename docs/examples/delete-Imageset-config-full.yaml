@@ -1,0 +1,18 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: DeleteImageSetConfiguration
+delete:
+  platform:
+    channels:
+      - name: stable-4.13 
+        minVersion: 4.13.3
+        maxVersion: 4.13.3
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+      packages:
+      - name: aws-load-balancer-operator
+  additionalImages: 
+    - name:  registry.redhat.io/ubi8/ubi-minimal@sha256:8bedbe742f140108897fb3532068e8316900d9814f399d676ac78b46e740e34e
+
+
+

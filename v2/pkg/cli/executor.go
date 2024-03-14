@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
+	"github.com/openshift/oc-mirror/v2/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	"github.com/openshift/oc-mirror/v2/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -59,6 +60,7 @@ const (
 	signaturesDir           string = "signatures"
 	registryLogFilename     string = "registry.log"
 	startMessage            string = "starting local storage on localhost:%v"
+	cachedImages            string = "cached-images.txt"
 )
 
 var (
@@ -104,6 +106,7 @@ type ExecutorSchema struct {
 	MirrorArchiver               archive.Archiver
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
+	Delete                       delete.DeleteInterface
 }
 
 type MakeDirInterface interface {
@@ -138,6 +141,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
 		Dev:                 false,
+		Function:            string(mirror.CopyMode),
 	}
 
 	mkd := MakeDir{}
@@ -183,6 +187,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd.AddCommand(NewPrepareCommand(log))
 	cmd.AddCommand(version.NewVersionCommand(log))
+	cmd.AddCommand(NewDeleteCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
@@ -190,7 +195,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
-	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.")
+	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
@@ -212,6 +217,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	return cmd
 }
 
+// nolint: errcheck
 func HideFlags(cmd *cobra.Command) {
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().MarkHidden("dest-authfile")
@@ -291,7 +297,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		return err
 	}
@@ -302,7 +308,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	md := mirror.NewMirrorDelete()
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, md)
-	o.Config = cfg
+	o.Config = cfg.(v1alpha2.ImageSetConfiguration)
 
 	// logic to check mode
 	var rootDir string
@@ -421,10 +427,9 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// setupLocalStorage - private function that sets up
-// a local (distribution) registry
-func (o *ExecutorSchema) setupLocalStorage() error {
-
+// setupLocalRegistryConfig - private function to parse registry config
+// used in both localregistry serve and localregistry garbage-collect (for delete)
+func (o *ExecutorSchema) setupLocalRegistryConfig() (*configuration.Configuration, error) {
 	// create config file for local registry
 	// sonarqube scanner variable declaration convention
 	configYamlV01 := `
@@ -437,6 +442,8 @@ log:
   fields:
     service: registry
 storage:
+  delete:
+    enabled: true
   cache:
     blobdescriptor: inmemory
   filesystem:
@@ -474,14 +481,24 @@ http:
 	t := template.Must(template.New("local-storage-config").Parse(configYamlV01))
 	err := t.Execute(&buff, rc)
 	if err != nil {
-		return fmt.Errorf("error parsing the config template %v", err)
+		return &configuration.Configuration{}, fmt.Errorf("error parsing the config template %v", err)
 	}
 
 	config, err := configuration.Parse(bytes.NewReader(buff.Bytes()))
 	if err != nil {
-		return fmt.Errorf("error parsing local storage configuration : %v", err)
+		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v", err)
 	}
+	return config, nil
+}
 
+// setupLocalStorage - private function that sets up
+// a local (distribution) registry
+func (o *ExecutorSchema) setupLocalStorage() error {
+
+	config, err := o.setupLocalRegistryConfig()
+	if err != nil {
+		o.Log.Error("parsing config %v", err)
+	}
 	regLogger := logrus.New()
 	// prepare the logger
 	registryLogPath := filepath.Join(o.LogsDir, registryLogFilename)
@@ -509,6 +526,7 @@ http:
 	if err != nil {
 		return err
 	}
+
 	o.LocalStorageService = *reg
 	o.localStorageInterruptChannel = errchan
 
@@ -572,7 +590,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	// ensure working dir exists
 	err := o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir, 0755)
 	if err != nil {
-		o.Log.Error(" %v ", err)
+		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
 	}
 
@@ -580,7 +598,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
 	if err != nil {
-		o.Log.Error(" %v ", err)
+		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
 	}
 
@@ -588,7 +606,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
 	if err != nil {
-		o.Log.Error(" %v ", err)
+		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
 	}
 
@@ -596,7 +614,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
 	if err != nil {
-		o.Log.Error(" %v ", err)
+		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
 	}
 
@@ -604,7 +622,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
 	if err != nil {
-		o.Log.Error(" %v ", err)
+		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
 	}
 	return nil
@@ -617,6 +635,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	o.Log.Info(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
+	// collect all images
 	allImages, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
@@ -629,12 +648,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	// Prepare tar.gz when mirror to disk
-	// First stop the registry
+	// prepare tar.gz when mirror to disk
+	// first stop the registry
 	interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
 	o.localStorageInterruptChannel <- interruptSig
 
-	// Next, generate the archive
+	// next, generate the archive
 	err = o.MirrorArchiver.BuildArchive(cmd.Context(), allImages)
 	if err != nil {
 		return err
@@ -731,7 +750,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 	collectionFinish := time.Now()
 
-	// Apply max-nested-paths processing if MaxNestedPaths>0
+	// apply max-nested-paths processing if MaxNestedPaths>0
 	if o.Opts.Global.MaxNestedPaths > 0 {
 		allImages, err = withMaxNestedPaths(allImages, o.Opts.Global.MaxNestedPaths)
 		if err != nil {
@@ -743,13 +762,15 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
-	//create IDMS/ITMS
+
+	// create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
 	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
 
+	// create catalog source
 	err = o.ClusterResources.CatalogSourceGenerator(allImages)
 	if err != nil {
 		return err
@@ -811,7 +832,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
-	o.Log.Info("total release images to copy %d ", len(imgs))
+	o.Log.Info("total release images to %s %d ", o.Opts.Function, len(imgs))
 	o.Opts.ImageType = "release"
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
@@ -821,7 +842,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
-	o.Log.Info("total operator images to copy %d ", len(imgs))
+	o.Log.Info("total operator images to %s %d ", o.Opts.Function, len(imgs))
 	o.Opts.ImageType = "operator"
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
@@ -831,7 +852,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSc
 		o.closeAll()
 		return []v1alpha3.CopyImageSchema{}, err
 	}
-	o.Log.Info("total additional images to copy %d ", len(imgs))
+	o.Log.Info("total additional images to %s %d ", o.Opts.Function, len(imgs))
 	allRelatedImages = mergeImages(allRelatedImages, imgs)
 
 	return allRelatedImages, nil
@@ -864,191 +885,4 @@ func withMaxNestedPaths(in []v1alpha3.CopyImageSchema, maxNestedPaths int) ([]v1
 		out = append(out, img)
 	}
 	return out, nil
-}
-
-// NewPrepareCommand - setup all the relevant support structs
-// to eventually execute the 'prepare' sub command
-func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
-	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
-		SecurePolicy: false,
-	}
-
-	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
-	flagDepTLS, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	flagSrcOpts, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	flagDestOpts, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-	flagRetryOpts, retryOpts := mirror.RetryFlags()
-
-	opts := &mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		Dev:                 false,
-	}
-
-	ex := &ExecutorSchema{
-		Log:  log,
-		Opts: opts,
-	}
-	cmd := &cobra.Command{
-		Use:   "prepare",
-		Short: "Queries Cincinnati for the required releases to mirror, and verifies their existence in the local cache",
-		Run: func(cmd *cobra.Command, args []string) {
-			err := ex.ValidatePrepare(args)
-			if err != nil {
-				log.Error("%v ", err)
-				os.Exit(1)
-			}
-			err = ex.CompletePrepare(args)
-			if err != nil {
-				log.Error("%v ", err)
-				os.Exit(1)
-			}
-			// prepare internal storage
-			err = ex.setupLocalStorage()
-			if err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
-			}
-
-			err = ex.RunPrepare(cmd, args)
-			if err != nil {
-				log.Error("%v ", err)
-				os.Exit(1)
-			}
-		},
-	}
-	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
-	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
-	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
-	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE it. V2 is still under development and it is not ready to be used.")
-	// nolint: errcheck
-	cmd.Flags().MarkHidden("v2")
-	cmd.Flags().AddFlagSet(&flagSharedOpts)
-	cmd.Flags().AddFlagSet(&flagRetryOpts)
-	cmd.Flags().AddFlagSet(&flagDepTLS)
-	cmd.Flags().AddFlagSet(&flagSrcOpts)
-	cmd.Flags().AddFlagSet(&flagDestOpts)
-	return cmd
-}
-
-// Validate - cobra validation
-func (o ExecutorSchema) ValidatePrepare(dest []string) error {
-	if len(o.Opts.Global.ConfigPath) == 0 {
-		return fmt.Errorf("use the --config flag it is mandatory")
-	}
-	if o.Opts.Global.From == "" {
-		return fmt.Errorf("with prepare command, the --from argument is mandatory (prefix : file://)")
-	}
-	if !strings.Contains(o.Opts.Global.From, fileProtocol) {
-		return fmt.Errorf("when --from is used, it must have file:// prefix")
-	}
-	return nil
-}
-
-// CompletePrepare - cobra complete
-func (o *ExecutorSchema) CompletePrepare(args []string) error {
-
-	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
-	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
-	if err != nil {
-		return err
-	}
-	o.Log.Trace("imagesetconfig : %v ", cfg)
-
-	// update all dependant modules
-	mc := mirror.NewMirrorCopy()
-	o.Manifest = manifest.New(o.Log)
-	o.Mirror = mirror.New(mc, nil)
-	o.Config = cfg
-
-	o.Opts.Global.WorkingDir = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
-
-	// setup logs level, and logsDir under workingDir
-	err = o.setupLogsLevelAndDir()
-	if err != nil {
-		return err
-	}
-	if o.isLocalStoragePortBound() {
-		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
-	}
-	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
-	o.Opts.Mode = mirror.Prepare
-	o.Log.Info("mode %s ", o.Opts.Mode)
-
-	err = o.setupWorkingDir()
-	if err != nil {
-		return err
-	}
-	err = o.setupLocalStorageDir()
-	if err != nil {
-		return err
-	}
-	client, _ := release.NewOCPClient(uuid.New())
-
-	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	return nil
-}
-
-// RunPrepare - cobra run
-func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
-
-	// creating file for storing list of cached images
-	cachedImagesFilePath := filepath.Join(o.LogsDir, "cached-images.txt")
-	cachedImagesFile, err := os.Create(cachedImagesFilePath)
-	if err != nil {
-		return err
-	}
-	defer cachedImagesFile.Close()
-
-	o.Log.Info(startMessage, o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
-
-	allImages, err := o.CollectAll(cmd.Context())
-	if err != nil {
-		return err
-	}
-
-	imagesAvailable := map[string]bool{}
-	atLeastOneMissing := false
-	var buff bytes.Buffer
-	for _, img := range allImages {
-		buff.WriteString(img.Destination + "\n")
-		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, o.Opts)
-		if err != nil {
-			o.Log.Warn("unable to check existence of %s in local cache: %v", img.Destination, err)
-		}
-		if err != nil || !exists {
-			atLeastOneMissing = true
-		}
-		imagesAvailable[img.Destination] = exists
-
-	}
-
-	_, err = cachedImagesFile.Write(buff.Bytes())
-	if err != nil {
-		return err
-	}
-	if atLeastOneMissing {
-		o.Log.Error("missing images: ")
-		for img, exists := range imagesAvailable {
-			if !exists {
-				o.Log.Error("%s", img)
-			}
-		}
-		return fmt.Errorf("all images necessary for mirroring are not available in the cache. \nplease re-run the mirror to disk process")
-	}
-
-	o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", len(imagesAvailable))
-	o.Log.Info("full list in : %s", cachedImagesFilePath)
-	return nil
 }

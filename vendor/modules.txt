@@ -974,6 +974,7 @@ github.com/openshift/oc-mirror/v2/pkg/cli
 github.com/openshift/oc-mirror/v2/pkg/clusterresources
 github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1
 github.com/openshift/oc-mirror/v2/pkg/config
+github.com/openshift/oc-mirror/v2/pkg/delete
 github.com/openshift/oc-mirror/v2/pkg/history
 github.com/openshift/oc-mirror/v2/pkg/image
 github.com/openshift/oc-mirror/v2/pkg/imagebuilder

@@ -74,11 +74,17 @@ func TestExecutorMirroring(t *testing.T) {
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+	res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		log.Error("imagesetconfig %v ", err)
 	}
-	log.Debug("imagesetconfig : %v", cfg)
+	var cfg v1alpha2.ImageSetConfiguration
+	if res == nil {
+		cfg = v1alpha2.ImageSetConfiguration{}
+	} else {
+		cfg = res.(v1alpha2.ImageSetConfiguration)
+		log.Debug("imagesetconfig : %v", cfg)
+	}
 
 	nie := NormalStorageInterruptError{}
 	nie.Is(fmt.Errorf("interrupt error"))
@@ -180,7 +186,6 @@ func TestExecutorMirroring(t *testing.T) {
 			t.Fatalf("should fail")
 		}
 	})
-
 }
 
 func TestRunMirrorToMirror(t *testing.T) {
@@ -220,10 +225,18 @@ func TestRunMirrorToMirror(t *testing.T) {
 	}
 
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+	res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		log.Error("imagesetconfig %v ", err)
 	}
+	var cfg v1alpha2.ImageSetConfiguration
+	if res == nil {
+		cfg = v1alpha2.ImageSetConfiguration{}
+	} else {
+		cfg = res.(v1alpha2.ImageSetConfiguration)
+		log.Debug("imagesetconfig : %v", cfg)
+	}
+
 	log.Debug("imagesetconfig : %v", cfg)
 
 	nie := NormalStorageInterruptError{}
@@ -448,190 +461,6 @@ func TestExecutorComplete(t *testing.T) {
 	})
 }
 
-// TestExecutorValidatePrepare
-func TestExecutorValidatePrepare(t *testing.T) {
-	t.Run("Testing Executor : validate prepare should pass", func(t *testing.T) {
-
-		log := clog.New("trace")
-
-		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "../../tests/isc.yaml"
-		opts.Global.From = "file://test"
-
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			LogsDir: "/tmp/",
-		}
-
-		defer os.RemoveAll("../../pkg/cli/test")
-		defer os.RemoveAll("../../pkg/cli/tmp")
-		defer os.RemoveAll("../../pkg/cli/working-dir")
-
-		err := ex.ValidatePrepare([]string{"file://test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
-		// check for config path error
-		opts.Global.ConfigPath = ""
-		err = ex.ValidatePrepare([]string{"file://test"})
-		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
-
-		// check when from is used it should not be empty
-		opts.Global.ConfigPath = "../../tests/isc.yaml"
-		opts.Global.From = ""
-		err = ex.ValidatePrepare([]string{"docker://test"})
-		assert.Equal(t, "with prepare command, the --from argument is mandatory (prefix : file://)", err.Error())
-
-		// check when from is used it should have file protocol
-		opts.Global.ConfigPath = "../../tests/isc.yaml"
-		opts.Global.From = "test"
-		err = ex.ValidatePrepare([]string{"docker://test"})
-		assert.Equal(t, "when --from is used, it must have file:// prefix", err.Error())
-	})
-}
-
-// TestExecutorCompletePrepare
-func TestExecutorCompletePrepare(t *testing.T) {
-	t.Run("Testing Executor : complete prepare should pass", func(t *testing.T) {
-		log := clog.New("trace")
-
-		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "../../tests/isc.yaml"
-		opts.Global.From = "file://test"
-
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			MakeDir: MakeDir{},
-			LogsDir: "/tmp/",
-		}
-
-		os.Setenv(cacheEnvVar, "/tmp/")
-
-		defer os.RemoveAll("../../pkg/cli/test")
-		defer os.RemoveAll("../../pkg/cli/tmp")
-		defer os.RemoveAll("../../pkg/cli/working-dir")
-
-		err := ex.CompletePrepare([]string{"file://test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
-	})
-}
-
-// TestExecutorRunPrepare
-func TestExecutorRunPrepare(t *testing.T) {
-	t.Run("Testing Executor : run prepare should pass", func(t *testing.T) {
-		log := clog.New("trace")
-
-		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "../../tests/isc.yaml"
-		opts.Global.From = "file://test"
-
-		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
-
-		// storage cache for test
-		regCfg, err := setupRegForTest(testFolder)
-		if err != nil {
-			t.Errorf("storage cache error: %v ", err)
-		}
-		reg, err := registry.NewRegistry(context.Background(), regCfg)
-		if err != nil {
-			t.Errorf("storage cache error: %v ", err)
-		}
-		fakeStorageInterruptChan := make(chan error)
-		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
-
-		// read the ImageSetConfiguration
-		cfg, err := config.ReadConfig(opts.Global.ConfigPath)
-		if err != nil {
-			log.Error("imagesetconfig %v ", err)
-		}
-
-		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
-		mockMirror := Mirror{}
-
-		ex := &ExecutorSchema{
-			Log:                          log,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			Mirror:                       mockMirror,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			LogsDir:                      "/tmp/",
-		}
-
-		res := &cobra.Command{}
-		res.SilenceUsage = true
-		res.SetContext(context.Background())
-
-		err = ex.RunPrepare(res, []string{"file://test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-	})
-}
-
 // TestExecutorLocalStorage
 func TestExecutorSetupLocalStorage(t *testing.T) {
 	t.Run("Testing Executor : setup local storage should pass", func(t *testing.T) {
@@ -760,7 +589,7 @@ func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 
 // TestExecutorCollectAll
 func TestExecutorCollectAll(t *testing.T) {
-	t.Run("Testing Executor : colelct all should pass", func(t *testing.T) {
+	t.Run("Testing Executor : collect all should pass", func(t *testing.T) {
 		log := clog.New("trace")
 		global := &mirror.GlobalOptions{
 			TlsVerify:    false,
@@ -785,9 +614,9 @@ func TestExecutorCollectAll(t *testing.T) {
 		}
 
 		// read the ImageSetConfiguration
-		cfg, _ := config.ReadConfig("../../tests/isc.yaml")
-		failCollector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: true}
-		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		cfg, _ := config.ReadConfig("../../tests/isc.yaml", v1alpha2.ImageSetConfigurationKind)
+		failCollector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: true}
+		collector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: false}
 
 		mkdir := MockMakeDir{}
 
@@ -969,14 +798,18 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 	return test, nil
 }
 
+func (o *Collector) IdentifyReleases() ([]v1alpha3.RelatedImage, []string, error) {
+	return nil, []string{}, nil
+}
+
+func (o *Collector) FilterReleasesForDelete() (map[string][]v1alpha3.RelatedImage, error) {
+	return nil, nil
+}
+
 func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error {
 	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
 }
-
-// func (o MockArchiver) Close() error {
-// 	return nil
-// }
 
 func skipSignalsToInterruptStorage(errchan chan error) {
 	err := <-errchan
@@ -1012,7 +845,7 @@ health:
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
 
 	if err != nil {
-		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV01)
+		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v %s", err, configYamlV01)
 	}
 	return config, nil
 }

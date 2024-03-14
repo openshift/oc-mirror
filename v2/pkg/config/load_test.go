@@ -111,7 +111,7 @@ mirror:
   foo: bar
 `,
 			assertion: require.Error,
-			expError:  `decode mirror.openshift.io/v1alpha2, Kind=ImageSetConfiguration: json: unknown field "foo"`,
+			expError:  `decode ImageSetConfiguration: json: unknown field "foo"`,
 		},
 	}
 
@@ -124,12 +124,134 @@ mirror:
 				require.NoError(t, err)
 			}
 
-			cfg, err := LoadConfig(data)
+			cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration](data, v1alpha2.ImageSetConfigurationKind)
 			s.assertion(t, err)
 			if err != nil {
 				require.EqualError(t, err, s.expError)
 			} else {
 				require.Equal(t, s.expConfig, cfg.ImageSetConfigurationSpec)
+			}
+		})
+	}
+}
+
+// TestLoadConfigDelete
+func TestLoadConfigDelete(t *testing.T) {
+	type spec struct {
+		name      string
+		file      string
+		inline    string
+		assertion require.ErrorAssertionFunc
+		expConfig v1alpha2.DeleteImageSetConfigurationSpec
+		expError  string
+	}
+
+	deletespecs := []spec{
+		{
+			name:      "Delete-Valid/Basic",
+			file:      filepath.Join("testdata", "config", "valid-delete.yaml"),
+			assertion: require.NoError,
+			expConfig: v1alpha2.DeleteImageSetConfigurationSpec{
+				Delete: v1alpha2.Delete{
+					Platform: v1alpha2.Platform{
+						Graph: true,
+						Channels: []v1alpha2.ReleaseChannel{
+							{
+								Name: "stable-4.7",
+							},
+							{
+								Name:       "stable-4.6",
+								MinVersion: "4.6.3",
+								MaxVersion: "4.6.13",
+							},
+							{
+								Name: "okd",
+								Type: v1alpha2.TypeOKD,
+							},
+						},
+					},
+					Operators: []v1alpha2.Operator{
+						{
+							Catalog: "redhat-operators:v4.7",
+							Full:    true,
+						},
+						{
+							Catalog: "certified-operators:v4.7",
+							Full:    true,
+							IncludeConfig: v1alpha2.IncludeConfig{
+								Packages: []v1alpha2.IncludePackage{
+									{Name: "couchbase-operator"},
+									{
+										Name: "mongodb-operator",
+										IncludeBundle: v1alpha2.IncludeBundle{
+											MinVersion: "1.4.0",
+										},
+									},
+									{
+										Name: "crunchy-postgresql-operator",
+										Channels: []v1alpha2.IncludeChannel{
+											{Name: "stable"},
+										},
+									},
+								},
+							},
+						},
+						{
+							Catalog: "community-operators:v4.7",
+						},
+					},
+					AdditionalImages: []v1alpha2.Image{
+						{Name: "registry.redhat.io/ubi8/ubi:latest"},
+					},
+					Helm: v1alpha2.Helm{
+						Repositories: []v1alpha2.Repository{
+							{
+								URL:  "https://stefanprodan.github.io/podinfo",
+								Name: "podinfo",
+								Charts: []v1alpha2.Chart{
+									{Name: "podinfo", Version: "5.0.0"},
+								},
+							},
+						},
+						Local: []v1alpha2.Chart{
+							{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
+						},
+					},
+					Samples: []v1alpha2.SampleImages{
+						{Image: v1alpha2.Image{Name: "ruby"}},
+						{Image: v1alpha2.Image{Name: "python"}},
+						{Image: v1alpha2.Image{Name: "nginx"}},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/UnknownKey",
+			inline: `
+apiVersion: mirror.openshift.io/v1alpha2
+kind: DeleteImageSetConfiguration
+delete:
+  foo: bar
+`,
+			assertion: require.Error,
+			expError:  `decode DeleteImageSetConfiguration: json: unknown field "foo"`,
+		},
+	}
+
+	for _, s := range deletespecs {
+		t.Run(s.name, func(t *testing.T) {
+			data := []byte(s.inline)
+			if len(data) == 0 {
+				var err error
+				data, err = os.ReadFile(s.file)
+				require.NoError(t, err)
+			}
+			cfg, err := LoadConfig[v1alpha2.DeleteImageSetConfiguration](data, v1alpha2.DeleteImageSetConfigurationKind)
+			s.assertion(t, err)
+			if err != nil {
+				require.EqualError(t, err, s.expError)
+			} else {
+				require.Equal(t, s.expConfig, cfg.DeleteImageSetConfigurationSpec)
 			}
 		})
 	}
@@ -156,7 +278,7 @@ mirror:
   - catalog: registry.com/ns/baz:v1.2
 `
 
-	cfg, err := LoadConfig([]byte(headsOnlyCfg))
+	cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration]([]byte(headsOnlyCfg), v1alpha2.ImageSetConfigurationKind)
 	require.NoError(t, err)
 	require.Len(t, cfg.Mirror.Platform.Channels, 3)
 	require.Len(t, cfg.Mirror.Operators, 3)
@@ -185,7 +307,7 @@ mirror:
   - catalog: registry.com/ns/baz:v1.2
 `
 
-	cfg, err := LoadConfig([]byte(ctlgCfg))
+	cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration]([]byte(ctlgCfg), v1alpha2.ImageSetConfigurationKind)
 	require.NoError(t, err)
 	require.Len(t, cfg.Mirror.Operators, 4)
 	ctlgOne, err := cfg.Mirror.Operators[0].GetUniqueName()
@@ -248,10 +370,34 @@ foo: bar
 
 func TestReadConfig(t *testing.T) {
 	t.Run("Testing ReadConfig : should pass ", func(t *testing.T) {
-		res, err := ReadConfig("../../tests/isc.yaml")
+		res, err := ReadConfig("../../tests/isc.yaml", v1alpha2.ImageSetConfigurationKind)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		require.Equal(t, []string{"amd64"}, res.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
+		conv := res.(v1alpha2.ImageSetConfiguration)
+		require.Equal(t, []string{"amd64"}, conv.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
+
+		// should fail
+		_, err = ReadConfig("../../tests/delete-isc.yaml", v1alpha2.ImageSetConfigurationKind)
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+	})
+}
+
+func TestReadConfigDelete(t *testing.T) {
+	t.Run("Testing ReadConfigDelete : should pass ", func(t *testing.T) {
+		res, err := ReadConfig("../../tests/delete-isc.yaml", v1alpha2.DeleteImageSetConfigurationKind)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		conv := res.(v1alpha2.DeleteImageSetConfiguration)
+		require.Equal(t, []string{"amd64"}, conv.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
+
+		// should fail
+		_, err = ReadConfig("../../tests/isc.yaml", v1alpha2.DeleteImageSetConfigurationKind)
+		if err == nil {
+			t.Fatalf("should fail")
+		}
 	})
 }

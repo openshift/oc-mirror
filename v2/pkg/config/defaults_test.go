@@ -62,3 +62,59 @@ func TestComplete(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteComplete(t *testing.T) {
+
+	type spec struct {
+		name      string
+		config    v1alpha2.DeleteImageSetConfiguration
+		expConfig v1alpha2.DeleteImageSetConfiguration
+	}
+
+	cases := []spec{
+		{
+			name: "Invalid/UnsupportedReleaseArchitecture",
+			config: v1alpha2.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v1alpha2.DeleteImageSetConfigurationSpec{
+					Delete: v1alpha2.Delete{
+						Platform: v1alpha2.Platform{
+							Architectures: []string{},
+							Channels: []v1alpha2.ReleaseChannel{
+								{
+									Name: "channel1",
+								},
+								{
+									Name: "channel2",
+								},
+							},
+						},
+					},
+				},
+			},
+			expConfig: v1alpha2.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v1alpha2.DeleteImageSetConfigurationSpec{
+					Delete: v1alpha2.Delete{
+						Platform: v1alpha2.Platform{
+							Architectures: []string{v1alpha2.DefaultPlatformArchitecture},
+							Channels: []v1alpha2.ReleaseChannel{
+								{
+									Name: "channel1",
+								},
+								{
+									Name: "channel2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			CompleteDelete(&c.config)
+			require.Equal(t, c.config, c.expConfig)
+		})
+	}
+}

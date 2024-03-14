@@ -1,0 +1,22 @@
+# This config demonstrates how to mirror a version range
+# in the specified channel for an OpenShift release.
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: DeleteImageSetConfiguration
+delete:
+  platform:
+    architectures:
+      - "amd64"
+    channels:
+      - name: stable-4.14
+        minVersion: 4.14.1
+        maxVersion: 4.12.2
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.12
+      packages:
+      - name: aws-load-balancer-operator
+        channels: 
+        - name: stable-v0
+  
+  additionalImages: 
+    - name: registry.redhat.io/ubi8/ubi:latest  
