@@ -93,6 +93,16 @@ func TestIntegrationRelease(t *testing.T) {
 	suite.runDisk2Mirror(t)
 }
 
+func TestIntegrationReleaseM2M(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	suite := setupReleaseTest(t)
+	defer suite.tearDown(t)
+
+	suite.runMirror2Mirror(t)
+}
+
 func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	os.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
 
@@ -153,7 +163,7 @@ func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
 	err := os.MkdirAll(resultFolder, 0755)
 	assert.NoError(t, err, "should not fail creating a temp folder for results")
 
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55005", "file://" + resultFolder})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "56001", "file://" + resultFolder})
 	err = ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 
@@ -169,8 +179,36 @@ func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
 	ocmirror := NewMirrorCmd(clog.New("trace"))
 	resultFolder := filepath.Join(suite.tempFolder, "release", d2mSubFolder)
 
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55007", "--from", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/release"})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "56002", "--from", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/release"})
 	err := ocmirror.Execute()
+	assert.NoError(t, err, "should not fail executing oc-mirror")
+
+	// assert release images exist
+	for _, img := range suite.releaseImageRefs {
+		destImgRef := strings.Replace(img, suite.sourceRegistryDomain, suite.destinationRegistryDomain+"/release", -1)
+		exists, err := testutils.ImageExists(destImgRef)
+		assert.NoError(t, err)
+		assert.True(t, exists)
+	}
+
+	// assert IDMS is generated
+	assert.FileExists(t, filepath.Join(resultFolder, "working-dir/cluster-resources/idms-oc-mirror.yaml"))
+}
+
+func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
+	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
+
+	// create cobra command and run
+	ocmirror := NewMirrorCmd(clog.New("trace"))
+	// b := bytes.NewBufferString("")
+	// ocmirror.SetOut(b)
+	resultFolder := filepath.Join(suite.tempFolder, "release", m2dSubFolder)
+	err := os.MkdirAll(resultFolder, 0755)
+	assert.NoError(t, err, "should not fail creating a temp folder for results")
+
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "56003", "--workspace", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/release"})
+	err = ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 
 	// assert release images exist

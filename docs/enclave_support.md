@@ -15,7 +15,7 @@ In this context, enclave users are interested in:
 ## When can I use the feature?
 :warning: **The Enclave support feature is an MVP in Developer Preview and should not be used in production.**
 
-In the OpenShift 4.15 release, the enclave workflow is a Developer Preview MVP (Minimal Viable Product). It is intended to graduate it to Tech Preview in OpenShift 4.16. 
+In the OpenShift 4.16 release, the enclave workflow is in Tech Preview. 
 
 After GA, this new mirroring technique is intended to replace the existing oc-mirror. 
 
@@ -27,18 +27,7 @@ oc-mirror --v2 --help
 ```
 
 
-The Enclave Support feature (`--v2`) has the **following limitations**:
-* Mirroring **OCP releases only**. Operator catalogs, additional images and Helm charts are not yet supported.
-* Mirroring to **fully disconnected clusters only**. In other words, mirroring to a registry  directly (Mirror-to-mirror) is not yet available.
-  * Mirroring is only possible by: 
-    * Generating an archive for the mirroring content described in the image set config (Mirror-to-disk)
-      ```bash
-      oc-mirror --v2 -c imageset_config.yaml file:///home/user/mirror_content
-      ```
-    * Mirroring from the archive to the disconnected registry (disk-to-mirror)
-      ```bash
-      oc-mirror --v2 -c imageset_config.yaml --from file:///home/user/mirror_content docker://disconnected_registry.internal:5000/
-      ```
+The Enclave Support feature (`--v2`) mirrors OCP releases, Operator catalogs, additional images. **Helm charts** are not yet supported.
 
 
 ## Reference Architecture Diagram for Enclave Support
@@ -180,3 +169,16 @@ oc-mirror --v2 -c isc-enclave.yaml
 ```
 
 The administrators of the OCP cluster in Enclave1 are now ready to install/upgrade that cluster.
+
+## How to mirror to a partially disconnected cluster? (Mirror to mirror)
+
+This workflow can be used when the environment from which oc-mirror is executed has access to both:
+* the public internet, and specifically redhat registries where OCP releases and OCP operators are delivered
+* the destination registry,  the remote registry where images will be mirrored to.
+
+In order to use the Mirror to Mirror workflow, the user can execute:
+```bash=
+oc-mirror --v2 -c isc-m2m.yaml --workspace file:///home/user/enterprise-content docker://enterprise-registry.in/
+```
+
+The images are copied from the source registry directly to the destination registry, without intermediate copies on the local machine. Custom resource manifests such as IDMS, ITMS, CatalogSource, UpdateService will be generated in the workspace provided, under `/home/user/enterprise-content/working-dir/cluster-resources`

@@ -17,6 +17,7 @@ import (
 const (
 	d2mSubFolder string = "d2m"
 	m2dSubFolder string = "m2d"
+	m2mSubFolder string = "m2m"
 )
 
 type TestEnvironmentAddditional struct {
@@ -92,6 +93,16 @@ func TestIntegrationAdditional(t *testing.T) {
 	suite.runDisk2Mirror(t)
 
 }
+func TestIntegrationAdditionalM2M(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	suite := setupAdditionalTest(t)
+	defer suite.tearDown(t)
+
+	suite.runMirror2Mirror(t)
+
+}
 
 func (suite *TestEnvironmentAddditional) setupTestData(t *testing.T) {
 
@@ -132,7 +143,7 @@ func (suite *TestEnvironmentAddditional) runDisk2Mirror(t *testing.T) {
 	ocmirror := NewMirrorCmd(clog.New("trace"))
 	resultFolder := filepath.Join(suite.tempFolder, "additional", d2mSubFolder)
 	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55003", "--from", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55002", "--from", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
 	err := ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 
@@ -144,5 +155,30 @@ func (suite *TestEnvironmentAddditional) runDisk2Mirror(t *testing.T) {
 
 	// assert ITMS is generated
 	assert.FileExists(t, filepath.Join(suite.tempFolder, "additional", d2mSubFolder, "/working-dir/cluster-resources/itms-oc-mirror.yaml"))
+
+}
+
+func (suite *TestEnvironmentAddditional) runMirror2Mirror(t *testing.T) {
+	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
+	// create cobra command and run
+	ocmirror := NewMirrorCmd(clog.New("trace"))
+	// b := bytes.NewBufferString("")
+	// ocmirror.SetOut(b)
+	resultFolder := filepath.Join(suite.tempFolder, "additional", m2mSubFolder)
+	err := os.MkdirAll(resultFolder, 0755)
+	assert.NoError(t, err, "should not fail creating a temp folder for results")
+
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55003", "--workspace", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
+	err = ocmirror.Execute()
+	assert.NoError(t, err, "should not fail executing oc-mirror")
+
+	// assert additional image exists
+	destImgRef := strings.Replace(suite.additionalImageRefs[0], suite.sourceRegistryDomain, suite.destinationRegistryDomain+"/additional", -1)
+	exists, err := testutils.ImageExists(destImgRef)
+	assert.NoError(t, err)
+	assert.True(t, exists)
+
+	// assert ITMS is generated
+	assert.FileExists(t, filepath.Join(suite.tempFolder, "additional", m2mSubFolder, "/working-dir/cluster-resources/itms-oc-mirror.yaml"))
 
 }

@@ -27,6 +27,18 @@ type LocalStorageCollector struct {
 	Config           v1alpha2.ImageSetConfiguration
 	Opts             mirror.CopyOptions
 	LocalStorageFQDN string
+	destReg          string
+}
+
+func (o LocalStorageCollector) destinationRegistry() string {
+	if o.destReg == "" {
+		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+		} else {
+			o.destReg = o.LocalStorageFQDN
+		}
+	}
+	return o.destReg
 }
 
 // OperatorImageCollector - this looks into the operator index image
@@ -234,7 +246,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	o.Log.Info("images to copy (before duplicates) %d ", count)
 	var err error
 	// check the mode
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
@@ -310,16 +322,16 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			if imgSpec.Transport == ociProtocol {
 				src = ociProtocolTrimmed + imgSpec.Reference
 				if len(img.TargetName) > 0 {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetName}, "/")
+					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetName}, "/")
 				} else {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name + ":" + img.TargetTag}, "/")
+					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name + ":" + img.TargetTag}, "/")
 				}
 			} else {
 				src = imgSpec.ReferenceWithTransport
 				if imgSpec.IsImageByDigest() {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 				} else {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 				}
 			}
 
