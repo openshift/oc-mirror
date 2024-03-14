@@ -54,6 +54,12 @@ type GlobalOptions struct {
 	StrictArchiving    bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
 	SinceString        string        // Sets the date since which all content mirrored after is included in the archive
 	Since              time.Time     // Sets the date since which all content mirrored after is included in the archive
+	DryRun             bool          // If used will not execute the underlying functionality - used for verification
+	DeleteSource       string        // Used primarily for delete - denotes the origin source directory for initial mirror
+	DeleteDestination  string        // Used primarily for delete - denotes the remote registry to delete from
+	SkipCacheDelete    bool          // Used to skip deleting of local cache
+	SkipRegistryDelete bool          // Used to skip deleting of remote registry
+	DeleteID           string        // This flag is used to append to the artifacts created by the delete functionality
 }
 
 type CopyOptions struct {
@@ -82,6 +88,7 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
+	Function                 string // copy or delete (default is copy)
 }
 
 // deprecatedTLSVerifyOption represents a deprecated --tls-verify option,

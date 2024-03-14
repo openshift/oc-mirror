@@ -15,3 +15,15 @@ func completeReleaseArchitectures(cfg *v1alpha2.ImageSetConfiguration) {
 		cfg.Mirror.Platform.Architectures = []string{v1alpha2.DefaultPlatformArchitecture}
 	}
 }
+
+// Complete set default values in the DeleteImageSetConfiguration
+// when applicable
+func CompleteDelete(cfg *v1alpha2.DeleteImageSetConfiguration) {
+	completeReleaseArchitecturesDelete(cfg)
+}
+
+func completeReleaseArchitecturesDelete(cfg *v1alpha2.DeleteImageSetConfiguration) {
+	if len(cfg.Delete.Platform.Channels) != 0 && len(cfg.Delete.Platform.Architectures) == 0 {
+		cfg.Delete.Platform.Architectures = []string{v1alpha2.DefaultPlatformArchitecture}
+	}
+}
