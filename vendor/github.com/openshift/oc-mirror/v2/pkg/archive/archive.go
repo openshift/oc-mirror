@@ -31,7 +31,7 @@ type MirrorArchive struct {
 // cause the BuildArchive method to stop and return in error.
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
 
-	err := removePastArchives(destination)
+	err := RemovePastArchives(destination)
 	if err != nil {
 		logg.Warn("unable to delete past archives from %s: %v", destination, err)
 	}
@@ -190,7 +190,7 @@ func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 	return blobsInDiff, nil
 }
 
-func removePastArchives(destination string) error {
+func RemovePastArchives(destination string) error {
 	_, err := os.Stat(destination)
 	if err == nil {
 		files, err := filepath.Glob(filepath.Join(destination, "mirror_*.tar"))
