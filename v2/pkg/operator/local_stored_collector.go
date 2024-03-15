@@ -10,8 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
-
+	"github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -19,10 +18,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/otiai10/copy"
-)
-
-const (
-	hashTruncLen int = 12
 )
 
 type LocalStorageCollector struct {
@@ -58,10 +53,11 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	for _, op := range o.Config.Mirror.Operators {
 		// download the operator index image
 		o.Log.Info("copying operator image %v", op.Catalog)
-		hld := strings.Split(op.Catalog, "/")
-		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
-		cacheDir := strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir}, "/")
-		dir = strings.Join([]string{o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir}, "/")
+
+		imageIndexDir := strings.Replace(filepath.Base(op.Catalog), ":", "/", -1)
+		imageIndexDir = strings.Replace(imageIndexDir, "@sha256", "", -1)
+		cacheDir := filepath.Join(o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir)
+		dir = filepath.Join(o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir)
 
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
@@ -115,10 +111,27 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			return []v1alpha3.CopyImageSchema{}, err
 		}
 
-		//read the link to the manifest
+		var catalogImage string
+		if isMultiManifestIndex(*oci) && imgSpec.Transport == ociProtocol {
+			err = o.Manifest.ConvertIndexToSingleManifest(dir, oci)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+
+			oci, err = o.Manifest.GetImageIndex(dir)
+			if err != nil {
+				return []v1alpha3.CopyImageSchema{}, err
+			}
+
+			catalogImage = ociProtocol + dir
+		} else {
+			catalogImage = op.Catalog
+		}
+
 		if len(oci.Manifests) == 0 {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] no manifests found for %s ", op.Catalog)
 		}
+
 		validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[OperatorImageCollector] the digests seem to be incorrect for %s: %v ", op.Catalog, err)
@@ -197,13 +210,21 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				targetTag = ""
 				targetCatalog = op.TargetCatalog
 			} else {
-				targetTag = validDigest.Encoded()[:hashTruncLen]
+				targetTag = validDigest.Encoded()
 			}
 		}
-		relatedImages[imgSpec.ComponentName()+"."+imgSpec.Tag] = []v1alpha3.RelatedImage{
+
+		var componentName string
+		if imgSpec.Tag != "" {
+			componentName = imgSpec.ComponentName() + "." + imgSpec.Tag
+		} else {
+			componentName = imgSpec.ComponentName()
+		}
+
+		relatedImages[componentName] = []v1alpha3.RelatedImage{
 			{
 				Name:       catalogName,
-				Image:      op.Catalog,
+				Image:      catalogImage,
 				Type:       v1alpha2.TypeOperatorCatalog,
 				TargetTag:  targetTag,
 				TargetName: targetCatalog,
@@ -235,6 +256,10 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	return allImages, nil
 }
 
+func isMultiManifestIndex(oci v1alpha3.OCISchema) bool {
+	return len(oci.Manifests) > 1
+}
+
 func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
 	var result []v1alpha3.CopyImageSchema
 	for _, relatedImgs := range images {
@@ -250,8 +275,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			if imgSpec.Transport != ociProtocol {
 				if imgSpec.IsImageByDigest() {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 				} else {
 					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
@@ -298,7 +323,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			} else {
 				src = imgSpec.ReferenceWithTransport
 				if imgSpec.IsImageByDigest() {
-					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest[:hashTruncLen]}, "/")
+					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 				} else {
 					dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 				}

@@ -186,3 +186,7 @@ func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1al
 func (o MockManifest) ExtractLayers(filePath, name, label string) error {
 	return nil
 }
+
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+	return nil
+}

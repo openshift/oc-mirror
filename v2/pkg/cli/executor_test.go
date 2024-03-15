@@ -51,7 +51,7 @@ func TestExecutorMirroring(t *testing.T) {
 	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	opts := mirror.CopyOptions{
+	opts := &mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 		SrcImage:            srcOpts,
@@ -85,8 +85,8 @@ func TestExecutorMirroring(t *testing.T) {
 	nie.Is(fmt.Errorf("interrupt error"))
 
 	t.Run("Testing Executor : mirrorToDisk should pass", func(t *testing.T) {
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
 		archiver := MockArchiver{opts.Destination}
 
 		ex := &ExecutorSchema{
@@ -116,8 +116,8 @@ func TestExecutorMirroring(t *testing.T) {
 	})
 
 	t.Run("Testing Executor : diskToMirror should pass", func(t *testing.T) {
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
 		archiver := MockMirrorUnArchiver{}
 		cr := MockClusterResources{}
 		cfg.Mirror.Platform.Graph = true
@@ -150,8 +150,8 @@ func TestExecutorMirroring(t *testing.T) {
 	})
 
 	t.Run("Testing Executor : diskToMirror should fail", func(t *testing.T) {
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
-		batch := &Batch{Log: log, Config: cfg, Opts: opts}
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
 		archiver := MockMirrorUnArchiver{Fail: true}
 		cr := MockClusterResources{}
 		cfg.Mirror.Platform.Graph = true
@@ -209,7 +209,7 @@ func TestExecutorValidate(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -288,7 +288,7 @@ func TestExecutorComplete(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -359,7 +359,7 @@ func TestExecutorValidatePrepare(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -420,7 +420,7 @@ func TestExecutorCompletePrepare(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -468,7 +468,7 @@ func TestExecutorRunPrepare(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -500,7 +500,7 @@ func TestExecutorRunPrepare(t *testing.T) {
 			log.Error("imagesetconfig %v ", err)
 		}
 
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
 		mockMirror := Mirror{}
 
 		ex := &ExecutorSchema{
@@ -543,7 +543,7 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -577,7 +577,7 @@ func TestExecutorSetupWorkingDir(t *testing.T) {
 			WorkingDir:   "/root",
 		}
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global: global,
 		}
 
@@ -627,7 +627,7 @@ func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 			SecurePolicy: false,
 		}
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global: global,
 		}
 
@@ -668,7 +668,7 @@ func TestExecutorCollectAll(t *testing.T) {
 		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		opts := mirror.CopyOptions{
+		opts := &mirror.CopyOptions{
 			Global:              global,
 			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
 			SrcImage:            srcOpts,
@@ -680,8 +680,8 @@ func TestExecutorCollectAll(t *testing.T) {
 
 		// read the ImageSetConfiguration
 		cfg, _ := config.ReadConfig("../../tests/isc.yaml")
-		failCollector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: true}
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+		failCollector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: true}
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
 
 		mkdir := MockMakeDir{}
 

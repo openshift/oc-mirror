@@ -4,11 +4,15 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"path"
 	"slices"
 	"strings"
 
@@ -19,6 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/otiai10/copy"
 	"k8s.io/klog/v2"
 )
 
@@ -468,4 +473,41 @@ func addTypeToRelatedImages(bundle declcfg.Bundle) []v1alpha3.RelatedImage {
 		relatedImages = append(relatedImages, relateImage)
 	}
 	return relatedImages
+}
+
+// ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
+// this is necessary because containers/image does not support multi manifest indexes on the top level folder
+func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+	data, err := os.ReadFile(path.Join(dir, "index.json"))
+	if err != nil {
+		o.Log.Debug(err.Error())
+	}
+	hash := sha256.Sum256(data)
+	digest := hex.EncodeToString(hash[:])
+	size := len(data)
+	log.Println("Digest:", digest)
+	log.Println("Size:", size)
+
+	err = copy.Copy(path.Join(dir, "index.json"), path.Join(dir, "blobs", "sha256", digest))
+	if err != nil {
+		return err
+	}
+
+	idx := v1alpha3.OCISchema{
+		SchemaVersion: oci.SchemaVersion,
+		Manifests:     []v1alpha3.OCIManifest{{MediaType: oci.MediaType, Digest: "sha256:" + digest, Size: size}},
+	}
+
+	idxData, err := json.Marshal(idx)
+	if err != nil {
+		return err
+	}
+
+	// Write the JSON string to a file
+	err = os.WriteFile(path.Join(dir, "index.json"), idxData, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
