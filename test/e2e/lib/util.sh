@@ -51,7 +51,6 @@ function install_deps() {
   then
     pushd ${DATA_TMP}
     GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
-    mv ~/go/bin/crane $GOBIN/
     popd
     crane export registry:2 registry2.tar
     tar xvf registry2.tar bin/registry
@@ -119,7 +118,6 @@ function setup_reg() {
 # to the connected registry
 function prep_registry() {
   local CATALOGTAG="${1:?CATALOGTAG required}"
-  local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
   # Copy target catalog to connected registry
   crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
     --platform linux/${CATALOG_ARCH} \
@@ -187,6 +185,8 @@ function setup_operator_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_REGISTRY_NAMESPACE@'"$OCI_REGISTRY_NAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_ARCH@'"$CATALOG_ARCH"'@g' {} \;
 }
 
 # setup_helm_testdata will move required
@@ -216,7 +216,7 @@ function setup_helm_repository_testdata() {
   export HELM_REPOSITORY_CACHE=$DATA_DIR
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
-  curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
+  curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${CATALOG_ARCH} -o ./helm
   chmod +x ./helm
   ./helm repo add sbo https://redhat-developer.github.io/service-binding-operator-helm-chart/
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
@@ -242,6 +242,8 @@ function prepare_mirror_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_REGISTRY_NAMESPACE@'"$OCI_REGISTRY_NAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_CTLG@'"$OCI_CTLG"'@g' {} \;
 }
 
 function prepare_oci_testdata() {

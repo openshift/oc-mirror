@@ -90,8 +90,8 @@ function check_bundles() {
 # check_images_exists ensures the image(s) is found and pullable.
 function check_image_exists() {
   local expected_image="${1:?expected image required}"
-  local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
-   if ! crane digest --insecure --platform linux/${CATALOG_ARCH} $expected_image; then
+  local exists_arch="${2:-${CATALOG_ARCH}}"
+   if ! crane digest --insecure --platform linux/${exists_arch} $expected_image; then
       echo "image $expected_image not pushed to registry"
       return 1
     fi
@@ -111,7 +111,6 @@ function check_sequence_number() {
 function check_image_removed() {
    local removed_image="${1:?removed image required}"
    set -e
-   local CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
    output=$(crane digest --platform linux/${CATALOG_ARCH} --insecure $removed_image 2>&1) && returncode=$? || returncode=$?
    if [[ $returncode != 1 ]]; then
       echo "image $removed_image still exists in registry"

@@ -80,13 +80,13 @@ function pruned_catalogs() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 
     workflow_diff imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 }
 
 # Test heads-only mode with catalogs that prune with a custom target
@@ -96,13 +96,13 @@ function pruned_catalogs_with_target() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 
     workflow_diff imageset-config-headsonly-newtarget.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGORG}/${TARGET_CATALOG_NAME}:${TARGET_CATALOG_TAG} \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 }
 
 # Test heads-only mode with catalogs that prune bundles
@@ -111,13 +111,13 @@ function pruned_catalogs_with_include() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 
     workflow_diff imageset-config-filter-multi-prune.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 }
 
 # Test heads-only mode with catalogs that prune bundles
@@ -126,13 +126,13 @@ function pruned_catalogs_mirror_to_mirror() {
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.1.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 
     workflow_mirror2mirror imageset-config-headsonly.yaml "test-catalog-prune-diff" -c="--source-use-http --source-skip-tls"
     check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest \
     "bar.v0.1.0 foo.v0.2.0" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
-    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:86fa1b12"
+    check_image_removed "localhost.localdomain:${REGISTRY_DISCONN_PORT}/${CATALOGNAMESPACE}:${CATALOG_ID}"
 }
 
 # Test registry backend
@@ -228,7 +228,7 @@ function skip_deps {
 # Test local helm chart
 function helm_local {
     workflow_helm imageset-config-helm.yaml podinfo-6.0.0.tgz
-    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0"
+    check_image_exists "localhost.localdomain:${REGISTRY_DISCONN_PORT}/stefanprodan/podinfo:6.0.0" "amd64"
 }
 
 
@@ -256,7 +256,7 @@ function no_updates_exist {
 function m2m_oci_catalog {
     rm -fr olm_artifacts
     workflow_m2m_oci_catalog imageset-config-oci-mirror.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--dest-skip-tls --oci-insecure-signature-policy"
-    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/redhatgov/oc-mirror-dev:test-catalog-latest \
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${OCI_REGISTRY_NAMESPACE}/oc-mirror-dev:test-catalog-latest \
     "baz.v1.0.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
@@ -279,7 +279,7 @@ function m2m_release_with_oci_catalog {
     workflow_oci_mirror_all imageset-config-oci-mirror-all.yaml "docker://localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest" -c="--dest-skip-tls --oci-insecure-signature-policy"
 
     # use crane digest to verify
-    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/redhatgov/oc-mirror-dev:bar-v0.1.0
+    crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/${OCI_REGISTRY_NAMESPACE}/oc-mirror-dev:bar-v0.1.0
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/openshift/release-images:alpine-x86_64
     crane digest --insecure localhost.localdomain:${REGISTRY_DISCONN_PORT}/test-catalog-latest/openshift/release:alpine-x86_64-alpime
 
@@ -294,7 +294,7 @@ function m2m_release_with_oci_catalog {
 function m2d2m_oci_catalog() {
     rm -fr olm_artifacts
     workflow_m2d2m_oci_catalog imageset-config-oci-mirror.yaml "localhost.localdomain:${REGISTRY_DISCONN_PORT}" -c="--source-use-http  --source-skip-tls"
-    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/redhatgov/oc-mirror-dev:test-catalog-latest \
+    check_bundles localhost.localdomain:${REGISTRY_DISCONN_PORT}/${OCI_REGISTRY_NAMESPACE}/oc-mirror-dev:test-catalog-latest \
     "baz.v1.0.1" \
     localhost.localdomain:${REGISTRY_DISCONN_PORT}
 }
