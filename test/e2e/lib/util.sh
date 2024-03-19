@@ -216,7 +216,12 @@ function setup_helm_repository_testdata() {
   export HELM_REPOSITORY_CACHE=$DATA_DIR
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
-  curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${CATALOG_ARCH} -o ./helm
+  if [ "${CATALOG_ARCH}" == "x86_64" ]
+  then
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
+  else
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${CATALOG_ARCH} -o ./helm
+  fi
   chmod +x ./helm
   ./helm repo add sbo https://redhat-developer.github.io/service-binding-operator-helm-chart/
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"

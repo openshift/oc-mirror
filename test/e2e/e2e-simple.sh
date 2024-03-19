@@ -30,7 +30,8 @@ OCI_REGISTRY_NAMESPACE="${ENV_OCI_REGISTRY_NAMESPACE:-redhatgov}"
 CATALOG_ARCH="$(arch | sed 's|aarch64|arm64|g')"
 if [ "${CATALOG_ARCH}" == "x86_64" ]
 then
-    OCI_CTLG_PATH="oc-mirror-dev"
+    OCI_CTLG="oc-mirror-dev"
+    OCI_CTLG_PATH="oc-mirror-dev.tgz"
 else
     OCI_CTLG="oc-mirror-${CATALOG_ARCH}-dev"
     OCI_CTLG_PATH="oc-mirror-${CATALOG_ARCH}-dev.tgz"
