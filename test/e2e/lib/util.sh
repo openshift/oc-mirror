@@ -117,15 +117,14 @@ function setup_reg() {
 # prep_registry will copy the needed catalog image
 # to the connected registry
 function prep_registry() {
-   local CATALOGTAG="${1:?CATALOGTAG required}"
+  local CATALOGTAG="${1:?CATALOGTAG required}"
   # Copy target catalog to connected registry
-    crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
+  crane copy --insecure ${CATALOGREGISTRY}/${CATALOGNAMESPACE}:${CATALOGTAG} \
+    --platform linux/${CATALOG_ARCH} \
     localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest
 
-    CATALOGDIGEST=$(crane digest --insecure localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
+  CATALOGDIGEST=$(crane digest --insecure --platform linux/${CATALOG_ARCH} localhost.localdomain:${REGISTRY_CONN_PORT}/${CATALOGNAMESPACE}:test-catalog-latest)
 }
-
-
 
 # parse_args will parse common arguments
 # for each workflow function
@@ -186,6 +185,8 @@ function setup_operator_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_REGISTRY_NAMESPACE@'"$OCI_REGISTRY_NAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@CATALOG_ARCH@'"$CATALOG_ARCH"'@g' {} \;
 }
 
 # setup_helm_testdata will move required
@@ -215,7 +216,12 @@ function setup_helm_repository_testdata() {
   export HELM_REPOSITORY_CACHE=$DATA_DIR
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
-  curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
+  if [ "${CATALOG_ARCH}" == "x86_64" ]
+  then
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
+  else
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${CATALOG_ARCH} -o ./helm
+  fi
   chmod +x ./helm
   ./helm repo add sbo https://redhat-developer.github.io/service-binding-operator-helm-chart/
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
@@ -241,6 +247,8 @@ function prepare_mirror_testdata() {
   find "$DATA_DIR" -type f -exec sed -i -E 's@TARGET_CATALOG_TAG@'"$TARGET_CATALOG_TAG"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@DATA_TMP@'"$DATA_DIR"'@g' {} \;
   find "$DATA_DIR" -type f -exec sed -i -E 's@MIRROR_OCI_DIR@'"$MIRROR_OCI_DIR"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_REGISTRY_NAMESPACE@'"$OCI_REGISTRY_NAMESPACE"'@g' {} \;
+  find "$DATA_DIR" -type f -exec sed -i -E 's@OCI_CTLG@'"$OCI_CTLG"'@g' {} \;
 }
 
 function prepare_oci_testdata() {
