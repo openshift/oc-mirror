@@ -151,16 +151,6 @@ func (o *MirrorOptions) buildGraphImage(ctx context.Context, srcSignatureDir str
 
 // downloadsGraphData will download the current Cincinnati graph data
 func downloadGraphData(ctx context.Context, dir string) error {
-	// TODO(jpower432): It would be helpful to validate
-	// the source of this downloaded file before processing
-	// it further
-	graphArchive := filepath.Join(dir, outputFile)
-	out, err := os.Create(filepath.Clean(graphArchive))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
 	req, err := http.NewRequest("GET", graphURL, nil)
 	if err != nil {
 		return err
@@ -186,10 +176,21 @@ func downloadGraphData(ctx context.Context, dir string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		klog.Errorf("call to Cincinatti API returned with status HTTP %s", resp.Status)
 		return fmt.Errorf("unexpected HTTP status: %s", resp.Status)
 	}
 
-	_, err = io.Copy(out, resp.Body)
+	// TODO(jpower432): It would be helpful to validate
+	// the source of this downloaded file before processing
+	// it further
+	graphArchive := filepath.Join(dir, outputFile)
+	out, err := os.Create(filepath.Clean(graphArchive))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	bytesWritten, err := io.Copy(out, resp.Body)
+	klog.V(5).Infof("HTTP body for request to Cincinnati API is %d bytes, and was written to %s", bytesWritten, graphArchive)
 	return err
 }
 

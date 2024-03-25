@@ -143,6 +143,7 @@ func (o *MirrorOptions) run(
 			if err := downloadGraphData(ctx, releaseDir); err != nil {
 				return mmappings, err
 			}
+			klog.V(5).Infof("graph data download complete. Downloaded to %s", releaseDir)
 		}
 	}
 
