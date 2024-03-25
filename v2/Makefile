@@ -24,7 +24,13 @@ verify:
 
 test:
 	mkdir -p tests/results
-	go test -v -coverprofile=tests/results/cover.out ./...
+	go test -v -short -coverprofile=tests/results/cover.out ./...
+
+test-integration:
+	mkdir -p tests/results-integration
+	go test -coverprofile=tests/results-integration/cover-additional.out  -race -count=1 ./... -run TestIntegrationAdditional
+	go test -coverprofile=tests/results-integration/cover-release.out  -race -count=1 ./... -run TestIntegrationRelease
+
 
 cover:
 	go tool cover -html=tests/results/cover.out -o tests/results/cover.html

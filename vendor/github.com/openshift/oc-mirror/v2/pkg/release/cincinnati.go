@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	pk = `-----BEGIN PGP PUBLIC KEY BLOCK-----
+	defaultPK = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBErgSTsBEACh2A4b0O9t+vzC9VrVtL1AKvUWi9OPCjkvR7Xd8DtJxeeMZ5eF
 0HtzIG58qDRybwUe89FZprB1ffuUKzdE+HcL3FbNWSSOXVjZIersdXyH3NvnLLLF

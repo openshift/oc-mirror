@@ -69,7 +69,7 @@ test-unit:
 #$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
 	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
 	mkdir -p v2/tests/results
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results/cover.out -race -count=1 ./pkg/...
+	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -short -coverprofile=tests/results/cover.out -race -count=1 ./pkg/...
 .PHONY: test-unit
 
 v2cover:
@@ -77,6 +77,9 @@ v2cover:
 
 test-e2e: build
 	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror
+	mkdir -p v2/tests/results-integration
+	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditional
+	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationRelease
 .PHONY: test-e2e
 
 test-integration: hack-build

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -774,7 +773,7 @@ func (o Mirror) Check(ctx context.Context, dest string, opts *mirror.CopyOptions
 	return true, nil
 }
 
-func (o Mirror) Run(context.Context, string, string, mirror.Mode, *mirror.CopyOptions, bufio.Writer) error {
+func (o Mirror) Run(context.Context, string, string, mirror.Mode, *mirror.CopyOptions) error {
 	return nil
 }
 

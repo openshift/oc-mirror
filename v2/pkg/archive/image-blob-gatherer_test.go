@@ -1,11 +1,9 @@
 package archive
 
 import (
-	"bufio"
 	"context"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -38,6 +36,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		RemoveSignatures:    true,
 	}
 	// Set up a fake registry.
 	s := httptest.NewServer(registry.New())
@@ -54,7 +53,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 	src := "dir://" + imageAbsolutePath
 	dest := "docker://" + u.Host + "/test:latest"
 
-	err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts, *bufio.NewWriter(os.Stdout))
+	err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts)
 	if err != nil {
 		t.Fatal(err)
 	}

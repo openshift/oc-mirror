@@ -1,0 +1,73 @@
+{
+  "kind": "ImageStream",
+  "apiVersion": "image.openshift.io/v1",
+  "metadata": {
+    "name": "4.15.0",
+    "creationTimestamp": "2023-02-12T18:29:52Z",
+    "annotations": {
+      "release.openshift.io/from-image-stream": "ocp/4.15-art-latest-2023-02-09-095104",
+      "release.openshift.io/from-release": "registry.ci.openshift.org/ocp/release:4.15.0-0.nightly-2023-02-09-095104"
+    }
+  },
+  "spec": {
+    "lookupPolicy": {
+      "local": false
+    },
+    "tags": [
+      {
+        "name": "component1",
+        "annotations": {
+          "io.openshift.build.commit.id": "40936e7a9159189889c637fa1631f8cbdd5c3c4f",
+          "io.openshift.build.commit.ref": "",
+          "io.openshift.build.source-location": "https://github.com/openshift/assisted-service"
+        },
+        "from": {
+          "kind": "DockerImage",
+          "name": "{{.Ref1}}"
+        },
+        "generation": null,
+        "importPolicy": {},
+        "referencePolicy": {
+          "type": ""
+        }
+      },
+      {
+        "name": "component2",
+        "annotations": {
+          "io.openshift.build.commit.id": "0f14c3d16cb089b55ca3658038e83bc0bcd01f47",
+          "io.openshift.build.commit.ref": "",
+          "io.openshift.build.source-location": "https://github.com/openshift/assisted-installer"
+        },
+        "from": {
+          "kind": "DockerImage",
+          "name": "{{.Ref2}}"
+        },
+        "generation": null,
+        "importPolicy": {},
+        "referencePolicy": {
+          "type": ""
+        }
+      },
+      {
+        "name": "component3",
+        "annotations": {
+          "io.openshift.build.commit.id": "271a6f48486db5702d3ebc4b644b74722319d49d",
+          "io.openshift.build.commit.ref": "",
+          "io.openshift.build.source-location": "https://github.com/openshift/assisted-installer-agent"
+        },
+        "from": {
+          "kind": "DockerImage",
+          "name": "{{.Ref3}}"
+        },
+        "generation": null,
+        "importPolicy": {},
+        "referencePolicy": {
+          "type": ""
+        }
+      }      
+    ]
+  },
+  "status": {
+    "dockerImageRepository": ""
+  }
+}

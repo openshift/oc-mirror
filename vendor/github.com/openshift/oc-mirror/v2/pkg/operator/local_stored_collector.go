@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -42,14 +41,10 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		dir         string
 		catalogName string
 	)
+	o.Log.Debug("multiArch=%v for operator collections", o.Opts.MultiArch)
+
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 
-	f, err := os.Create(filepath.Join(o.LogsDir, logsFile))
-	if err != nil {
-		o.Log.Error(errMsg, err)
-	}
-	writer := bufio.NewWriter(f)
-	defer f.Close()
 	for _, op := range o.Config.Mirror.Operators {
 		// download the operator index image
 		o.Log.Info("copying operator image %v", op.Catalog)
@@ -89,8 +84,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				}
 				src := dockerProtocol + op.Catalog
 				dest := ociProtocolTrimmed + dir
-				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts, *writer)
-				writer.Flush()
+				err = o.Mirror.Run(ctx, src, dest, "copy", &o.Opts)
 				if err != nil {
 					o.Log.Error(errMsg, err)
 				}
@@ -238,7 +232,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		count = count + len(v)
 	}
 	o.Log.Info("images to copy (before duplicates) %d ", count)
-
+	var err error
 	// check the mode
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)

@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -155,12 +156,16 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 			switch header.Typeflag {
 			case tar.TypeDir:
 				if header.Name != "./" {
-					if err := os.MkdirAll(path+"/"+header.Name, 0755); err != nil {
+					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
 						return fmt.Errorf("untar: Mkdir() failed: %v", err)
 					}
 				}
 			case tar.TypeReg:
-				outFile, err := os.Create(path + "/" + header.Name)
+				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
+				if err != nil {
+					return fmt.Errorf("untar: Create() failed: %v", err)
+				}
+				outFile, err := os.Create(filepath.Join(path, header.Name))
 				if err != nil {
 					return fmt.Errorf("untar: Create() failed: %v", err)
 				}

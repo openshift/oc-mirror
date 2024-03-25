@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,14 +12,23 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/docker/distribution/manifest"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/openshift/oc-mirror/v2/pkg/image"
+)
+
+const (
+	GraphMediaType = "application/json"
 )
 
 // WriteTestImage will use go-containerregistry to push a test image to
@@ -32,29 +42,9 @@ func WriteTestImage(testServer *httptest.Server, dir string) (string, error) {
 		"/testfile": []byte("test contents contents"),
 	}
 	targetRef := fmt.Sprintf("%s/bar:foo", u.Host)
-	tag, err := name.NewTag(targetRef)
+	_, err = buildAndPushFakeImage(c, targetRef, dir)
 	if err != nil {
 		return "", err
-	}
-	i, _ := crane.Image(c)
-	if err := crane.Push(i, tag.String()); err != nil {
-		return "", err
-	}
-	if dir != "" {
-		lp, err := layout.Write(dir, empty.Index)
-		if err != nil {
-			return "", err
-		}
-		if err := lp.AppendImage(i); err != nil {
-			return "", err
-		}
-		idx, err := lp.ImageIndex()
-		if err != nil {
-			return "", err
-		}
-		if err := remote.WriteIndex(tag, idx); err != nil {
-			return "", err
-		}
 	}
 	return targetRef, nil
 }
@@ -121,4 +111,263 @@ func LocalMirrorFromFiles(source string, destination string) error {
 		return nil
 	})
 	return err
+}
+
+func CreateRegistry() *httptest.Server {
+	// Set up a fake registry.
+	s := httptest.NewServer(registry.New())
+
+	return s
+}
+
+func buildAndPushFakeImage(content map[string][]byte, imgRef string, dir string) (string, error) {
+	var digest v1.Hash
+	tag, err := name.NewTag(imgRef)
+	if err != nil {
+		return "", err
+	}
+	i, _ := crane.Image(content)
+	if err := crane.Push(i, tag.String()); err != nil {
+		return "", err
+	}
+	if dir != "" {
+		lp, err := layout.Write(dir, empty.Index)
+		if err != nil {
+			return "", err
+		}
+		if err := lp.AppendImage(i); err != nil {
+			return "", err
+		}
+		idx, err := lp.ImageIndex()
+		if err != nil {
+			return "", err
+		}
+		if err := remote.WriteIndex(tag, idx); err != nil {
+			return "", err
+		}
+		digest, err = idx.Digest()
+		if err != nil {
+			return "", err
+		}
+	} else {
+		digest, err = i.Digest()
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return digest.String(), nil
+}
+
+// WriteTestImage will use go-containerregistry to push a test image to
+// an httptest.Server and will write the image to an OCI layout if dir is not "".
+func GenerateFakeImage(content, imgRef string, tempFolder string) (string, error) {
+	imgSpec, err := image.ParseRef(imgRef)
+	if err != nil {
+		return "", err
+	}
+	sanitizedTagOrDigest := imgSpec.Tag
+	if imgSpec.Tag == "" {
+		sanitizedTagOrDigest = imgSpec.Digest
+	} else {
+		sanitizedTagOrDigest = strings.ReplaceAll(sanitizedTagOrDigest, ".", "-")
+	}
+
+	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
+	err = os.MkdirAll(indexFolder, 0755)
+	if err != nil {
+		return "", err
+	}
+	c := map[string][]byte{
+		"/testfile": []byte("test contents " + content),
+	}
+	return buildAndPushFakeImage(c, imgRef, indexFolder)
+}
+
+func ByteArrayFromTemplate(templatePath string, tokens []string) ([]byte, error) {
+	exBytes := []byte{}
+	buf := bytes.NewBuffer(exBytes)
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return []byte{}, err
+	}
+	err = tmpl.Execute(buf, tokens)
+
+	if err != nil {
+		return []byte{}, err
+	}
+	return buf.Bytes(), nil
+
+}
+
+func ImgRefsFromTemplate(filePath, templatePath string, token releaseContents) error {
+	exBytes := []byte{}
+	buf := bytes.NewBuffer(exBytes)
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return err
+	}
+	err = tmpl.Execute(buf, token)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, buf.Bytes(), 0644)
+
+}
+func FileFromTemplate(filePath, templatePath string, tokens []string) error {
+
+	bytes, err := ByteArrayFromTemplate(templatePath, tokens)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("registries.conf contents: %v", string(bytes))
+	return os.WriteFile(filePath, bytes, 0644)
+}
+
+func ImageExists(imgRef string) (bool, error) {
+	desc, err := crane.Head(imgRef)
+	if err != nil {
+		return false, err
+	}
+	if desc != nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+type releaseContents struct {
+	Ref1 string
+	Ref2 string
+	Ref3 string
+}
+
+func GenerateReleaseAndComponents(toRegistry, tempFolder string, templatePath string) (string, []string, error) {
+	contents := releaseContents{}
+	relatedImages := []string{}
+	// generating a fake release with 3 components
+	component1 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component1"
+	digest1, err := GenerateFakeImage("component1", component1, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref1 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest1
+	relatedImages = append(relatedImages, contents.Ref1)
+
+	component2 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component2"
+	digest2, err := GenerateFakeImage("component2", component2, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref2 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest2
+	relatedImages = append(relatedImages, contents.Ref2)
+
+	component3 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component3"
+	digest3, err := GenerateFakeImage("component3", component3, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref3 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest3
+	relatedImages = append(relatedImages, contents.Ref3)
+
+	digest, err := GenerateFakeRelease(contents, toRegistry+"/openshift-release-dev/ocp-release:4.15.0-x86_64", tempFolder, templatePath)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	relatedImages = append(relatedImages, toRegistry+"/openshift-release-dev/ocp-release@"+digest)
+	return digest, relatedImages, nil
+}
+
+func GenerateFakeRelease(imageRefs releaseContents, releaseImgRef, tempFolder string, templateFile string) (string, error) {
+	err := ImgRefsFromTemplate(tempFolder+"/image-references", templateFile, imageRefs)
+	if err != nil {
+		return "", err
+	}
+	imgSpec, err := image.ParseRef(releaseImgRef)
+	if err != nil {
+		return "", err
+	}
+	sanitizedTagOrDigest := imgSpec.Tag
+	if imgSpec.Tag == "" {
+		sanitizedTagOrDigest = imgSpec.Digest
+	} else {
+		sanitizedTagOrDigest = strings.ReplaceAll(sanitizedTagOrDigest, ".", "-")
+	}
+
+	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
+	err = os.MkdirAll(indexFolder, 0755)
+	if err != nil {
+		return "", err
+	}
+
+	imageRefsBytes, err := os.ReadFile(tempFolder + "/image-references")
+	if err != nil {
+		return "", err
+	}
+	releaseMetaBytes, err := os.ReadFile("../../internal/e2e/templates/release_templates/release-metadata")
+	if err != nil {
+		return "", err
+	}
+	c := map[string][]byte{
+		"/release-manifests/image-references": imageRefsBytes,
+		"/release-manifests/release-metadata": releaseMetaBytes,
+	}
+	return buildAndPushFakeImage(c, releaseImgRef, indexFolder)
+}
+
+type CincinnatiMock struct {
+	Templates map[string]string
+	Tokens    []string
+}
+
+func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	mtype := r.Header.Get("Accept")
+	if mtype != GraphMediaType {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
+
+	keys, ok := r.URL.Query()["channel"]
+	if !ok {
+		// t.Fail()
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	ch := keys[len(keys)-1]
+
+	responseTemplate, ok := c.Templates[ch]
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	responseBytes, err := ByteArrayFromTemplate(responseTemplate, c.Tokens)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(responseBytes)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+// GetRootlessUID returns the UID of the user in the parent userNS
+func getRootlessUID() int {
+	// not sure if this will work. this is taken from github.com/containers/storage/pkg/unshare/unshare_linux.go
+	// where they use c.getenv...
+	uidEnv := os.Getenv("_CONTAINERS_ROOTLESS_UID")
+	if uidEnv != "" {
+		u, _ := strconv.Atoi(uidEnv)
+		return u
+	}
+	return os.Getuid()
 }

@@ -1,0 +1,23 @@
+{{ range . }}
+{
+  "nodes": [
+  {
+    "version": "4.15.0",
+    "payload": "{{ . }}"
+  },
+  {
+    "version": "4.2.0-2",
+    "payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-2"
+  },
+  {
+    "version": "4.2.0-3",
+    "payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-3"
+  },
+  {
+    "version": "4.2.0-5",
+    "payload": "quay.io/openshift-release-dev/ocp-release:4.2.0-5"
+  }
+  ],
+  "edges": [[0,2],[1,2],[2,3]]
+}
+  {{ end }}

@@ -1,7 +1,6 @@
 package batch
 
 import (
-	"bufio"
 	"context"
 	"os"
 	"testing"
@@ -65,7 +64,7 @@ func TestWorker(t *testing.T) {
 type Mirror struct{}
 type Manifest struct{}
 
-func (o Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, stdout bufio.Writer) error {
+func (o Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
 	return nil
 }
 

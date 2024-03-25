@@ -1,7 +1,6 @@
 package release
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -348,7 +347,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions, out bufio.Writer) error {
+func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
 	if o.Fail {
 		return fmt.Errorf("forced mirror run fail")
 	}

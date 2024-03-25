@@ -29,6 +29,8 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	var allImages []v1alpha3.CopyImageSchema
 
+	o.Log.Debug("multiArch=%v for additional images collections", o.Opts.MultiArch)
+
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
