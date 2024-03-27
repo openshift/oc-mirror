@@ -190,7 +190,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
-	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DON'T USE it. V2 is still under development and it is not production ready.")
+	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "// If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.")
@@ -283,7 +283,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	md := mirror.NewMirrorDelete()
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, md)
-	o.Config = cfg
+	o.Config = cfg.(v1alpha2.ImageSetConfiguration)
 
 	// logic to check mode
 	var rootDir string

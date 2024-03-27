@@ -58,8 +58,8 @@ type GlobalOptions struct {
 	DeleteSource       string        // Used primarily for delete - denotes the origin source directory for initial mirror
 	DeleteDestination  string        // Used primarily for delete - denotes the remote registry to delete from
 	SkipCacheDelete    bool          // Used to skip deleting of local cache
-	SkipRegistryDelete bool          // Used to skip deleting of remote registry
 	DeleteID           string        // This flag is used to append to the artifacts created by the delete functionality
+	DeleteYaml         string        // This flag will use the contents of the indicated yaml as basis to delete the local cache and remote registry
 }
 
 type CopyOptions struct {

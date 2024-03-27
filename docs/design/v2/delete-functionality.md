@@ -1,20 +1,26 @@
-# Image Delete Fucntionality in V2
+# Image Delete Funaionality in V2
+
 
 ## Overview
 
 In V1, pruning (or deletion of images) is set automatically, if a specific index (release, catalog) or additionalImage
-is to be deleted, the current workflow would be to use the same "StorageConfig" setting and omit  the previously mirrored images, the pruning logic will find the "diffrenece"
+is to be deleted, the current workflow would be to use the same "StorageConfig" setting and omit  the previously mirrored images, the pruning logic will find the "difference"
 and prune the images accordingly.
 
-This has its pros and cons, but due to the large amount of bugs been filed it we decided to change the behaviour in v2.
+This has its pros and cons, but due to the large amount of bugs been filed, we decided to change the behaviour in v2.
 
-In v2 a new kind called "DeleteImageSetConfig" has been introduced, this is used to configure the deletion of images, avoiding using the
-current ImageSetConfig to accidentally delete wanted (deployed) images.
+In v2 a new kind called "DeleteImageSetConfiguration" has been introduced, this is used to configure the deletion of images, to avoid using 
+an ImageSetConfig, accidentally deleting wanted (deployed) images.
 
-A new oc-mirror delete sub command is now available to execute the delete workflow with the DeleteImageSetConfig input.
+A new oc-mirror delete sub command is now available to execute the delete workflow with the DeleteImageSetConfiguration input.
 
 This functionality is able to work in a complete "air-gapped" (disconnected) environment, providing that the images have been
 previously mirrored (i.e the local cache and remote registry know about the images being deleted).
+
+The delete functionality is split into 2 stages:
+
+- The first stage is to create a delete yaml file using the --dry-run flag, this file is used to validate the images/blobs that will be deleted.
+- The second stage is to use the delete yaml file (once validated) to actually perform a local cache and remote registry delete.
 
 
 ## Usage
@@ -49,17 +55,29 @@ to intentionaly delete the manifests and blobs (in cache only).
 ### Command line examples
 
 ```bash
-# validate using --dry-run
-oc-mirror delete --config delete-image-set-config.yaml --source file://<previously-mirrored-work-folder> --destination <remote-registry> --v2 --dry-run
+# stage 1
+# -------
 
-# use delete-id 
-oc-mirror delete --config delete-image-set-config.yaml --source file://<previously-mirrored-work-folder> --destination <remote-registry> --v2 --dry-run --delete-id 4.15
+# create delete yaml file for delete phase using --dry-run
+oc-mirror delete --config delete-image-set-config.yaml --source file://<previously-mirrored-work-folder> --v2 --dry-run
 
+# use delete-id (usefull for comparing 2 versions of the delete yaml) 
+oc-mirror delete --config delete-image-set-config-v4-15.yaml --source file://<previously-mirrored-work-folder> --v2 --dry-run --delete-id v4.15
+
+
+# stage 2
+# -------
+
+# once the dry-run has executed succesfully use the created delete yaml to delete the images from the remote registry
+# the default setting for the delete-yaml-file is <previously-mirrored-work-folder>/delete/delete-images.yaml
 # delete remote registry only 
-oc-mirror delete --config delete-image-set-config.yaml --source file://<previously-mirrored-work-folder> --destination <remote-registry> --v2 --skip-cache-delete 
+oc-mirror delete --config delete-image-set-config --source file://<previously-mirrored-work-folder> --destination docker://<remote-registry> --v2 --skip-cache-delete 
+
+# delete remote registry only with yaml file specified
+oc-mirror delete --config delete-image-set-config --delete-yaml-file <path-to-handcrafted-or-updated-delete.yaml> --source file://<previously-mirrored-work-folder> --destination docker://<remote-registry> --v2 --skip-cache-delete 
 
 # delete remote registry and local cache 
-oc-mirror delete --config delete-image-set-config.yaml --source file://<previously-mirrored-work-folder> --destination <remote-registry> --v2  
+oc-mirror delete --config delete-imagese-config --source file://<previously-mirrored-work-folder> --destination docker://<remote-registry> --v2  
 
 ```
 
@@ -68,14 +86,15 @@ oc-mirror delete --config delete-image-set-config.yaml --source file://<previous
 The flags --source and --destination have intentionlly been introduced as to avoid any similarity with the current oc-mirror workflow,
 ensuring no accidental deletion of images.
 
-The --source flag must have the file:// prefix and with the path to the previosly mirrored images, this flag is mandatory.
+The --source flag must have the `file://` prefix and with the path to the previosly mirrored images, this flag is mandatory when using the --dry-run flag.
 
-The --destination flag is the remote registry to delete the images from, this flag is optional.
+The --destination flag is the remote registry to delete the images from, this flag is optional. It is used in stage 2 and must have a `docker://` prefix
 
-The --dry-run flag is used to simulate the deletion, without actually deleting the images, this flag is optional.
+The --dry-run flag is used to create the delete yaml files in stage 1.
+The file created can be found in the <previously-mirrored-work-folder>/delete/delete-images.yaml 
 
-In all cases for v2 both output and delete-imageset-config.yaml files are created (located in the directory defined by the --source flag
-as bash<directory/delete/delete-images.yaml>)
+The --delete-id flag is used to create files in the delete folder with an id for version comparison and validation, in the form of <previously-mirrored-work-folder>/delete/delete-images-<delete-id>.yaml
+
 
 Generated delete yaml, an actual example for the ubi8 image deletion:
 
@@ -102,13 +121,15 @@ items:
   - sha256:e3649b5f99e0fcf52b3d19c3b201484e78f19873fb98a5b5a4b3a4d64c75ae78
 ```
 
-**N.B.  A final note about the remote registry deletion, only manifests are deleted (no blobs), it's out of scope for oc-mirror
+**N.B.  A note about the remote registry deletion, only manifests are deleted (no blobs), it's out of scope for oc-mirror
 to make an informed decision about deleting blobs on the remote-registry due to potential impact on dependencies etc.
-The task of removing blobs will be left to the system administrator for the remote registry.**
+The task of removing blobs for a remote registry will be left to the system administrator.**
 
 ### Troubleshooting and Recovery
 
-Its highly recommended to use the --dry-run flag to ensure all the correct images to be deleted are in the list for validation.
+The delete functionality is split into 2 stages (as mentioned in the overview), a typical workflow would be to use the --dry-run flag first, this will create the delete yaml file, this file can be used to validate the images/blobs that will be deleted.
+
+We highly recommend making backup of each tar.gz file that gets created in the <work-directory> folder. You could also create a tar.gz using the --since flag (see the oc-mirror command help for more information).
 
 Use the --delete-id flag to create various files in the delete folder (artifacts created by the delete functionality) for version comparison and validation.
 

@@ -38,8 +38,8 @@ type DeleteImageSetConfiguration struct {
 }
 
 // DeleteImageSetConfigurationSpec defines the global configuration for a delete imageset.
-// This is to ensure a clean differentiation between delet and mirror
-// and is designed t oavoid accidental deletion of images (when using imagesetconfig)
+// This is to ensure a clean differentiation between delete and mirror
+// and is designed to avoid accidental deletion of images (when using imagesetconfig)
 type DeleteImageSetConfigurationSpec struct {
 	// Delete defines the configuration for content types within the imageset.
 	Delete Delete `json:"delete"`

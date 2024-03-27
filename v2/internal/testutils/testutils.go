@@ -360,6 +360,7 @@ func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// nolint: unused
 // GetRootlessUID returns the UID of the user in the parent userNS
 func getRootlessUID() int {
 	// not sure if this will work. this is taken from github.com/containers/storage/pkg/unshare/unshare_linux.go

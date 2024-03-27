@@ -226,12 +226,12 @@ type SignatureContentSchema struct {
 
 // DeleteImageList
 type DeleteImageList struct {
-	Kind       string        `json:"kind"`
-	APIVersion string        `json:"apiVersion"`
-	Items      []DeleteItems `json:"items"`
+	Kind       string       `json:"kind"`
+	APIVersion string       `json:"apiVersion"`
+	Items      []DeleteItem `json:"items"`
 }
 
-type DeleteItems struct {
+type DeleteItem struct {
 	ImageName      string   `json:"imageName"`
 	ImageReference string   `json:"imageReference"`
 	RelatedBlobs   []string `json:"relatedBlobs"`

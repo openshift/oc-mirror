@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -166,12 +167,12 @@ func TestExecutorRunPrepare(t *testing.T) {
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		// read the ImageSetConfiguration
-		cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+		cfg, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 		if err != nil {
 			log.Error("imagesetconfig %v ", err)
 		}
 
-		collector := &Collector{Log: log, Config: cfg, Opts: opts, Fail: false}
+		collector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: opts, Fail: false}
 		mockMirror := Mirror{}
 
 		ex := &ExecutorSchema{

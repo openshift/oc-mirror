@@ -111,7 +111,7 @@ mirror:
   foo: bar
 `,
 			assertion: require.Error,
-			expError:  `decode mirror.openshift.io/v1alpha2, Kind=ImageSetConfiguration: json: unknown field "foo"`,
+			expError:  `decode ImageSetConfiguration: json: unknown field "foo"`,
 		},
 	}
 
@@ -124,7 +124,7 @@ mirror:
 				require.NoError(t, err)
 			}
 
-			cfg, err := LoadConfig(data)
+			cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration](data, v1alpha2.ImageSetConfigurationKind)
 			s.assertion(t, err)
 			if err != nil {
 				require.EqualError(t, err, s.expError)
@@ -238,7 +238,7 @@ delete:
   foo: bar
 `,
 			assertion: require.Error,
-			expError:  `decode mirror.openshift.io/v1alpha2, Kind=DeleteImageSetConfiguration: json: unknown field "foo"`,
+			expError:  `decode DeleteImageSetConfiguration: json: unknown field "foo"`,
 		},
 	}
 
@@ -251,7 +251,7 @@ delete:
 				require.NoError(t, err)
 			}
 
-			cfg, err := LoadConfigDelete(data)
+			cfg, err := LoadConfig[v1alpha2.DeleteImageSetConfiguration](data, v1alpha2.DeleteImageSetConfigurationKind)
 			s.assertion(t, err)
 			if err != nil {
 				require.EqualError(t, err, s.expError)
@@ -283,7 +283,7 @@ mirror:
   - catalog: registry.com/ns/baz:v1.2
 `
 
-	cfg, err := LoadConfig([]byte(headsOnlyCfg))
+	cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration]([]byte(headsOnlyCfg), v1alpha2.ImageSetConfigurationKind)
 	require.NoError(t, err)
 	require.Len(t, cfg.Mirror.Platform.Channels, 3)
 	require.Len(t, cfg.Mirror.Operators, 3)
@@ -312,7 +312,7 @@ mirror:
   - catalog: registry.com/ns/baz:v1.2
 `
 
-	cfg, err := LoadConfig([]byte(ctlgCfg))
+	cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration]([]byte(ctlgCfg), v1alpha2.ImageSetConfigurationKind)
 	require.NoError(t, err)
 	require.Len(t, cfg.Mirror.Operators, 4)
 	ctlgOne, err := cfg.Mirror.Operators[0].GetUniqueName()
@@ -375,14 +375,15 @@ foo: bar
 
 func TestReadConfig(t *testing.T) {
 	t.Run("Testing ReadConfig : should pass ", func(t *testing.T) {
-		res, err := ReadConfig("../../tests/isc.yaml")
+		res, err := ReadConfig("../../tests/isc.yaml", v1alpha2.ImageSetConfigurationKind)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		require.Equal(t, []string{"amd64"}, res.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
+		conv := res.(v1alpha2.ImageSetConfiguration)
+		require.Equal(t, []string{"amd64"}, conv.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
 
 		// should fail
-		res, err = ReadConfig("../../tests/delete-isc.yaml")
+		_, err = ReadConfig("../../tests/delete-isc.yaml", v1alpha2.ImageSetConfigurationKind)
 		if err == nil {
 			t.Fatalf("should fail")
 		}
@@ -391,14 +392,15 @@ func TestReadConfig(t *testing.T) {
 
 func TestReadConfigDelete(t *testing.T) {
 	t.Run("Testing ReadConfigDelete : should pass ", func(t *testing.T) {
-		res, err := ReadConfigDelete("../../tests/delete-isc.yaml")
+		res, err := ReadConfig("../../tests/delete-isc.yaml", v1alpha2.DeleteImageSetConfigurationKind)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		require.Equal(t, []string{"amd64"}, res.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
+		conv := res.(v1alpha2.DeleteImageSetConfiguration)
+		require.Equal(t, []string{"amd64"}, conv.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
 
 		// should fail
-		res, err = ReadConfigDelete("../../tests/isc.yaml")
+		_, err = ReadConfig("../../tests/isc.yaml", v1alpha2.DeleteImageSetConfigurationKind)
 		if err == nil {
 			t.Fatalf("should fail")
 		}

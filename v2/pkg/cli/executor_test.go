@@ -74,11 +74,17 @@ func TestExecutorMirroring(t *testing.T) {
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+	res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		log.Error("imagesetconfig %v ", err)
 	}
-	log.Debug("imagesetconfig : %v", cfg)
+	var cfg v1alpha2.ImageSetConfiguration
+	if res == nil {
+		cfg = v1alpha2.ImageSetConfiguration{}
+	} else {
+		cfg = res.(v1alpha2.ImageSetConfiguration)
+		log.Debug("imagesetconfig : %v", cfg)
+	}
 
 	nie := NormalStorageInterruptError{}
 	nie.Is(fmt.Errorf("interrupt error"))
@@ -494,9 +500,9 @@ func TestExecutorCollectAll(t *testing.T) {
 		}
 
 		// read the ImageSetConfiguration
-		cfg, _ := config.ReadConfig("../../tests/isc.yaml")
-		failCollector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: true}
-		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		cfg, _ := config.ReadConfig("../../tests/isc.yaml", v1alpha2.ImageSetConfigurationKind)
+		failCollector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: true}
+		collector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: false}
 
 		mkdir := MockMakeDir{}
 

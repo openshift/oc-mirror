@@ -70,7 +70,7 @@ func TestAllDeleteImages(t *testing.T) {
 		if err != nil {
 			t.Fatal("should not fail")
 		}
-		assert.Equal(t, "docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2", data[0].Destination)
+		assert.Equal(t, "docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2", data.Items[0].ImageReference)
 	})
 
 	t.Run("Testing CollectReleaseImages : should pass", func(t *testing.T) {
@@ -105,23 +105,22 @@ func TestAllDeleteImages(t *testing.T) {
 		if err != nil {
 			t.Fatal("should not fail")
 		}
-		err = di.DeleteRegistryImages(context.Background(), imgs)
+		err = di.DeleteRegistryImages(imgs)
 		if err != nil {
 			t.Fatal("should not fail")
 		}
 	})
 
 	t.Run("Testing DeleteCacheBlobs : should pass", func(t *testing.T) {
-		imgs := []v1alpha3.CopyImageSchema{
-			{Destination: "test.registry.io/simple/test:v1.0.0"},
-		}
 		testFolder := t.TempDir()
 		defer os.RemoveAll(testFolder)
-
-		opts.Global.WorkingDir = testFolder
+		opts.Global.WorkingDir = "../../tests"
 		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v1alpha2.ImageSetConfiguration{}, &mockManifest{}, "/tmp", "localhost:8888")
-
-		err := deleteDI.DeleteCacheBlobs(context.Background(), imgs)
+		imgs, err := di.ReadDeleteMetaData()
+		if err != nil {
+			t.Fatal("should not fail")
+		}
+		err = deleteDI.DeleteCacheBlobs(imgs)
 		if err != nil {
 			t.Fatal("should not fail")
 		}

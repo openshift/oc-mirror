@@ -11,6 +11,7 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
@@ -112,7 +113,7 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath)
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
 	if err != nil {
 		return err
 	}
@@ -122,7 +123,7 @@ func (o *ExecutorSchema) CompletePrepare(args []string) error {
 	mc := mirror.NewMirrorCopy()
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, nil)
-	o.Config = cfg
+	o.Config = cfg.(v1alpha2.ImageSetConfiguration)
 
 	o.Opts.Global.WorkingDir = filepath.Join(strings.Split(o.Opts.Global.From, "://")[1], workingDir)
 

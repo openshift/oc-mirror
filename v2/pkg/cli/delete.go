@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 
 const (
 	deleteErrMsg = "[delete] %v"
+	deleteYaml   = "/delete/delete-images.yaml"
 )
 
 // NewDeleteCommand - setup all the relevant support structs
@@ -91,13 +91,13 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to delete imageset configuration file")
 	cmd.PersistentFlags().StringVarP(&opts.Global.DeleteSource, "source", "s", "", "The working directory used to do the initial mirroring")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.DeleteID, "delete-id", "", "Used to append to artifacts created by the delete functioality")
+	cmd.Flags().StringVar(&opts.Global.DeleteID, "delete-id", "", "Used to differentiate between versions for files created by the delete functionality")
+	cmd.Flags().StringVar(&opts.Global.DeleteYaml, "delete-yaml-file", "", "If set will use the generated or updated yaml file to delete contents")
 	cmd.Flags().BoolVar(&opts.Global.SkipCacheDelete, "skip-cache-delete", ex.Opts.Global.SkipCacheDelete, "Used to skip deleting of local cache manifests and blobs")
-	cmd.Flags().BoolVar(&opts.Global.SkipRegistryDelete, "skip-registry-delete", ex.Opts.Global.SkipRegistryDelete, "Used to skip deleting of remote registry images")
 	cmd.Flags().StringVar(&opts.Global.DeleteDestination, "destination", "", "The remote registry to delete from (optional)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
-	cmd.Flags().BoolVar(&opts.Global.V2, "v2", ex.Opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DON'T USE it. V2 is still under development and it is not production ready.")
+	cmd.Flags().BoolVar(&opts.Global.V2, "v2", ex.Opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.DryRun, "dry-run", ex.Opts.Global.DryRun, "If set will only output the list of images (manifests and shas) to delete")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
@@ -116,10 +116,10 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 // Validate - cobra validation
 func (o ExecutorSchema) ValidateDelete() error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
-		return fmt.Errorf("use the --config flag it is mandatory")
+		return fmt.Errorf("use the --config flag, it is mandatory")
 	}
 	if len(o.Opts.Global.DeleteSource) == 0 {
-		return fmt.Errorf("use the --source flag it is mandatory when using the delete command")
+		return fmt.Errorf("use the --source flag, it is mandatory when using the delete command")
 	} else {
 		if !strings.Contains(o.Opts.Global.DeleteSource, fileProtocol) {
 			return fmt.Errorf("--source flag must have a file:// protocol prefix")
@@ -128,6 +128,15 @@ func (o ExecutorSchema) ValidateDelete() error {
 	if len(o.Opts.Global.DeleteDestination) > 1 && !strings.Contains(o.Opts.Global.DeleteDestination, dockerProtocol) {
 		return fmt.Errorf("--destination flag must have a docker:// protocol prefix")
 	}
+
+	// remove file protocol from delete source
+	wd := strings.Split(o.Opts.Global.DeleteSource, fileProtocol)[1]
+	delete_dir := filepath.Join(wd, o.Opts.Global.WorkingDir, deleteYaml)
+	_, err := os.Stat(delete_dir)
+	if len(o.Opts.Global.DeleteYaml) == 0 && !o.Opts.Global.DryRun && os.IsNotExist(err) {
+		return fmt.Errorf("either use the --delete-yaml-file flag or ensure that you have executed a delete with the --dry-run flag")
+	}
+
 	return nil
 }
 
@@ -136,12 +145,13 @@ func (o *ExecutorSchema) CompleteDelete() error {
 
 	o.Log.Debug("delete imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read and validate the DeleteImageSetConfiguration
-	cfg, err := config.ReadConfigDelete(o.Opts.Global.ConfigPath)
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.DeleteImageSetConfigurationKind)
 	if err != nil {
 		return err
 	}
-	o.Log.Trace("delete imagesetconfig : %v ", cfg)
-	if cfg.Kind != "DeleteImageSetConfiguration" {
+	converted := cfg.(v1alpha2.DeleteImageSetConfiguration)
+	o.Log.Trace("delete imagesetconfig : %v ", converted)
+	if converted.Kind != "DeleteImageSetConfiguration" {
 		return fmt.Errorf("using the delete functiionlity requires the 'DeleteImageSetConfiguration' kind set in the yaml file")
 	}
 
@@ -164,9 +174,9 @@ func (o *ExecutorSchema) CompleteDelete() error {
 	isc := v1alpha2.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
 			Mirror: v1alpha2.Mirror{
-				Platform:         cfg.Delete.Platform,
-				Operators:        cfg.Delete.Operators,
-				AdditionalImages: cfg.Delete.AdditionalImages,
+				Platform:         converted.Delete.Platform,
+				Operators:        converted.Delete.Operators,
+				AdditionalImages: converted.Delete.AdditionalImages,
 			},
 		},
 	}
@@ -188,19 +198,19 @@ func (o *ExecutorSchema) CompleteDelete() error {
 	o.Log.Info("executing %s ", o.Opts.Function)
 
 	if o.Opts.Global.DryRun {
-		o.Log.Info("dry-run flag set, cache and remote registry deletion will be skipped")
+		absPath, err := filepath.Abs(o.Opts.Global.WorkingDir + deleteYaml)
+		if err != nil {
+			o.Log.Error("absolute path %v", err)
+		}
+		o.Log.Info("dry-run flag set, files will be created in %s", absPath)
 	}
 
 	if o.Opts.Global.SkipCacheDelete && !o.Opts.Global.DryRun {
 		o.Log.Info("skip-cache-delete flag set, cache deletion will be skipped")
 	}
 
-	if o.Opts.Global.SkipRegistryDelete && !o.Opts.Global.DryRun {
-		o.Log.Info("skip-registry-delete flag set, remote registry deletion will be skipped")
-	}
-
 	if len(o.Opts.Global.DeleteID) > 0 {
-		o.Log.Info("using id %s to update all delete artifacts", o.Opts.Global.DeleteID)
+		o.Log.Info("using id %s to update all delete generated files", o.Opts.Global.DeleteID)
 	}
 
 	err = o.setupWorkingDir()
@@ -230,58 +240,63 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 	startTime := time.Now()
 	o.Log.Debug("config %v", o.Config)
 	o.Log.Info(startMessage, o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
-	// lets get the release images from local disk
-	_, releaseFolder, err := o.Release.IdentifyReleases()
-	if err != nil {
-		o.Log.Error(deleteErrMsg, err)
-	}
+	if o.Opts.Global.DryRun {
+		go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
-	// collect release images from local file system
-	var allImages []v1alpha3.CopyImageSchema
-	for _, i := range releaseFolder {
-		allImages, err = o.Delete.CollectReleaseImages(i)
+		// lets get the release images from local disk
+		_, releaseFolder, err := o.Release.IdentifyReleases()
 		if err != nil {
 			o.Log.Error(deleteErrMsg, err)
 		}
-	}
 
-	// collect operator images
-	oi, err := o.Delete.CollectOperatorImages()
-	if err != nil {
-		o.Log.Error(" %v", err)
-	}
-	allImages = append(allImages, oi...)
+		// collect release images from local file system
+		var allImages []v1alpha3.CopyImageSchema
+		for _, i := range releaseFolder {
+			allImages, err = o.Delete.CollectReleaseImages(i)
+			if err != nil {
+				o.Log.Error(deleteErrMsg, err)
+			}
+		}
 
-	// collect additional images
-	ai, err := o.Delete.CollectAdditionalImages()
-	if err != nil {
-		o.Log.Error(deleteErrMsg, err)
-	}
-	allImages = append(allImages, ai...)
+		// collect operator images
+		oi, err := o.Delete.CollectOperatorImages()
+		if err != nil {
+			o.Log.Error(" %v", err)
+		}
+		allImages = append(allImages, oi...)
 
-	collectionFinish := time.Now()
+		// collect additional images
+		ai, err := o.Delete.CollectAdditionalImages()
+		if err != nil {
+			o.Log.Error(deleteErrMsg, err)
+		}
+		allImages = append(allImages, ai...)
 
-	err = o.Delete.DeleteCacheBlobs(context.Background(), allImages)
-	if err != nil {
-		return err
-	}
+		err = o.Delete.WriteDeleteMetaData(allImages)
+		if err != nil {
+			return err
+		}
+	} else {
 
-	err = o.Delete.DeleteRegistryImages(context.Background(), allImages)
-	if err != nil {
-		return err
-	}
+		deleteList, err := o.Delete.ReadDeleteMetaData()
+		if err != nil {
+			return err
+		}
 
-	// finally just verify that the yaml file is well formed
-	_, err = o.Delete.ReadDeleteMetaData()
-	if err != nil {
-		return err
+		err = o.Delete.DeleteCacheBlobs(deleteList)
+		if err != nil {
+			return err
+		}
+
+		err = o.Delete.DeleteRegistryImages(deleteList)
+		if err != nil {
+			return err
+		}
 	}
 
 	deleteFinish := time.Now()
 	o.Log.Info("start time      : %v", startTime)
-	o.Log.Info("collection time : %v", collectionFinish)
 	o.Log.Info("delete time     : %v", deleteFinish)
 
 	return nil
