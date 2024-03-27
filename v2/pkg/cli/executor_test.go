@@ -234,11 +234,6 @@ func TestExecutorValidate(t *testing.T) {
 		err = ex.Validate([]string{"file://test"})
 		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
 
-		// check when using docker protocol --from should be used
-		opts.Global.ConfigPath = "test"
-		err = ex.Validate([]string{"docker://test"})
-		assert.Equal(t, "when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory", err.Error())
-
 		// check when using file protocol --from should not be used
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "test"
