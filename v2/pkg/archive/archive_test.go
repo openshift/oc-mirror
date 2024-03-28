@@ -276,7 +276,7 @@ func TestArchive_RemovePastMirrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.caseName, func(t *testing.T) {
-			err := removePastArchives(tc.destination)
+			err := RemovePastArchives(tc.destination)
 			if err != nil {
 				assert.Equal(t, tc.expectedError, err.Error())
 			} else {

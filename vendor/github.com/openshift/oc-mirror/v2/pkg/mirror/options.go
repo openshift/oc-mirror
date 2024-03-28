@@ -76,7 +76,7 @@ type CopyOptions struct {
 	EncryptLayer             []int     // The list of layers to encrypt
 	EncryptionKeys           []string  // Keys needed to encrypt the image
 	DecryptionKeys           []string  // Keys needed to decrypt the image
-	Mode                     string    // 2 options disktoMirror or mirrorToDisk (for now)
+	Mode                     string    // possible values: mirrorToDisk, disktoMirror or mirrorToMirror
 	Dev                      bool      // developer mode - will be removed when completed
 	Destination              string    // what to target to
 	UUID                     uuid.UUID // set uuid
@@ -137,6 +137,10 @@ type imageDestOptions struct {
 
 func (cp CopyOptions) IsMirrorToDisk() bool {
 	return cp.Mode == MirrorToDisk
+}
+
+func (cp CopyOptions) IsMirrorToMirror() bool {
+	return cp.Mode == MirrorToMirror
 }
 
 func (cp CopyOptions) IsDiskToMirror() bool {

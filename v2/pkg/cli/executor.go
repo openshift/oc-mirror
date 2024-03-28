@@ -48,6 +48,7 @@ const (
 	releaseImageDir         string = "release-images"
 	logsDir                 string = "logs"
 	workingDir              string = "working-dir"
+	ocmirrorRelativePath    string = ".oc-mirror"
 	cacheRelativePath       string = ".oc-mirror/.cache"
 	cacheEnvVar             string = "OC_MIRROR_CACHE"
 	additionalImages        string = "additional-images"
@@ -244,9 +245,9 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
-	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
-		return fmt.Errorf("when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory")
-	}
+	// if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
+	// 	return fmt.Errorf("when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory")
+	// }
 	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
 	}
@@ -296,9 +297,16 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		o.Opts.Mode = mirror.MirrorToDisk
 		rootDir = strings.TrimPrefix(args[0], fileProtocol)
 		o.Log.Debug("destination %s ", rootDir)
-	} else if strings.Contains(args[0], dockerProtocol) {
+	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
+	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
+		o.Opts.Mode = mirror.MirrorToMirror
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		rootDir = filepath.Join(homeDir, ocmirrorRelativePath)
 	} else {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
@@ -340,6 +348,18 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return err
 	}
 
+	if !o.Opts.IsMirrorToMirror() {
+		err := o.setupInterfaces(o.Opts.Mode, rootDir)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (o *ExecutorSchema) setupInterfaces(mode, rootDir string) error {
+	var err error
+	o.Opts.Mode = mode
+
 	client, _ := release.NewOCPClient(uuid.New())
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
@@ -379,9 +399,11 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	if o.Opts.IsMirrorToDisk() {
 		err = o.RunMirrorToDisk(cmd, args)
 
-	} else {
+	} else if o.Opts.IsDiskToMirror() {
 		err = o.RunDiskToMirror(cmd, args)
 
+	} else {
+		err = o.RunMirrorToMirror(cmd, args)
 	}
 	if err != nil {
 		o.closeAll()
@@ -603,6 +625,35 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	o.Log.Info("start time      : %v", startTime)
 	o.Log.Info("collection time : %v", collectionFinish)
 	o.Log.Info("mirror time     : %v", mirrorFinish)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RunMirrorToMirror - execute the mirror to mirror functionality
+func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
+	rootDir := filepath.Dir(o.Opts.Global.WorkingDir)
+	copyPlatformFilter := o.Config.Mirror.Platform.DeepCopy()
+
+	o.Log.Info("Phase 1: mirroring to local cache")
+	o.Opts.Mode = mirror.MirrorToDisk
+	o.setupInterfaces(o.Opts.Mode, rootDir)
+	err := o.RunMirrorToDisk(cmd, args)
+	if err != nil {
+		return err
+	}
+
+	o.Log.Info("Phase 2: mirroring from local cache to destination registry")
+	o.Opts.Mode = mirror.DiskToMirror
+	o.Config.Mirror.Platform = copyPlatformFilter
+	o.setupInterfaces(o.Opts.Mode, rootDir)
+	err = o.RunDiskToMirror(cmd, args)
+	if err != nil {
+		return err
+	}
+	// destroy tar files
+	err = archive.RemovePastArchives(rootDir)
 	if err != nil {
 		return err
 	}
