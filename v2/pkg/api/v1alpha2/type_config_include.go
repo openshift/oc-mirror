@@ -48,70 +48,6 @@ type IncludeBundle struct {
 	MinBundle string `json:"minBundle,omitempty" yaml:"minBundle,omitempty"`
 }
 
-/*
-// ConvertToDiffIncludeConfig converts an IncludeConfig to a DiffIncludeConfig type to
-// interact with `operator-registry` libraries.
-func (ic *IncludeConfig) ConvertToDiffIncludeConfig() (dic diff.DiffIncludeConfig, err error) {
-	if ic == nil || len(ic.Packages) == 0 {
-		return dic, nil
-	}
-
-	for pkgIdx, pkg := range ic.Packages {
-		if pkg.Name == "" {
-			return dic, fmt.Errorf("package %d requires a name", pkgIdx)
-		}
-		if err := pkg.IncludeBundle.validate(); err != nil {
-			return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
-		}
-
-		dpkg := diff.DiffIncludePackage{Name: pkg.Name}
-		switch {
-		case pkg.MinVersion != "" && pkg.MaxVersion != "":
-			dpkg.Range = fmt.Sprintf(">=%s <=%s", pkg.MinVersion, pkg.MaxVersion)
-		case pkg.MinVersion != "":
-			minVer, err := semver.Parse(pkg.MinVersion)
-			if err != nil {
-				return dic, fmt.Errorf("package %s: %v", pkg.Name, err)
-			}
-			dpkg.Versions = []semver.Version{minVer}
-		case pkg.MaxVersion != "":
-			dpkg.Range = fmt.Sprintf("<=%s", pkg.MaxVersion)
-		case pkg.MinBundle != "":
-			dpkg.Bundles = []string{pkg.MinBundle}
-		}
-
-		for chIdx, ch := range pkg.Channels {
-			if ch.Name == "" {
-				return dic, fmt.Errorf("package %s: channel %d requires a name", pkg.Name, chIdx)
-			}
-			if err := ch.IncludeBundle.validate(); err != nil {
-				return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
-			}
-
-			dch := diff.DiffIncludeChannel{Name: ch.Name}
-			switch {
-			case ch.MinVersion != "" && ch.MaxVersion != "":
-				dch.Range = fmt.Sprintf(">=%s <=%s", ch.MinVersion, ch.MaxVersion)
-			case ch.MinVersion != "":
-				ver, err := semver.Parse(ch.MinVersion)
-				if err != nil {
-					return dic, fmt.Errorf("channel %s: %v", ch.Name, err)
-				}
-				dch.Versions = []semver.Version{ver}
-			case ch.MaxVersion != "":
-				dch.Range = fmt.Sprintf("<=%s", ch.MaxVersion)
-			case ch.MinBundle != "":
-				dch.Bundles = []string{ch.MinBundle}
-			}
-			dpkg.Channels = append(dpkg.Channels, dch)
-		}
-		dic.Packages = append(dic.Packages, dpkg)
-	}
-
-	return dic, nil
-}
-*/
-
 // Encode IncludeConfig in an efficient, opaque format.
 func (ic *IncludeConfig) Encode(w io.Writer) error {
 	enc := gob.NewEncoder(w)
@@ -130,12 +66,3 @@ func (ic *IncludeConfig) Decode(r io.Reader) error {
 	}
 	return nil
 }
-
-/*
-func (b IncludeBundle) validate() error {
-	if b.MinVersion != "" && b.MinBundle != "" {
-		return fmt.Errorf("minimum version and bundle are mutually exclusive")
-	}
-	return nil
-}
-*/

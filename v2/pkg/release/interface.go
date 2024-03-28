@@ -24,6 +24,8 @@ type CollectorInterface interface {
 	// This works because oc-mirror doesn't know how to mix OKD and OCP
 	// release mirroring.
 	ReleaseImage() (string, error)
+	// Get all relevant releases from the local filter
+	IdentifyReleases() ([]v1alpha3.RelatedImage, []string, error)
 }
 
 type GraphBuilderInterface interface {

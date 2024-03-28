@@ -145,7 +145,7 @@ func buildV1Cmd() *cobra.Command {
 }
 
 func buildV2Cmd() *cobra.Command {
-	fmt.Println("--v2 flag identified, flow redirected to the oc-mirror v2 version. PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used. ")
+	fmt.Println("--v2 flag identified, flow redirected to the oc-mirror v2 version. This is Tech Preview, it is still under development and it is not production ready.")
 
 	log := clog.New("info")
 	cmd := cliV2.NewMirrorCmd(log)

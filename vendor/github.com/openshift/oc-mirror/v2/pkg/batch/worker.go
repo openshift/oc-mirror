@@ -63,7 +63,7 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 		b = &BatchSchema{Items: imgs, Count: (imgs / BATCH_SIZE), BatchSize: BATCH_SIZE, Remainder: (imgs % BATCH_SIZE)}
 	}
 
-	o.Log.Info("images to mirror %d ", b.Items)
+	o.Log.Info("images to %s %d ", opts.Function, b.Items)
 	o.Log.Info("batch count %d ", b.Count)
 	o.Log.Info("batch index %d ", b.BatchIndex)
 	o.Log.Info("batch size %d ", b.BatchSize)
@@ -80,7 +80,7 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 			o.Log.Debug("destination %s ", images[index].Destination)
 			go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions) {
 				defer wg.Done()
-				err := o.Mirror.Run(ctx, src, dest, "copy", opts)
+				err := o.Mirror.Run(ctx, src, dest, mirror.Mode(opts.Function), opts)
 				if err != nil {
 					mu.Lock()
 					errArray = append(errArray, err)
@@ -104,7 +104,7 @@ func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, o
 	if b.Remainder > 0 {
 		// one level of simple recursion
 		i := b.Count * BATCH_SIZE
-		o.Log.Info("executing remainder [batch size of 1]")
+		o.Log.Info("executing remainder")
 		err := o.Worker(ctx, images[i:], opts)
 		if err != nil {
 			return err

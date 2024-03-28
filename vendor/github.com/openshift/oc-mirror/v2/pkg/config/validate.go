@@ -9,8 +9,10 @@ import (
 )
 
 type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
+type validationDeleteFunc func(cfg *v1alpha2.DeleteImageSetConfiguration) error
 
 var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseChannels}
+var validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
 
 // Validate will check an ImagesetConfiguration for input errors.
 func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
@@ -43,6 +45,47 @@ func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, channel := range cfg.Mirror.Platform.Channels {
+		if seen[channel.Name] {
+			return fmt.Errorf(
+				"release channel %q: duplicate found in configuration", channel.Name,
+			)
+		}
+		seen[channel.Name] = true
+	}
+	return nil
+}
+
+// ValidateDelete will check an DeleteImagesetConfiguration for input errors.
+func ValidateDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+	var errs []error
+	for _, check := range validationDeleteChecks {
+		if err := check(cfg); err != nil {
+			errs = append(errs, fmt.Errorf("invalid configuration: %v", err))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func validateOperatorOptionsDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+	seen := map[string]bool{}
+	for _, ctlg := range cfg.Delete.Operators {
+		ctlgName, err := ctlg.GetUniqueName()
+		if err != nil {
+			return err
+		}
+		if seen[ctlgName] {
+			return fmt.Errorf(
+				"catalog %q: duplicate found in configuration", ctlgName,
+			)
+		}
+		seen[ctlgName] = true
+	}
+	return nil
+}
+
+func validateReleaseChannelsDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+	seen := map[string]bool{}
+	for _, channel := range cfg.Delete.Platform.Channels {
 		if seen[channel.Name] {
 			return fmt.Errorf(
 				"release channel %q: duplicate found in configuration", channel.Name,
