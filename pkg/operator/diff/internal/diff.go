@@ -207,6 +207,14 @@ func (g *DiffGenerator) Run(oldModel, newModel model.Model) (model.Model, error)
 						// no use continuing
 						break
 					}
+				} else {
+					// necessary as this happens in the second pass
+					// check to see if we have a default channel in previous run
+					if len(pkg.Channels) == 1 && pkg.Name == newPkg.Name {
+						outputModel[idx].DefaultChannel = newPkg.Channels[pkg.Channels[0].Name]
+						overrideSet = true
+						break
+					}
 				}
 			}
 			if !overrideSet {
