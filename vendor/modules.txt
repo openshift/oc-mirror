@@ -984,6 +984,7 @@ github.com/openshift/oc-mirror/v2/pkg/manifest
 github.com/openshift/oc-mirror/v2/pkg/mirror
 github.com/openshift/oc-mirror/v2/pkg/operator
 github.com/openshift/oc-mirror/v2/pkg/release
+github.com/openshift/oc-mirror/v2/pkg/version
 # github.com/operator-framework/api v0.17.7
 ## explicit; go 1.19
 github.com/operator-framework/api/pkg/constraints

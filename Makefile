@@ -10,6 +10,9 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/images.mk \
 	targets/openshift/deps-gomod.mk \
 )
+
+GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/pkg/version)
+
 #v2 workspace required change
 #GO_MOD_FLAGS = -mod=readonly
 GO_BUILD_PACKAGES := ./cmd/...

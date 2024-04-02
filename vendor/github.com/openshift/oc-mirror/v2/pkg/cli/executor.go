@@ -37,6 +37,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/pkg/release"
+	"github.com/openshift/oc-mirror/v2/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -178,6 +179,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		},
 	}
 	cmd.AddCommand(NewPrepareCommand(log))
+	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
