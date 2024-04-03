@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -143,4 +144,8 @@ func (o Manifest) ExtractLayers(filePath, name, label string) error {
 
 func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
 	return nil
+}
+
+func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+	return "", nil
 }

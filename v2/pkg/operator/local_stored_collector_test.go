@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -376,4 +377,8 @@ func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1al
 
 func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
 	return nil
+}
+
+func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+	return "", nil
 }
