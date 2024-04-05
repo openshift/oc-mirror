@@ -49,16 +49,26 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		// download the operator index image
 		o.Log.Info("copying operator image %v", op.Catalog)
 
-		imageIndexDir := strings.Replace(filepath.Base(op.Catalog), ":", "/", -1)
-		imageIndexDir = strings.Replace(imageIndexDir, "@sha256", "", -1)
-		cacheDir := filepath.Join(o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir)
-		dir = filepath.Join(o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir)
-
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
 			return []v1alpha3.CopyImageSchema{}, err
 		}
+
+		sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+		if err != nil {
+			return nil, err
+		}
+
+		catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+		if err != nil {
+			return []v1alpha3.CopyImageSchema{}, err
+		}
+
+		imageIndexDir := filepath.Join(imgSpec.ComponentName(), catalogDigest)
+		cacheDir := filepath.Join(o.Opts.Global.WorkingDir, operatorImageExtractDir, imageIndexDir)
+		dir = filepath.Join(o.Opts.Global.WorkingDir, operatorImageDir, imageIndexDir)
+
 		if imgSpec.Transport == ociProtocol {
 			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 				// delete the existing directory and untarred cache contents
@@ -208,12 +218,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			}
 		}
 
-		var componentName string
-		if imgSpec.Tag != "" {
-			componentName = imgSpec.ComponentName() + "." + imgSpec.Tag
-		} else {
-			componentName = imgSpec.ComponentName()
-		}
+		componentName := imgSpec.ComponentName() + "." + catalogDigest
 
 		relatedImages[componentName] = []v1alpha3.RelatedImage{
 			{

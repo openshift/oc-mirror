@@ -17,12 +17,16 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/otiai10/copy"
 	"k8s.io/klog/v2"
@@ -515,4 +519,37 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISche
 	}
 
 	return nil
+}
+
+func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+	if err := mirror.ReexecIfNecessaryForImages([]string{imgRef}...); err != nil {
+		return "", err
+	}
+
+	srcRef, err := alltransports.ParseImageName(imgRef)
+	if err != nil {
+		return "", fmt.Errorf("invalid source name %s: %v", imgRef, err)
+	}
+
+	img, err := srcRef.NewImageSource(ctx, sourceCtx)
+	if err != nil {
+		return "", err
+	}
+
+	manifestBytes, _, err := img.GetManifest(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	digest, err := manifest.Digest(manifestBytes)
+	if err != nil {
+		return "", err
+	}
+
+	var digestString string
+	if strings.Contains(digest.String(), ":") {
+		digestString = strings.Split(digest.String(), ":")[1]
+	}
+
+	return digestString, nil
 }

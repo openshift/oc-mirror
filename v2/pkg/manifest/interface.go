@@ -1,6 +1,9 @@
 package manifest
 
 import (
+	"context"
+
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 )
@@ -14,4 +17,5 @@ type ManifestInterface interface {
 	ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error
 	GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error)
 	ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error
+	GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
 }
