@@ -86,7 +86,7 @@ type CatalogSourceSpec struct {
 	DisplayName string `json:"displayName,omitempty"`
 	Description string `json:"description,omitempty"`
 	Publisher   string `json:"publisher,omitempty"`
-	Icon        Icon   `json:"icon,omitempty"`
+	Icon        *Icon  `json:"icon,omitempty"`
 }
 
 type Icon struct{}
