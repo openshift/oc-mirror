@@ -33,7 +33,13 @@ For a complete list of use cases that are accounted for, please see [below](#ann
 
 :warning: In this document, we do not discuss if/how the catalog would be rebuilt with the filtered content. We are separating the two discussions, even though we are aware that according to the solution chosen here, the filtered FBC catalog might not be considered as valid from the standpoint of OLM, or might not allow an operator to be upgraded correctly with such a filtered FBC catalog.
 
-### S1 - SemVer
+### Solutions implemented
+
+TLDR; From the following studied solutions, S1 and S4(partial) are implemented for oc-mirror V2. 
+
+The user can filter operators and bundles by operator names, channels, minVersion/maxVersion as in V1. They can also list  specific bundles that they require for mirroring in the imageSetConfig.
+
+### S1 - SemVer (Selected Solution)
 
 Most bundle versions are semver compatible. The bundles included in a channel can simply be sorted by version and any bundles that fall in the range selected in the ImageSetConfig are taken. 
 
@@ -113,6 +119,8 @@ A solution where oc-mirror can call the introspection API directly, without chan
 
 It can be looked at as the longer term definitive solution.
 
+In 4.16, the API change to ImageSetConfig is implemented, allowing the user to list directly the bundles which are needed to be mirrored. ([example](../../examples/imageset-config-filter-catalog-by-bundle.yaml))
+
 ## Conclusion - rationale
 
 
@@ -124,7 +132,7 @@ It can be looked at as the longer term definitive solution.
 |S4 - API v2 |* Inline with OLM expectations<br>* Idempotent<br>* Fastest path for upgrades (smaller mirroring volume)|* Not ready for the 4.16 timeline<br>* API break for ImageSetConfig |
 
 **From what we see in the table above, there is no perfect fit.
-The team proposes to use S1 - SemVer for 4.16, and actively work with the OLM team towards S4 and an API bump.** 
+The team proposes to use S1 - SemVer for 4.16, provide a way for customers to list the selected bundles directly (S4) and actively work with the OLM team towards full implementation of S4 and an API bump.** 
 
 ## Annex - Acceptance criteria set for V2
 

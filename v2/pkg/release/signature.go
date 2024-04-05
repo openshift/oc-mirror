@@ -73,7 +73,11 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			if err != nil {
 				o.Log.Error("http request %v", err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if resp != nil && resp.Body != nil {
+					resp.Body.Close()
+				}
+			}()
 			if resp.StatusCode == http.StatusOK {
 				o.Log.Debug("response from signature lookup %d", resp.StatusCode)
 
