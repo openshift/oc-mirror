@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +15,7 @@ import (
 
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -74,15 +74,15 @@ func TestExecutorMirroring(t *testing.T) {
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 	// read the ImageSetConfiguration
-	res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
+	res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 	if err != nil {
 		log.Error("imagesetconfig %v ", err)
 	}
-	var cfg v1alpha2.ImageSetConfiguration
+	var cfg v2alpha1.ImageSetConfiguration
 	if res == nil {
-		cfg = v1alpha2.ImageSetConfiguration{}
+		cfg = v2alpha1.ImageSetConfiguration{}
 	} else {
-		cfg = res.(v1alpha2.ImageSetConfiguration)
+		cfg = res.(v2alpha1.ImageSetConfiguration)
 		log.Debug("imagesetconfig : %v", cfg)
 	}
 
@@ -107,6 +107,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -141,6 +142,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -178,6 +180,7 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -214,6 +217,7 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -249,6 +253,7 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -299,15 +304,15 @@ func TestRunMirrorToMirror(t *testing.T) {
 	}
 
 	// read the ImageSetConfiguration
-	res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
+	res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 	if err != nil {
 		log.Error("imagesetconfig %v ", err)
 	}
-	var cfg v1alpha2.ImageSetConfiguration
+	var cfg v2alpha1.ImageSetConfiguration
 	if res == nil {
-		cfg = v1alpha2.ImageSetConfiguration{}
+		cfg = v2alpha1.ImageSetConfiguration{}
 	} else {
-		cfg = res.(v1alpha2.ImageSetConfiguration)
+		cfg = res.(v2alpha1.ImageSetConfiguration)
 		log.Debug("imagesetconfig : %v", cfg)
 	}
 
@@ -746,9 +751,9 @@ func TestExecutorCollectAll(t *testing.T) {
 		}
 
 		// read the ImageSetConfiguration
-		cfg, _ := config.ReadConfig("../../tests/isc.yaml", v1alpha2.ImageSetConfigurationKind)
-		failCollector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: true}
-		collector := &Collector{Log: log, Config: cfg.(v1alpha2.ImageSetConfiguration), Opts: *opts, Fail: false}
+		cfg, _ := config.ReadConfig("../../tests/isc.yaml", v2alpha1.ImageSetConfigurationKind)
+		failCollector := &Collector{Log: log, Config: cfg.(v2alpha1.ImageSetConfiguration), Opts: *opts, Fail: true}
+		collector := &Collector{Log: log, Config: cfg.(v2alpha1.ImageSetConfiguration), Opts: *opts, Fail: false}
 
 		mkdir := MockMakeDir{}
 
@@ -792,7 +797,7 @@ type Mirror struct {
 // ReleaseImageCollector, OperatorImageCollector and Batchr
 type Collector struct {
 	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
+	Config v2alpha1.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Fail   bool
 	Name   string
@@ -800,14 +805,14 @@ type Collector struct {
 
 type Batch struct {
 	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
+	Config v2alpha1.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Fail   bool
 }
 
 type Diff struct {
 	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
+	Config v2alpha1.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Mirror Mirror
 	Fail   bool
@@ -858,28 +863,28 @@ func (o MockMirrorUnArchiver) Unarchive() error {
 	return nil
 }
 
-func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
+func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error {
 	return nil
 }
 func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage string) error {
 	return nil
 }
-func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
 
-func (o Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {
+func (o Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error {
 	if o.Fail {
 		return fmt.Errorf("forced error")
 	}
 	return nil
 }
 
-func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	if o.Fail {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error operator collector")
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error operator collector")
 	}
-	test := []v1alpha3.CopyImageSchema{
+	test := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -890,11 +895,11 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.Copy
 	return test, nil
 }
 
-func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	if o.Fail {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error release collector")
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error release collector")
 	}
-	test := []v1alpha3.CopyImageSchema{
+	test := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -913,11 +918,11 @@ func (o *Collector) ReleaseImage() (string, error) {
 	return "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", nil
 }
 
-func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	if o.Fail {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("forced error additionalImages collector")
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error additionalImages collector")
 	}
-	test := []v1alpha3.CopyImageSchema{
+	test := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -928,15 +933,7 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.C
 	return test, nil
 }
 
-func (o *Collector) IdentifyReleases() ([]v1alpha3.RelatedImage, []string, error) {
-	return nil, []string{}, nil
-}
-
-func (o *Collector) FilterReleasesForDelete() (map[string][]v1alpha3.RelatedImage, error) {
-	return nil, nil
-}
-
-func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error {
+func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
 	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
 }
@@ -971,7 +968,18 @@ health:
   storagedriver:
     enabled: false
 `
-	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, 6000)
+	port := 5000
+	for {
+		addr := fmt.Sprintf("localhost:%d", port)
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			conn.Close()
+			port++
+		} else {
+			break
+		}
+	}
+	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, port)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
 
 	if err != nil {

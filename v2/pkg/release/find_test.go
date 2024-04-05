@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,11 +16,11 @@ func TestFindLatestRelease(t *testing.T) {
 		min          bool
 		expectedVer  semver.Version
 		expectedChan string
-		channels     []v1alpha2.ReleaseChannel
+		channels     []v2alpha1.ReleaseChannel
 		err          string
 	}{{
 		name: "Success/MinVersion",
-		channels: []v1alpha2.ReleaseChannel{
+		channels: []v2alpha1.ReleaseChannel{
 			{
 				Name:       channelName,
 				MinVersion: "4.0.0-5",
@@ -35,7 +35,7 @@ func TestFindLatestRelease(t *testing.T) {
 		min:          true,
 	}, {
 		name: "Success/MaxVersion",
-		channels: []v1alpha2.ReleaseChannel{
+		channels: []v2alpha1.ReleaseChannel{
 			{
 				Name:       channelName,
 				MaxVersion: "4.0.0-5",
@@ -50,7 +50,7 @@ func TestFindLatestRelease(t *testing.T) {
 		min:          false,
 	}, {
 		name:     "FailureNoPreviousRelease",
-		channels: []v1alpha2.ReleaseChannel{},
+		channels: []v2alpha1.ReleaseChannel{},
 		err:      ErrNoPreviousRelease.Error(),
 	}}
 	for _, test := range tests {

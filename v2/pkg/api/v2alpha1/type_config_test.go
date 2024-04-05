@@ -1,4 +1,4 @@
-package v1alpha2
+package v2alpha1
 
 import "testing"
 

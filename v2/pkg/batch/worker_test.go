@@ -6,8 +6,7 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -42,7 +41,7 @@ func TestWorker(t *testing.T) {
 
 	// this is a facade to get code coverage up
 	t.Run("Testing Worker : should pass", func(t *testing.T) {
-		relatedImages := []v1alpha3.CopyImageSchema{
+		relatedImages := []v2alpha1.CopyImageSchema{
 			{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -53,7 +52,7 @@ func TestWorker(t *testing.T) {
 			{Source: "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-i@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		}
-		err := w.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: relatedImages}, opts)
+		err := w.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: relatedImages}, opts)
 		if err != nil {
 			t.Fatal("should pass")
 		}
@@ -73,15 +72,15 @@ func (o Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOption
 	return true, nil
 }
 
-func (o Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
-	opcl := v1alpha3.OperatorLabels{OperatorsOperatorframeworkIoIndexConfigsV1: "/configs"}
-	opc := v1alpha3.OperatorConfig{Labels: opcl}
-	ocs := &v1alpha3.OperatorConfigSchema{Config: opc}
+func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	opcl := v2alpha1.OperatorLabels{OperatorsOperatorframeworkIoIndexConfigsV1: "/configs"}
+	opc := v2alpha1.OperatorConfig{Labels: opcl}
+	ocs := &v2alpha1.OperatorConfigSchema{Config: opc}
 	return ocs, nil
 }
 
-func (o Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
-	relatedImages := []v1alpha3.RelatedImage{
+func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	relatedImages := []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testC", Image: "registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -90,10 +89,10 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, er
 	return relatedImages, nil
 }
 
-func (o Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
-	return &v1alpha3.OCISchema{
+func (o Manifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
@@ -103,17 +102,17 @@ func (o Manifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o Manifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
-	return &v1alpha3.OCISchema{
+func (o Manifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 				Size:      567,
 			},
 		},
-		Config: v1alpha3.OCIManifest{
+		Config: v2alpha1.OCIManifest{
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 			Size:      567,
@@ -125,16 +124,16 @@ func (o Manifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) 
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	relatedImages["abc"] = []v1alpha3.RelatedImage{
+func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
+	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 	}
 	return relatedImages, nil
 }
 
-func (o Manifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -142,7 +141,7 @@ func (o Manifest) ExtractLayers(filePath, name, label string) error {
 	return nil
 }
 
-func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 

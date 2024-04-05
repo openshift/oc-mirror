@@ -11,8 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -23,12 +22,12 @@ import (
 
 type SignatureSchema struct {
 	Log    clog.PluggableLoggerInterface
-	Config v1alpha2.ImageSetConfiguration
+	Config v2alpha1.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	pgpKey string
 }
 
-func NewSignatureClient(log clog.PluggableLoggerInterface, config v1alpha2.ImageSetConfiguration, opts mirror.CopyOptions) SignatureInterface {
+func NewSignatureClient(log clog.PluggableLoggerInterface, config v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions) SignatureInterface {
 	var pgp string
 	if pgpKeyOverride := os.Getenv("OCP_SIGNATURE_VERIFICATION_PK"); len(pgpKeyOverride) != 0 {
 		log.Debug("OCP_SIGNATURE_VERIFICATION_PK environment variable set: using PGP key in %s for OCP signature verification", pgpKeyOverride)
@@ -48,10 +47,10 @@ func NewSignatureClient(log clog.PluggableLoggerInterface, config v1alpha2.Image
 }
 
 // GenerateReleaseSignatures
-func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error) {
+func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 
 	var data []byte
-	var imgs []v1alpha3.CopyImageSchema
+	var imgs []v2alpha1.CopyImageSchema
 	var digest string
 	// set up http object
 	tr := &http.Transport{
@@ -62,7 +61,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	for _, img := range images {
 		imgSpec, err := image.ParseRef(img.Source)
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("parsing image digest")
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
 		}
 		digest = imgSpec.Digest
 
@@ -77,7 +76,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				}
 			}
 		} else {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("parsing image digest")
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
 		}
 
 		// we have the current digest in cache
@@ -158,11 +157,11 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 
 			o.Log.Debug("content %s", string(content))
 			// update the image with the actaul reference from the contents json
-			var signSchema *v1alpha3.SignatureContentSchema
+			var signSchema *v2alpha1.SignatureContentSchema
 			err = json.Unmarshal(content, &signSchema)
 			if err != nil {
 				o.Log.Error("could not unmarshal json %v", err)
-				return []v1alpha3.CopyImageSchema{}, err
+				return []v2alpha1.CopyImageSchema{}, err
 			}
 			img.Source = signSchema.Critical.Identity.DockerReference
 			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
@@ -176,7 +175,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			imgs = append(imgs, img)
 		} else {
 			o.Log.Warn("no signature found for %s", digest)
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)
 		}
 	}
 	return imgs, nil

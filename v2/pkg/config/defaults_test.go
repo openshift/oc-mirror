@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -11,19 +11,19 @@ func TestComplete(t *testing.T) {
 
 	type spec struct {
 		name      string
-		config    v1alpha2.ImageSetConfiguration
-		expConfig v1alpha2.ImageSetConfiguration
+		config    v2alpha1.ImageSetConfiguration
+		expConfig v2alpha1.ImageSetConfiguration
 	}
 
 	cases := []spec{
 		{
 			name: "Invalid/UnsupportedReleaseArchitecture",
-			config: v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Platform: v1alpha2.Platform{
+			config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
 							Architectures: []string{},
-							Channels: []v1alpha2.ReleaseChannel{
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel1",
 								},
@@ -35,12 +35,12 @@ func TestComplete(t *testing.T) {
 					},
 				},
 			},
-			expConfig: v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Platform: v1alpha2.Platform{
-							Architectures: []string{v1alpha2.DefaultPlatformArchitecture},
-							Channels: []v1alpha2.ReleaseChannel{
+			expConfig: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
+							Architectures: []string{v2alpha1.DefaultPlatformArchitecture},
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel1",
 								},
@@ -67,19 +67,19 @@ func TestDeleteComplete(t *testing.T) {
 
 	type spec struct {
 		name      string
-		config    v1alpha2.DeleteImageSetConfiguration
-		expConfig v1alpha2.DeleteImageSetConfiguration
+		config    v2alpha1.DeleteImageSetConfiguration
+		expConfig v2alpha1.DeleteImageSetConfiguration
 	}
 
 	cases := []spec{
 		{
 			name: "Invalid/UnsupportedReleaseArchitecture",
-			config: v1alpha2.DeleteImageSetConfiguration{
-				DeleteImageSetConfigurationSpec: v1alpha2.DeleteImageSetConfigurationSpec{
-					Delete: v1alpha2.Delete{
-						Platform: v1alpha2.Platform{
+			config: v2alpha1.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+					Delete: v2alpha1.Delete{
+						Platform: v2alpha1.Platform{
 							Architectures: []string{},
-							Channels: []v1alpha2.ReleaseChannel{
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel1",
 								},
@@ -91,12 +91,12 @@ func TestDeleteComplete(t *testing.T) {
 					},
 				},
 			},
-			expConfig: v1alpha2.DeleteImageSetConfiguration{
-				DeleteImageSetConfigurationSpec: v1alpha2.DeleteImageSetConfigurationSpec{
-					Delete: v1alpha2.Delete{
-						Platform: v1alpha2.Platform{
-							Architectures: []string{v1alpha2.DefaultPlatformArchitecture},
-							Channels: []v1alpha2.ReleaseChannel{
+			expConfig: v2alpha1.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+					Delete: v2alpha1.Delete{
+						Platform: v2alpha1.Platform{
+							Architectures: []string{v2alpha1.DefaultPlatformArchitecture},
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel1",
 								},

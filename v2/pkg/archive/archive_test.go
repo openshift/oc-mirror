@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/stretchr/testify/assert"
@@ -67,7 +67,7 @@ func TestArchive_BuildArchive(t *testing.T) {
 		}
 		defer os.RemoveAll(testFolder)
 
-		images := []v1alpha3.CopyImageSchema{
+		images := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
 				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
@@ -92,7 +92,7 @@ func TestArchive_BuildArchive(t *testing.T) {
 		}
 		defer os.RemoveAll(testFolder)
 
-		images := []v1alpha3.CopyImageSchema{
+		images := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
 				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
@@ -119,7 +119,7 @@ func TestArchive_CacheDirError(t *testing.T) {
 	}
 	defer os.RemoveAll(testFolder)
 
-	images := []v1alpha3.CopyImageSchema{
+	images := []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
 			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
@@ -146,7 +146,7 @@ func TestArchive_WorkingDirError(t *testing.T) {
 	}
 	defer os.RemoveAll(testFolder)
 
-	images := []v1alpha3.CopyImageSchema{
+	images := []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
 			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
@@ -173,7 +173,7 @@ func TestArchive_FileError(t *testing.T) {
 	}
 	defer os.RemoveAll(testFolder)
 
-	images := []v1alpha3.CopyImageSchema{
+	images := []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
 			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",

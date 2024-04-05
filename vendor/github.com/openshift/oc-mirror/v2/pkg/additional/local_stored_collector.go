@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
@@ -17,7 +16,7 @@ type LocalStorageCollector struct {
 	Log              clog.PluggableLoggerInterface
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
-	Config           v1alpha2.ImageSetConfiguration
+	Config           v2alpha1.ImageSetConfiguration
 	Opts             mirror.CopyOptions
 	LocalStorageFQDN string
 	destReg          string
@@ -37,9 +36,9 @@ func (o LocalStorageCollector) destinationRegistry() string {
 // AdditionalImagesCollector - this looks into the additional images field
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded in oci format
-func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 
-	var allImages []v1alpha3.CopyImageSchema
+	var allImages []v2alpha1.CopyImageSchema
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 
@@ -62,7 +61,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			o.Log.Debug(collectorPrefix+"source %s", src)
 			o.Log.Debug(collectorPrefix+"destination %s", dest)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v1alpha2.TypeGeneric})
+			allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v2alpha1.TypeGeneric})
 
 		}
 	}
@@ -100,7 +99,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			o.Log.Debug(collectorPrefix+"source %s", src)
 			o.Log.Debug(collectorPrefix+"destination %s", dest)
-			allImages = append(allImages, v1alpha3.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest, Type: v1alpha2.TypeGeneric})
+			allImages = append(allImages, v2alpha1.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest, Type: v2alpha1.TypeGeneric})
 		}
 	}
 	return allImages, nil

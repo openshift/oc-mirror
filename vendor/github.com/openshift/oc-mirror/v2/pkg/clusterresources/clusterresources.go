@@ -12,8 +12,7 @@ import (
 
 	confv1 "github.com/openshift/api/config/v1"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/pkg/api/operator-framework/v1alpha1"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
@@ -30,7 +29,7 @@ const (
 
 func New(log clog.PluggableLoggerInterface,
 	workingDir string,
-	conf v1alpha2.ImageSetConfiguration,
+	conf v2alpha1.ImageSetConfiguration,
 ) GeneratorInterface {
 	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, Config: conf}
 }
@@ -38,7 +37,7 @@ func New(log clog.PluggableLoggerInterface,
 type ClusterResourcesGenerator struct {
 	Log        clog.PluggableLoggerInterface
 	WorkingDir string
-	Config     v1alpha2.ImageSetConfiguration
+	Config     v2alpha1.ImageSetConfiguration
 }
 
 type imageMirrorsGeneratorMode int
@@ -61,7 +60,7 @@ const (
 	itmsFileName = "itms-oc-mirror.yaml"
 )
 
-func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
+func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error {
 	o.Log.Info("📄 Generating IDMS and ITMS files...")
 
 	// byDigestMirrors
@@ -169,10 +168,10 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 	return err
 }
 
-func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	o.Log.Info("📄 Generating CatalogSource file...")
 	for _, copyImage := range allRelatedImages {
-		if copyImage.Type == v1alpha2.TypeOperatorCatalog {
+		if copyImage.Type == v2alpha1.TypeOperatorCatalog {
 			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
 			template := o.getCSTemplate(copyImage.Origin)
 			err := o.generateCatalogSource(copyImage.Destination, template)
@@ -366,13 +365,13 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 	return idmsList, nil
 }
 
-func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1alpha3.CopyImageSchema, mode imageMirrorsGeneratorMode, forceRepositoryScope bool) ([]categorizedMirrors, error) {
+func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2alpha1.CopyImageSchema, mode imageMirrorsGeneratorMode, forceRepositoryScope bool) ([]categorizedMirrors, error) {
 	mirrorsByCategory := make(map[mirrorCategory]categorizedMirrors)
 	for _, relatedImage := range allRelatedImages {
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
 		}
-		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph || relatedImage.Type == v1alpha2.TypeOperatorCatalog {
+		if relatedImage.Type == v2alpha1.TypeCincinnatiGraph || relatedImage.Type == v2alpha1.TypeOperatorCatalog {
 			// cincinnati graph images and operator catalog images don't need to be in the IDMS/ITMS file.
 			// * cincinnati graph image has been generated from scratch by oc-mirror and will be copied to the destination registry.
 			// The updateservice.yaml file will instruct the cluster to use it.
@@ -532,23 +531,23 @@ func (m mirrorCategory) toString() string {
 	}
 }
 
-func imageTypeToCategory(imageType v1alpha2.ImageType) mirrorCategory {
+func imageTypeToCategory(imageType v2alpha1.ImageType) mirrorCategory {
 	switch imageType {
-	case v1alpha2.TypeCincinnatiGraph:
+	case v2alpha1.TypeCincinnatiGraph:
 		return releaseCategory
-	case v1alpha2.TypeGeneric:
+	case v2alpha1.TypeGeneric:
 		return genericCategory
-	case v1alpha2.TypeOCPRelease:
+	case v2alpha1.TypeOCPRelease:
 		return releaseCategory
-	case v1alpha2.TypeOCPReleaseContent:
+	case v2alpha1.TypeOCPReleaseContent:
 		return releaseCategory
-	case v1alpha2.TypeOperatorBundle:
+	case v2alpha1.TypeOperatorBundle:
 		return operatorCategory
-	case v1alpha2.TypeOperatorCatalog:
+	case v2alpha1.TypeOperatorCatalog:
 		return operatorCategory
-	case v1alpha2.TypeOperatorRelatedImage:
+	case v2alpha1.TypeOperatorRelatedImage:
 		return operatorCategory
-	case v1alpha2.TypeInvalid:
+	case v2alpha1.TypeInvalid:
 		return genericCategory
 	default:
 		return genericCategory

@@ -966,8 +966,7 @@ github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
 ## explicit; go 1.19
 github.com/openshift/oc-mirror/v2/pkg/additional
 github.com/openshift/oc-mirror/v2/pkg/api/operator-framework/v1alpha1
-github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2
-github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3
+github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1
 github.com/openshift/oc-mirror/v2/pkg/archive
 github.com/openshift/oc-mirror/v2/pkg/batch
 github.com/openshift/oc-mirror/v2/pkg/cli

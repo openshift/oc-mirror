@@ -11,8 +11,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
@@ -25,7 +24,7 @@ type LocalStorageCollector struct {
 	LogsDir          string
 	Mirror           mirror.MirrorInterface
 	Manifest         manifest.ManifestInterface
-	Config           v1alpha2.ImageSetConfiguration
+	Config           v2alpha1.ImageSetConfiguration
 	Opts             mirror.CopyOptions
 	LocalStorageFQDN string
 	destReg          string
@@ -46,32 +45,32 @@ func (o LocalStorageCollector) destinationRegistry() string {
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded (oci format) and the index.json is inspected
 // once unmarshalled, the links to manifests are inspected
-func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 
 	var (
-		allImages   []v1alpha3.CopyImageSchema
+		allImages   []v2alpha1.CopyImageSchema
 		label       string
 		dir         string
 		catalogName string
 	)
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting operator images", o.Opts.MultiArch)
 
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 
 	for _, op := range o.Config.Mirror.Operators {
 		// download the operator index image
 		o.Log.Debug(collectorPrefix+"copying operator image %s", op.Catalog)
 
 		// CLID-47 double check that targetCatalog is valid
-		if op.TargetCatalog != "" && !v1alpha2.IsValidPathComponent(op.TargetCatalog) {
+		if op.TargetCatalog != "" && !v2alpha1.IsValidPathComponent(op.TargetCatalog) {
 			o.Log.Error(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
 		}
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
@@ -82,7 +81,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		imageIndexDir := filepath.Join(imgSpec.ComponentName(), catalogDigest)
@@ -98,7 +97,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				err := copy.Copy(imgSpec.PathComponent, dir)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
-					return []v1alpha3.CopyImageSchema{}, err
+					return []v2alpha1.CopyImageSchema{}, err
 				}
 			}
 
@@ -112,7 +111,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
-					return []v1alpha3.CopyImageSchema{}, err
+					return []v2alpha1.CopyImageSchema{}, err
 				}
 				src := dockerProtocol + op.Catalog
 				dest := ociProtocolTrimmed + dir
@@ -132,7 +131,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		oci, err := o.Manifest.GetImageIndex(dir)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		var catalogImage string
@@ -140,13 +139,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			err = o.Manifest.ConvertIndexToSingleManifest(dir, oci)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				return []v1alpha3.CopyImageSchema{}, err
+				return []v2alpha1.CopyImageSchema{}, err
 			}
 
 			oci, err = o.Manifest.GetImageIndex(dir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				return []v1alpha3.CopyImageSchema{}, err
+				return []v2alpha1.CopyImageSchema{}, err
 			}
 
 			catalogImage = ociProtocol + dir
@@ -156,13 +155,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 
 		if len(oci.Manifests) == 0 {
 			o.Log.Error(collectorPrefix+"no manifests found for %s ", op.Catalog)
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"no manifests found for %s ", op.Catalog)
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"no manifests found for %s ", op.Catalog)
 		}
 
 		validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
 			o.Log.Error(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 		}
 
 		manifest := validDigest.Encoded()
@@ -172,7 +171,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		oci, err = o.Manifest.GetImageManifest(manifestDir)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		// we need to check if oci returns multi manifests
@@ -183,13 +182,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			subDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
 				o.Log.Error(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
-				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 			}
 			manifestDir := filepath.Join(dir, blobsDir, subDigest.Encoded())
 			oci, err = o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
 				o.Log.Error(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
-				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
 			}
 		}
 
@@ -198,13 +197,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		configDigest, err := digest.Parse(oci.Config.Digest)
 		if err != nil {
 			o.Log.Error(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 		}
 		catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 		ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		label = ocs.Config.Labels.OperatorsOperatorframeworkIoIndexConfigsV1
@@ -216,19 +215,19 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, label, oci)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		operatorCatalog, err := o.Manifest.GetCatalog(filepath.Join(cacheDir, label))
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		ri, err := o.Manifest.GetRelatedImagesFromCatalog(operatorCatalog, op)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 		for k, v := range ri {
 			relatedImages[k] = v
@@ -254,11 +253,11 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 
 		componentName := imgSpec.ComponentName() + "." + catalogDigest
 
-		relatedImages[componentName] = []v1alpha3.RelatedImage{
+		relatedImages[componentName] = []v2alpha1.RelatedImage{
 			{
 				Name:          catalogName,
 				Image:         catalogImage,
-				Type:          v1alpha2.TypeOperatorCatalog,
+				Type:          v2alpha1.TypeOperatorCatalog,
 				TargetTag:     targetTag,
 				TargetCatalog: targetCatalog,
 			},
@@ -277,7 +276,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 	}
 
@@ -285,18 +284,18 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		allImages, err = o.prepareD2MCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 	}
 	return allImages, nil
 }
 
-func isMultiManifestIndex(oci v1alpha3.OCISchema) bool {
+func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
 	return len(oci.Manifests) > 1
 }
 
-func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
-	var result []v1alpha3.CopyImageSchema
+func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	var result []v2alpha1.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -310,7 +309,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			// prepare the src and dest references
 			switch {
-			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0: // applies only to catalogs
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0: // applies only to catalogs
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, img.TargetCatalog}, "/")
 			case imgSpec.Transport == ociProtocol:
@@ -323,7 +322,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			// add the tag for src and dest
 			switch {
-			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0: // applies only to catalogs
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0: // applies only to catalogs
 				src = src + ":" + img.TargetTag
 				dest = dest + ":" + img.TargetTag
 			case imgSpec.Tag == "":
@@ -339,14 +338,14 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v1alpha3.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
+			result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
 		}
 	}
 	return result, nil
 }
 
-func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
-	var result []v1alpha3.CopyImageSchema
+func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	var result []v2alpha1.CopyImageSchema
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -357,14 +356,14 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			}
 
 			src = imgSpec.ReferenceWithTransport
-			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
+			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
 			} else if imgSpec.Transport == ociProtocol {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
 			}
-			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0 {
+			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0 {
 				dest = dest + ":" + img.TargetTag
 			} else if imgSpec.Tag == "" {
 				dest = dest + ":" + imgSpec.Digest
@@ -374,7 +373,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+			result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
 
 		}
 	}

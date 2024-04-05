@@ -15,8 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
@@ -169,20 +168,20 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 	if o.Opts.Global.DeleteGenerate {
 		o.Log.Debug("delete imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 		// read and validate the DeleteImageSetConfiguration
-		cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.DeleteImageSetConfigurationKind)
+		cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v2alpha1.DeleteImageSetConfigurationKind)
 		if err != nil {
 			return err
 		}
-		converted := cfg.(v1alpha2.DeleteImageSetConfiguration)
+		converted := cfg.(v2alpha1.DeleteImageSetConfiguration)
 		o.Log.Trace("delete imagesetconfig : %v ", converted)
 		if converted.Kind != "DeleteImageSetConfiguration" {
 			return fmt.Errorf("using the delete functionality requires the 'DeleteImageSetConfiguration' kind set in the yaml file")
 		}
 		// we now coerce deleteimagesetconfig to imagesetconfig
 		// as we want to use the underlying logic (filtering etc)
-		isc := v1alpha2.ImageSetConfiguration{
-			ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-				Mirror: v1alpha2.Mirror{
+		isc := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
 					Platform:         converted.Delete.Platform,
 					Operators:        converted.Delete.Operators,
 					AdditionalImages: converted.Delete.AdditionalImages,
@@ -283,7 +282,7 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 		o.Log.Info("🕵️  going to discover the necessary images...")
 		o.Log.Info("🔍 collecting release images...")
 		// convert release images
-		var allImages []v1alpha3.CopyImageSchema
+		var allImages []v2alpha1.CopyImageSchema
 		for _, i := range releaseImages {
 			ai, err := o.Delete.ConvertReleaseImages(i)
 			if err != nil {

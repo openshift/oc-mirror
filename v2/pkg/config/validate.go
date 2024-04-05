@@ -5,17 +5,17 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
-type validationFunc func(cfg *v1alpha2.ImageSetConfiguration) error
-type validationDeleteFunc func(cfg *v1alpha2.DeleteImageSetConfiguration) error
+type validationFunc func(cfg *v2alpha1.ImageSetConfiguration) error
+type validationDeleteFunc func(cfg *v2alpha1.DeleteImageSetConfiguration) error
 
 var validationChecks = []validationFunc{validateOperatorOptions, validateReleaseChannels}
 var validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
 
 // Validate will check an ImagesetConfiguration for input errors.
-func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
+func Validate(cfg *v2alpha1.ImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationChecks {
 		if err := check(cfg); err != nil {
@@ -25,7 +25,7 @@ func Validate(cfg *v1alpha2.ImageSetConfiguration) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
+func validateOperatorOptions(cfg *v2alpha1.ImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, ctlg := range cfg.Mirror.Operators {
 		ctlgName, err := ctlg.GetUniqueName()
@@ -45,7 +45,7 @@ func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 	}
 	return nil
 }
-func validateOperatorFiltering(ctlg v1alpha2.Operator) error {
+func validateOperatorFiltering(ctlg v2alpha1.Operator) error {
 	if len(ctlg.Packages) > 0 {
 		for _, pkg := range ctlg.Packages {
 			if len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.MaxVersion != "" || pkg.MinVersion != "") {
@@ -55,7 +55,7 @@ func validateOperatorFiltering(ctlg v1alpha2.Operator) error {
 	}
 	return nil
 }
-func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
+func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, channel := range cfg.Mirror.Platform.Channels {
 		if seen[channel.Name] {
@@ -69,7 +69,7 @@ func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
 }
 
 // ValidateDelete will check an DeleteImagesetConfiguration for input errors.
-func ValidateDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+func ValidateDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
 	var errs []error
 	for _, check := range validationDeleteChecks {
 		if err := check(cfg); err != nil {
@@ -79,7 +79,7 @@ func ValidateDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateOperatorOptionsDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+func validateOperatorOptionsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, ctlg := range cfg.Delete.Operators {
 		ctlgName, err := ctlg.GetUniqueName()
@@ -96,7 +96,7 @@ func validateOperatorOptionsDelete(cfg *v1alpha2.DeleteImageSetConfiguration) er
 	return nil
 }
 
-func validateReleaseChannelsDelete(cfg *v1alpha2.DeleteImageSetConfiguration) error {
+func validateReleaseChannelsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, channel := range cfg.Delete.Platform.Channels {
 		if seen[channel.Name] {

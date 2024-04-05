@@ -11,11 +11,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 // ReadConfig opens an imageset configuration file at the given path
-// and loads it into a v1alpha2.ImageSetConfiguration instance for processing and validation.
+// and loads it into a v2alpha1.ImageSetConfiguration instance for processing and validation.
 func ReadConfig(configPath string, kind string) (interface{}, error) {
 
 	result := interface{}(nil)
@@ -38,12 +38,12 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 	}
 
 	switch typeMeta.GroupVersionKind() {
-	case v1alpha2.GroupVersion.WithKind(v1alpha2.ImageSetConfigurationKind):
+	case v2alpha1.GroupVersion.WithKind(v2alpha1.ImageSetConfigurationKind):
 		if strings.Contains(string(data), "delete:") {
 			return result, fmt.Errorf("delete: is not allowed in ImageSetConfiguration")
 		}
-		cfg, err := LoadConfig[v1alpha2.ImageSetConfiguration](data, v1alpha2.ImageSetConfigurationKind)
-		gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.ImageSetConfigurationKind)
+		cfg, err := LoadConfig[v2alpha1.ImageSetConfiguration](data, v2alpha1.ImageSetConfigurationKind)
+		gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.ImageSetConfigurationKind)
 		cfg.SetGroupVersionKind(gvk)
 		if err != nil {
 			return result, err
@@ -54,12 +54,12 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 			return result, err
 		}
 		return cfg, nil
-	case v1alpha2.GroupVersion.WithKind(v1alpha2.DeleteImageSetConfigurationKind):
+	case v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind):
 		if strings.Contains(string(data), "mirror:") {
 			return result, fmt.Errorf("mirror: is not allowed in DeleteImageSetConfiguration")
 		}
-		cfg, err := LoadConfig[v1alpha2.DeleteImageSetConfiguration](data, v1alpha2.DeleteImageSetConfigurationKind)
-		gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.DeleteImageSetConfigurationKind)
+		cfg, err := LoadConfig[v2alpha1.DeleteImageSetConfiguration](data, v2alpha1.DeleteImageSetConfigurationKind)
+		gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind)
 		cfg.SetGroupVersionKind(gvk)
 		if err != nil {
 			return result, err
@@ -76,8 +76,8 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 	}
 }
 
-// LoadConfig loads data into a v1alpha2.ImageSetConfiguration or
-// v1alpha2.DeleteImageSetConfiguration instance
+// LoadConfig loads data into a v2alpha1.ImageSetConfiguration or
+// v2alpha1.DeleteImageSetConfiguration instance
 func LoadConfig[T any](data []byte, kind string) (c T, err error) {
 
 	if data, err = yaml.YAMLToJSON(data); err != nil {
@@ -93,10 +93,10 @@ func LoadConfig[T any](data []byte, kind string) (c T, err error) {
 	return res, nil
 }
 
-// LoadConfigDelete loads data into a v1alpha2.ImageSetConfiguration instance
-func LoadConfigDelete(data []byte) (c v1alpha2.DeleteImageSetConfiguration, err error) {
+// LoadConfigDelete loads data into a v2alpha1.ImageSetConfiguration instance
+func LoadConfigDelete(data []byte) (c v2alpha1.DeleteImageSetConfiguration, err error) {
 
-	gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.DeleteImageSetConfigurationKind)
+	gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind)
 
 	if data, err = yaml.YAMLToJSON(data); err != nil {
 		return c, fmt.Errorf("yaml to json %s: %v", gvk, err)
@@ -111,22 +111,6 @@ func LoadConfigDelete(data []byte) (c v1alpha2.DeleteImageSetConfiguration, err 
 	c.SetGroupVersionKind(gvk)
 
 	return c, nil
-}
-
-// LoadMetadata loads data into a v1alpha2.Metadata instance
-func LoadMetadata(data []byte) (m v1alpha2.Metadata, err error) {
-
-	gvk := v1alpha2.GroupVersion.WithKind(v1alpha2.MetadataKind)
-
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&m); err != nil {
-		return m, fmt.Errorf("decode %s: %v", gvk, err)
-	}
-
-	m.SetGroupVersionKind(gvk)
-
-	return m, nil
 }
 
 func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {

@@ -1,19 +1,18 @@
-package v1alpha3
+package v2alpha1
 
 import (
 	"time"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
 
 // ReleaseSchema
 type ReleaseSchema struct {
-	Kind       string   `json:"kind"`
-	APIVersion string   `json:"apiVersion"`
-	Metadata   Metadata `json:"metadata"`
-	Spec       Spec     `json:"spec"`
-	Status     Status   `json:"status"`
+	Kind       string          `json:"kind"`
+	APIVersion string          `json:"apiVersion"`
+	Metadata   ReleaseMetadata `json:"metadata"`
+	Spec       Spec            `json:"spec"`
+	Status     Status          `json:"status"`
 }
 
 // MetadataAnnotations
@@ -22,8 +21,8 @@ type MetadataAnnotations struct {
 	ReleaseOpenshiftIoFromRelease     string `json:"release.openshift.io/from-release"`
 }
 
-// Metadata
-type Metadata struct {
+// ReleaseMetadata
+type ReleaseMetadata struct {
 	Name              string              `json:"name"`
 	CreationTimestamp time.Time           `json:"creationTimestamp"`
 	Annotations       MetadataAnnotations `json:"annotations"`
@@ -186,7 +185,7 @@ type RelatedImage struct {
 	// Type: metadata to explain why this image is being copied
 	// it doesn't need to be persisted to JSON
 	// This field doesn't exist in the catalog declarativeConfig.
-	Type v1alpha2.ImageType `json:"-"`
+	Type ImageType `json:"-"`
 	// Used to keep specific tag info for the related image
 	// if set should be used when mirroring
 	TargetTag string `json:"targetTag"`
@@ -212,7 +211,7 @@ type CopyImageSchema struct {
 	Origin string
 	// Type: metadata to explain why this image is being copied
 	// it doesn´t need to be persisted to json
-	Type v1alpha2.ImageType `json:"-"`
+	Type ImageType `json:"-"`
 }
 
 // SignatureContentSchema

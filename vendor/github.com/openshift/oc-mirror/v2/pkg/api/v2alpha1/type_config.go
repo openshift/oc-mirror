@@ -1,4 +1,4 @@
-package v1alpha2
+package v2alpha1
 
 import (
 	"fmt"
@@ -25,8 +25,6 @@ type ImageSetConfigurationSpec struct {
 	Mirror Mirror `json:"mirror"`
 	// ArchiveSize is the size of the segmented archive in GB
 	ArchiveSize int64 `json:"archiveSize,omitempty"`
-	// StorageConfig for reading/writing metadata and files.
-	StorageConfig StorageConfig `json:"storageConfig"`
 }
 
 // DeleteImageSetConfiguration object kind.

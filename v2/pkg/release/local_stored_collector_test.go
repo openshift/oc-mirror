@@ -10,8 +10,7 @@ import (
 
 	"github.com/containers/image/v5/types"
 	"github.com/google/uuid"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -31,7 +30,7 @@ type MockManifest struct {
 }
 
 type MockCincinnati struct {
-	Config v1alpha2.ImageSetConfiguration
+	Config v2alpha1.ImageSetConfiguration
 	Opts   mirror.CopyOptions
 	Client Client
 	Fail   bool
@@ -196,12 +195,12 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		Mode:                mirror.DiskToMirror,
 	}
 
-	cfgd2m := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
+	cfgd2m := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
 					Architectures: []string{"amd64"},
-					Channels: []v1alpha2.ReleaseChannel{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
 							Name:       "stable-4.13",
 							MinVersion: "4.13.9",
@@ -253,11 +252,11 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		Mode:                mirror.MirrorToDisk,
 	}
 
-	cfgm2d := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
-					Channels: []v1alpha2.ReleaseChannel{
+	cfgm2d := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
 							Name: "stable-4.7",
 						},
@@ -268,12 +267,12 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 						},
 						{
 							Name: "okd",
-							Type: v1alpha2.TypeOKD,
+							Type: v2alpha1.TypeOKD,
 						},
 					},
 					Graph: true,
 				},
-				Operators: []v1alpha2.Operator{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog: "redhat-operators:v4.7",
 						Full:    true,
@@ -281,18 +280,18 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 					{
 						Catalog: "certified-operators:v4.7",
 						Full:    true,
-						IncludeConfig: v1alpha2.IncludeConfig{
-							Packages: []v1alpha2.IncludePackage{
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
 								{Name: "couchbase-operator"},
 								{
 									Name: "mongodb-operator",
-									IncludeBundle: v1alpha2.IncludeBundle{
+									IncludeBundle: v2alpha1.IncludeBundle{
 										MinVersion: "1.4.0",
 									},
 								},
 								{
 									Name: "crunchy-postgresql-operator",
-									Channels: []v1alpha2.IncludeChannel{
+									Channels: []v2alpha1.IncludeChannel{
 										{Name: "stable"},
 									},
 								},
@@ -303,31 +302,31 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 						Catalog: "community-operators:v4.7",
 					},
 				},
-				AdditionalImages: []v1alpha2.Image{
+				AdditionalImages: []v2alpha1.Image{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
 				},
-				Helm: v1alpha2.Helm{
-					Repositories: []v1alpha2.Repository{
+				Helm: v2alpha1.Helm{
+					Repositories: []v2alpha1.Repository{
 						{
 							URL:  "https://stefanprodan.github.io/podinfo",
 							Name: "podinfo",
-							Charts: []v1alpha2.Chart{
+							Charts: []v2alpha1.Chart{
 								{Name: "podinfo", Version: "5.0.0"},
 							},
 						},
 					},
-					Local: []v1alpha2.Chart{
+					Local: []v2alpha1.Chart{
 						{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
 					},
 				},
-				BlockedImages: []v1alpha2.Image{
+				BlockedImages: []v2alpha1.Image{
 					{Name: "alpine"},
 					{Name: "redis"},
 				},
-				Samples: []v1alpha2.SampleImages{
-					{Image: v1alpha2.Image{Name: "ruby"}},
-					{Image: v1alpha2.Image{Name: "python"}},
-					{Image: v1alpha2.Image{Name: "nginx"}},
+				Samples: []v2alpha1.SampleImages{
+					{Image: v2alpha1.Image{Name: "ruby"}},
+					{Image: v2alpha1.Image{Name: "python"}},
+					{Image: v2alpha1.Image{Name: "nginx"}},
 				},
 			},
 		},
@@ -359,12 +358,12 @@ func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOp
 	return true, nil
 }
 
-func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
+func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return nil, nil
 }
 
-func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
-	relatedImages := []v1alpha3.RelatedImage{
+func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	relatedImages := []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebeb"},
 		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebec"},
@@ -373,13 +372,13 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageIndex {
-		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
-	return &v1alpha3.OCISchema{
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
@@ -389,21 +388,21 @@ func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageManifest {
-		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
 
-	return &v1alpha3.OCISchema{
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 				Size:      567,
 			},
 		},
-		Config: v1alpha3.OCIManifest{
+		Config: v2alpha1.OCIManifest{
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 			Size:      567,
@@ -415,23 +414,23 @@ func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, err
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	relatedImages["abc"] = []v1alpha3.RelatedImage{
+func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
+	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 	}
 	return relatedImages, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -439,9 +438,9 @@ func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemCont
 	return "", nil
 }
 
-func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
-	var res []v1alpha3.CopyImageSchema
-	res = append(res, v1alpha3.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})
+func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
+	var res []v2alpha1.CopyImageSchema
+	res = append(res, v2alpha1.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})
 	return res
 }
 
@@ -456,6 +455,6 @@ func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
 	return o.Client, nil
 }
 
-func (o MockCincinnati) GenerateReleaseSignatures(context.Context, []v1alpha3.RelatedImage) {
+func (o MockCincinnati) GenerateReleaseSignatures(context.Context, []v2alpha1.RelatedImage) {
 	fmt.Println("test release signature")
 }
