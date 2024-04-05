@@ -39,6 +39,18 @@ type LocalStorageCollector struct {
 	ImageBuilder     imagebuilder.ImageBuilderInterface
 	Releases         []string
 	GraphDataImage   string
+	destReg          string
+}
+
+func (o LocalStorageCollector) destinationRegistry() string {
+	if o.destReg == "" {
+		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+		} else {
+			o.destReg = o.LocalStorageFQDN
+		}
+	}
+	return o.destReg
 }
 
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
@@ -47,7 +59,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 	var allImages []v1alpha3.CopyImageSchema
 	var imageIndexDir string
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
 		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
 
 		releasesForFilter := releasesForFilter{
@@ -270,14 +282,14 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		}
 		src = imgSpec.ReferenceWithTransport
 		if imgSpec.IsImageByDigest() {
-			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
+			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
 		} else {
-			dest = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
+			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
 
 		}
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
 	}
 	return result, nil
 }

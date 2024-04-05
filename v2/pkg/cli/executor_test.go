@@ -183,6 +183,81 @@ func TestExecutorMirroring(t *testing.T) {
 
 }
 
+func TestRunMirrorToMirror(t *testing.T) {
+	testFolder := t.TempDir()
+	defer os.RemoveAll(testFolder)
+	defer os.Remove("../../pkg/cli/registry.log")
+
+	workDir := filepath.Join(testFolder, "tests")
+	//copy tests/hold-test-fake to working-dir
+	err := copy.Copy("../../tests/working-dir-fake", workDir)
+	if err != nil {
+		t.Fatalf("should not fail to copy: %v", err)
+	}
+	log := clog.New("trace")
+
+	global := &mirror.GlobalOptions{
+		TlsVerify:    false,
+		SecurePolicy: false,
+		Force:        true,
+		WorkingDir:   workDir,
+	}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := &mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+		Mode:                mirror.MirrorToMirror,
+		Destination:         "docker://test",
+	}
+
+	// read the ImageSetConfiguration
+	cfg, err := config.ReadConfig(opts.Global.ConfigPath)
+	if err != nil {
+		log.Error("imagesetconfig %v ", err)
+	}
+	log.Debug("imagesetconfig : %v", cfg)
+
+	nie := NormalStorageInterruptError{}
+	nie.Is(fmt.Errorf("interrupt error"))
+
+	t.Run("Testing Executor : mirrorToMirror should pass", func(t *testing.T) {
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
+		cr := MockClusterResources{}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			Config:           cfg,
+			Opts:             opts,
+			Operator:         collector,
+			Release:          collector,
+			AdditionalImages: collector,
+			Batch:            batch,
+			MakeDir:          MakeDir{},
+			LogsDir:          "/tmp/",
+			ClusterResources: cr,
+		}
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
+		res.SilenceUsage = true
+		err := ex.Run(res, []string{"docker://test"})
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+	})
+}
+
 // TestNewMirrorCommand this covers both NewMirrorCmd and NewPrepareCommand
 // we ignore any return values - we are only intersted in code coverage
 func TestExecutorNewMirrorCommand(t *testing.T) {
@@ -234,11 +309,6 @@ func TestExecutorValidate(t *testing.T) {
 		err = ex.Validate([]string{"file://test"})
 		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
 
-		// check when using docker protocol --from should be used
-		opts.Global.ConfigPath = "test"
-		err = ex.Validate([]string{"docker://test"})
-		assert.Equal(t, "when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory", err.Error())
-
 		// check when using file protocol --from should not be used
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "test"
@@ -268,6 +338,31 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = ""
 		opts.Global.SinceString = "224-44-01"
 		assert.Equal(t, "--since flag needs to be in format yyyy-MM-dd", ex.Validate([]string{"file://test"}).Error())
+
+		// should not be able to use --workspace in mirror-to-disk workflow
+		opts.Global.SinceString = "" //reset
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		opts.Global.WorkingDir = "file://test"
+		assert.Equal(t, "when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed", ex.Validate([]string{"file://test"}).Error())
+
+		// should not be able to use --workspace and --from together at the same time
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "file://abc"
+		opts.Global.WorkingDir = "file://test"
+		assert.Equal(t, "when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together", ex.Validate([]string{"docker://test"}).Error())
+
+		// should be able to run mirror-to-mirror with a specific workingDir (--workspace)
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "" //reset
+		opts.Global.WorkingDir = "file://test"
+		assert.NoError(t, ex.Validate([]string{"docker://test"}))
+
+		// should not be able to run mirror-to-mirror  without specifying workspace
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""       //reset
+		opts.Global.WorkingDir = "" //reset
+		assert.Equal(t, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided", ex.Validate([]string{"docker://test"}).Error())
 	})
 }
 
@@ -312,7 +407,7 @@ func TestExecutorComplete(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 
-		// docker protocol
+		// docker protocol - disk to mirror
 		testFolder := t.TempDir()
 		defer os.RemoveAll(testFolder)
 		ex.Opts.Global.From = "file://" + testFolder
@@ -321,6 +416,18 @@ func TestExecutorComplete(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 
+		// docker protocol - mirror to mirror
+		ex.Opts.Global.From = ""
+		ex.Opts.Global.WorkingDir = "file://" + testFolder
+		err = ex.Complete([]string{"docker://tmp/test"})
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		assert.Equal(t, filepath.Join(testFolder, workingDir), ex.Opts.Global.WorkingDir)
+
+		// diskToMirror - using since
+		ex.Opts.Global.From = "file://" + testFolder
+		ex.Opts.Global.WorkingDir = ""
 		ex.Opts.Global.SinceString = "2024-01-01"
 		err = ex.Complete([]string{"file:///tmp/test"})
 		if err != nil {

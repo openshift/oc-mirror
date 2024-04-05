@@ -49,6 +49,7 @@ const (
 	releaseImageDir         string = "release-images"
 	logsDir                 string = "logs"
 	workingDir              string = "working-dir"
+	ocmirrorRelativePath    string = ".oc-mirror"
 	cacheRelativePath       string = ".oc-mirror/.cache"
 	cacheEnvVar             string = "OC_MIRROR_CACHE"
 	additionalImages        string = "additional-images"
@@ -86,6 +87,7 @@ type ExecutorSchema struct {
 	registryLogFile              *os.File
 	Config                       v1alpha2.ImageSetConfiguration
 	Opts                         *mirror.CopyOptions
+	WorkingDir                   string
 	Operator                     operator.CollectorInterface
 	Release                      release.CollectorInterface
 	AdditionalImages             additional.CollectorInterface
@@ -182,7 +184,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
+	cmd.Flags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
@@ -246,9 +248,6 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
-	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.From == "" {
-		return fmt.Errorf("when destination is docker://, diskToMirror workflow is assumed, and the --from argument is mandatory")
-	}
 	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
 	}
@@ -262,6 +261,18 @@ func (o ExecutorSchema) Validate(dest []string) error {
 		if _, err := time.Parse(time.DateOnly, o.Opts.Global.SinceString); err != nil {
 			return fmt.Errorf("--since flag needs to be in format yyyy-MM-dd")
 		}
+	}
+	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.WorkingDir != "" {
+		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed")
+	}
+	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.WorkingDir != "" && o.Opts.Global.From != "" {
+		return fmt.Errorf("when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together")
+	}
+	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
+		return fmt.Errorf("when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
+	}
+	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
+		return fmt.Errorf("when --workspace is used, it must have file:// prefix")
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -298,14 +309,27 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		o.Opts.Mode = mirror.MirrorToDisk
 		rootDir = strings.TrimPrefix(args[0], fileProtocol)
 		o.Log.Debug("destination %s ", rootDir)
-	} else if strings.Contains(args[0], dockerProtocol) {
+	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
+	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
+		o.Opts.Mode = mirror.MirrorToMirror
+		if o.Opts.Global.WorkingDir == "" { // this should have been caught by Validate function. Nevertheless...
+			return fmt.Errorf("mirror to mirror workflow detected. --workspace is mandatory to provide in the command arguments")
+		}
+		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, fileProtocol)
 	} else {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
 	o.Opts.Destination = args[0]
-	o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
+	if o.Opts.Global.WorkingDir == "" { // this can already be set by using flag --workspace in mirror to mirror workflow
+		o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
+	} else {
+		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, fileProtocol)
+		if filepath.Base(o.Opts.Global.WorkingDir) != workingDir {
+			o.Opts.Global.WorkingDir = filepath.Join(o.Opts.Global.WorkingDir, workingDir)
+		}
+	}
 	o.Log.Info("mode %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
@@ -381,9 +405,11 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	if o.Opts.IsMirrorToDisk() {
 		err = o.RunMirrorToDisk(cmd, args)
 
-	} else {
+	} else if o.Opts.IsDiskToMirror() {
 		err = o.RunDiskToMirror(cmd, args)
 
+	} else {
+		err = o.RunMirrorToMirror(cmd, args)
 	}
 	if err != nil {
 		o.closeAll()
@@ -430,7 +456,11 @@ http:
 	}
 	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ROOT$$", o.LocalStorageDisk, 1)
 	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
-	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
+	if o.Opts.Global.LogLevel != "trace" {
+		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
+	} else {
+		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", "info", 1)
+	}
 	if o.Opts.Global.LogLevel == "debug" {
 		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
 	} else {
@@ -608,6 +638,65 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// RunMirrorToMirror - execute the mirror to mirror functionality
+func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
+	startTime := time.Now()
+
+	allImages, err := o.CollectAll(cmd.Context())
+	if err != nil {
+		return err
+	}
+	collectionFinish := time.Now()
+
+	// Apply max-nested-paths processing if MaxNestedPaths>0
+	if o.Opts.Global.MaxNestedPaths > 0 {
+		allImages, err = withMaxNestedPaths(allImages, o.Opts.Global.MaxNestedPaths)
+		if err != nil {
+			return err
+		}
+	}
+
+	//call the batch worker
+	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
+	if err != nil {
+		return err
+	}
+
+	//create IDMS/ITMS
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
+	if err != nil {
+		return err
+	}
+
+	err = o.ClusterResources.CatalogSourceGenerator(allImages)
+	if err != nil {
+		return err
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage()
+		if err != nil {
+			return err
+		}
+		err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+		if err != nil {
+			return err
+		}
+	}
+	mirrorFinish := time.Now()
+	o.Log.Info("start time      : %v", startTime)
+	o.Log.Info("collection time : %v", collectionFinish)
+	o.Log.Info("mirror time     : %v", mirrorFinish)
+
 	return nil
 }
 
@@ -825,7 +914,6 @@ func NewPrepareCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.WorkingDir, "dir", workingDir, "Assets directory")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE it. V2 is still under development and it is not ready to be used.")

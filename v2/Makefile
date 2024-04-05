@@ -30,6 +30,8 @@ test-integration:
 	mkdir -p tests/results-integration
 	go test -coverprofile=tests/results-integration/cover-additional.out  -race -count=1 ./... -run TestIntegrationAdditional
 	go test -coverprofile=tests/results-integration/cover-release.out  -race -count=1 ./... -run TestIntegrationRelease
+	go test -coverprofile=tests/results-integration/cover-additional.out  -race -count=1 ./... -run TestIntegrationAdditionalM2M
+	go test -coverprofile=tests/results-integration/cover-release.out  -race -count=1 ./... -run TestIntegrationReleaseM2M
 
 
 cover:

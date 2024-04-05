@@ -51,7 +51,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 	cmd := []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", graphDataDir, graphDataMountPath)}
 
 	// update a ubi9 image with this new graphLayer and new cmd
-	graphImageRef := filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+	graphImageRef := filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
 	err = o.ImageBuilder.BuildAndPush(ctx, graphImageRef, layoutPath, cmd, graphLayer)
 	if err != nil {
 		return "", err

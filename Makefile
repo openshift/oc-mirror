@@ -83,6 +83,9 @@ test-e2e: build
 	mkdir -p v2/tests/results-integration
 	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditional
 	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationRelease
+	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditionalM2M
+	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationReleaseM2M
+
 .PHONY: test-e2e
 
 test-integration: hack-build
