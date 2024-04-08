@@ -18,6 +18,8 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
@@ -127,8 +129,17 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mirrorSetsList []T, workingDir, fileName string, log clog.PluggableLoggerInterface) error {
 	msFilePath := filepath.Join(workingDir, clusterResourcesDir, fileName)
 	msAggregation := []byte{}
+	var err error
 	for _, ms := range mirrorSetsList {
-		msBytes, err := yaml.Marshal(ms)
+		// Create an unstructured object for removing creationTimestamp
+		unstructuredObj := unstructured.Unstructured{}
+		unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&ms)
+		if err != nil {
+			return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
+		}
+		delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+
+		msBytes, err := yaml.Marshal(unstructuredObj.Object)
 		if err != nil {
 			return err
 		}
@@ -137,7 +148,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 	}
 	// save IDMS struct to file
 	if _, err := os.Stat(msFilePath); errors.Is(err, os.ErrNotExist) {
-		log.Debug("%s does not exist, creating it", idmsFileName)
+		log.Debug("%s does not exist, creating it", msFilePath)
 		err := os.MkdirAll(filepath.Dir(msFilePath), 0755)
 		if err != nil {
 			return err
@@ -235,7 +246,16 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			},
 		}
 	}
-	bytes, err := yaml.Marshal(obj)
+
+	// Create an unstructured object for removing creationTimestamp
+	unstructuredObj := unstructured.Unstructured{}
+	unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	if err != nil {
+		return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
+	}
+	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+
+	bytes, err := yaml.Marshal(unstructuredObj.Object)
 	if err != nil {
 		return fmt.Errorf("unable to marshal CatalogSource yaml: %v", err)
 	}
