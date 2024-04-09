@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/assert"
 	//"github.com/stretchr/testify/assert"
 )
 
@@ -65,11 +66,48 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		ex.Config.Mirror.Operators[3].TargetTag = ""
 		ex.Config.Mirror.Operators[3].TargetCatalog = "test-catalog:v4.14"
 		res, err = ex.OperatorImageCollector(ctx)
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+		log.Debug("completed test (with invalid TargetCatalog set) related images %v ", res)
+
+		// test with TargetCatalog for OCI catalog
+		ex.Config.Mirror.Operators[3].TargetTag = "v4.14"
+		ex.Config.Mirror.Operators[3].TargetCatalog = "test-catalog"
+		res, err = ex.OperatorImageCollector(ctx)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
+		log.Debug("completed test (with TargetCatalog and TargetTag set) related images %v ", res)
 
+		// test with TargetCatalog for registry catalog
+		ex.Config.Mirror.Operators[1].TargetTag = "v2.0"
+		ex.Config.Mirror.Operators[1].TargetCatalog = "test-namespace/test-catalog"
+		res, err = ex.OperatorImageCollector(ctx)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		ociScenarioCovered := false
+		registryScenarioCovered := false
+		for _, item := range res {
+			assert.Contains(t, item.Destination, ex.LocalStorageFQDN)
+			if item.Origin == "docker://certified-operators:v4.7" {
+				registryScenarioCovered = true
+				assert.Equal(t, dockerProtocol+ex.LocalStorageFQDN+"/test-namespace/test-catalog:v2.0", item.Destination)
+			}
+			if item.Origin == "oci://../../tests/simple-test-bundle" {
+				ociScenarioCovered = true
+				assert.Equal(t, dockerProtocol+ex.LocalStorageFQDN+"/test-catalog:v4.14", item.Destination)
+			}
+		}
+		if !ociScenarioCovered {
+			t.Fatalf("targetCatalog / targetTag should be covered for oci catalog but was not")
+		}
+		if !registryScenarioCovered {
+			t.Fatalf("targetCatalog / targetTag should be covered for registry catalog but was not")
+
+		}
+		log.Debug("completed test (with TargetCatalog and TargetTag set) related images %v ", res)
 	})
 
 	t.Run("Testing OperatorImageCollector - Disk to mirror : should pass", func(t *testing.T) {
@@ -97,12 +135,46 @@ func TestOperatorLocalStoredCollector(t *testing.T) {
 		}
 		log.Debug("completed test related images %v ", res)
 
-		// test with TargetCatalog
+		// test with invalid TargetCatalog
 		ex.Config.Mirror.Operators[1].TargetTag = ""
 		ex.Config.Mirror.Operators[1].TargetCatalog = "test-catalog:v4.14"
 		res, err = ex.OperatorImageCollector(context.Background())
+		if err == nil {
+			t.Fatalf("should fail")
+		}
+		log.Debug("completed test (with invalid TargetCatalog set) related images %v ", res)
+
+		// test with TargetCatalog on oci catalog
+		ex.Config.Mirror.Operators[1].TargetTag = "v4.14"
+		ex.Config.Mirror.Operators[1].TargetCatalog = "test-catalog"
+
+		// test with TargetCatalog on registry catalog
+		ex.Config.Mirror.Operators[0].TargetTag = "v2.0"
+		ex.Config.Mirror.Operators[0].TargetCatalog = "test-namespace/test-catalog"
+		res, err = ex.OperatorImageCollector(context.Background())
 		if err != nil {
 			t.Fatalf("should not fail")
+		}
+		ociScenarioCovered := false
+		registryScenarioCovered := false
+		for _, item := range res {
+			assert.Contains(t, item.Source, ex.LocalStorageFQDN)
+			assert.Contains(t, item.Destination, ex.Opts.Destination)
+			if item.Origin == "docker://redhat-operator-index:v4.14" {
+				registryScenarioCovered = true
+				assert.Equal(t, ex.Opts.Destination+"/test-namespace/test-catalog:v2.0", item.Destination)
+			}
+			if item.Origin == "oci://../../tests/simple-test-bundle" {
+				ociScenarioCovered = true
+				assert.Equal(t, ex.Opts.Destination+"/test-catalog:v4.14", item.Destination)
+			}
+		}
+		if !ociScenarioCovered {
+			t.Fatalf("targetCatalog / targetTag should be covered for oci catalog but was not")
+		}
+		if !registryScenarioCovered {
+			t.Fatalf("targetCatalog / targetTag should be covered for registry catalog but was not")
+
 		}
 		log.Debug("completed test (with TargetCatalog set) related images %v ", res)
 

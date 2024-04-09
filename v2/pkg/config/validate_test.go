@@ -54,6 +54,27 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid/UniqueCatalogsWithTargetCatalogAndTargetTag",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:       "test-catalog:latest",
+								TargetCatalog: "test1",
+								TargetTag:     "v1.3",
+							},
+							{
+								Catalog:       "test-catalog:latest",
+								TargetCatalog: "test2",
+								TargetTag:     "latest",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Valid/UniqueReleaseChannels",
 			config: &v1alpha2.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
@@ -110,6 +131,38 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: catalog \"test:latest\": duplicate found in configuration",
+		},
+		{
+			name: "Invalid/CatalogWithTargetCatalogContainsTag",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:       "test-catalog1:latest",
+								TargetCatalog: "test:v1.3",
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: targetCatalog: test:v1.3 - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
+		},
+		{
+			name: "Invalid/CatalogWithTargetCatalogContainsDigest",
+			config: &v1alpha2.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
+					Mirror: v1alpha2.Mirror{
+						Operators: []v1alpha2.Operator{
+							{
+								Catalog:       "test-catalog1:latest",
+								TargetCatalog: "a/b/test@sha256:45df874",
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: targetCatalog: a/b/test@sha256:45df874 - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
 		},
 		{
 			name: "Invalid/DuplicateChannels",
