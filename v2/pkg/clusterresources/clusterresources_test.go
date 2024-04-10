@@ -64,6 +64,12 @@ var (
 			Type:        v1alpha2.TypeOperatorCatalog,
 		},
 		{
+			Source:      "docker://localhost:5000/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Destination: "docker://myregistry/mynamespace/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Origin:      "oci:///tmp/app1",
+			Type:        v1alpha2.TypeOperatorCatalog,
+		},
+		{
 			Source:      "docker://localhost:5000/ubi8/ubi:latest",
 			Destination: "docker://myregistry/mynamespace/ubi8/ubi:latest",
 			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
@@ -132,7 +138,7 @@ var (
 			Source:      "docker://localhost:5000/cockroachdb/cockroach-helm-operator:6.0.0",
 			Destination: "docker://myregistry/mynamespace/cockroachdb-cockroach-helm-operator:6.0.0",
 			Origin:      "docker://quay.io/cockroachdb/cockroach-helm-operator:6.0.0",
-			Type:        v1alpha2.TypeOperatorCatalog,
+			Type:        v1alpha2.TypeOperatorRelatedImage,
 		},
 	}
 )
@@ -243,10 +249,6 @@ func TestGenerateIDMS(t *testing.T) {
 					ObjectMeta: v1.ObjectMeta{Name: "idms-operator-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
-							{
-								Source:  "quay.io/openshift",
-								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift"},
-							},
 							{
 								Source:  "quay.io/openshift-community-operators",
 								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift-community-operators"},
@@ -753,7 +755,7 @@ func TestGenerateImageMirrors(t *testing.T) {
 			expectedCategorizedMirrors: []categorizedMirrors{
 				{
 					category: operatorCategory,
-					mirrors:  map[string][]confv1.ImageMirror{"quay.io/openshift-community-operators": {"myregistry/mynamespace/openshift-community-operators"}, "quay.io/openshift": {"myregistry/mynamespace/openshift"}},
+					mirrors:  map[string][]confv1.ImageMirror{"quay.io/openshift-community-operators": {"myregistry/mynamespace/openshift-community-operators"}},
 				},
 				{
 					category: releaseCategory,
@@ -772,11 +774,7 @@ func TestGenerateImageMirrors(t *testing.T) {
 					category: operatorCategory,
 					mirrors: map[string][]confv1.ImageMirror{
 						"quay.io/openshift-community-operators/cockroachdb": {
-							"myregistry/mynamespace/openshift-community-operators/cockroachdb"},
-
-						"quay.io/openshift/openshift-community-operators": {
-							"myregistry/mynamespace/openshift/openshift-community-operators",
-						}},
+							"myregistry/mynamespace/openshift-community-operators/cockroachdb"}},
 				},
 				{
 					category: releaseCategory,

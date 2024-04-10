@@ -365,10 +365,13 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1al
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
 		}
-		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph {
-			// cincinnati graph image doesn't need to be in the IDMS file.
-			// it has been generated from scratch by oc-mirror and will be copied to the destination registry.
+		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph || relatedImage.Type == v1alpha2.TypeOperatorCatalog {
+			// cincinnati graph images and operator catalog images don't need to be in the IDMS/ITMS file.
+			// * cincinnati graph image has been generated from scratch by oc-mirror and will be copied to the destination registry.
 			// The updateservice.yaml file will instruct the cluster to use it.
+			// * operator catalogs are added to catalog source custom resources, and is consumed by the cluster from there.
+			// it therefore doesn't need to be added to IDMS, same as oc-mirror
+			// [v1 doesn't add it to ICSP](https://github.com/openshift/oc-mirror/blob/fa0c2caa6a3eb33ed7a7b3350e3b5fc7430bad55/pkg/cli/mirror/mirror.go#L539).
 			continue
 		}
 		srcImgSpec, err := image.ParseRef(relatedImage.Origin)
