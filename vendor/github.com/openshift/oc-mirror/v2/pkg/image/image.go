@@ -109,6 +109,10 @@ func (i ImageSpec) IsImageByDigest() bool {
 	return i.Digest != ""
 }
 
+func (i ImageSpec) IsImageByDigestOnly() bool {
+	return i.Tag == "" && i.Digest != ""
+}
+
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	if maxNestedPaths == 0 {
 		return imageRef, nil

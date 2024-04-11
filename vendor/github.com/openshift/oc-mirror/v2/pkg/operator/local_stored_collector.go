@@ -222,7 +222,12 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		var targetCatalog string
 		if len(op.TargetTag) > 0 {
 			targetTag = op.TargetTag
-		} else {
+		} else if imgSpec.Transport == ociProtocol {
+			// for this case only, img.ParseRef(in its current state)
+			// will not be able to determine the digest.
+			// this leaves the oci imgSpec with no tag nor digest as it
+			// goes to prepareM2DCopyBatch/prepareD2MCopyBath. This is
+			// why we set the digest read from manifest in targetTag
 			targetTag = validDigest.Encoded()
 		}
 
@@ -235,11 +240,11 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 
 		relatedImages[componentName] = []v1alpha3.RelatedImage{
 			{
-				Name:       catalogName,
-				Image:      catalogImage,
-				Type:       v1alpha2.TypeOperatorCatalog,
-				TargetTag:  targetTag,
-				TargetName: targetCatalog,
+				Name:          catalogName,
+				Image:         catalogImage,
+				Type:          v1alpha2.TypeOperatorCatalog,
+				TargetTag:     targetTag,
+				TargetCatalog: targetCatalog,
 			},
 		}
 	}
@@ -285,23 +290,28 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 				return nil, err
 			}
 
-			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetName) > 0 {
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetName}, "/")
-				dest = strings.Join([]string{o.Opts.Destination, img.TargetName}, "/")
-			} else if imgSpec.Transport == ociProtocol {
+			// prepare the src and dest references
+			switch {
+			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0: // applies only to catalogs
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, img.TargetCatalog}, "/")
+			case imgSpec.Transport == ociProtocol:
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
-			} else {
+			default:
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/")
 			}
-			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0 {
+
+			// add the tag for src and dest
+			switch {
+			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0: // applies only to catalogs
 				src = src + ":" + img.TargetTag
 				dest = dest + ":" + img.TargetTag
-			} else if imgSpec.Tag == "" {
+			case imgSpec.Tag == "":
 				src = src + ":" + imgSpec.Digest
 				dest = dest + ":" + imgSpec.Digest
-			} else {
+			default:
 				src = src + ":" + imgSpec.Tag
 				dest = dest + ":" + imgSpec.Tag
 			}
@@ -329,8 +339,8 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			}
 
 			src = imgSpec.ReferenceWithTransport
-			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetName) > 0 {
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetName}, "/")
+			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
 			} else if imgSpec.Transport == ociProtocol {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
 			} else {

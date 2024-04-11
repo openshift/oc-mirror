@@ -187,7 +187,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	}
 
 	var csSuffix string
-	if catalogSpec.IsImageByDigest() {
+	if catalogSpec.IsImageByDigestOnly() {
 		if len(catalogSpec.Digest) >= hashTruncLen {
 			csSuffix = catalogSpec.Digest[:hashTruncLen]
 		} else {
@@ -362,11 +362,11 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1al
 		toBeAdded := true
 		switch mode {
 		case TagsOnlyMode:
-			if srcImgSpec.IsImageByDigest() {
+			if srcImgSpec.IsImageByDigestOnly() {
 				toBeAdded = false
 			}
 		case DigestsOnlyMode:
-			if !srcImgSpec.IsImageByDigest() {
+			if !srcImgSpec.IsImageByDigestOnly() {
 				toBeAdded = false
 			}
 		}

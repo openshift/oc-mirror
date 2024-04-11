@@ -192,7 +192,7 @@ type RelatedImage struct {
 	TargetTag string `json:"targetTag"`
 	// Used to keep specific naming info for the related image
 	// if set should be used when mirroring
-	TargetName string `json:"tagetName"`
+	TargetCatalog string `json:"targetCatalog"`
 }
 
 // CopyImageSchema
