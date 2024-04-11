@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"k8s.io/kubectl/pkg/util/templates"
@@ -430,8 +431,8 @@ func (o *ExecutorSchema) setupLocalStorage() error {
 version: 0.1
 log:
   accesslog:
-    disabled: $$PLACEHOLDER_ACCESS_LOG_OFF$$
-  level: $$PLACEHOLDER_LOG_LEVEL$$
+    disabled: {{ .LogAccessOff }}
+  level: {{ .LogLevel }}
   formatter: text
   fields:
     service: registry
@@ -439,9 +440,9 @@ storage:
   cache:
     blobdescriptor: inmemory
   filesystem:
-    rootdirectory: $$PLACEHOLDER_ROOT$$
+    rootdirectory: {{ .LocalStorageDisk }}
 http:
-  addr: :$$PLACEHOLDER_PORT$$
+  addr: :{{ .LocalStoragePort }}
   headers:
     X-Content-Type-Options: [nosniff]
       #auth:
@@ -450,27 +451,35 @@ http:
       #path: /etc/registry
 `
 
-	if _, err := os.Stat(o.LocalStorageDisk); err != nil {
-		// something went wrong
-		return fmt.Errorf("error using the local storage folder for caching")
-	}
-	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ROOT$$", o.LocalStorageDisk, 1)
-	configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_PORT$$", strconv.Itoa(int(o.Opts.Global.Port)), 1)
-	if o.Opts.Global.LogLevel != "trace" {
-		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", o.Opts.Global.LogLevel, 1)
-	} else {
-		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_LOG_LEVEL$$", "info", 1)
-	}
-	if o.Opts.Global.LogLevel == "debug" {
-		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "false", 1)
-	} else {
-		configYamlV01 = strings.Replace(configYamlV01, "$$PLACEHOLDER_ACCESS_LOG_OFF$$", "true", 1)
+	var buff bytes.Buffer
+	type RegistryConfig struct {
+		LocalStorageDisk string
+		LocalStoragePort int
+		LogLevel         string
+		LogAccessOff     bool
 	}
 
-	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
+	rc := RegistryConfig{
+		LocalStorageDisk: o.LocalStorageDisk,
+		LocalStoragePort: int(o.Opts.Global.Port),
+		LogLevel:         o.Opts.Global.LogLevel,
+		LogAccessOff:     o.Opts.Global.LogLevel != "debug",
+	}
 
+	if o.Opts.Global.LogLevel == "debug" || o.Opts.Global.LogLevel == "trace" {
+		rc.LogLevel = "debug"
+		rc.LogAccessOff = false
+	}
+
+	t := template.Must(template.New("local-storage-config").Parse(configYamlV01))
+	err := t.Execute(&buff, rc)
 	if err != nil {
-		return fmt.Errorf("error parsing local storage configuration : %v\n %s", err, configYamlV01)
+		return fmt.Errorf("error parsing the config template %v", err)
+	}
+
+	config, err := configuration.Parse(bytes.NewReader(buff.Bytes()))
+	if err != nil {
+		return fmt.Errorf("error parsing local storage configuration : %v", err)
 	}
 
 	regLogger := logrus.New()
