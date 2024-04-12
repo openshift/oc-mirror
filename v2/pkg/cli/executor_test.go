@@ -667,7 +667,7 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 		}
 		err := ex.setupLocalStorage()
 		if err != nil {
-			t.Fatalf("should not fail")
+			t.Fatalf("should not fail %v", err)
 		}
 	})
 }
