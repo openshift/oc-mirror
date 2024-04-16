@@ -468,7 +468,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}
 
 		if len(csFiles) != 1 {
-			t.Fatalf("output folder should contain 1 idms yaml file")
+			t.Fatalf("output folder should contain 1 catalogsource yaml file")
 		}
 
 		expectedCSName := "cs-redhat-operator-index-v4-15"
@@ -695,6 +695,79 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
 
 		}
+	})
+	t.Run("Testing GenerateCatalogSource with catalog using a digest as tag : should pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := tmpDir + "/working-dir"
+
+		defer os.RemoveAll(tmpDir)
+		listCatalogDigestAsTag := []v1alpha3.CopyImageSchema{
+
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Type:        v1alpha2.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+		}
+		err := cr.CatalogSourceGenerator(listCatalogDigestAsTag)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(csFiles) != 1 {
+			t.Fatalf("output folder should contain 1 catalogsource yaml file")
+		}
+
+		expectedCSName := "cs-redhat-operator-index-7c4ef7434c97"
+		// check catalogsource has a name that is
+		//compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
+		}
+		assert.Equal(t, expectedCSName, customResourceName)
+		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		var actualCS ofv1alpha1.CatalogSource
+		err = yaml.Unmarshal(bytes, &actualCS)
+		if err != nil {
+			t.Fatalf("failed to unmarshal catalogsource: %v", err)
+		}
+		expectedCS := ofv1alpha1.CatalogSource{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+				Kind:       "CatalogSource",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      expectedCSName,
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1alpha1.CatalogSourceSpec{
+				SourceType: "grpc",
+				Image:      "myregistry/mynamespace/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			},
+		}
+
+		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+
 	})
 }
 

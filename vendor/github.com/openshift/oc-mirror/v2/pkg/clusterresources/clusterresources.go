@@ -206,7 +206,11 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 		}
 	} else {
 		tag := catalogSpec.Tag
-		csSuffix = strings.Map(toRFC1035, tag)
+		if len(tag) >= hashTruncLen {
+			csSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
+		} else {
+			csSuffix = strings.Map(toRFC1035, tag)
+		}
 	}
 
 	if csSuffix == "" {
@@ -217,7 +221,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	catalogRepository := pathComponents[len(pathComponents)-1]
 	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
 	errs := validation.IsDNS1035Label(catalogSourceName)
-	if len(errs) != 0 && isValidRFC1123(catalogSourceName) {
+	if len(errs) != 0 && !isValidRFC1123(catalogSourceName) {
 		return fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))
 	}
 
