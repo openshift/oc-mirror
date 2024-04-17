@@ -42,26 +42,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	dockerProtocol          string = "docker://"
-	ociProtocol             string = "oci://"
-	dirProtocol             string = "dir://"
-	fileProtocol            string = "file://"
-	releaseImageDir         string = "release-images"
-	logsDir                 string = "logs"
-	workingDir              string = "working-dir"
-	ocmirrorRelativePath    string = ".oc-mirror"
-	cacheRelativePath       string = ".oc-mirror/.cache"
-	cacheEnvVar             string = "OC_MIRROR_CACHE"
-	additionalImages        string = "additional-images"
-	releaseImageExtractDir  string = "hold-release"
-	operatorImageExtractDir string = "hold-operator"
-	signaturesDir           string = "signatures"
-	registryLogFilename     string = "registry.log"
-	startMessage            string = "starting local storage on localhost:%v"
-	cachedImages            string = "cached-images.txt"
-)
-
 var (
 	mirrorlongDesc = templates.LongDesc(
 		` 
@@ -188,7 +168,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			}
 		},
 	}
-	cmd.AddCommand(NewPrepareCommand(log))
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.AddCommand(NewDeleteCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
@@ -198,6 +177,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "force the copy and mirror functionality")
+	cmd.Flags().BoolVarP(&opts.IsDryRun, "dry-run", "", false, "Print actions without mirroring images")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
@@ -643,22 +623,29 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-	if err != nil {
-		return err
-	}
+	if !o.Opts.IsDryRun {
+		// call the batch worker
+		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
+		if err != nil {
+			return err
+		}
 
-	// prepare tar.gz when mirror to disk
-	// first stop the registry
-	interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
-	o.localStorageInterruptChannel <- interruptSig
+		// prepare tar.gz when mirror to disk
+		// first stop the registry
+		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
+		o.localStorageInterruptChannel <- interruptSig
 
-	o.Log.Info("📦 Preparing the tarball archive...")
-	// next, generate the archive
-	err = o.MirrorArchiver.BuildArchive(cmd.Context(), collectorSchema.AllImages)
-	if err != nil {
-		return err
+		o.Log.Info("📦 Preparing the tarball archive...")
+		// next, generate the archive
+		err = o.MirrorArchiver.BuildArchive(cmd.Context(), collectorSchema.AllImages)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		if err != nil {
+			return err
+		}
 	}
 
 	endTime := time.Now()
@@ -687,36 +674,42 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
-
-	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-	if err != nil {
-		return err
-	}
-
-	//create IDMS/ITMS
-	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
-	if err != nil {
-		return err
-	}
-
-	err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
-	if err != nil {
-		return err
-	}
-
-	// create updateService
-	if o.Config.Mirror.Platform.Graph {
-		graphImage, err := o.Release.GraphImage()
+	if !o.Opts.IsDryRun {
+		//call the batch worker
+		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 		if err != nil {
 			return err
 		}
-		releaseImage, err := o.Release.ReleaseImage()
+
+		//create IDMS/ITMS
+		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
-		err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+
+		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		if err != nil {
+			return err
+		}
+
+		// create updateService
+		if o.Config.Mirror.Platform.Graph {
+			graphImage, err := o.Release.GraphImage()
+			if err != nil {
+				return err
+			}
+			releaseImage, err := o.Release.ReleaseImage()
+			if err != nil {
+				return err
+			}
+			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -757,36 +750,43 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 			return err
 		}
 	}
-	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-	if err != nil {
-		return err
-	}
 
-	// create IDMS/ITMS
-	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
-	if err != nil {
-		return err
-	}
-
-	// create catalog source
-	err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
-	if err != nil {
-		return err
-	}
-
-	// create updateService
-	if o.Config.Mirror.Platform.Graph {
-		graphImage, err := o.Release.GraphImage()
+	if !o.Opts.IsDryRun {
+		// call the batch worker
+		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 		if err != nil {
 			return err
 		}
-		releaseImage, err := o.Release.ReleaseImage()
+		// create IDMS/ITMS
+		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
-		err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+
+		// create catalog source
+		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		if err != nil {
+			return err
+		}
+
+		// create updateService
+		if o.Config.Mirror.Platform.Graph {
+			graphImage, err := o.Release.GraphImage()
+			if err != nil {
+				return err
+			}
+			releaseImage, err := o.Release.ReleaseImage()
+			if err != nil {
+				return err
+			}
+			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
 		if err != nil {
 			return err
 		}
