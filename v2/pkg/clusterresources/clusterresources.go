@@ -18,6 +18,8 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
@@ -127,8 +129,17 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mirrorSetsList []T, workingDir, fileName string, log clog.PluggableLoggerInterface) error {
 	msFilePath := filepath.Join(workingDir, clusterResourcesDir, fileName)
 	msAggregation := []byte{}
+	var err error
 	for _, ms := range mirrorSetsList {
-		msBytes, err := yaml.Marshal(ms)
+		// Create an unstructured object for removing creationTimestamp
+		unstructuredObj := unstructured.Unstructured{}
+		unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&ms)
+		if err != nil {
+			return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
+		}
+		delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+
+		msBytes, err := yaml.Marshal(unstructuredObj.Object)
 		if err != nil {
 			return err
 		}
@@ -137,7 +148,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 	}
 	// save IDMS struct to file
 	if _, err := os.Stat(msFilePath); errors.Is(err, os.ErrNotExist) {
-		log.Debug("%s does not exist, creating it", idmsFileName)
+		log.Debug("%s does not exist, creating it", msFilePath)
 		err := os.MkdirAll(filepath.Dir(msFilePath), 0755)
 		if err != nil {
 			return err
@@ -195,7 +206,11 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 		}
 	} else {
 		tag := catalogSpec.Tag
-		csSuffix = strings.Map(toRFC1035, tag)
+		if len(tag) >= hashTruncLen {
+			csSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
+		} else {
+			csSuffix = strings.Map(toRFC1035, tag)
+		}
 	}
 
 	if csSuffix == "" {
@@ -206,7 +221,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	catalogRepository := pathComponents[len(pathComponents)-1]
 	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
 	errs := validation.IsDNS1035Label(catalogSourceName)
-	if len(errs) != 0 && isValidRFC1123(catalogSourceName) {
+	if len(errs) != 0 && !isValidRFC1123(catalogSourceName) {
 		return fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))
 	}
 
@@ -235,7 +250,16 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			},
 		}
 	}
-	bytes, err := yaml.Marshal(obj)
+
+	// Create an unstructured object for removing creationTimestamp
+	unstructuredObj := unstructured.Unstructured{}
+	unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	if err != nil {
+		return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
+	}
+	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+
+	bytes, err := yaml.Marshal(unstructuredObj.Object)
 	if err != nil {
 		return fmt.Errorf("unable to marshal CatalogSource yaml: %v", err)
 	}
@@ -345,10 +369,13 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1al
 		if relatedImage.Origin == "" {
 			return nil, fmt.Errorf("unable to generate IDMS/ITMS: original reference for (%s,%s) undetermined", relatedImage.Source, relatedImage.Destination)
 		}
-		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph {
-			// cincinnati graph image doesn't need to be in the IDMS file.
-			// it has been generated from scratch by oc-mirror and will be copied to the destination registry.
+		if relatedImage.Type == v1alpha2.TypeCincinnatiGraph || relatedImage.Type == v1alpha2.TypeOperatorCatalog {
+			// cincinnati graph images and operator catalog images don't need to be in the IDMS/ITMS file.
+			// * cincinnati graph image has been generated from scratch by oc-mirror and will be copied to the destination registry.
 			// The updateservice.yaml file will instruct the cluster to use it.
+			// * operator catalogs are added to catalog source custom resources, and is consumed by the cluster from there.
+			// it therefore doesn't need to be added to IDMS, same as oc-mirror
+			// [v1 doesn't add it to ICSP](https://github.com/openshift/oc-mirror/blob/fa0c2caa6a3eb33ed7a7b3350e3b5fc7430bad55/pkg/cli/mirror/mirror.go#L539).
 			continue
 		}
 		srcImgSpec, err := image.ParseRef(relatedImage.Origin)
