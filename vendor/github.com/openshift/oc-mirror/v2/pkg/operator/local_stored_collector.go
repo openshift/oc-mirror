@@ -61,6 +61,10 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		// download the operator index image
 		o.Log.Info("copying operator image %v", op.Catalog)
 
+		// CLID-47 double check that targetCatalog is valid
+		if op.TargetCatalog != "" && !v1alpha2.IsValidPathComponent(op.TargetCatalog) {
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("invalid targetCatalog %s", op.TargetCatalog)
+		}
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
@@ -214,31 +218,33 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			relatedImages[k] = v
 		}
 
-		// this ensures we either enforce using targetTag or targetCatalog
-		// but not both
 		var targetTag string
 		var targetCatalog string
 		if len(op.TargetTag) > 0 {
 			targetTag = op.TargetTag
-			targetCatalog = ""
-		} else {
-			if len(op.TargetCatalog) > 0 {
-				targetTag = ""
-				targetCatalog = op.TargetCatalog
-			} else {
-				targetTag = validDigest.Encoded()
-			}
+		} else if imgSpec.Transport == ociProtocol {
+			// for this case only, img.ParseRef(in its current state)
+			// will not be able to determine the digest.
+			// this leaves the oci imgSpec with no tag nor digest as it
+			// goes to prepareM2DCopyBatch/prepareD2MCopyBath. This is
+			// why we set the digest read from manifest in targetTag
+			targetTag = validDigest.Encoded()
+		}
+
+		if len(op.TargetCatalog) > 0 {
+			targetCatalog = op.TargetCatalog
+
 		}
 
 		componentName := imgSpec.ComponentName() + "." + catalogDigest
 
 		relatedImages[componentName] = []v1alpha3.RelatedImage{
 			{
-				Name:       catalogName,
-				Image:      catalogImage,
-				Type:       v1alpha2.TypeOperatorCatalog,
-				TargetTag:  targetTag,
-				TargetName: targetCatalog,
+				Name:          catalogName,
+				Image:         catalogImage,
+				Type:          v1alpha2.TypeOperatorCatalog,
+				TargetTag:     targetTag,
+				TargetCatalog: targetCatalog,
 			},
 		}
 	}
@@ -284,31 +290,38 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 				return nil, err
 			}
 
-			if imgSpec.Transport != ociProtocol {
-				if imgSpec.IsImageByDigest() {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-				} else {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-				}
-			} else {
-				if len(img.TargetName) > 0 {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetName}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, img.TargetName}, "/")
-				} else {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name + ":" + img.TargetTag}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, img.Name + ":" + img.TargetTag}, "/")
-				}
+			// prepare the src and dest references
+			switch {
+			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0: // applies only to catalogs
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, img.TargetCatalog}, "/")
+			case imgSpec.Transport == ociProtocol:
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
+			default:
+				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/")
+				dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/")
 			}
 
+			// add the tag for src and dest
+			switch {
+			case img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0: // applies only to catalogs
+				src = src + ":" + img.TargetTag
+				dest = dest + ":" + img.TargetTag
+			case imgSpec.Tag == "":
+				src = src + ":" + imgSpec.Digest
+				dest = dest + ":" + imgSpec.Digest
+			default:
+				src = src + ":" + imgSpec.Tag
+				dest = dest + ":" + imgSpec.Tag
+			}
 			if src == "" || dest == "" {
 				return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Image)
 			}
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v1alpha3.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+			result = append(result, v1alpha3.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
 		}
 	}
 	return result, nil
@@ -324,20 +337,21 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			if err != nil {
 				return nil, err
 			}
-			if imgSpec.Transport == ociProtocol {
-				src = ociProtocolTrimmed + imgSpec.Reference
-				if len(img.TargetName) > 0 {
-					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetName}, "/")
-				} else {
-					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name + ":" + img.TargetTag}, "/")
-				}
+
+			src = imgSpec.ReferenceWithTransport
+			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
+			} else if imgSpec.Transport == ociProtocol {
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
 			} else {
-				src = imgSpec.ReferenceWithTransport
-				if imgSpec.IsImageByDigest() {
-					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-				} else {
-					dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-				}
+				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
+			}
+			if img.Type == v1alpha2.TypeOperatorCatalog && len(img.TargetTag) > 0 {
+				dest = dest + ":" + img.TargetTag
+			} else if imgSpec.Tag == "" {
+				dest = dest + ":" + imgSpec.Digest
+			} else {
+				dest = dest + ":" + imgSpec.Tag
 			}
 
 			o.Log.Debug("source %s", src)

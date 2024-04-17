@@ -54,7 +54,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			var dest string
 			src = imgSpec.ReferenceWithTransport
 
-			if imgSpec.IsImageByDigest() {
+			if imgSpec.IsImageByDigestOnly() {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
@@ -79,7 +79,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 					return nil, err
 				}
 
-				if imgSpec.IsImageByDigest() {
+				if imgSpec.IsImageByDigestOnly() {
 					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
 				} else {

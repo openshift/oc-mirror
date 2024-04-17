@@ -1,6 +1,8 @@
 package v1alpha2
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -163,7 +165,6 @@ type Operator struct {
 	//     path-component = alpha-numeric [separator alpha-numeric]*
 	//     alpha-numeric  = /[a-z0-9]+/
 	//     separator      = /[_.]|__|[-]*/
-	// TargetCatalog will be preferred over TargetName if both are specified in te ImageSetConfig.
 	TargetCatalog string `json:"targetCatalog,omitempty"`
 	// TargetTag is the tag the catalog image will be built with. If unset,
 	// the catalog will be publish with the provided tag in the Catalog
@@ -193,17 +194,25 @@ func (o Operator) GetUniqueName() (string, error) {
 	}
 
 	if o.TargetTag != "" {
-		ctlgSpec.Digest = ""
 		ctlgSpec.Reference = strings.Replace(ctlgSpec.Reference, ctlgSpec.Tag, o.TargetTag, 1)
 		ctlgSpec.ReferenceWithTransport = strings.Replace(ctlgSpec.ReferenceWithTransport, ctlgSpec.Tag, o.TargetTag, 1)
 		ctlgSpec.Tag = o.TargetTag
 	}
 	if o.TargetCatalog != "" {
-		ctlgSpec.Reference = strings.Replace(ctlgSpec.Reference, ctlgSpec.PathComponent, o.TargetCatalog, 1)
-		ctlgSpec.ReferenceWithTransport = strings.Replace(ctlgSpec.ReferenceWithTransport, ctlgSpec.PathComponent, o.TargetCatalog, 1)
-		ctlgSpec.PathComponent = o.TargetCatalog
+		if IsValidPathComponent(o.TargetCatalog) {
+			ctlgSpec.Reference = strings.Replace(ctlgSpec.Reference, ctlgSpec.PathComponent, o.TargetCatalog, 1)
+			ctlgSpec.ReferenceWithTransport = strings.Replace(ctlgSpec.ReferenceWithTransport, ctlgSpec.PathComponent, o.TargetCatalog, 1)
+			ctlgSpec.PathComponent = o.TargetCatalog
+		} else {
+			return "", fmt.Errorf("targetCatalog: %s - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go", o.TargetCatalog)
+		}
 	}
 	return ctlgSpec.Reference, nil
+}
+
+func IsValidPathComponent(targetCatalog string) bool {
+	pathComponentPattern := regexp.MustCompile(`^([a-z0-9]+((?:[._]|__|[-]*)[a-z0-9]+)*)(/([a-z0-9]+((?:[._]|__|[-]*)[a-z0-9]+)*))*$`)
+	return pathComponentPattern.MatchString(targetCatalog)
 }
 
 // IsHeadsOnly determine if the mode set mirrors only channel heads of all packages in the catalog.
