@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -358,16 +357,4 @@ func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-}
-
-// GetRootlessUID returns the UID of the user in the parent userNS
-func getRootlessUID() int {
-	// not sure if this will work. this is taken from github.com/containers/storage/pkg/unshare/unshare_linux.go
-	// where they use c.getenv...
-	uidEnv := os.Getenv("_CONTAINERS_ROOTLESS_UID")
-	if uidEnv != "" {
-		u, _ := strconv.Atoi(uidEnv)
-		return u
-	}
-	return os.Getuid()
 }

@@ -623,6 +623,7 @@ func TestExtractOCILayers(t *testing.T) {
 		if err != nil {
 			t.Fatal("should not fail")
 		}
+
 		_, err = os.Stat("../../tests/hold-test-untar/release-manifests/")
 		if err == nil {
 			t.Fatalf("should fail")

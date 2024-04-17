@@ -1,0 +1,8 @@
+apiVersion: mirror.openshift.io/v1alpha2
+kind: DeleteImageList
+items: 
+  - imageReference: docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2
+    imageName: agent-installer-api-server
+    relatedBlobs:
+    - sha256:aad3e79a2bac9129db69d0c6d921e12934fb8c3826d8bcd0ef368c8647c4e8a5
+    - sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2

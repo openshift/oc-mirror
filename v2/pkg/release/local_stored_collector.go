@@ -108,7 +108,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 
 			oci, err := o.Manifest.GetImageIndex(dir)
 			if err != nil {
-				o.Log.Error("[ReleaseImageCollector] %v ", err)
+				o.Log.Error("[release collector] %v ", err)
 				return []v1alpha3.CopyImageSchema{}, fmt.Errorf(errMsg, err)
 			}
 
@@ -118,7 +118,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 			}
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
-				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] invalid digest for image index %s: %v", oci.Manifests[0].Digest, err)
+				return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[release collector] invalid digest for image index %s: %v", oci.Manifests[0].Digest, err)
 			}
 
 			manifest := validDigest.Encoded()
@@ -156,7 +156,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v1
 		// so that it can be used during diskToMirror flow
 		err := o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir))
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[ReleaseImageCollector] unable to save cincinnati response: %v", err)
+			return []v1alpha3.CopyImageSchema{}, fmt.Errorf("[release collector] unable to save cincinnati response: %v", err)
 		}
 
 		if !o.Opts.IsPrepare() && o.Config.Mirror.Platform.Graph {
@@ -369,7 +369,7 @@ func (o *LocalStorageCollector) GraphImage() (string, error) {
 		}
 		graphCopyImage, err := o.prepareD2MCopyBatch(nil, graphRelatedImage)
 		if err != nil {
-			return "", fmt.Errorf("collector could not establish the destination for the graph image: %v", err)
+			return "", fmt.Errorf("[release collector] could not establish the destination for the graph image: %v", err)
 		}
 		o.GraphDataImage = graphCopyImage[0].Destination
 	}
@@ -384,7 +384,7 @@ func (o *LocalStorageCollector) ReleaseImage() (string, error) {
 	if len(o.Releases) == 0 {
 		releaseImages, _, err := o.identifyReleases()
 		if err != nil {
-			return "", fmt.Errorf("collector could not establish the destination for the release image: %v", err)
+			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
 		}
 		o.Releases = []string{}
 		for _, img := range releaseImages {
@@ -401,11 +401,11 @@ func (o *LocalStorageCollector) ReleaseImage() (string, error) {
 		}
 		releaseCopyImage, err := o.prepareD2MCopyBatch(nil, releaseRelatedImage)
 		if err != nil {
-			return "", fmt.Errorf("collector could not establish the destination for the release image: %v", err)
+			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
 		}
 		return releaseCopyImage[0].Destination, nil
 
 	} else {
-		return "", fmt.Errorf("collector could not establish the destination for the release image")
+		return "", fmt.Errorf("[release collector] could not establish the destination for the release image")
 	}
 }

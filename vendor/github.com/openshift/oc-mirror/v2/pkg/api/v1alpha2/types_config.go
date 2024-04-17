@@ -27,6 +27,24 @@ type ImageSetConfigurationSpec struct {
 	StorageConfig StorageConfig `json:"storageConfig"`
 }
 
+// DeleteImageSetConfiguration object kind.
+const DeleteImageSetConfigurationKind = "DeleteImageSetConfiguration"
+
+// DeleteImageSetConfiguration configures image set creation.
+type DeleteImageSetConfiguration struct {
+	metav1.TypeMeta `json:",inline"`
+	// DeleteImageSetConfigurationSpec defines the global configuration for an imageset.
+	DeleteImageSetConfigurationSpec `json:",inline"`
+}
+
+// DeleteImageSetConfigurationSpec defines the global configuration for a delete imageset.
+// This is to ensure a clean differentiation between delete and mirror
+// and is designed to avoid accidental deletion of images (when using imagesetconfig)
+type DeleteImageSetConfigurationSpec struct {
+	// Delete defines the configuration for content types within the imageset.
+	Delete Delete `json:"delete"`
+}
+
 // Mirror defines the configuration for content types within the imageset.
 type Mirror struct {
 	// Platform defines the configuration for OpenShift and OKD platform types.
@@ -42,6 +60,22 @@ type Mirror struct {
 	// from the mirroring process if they exist in other content
 	// types in the configuration.
 	BlockedImages []Image `json:"blockedImages,omitempty"`
+	// Samples defines the configuration for Sample content types.
+	// This is currently not implemented.
+	Samples []SampleImages `json:"samples,omitempty"`
+}
+
+// Delete defines the configuration for content types within the imageset.
+type Delete struct {
+	// Platform defines the configuration for OpenShift and OKD platform types.
+	Platform Platform `json:"platform,omitempty"`
+	// Operators defines the configuration for Operator content types.
+	Operators []Operator `json:"operators,omitempty"`
+	// AdditionalImages defines the configuration for a list
+	// of individual image content types.
+	AdditionalImages []Image `json:"additionalImages,omitempty"`
+	// Helm define the configuration for Helm content types.
+	Helm Helm `json:"helm,omitempty"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
 	Samples []SampleImages `json:"samples,omitempty"`

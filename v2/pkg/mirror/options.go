@@ -54,6 +54,11 @@ type GlobalOptions struct {
 	StrictArchiving    bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
 	SinceString        string        // Sets the date since which all content mirrored after is included in the archive
 	Since              time.Time     // Sets the date since which all content mirrored after is included in the archive
+	DeleteGenerate     bool          // Used to generate the delete-images.yaml file , mandatory fist step in the delete workflow
+	DeleteDestination  string        // Used primarily for delete - denotes the remote registry to delete from
+	ForceCacheDelete   bool          // Used to force delete the local cache
+	DeleteID           string        // This flag is used to append to the artifacts created by the delete functionality
+	DeleteYaml         string        // This flag will use the contents of the indicated yaml as basis to delete the local cache and remote registry
 }
 
 type CopyOptions struct {
@@ -82,6 +87,7 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
+	Function                 string // copy or delete (default is copy)
 }
 
 // deprecatedTLSVerifyOption represents a deprecated --tls-verify option,

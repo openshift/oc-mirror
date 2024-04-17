@@ -223,3 +223,16 @@ type SignatureContentSchema struct {
 		Creator string `json:"creator"`
 	} `json:"optional"`
 }
+
+// DeleteImageList
+type DeleteImageList struct {
+	Kind       string       `json:"kind"`
+	APIVersion string       `json:"apiVersion"`
+	Items      []DeleteItem `json:"items"`
+}
+
+type DeleteItem struct {
+	ImageName      string   `json:"imageName"`
+	ImageReference string   `json:"imageReference"`
+	RelatedBlobs   []string `json:"relatedBlobs"`
+}
