@@ -99,4 +99,62 @@ func TestReleaseSignature(t *testing.T) {
 		}
 
 	})
+
+	t.Run("Testing ReleaseSignature with custom PGP key - should pass", func(t *testing.T) {
+		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/custom-ocp-sig-key.asc")
+
+		ex := NewSignatureClient(log, cfg, opts)
+
+		imgs := []v1alpha3.CopyImageSchema{
+			{
+				Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+				Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
+			},
+		}
+
+		res, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
+
+	})
+
+	// t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
+	// 	os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/buggy-ocp-sig-key.asc")
+
+	// 	ex := NewSignatureClient(log, cfg, opts)
+
+	// 	imgs := []v1alpha3.CopyImageSchema{
+	// 		{
+	// 			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+	// 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
+	// 		},
+	// 	}
+
+	// 	_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
+
+	// 	assert.Error(t, err)
+
+	// })
+
+	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
+		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/inexisting-ocp-sig-key.asc")
+
+		ex := NewSignatureClient(log, cfg, opts)
+
+		imgs := []v1alpha3.CopyImageSchema{
+			{
+				Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+				Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
+			},
+		}
+
+		res, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
+
+	})
 }

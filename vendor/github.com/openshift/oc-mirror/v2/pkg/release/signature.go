@@ -25,10 +25,26 @@ type SignatureSchema struct {
 	Log    clog.PluggableLoggerInterface
 	Config v1alpha2.ImageSetConfiguration
 	Opts   mirror.CopyOptions
+	pgpKey string
 }
 
 func NewSignatureClient(log clog.PluggableLoggerInterface, config v1alpha2.ImageSetConfiguration, opts mirror.CopyOptions) SignatureInterface {
-	return &SignatureSchema{Log: log, Config: config, Opts: opts}
+	var pgp string
+	if pgpKeyOverride := os.Getenv("OCP_SIGNATURE_VERIFICATION_PK"); len(pgpKeyOverride) != 0 {
+		log.Debug("OCP_SIGNATURE_VERIFICATION_PK environment variable set: using PGP key in %s for OCP signature verification", pgpKeyOverride)
+		pgpKeyOverrideContent, err := os.ReadFile(pgpKeyOverride)
+		if err != nil {
+			log.Warn("unable to read file %s, fallback to using default PGP key", pgpKeyOverride)
+		}
+		if len(pgpKeyOverrideContent) > 0 {
+			pgp = string(pgpKeyOverrideContent)
+		} else {
+			pgp = defaultPK
+		}
+	} else {
+		pgp = defaultPK
+	}
+	return &SignatureSchema{Log: log, Config: config, Opts: opts, pgpKey: pgp}
 }
 
 // GenerateReleaseSignatures
@@ -85,7 +101,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		}
 
 		if len(data) > 0 {
-			pkBytes := []byte(defaultPK)
+			pkBytes := []byte(o.pgpKey)
 
 			keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(pkBytes))
 			// keyring, err := openpgp.ReadKeyRing(bytes.NewReader([]byte(pkBytes)))
