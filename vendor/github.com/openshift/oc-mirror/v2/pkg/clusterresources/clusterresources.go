@@ -62,6 +62,8 @@ const (
 )
 
 func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error {
+	o.Log.Info("📄 Generating IDMS and ITMS files...")
+
 	// byDigestMirrors
 	byDigestMirrors, err := o.generateImageMirrors(allRelatedImages, DigestsOnlyMode, forceRepositoryScope)
 	if err != nil {
@@ -168,6 +170,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 }
 
 func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
+	o.Log.Info("📄 Generating CatalogSource file...")
 	for _, copyImage := range allRelatedImages {
 		if copyImage.Type == v1alpha2.TypeOperatorCatalog {
 			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
@@ -446,6 +449,7 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v1al
 }
 
 func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releaseImageRef string) error {
+	o.Log.Info("📄 Generating UpdateService file...")
 	// truncate tag or digest from release image
 	// according to https://docs.openshift.com/container-platform/4.14/updating/updating_a_cluster/updating_disconnected_cluster/disconnected-update-osus.html#update-service-create-service-cli_updating-restricted-network-cluster-osus
 	releaseImage, err := image.ParseRef(releaseImageRef)
@@ -486,12 +490,12 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 	osusPath := filepath.Join(o.WorkingDir, clusterResourcesDir, updateServiceFilename)
 
 	if _, err := os.Stat(osusPath); errors.Is(err, os.ErrNotExist) {
-		o.Log.Info("%s does not exist, creating it", osusPath)
+		o.Log.Debug("%s does not exist, creating it", osusPath)
 		err := os.MkdirAll(filepath.Dir(osusPath), 0755)
 		if err != nil {
 			return err
 		}
-		o.Log.Info("%s dir created", filepath.Dir(osusPath))
+		o.Log.Debug("%s dir created", filepath.Dir(osusPath))
 	}
 	osusFile, err := os.Create(osusPath)
 	if err != nil {

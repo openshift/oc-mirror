@@ -87,6 +87,7 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
+	MaxParallelDownloads     uint
 	Function                 string // copy or delete (default is copy)
 }
 

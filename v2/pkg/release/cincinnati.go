@@ -169,7 +169,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v1al
 			} else {
 				// Range is set. Ensure full is true so this
 				// is skipped when processing release metadata.
-				o.Log.Info("processing minimum version %s and maximum version %s\n", ch.MinVersion, ch.MaxVersion)
+				o.Log.Debug("processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
 				ch.Full = true
 				versionsByChannel[ch.Name] = ch
 			}
@@ -300,7 +300,7 @@ func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInter
 func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v1alpha3.CopyImageSchema {
 	var allImages []v1alpha3.CopyImageSchema
 	for _, update := range updates {
-		log.Info("Found update %s\n", update.Version)
+		log.Debug("Found update %s", update.Version)
 		allImages = append(allImages, v1alpha3.CopyImageSchema{Source: update.Image, Destination: ""})
 	}
 

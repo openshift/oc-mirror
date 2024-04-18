@@ -4,23 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
-	"sync"
+	"time"
 
+	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
-const (
-	BATCH_SIZE int    = 8
-	logFile    string = "worker-{batch}.log"
-)
-
 type BatchInterface interface {
-	Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error
+	Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error
 }
 
 func New(log clog.PluggableLoggerInterface,
@@ -49,89 +44,92 @@ type BatchSchema struct {
 }
 
 // Worker - the main batch processor
-func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {
+func (o *Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {
+	startTime := time.Now()
+
+	var mirrorMsg string
+	if opts.Function == string(mirror.CopyMode) {
+		mirrorMsg = "copying"
+	} else if opts.Function == string(mirror.DeleteMode) {
+		mirrorMsg = "deleting"
+	}
 
 	var errArray []error
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
-	var b *BatchSchema
-	imgs := len(images)
-	if imgs < BATCH_SIZE {
-		b = &BatchSchema{Items: imgs, Count: 1, BatchSize: imgs, BatchIndex: 0, Remainder: 0}
-	} else {
-		b = &BatchSchema{Items: imgs, Count: (imgs / BATCH_SIZE), BatchSize: BATCH_SIZE, Remainder: (imgs % BATCH_SIZE)}
-	}
+	totalImages := len(collectorSchema.AllImages)
+	countTotal := 0
+	countReleaseImages := 0
+	countOperatorsImages := 0
+	countAdditionalImages := 0
 
-	o.Log.Info("images to %s %d ", opts.Function, b.Items)
-	o.Log.Info("batch count %d ", b.Count)
-	o.Log.Info("batch index %d ", b.BatchIndex)
-	o.Log.Info("batch size %d ", b.BatchSize)
-	o.Log.Info("remainder size %d ", b.Remainder)
+	o.Log.Info("🚀 Start " + mirrorMsg + " the images...")
 
-	// prepare batching
-	wg.Add(b.BatchSize)
-	for i := 0; i < b.Count; i++ {
-
-		o.Log.Info(fmt.Sprintf("starting batch %d ", i))
-		for x := 0; x < b.BatchSize; x++ {
-			index := (i * b.BatchSize) + x
-			o.Log.Debug("source %s ", images[index].Source)
-			o.Log.Debug("destination %s ", images[index].Destination)
-			go func(ctx context.Context, src, dest string, opts *mirror.CopyOptions) {
-				defer wg.Done()
-				err := o.Mirror.Run(ctx, src, dest, mirror.Mode(opts.Function), opts)
-				if err != nil {
-					mu.Lock()
-					errArray = append(errArray, err)
-					defer mu.Unlock()
-				}
-			}(ctx, images[index].Source, images[index].Destination, &opts)
+	for _, img := range collectorSchema.AllImages {
+		switch img.Type {
+		case v1alpha2.TypeOCPRelease, v1alpha2.TypeOCPReleaseContent, v1alpha2.TypeCincinnatiGraph:
+			countReleaseImages++
+		case v1alpha2.TypeOperatorCatalog, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorRelatedImage:
+			countOperatorsImages++
+		case v1alpha2.TypeGeneric:
+			countAdditionalImages++
 		}
-		wg.Wait()
 
-		o.Log.Info("completed batch %d", i)
-		if b.Count > 1 {
-			wg.Add(BATCH_SIZE)
+		countTotal++
+
+		overalProgress := fmt.Sprintf("=== Overall Progress - "+mirrorMsg+" image %d / %d ===", countTotal, totalImages)
+		o.Log.Info(overalProgress)
+		if opts.Function == string(mirror.CopyMode) {
+			o.Log.Info(mirrorMsg+" release image %d / %d ", countReleaseImages, collectorSchema.TotalReleaseImages)
+			o.Log.Info(mirrorMsg+" operator image %d / %d ", countOperatorsImages, collectorSchema.TotalOperatorImages)
+			o.Log.Info(mirrorMsg+" additional image %d / %d ", countAdditionalImages, collectorSchema.TotalAdditionalImages)
+			o.Log.Info(strings.Repeat("=", len(overalProgress)))
 		}
-		if len(errArray) > 0 {
-			for _, err := range errArray {
-				o.Log.Error("[Worker] errArray %v", err)
-			}
-			return fmt.Errorf("[Worker] error in batch - refer to console logs")
-		}
-	}
-	if b.Remainder > 0 {
-		// one level of simple recursion
-		i := b.Count * BATCH_SIZE
-		o.Log.Info("executing remainder")
-		err := o.Worker(ctx, images[i:], opts)
+		o.Log.Info(mirrorMsg+" image: %s", img.Origin)
+
+		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
+
 		if err != nil {
-			return err
+			errArray = append(errArray, err)
 		}
-		// output the logs to console
-		if !opts.Global.Quiet {
-			consoleLogFromFile(o.Log, o.LogsDir)
-		}
-		o.Log.Info("[Worker] successfully completed all batches")
 	}
-	return nil
-}
 
-// consoleLogFromFile
-func consoleLogFromFile(log clog.PluggableLoggerInterface, path string) {
-	dir, _ := os.ReadDir(path)
-	for _, f := range dir {
-		if strings.Contains(f.Name(), "worker") {
-			log.Debug("[batch] %s ", f.Name())
-			data, _ := os.ReadFile("logs/" + f.Name())
-			lines := strings.Split(string(data), "\n")
-			for _, s := range lines {
-				if len(s) > 0 {
-					// clean the line
-					log.Debug("%s ", strings.ToLower(s))
-				}
-			}
+	if opts.Function == string(mirror.CopyMode) {
+		o.Log.Info("=== Results ===")
+		if countReleaseImages == collectorSchema.TotalReleaseImages {
+			o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
+		} else {
+			o.Log.Info("Some release images failed to mirror %d / %d ❌ - please check the logs", countReleaseImages, collectorSchema.TotalReleaseImages)
+		}
+
+		if countOperatorsImages == collectorSchema.TotalOperatorImages {
+			o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
+		} else {
+			o.Log.Info("Some operator images failed to mirror %d / %d ❌ - please check the logs", countOperatorsImages, collectorSchema.TotalOperatorImages)
+		}
+
+		if countAdditionalImages == collectorSchema.TotalAdditionalImages {
+			o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
+		} else {
+			o.Log.Info("Some additional images failed to mirror %d / %d ❌ - please check the logs", countAdditionalImages, collectorSchema.TotalAdditionalImages)
+		}
+	} else {
+		o.Log.Info("=== Results ===")
+		if countTotal == totalImages {
+			o.Log.Info("All images deleted successfully %d / %d ✅", countTotal, totalImages)
+		} else {
+			o.Log.Info("Some images failed to delete %d / %d ❌ - please check the logs", countTotal, totalImages)
 		}
 	}
+
+	if len(errArray) > 0 {
+		for _, err := range errArray {
+			o.Log.Error(workerPrefix+"err: %s", err.Error())
+		}
+		return fmt.Errorf(workerPrefix + "error in batch - refer to console logs")
+	}
+
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Debug("batch time     : %v", execTime)
+	return nil
 }

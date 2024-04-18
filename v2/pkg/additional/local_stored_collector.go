@@ -41,13 +41,13 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	var allImages []v1alpha3.CopyImageSchema
 
-	o.Log.Debug("multiArch=%v for additional images collections", o.Opts.MultiArch)
+	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
-				o.Log.Error("%s", err.Error())
+				o.Log.Error(errMsg, err.Error())
 				return nil, err
 			}
 			var src string
@@ -60,8 +60,8 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			}
 
-			o.Log.Debug("source %s", src)
-			o.Log.Debug("destination %s", dest)
+			o.Log.Debug(collectorPrefix+"source %s", src)
+			o.Log.Debug(collectorPrefix+"destination %s", dest)
 			allImages = append(allImages, v1alpha3.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v1alpha2.TypeGeneric})
 
 		}
@@ -75,7 +75,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			if !strings.HasPrefix(img.Name, ociProtocol) {
 				imgSpec, err := image.ParseRef(img.Name)
 				if err != nil {
-					o.Log.Error("%s", err.Error())
+					o.Log.Error(errMsg, err.Error())
 					return nil, err
 				}
 
@@ -94,11 +94,12 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			}
 
 			if src == "" || dest == "" {
+				o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", src, dest, img.Name)
 				return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
 			}
 
-			o.Log.Debug("source %s", src)
-			o.Log.Debug("destination %s", dest)
+			o.Log.Debug(collectorPrefix+"source %s", src)
+			o.Log.Debug(collectorPrefix+"destination %s", dest)
 			allImages = append(allImages, v1alpha3.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest, Type: v1alpha2.TypeGeneric})
 		}
 	}

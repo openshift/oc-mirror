@@ -195,6 +195,13 @@ type RelatedImage struct {
 	TargetCatalog string `json:"targetCatalog"`
 }
 
+type CollectorSchema struct {
+	TotalReleaseImages    int
+	TotalOperatorImages   int
+	TotalAdditionalImages int
+	AllImages             []CopyImageSchema
+}
+
 // CopyImageSchema
 type CopyImageSchema struct {
 	// Source: from where to copy the image

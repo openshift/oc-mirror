@@ -171,7 +171,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	o.Log.Info(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
-	allImages, err := o.CollectAll(cmd.Context())
+	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func (o *ExecutorSchema) RunPrepare(cmd *cobra.Command, args []string) error {
 	imagesAvailable := map[string]bool{}
 	atLeastOneMissing := false
 	var buff bytes.Buffer
-	for _, img := range allImages {
+	for _, img := range collectorSchema.AllImages {
 		buff.WriteString(img.Destination + "\n")
 		exists, err := o.Mirror.Check(cmd.Context(), img.Destination, o.Opts)
 		if err != nil {

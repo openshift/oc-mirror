@@ -53,7 +53,7 @@ func TestWorker(t *testing.T) {
 			{Source: "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 			{Source: "docker://registry/name/namespace/sometestimage-i@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		}
-		err := w.Worker(context.Background(), relatedImages, opts)
+		err := w.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: relatedImages}, opts)
 		if err != nil {
 			t.Fatal("should pass")
 		}
