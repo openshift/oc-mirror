@@ -33,9 +33,19 @@ import (
 )
 
 type OperatorCatalog struct {
-	Packages            map[string]declcfg.Package
-	Channels            map[string][]declcfg.Channel
-	ChannelEntries      map[string]map[string]map[string]declcfg.ChannelEntry
+	// Packages is a map that stores the packages in the operator catalog.
+	// The key is the package name and the value is the corresponding declcfg.Package object.
+	Packages map[string]declcfg.Package
+	// Channels is a map that stores the channels for each package in the operator catalog.
+	// The key is the package name and the value is a slice of declcfg.Channel objects.
+	Channels map[string][]declcfg.Channel
+	// ChannelEntries is a map that stores the channel entries (Bundle names) for each channel and package in the operator catalog.
+	// The first key is the package name, the second key is the channel name, and the third key is the bundle name (or channel entry name).
+	// The value is the corresponding declcfg.ChannelEntry object.
+	ChannelEntries map[string]map[string]map[string]declcfg.ChannelEntry
+	// BundlesByPkgAndName is a map that stores the bundles for each package and bundle name in the operator catalog.
+	// The first key is the package name, the second key is the bundle name, and the value is the corresponding declcfg.Bundle object.
+	// This map allows quick access to the bundles based on the package and bundle name.
 	BundlesByPkgAndName map[string]map[string]declcfg.Bundle
 }
 
@@ -294,15 +304,26 @@ func parseOperatorCatalogByOperator(operatorName string, operatorCatalog Operato
 }
 
 func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, operatorConfig OperatorCatalog, iscOperator v1alpha2.IncludePackage, full bool) (map[string][]v1alpha3.RelatedImage, error) {
-	if isInvalidFiltering(iscOperator, full) {
-		return nil, fmt.Errorf("cannot use channels/full and min/max versions at the same time")
+	invalid, err := isInvalidFiltering(iscOperator, full)
+	if invalid {
+		return nil, err
 	}
 
 	relatedImages := make(map[string][]v1alpha3.RelatedImage)
 	var filteredBundles []string
 	defaultChannel := operatorConfig.Packages[operatorName].DefaultChannel
 
-	if len(iscOperator.Channels) > 0 {
+	switch {
+	case len(iscOperator.SelectedBundles) > 0:
+		for _, iscSelectedBundle := range iscOperator.SelectedBundles {
+			bundle, found := operatorConfig.BundlesByPkgAndName[operatorName][iscSelectedBundle.Name]
+			if !found {
+				log.Warn("bundle %s of operator %s not found in catalog: SKIPPING", iscSelectedBundle.Name, operatorName)
+				continue
+			}
+			relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
+		}
+	case len(iscOperator.Channels) > 0:
 		for _, iscChannel := range iscOperator.Channels {
 			log.Debug("found channel : %v", iscChannel)
 			chEntries := operatorConfig.ChannelEntries[operatorName][iscChannel.Name]
@@ -313,7 +334,7 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 			log.Debug("adding bundles : %s", bundles)
 			filteredBundles = append(filteredBundles, bundles...)
 		}
-	} else {
+	default:
 		chEntries := operatorConfig.ChannelEntries[operatorName][defaultChannel]
 		bundles, err := filterBundles(chEntries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
 		if err != nil {
@@ -342,9 +363,21 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 	return relatedImages, nil
 }
 
-func isInvalidFiltering(pkg v1alpha2.IncludePackage, full bool) bool {
-	return (len(pkg.Channels) > 0 && (pkg.MinVersion != "" || pkg.MaxVersion != "")) ||
+func isInvalidFiltering(pkg v1alpha2.IncludePackage, full bool) (bool, error) {
+	invalid := (len(pkg.Channels) > 0 && (pkg.MinVersion != "" || pkg.MaxVersion != "")) ||
 		full && (pkg.MinVersion != "" || pkg.MaxVersion != "")
+	if invalid {
+		return invalid, fmt.Errorf("cannot use channels/full and min/max versions at the same time")
+	}
+	invalid = len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.MinVersion != "" || pkg.MaxVersion != "")
+	if invalid {
+		return invalid, fmt.Errorf("cannot use filtering by bundle selection and filtering by channels or min/max versions at the same time")
+	}
+	invalid = len(pkg.SelectedBundles) > 0 && full
+	if invalid {
+		return invalid, fmt.Errorf("cannot use filtering by bundle selection and full the same time")
+	}
+	return false, nil
 }
 
 func filterBundles(channelEntries map[string]declcfg.ChannelEntry, min string, max string, full bool) ([]string, error) {

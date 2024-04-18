@@ -460,6 +460,26 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 		},
 		{
+			caseName: "packages with selectedBundles - all selected bundles present - should pass",
+			cfg: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "3scale-operator",
+							SelectedBundles: []v1alpha2.SelectedBundle{
+								{Name: "3scale-operator.v0.8.0-0.1634606167.p"},
+								{Name: "3scale-operator.v0.8.4"},
+							},
+						},
+					},
+				},
+			},
+			expectedBundles: []string{
+				"3scale-operator.v0.8.0-0.1634606167.p",
+				"3scale-operator.v0.8.4",
+			},
+		},
+		{
 			caseName: "packages with MinVersion MaxVersion with channels - Error: filtering by channel and by package min max should not be allowed - should pass",
 			cfg: v1alpha2.Operator{
 				IncludeConfig: v1alpha2.IncludeConfig{
@@ -500,6 +520,29 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{},
 			expectedError:   errors.New("cannot use channels/full and min/max versions at the same time"),
+		},
+		{
+			caseName: "packages with MinVersion MaxVersion with bundle selection - Error: filtering by bundle selection and by package min max should not be allowed - should pass",
+			cfg: v1alpha2.Operator{
+				IncludeConfig: v1alpha2.IncludeConfig{
+					Packages: []v1alpha2.IncludePackage{
+						{
+							Name: "3scale-operator",
+							SelectedBundles: []v1alpha2.SelectedBundle{
+								{
+									Name: "3scale-operator.v0.10.0-mas",
+								},
+							},
+							IncludeBundle: v1alpha2.IncludeBundle{
+								MinVersion: "0.8.0",
+								MaxVersion: "0.8.1",
+							},
+						},
+					},
+				},
+			},
+			expectedBundles: []string{},
+			expectedError:   errors.New("cannot use filtering by bundle selection and filtering by channels or min/max versions at the same time"),
 		},
 	}
 

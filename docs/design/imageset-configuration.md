@@ -34,6 +34,15 @@ a custom catalog image in the target registry.
 
 > **WARNING**: When filtering an operator package by version or channel, the default channel MUST not be filtered out. There is currently no mechanism to reset the default channel and this is required to be in the package with at least one bundle attached for the catalog to be valid.`oc-mirror` will error if the catalog is invalid.
 
+Filtering can be done by : 
+* Package / Operator name : 1 bundle, corresponding to the head version of the default channel for that package is mirrored
+* Package name and one or more channels: head bundle for the selected channel of that package
+* Package name, channel(s), and minVersion/maxVersion for each channel: within the selected channel of that package, all versions between minVersion and maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering
+* Package name and minVersion and/or maxVersion: all bundles in the default channel, between minVersion and maxVersion for that package. 
+For more examples, please check [the examples](../examples/imageset-config-filter-catalog.yaml)
+
+Starting oc-mirror V2 (introduced in OCP v4.16 as Tech Preview), it is also possible to filter operators by bundle names specifically. This helps with situations where the shortest upgrade path has been established in a separate process or tool, and that the user requires oc-mirror to mirror strictly this list of bundles needed for the upgrade. For an example of usage, please check [this example](../examples/imageset-config-filter-catalog-by-bundle.yaml)
+
 ## Additional Images
 
 Individual images can be specified in an imageset configuration. If no tag is specified, the "latest" tag will be assigned.

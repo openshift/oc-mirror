@@ -37,11 +37,24 @@ func validateOperatorOptions(cfg *v1alpha2.ImageSetConfiguration) error {
 				"catalog %q: duplicate found in configuration", ctlgName,
 			)
 		}
+		if err := validateOperatorFiltering(ctlg); err != nil {
+			return err
+		}
+
 		seen[ctlgName] = true
 	}
 	return nil
 }
-
+func validateOperatorFiltering(ctlg v1alpha2.Operator) error {
+	if len(ctlg.Packages) > 0 {
+		for _, pkg := range ctlg.Packages {
+			if len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.MaxVersion != "" || pkg.MinVersion != "") {
+				return fmt.Errorf("catalog %q: operator %q: mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed", ctlg.Catalog, pkg.Name)
+			}
+		}
+	}
+	return nil
+}
 func validateReleaseChannels(cfg *v1alpha2.ImageSetConfiguration) error {
 	seen := map[string]bool{}
 	for _, channel := range cfg.Mirror.Platform.Channels {
