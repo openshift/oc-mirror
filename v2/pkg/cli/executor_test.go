@@ -120,6 +120,78 @@ func TestExecutorMirroring(t *testing.T) {
 		}
 	})
 
+	t.Run("Testing Executor : mirrorToDisk --dry-run should pass", func(t *testing.T) {
+		opts.IsDryRun = true
+
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
+		archiver := MockArchiver{opts.Destination}
+
+		ex := &ExecutorSchema{
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Batch:                        batch,
+			MirrorArchiver:               archiver,
+			Mirror:                       Mirror{},
+			LocalStorageService:          *reg,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
+			MakeDir:                      MakeDir{},
+			LogsDir:                      "/tmp/",
+		}
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
+		res.SilenceUsage = true
+		ex.Opts.Mode = mirror.MirrorToDisk
+		err := ex.Run(res, []string{"file://" + testFolder})
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+		opts.IsDryRun = false
+	})
+
+	t.Run("Testing Executor : diskToMirror --dry-run should pass", func(t *testing.T) {
+		opts.IsDryRun = true
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
+		archiver := MockMirrorUnArchiver{}
+		cr := MockClusterResources{}
+		cfg.Mirror.Platform.Graph = true
+
+		ex := &ExecutorSchema{
+			Log:                          log,
+			Config:                       cfg,
+			Opts:                         opts,
+			Operator:                     collector,
+			Release:                      collector,
+			AdditionalImages:             collector,
+			Batch:                        batch,
+			Mirror:                       Mirror{},
+			MirrorUnArchiver:             archiver,
+			LocalStorageService:          *reg,
+			localStorageInterruptChannel: fakeStorageInterruptChan,
+			ClusterResources:             cr,
+			MakeDir:                      MakeDir{},
+			LogsDir:                      "/tmp/",
+		}
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
+		res.SilenceUsage = true
+		ex.Opts.Mode = mirror.DiskToMirror
+		err := ex.Run(res, []string{"docker://test/test"})
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+		opts.IsDryRun = false
+	})
+
 	t.Run("Testing Executor : diskToMirror should pass", func(t *testing.T) {
 		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
 		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
@@ -135,6 +207,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Release:                      collector,
 			AdditionalImages:             collector,
 			Batch:                        batch,
+			Mirror:                       Mirror{},
 			MirrorUnArchiver:             archiver,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
@@ -169,6 +242,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Release:                      collector,
 			AdditionalImages:             collector,
 			Batch:                        batch,
+			Mirror:                       Mirror{},
 			MirrorUnArchiver:             archiver,
 			LocalStorageService:          *reg,
 			localStorageInterruptChannel: fakeStorageInterruptChan,
@@ -254,6 +328,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 			Operator:         collector,
 			Release:          collector,
 			AdditionalImages: collector,
+			Mirror:           Mirror{},
 			Batch:            batch,
 			MakeDir:          MakeDir{},
 			LogsDir:          "/tmp/",
@@ -268,6 +343,63 @@ func TestRunMirrorToMirror(t *testing.T) {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
+	})
+
+	t.Run("Testing Executor : mirrorToMirror --dry-run should pass", func(t *testing.T) {
+		opts.IsDryRun = true
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
+		cr := MockClusterResources{}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			Config:           cfg,
+			Opts:             opts,
+			Operator:         collector,
+			Release:          collector,
+			AdditionalImages: collector,
+			Batch:            batch,
+			MakeDir:          MakeDir{},
+			LogsDir:          "/tmp/",
+			ClusterResources: cr,
+		}
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
+		res.SilenceUsage = true
+		err := ex.Run(res, []string{"docker://test"})
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+		opts.IsDryRun = false
+	})
+
+	t.Run("Testing Executor : mirrorToMirror --dry-run - failing collector: should fail", func(t *testing.T) {
+		opts.IsDryRun = true
+		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: true}
+		batch := &Batch{Log: log, Config: cfg, Opts: *opts}
+		cr := MockClusterResources{}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			Config:           cfg,
+			Opts:             opts,
+			Operator:         collector,
+			Release:          collector,
+			AdditionalImages: collector,
+			Batch:            batch,
+			MakeDir:          MakeDir{},
+			LogsDir:          "/tmp/",
+			ClusterResources: cr,
+		}
+
+		res := &cobra.Command{}
+		res.SetContext(context.Background())
+		res.SilenceUsage = true
+		err := ex.Run(res, []string{"docker://test"})
+		assert.Error(t, err)
+		opts.IsDryRun = false
 	})
 }
 
@@ -652,7 +784,9 @@ func TestExecutorCollectAll(t *testing.T) {
 
 // setup mocks
 
-type Mirror struct{}
+type Mirror struct {
+	Fail bool
+}
 
 // for this test scenario we only need to mock
 // ReleaseImageCollector, OperatorImageCollector and Batchr
@@ -706,7 +840,11 @@ func (o MockMakeDir) makeDirAll(dir string, mode os.FileMode) error {
 }
 
 func (o Mirror) Check(ctx context.Context, dest string, opts *mirror.CopyOptions) (bool, error) {
-	return true, nil
+	if !o.Fail {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("fake error from check")
+	}
 }
 
 func (o Mirror) Run(context.Context, string, string, mirror.Mode, *mirror.CopyOptions) error {
@@ -728,14 +866,6 @@ func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage st
 }
 func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error {
 	return nil
-}
-
-func (o *Diff) DeleteImages(ctx context.Context) error {
-	return nil
-}
-
-func (o *Diff) CheckDiff(prevCfg v1alpha2.ImageSetConfiguration) (bool, error) {
-	return false, nil
 }
 
 func (o Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {

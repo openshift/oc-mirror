@@ -82,6 +82,7 @@ type CopyOptions struct {
 	EncryptionKeys           []string  // Keys needed to encrypt the image
 	DecryptionKeys           []string  // Keys needed to decrypt the image
 	Mode                     string    // possible values: mirrorToDisk, disktoMirror or mirrorToMirror
+	IsDryRun                 bool      // generates a mappings.txt without performing the mirroring
 	Dev                      bool      // developer mode - will be removed when completed
 	Destination              string    // what to target to
 	UUID                     uuid.UUID // set uuid
