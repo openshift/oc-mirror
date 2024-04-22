@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -135,13 +134,14 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	flagRetryOpts, retryOpts := mirror.RetryFlags()
 
 	opts := &mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		Dev:                 false,
-		Function:            string(mirror.CopyMode),
+		Global:               global,
+		DeprecatedTLSVerify:  deprecatedTLSVerifyOpt,
+		SrcImage:             srcOpts,
+		DestImage:            destOpts,
+		RetryOpts:            retryOpts,
+		Dev:                  false,
+		MaxParallelDownloads: 1000,
+		Function:             string(mirror.CopyMode),
 	}
 
 	mkd := MakeDir{}
@@ -161,6 +161,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		SilenceErrors: false,
 		SilenceUsage:  false,
 		Run: func(cmd *cobra.Command, args []string) {
+			log.Info("👋 Hello, welcome to oc-mirror")
+			log.Info("⚙️  setting up the environment for you...")
+
 			err := ex.Validate(args)
 			if err != nil {
 				log.Error("%v ", err)
@@ -208,11 +211,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().AddFlagSet(&flagDestOpts)
 	HideFlags(cmd)
 
-	if ex.Opts.Global.LogLevel == "debug" || ex.Opts.Global.LogLevel == "trace" {
-		ex.Opts.Stdout = cmd.OutOrStdout()
-	} else {
-		ex.Opts.Stdout = io.Discard
-	}
+	ex.Opts.Stdout = cmd.OutOrStdout()
 
 	return cmd
 }
@@ -301,7 +300,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if err != nil {
 		return err
 	}
-	o.Log.Trace("imagesetconfig : %v ", cfg)
+	o.Log.Debug("imagesetconfig : %v ", cfg)
 
 	// update all dependant modules
 	mc := mirror.NewMirrorCopy()
@@ -337,7 +336,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 			o.Opts.Global.WorkingDir = filepath.Join(o.Opts.Global.WorkingDir, workingDir)
 		}
 	}
-	o.Log.Info("mode %s ", o.Opts.Mode)
+	o.Log.Info("🔀 workflow mode: %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
 		o.Opts.Global.Since, err = time.Parse(time.DateOnly, o.Opts.Global.SinceString)
@@ -409,15 +408,18 @@ func (o *ExecutorSchema) Complete(args []string) error {
 // Run - start the mirror functionality
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	var err error
-	if o.Opts.IsMirrorToDisk() {
+
+	switch {
+	case o.Opts.IsMirrorToDisk():
 		err = o.RunMirrorToDisk(cmd, args)
-
-	} else if o.Opts.IsDiskToMirror() {
+	case o.Opts.IsDiskToMirror():
 		err = o.RunDiskToMirror(cmd, args)
-
-	} else {
+	default:
 		err = o.RunMirrorToMirror(cmd, args)
 	}
+
+	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
+
 	if err != nil {
 		o.closeAll()
 		return err
@@ -509,7 +511,7 @@ func (o *ExecutorSchema) setupLocalStorage() error {
 		regLogger.Out = o.registryLogFile
 	}
 	absPath, err := filepath.Abs(registryLogPath)
-	o.Log.Info("local storage registry will log to %s", absPath)
+	o.Log.Debug("local storage registry will log to %s", absPath)
 	if err != nil {
 		o.Log.Error(err.Error())
 	}
@@ -632,18 +634,17 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
-	o.Log.Info(startMessage, o.Opts.Global.Port)
+	o.Log.Debug(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect all images
-	allImages, err := o.CollectAll(cmd.Context())
+	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
 	}
-	collectionFinish := time.Now()
 
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
+	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 	if err != nil {
 		return err
 	}
@@ -653,16 +654,17 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
 	o.localStorageInterruptChannel <- interruptSig
 
+	o.Log.Info("📦 Preparing the tarball archive...")
 	// next, generate the archive
-	err = o.MirrorArchiver.BuildArchive(cmd.Context(), allImages)
+	err = o.MirrorArchiver.BuildArchive(cmd.Context(), collectorSchema.AllImages)
 	if err != nil {
 		return err
 	}
 
-	mirrorFinish := time.Now()
-	o.Log.Info("start time      : %v", startTime)
-	o.Log.Info("collection time : %v", collectionFinish)
-	o.Log.Info("mirror time     : %v", mirrorFinish)
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Info("mirror time     : %v", execTime)
+
 	if err != nil {
 		return err
 	}
@@ -673,34 +675,33 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
-	allImages, err := o.CollectAll(cmd.Context())
+	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
 	}
-	collectionFinish := time.Now()
 
 	// Apply max-nested-paths processing if MaxNestedPaths>0
 	if o.Opts.Global.MaxNestedPaths > 0 {
-		allImages, err = withMaxNestedPaths(allImages, o.Opts.Global.MaxNestedPaths)
+		collectorSchema.AllImages, err = withMaxNestedPaths(collectorSchema.AllImages, o.Opts.Global.MaxNestedPaths)
 		if err != nil {
 			return err
 		}
 	}
 
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
+	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 	if err != nil {
 		return err
 	}
 
 	//create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
+	err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
 
-	err = o.ClusterResources.CatalogSourceGenerator(allImages)
+	err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
 	if err != nil {
 		return err
 	}
@@ -720,10 +721,10 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
-	mirrorFinish := time.Now()
-	o.Log.Info("start time      : %v", startTime)
-	o.Log.Info("collection time : %v", collectionFinish)
-	o.Log.Info("mirror time     : %v", mirrorFinish)
+
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Info("mirror time     : %v", execTime)
 
 	return nil
 }
@@ -740,38 +741,37 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	// start the local storage registry
-	o.Log.Info(startMessage, o.Opts.Global.Port)
+	o.Log.Debug(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect
-	allImages, err := o.CollectAll(cmd.Context())
+	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
 	}
-	collectionFinish := time.Now()
 
 	// apply max-nested-paths processing if MaxNestedPaths>0
 	if o.Opts.Global.MaxNestedPaths > 0 {
-		allImages, err = withMaxNestedPaths(allImages, o.Opts.Global.MaxNestedPaths)
+		collectorSchema.AllImages, err = withMaxNestedPaths(collectorSchema.AllImages, o.Opts.Global.MaxNestedPaths)
 		if err != nil {
 			return err
 		}
 	}
 	//call the batch worker
-	err = o.Batch.Worker(cmd.Context(), allImages, *o.Opts)
+	err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 	if err != nil {
 		return err
 	}
 
 	// create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	err = o.ClusterResources.IDMS_ITMSGenerator(allImages, forceRepositoryScope)
+	err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
 	if err != nil {
 		return err
 	}
 
 	// create catalog source
-	err = o.ClusterResources.CatalogSourceGenerator(allImages)
+	err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
 	if err != nil {
 		return err
 	}
@@ -792,10 +792,10 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		}
 	}
 
-	mirrorFinish := time.Now()
-	o.Log.Info("start time      : %v", startTime)
-	o.Log.Info("collection time : %v", collectionFinish)
-	o.Log.Info("mirror time     : %v", mirrorFinish)
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Info("mirror time     : %v", execTime)
+
 	if err != nil {
 		return err
 	}
@@ -823,46 +823,55 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 
 // CollectAll - collect all relevant images for
 // release, operators and additonalImages
-func (o *ExecutorSchema) CollectAll(ctx context.Context) ([]v1alpha3.CopyImageSchema, error) {
+func (o *ExecutorSchema) CollectAll(ctx context.Context) (v1alpha3.CollectorSchema, error) {
+	startTime := time.Now()
+
+	var collectorSchema v1alpha3.CollectorSchema
 	var allRelatedImages []v1alpha3.CopyImageSchema
 
-	// do releases
-	imgs, err := o.Release.ReleaseImageCollector(ctx)
+	o.Log.Info("🕵️  going to discover the necessary images...")
+	o.Log.Info("🔍 collecting release images...")
+	// collect releases
+	rImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return []v1alpha3.CopyImageSchema{}, err
+		return v1alpha3.CollectorSchema{}, err
 	}
-	o.Log.Info("total release images to %s %d ", o.Opts.Function, len(imgs))
-	o.Opts.ImageType = "release"
-	allRelatedImages = mergeImages(allRelatedImages, imgs)
+	collectorSchema.TotalReleaseImages = len(rImgs)
+	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
+	o.Opts.ImageType = "release" //TODO ALEX ask to Sherine about it
+	allRelatedImages = append(allRelatedImages, rImgs...)
 
-	// do operators
-	imgs, err = o.Operator.OperatorImageCollector(ctx)
+	o.Log.Info("🔍 collecting operator images...")
+	// collect operators
+	oImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return []v1alpha3.CopyImageSchema{}, err
+		return v1alpha3.CollectorSchema{}, err
 	}
-	o.Log.Info("total operator images to %s %d ", o.Opts.Function, len(imgs))
+	collectorSchema.TotalOperatorImages = len(oImgs)
+	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 	o.Opts.ImageType = "operator"
-	allRelatedImages = mergeImages(allRelatedImages, imgs)
+	allRelatedImages = append(allRelatedImages, oImgs...)
 
-	// do additionalImages
-	imgs, err = o.AdditionalImages.AdditionalImagesCollector(ctx)
+	o.Log.Info("🔍 collecting additional images...")
+	// collect additionalImages
+	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return []v1alpha3.CopyImageSchema{}, err
+		return v1alpha3.CollectorSchema{}, err
 	}
-	o.Log.Info("total additional images to %s %d ", o.Opts.Function, len(imgs))
-	allRelatedImages = mergeImages(allRelatedImages, imgs)
+	collectorSchema.TotalAdditionalImages = len(aImgs)
+	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
+	allRelatedImages = append(allRelatedImages, aImgs...)
 
-	return allRelatedImages, nil
-}
+	collectorSchema.AllImages = allRelatedImages
 
-// mergeImages - simple function to append related images
-// nolint
-func mergeImages(base, in []v1alpha3.CopyImageSchema) []v1alpha3.CopyImageSchema {
-	base = append(base, in...)
-	return base
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Debug("collection time     : %v", execTime)
+
+	return collectorSchema, nil
 }
 
 // closeAll - utility to close any open files

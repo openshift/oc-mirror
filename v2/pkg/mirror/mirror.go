@@ -176,6 +176,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		PreserveDigests:                  opts.PreserveDigests,
+		MaxParallelDownloads:             opts.MaxParallelDownloads,
 	}
 
 	return retry.IfNecessary(ctx, func() error {

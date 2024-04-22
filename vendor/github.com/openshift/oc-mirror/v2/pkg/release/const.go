@@ -25,6 +25,7 @@ const (
 	imageReferences             = "image-references"
 	releaseImageExtractFullPath = releaseManifests + "/" + imageReferences
 	blobsDir                    = "blobs/sha256"
-	errMsg                      = "[ReleaseImageCollector] %v "
+	collectorPrefix             = "[ReleaseImageCollector] "
+	errMsg                      = collectorPrefix + "%s"
 	logFile                     = "release.log"
 )

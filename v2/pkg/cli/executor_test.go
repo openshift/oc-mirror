@@ -738,7 +738,7 @@ func (o *Diff) CheckDiff(prevCfg v1alpha2.ImageSetConfiguration) (bool, error) {
 	return false, nil
 }
 
-func (o *Batch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {
+func (o Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {
 	if o.Fail {
 		return fmt.Errorf("forced error")
 	}

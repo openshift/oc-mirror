@@ -33,6 +33,9 @@ const (
 	deleteErrMsg = "[delete] %v"
 	deleteYaml   = "/delete/delete-images.yaml"
 	deleteDir    = "/delete/"
+
+	deletePrefix = "[RunDelete] "
+	errMsg       = deletePrefix + "%s"
 )
 
 // NewDeleteCommand - setup all the relevant support structs
@@ -70,6 +73,9 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 		Use:   "delete",
 		Short: "Deletes all related images and manifests from a remote repository or local cache or both",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.Info("👋 Hello, welcome to oc-mirror")
+			log.Info("⚙️  setting up the environment for you...")
+
 			err := ex.ValidateDelete(args)
 			if err != nil {
 				log.Error("%v ", err)
@@ -217,7 +223,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 
 	// ensure mirror and batch worker use delete logic
 	o.Opts.Function = string(mirror.DeleteMode)
-	o.Log.Info("executing %s ", o.Opts.Function)
+	o.Log.Info("🔀 workflow mode: %s / %s", o.Opts.Mode, o.Opts.Function)
 
 	if o.Opts.Global.DeleteGenerate {
 		err = o.setupWorkingDir()
@@ -229,13 +235,13 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 			o.Log.Error("absolute path %v", err)
 		}
 		if len(o.Opts.Global.DeleteID) > 0 {
-			o.Log.Info("using id %s to update all delete generated files", o.Opts.Global.DeleteID)
+			o.Log.Debug("using id %s to update all delete generated files", o.Opts.Global.DeleteID)
 		}
-		o.Log.Info("generate flag set, files will be created in %s", absPath)
+		o.Log.Debug("generate flag set, files will be created in %s", absPath)
 	}
 
 	if o.Opts.Global.ForceCacheDelete && !o.Opts.Global.DeleteGenerate {
-		o.Log.Info("force-cache-delete flag set, cache deletion will be forced")
+		o.Log.Debug("force-cache-delete flag set, cache deletion will be forced")
 	}
 
 	err = o.setupLocalStorageDir()
@@ -260,10 +266,9 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 
 // RunDelete - cobra run
 func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
-
 	startTime := time.Now()
 	o.Log.Debug("config %v", o.Config)
-	o.Log.Info(startMessage, o.Opts.Global.Port)
+	o.Log.Debug(startMessage, o.Opts.Global.Port)
 
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
@@ -272,30 +277,34 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 		// lets get the release images from local disk
 		releaseImages, err := o.Delete.FilterReleasesForDelete()
 		if err != nil {
-			o.Log.Error(deleteErrMsg, err)
+			o.Log.Error(errMsg, err.Error())
 		}
 
+		o.Log.Info("🕵️  going to discover the necessary images...")
+		o.Log.Info("🔍 collecting release images...")
 		// convert release images
 		var allImages []v1alpha3.CopyImageSchema
 		for _, i := range releaseImages {
 			ai, err := o.Delete.ConvertReleaseImages(i)
 			if err != nil {
-				o.Log.Error(deleteErrMsg, err)
+				o.Log.Error(errMsg, err.Error())
 			}
 			allImages = append(allImages, ai...)
 		}
 
+		o.Log.Info("🔍 collecting operator images...")
 		// collect operator images
-		oi, err := o.Operator.OperatorImageCollector(cmd.Context())
+		oImgs, err := o.Operator.OperatorImageCollector(cmd.Context())
 		if err != nil {
 			o.Log.Error(" %v", err)
 		}
-		allImages = append(allImages, oi...)
+		allImages = append(allImages, oImgs...)
 
+		o.Log.Info("🔍 collecting additional images...")
 		// collect additional images
 		ai, err := o.AdditionalImages.AdditionalImagesCollector(cmd.Context())
 		if err != nil {
-			o.Log.Error(deleteErrMsg, err)
+			o.Log.Error(errMsg, err.Error())
 		}
 		allImages = append(allImages, ai...)
 
@@ -316,9 +325,9 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 		}
 	}
 
-	deleteFinish := time.Now()
-	o.Log.Info("start time      : %v", startTime)
-	o.Log.Info("delete time     : %v", deleteFinish)
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Info("delete time     : %v", execTime)
 
 	if o.Opts.Global.ForceCacheDelete {
 		// finally execute the garbage collector
@@ -328,6 +337,8 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 			return err
 		}
 	}
+
+	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
 
 	return nil
 }

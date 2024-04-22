@@ -34,7 +34,8 @@ type DeleteImages struct {
 
 // WriteDeleteMetaData
 func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) error {
-	o.Log.Info("writing delete metadata images to %s ", o.Opts.Global.WorkingDir+deleteDir)
+	o.Log.Info("📄 Generating delete file...")
+	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
 	// we write the image and related blobs in yaml format to file for further processing
 	filename := filepath.Join(o.Opts.Global.WorkingDir, deleteImagesYaml)
@@ -132,7 +133,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 
 // DeleteRegistryImages - deletes both remote and local registries
 func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) error {
-	o.Log.Info("deleting images from remote registry")
+	o.Log.Debug("deleting images from remote registry")
 	var rrUpdatedImages []v1alpha3.CopyImageSchema
 	var lsUpdatedImages []v1alpha3.CopyImageSchema
 
@@ -154,13 +155,13 @@ func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) erro
 
 	}
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
-		err := o.Batch.Worker(context.Background(), rrUpdatedImages, o.Opts)
+		err := o.Batch.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
 		}
 	}
 	if o.Opts.Global.ForceCacheDelete {
-		err := o.Batch.Worker(context.Background(), lsUpdatedImages, o.Opts)
+		err := o.Batch.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
 		}
@@ -172,6 +173,7 @@ func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) erro
 // used to verify the delete yaml is well formed as well as being
 // the base for both local cache delete and remote registry delete
 func (o DeleteImages) ReadDeleteMetaData() (v1alpha3.DeleteImageList, error) {
+	o.Log.Info("👀 Reading delete file...")
 	var list v1alpha3.DeleteImageList
 	var fileName string
 

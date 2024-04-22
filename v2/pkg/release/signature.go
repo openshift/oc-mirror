@@ -67,13 +67,13 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		digest = imgSpec.Digest
 
 		if digest != "" {
-			o.Log.Info("signature %s", digest)
+			o.Log.Debug("signature %s", digest)
 			// check if the image is in the cache else
 			// do a lookup and download it to cache
 			data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
 			if err != nil {
 				if os.IsNotExist(err) {
-					o.Log.Warn("signature for %s not in cache", digest)
+					o.Log.Debug("signature for %s not in cache", digest)
 				}
 			}
 		} else {
@@ -156,7 +156,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				o.Log.Error("unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set")
 			}
 
-			o.Log.Info("content %s", string(content))
+			o.Log.Debug("content %s", string(content))
 			// update the image with the actaul reference from the contents json
 			var signSchema *v1alpha3.SignatureContentSchema
 			err = json.Unmarshal(content, &signSchema)
@@ -165,7 +165,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				return []v1alpha3.CopyImageSchema{}, err
 			}
 			img.Source = signSchema.Critical.Identity.DockerReference
-			o.Log.Info("image found : %s", signSchema.Critical.Identity.DockerReference)
+			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
 			// o.Log.Info("public Key : %s", strings.ToUpper(fmt.Sprintf("%x", md.SignedBy.PublicKey.Fingerprint)))
 
 			// write signature to cache

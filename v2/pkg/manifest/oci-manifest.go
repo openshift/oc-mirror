@@ -118,7 +118,7 @@ func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3
 			}
 		}
 	} else {
-		o.Log.Info("extract directory exists (nop)")
+		o.Log.Debug("extract directory exists (nop)")
 	}
 	return nil
 }

@@ -1,6 +1,8 @@
 package additional
 
 const (
-	dockerProtocol string = "docker://"
-	ociProtocol    string = "oci://"
+	dockerProtocol  = "docker://"
+	ociProtocol     = "oci://"
+	collectorPrefix = "[AdditionalImagesCollector] "
+	errMsg          = collectorPrefix + "%s"
 )

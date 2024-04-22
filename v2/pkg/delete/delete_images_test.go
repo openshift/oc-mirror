@@ -734,7 +734,7 @@ type mockBlobs struct {
 
 type mockManifest struct{}
 
-func (o *mockBatch) Worker(ctx context.Context, images []v1alpha3.CopyImageSchema, opts mirror.CopyOptions) error {
+func (o mockBatch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {
 	if o.Fail {
 		return fmt.Errorf("forced error")
 	}
