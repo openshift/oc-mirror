@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
-func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v1alpha3.CopyImageSchema) error {
+func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
 	// set up location of logs dir
 	outDir := filepath.Join(o.Opts.Global.WorkingDir, dryRunOutDir)
 	// clean up logs directory

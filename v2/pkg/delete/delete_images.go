@@ -9,8 +9,7 @@ import (
 	"strings"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/image"
@@ -26,14 +25,14 @@ type DeleteImages struct {
 	Opts             mirror.CopyOptions
 	Batch            batch.BatchInterface
 	Blobs            archive.BlobsGatherer
-	Config           v1alpha2.ImageSetConfiguration
+	Config           v2alpha1.ImageSetConfiguration
 	Manifest         manifest.ManifestInterface
 	LocalStorageDisk string
 	LocalStorageFQDN string
 }
 
 // WriteDeleteMetaData
-func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) error {
+func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) error {
 	o.Log.Info("📄 Generating delete file...")
 	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
@@ -50,12 +49,12 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
-	var items_map = make(map[string]v1alpha3.DeleteItem)
+	var items_map = make(map[string]v2alpha1.DeleteItem)
 
 	// gather related blobs
 	for _, img := range images {
 
-		item := v1alpha3.DeleteItem{
+		item := v2alpha1.DeleteItem{
 			ImageName:      img.Origin,
 			ImageReference: img.Destination,
 		}
@@ -83,7 +82,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 		items_map[img.Destination] = item
 	}
 
-	var items []v1alpha3.DeleteItem
+	var items []v2alpha1.DeleteItem
 	// convert back
 	for _, v := range items_map {
 		items = append(items, v)
@@ -93,9 +92,9 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 		return items[i].ImageReference < items[j].ImageReference
 	})
 	// marshal to yaml and write to file
-	deleteImageList := v1alpha3.DeleteImageList{
+	deleteImageList := v2alpha1.DeleteImageList{
 		Kind:       "DeleteImageList",
-		APIVersion: "mirror.openshift.io/v1alpha2",
+		APIVersion: "mirror.openshift.io/v2alpha1",
 		Items:      items,
 	}
 	ymlData, err := yaml.Marshal(deleteImageList)
@@ -107,13 +106,13 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
 	// finally copy the deleteimagesetconfig for reference
-	disc := v1alpha2.DeleteImageSetConfiguration{
+	disc := v2alpha1.DeleteImageSetConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "DeleteImageSetConfiguration",
-			APIVersion: "mirror.openshift.io/v1alpha2",
+			APIVersion: "mirror.openshift.io/v2alpha1",
 		},
-		DeleteImageSetConfigurationSpec: v1alpha2.DeleteImageSetConfigurationSpec{
-			Delete: v1alpha2.Delete{
+		DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+			Delete: v2alpha1.Delete{
 				Platform:         o.Config.Mirror.Platform,
 				Operators:        o.Config.Mirror.Operators,
 				AdditionalImages: o.Config.Mirror.AdditionalImages,
@@ -132,13 +131,13 @@ func (o DeleteImages) WriteDeleteMetaData(images []v1alpha3.CopyImageSchema) err
 }
 
 // DeleteRegistryImages - deletes both remote and local registries
-func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) error {
+func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) error {
 	o.Log.Debug("deleting images from remote registry")
-	var rrUpdatedImages []v1alpha3.CopyImageSchema
-	var lsUpdatedImages []v1alpha3.CopyImageSchema
+	var rrUpdatedImages []v2alpha1.CopyImageSchema
+	var lsUpdatedImages []v2alpha1.CopyImageSchema
 
 	for _, img := range images.Items {
-		cis := v1alpha3.CopyImageSchema{
+		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
 			Destination: img.ImageReference,
 		}
@@ -146,7 +145,7 @@ func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) erro
 		rrUpdatedImages = append(rrUpdatedImages, cis)
 		// prepare for local storage delete
 		lsUpdated := strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1)
-		lsCis := v1alpha3.CopyImageSchema{
+		lsCis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
 			Destination: lsUpdated,
 		}
@@ -155,13 +154,13 @@ func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) erro
 
 	}
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
-		err := o.Batch.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts)
+		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
 		}
 	}
 	if o.Opts.Global.ForceCacheDelete {
-		err := o.Batch.Worker(context.Background(), v1alpha3.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts)
+		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
 		}
@@ -172,9 +171,9 @@ func (o DeleteImages) DeleteRegistryImages(images v1alpha3.DeleteImageList) erro
 // ReadDeleteMetaData - read the list of images to delete
 // used to verify the delete yaml is well formed as well as being
 // the base for both local cache delete and remote registry delete
-func (o DeleteImages) ReadDeleteMetaData() (v1alpha3.DeleteImageList, error) {
+func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 	o.Log.Info("👀 Reading delete file...")
-	var list v1alpha3.DeleteImageList
+	var list v2alpha1.DeleteImageList
 	var fileName string
 
 	if len(o.Opts.Global.DeleteYaml) == 0 {
@@ -199,14 +198,14 @@ func (o DeleteImages) ReadDeleteMetaData() (v1alpha3.DeleteImageList, error) {
 }
 
 // ConvertReleaseImages
-func (o DeleteImages) ConvertReleaseImages(ri []v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error) {
+func (o DeleteImages) ConvertReleaseImages(ri []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	// convert and format the collection
-	var allImages []v1alpha3.CopyImageSchema
+	var allImages []v2alpha1.CopyImageSchema
 	for _, img := range ri {
 		// replace the destination registry with our local registry
 		copyIS, err := buildFormatedCopyImageSchema(img.Image, dockerProtocol+o.LocalStorageFQDN, o.Opts.Global.DeleteDestination)
 		if err != nil {
-			return []v1alpha3.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, err
 		}
 		allImages = append(allImages, copyIS)
 	}
@@ -214,11 +213,11 @@ func (o DeleteImages) ConvertReleaseImages(ri []v1alpha3.RelatedImage) ([]v1alph
 }
 
 // buildFormatedCopyImageSchema - simple private utility to build the CopyImageSchema data
-func buildFormatedCopyImageSchema(img, cacheRegistry, targetRegistry string) (v1alpha3.CopyImageSchema, error) {
+func buildFormatedCopyImageSchema(img, cacheRegistry, targetRegistry string) (v2alpha1.CopyImageSchema, error) {
 	var src, dest string
 	imgSpec, err := image.ParseRef(img)
 	if err != nil {
-		return v1alpha3.CopyImageSchema{}, err
+		return v2alpha1.CopyImageSchema{}, err
 	}
 	if imgSpec.IsImageByDigest() {
 		src = strings.Join([]string{cacheRegistry, imgSpec.PathComponent + "@sha256:" + imgSpec.Digest}, "/")
@@ -228,7 +227,7 @@ func buildFormatedCopyImageSchema(img, cacheRegistry, targetRegistry string) (v1
 		dest = strings.Join([]string{targetRegistry, imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
 	}
 
-	is := v1alpha3.CopyImageSchema{
+	is := v2alpha1.CopyImageSchema{
 		Source:      src,
 		Destination: dest,
 		Origin:      img,
@@ -237,9 +236,9 @@ func buildFormatedCopyImageSchema(img, cacheRegistry, targetRegistry string) (v1
 }
 
 // FilterReleasesForDelete returns a map of releases that should be deleted
-func (o DeleteImages) FilterReleasesForDelete() (map[string][]v1alpha3.RelatedImage, error) {
+func (o DeleteImages) FilterReleasesForDelete() (map[string][]v2alpha1.RelatedImage, error) {
 	// get the release data from the deleteimagesetconfig
-	ri := map[string][]v1alpha3.RelatedImage{}
+	ri := map[string][]v2alpha1.RelatedImage{}
 	release_hold_path := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, ocpRelease)
 	folders, err := os.ReadDir(release_hold_path)
 	if err != nil {
@@ -286,10 +285,10 @@ func (o DeleteImages) FilterReleasesForDelete() (map[string][]v1alpha3.RelatedIm
 					if err != nil {
 						return nil, err
 					}
-					releaseImage := v1alpha3.RelatedImage{
+					releaseImage := v2alpha1.RelatedImage{
 						Name:  releaseRepo + ":" + dir.Name(),
 						Image: releaseRepo + ":" + dir.Name(),
-						Type:  v1alpha2.TypeOCPRelease,
+						Type:  v2alpha1.TypeOCPRelease,
 					}
 					releaseImages = append(releaseImages, releaseImage)
 					ri[dir.Name()] = releaseImages

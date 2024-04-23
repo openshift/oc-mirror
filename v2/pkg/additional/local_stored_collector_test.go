@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -43,10 +42,10 @@ func TestAdditionalImageCollector(t *testing.T) {
 
 	// use the minamal amount of images
 	// simplifies testing
-	cfg := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				AdditionalImages: []v1alpha2.Image{
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				AdditionalImages: []v2alpha1.Image{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
 					{Name: "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 					{Name: "oci://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -118,15 +117,15 @@ func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOp
 	return true, nil
 }
 
-func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
-	opcl := v1alpha3.OperatorLabels{OperatorsOperatorframeworkIoIndexConfigsV1: "/configs"}
-	opc := v1alpha3.OperatorConfig{Labels: opcl}
-	ocs := &v1alpha3.OperatorConfigSchema{Config: opc}
+func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	opcl := v2alpha1.OperatorLabels{OperatorsOperatorframeworkIoIndexConfigsV1: "/configs"}
+	opc := v2alpha1.OperatorConfig{Labels: opcl}
+	ocs := &v2alpha1.OperatorConfigSchema{Config: opc}
 	return ocs, nil
 }
 
-func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
-	relatedImages := []v1alpha3.RelatedImage{
+func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	relatedImages := []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -135,10 +134,10 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
-	return &v1alpha3.OCISchema{
+func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
@@ -148,17 +147,17 @@ func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
-	return &v1alpha3.OCISchema{
+func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 				Size:      567,
 			},
 		},
-		Config: v1alpha3.OCIManifest{
+		Config: v2alpha1.OCIManifest{
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 			Size:      567,
@@ -170,16 +169,16 @@ func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, err
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	relatedImages["abc"] = []v1alpha3.RelatedImage{
+func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
+	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "quay.io/name/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "quay.io/name/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 	}
 	return relatedImages, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -187,7 +186,7 @@ func (o MockManifest) ExtractLayers(filePath, name, label string) error {
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 

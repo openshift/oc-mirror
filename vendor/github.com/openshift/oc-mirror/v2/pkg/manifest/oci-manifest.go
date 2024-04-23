@@ -23,8 +23,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -58,8 +57,8 @@ func New(log clog.PluggableLoggerInterface) ManifestInterface {
 }
 
 // GetImageIndex - used to get the oci index.json
-func (o Manifest) GetImageIndex(dir string) (*v1alpha3.OCISchema, error) {
-	var oci *v1alpha3.OCISchema
+func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+	var oci *v2alpha1.OCISchema
 	indx, err := os.ReadFile(dir + "/" + index)
 	if err != nil {
 		return nil, err
@@ -73,8 +72,8 @@ func (o Manifest) GetImageIndex(dir string) (*v1alpha3.OCISchema, error) {
 
 // GetImageManifest used to ge the manifest in the oci blobs/sha254
 // directory - found in index.json
-func (o Manifest) GetImageManifest(file string) (*v1alpha3.OCISchema, error) {
-	var oci *v1alpha3.OCISchema
+func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+	var oci *v2alpha1.OCISchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -87,8 +86,8 @@ func (o Manifest) GetImageManifest(file string) (*v1alpha3.OCISchema, error) {
 }
 
 // GetOperatorConfig used to parse the operator json
-func (o Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
-	var ocs *v1alpha3.OperatorConfigSchema
+func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	var ocs *v2alpha1.OperatorConfigSchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -101,7 +100,7 @@ func (o Manifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema
 }
 
 // ExtractLayersOCI
-func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if _, err := os.Stat(toPath + "/" + label); errors.Is(err, os.ErrNotExist) {
 		for _, blob := range oci.Layers {
 			validDigest, err := digest.Parse(blob.Digest)
@@ -124,22 +123,22 @@ func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v1alpha3
 }
 
 // GetReleaseSchema
-func (o Manifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
-	var release = v1alpha3.ReleaseSchema{}
+func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	var release = v2alpha1.ReleaseSchema{}
 
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		return []v1alpha3.RelatedImage{}, err
+		return []v2alpha1.RelatedImage{}, err
 	}
 
 	err = json.Unmarshal([]byte(file), &release)
 	if err != nil {
-		return []v1alpha3.RelatedImage{}, err
+		return []v2alpha1.RelatedImage{}, err
 	}
 
-	var allImages []v1alpha3.RelatedImage
+	var allImages []v2alpha1.RelatedImage
 	for _, item := range release.Spec.Tags {
-		allImages = append(allImages, v1alpha3.RelatedImage{Image: item.From.Name, Name: item.Name, Type: v1alpha2.TypeOCPReleaseContent})
+		allImages = append(allImages, v2alpha1.RelatedImage{Image: item.From.Name, Name: item.Name, Type: v2alpha1.TypeOCPReleaseContent})
 	}
 	return allImages, nil
 }
@@ -234,16 +233,16 @@ func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
 	return operatorCatalog, err
 }
 
-func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
+func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
 
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 
 	if len(ctlgInIsc.Packages) == 0 {
 		for operatorName := range operatorCatalog.Packages {
 
 			operatorConfig := parseOperatorCatalogByOperator(operatorName, operatorCatalog)
 
-			ri, err := getRelatedImages(o.Log, operatorName, operatorConfig, v1alpha2.IncludePackage{}, ctlgInIsc.Full)
+			ri, err := getRelatedImages(o.Log, operatorName, operatorConfig, v2alpha1.IncludePackage{}, ctlgInIsc.Full)
 
 			if err != nil {
 				return relatedImages, err
@@ -303,13 +302,13 @@ func parseOperatorCatalogByOperator(operatorName string, operatorCatalog Operato
 	return operatorConfig
 }
 
-func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, operatorConfig OperatorCatalog, iscOperator v1alpha2.IncludePackage, full bool) (map[string][]v1alpha3.RelatedImage, error) {
+func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, operatorConfig OperatorCatalog, iscOperator v2alpha1.IncludePackage, full bool) (map[string][]v2alpha1.RelatedImage, error) {
 	invalid, err := isInvalidFiltering(iscOperator, full)
 	if invalid {
 		return nil, err
 	}
 
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	var filteredBundles []string
 	defaultChannel := operatorConfig.Packages[operatorName].DefaultChannel
 
@@ -363,7 +362,7 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 	return relatedImages, nil
 }
 
-func isInvalidFiltering(pkg v1alpha2.IncludePackage, full bool) (bool, error) {
+func isInvalidFiltering(pkg v2alpha1.IncludePackage, full bool) (bool, error) {
 	invalid := (len(pkg.Channels) > 0 && (pkg.MinVersion != "" || pkg.MaxVersion != "")) ||
 		full && (pkg.MinVersion != "" || pkg.MaxVersion != "")
 	if invalid {
@@ -498,19 +497,19 @@ func isPreReleaseOfFilteredVersion(version string, chEntryName string, filteredV
 	return false
 }
 
-func addTypeToRelatedImages(bundle declcfg.Bundle) []v1alpha3.RelatedImage {
-	var relatedImages []v1alpha3.RelatedImage
+func addTypeToRelatedImages(bundle declcfg.Bundle) []v2alpha1.RelatedImage {
+	var relatedImages []v2alpha1.RelatedImage
 
 	for _, ri := range bundle.RelatedImages {
-		relateImage := v1alpha3.RelatedImage{}
+		relateImage := v2alpha1.RelatedImage{}
 		if ri.Image == bundle.Image {
 			relateImage.Name = ri.Name
 			relateImage.Image = ri.Image
-			relateImage.Type = v1alpha2.TypeOperatorBundle
+			relateImage.Type = v2alpha1.TypeOperatorBundle
 		} else {
 			relateImage.Name = ri.Name
 			relateImage.Image = ri.Image
-			relateImage.Type = v1alpha2.TypeOperatorRelatedImage
+			relateImage.Type = v2alpha1.TypeOperatorRelatedImage
 		}
 		relatedImages = append(relatedImages, relateImage)
 	}
@@ -519,7 +518,7 @@ func addTypeToRelatedImages(bundle declcfg.Bundle) []v1alpha3.RelatedImage {
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
-func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	data, err := os.ReadFile(path.Join(dir, "index.json"))
 	if err != nil {
 		o.Log.Debug(err.Error())
@@ -535,9 +534,9 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISche
 		return err
 	}
 
-	idx := v1alpha3.OCISchema{
+	idx := v2alpha1.OCISchema{
 		SchemaVersion: oci.SchemaVersion,
-		Manifests:     []v1alpha3.OCIManifest{{MediaType: oci.MediaType, Digest: "sha256:" + digest, Size: size}},
+		Manifests:     []v2alpha1.OCIManifest{{MediaType: oci.MediaType, Digest: "sha256:" + digest, Size: size}},
 	}
 
 	idxData, err := json.Marshal(idx)

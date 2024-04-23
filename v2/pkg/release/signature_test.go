@@ -5,8 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	"github.com/stretchr/testify/assert"
@@ -42,12 +41,12 @@ func TestReleaseSignature(t *testing.T) {
 		Mode:                mirror.DiskToMirror,
 	}
 
-	cfg := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
 					Architectures: []string{"amd64"},
-					Channels: []v1alpha2.ReleaseChannel{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
 							Name:       "stable-4.13",
 							MinVersion: "4.13.10",
@@ -62,10 +61,10 @@ func TestReleaseSignature(t *testing.T) {
 
 	t.Run("Testing ReleaseSignature - should pass", func(t *testing.T) {
 		ex := NewSignatureClient(log, cfg, opts)
-		var imgs []v1alpha3.CopyImageSchema
-		var newImgs []v1alpha3.CopyImageSchema
+		var imgs []v2alpha1.CopyImageSchema
+		var newImgs []v2alpha1.CopyImageSchema
 
-		imgs = append(imgs, v1alpha3.CopyImageSchema{
+		imgs = append(imgs, v2alpha1.CopyImageSchema{
 			Source:      "quay.io/openshift-release-dev/ocp-release-4.13.10-x86_64",
 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
 		})
@@ -73,7 +72,7 @@ func TestReleaseSignature(t *testing.T) {
 		_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
 		assert.Equal(t, "parsing image digest", err.Error())
 
-		newImgs = append(newImgs, v1alpha3.CopyImageSchema{
+		newImgs = append(newImgs, v2alpha1.CopyImageSchema{
 			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
 		})
@@ -105,7 +104,7 @@ func TestReleaseSignature(t *testing.T) {
 
 		ex := NewSignatureClient(log, cfg, opts)
 
-		imgs := []v1alpha3.CopyImageSchema{
+		imgs := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
 				Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
@@ -125,7 +124,7 @@ func TestReleaseSignature(t *testing.T) {
 
 	// 	ex := NewSignatureClient(log, cfg, opts)
 
-	// 	imgs := []v1alpha3.CopyImageSchema{
+	// 	imgs := []v2alpha1.CopyImageSchema{
 	// 		{
 	// 			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
 	// 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
@@ -143,7 +142,7 @@ func TestReleaseSignature(t *testing.T) {
 
 		ex := NewSignatureClient(log, cfg, opts)
 
-		imgs := []v1alpha3.CopyImageSchema{
+		imgs := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
 				Destination: "localhost:9999/ocp-release:4.13.10-x86_64",

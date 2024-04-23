@@ -6,8 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/stretchr/testify/assert"
 )
@@ -58,7 +57,7 @@ func TestGetAllManifests(t *testing.T) {
 func TestGetRelatedImagesFromCatalog(t *testing.T) {
 	type testCase struct {
 		caseName        string
-		cfg             v1alpha2.Operator
+		cfg             v2alpha1.Operator
 		expectedBundles []string
 		expectedError   error
 	}
@@ -66,8 +65,8 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 	testCases := []testCase{
 		{
 			caseName: "only catalog (no filtering) - only the head of the default channel - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{},
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{},
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
@@ -77,8 +76,8 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "only catalog with full: true - all bundles of all channels of the specified catalog - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{},
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{},
 				Full:          true,
 			},
 			expectedBundles: []string{
@@ -124,9 +123,9 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with no Min Max version (no channels) - 1 bundle, corresponding to the head version of the default channel for each package - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
 						},
@@ -147,9 +146,9 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with full: true (no channels) - all bundles of all channels for the packages specified - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
 						},
@@ -206,15 +205,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with minVersion only (no channels) - all bundles in the default channel, from minVersion, up to channel head for that package (not relying of shortest path from upgrade graph) - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
 						},
 						{
 							Name:          "devworkspace-operator",
-							IncludeBundle: v1alpha2.IncludeBundle{MinVersion: "0.18.1"},
+							IncludeBundle: v2alpha1.IncludeBundle{MinVersion: "0.18.1"},
 						},
 						{
 							Name: "jaeger-product",
@@ -234,15 +233,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with maxVersion only (no channels) - all bundles in the default channel, that are lower than maxVersion for each package - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
 						},
 						{
 							Name:          "devworkspace-operator",
-							IncludeBundle: v1alpha2.IncludeBundle{MaxVersion: "0.18.1"},
+							IncludeBundle: v2alpha1.IncludeBundle{MaxVersion: "0.18.1"},
 						},
 						{
 							Name: "jaeger-product",
@@ -270,15 +269,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with minVersion and maxVersion (no channels) - all bundles in the default channel, between minVersion and maxVersion for that package. Head of channel is not included, even if multiple channels are included in the filtering - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
 						},
 						{
 							Name: "devworkspace-operator",
-							IncludeBundle: v1alpha2.IncludeBundle{
+							IncludeBundle: v2alpha1.IncludeBundle{
 								MinVersion: "0.16.0",
 								MaxVersion: "0.17.0",
 							},
@@ -299,15 +298,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with minVersion only (with channels) - within the selected channel of that package, all version starting minVersion up to channel head (not relying of shortest path from upgrade graph) - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name:          "threescale-2.11",
-									IncludeBundle: v1alpha2.IncludeBundle{MinVersion: "0.8.3"},
+									IncludeBundle: v2alpha1.IncludeBundle{MinVersion: "0.8.3"},
 								},
 							},
 						},
@@ -326,12 +325,12 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with channel name only - head bundle for the selected channel of that package - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name: "threescale-2.11",
 								},
@@ -339,7 +338,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 						},
 						{
 							Name: "devworkspace-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name: "fast",
 								},
@@ -355,12 +354,12 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with multiple channels - head bundle for the each selected channel of that package - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name: "threescale-2.11",
 								},
@@ -379,15 +378,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with maxVersion only (with channels) - within the selected channel of that package, all versions up to maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name:          "threescale-2.11",
-									IncludeBundle: v1alpha2.IncludeBundle{MaxVersion: "0.8.2"},
+									IncludeBundle: v2alpha1.IncludeBundle{MaxVersion: "0.8.2"},
 								},
 							},
 						},
@@ -403,15 +402,15 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with minVersion and maxVersion (with channels) - within the selected channel of that package, all versions between minVersion and maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name:          "threescale-2.11",
-									IncludeBundle: v1alpha2.IncludeBundle{MinVersion: "0.8.1", MaxVersion: "0.8.3"},
+									IncludeBundle: v2alpha1.IncludeBundle{MinVersion: "0.8.1", MaxVersion: "0.8.3"},
 								},
 							},
 						},
@@ -430,12 +429,12 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with Full:true (with channels) - all bundles for the packages and channels specified - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name: "threescale-2.11",
 								},
@@ -461,12 +460,12 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with selectedBundles - all selected bundles present - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							SelectedBundles: []v1alpha2.SelectedBundle{
+							SelectedBundles: []v2alpha1.SelectedBundle{
 								{Name: "3scale-operator.v0.8.0-0.1634606167.p"},
 								{Name: "3scale-operator.v0.8.4"},
 							},
@@ -481,17 +480,17 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with MinVersion MaxVersion with channels - Error: filtering by channel and by package min max should not be allowed - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							Channels: []v1alpha2.IncludeChannel{
+							Channels: []v2alpha1.IncludeChannel{
 								{
 									Name: "threescale-2.11",
 								},
 							},
-							IncludeBundle: v1alpha2.IncludeBundle{
+							IncludeBundle: v2alpha1.IncludeBundle{
 								MinVersion: "0.8.0",
 								MaxVersion: "0.8.1",
 							},
@@ -504,12 +503,12 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with full:true and min OR max version under packages - Error: filtering using full:true and min or max version is not allowed - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							IncludeBundle: v1alpha2.IncludeBundle{
+							IncludeBundle: v2alpha1.IncludeBundle{
 								MinVersion: "0.8.0",
 								MaxVersion: "0.8.1",
 							},
@@ -523,17 +522,17 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		},
 		{
 			caseName: "packages with MinVersion MaxVersion with bundle selection - Error: filtering by bundle selection and by package min max should not be allowed - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{
-					Packages: []v1alpha2.IncludePackage{
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
 						{
 							Name: "3scale-operator",
-							SelectedBundles: []v1alpha2.SelectedBundle{
+							SelectedBundles: []v2alpha1.SelectedBundle{
 								{
 									Name: "3scale-operator.v0.10.0-mas",
 								},
 							},
-							IncludeBundle: v1alpha2.IncludeBundle{
+							IncludeBundle: v2alpha1.IncludeBundle{
 								MinVersion: "0.8.0",
 								MaxVersion: "0.8.1",
 							},
@@ -555,7 +554,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 
-			var res map[string][]v1alpha3.RelatedImage
+			var res map[string][]v2alpha1.RelatedImage
 			var err error
 
 			res, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
@@ -588,14 +587,14 @@ func TestTypesOnRelatedImages(t *testing.T) {
 
 	type testCase struct {
 		caseName string
-		cfg      v1alpha2.Operator
+		cfg      v2alpha1.Operator
 	}
 
 	testCases := []testCase{
 		{
 			caseName: "only catalog (no filtering) - only the head of the default channel - should pass",
-			cfg: v1alpha2.Operator{
-				IncludeConfig: v1alpha2.IncludeConfig{},
+			cfg: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{},
 			},
 		},
 	}
@@ -610,7 +609,7 @@ func TestTypesOnRelatedImages(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 
-			var bundles map[string][]v1alpha3.RelatedImage
+			var bundles map[string][]v2alpha1.RelatedImage
 			var err error
 
 			bundles, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
@@ -619,7 +618,7 @@ func TestTypesOnRelatedImages(t *testing.T) {
 
 			for _, relatedImages := range bundles {
 				for _, ri := range relatedImages {
-					assert.NotEqual(t, v1alpha2.TypeInvalid, ri.Type, "Type should be catalog")
+					assert.NotEqual(t, v2alpha1.TypeInvalid, ri.Type, "Type should be catalog")
 				}
 			}
 
@@ -633,21 +632,21 @@ func TestExtractOCILayers(t *testing.T) {
 
 	log := clog.New("debug")
 	t.Run("Testing ExtractOCILayers : should pass", func(t *testing.T) {
-		oci := &v1alpha3.OCISchema{
+		oci := &v2alpha1.OCISchema{
 			SchemaVersion: 2,
-			Manifests: []v1alpha3.OCIManifest{
+			Manifests: []v2alpha1.OCIManifest{
 				{
 					MediaType: "application/vnd.oci.image.manifest.v1+json",
 					Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 					Size:      567,
 				},
 			},
-			Config: v1alpha3.OCIManifest{
+			Config: v2alpha1.OCIManifest{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 				Size:      567,
 			},
-			Layers: []v1alpha3.OCIManifest{
+			Layers: []v2alpha1.OCIManifest{
 				{
 					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
 					Digest:    "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e",

@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 // ErrNoPreviousRelease is returned when no releases can be found in the
@@ -13,7 +13,7 @@ import (
 var ErrNoPreviousRelease = errors.New("no previous release downloads detected")
 
 // FindRelease will find the minimum or maximum release for a set of ReleaseChannels
-func FindRelease(channels []v1alpha2.ReleaseChannel, min bool) (string, semver.Version, error) {
+func FindRelease(channels []v2alpha1.ReleaseChannel, min bool) (string, semver.Version, error) {
 	vers, err := findReleases(channels, min)
 	if err != nil {
 		return "", semver.Version{}, err
@@ -36,7 +36,7 @@ func FindRelease(channels []v1alpha2.ReleaseChannel, min bool) (string, semver.V
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
 }
 
-func findReleases(channels []v1alpha2.ReleaseChannel, min bool) (map[string]semver.Version, error) {
+func findReleases(channels []v2alpha1.ReleaseChannel, min bool) (map[string]semver.Version, error) {
 	vers := make(map[string]semver.Version, len(channels))
 	if len(channels) == 0 {
 		return vers, ErrNoPreviousRelease

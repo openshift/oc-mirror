@@ -1,11 +1,11 @@
 package clusterresources
 
 import (
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 type GeneratorInterface interface {
-	IDMS_ITMSGenerator(allRelatedImages []v1alpha3.CopyImageSchema, forceRepositoryScope bool) error
+	IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error
 	UpdateServiceGenerator(graphImage, releaseImage string) error
-	CatalogSourceGenerator(allRelatedImages []v1alpha3.CopyImageSchema) error
+	CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error
 }

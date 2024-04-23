@@ -1,14 +1,14 @@
 package delete
 
 import (
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 type DeleteInterface interface {
-	WriteDeleteMetaData([]v1alpha3.CopyImageSchema) error
-	ReadDeleteMetaData() (v1alpha3.DeleteImageList, error)
-	DeleteRegistryImages(images v1alpha3.DeleteImageList) error
-	ConvertReleaseImages([]v1alpha3.RelatedImage) ([]v1alpha3.CopyImageSchema, error)
+	WriteDeleteMetaData([]v2alpha1.CopyImageSchema) error
+	ReadDeleteMetaData() (v2alpha1.DeleteImageList, error)
+	DeleteRegistryImages(images v2alpha1.DeleteImageList) error
+	ConvertReleaseImages([]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error)
 	// Get all relevant releases for delete filter by arch,min and max version
-	FilterReleasesForDelete() (map[string][]v1alpha3.RelatedImage, error)
+	FilterReleasesForDelete() (map[string][]v2alpha1.RelatedImage, error)
 }

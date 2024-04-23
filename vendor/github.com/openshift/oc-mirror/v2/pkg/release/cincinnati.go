@@ -6,8 +6,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	//nolint
@@ -77,14 +76,14 @@ lpGyUoChXHLIz6E2y8sYbjEjZBGRR75Wa0ivb5z85n4kR9Dq8d8GKTE=
 
 type CincinnatiSchema struct {
 	Log       clog.PluggableLoggerInterface
-	Config    *v1alpha2.ImageSetConfiguration
+	Config    *v2alpha1.ImageSetConfiguration
 	Opts      mirror.CopyOptions
 	Client    Client
 	Signature SignatureInterface
 	Fail      bool
 }
 
-func NewCincinnati(log clog.PluggableLoggerInterface, config *v1alpha2.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
+func NewCincinnati(log clog.PluggableLoggerInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
 	return &CincinnatiSchema{Log: log, Config: config, Opts: opts, Client: c, Fail: b, Signature: sig}
 }
 
@@ -99,25 +98,25 @@ func (o CincinnatiSchema) NewOKDClient(uuid uuid.UUID) (Client, error) {
 	return o.Client, nil
 }
 
-func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v1alpha3.CopyImageSchema {
+func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
 
 	var (
-		allImages []v1alpha3.CopyImageSchema
+		allImages []v2alpha1.CopyImageSchema
 		errs      = []error{}
 	)
 
 	for _, arch := range o.Config.Mirror.Platform.Architectures {
-		versionsByChannel := make(map[string]v1alpha2.ReleaseChannel, len(o.Config.Mirror.Platform.Channels))
+		versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(o.Config.Mirror.Platform.Channels))
 		for _, ch := range o.Config.Mirror.Platform.Channels {
 			var client Client
 			var err error
 			switch ch.Type {
-			case v1alpha2.TypeOCP:
+			case v2alpha1.TypeOCP:
 				client, err = o.NewOCPClient(o.Opts.UUID)
 				if err != nil {
 					errs = append(errs, err)
 				}
-			case v1alpha2.TypeOKD:
+			case v2alpha1.TypeOKD:
 				client, err = o.NewOKDClient(o.Opts.UUID)
 				if err != nil {
 					errs = append(errs, err)
@@ -218,10 +217,10 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v1al
 }
 
 // getDownloads will prepare the downloads map for mirroring
-func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, c Client, lastChannels []v1alpha2.ReleaseChannel, channel v1alpha2.ReleaseChannel, arch string) ([]v1alpha3.CopyImageSchema, error) {
-	var allImages []v1alpha3.CopyImageSchema
+func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, c Client, lastChannels []v2alpha1.ReleaseChannel, channel v2alpha1.ReleaseChannel, arch string) ([]v2alpha1.CopyImageSchema, error) {
+	var allImages []v2alpha1.CopyImageSchema
 
-	var prevChannel v1alpha2.ReleaseChannel
+	var prevChannel v2alpha1.ReleaseChannel
 	for _, ch := range lastChannels {
 		if ch.Name == channel.Name {
 			prevChannel = ch
@@ -238,7 +237,7 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 		return allImages, err
 	}
 
-	var newDownloads []v1alpha3.CopyImageSchema
+	var newDownloads []v2alpha1.CopyImageSchema
 	if channel.ShortestPath {
 		current, newest, updates, err := CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
 		if err != nil {
@@ -267,49 +266,49 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 }
 
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
-func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, ocpClient Client, arch string, channels []v1alpha2.ReleaseChannel) ([]v1alpha3.CopyImageSchema, error) {
+func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, ocpClient Client, arch string, channels []v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
 	// Strip any OKD channels from the list
 
-	var ocpChannels []v1alpha2.ReleaseChannel
+	var ocpChannels []v2alpha1.ReleaseChannel
 	for _, ch := range channels {
-		if ch.Type == v1alpha2.TypeOCP {
+		if ch.Type == v2alpha1.TypeOCP {
 			ocpChannels = append(ocpChannels, ch)
 		}
 	}
 	// If no other channels exist, return no downloads
 	if len(ocpChannels) == 0 {
-		return []v1alpha3.CopyImageSchema{}, nil
+		return []v2alpha1.CopyImageSchema{}, nil
 	}
 
 	firstCh, first, err := FindRelease(ocpChannels, true)
 	if err != nil {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("failed to find minimum release version: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find minimum release version: %v", err)
 	}
 	lastCh, last, err := FindRelease(ocpChannels, false)
 	if err != nil {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %v", err)
 	}
 	current, newest, updates, err := CalculateUpgrades(ctx, ocpClient, arch, firstCh, lastCh, first, last)
 	if err != nil {
-		return []v1alpha3.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %v", err)
 	}
 	return gatherUpdates(log, current, newest, updates), nil
 }
 
 // gatherUpdates
-func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v1alpha3.CopyImageSchema {
-	var allImages []v1alpha3.CopyImageSchema
+func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v2alpha1.CopyImageSchema {
+	var allImages []v2alpha1.CopyImageSchema
 	for _, update := range updates {
 		log.Debug("Found update %s", update.Version)
-		allImages = append(allImages, v1alpha3.CopyImageSchema{Source: update.Image, Destination: ""})
+		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: update.Image, Destination: ""})
 	}
 
 	if current.Image != "" {
-		allImages = append(allImages, v1alpha3.CopyImageSchema{Source: current.Image, Destination: ""})
+		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: current.Image, Destination: ""})
 	}
 
 	if newest.Image != "" {
-		allImages = append(allImages, v1alpha3.CopyImageSchema{Source: newest.Image, Destination: ""})
+		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: newest.Image, Destination: ""})
 	}
 
 	return allImages

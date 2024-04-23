@@ -1,7 +1,7 @@
 # This config demonstrates how to mirror a version range
 # in the specified channel for an OpenShift release.
 ---
-apiVersion: mirror.openshift.io/v1alpha2
+apiVersion: mirror.openshift.io/v2alpha1
 kind: DeleteImageSetConfiguration
 delete:
   platform:

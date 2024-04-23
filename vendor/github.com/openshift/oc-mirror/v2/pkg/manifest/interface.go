@@ -4,18 +4,17 @@ import (
 	"context"
 
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 type ManifestInterface interface {
-	GetImageIndex(dir string) (*v1alpha3.OCISchema, error)
-	GetImageManifest(file string) (*v1alpha3.OCISchema, error)
-	GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error)
+	GetImageIndex(dir string) (*v2alpha1.OCISchema, error)
+	GetImageManifest(file string) (*v2alpha1.OCISchema, error)
+	GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error)
 	GetCatalog(filePath string) (OperatorCatalog, error)
-	GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error)
-	ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error
-	GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error)
-	ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error
+	GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error)
+	ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error
+	GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error)
+	ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error
 	GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
 }

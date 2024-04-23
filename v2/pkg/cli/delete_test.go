@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -199,16 +199,16 @@ func TestExecutorRunDelete(t *testing.T) {
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		// read the DeleteImageSetConfiguration
-		dcfg, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.DeleteImageSetConfigurationKind)
+		dcfg, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.DeleteImageSetConfigurationKind)
 		if err != nil {
 			log.Error("imagesetconfig %v ", err)
 		}
-		converted := dcfg.(v1alpha2.DeleteImageSetConfiguration)
+		converted := dcfg.(v2alpha1.DeleteImageSetConfiguration)
 
 		// we now coerce deleteimagesetconfig to imagesetconfig
-		isc := v1alpha2.ImageSetConfiguration{
-			ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-				Mirror: v1alpha2.Mirror{
+		isc := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
 					Platform:         converted.Delete.Platform,
 					Operators:        converted.Delete.Operators,
 					AdditionalImages: converted.Delete.AdditionalImages,
@@ -236,6 +236,7 @@ func TestExecutorRunDelete(t *testing.T) {
 			LogsDir:                      "/tmp/",
 			Delete:                       MockDelete{},
 			LocalStorageDisk:             "../../tests/cache-fake-temp/",
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}

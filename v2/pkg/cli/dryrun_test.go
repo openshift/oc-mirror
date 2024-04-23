@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -17,7 +16,7 @@ import (
 
 // TestExecutorRunPrepare
 func TestDryRun(t *testing.T) {
-	var imgs = []v1alpha3.CopyImageSchema{
+	var imgs = []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -71,15 +70,15 @@ func TestDryRun(t *testing.T) {
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		// read the ImageSetConfiguration
-		res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
+		res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 		if err != nil {
 			log.Error("imagesetconfig %v ", err)
 		}
-		var cfg v1alpha2.ImageSetConfiguration
+		var cfg v2alpha1.ImageSetConfiguration
 		if res == nil {
-			cfg = v1alpha2.ImageSetConfiguration{}
+			cfg = v2alpha1.ImageSetConfiguration{}
 		} else {
-			cfg = res.(v1alpha2.ImageSetConfiguration)
+			cfg = res.(v2alpha1.ImageSetConfiguration)
 		}
 		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
 		mockMirror := Mirror{}
@@ -95,6 +94,7 @@ func TestDryRun(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			LogsDir:                      testFolder,
 			MakeDir:                      MakeDir{},
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)
@@ -145,15 +145,15 @@ func TestDryRun(t *testing.T) {
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		// read the ImageSetConfiguration
-		res, err := config.ReadConfig(opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
+		res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 		if err != nil {
 			log.Error("imagesetconfig %v ", err)
 		}
-		var cfg v1alpha2.ImageSetConfiguration
+		var cfg v2alpha1.ImageSetConfiguration
 		if res == nil {
-			cfg = v1alpha2.ImageSetConfiguration{}
+			cfg = v2alpha1.ImageSetConfiguration{}
 		} else {
-			cfg = res.(v1alpha2.ImageSetConfiguration)
+			cfg = res.(v2alpha1.ImageSetConfiguration)
 			log.Debug("imagesetconfig : %v", cfg)
 		}
 		collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
@@ -170,6 +170,7 @@ func TestDryRun(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			LogsDir:                      "/tmp/",
 			MakeDir:                      MakeDir{},
+			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)

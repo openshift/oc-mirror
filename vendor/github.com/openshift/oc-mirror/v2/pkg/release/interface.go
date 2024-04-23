@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 type CollectorInterface interface {
-	ReleaseImageCollector(ctx context.Context) ([]v1alpha3.CopyImageSchema, error)
+	ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error)
 	// Returns the graphImage if generated, especially with the reference to the image
 	// on the destination repository
 	// Returns an error if the graph image was not generated (graph : false)
@@ -31,11 +31,11 @@ type GraphBuilderInterface interface {
 }
 
 type CincinnatiInterface interface {
-	GetReleaseReferenceImages(context.Context) []v1alpha3.CopyImageSchema
+	GetReleaseReferenceImages(context.Context) []v2alpha1.CopyImageSchema
 	NewOCPClient(uuid.UUID) (Client, error)
 	NewOKDClient(uuid.UUID) (Client, error)
 }
 
 type SignatureInterface interface {
-	GenerateReleaseSignatures(context.Context, []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error)
+	GenerateReleaseSignatures(context.Context, []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error)
 }

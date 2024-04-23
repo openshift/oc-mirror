@@ -7,15 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 )
 
 type BatchInterface interface {
-	Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error
+	Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error
 }
 
 func New(log clog.PluggableLoggerInterface,
@@ -35,7 +34,7 @@ type Batch struct {
 
 type BatchSchema struct {
 	Writer     io.Writer
-	CopyImages []v1alpha3.RelatedImage
+	CopyImages []v2alpha1.RelatedImage
 	Items      int
 	Count      int
 	BatchSize  int
@@ -44,7 +43,7 @@ type BatchSchema struct {
 }
 
 // Worker - the main batch processor
-func (o *Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSchema, opts mirror.CopyOptions) error {
+func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error {
 	startTime := time.Now()
 
 	var mirrorMsg string
@@ -66,11 +65,11 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v1alpha3.CollectorSc
 
 	for _, img := range collectorSchema.AllImages {
 		switch img.Type {
-		case v1alpha2.TypeOCPRelease, v1alpha2.TypeOCPReleaseContent, v1alpha2.TypeCincinnatiGraph:
+		case v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent, v2alpha1.TypeCincinnatiGraph:
 			countReleaseImages++
-		case v1alpha2.TypeOperatorCatalog, v1alpha2.TypeOperatorBundle, v1alpha2.TypeOperatorRelatedImage:
+		case v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage:
 			countOperatorsImages++
-		case v1alpha2.TypeGeneric:
+		case v2alpha1.TypeGeneric:
 			countAdditionalImages++
 		}
 

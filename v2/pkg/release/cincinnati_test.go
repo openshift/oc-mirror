@@ -7,8 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
@@ -41,13 +40,13 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		Mode:                mirror.MirrorToDisk,
 	}
 
-	cfg := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
 					Architectures: []string{"amd64"},
 					Graph:         true,
-					Channels: []v1alpha2.ReleaseChannel{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
 							Name: "stable-4.0",
 							Full: true,
@@ -70,15 +69,15 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		},
 	}
 
-	cfgNoChannels := v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
+	cfgNoChannels := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
 					Architectures: []string{"amd64"},
 					Graph:         true,
-					Channels: []v1alpha2.ReleaseChannel{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
-							Type: v1alpha2.TypeOKD,
+							Type: v2alpha1.TypeOKD,
 							Name: "stable-4.0",
 						},
 					},
@@ -166,7 +165,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 }
 
-func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v1alpha3.CopyImageSchema) ([]v1alpha3.CopyImageSchema, error) {
+func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	o.Log.Info("signature verification (mock)")
-	return []v1alpha3.CopyImageSchema{}, nil
+	return []v2alpha1.CopyImageSchema{}, nil
 }

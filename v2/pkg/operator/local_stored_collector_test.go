@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -32,10 +31,10 @@ type MockManifest struct {
 }
 
 var (
-	nominalConfigD2M = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigD2M = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog: "redhat-operator-index:v4.14",
 					},
@@ -46,10 +45,10 @@ var (
 			},
 		},
 	}
-	failingConfigD2MWithTargetCatalog4OCI = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	failingConfigD2MWithTargetCatalog4OCI = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog:       "oci://../../tests/simple-test-bundle",
 						TargetCatalog: "test-catalog:v4.14",
@@ -58,10 +57,10 @@ var (
 			},
 		},
 	}
-	nominalConfigD2MWithTargetCatalogTag4OCI = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigD2MWithTargetCatalogTag4OCI = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 
 					{
 						Catalog:       "oci://../../tests/simple-test-bundle",
@@ -72,10 +71,10 @@ var (
 			},
 		},
 	}
-	nominalConfigD2MWithTargetCatalogTag = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigD2MWithTargetCatalogTag = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog:       "redhat-operator-index:v4.14",
 						TargetCatalog: "test-namespace/test-catalog",
@@ -85,11 +84,11 @@ var (
 			},
 		},
 	}
-	nominalConfigM2D = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Platform: v1alpha2.Platform{
-					Channels: []v1alpha2.ReleaseChannel{
+	nominalConfigM2D = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
+					Channels: []v2alpha1.ReleaseChannel{
 						{
 							Name: "stable-4.7",
 						},
@@ -100,12 +99,12 @@ var (
 						},
 						{
 							Name: "okd",
-							Type: v1alpha2.TypeOKD,
+							Type: v2alpha1.TypeOKD,
 						},
 					},
 					Graph: true,
 				},
-				Operators: []v1alpha2.Operator{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog: "redhat-operators:v4.7",
 						Full:    true,
@@ -113,18 +112,18 @@ var (
 					{
 						Catalog: "certified-operators:v4.7",
 						Full:    true,
-						IncludeConfig: v1alpha2.IncludeConfig{
-							Packages: []v1alpha2.IncludePackage{
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
 								{Name: "couchbase-operator"},
 								{
 									Name: "mongodb-operator",
-									IncludeBundle: v1alpha2.IncludeBundle{
+									IncludeBundle: v2alpha1.IncludeBundle{
 										MinVersion: "1.4.0",
 									},
 								},
 								{
 									Name: "crunchy-postgresql-operator",
-									Channels: []v1alpha2.IncludeChannel{
+									Channels: []v2alpha1.IncludeChannel{
 										{Name: "stable"},
 									},
 								},
@@ -138,39 +137,39 @@ var (
 						Catalog: "oci://../../tests/simple-test-bundle",
 					},
 				},
-				AdditionalImages: []v1alpha2.Image{
+				AdditionalImages: []v2alpha1.Image{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
 				},
-				Helm: v1alpha2.Helm{
-					Repositories: []v1alpha2.Repository{
+				Helm: v2alpha1.Helm{
+					Repositories: []v2alpha1.Repository{
 						{
 							URL:  "https://stefanprodan.github.io/podinfo",
 							Name: "podinfo",
-							Charts: []v1alpha2.Chart{
+							Charts: []v2alpha1.Chart{
 								{Name: "podinfo", Version: "5.0.0"},
 							},
 						},
 					},
-					Local: []v1alpha2.Chart{
+					Local: []v2alpha1.Chart{
 						{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
 					},
 				},
-				BlockedImages: []v1alpha2.Image{
+				BlockedImages: []v2alpha1.Image{
 					{Name: "alpine"},
 					{Name: "redis"},
 				},
-				Samples: []v1alpha2.SampleImages{
-					{Image: v1alpha2.Image{Name: "ruby"}},
-					{Image: v1alpha2.Image{Name: "python"}},
-					{Image: v1alpha2.Image{Name: "nginx"}},
+				Samples: []v2alpha1.SampleImages{
+					{Image: v2alpha1.Image{Name: "ruby"}},
+					{Image: v2alpha1.Image{Name: "python"}},
+					{Image: v2alpha1.Image{Name: "nginx"}},
 				},
 			},
 		},
 	}
-	nominalConfigM2DWithTargetTag4Oci = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigM2DWithTargetTag4Oci = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog:   "oci://../../tests/simple-test-bundle",
 						TargetTag: "v4.14",
@@ -180,10 +179,10 @@ var (
 		},
 	}
 
-	failingConfigM2DWithTargetCatalog4Oci = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	failingConfigM2DWithTargetCatalog4Oci = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog:       "oci://../../tests/simple-test-bundle",
 						TargetCatalog: "test-catalog:v4.14",
@@ -192,10 +191,10 @@ var (
 			},
 		},
 	}
-	nominalConfigM2DWithTargetCatalogTag4Oci = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigM2DWithTargetCatalogTag4Oci = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 					{
 						Catalog:       "oci://../../tests/simple-test-bundle",
 						TargetCatalog: "test-catalog",
@@ -205,28 +204,28 @@ var (
 			},
 		},
 	}
-	nominalConfigM2DWithTargetCatalogTag = v1alpha2.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-			Mirror: v1alpha2.Mirror{
-				Operators: []v1alpha2.Operator{
+	nominalConfigM2DWithTargetCatalogTag = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
 
 					{
 						TargetCatalog: "test-namespace/test-catalog",
 						TargetTag:     "v2.0",
 						Catalog:       "certified-operators:v4.7",
 						Full:          true,
-						IncludeConfig: v1alpha2.IncludeConfig{
-							Packages: []v1alpha2.IncludePackage{
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
 								{Name: "couchbase-operator"},
 								{
 									Name: "mongodb-operator",
-									IncludeBundle: v1alpha2.IncludeBundle{
+									IncludeBundle: v2alpha1.IncludeBundle{
 										MinVersion: "1.4.0",
 									},
 								},
 								{
 									Name: "crunchy-postgresql-operator",
-									Channels: []v1alpha2.IncludeChannel{
+									Channels: []v2alpha1.IncludeChannel{
 										{Name: "stable"},
 									},
 								},
@@ -246,8 +245,8 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	type testCase struct {
 		caseName       string
-		config         v1alpha2.ImageSetConfiguration
-		expectedResult []v1alpha3.CopyImageSchema
+		config         v2alpha1.ImageSetConfiguration
+		expectedResult []v2alpha1.CopyImageSchema
 		expectedError  bool
 	}
 
@@ -259,42 +258,42 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 			caseName:      "OperatorImageCollector - Mirror to disk: should pass",
 			config:        nominalConfigM2D,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://redhat-operators:v4.7",
 					Destination: "docker://localhost:9999/redhat-operators:v4.7",
 					Origin:      "docker://redhat-operators:v4.7",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
 					Source:      "docker://certified-operators:v4.7",
 					Destination: "docker://localhost:9999/certified-operators:v4.7",
 					Origin:      "docker://certified-operators:v4.7",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
 					Source:      "docker://community-operators:v4.7",
 					Destination: "docker://localhost:9999/community-operators:v4.7",
 					Origin:      "docker://community-operators:v4.7",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
 					Source:      "oci://../../tests/simple-test-bundle",
 					Destination: "docker://localhost:9999/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 					Origin:      "oci://../../tests/simple-test-bundle",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -302,24 +301,24 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 			caseName:      "OperatorImageCollector - Mirror to disk - OCI Catalog with TargetTag: should pass",
 			config:        nominalConfigM2DWithTargetTag4Oci,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "oci://../../tests/simple-test-bundle",
 					Destination: "docker://localhost:9999/simple-test-bundle:v4.14",
 					Origin:      "oci://../../tests/simple-test-bundle",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -327,30 +326,30 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 			caseName:       "OperatorImageCollector - Mirror to disk - OCI Catalog with invalid TargetCatalog: should fail",
 			config:         failingConfigM2DWithTargetCatalog4Oci,
 			expectedError:  true,
-			expectedResult: []v1alpha3.CopyImageSchema{},
+			expectedResult: []v2alpha1.CopyImageSchema{},
 		},
 		{
 			caseName:      "OperatorImageCollector - Mirror to disk - OCI Catalog with TargetTag + TargetCatalog: should pass",
 			config:        nominalConfigM2DWithTargetCatalogTag4Oci,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "oci://../../tests/simple-test-bundle",
 					Destination: "docker://localhost:9999/test-catalog:v4.14",
 					Origin:      "oci://../../tests/simple-test-bundle",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -358,24 +357,24 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 			caseName:      "OperatorImageCollector - Mirror to disk - Catalog with TargetTag + TargetCatalog: should pass",
 			config:        nominalConfigM2DWithTargetCatalogTag,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://certified-operators:v4.7",
 					Destination: "docker://localhost:9999/test-namespace/test-catalog:v2.0",
 					Origin:      "docker://certified-operators:v4.7",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -409,8 +408,8 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	type testCase struct {
 		caseName       string
-		config         v1alpha2.ImageSetConfiguration
-		expectedResult []v1alpha3.CopyImageSchema
+		config         v2alpha1.ImageSetConfiguration
+		expectedResult []v2alpha1.CopyImageSchema
 		expectedError  bool
 	}
 
@@ -430,30 +429,30 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 			caseName:      "OperatorImageCollector - Disk to mirror : should pass",
 			config:        nominalConfigD2M,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://localhost:9999/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 					Destination: "docker://localhost:5000/test/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 					Origin:      "oci://../../tests/simple-test-bundle",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
 					Source:      "docker://localhost:9999/redhat-operator-index:v4.14",
 					Destination: "docker://localhost:5000/test/redhat-operator-index:v4.14",
 					Origin:      "docker://redhat-operator-index:v4.14",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -466,24 +465,24 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 			caseName:      "OperatorImageCollector - Disk to mirror - OCI Catalog with TargetTag + TargetCatalog: should pass",
 			config:        nominalConfigD2MWithTargetCatalogTag4OCI,
 			expectedError: false,
-			expectedResult: []v1alpha3.CopyImageSchema{
+			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://localhost:9999/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Type:        v1alpha2.TypeInvalid,
+					Type:        v2alpha1.TypeInvalid,
 				},
 				{
 					Source:      "docker://localhost:9999/test-catalog:v4.14",
 					Destination: "docker://localhost:5000/test/test-catalog:v4.14",
 					Origin:      "oci://../../tests/simple-test-bundle",
-					Type:        v1alpha2.TypeOperatorCatalog,
+					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
 		},
@@ -591,8 +590,8 @@ func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOp
 	return true, nil
 }
 
-func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSchema, error) {
-	var cfs *v1alpha3.OperatorConfigSchema
+func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	var cfs *v2alpha1.OperatorConfigSchema
 	// read the test config
 	cfg, err := os.ReadFile("../../tests/operator-config.json")
 	if err != nil {
@@ -605,8 +604,8 @@ func (o MockManifest) GetOperatorConfig(file string) (*v1alpha3.OperatorConfigSc
 	return cfs, nil
 }
 
-func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage, error) {
-	relatedImages := []v1alpha3.RelatedImage{
+func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	relatedImages := []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -615,13 +614,13 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v1alpha3.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageIndex {
-		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
-	return &v1alpha3.OCISchema{
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
@@ -631,21 +630,21 @@ func (o MockManifest) GetImageIndex(name string) (*v1alpha3.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v1alpha3.OCISchema, error) {
+func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageManifest {
-		return &v1alpha3.OCISchema{}, fmt.Errorf("forced error image index")
+		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
 
-	return &v1alpha3.OCISchema{
+	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
-		Manifests: []v1alpha3.OCIManifest{
+		Manifests: []v2alpha1.OCIManifest{
 			{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
 				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 				Size:      567,
 			},
 		},
-		Config: v1alpha3.OCIManifest{
+		Config: v2alpha1.OCIManifest{
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 			Size:      567,
@@ -657,23 +656,23 @@ func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, err
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v1alpha2.Operator) (map[string][]v1alpha3.RelatedImage, error) {
-	relatedImages := make(map[string][]v1alpha3.RelatedImage)
-	relatedImages["abc"] = []v1alpha3.RelatedImage{
+func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+	relatedImages := make(map[string][]v2alpha1.RelatedImage)
+	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 	}
 	return relatedImages, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v1alpha3.OCISchema) error {
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -681,7 +680,7 @@ func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemCont
 	return "", nil
 }
 
-func (ex *LocalStorageCollector) withConfig(cfg v1alpha2.ImageSetConfiguration) *LocalStorageCollector {
+func (ex *LocalStorageCollector) withConfig(cfg v2alpha1.ImageSetConfiguration) *LocalStorageCollector {
 	ex.Config = cfg
 	return ex
 }

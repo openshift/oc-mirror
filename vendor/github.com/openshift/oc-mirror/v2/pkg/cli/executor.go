@@ -24,8 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/oc-mirror/v2/pkg/additional"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/pkg/clusterresources"
@@ -67,7 +66,7 @@ type ExecutorSchema struct {
 	Log                          clog.PluggableLoggerInterface
 	LogsDir                      string
 	registryLogFile              *os.File
-	Config                       v1alpha2.ImageSetConfiguration
+	Config                       v2alpha1.ImageSetConfiguration
 	Opts                         *mirror.CopyOptions
 	WorkingDir                   string
 	Operator                     operator.CollectorInterface
@@ -276,7 +275,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	o.Log.Debug("imagesetconfig file %s ", o.Opts.Global.ConfigPath)
 	// read the ImageSetConfiguration
-	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v1alpha2.ImageSetConfigurationKind)
+	cfg, err := config.ReadConfig(o.Opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 	if err != nil {
 		return err
 	}
@@ -287,7 +286,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	md := mirror.NewMirrorDelete()
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, md)
-	o.Config = cfg.(v1alpha2.ImageSetConfiguration)
+	o.Config = cfg.(v2alpha1.ImageSetConfiguration)
 
 	// logic to check mode
 	var rootDir string
@@ -823,11 +822,11 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 
 // CollectAll - collect all relevant images for
 // release, operators and additonalImages
-func (o *ExecutorSchema) CollectAll(ctx context.Context) (v1alpha3.CollectorSchema, error) {
+func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	startTime := time.Now()
 
-	var collectorSchema v1alpha3.CollectorSchema
-	var allRelatedImages []v1alpha3.CopyImageSchema
+	var collectorSchema v2alpha1.CollectorSchema
+	var allRelatedImages []v2alpha1.CopyImageSchema
 
 	o.Log.Info("🕵️  going to discover the necessary images...")
 	o.Log.Info("🔍 collecting release images...")
@@ -835,7 +834,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v1alpha3.CollectorSche
 	rImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return v1alpha3.CollectorSchema{}, err
+		return v2alpha1.CollectorSchema{}, err
 	}
 	collectorSchema.TotalReleaseImages = len(rImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
@@ -847,7 +846,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v1alpha3.CollectorSche
 	oImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return v1alpha3.CollectorSchema{}, err
+		return v2alpha1.CollectorSchema{}, err
 	}
 	collectorSchema.TotalOperatorImages = len(oImgs)
 	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
@@ -859,7 +858,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v1alpha3.CollectorSche
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
 		o.closeAll()
-		return v1alpha3.CollectorSchema{}, err
+		return v2alpha1.CollectorSchema{}, err
 	}
 	collectorSchema.TotalAdditionalImages = len(aImgs)
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
@@ -883,8 +882,8 @@ func (o *ExecutorSchema) closeAll() {
 	}
 }
 
-func withMaxNestedPaths(in []v1alpha3.CopyImageSchema, maxNestedPaths int) ([]v1alpha3.CopyImageSchema, error) {
-	out := []v1alpha3.CopyImageSchema{}
+func withMaxNestedPaths(in []v2alpha1.CopyImageSchema, maxNestedPaths int) ([]v2alpha1.CopyImageSchema, error) {
+	out := []v2alpha1.CopyImageSchema{}
 	for _, img := range in {
 		dst, err := image.WithMaxNestedPaths(img.Destination, maxNestedPaths)
 		if err != nil {

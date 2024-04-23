@@ -5,24 +5,24 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha2"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 )
 
 func TestValidate(t *testing.T) {
 
 	type spec struct {
 		name     string
-		config   *v1alpha2.ImageSetConfiguration
+		config   *v2alpha1.ImageSetConfiguration
 		expError string
 	}
 
 	cases := []spec{
 		{
 			name: "Valid/UniqueCatalogs",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog: "test-catalog1:latest",
 							},
@@ -36,10 +36,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/UniqueCatalogsWithTarget",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog:       "test-catalog:latest",
 								TargetCatalog: "test1",
@@ -55,10 +55,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/UniqueCatalogsWithTargetCatalogAndTargetTag",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog:       "test-catalog:latest",
 								TargetCatalog: "test1",
@@ -76,12 +76,12 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Valid/UniqueReleaseChannels",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Platform: v1alpha2.Platform{
-							Architectures: []string{v1alpha2.DefaultPlatformArchitecture},
-							Channels: []v1alpha2.ReleaseChannel{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
+							Architectures: []string{v2alpha1.DefaultPlatformArchitecture},
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel1",
 								},
@@ -96,10 +96,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/DuplicateCatalogs",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog: "test-catalog:latest",
 							},
@@ -114,10 +114,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/DuplicateCatalogsWithTarget",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog:       "test-catalog1:latest",
 								TargetCatalog: "test",
@@ -134,10 +134,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/CatalogWithTargetCatalogContainsTag",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog:       "test-catalog1:latest",
 								TargetCatalog: "test:v1.3",
@@ -150,10 +150,10 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/CatalogWithTargetCatalogContainsDigest",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog:       "test-catalog1:latest",
 								TargetCatalog: "a/b/test@sha256:45df874",
@@ -166,22 +166,22 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/CatalogFilteringByChannelsAndBundles",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Operators: []v1alpha2.Operator{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
 							{
 								Catalog: "test-catalog1:latest",
-								IncludeConfig: v1alpha2.IncludeConfig{
-									Packages: []v1alpha2.IncludePackage{
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
 										{
 											Name: "operator1",
-											SelectedBundles: []v1alpha2.SelectedBundle{
+											SelectedBundles: []v2alpha1.SelectedBundle{
 												{
 													Name: "operator1.v1.0.0",
 												},
 											},
-											Channels: []v1alpha2.IncludeChannel{
+											Channels: []v2alpha1.IncludeChannel{
 												{
 													Name: "stable-xyz",
 												},
@@ -198,11 +198,11 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "Invalid/DuplicateChannels",
-			config: &v1alpha2.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v1alpha2.ImageSetConfigurationSpec{
-					Mirror: v1alpha2.Mirror{
-						Platform: v1alpha2.Platform{
-							Channels: []v1alpha2.ReleaseChannel{
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
+							Channels: []v2alpha1.ReleaseChannel{
 								{
 									Name: "channel",
 								},

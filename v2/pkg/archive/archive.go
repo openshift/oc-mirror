@@ -9,7 +9,7 @@ import (
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/openshift/oc-mirror/v2/pkg/api/v1alpha3"
+	"github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/pkg/history"
 	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"github.com/openshift/oc-mirror/v2/pkg/mirror"
@@ -105,7 +105,7 @@ func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, 
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema) error {
+func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
 	// 0 - make sure that any tarWriters or files opened by the adder are closed as we leave this method
 	defer o.adder.close()
 	// 1 - Add files and directories under the cache's docker/v2/repositories to the archive
@@ -145,7 +145,7 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v1al
 	return nil
 }
 
-func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v1alpha3.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
+func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema, historyBlobs map[string]string, cacheDir string) (map[string]string, error) {
 	allAddedBlobs := map[string]string{}
 	for _, img := range collectedImages {
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
