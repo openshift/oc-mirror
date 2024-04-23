@@ -103,7 +103,7 @@ Nevertheless, it might be something to consider in the future.
 
 If an introspection tool is able, and can provide at least the list of bundle versions that fit the input filtering conditions, oc-mirror could evolve its ImageSetConfig API in order to allow the user to set a list of bundle versions instead of channels and version ranges. 
 
-![Proposal](../../../v2/assets/S4-ISC_V2.jpg).
+![Proposal](../assets/S4-ISC_V2.jpg).
 
 In this solution, as illustrated in the above diagram, the introspection tool would :
 * Take an input in yaml format, with a schema close to the ImageSetConfig filtering (yaml at the top left side of the diagram)
