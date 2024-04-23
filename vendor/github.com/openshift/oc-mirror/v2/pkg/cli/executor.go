@@ -44,22 +44,59 @@ import (
 var (
 	mirrorlongDesc = templates.LongDesc(
 		` 
-		Create and publish user-configured mirrors with a declarative configuration input.
-		used for authenticating to the registries. 
+		Mirror OCP Release, operator catalog and additional images using a declarative configuration file as an input. 
 
-		The podman location for credentials is also supported as a secondary location.
+		The command line uses a declarative configuration file as the input to discover where to get the container images and copy them to the destination specified in the command line. 
 
-		1. Destination prefix is docker:// - The current working directory will be used.
-		2. Destination prefix is oci:// - The destination directory specified will be used.
+		There are three workflows available in oc-mirror currently:
+			
+			- mirrorToDisk - pulls the container images from the source specified in the image set configuration and packs them into a tar archive on disk (local directory).
+			- diskToMirror - copy the containers images from the tar archive to a container registry (--from flag is required on this workflow).
+			- mirrorToMirror - copy the container images from the source specified in the image set configuration to the destination (container registry).
+
+		When specifying the destination on the command line, there are two prefixes available:
+
+			- file://<destination location> - used in mirrorToDisk: local mirror packed into a tar archive.
+			- docker://<destination location> - used in diskToMirror and mirrorToMirror: when the destination is a registry.
+
+		The default podman credentials location ($XDG_RUNTIME_DIR/containers/auth) is used for authenticating to the registries. The docker location for credentials is also supported as a secondary location.
+
+		The name of the directory used by oc-mirror as a workspace defaults to the name 'working-dir'. The location of this directory depends on the following:
+
+			- mirrorToDisk: file://<destination location> 
+			- mirrorToMirror: --workspace file://<destination location>
+			
+			In both cases above the working-dir will be under the folder specified in the <destination location>
+
+		There is also a delete command to delete images from a remote registry (specified in the command line). This command is split in two phases:
+
+			- Phase 1: using a delete set configuration as an input, oc-mirror discovers all images that needed to be deleted. These images are included in a delete-images file to be consumed as input in the second phase.
+			- Phase 2: using the file generated in first phase, oc-mirror will delete all manifests specified on this file on the destination specified in the command line. It is up to the container registry to run the garbage collector to clean up all the blobs which are not referenced by a manifest. Deleting only manifests is safer since blobs shared between more than one image are not going to be deleted.
 
 		`,
 	)
 	mirrorExamples = templates.Examples(
 		`
-		# Mirror to a directory
-		oc-mirror oci:mirror --config mirror-config.yaml
+# Mirror To Disk
+oc-mirror -c ./isc.yaml file:///home/<user>/oc-mirror/mirror1 --v2
+
+# Disk To Mirror
+oc-mirror -c ./isc.yaml --from file:///home/<user>/oc-mirror/mirror1 docker://localhost:6000 --v2
+
+# Mirror To Mirror
+oc-mirror -c ./isc.yaml --workspace file:///home/<user>/oc-mirror/mirror1 docker://localhost:6000 --v2
+
+# Delete Phase 1 (--generate)
+oc-mirror delete -c ./delete-isc.yaml --generate --workspace file:///home/<user>/oc-mirror/delete1 --delete-id delete1-test docker://localhost:6000 --v2
+
+# Delete Phase 2
+oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/delete/delete-images-delete1-test.yaml docker://localhost:6000 --v2
 		`,
 	)
+
+	usage = `
+-c <image set configuration path> [--from | --workspace] <destination prefix>:<destination location> --v2
+`
 )
 
 type ExecutorSchema struct {
@@ -131,9 +168,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           fmt.Sprintf("%v <destination type>:<destination location>", filepath.Base(os.Args[0])),
-		Version:       "v2.0.0-dev-01",
-		Short:         "Manage mirrors per user configuration",
+		Use:           fmt.Sprintf("%s %s", filepath.Base(os.Args[0]), usage),
+		Version:       "v2.0.0",
+		Short:         "Mirror container images using a declarative configuration file as an input.",
 		Long:          mirrorlongDesc,
 		Example:       mirrorExamples,
 		Args:          cobra.MinimumNArgs(1),
