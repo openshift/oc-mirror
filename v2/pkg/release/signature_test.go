@@ -119,23 +119,23 @@ func TestReleaseSignature(t *testing.T) {
 
 	})
 
-	// t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
-	// 	os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/buggy-ocp-sig-key.asc")
+	t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
+		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/buggy-ocp-sig-key.asc")
 
-	// 	ex := NewSignatureClient(log, cfg, opts)
+		ex := NewSignatureClient(log, cfg, opts)
 
-	// 	imgs := []v2alpha1.CopyImageSchema{
-	// 		{
-	// 			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
-	// 			Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
-	// 		},
-	// 	}
+		imgs := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+				Destination: "localhost:9999/ocp-release:4.13.10-x86_64",
+			},
+		}
 
-	// 	_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
+		_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
 
-	// 	assert.Error(t, err)
+		assert.Error(t, err)
 
-	// })
+	})
 
 	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
 		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", "../../tests/inexisting-ocp-sig-key.asc")

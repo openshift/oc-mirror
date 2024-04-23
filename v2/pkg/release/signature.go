@@ -117,18 +117,21 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			if err != nil {
 				o.Log.Error("%v could not read the message:", err)
 			}
+			if md == nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("unable to read signature message for %s image %s", digest, img.Source)
+			}
 			if !md.IsSigned {
-				o.Log.Error("not signed")
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("message was not signed for %s image %s", digest, img.Source)
+			}
+			if md.SignatureError != nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("signature error for %s image %s", digest, img.Source)
+			}
+			if md.SignedBy == nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("invalid signature for %s image %s", digest, img.Source)
 			}
 			content, err := io.ReadAll(md.UnverifiedBody)
 			if err != nil {
 				o.Log.Error("%v", err)
-			}
-			if md.SignatureError != nil {
-				o.Log.Error("signature error:", md.SignatureError)
-			}
-			if md.SignedBy == nil {
-				o.Log.Error("invalid signature")
 			}
 
 			o.Log.Trace("field isEncrypted %v", md.IsEncrypted)
@@ -152,7 +155,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 					}
 				}
 			} else if md.SignatureV3 == nil {
-				o.Log.Error("unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set")
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set for %s image %s", digest, img.Source)
 			}
 
 			o.Log.Debug("content %s", string(content))
