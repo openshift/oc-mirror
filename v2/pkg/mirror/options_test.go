@@ -10,7 +10,7 @@ import (
 
 func TestOptionsNewContext(t *testing.T) {
 
-	global := &GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()

@@ -21,7 +21,7 @@ func TestMirrorCopy(t *testing.T) {
 	testFile := testFolder + "/testDigest.txt"
 	defer os.RemoveAll(testFolder)
 
-	global := &GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
@@ -101,14 +101,15 @@ func TestMirrorCopy(t *testing.T) {
 
 func TestMirrorCheck(t *testing.T) {
 
-	global := &GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
-	_, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	srcFlags, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	dstFlags, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := RetryFlags()
-
+	srcFlags.Set("src-tls-verify", "false")
+	dstFlags.Set("dest-tls-verify", "false")
 	opts := CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
@@ -162,13 +163,16 @@ func TestMirrorCheck(t *testing.T) {
 // TestMirrorDelete
 func TestMirrorDelete(t *testing.T) {
 
-	global := &GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
-	_, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	srcFlags, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	dstFlags, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := RetryFlags()
+
+	srcFlags.Set("src-tls-verify", "false")
+	dstFlags.Set("dest-tls-verify", "false")
 
 	opts := CopyOptions{
 		Global:              global,

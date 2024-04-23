@@ -19,7 +19,6 @@ func TestAllDeleteImages(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:         false,
 		SecurePolicy:      false,
 		Quiet:             false,
 		WorkingDir:        "../../tests/",
@@ -131,7 +130,6 @@ func TestWriteMetaData(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		Quiet:        false,
 		WorkingDir:   tempDir,
@@ -176,7 +174,6 @@ func TestFilterReleasesForDelete(t *testing.T) {
 	log := clog.New("trace")
 
 	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   "../../tests/release-semver-test/",
 	}

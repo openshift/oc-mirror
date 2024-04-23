@@ -22,7 +22,6 @@ func TestExecutorValidateDelete(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
@@ -104,7 +103,6 @@ func TestExecutorCompleteDelete(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
@@ -161,7 +159,6 @@ func TestExecutorRunDelete(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 			WorkingDir:   "../../tests/temp-dir/tests/",
 		}

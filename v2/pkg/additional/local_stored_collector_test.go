@@ -22,7 +22,7 @@ type MockManifest struct {
 func TestAdditionalImageCollector(t *testing.T) {
 	log := clog.New("trace")
 
-	global := &mirror.GlobalOptions{TlsVerify: false, SecurePolicy: false}
+	global := &mirror.GlobalOptions{SecurePolicy: false}
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
 	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")

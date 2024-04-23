@@ -19,7 +19,6 @@ func TestReleaseSignature(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
 	}

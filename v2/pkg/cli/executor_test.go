@@ -39,7 +39,6 @@ func TestExecutorMirroring(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
 		WorkingDir:   workDir,
@@ -281,7 +280,6 @@ func TestRunMirrorToMirror(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
 		WorkingDir:   workDir,
@@ -423,7 +421,6 @@ func TestExecutorValidate(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
@@ -522,7 +519,6 @@ func TestExecutorComplete(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
@@ -604,7 +600,6 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 			Port:         7777,
 		}
@@ -644,7 +639,6 @@ func TestExecutorSetupWorkingDir(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 			WorkingDir:   "/root",
 		}
@@ -695,7 +689,6 @@ func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
@@ -729,7 +722,6 @@ func TestExecutorCollectAll(t *testing.T) {
 	t.Run("Testing Executor : collect all should pass", func(t *testing.T) {
 		log := clog.New("trace")
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 			Force:        true,
 		}

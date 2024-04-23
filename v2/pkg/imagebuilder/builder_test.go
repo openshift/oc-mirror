@@ -29,7 +29,6 @@ func TestImageBuilder(t *testing.T) {
 	tempDir := t.TempDir()
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   tempDir + "/working-dir",
 		From:         tempDir,
@@ -37,9 +36,12 @@ func TestImageBuilder(t *testing.T) {
 
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	srcFlags, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
+
+	srcFlags.Set("src-tls-verify", "false")
+	destFlags.Set("dest-tls-verify", "false")
 
 	opts := mirror.CopyOptions{
 		Global:              global,
@@ -56,7 +58,8 @@ func TestImageBuilder(t *testing.T) {
 	t.Run("Testing NewImageBuilder : should pass", func(t *testing.T) {
 
 		_ = NewBuilder(log, opts)
-		opts.Global.TlsVerify = true
+		srcFlags.Set("src-tls-verify", "true")
+		destFlags.Set("dest-tls-verify", "true")
 		_ = NewBuilder(log, opts)
 
 		e := ErrInvalidReference{image: "broken"}
@@ -74,7 +77,8 @@ func TestImageBuilder(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		opts.Global.TlsVerify = false
+		srcFlags.Set("src-tls-verify", "false")
+		destFlags.Set("dest-tls-verify", "false")
 		ex := NewBuilder(log, opts)
 		ctx := context.Background()
 
@@ -149,15 +153,17 @@ func TestProcessImageIndex(t *testing.T) {
 		log := clog.New("debug")
 
 		global := &mirror.GlobalOptions{
-			TlsVerify:    false,
 			SecurePolicy: false,
 		}
 
 		_, sharedOpts := mirror.SharedImageFlags()
 		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		srcFlags, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
+
+		srcFlags.Set("src-tls-verify", "false")
+		destFlags.Set("dest-tls-verify", "false")
 
 		opts := mirror.CopyOptions{
 			Global:              global,
@@ -185,7 +191,6 @@ func TestProcessImageIndex(t *testing.T) {
 		}
 
 		v2format := false
-		opts.Global.TlsVerify = false
 
 		// cover the mediatype as list
 		idx, err := layout.ImageIndexFromPath("../../tests/test-process-image-list/")

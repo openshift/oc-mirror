@@ -20,7 +20,6 @@ func TestCreateGraphImage(t *testing.T) {
 
 	log := clog.New("trace")
 	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   t.TempDir(),
 	}
