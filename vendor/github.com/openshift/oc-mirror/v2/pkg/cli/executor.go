@@ -39,6 +39,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/pkg/release"
 	"github.com/openshift/oc-mirror/v2/pkg/version"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -122,6 +123,8 @@ type ExecutorSchema struct {
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
 	Delete                       delete.DeleteInterface
+	srcFlagSet                   pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
+	destFlagSet                  pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
 }
 
 type MakeDirInterface interface {
@@ -139,7 +142,6 @@ func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 	}
 
@@ -162,9 +164,11 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	mkd := MakeDir{}
 	ex := &ExecutorSchema{
-		Log:     log,
-		Opts:    opts,
-		MakeDir: mkd,
+		srcFlagSet:  flagSrcOpts,
+		destFlagSet: flagDestOpts,
+		Log:         log,
+		Opts:        opts,
+		MakeDir:     mkd,
 	}
 
 	cmd := &cobra.Command{
@@ -331,9 +335,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		o.Opts.Mode = mirror.MirrorToDisk
 		rootDir = strings.TrimPrefix(args[0], fileProtocol)
 		o.Log.Debug("destination %s ", rootDir)
+		// destination is the local cache, which is HTTP
+		o.destFlagSet.Set("dest-tls-verify", "false")
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
+		// source is the local cache, which is HTTP
+		o.srcFlagSet.Set("src-tls-verify", "false")
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
 		o.Opts.Mode = mirror.MirrorToMirror
 		if o.Opts.Global.WorkingDir == "" { // this should have been caught by Validate function. Nevertheless...

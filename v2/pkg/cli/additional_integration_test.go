@@ -131,7 +131,7 @@ func (suite *TestEnvironmentAddditional) runMirror2Disk(t *testing.T) {
 	assert.NoError(t, err, "should not fail creating a temp folder for results")
 
 	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55001", "file://" + resultFolder})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55001", "--src-tls-verify=false", "--dest-tls-verify=false", "file://" + resultFolder})
 	err = ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 
@@ -143,7 +143,7 @@ func (suite *TestEnvironmentAddditional) runDisk2Mirror(t *testing.T) {
 	ocmirror := NewMirrorCmd(clog.New("trace"))
 	resultFolder := filepath.Join(suite.tempFolder, "additional", d2mSubFolder)
 	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55002", "--from", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55002", "--from", "file://" + resultFolder, "--src-tls-verify=false", "--dest-tls-verify=false", "docker://" + suite.destinationRegistryDomain + "/additional"})
 	err := ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 
@@ -168,7 +168,7 @@ func (suite *TestEnvironmentAddditional) runMirror2Mirror(t *testing.T) {
 	err := os.MkdirAll(resultFolder, 0755)
 	assert.NoError(t, err, "should not fail creating a temp folder for results")
 
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55003", "--workspace", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "55003", "--src-tls-verify=false", "--dest-tls-verify=false", "--workspace", "file://" + resultFolder, "docker://" + suite.destinationRegistryDomain + "/additional"})
 	err = ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 

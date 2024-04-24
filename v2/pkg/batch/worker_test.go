@@ -16,7 +16,7 @@ func TestWorker(t *testing.T) {
 
 	log := clog.New("trace")
 
-	global := &mirror.GlobalOptions{TlsVerify: false, SecurePolicy: false, Quiet: false}
+	global := &mirror.GlobalOptions{SecurePolicy: false, Quiet: false}
 
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()

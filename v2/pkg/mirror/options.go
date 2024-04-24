@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const defaultUserAgent string = "skopeo/v.19.5"
+const defaultUserAgent string = "oc-mirror"
 
 // errorShouldDisplayUsage is a subtype of error used by command handlers to indicate that cli.ShowSubcommandHelp should be called.
 type ErrorShouldDisplayUsage struct {
@@ -30,7 +30,6 @@ type ErrorShouldDisplayUsage struct {
 
 type GlobalOptions struct {
 	LogLevel           string        // one of info, debug, trace
-	TlsVerify          bool          // Require HTTPS and verify certificates (for docker: and docker-daemon:)
 	PolicyPath         string        // Path to a signature verification policy file
 	SecurePolicy       bool          // Use an "allow everything" signature verification policy
 	RegistriesDirPath  string        // Path to a "registries.d" registry configuration directory
@@ -317,11 +316,16 @@ func (opts *GlobalOptions) NewSystemContext() *types.SystemContext {
 		BigFilesTemporaryDir:     opts.TmpDir,
 		DockerRegistryUserAgent:  defaultUserAgent,
 	}
-	// DEPRECATED: We support this for backward compatibility, but override it if a per-image flag is provided.
-	if !opts.TlsVerify {
-		ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
-	}
 	return ctx
+}
+
+func (opts *imageOptions) NewSystemContextWithTLSVerificationOverride(tlsVerify bool) (*types.SystemContext, error) {
+	ctx, err := opts.NewSystemContext()
+	if err != nil {
+		return nil, err
+	}
+	ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!tlsVerify)
+	return ctx, nil
 }
 
 // newSystemContext returns a *types.SystemContext corresponding to opts.

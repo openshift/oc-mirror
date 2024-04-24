@@ -39,7 +39,8 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 	if err != nil {
 		return nil, fmt.Errorf("invalid source name %s: %v", imgRef, err)
 	}
-	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
+	// we are always gathering blobs from the local cache registry - skipping tls verification
+	sourceCtx, err := o.opts.SrcImage.NewSystemContextWithTLSVerificationOverride(false)
 	if err != nil {
 		return nil, err
 	}

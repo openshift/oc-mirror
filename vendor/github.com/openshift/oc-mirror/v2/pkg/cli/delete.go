@@ -42,7 +42,6 @@ const (
 func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 	}
 
@@ -192,6 +191,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 		// fake a diskToMirror Mode
 		o.Opts.Mode = mirror.DiskToMirror
 		o.Opts.RemoveSignatures = true
+		o.srcFlagSet.Set("src-tls-verify", "false")
 	}
 
 	// update all dependant modules

@@ -30,7 +30,6 @@ func TestDryRun(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 	}
 

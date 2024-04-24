@@ -508,7 +508,6 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	manifest := &MockManifest{Log: log}
 
 	globalD2M := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   tempDir + "/working-dir",
 		From:         tempDir,
@@ -546,7 +545,6 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *LocalStorageCollector {
 
 	globalM2D := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		WorkingDir:   tempDir + "/working-dir",
 	}

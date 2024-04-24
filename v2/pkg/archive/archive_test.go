@@ -331,7 +331,6 @@ func assertContents(t *testing.T, archiveFile string, expectedTarContents []stri
 
 func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissive bool) (*MirrorArchive, error) {
 	global := &mirror.GlobalOptions{
-		TlsVerify:    false,
 		SecurePolicy: false,
 		Force:        true,
 		WorkingDir:   "tests",

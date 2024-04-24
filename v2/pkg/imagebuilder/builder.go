@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	cimagetypesv5 "github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -57,13 +58,14 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) Im
 		remote.WithContext(context.TODO()),
 		// doesn't seem possible to use registries.conf here.
 	}
-	if !opts.Global.TlsVerify {
-		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
-	} else {
+	ctx, err := opts.DestImage.NewSystemContext()
+	if err == nil && ctx != nil && ctx.DockerInsecureSkipTLSVerify == cimagetypesv5.OptionalBoolTrue {
 		nameOptions = append(nameOptions, name.Insecure)
 		// create our own roundTripper to pass insecure=true
 		insecureRoundTripper := createInsecureRoundTripper()
 		remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
+	} else {
+		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
 	}
 
 	return &ImageBuilder{
