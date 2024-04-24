@@ -964,25 +964,27 @@ github.com/openshift/oc/pkg/helpers/image/dockerlayer
 github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
 # github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044 => ./v2
 ## explicit; go 1.19
-github.com/openshift/oc-mirror/v2/pkg/additional
-github.com/openshift/oc-mirror/v2/pkg/api/operator-framework/v1alpha1
-github.com/openshift/oc-mirror/v2/pkg/api/v2alpha1
-github.com/openshift/oc-mirror/v2/pkg/archive
-github.com/openshift/oc-mirror/v2/pkg/batch
+github.com/openshift/oc-mirror/v2/internal/pkg/additional
+github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1
+github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1
+github.com/openshift/oc-mirror/v2/internal/pkg/archive
+github.com/openshift/oc-mirror/v2/internal/pkg/batch
+github.com/openshift/oc-mirror/v2/internal/pkg/cli
+github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources
+github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1
+github.com/openshift/oc-mirror/v2/internal/pkg/common
+github.com/openshift/oc-mirror/v2/internal/pkg/config
+github.com/openshift/oc-mirror/v2/internal/pkg/delete
+github.com/openshift/oc-mirror/v2/internal/pkg/history
+github.com/openshift/oc-mirror/v2/internal/pkg/image
+github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder
+github.com/openshift/oc-mirror/v2/internal/pkg/log
+github.com/openshift/oc-mirror/v2/internal/pkg/manifest
+github.com/openshift/oc-mirror/v2/internal/pkg/mirror
+github.com/openshift/oc-mirror/v2/internal/pkg/operator
+github.com/openshift/oc-mirror/v2/internal/pkg/release
+github.com/openshift/oc-mirror/v2/internal/pkg/version
 github.com/openshift/oc-mirror/v2/pkg/cli
-github.com/openshift/oc-mirror/v2/pkg/clusterresources
-github.com/openshift/oc-mirror/v2/pkg/clusterresources/updateservice/v1
-github.com/openshift/oc-mirror/v2/pkg/config
-github.com/openshift/oc-mirror/v2/pkg/delete
-github.com/openshift/oc-mirror/v2/pkg/history
-github.com/openshift/oc-mirror/v2/pkg/image
-github.com/openshift/oc-mirror/v2/pkg/imagebuilder
-github.com/openshift/oc-mirror/v2/pkg/log
-github.com/openshift/oc-mirror/v2/pkg/manifest
-github.com/openshift/oc-mirror/v2/pkg/mirror
-github.com/openshift/oc-mirror/v2/pkg/operator
-github.com/openshift/oc-mirror/v2/pkg/release
-github.com/openshift/oc-mirror/v2/pkg/version
 # github.com/operator-framework/api v0.17.7
 ## explicit; go 1.19
 github.com/operator-framework/api/pkg/constraints
