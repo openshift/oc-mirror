@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	cli "github.com/openshift/oc-mirror/v2/pkg/cli"
-	clog "github.com/openshift/oc-mirror/v2/pkg/log"
+	cli "github.com/openshift/oc-mirror/v2/internal/pkg/cli"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 func main() {

@@ -23,7 +23,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/openshift/oc-mirror/v2/pkg/image"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
 const (

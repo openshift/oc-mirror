@@ -37,7 +37,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
 
 	cliV2 "github.com/openshift/oc-mirror/v2/pkg/cli"
-	clog "github.com/openshift/oc-mirror/v2/pkg/log"
 	"golang.org/x/exp/slices"
 )
 
@@ -145,13 +144,7 @@ func buildV1Cmd() *cobra.Command {
 }
 
 func buildV2Cmd() *cobra.Command {
-	log := clog.New("info")
-
-	fmt.Println()
-	log.Warn("⚠️  --v2 flag identified, flow redirected to the oc-mirror v2 version. This is Tech Preview, it is still under development and it is not production ready.")
-
-	cmd := cliV2.NewMirrorCmd(log)
-	return cmd
+	return cliV2.V2Cmd("info")
 }
 
 func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
