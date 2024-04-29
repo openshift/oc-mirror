@@ -46,7 +46,7 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 	if maxSize == 0 {
 		maxSize = defaultSegSize
 	}
-	maxSize *= maxSize * segMultiplier
+	maxSize = maxSize * segMultiplier
 
 	a, err := newStrictAdder(maxSize, destination, logg)
 	if err != nil {
@@ -80,7 +80,7 @@ func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, 
 	if maxSize == 0 {
 		maxSize = defaultSegSize
 	}
-	maxSize *= maxSize * segMultiplier
+	maxSize = maxSize * segMultiplier
 
 	a, err := newPermissiveAdder(maxSize, destination, logg)
 	if err != nil {
