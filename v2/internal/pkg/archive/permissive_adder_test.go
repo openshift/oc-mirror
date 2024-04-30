@@ -119,6 +119,7 @@ func TestPermissiveAdder_AddFile_BiggerThanMax(t *testing.T) {
 		assertContents(t, firstArchive, []string{"file1", "file2"})
 		// assert that the second archive is saved to disk
 		assert.FileExists(t, ma.archiveFile.Name(), "archive2 should exist")
+		assertContents(t, ma.archiveFile.Name(), []string{"file3"})
 	})
 }
 
