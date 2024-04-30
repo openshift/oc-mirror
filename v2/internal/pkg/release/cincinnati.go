@@ -99,15 +99,15 @@ func (o CincinnatiSchema) NewOKDClient(uuid uuid.UUID) (Client, error) {
 }
 
 func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
-
+	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 	var (
 		allImages []v2alpha1.CopyImageSchema
 		errs      = []error{}
 	)
 
-	for _, arch := range o.Config.Mirror.Platform.Architectures {
-		versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(o.Config.Mirror.Platform.Channels))
-		for _, ch := range o.Config.Mirror.Platform.Channels {
+	for _, arch := range filterCopy.Architectures {
+		versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(filterCopy.Channels))
+		for _, ch := range filterCopy.Channels {
 			var client Client
 			var err error
 			switch ch.Type {
@@ -183,20 +183,20 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 
 		// Update cfg release channels with maximum and minimum versions
 		// if applicable
-		for i, ch := range o.Config.Mirror.Platform.Channels {
+		for i, ch := range filterCopy.Channels {
 			ch, found := versionsByChannel[ch.Name]
 			if found {
-				o.Config.Mirror.Platform.Channels[i] = ch
+				filterCopy.Channels[i] = ch
 			}
 		}
 
-		if len(o.Config.Mirror.Platform.Channels) > 1 {
+		if len(filterCopy.Channels) > 1 {
 			client, err := NewOCPClient(o.Opts.UUID)
 			if err != nil {
 				errs = append(errs, err)
 				continue
 			}
-			newDownloads, err := getCrossChannelDownloads(ctx, o.Log, client, arch, o.Config.Mirror.Platform.Channels)
+			newDownloads, err := getCrossChannelDownloads(ctx, o.Log, client, arch, filterCopy.Channels)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error calculating cross channel upgrades: %v", err))
 				continue

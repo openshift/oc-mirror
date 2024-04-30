@@ -58,12 +58,11 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	var allImages []v2alpha1.CopyImageSchema
 	var imageIndexDir string
-	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
 		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
 
 		releasesForFilter := releasesForFilter{
-			Filter: filterCopy,
+			Filter: o.Config.Mirror.Platform,
 			//cannot directly use the array releases here as the Destinations are still empty
 			Releases: []v2alpha1.CopyImageSchema{},
 		}
@@ -172,6 +171,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 			o.Log.Debug(collectorPrefix + "graph image created and pushed to cache.")
 			// still add the graph image to the `allImages` so that we later can add it in the tar.gz archive
+			// or copied to the destination registry (case of mirror to mirror)
 			graphCopy := v2alpha1.CopyImageSchema{
 				Source:      graphImgRef,
 				Destination: graphImgRef,
