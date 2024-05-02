@@ -183,6 +183,80 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	return refs, nil
 }
 
+func (o *MirrorOptions) copyCatalogs(ctx context.Context, dstDir string) error {
+	var err error
+
+	mirrorRef := imagesource.TypedImageReference{Type: imagesource.DestinationRegistry}
+	mirrorRef.Ref, err = reference.Parse(o.ToMirror)
+	if err != nil {
+		return err
+	}
+
+	dstDir = filepath.Clean(dstDir)
+	if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return err
+		}
+		slashPath := filepath.ToSlash(fpath)
+
+		if filepath.Base(fpath) == config.LayoutsDir {
+
+			// results in <some path>/src/catalogs/<repoPath>/layout
+			slashPath = path.Dir(slashPath)
+
+			// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
+			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
+			// get the repo namespace and id (where ID is a SHA or tag)
+			// example: foo.com/foo/bar/<id>
+			regRepoNs, id := path.Split(repoPath)
+			regRepoNs = path.Clean(regRepoNs)
+			// reconstitute the path into a valid docker ref
+			var img string
+			if strings.Contains(id, ":") {
+				// Digest.
+				img = fmt.Sprintf("%s@%s", regRepoNs, id)
+			} else {
+				// Tag.
+				img = fmt.Sprintf("%s:%s", regRepoNs, id)
+			}
+
+			ctlgRef := image.TypedImage{}
+			ctlgRef.Type = imagesource.DestinationRegistry
+			originRef, err := image.ParseReference(img)
+			// since we can't really tell if the "img" reference originated from an actual docker
+			// reference or from an OCI file path that approximates a docker reference, ParseReference
+			// might not lowercase the name and namespace values which is required by the
+			// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+			// Therefore we lower case name and namespace here to make sure it's done.
+			originRef.Ref.Name = strings.ToLower(originRef.Ref.Name)
+			originRef.Ref.Namespace = strings.ToLower(originRef.Ref.Namespace)
+
+			if err != nil {
+				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
+			}
+			ctlgRef.Ref = originRef.Ref
+			// Update registry so the existing catalog image can be pulled.
+			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
+			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
+			ctlgRef = ctlgRef.SetDefaults()
+			// Unset the ID when passing to the image builder.
+			// Tags are needed here since the digest will be recalculated.
+			ctlgRef.Ref.ID = ""
+
+			// Add to mapping for ICSP generation
+			_, err = o.copyImage(ctx, "oci://"+fpath, "docker://"+ctlgRef.Ref.String(), o.remoteRegFuncs)
+			if err != nil {
+				return fmt.Errorf("error copying image %s to %s: %v", "oci://"+fpath, "docker://"+ctlgRef.Ref.String(), err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 /*
 processCatalogRefs uses the image builder to update a given image using the data provided in catalogRefs.
 
@@ -240,12 +314,17 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		layersToDelete = append(layersToDelete, deletedConfigLayer)
 
 		if withCacheRegeneration {
-
-			opmCmdPath := filepath.Join(artifactDir, config.OpmBinDir, "opm")
-			_, err = os.Stat(opmCmdPath)
-			if err != nil {
-				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
+			opmCmdPath := ""
+			if opmBinary := os.Getenv("OPM_BINARY"); opmBinary != "" {
+				opmCmdPath = opmBinary
+			} else {
+				opmCmdPath = filepath.Join(artifactDir, config.OpmBinDir, "opm")
+				_, err = os.Stat(opmCmdPath)
+				if err != nil {
+					return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
+				}
 			}
+
 			absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
 			if err != nil {
 				return fmt.Errorf("error getting absolute path for catalog's index %v: %v", filepath.Join(artifactDir, config.IndexDir), err)
@@ -354,12 +433,16 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 	}
 	// cachePath exists, opm binary will be needed to regenerate it
 	opmBinaryFileName, err := copyOPMBinary(img, ctlgSrcDir)
-	if err != nil {
+	opmBinary := os.Getenv("OPM_BINARY")
+	if err != nil && opmBinary == "" {
 		return err
+	} else {
+		klog.Warning("unable to extract opm binary from the catalog %s: %v", img, err)
+		klog.Warning("ignoring, since $OPM_BINARY is provided")
 	}
 	// check for the extracted opm file (it should exist if we found something)
 	_, err = os.Stat(opmBinaryFileName)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) && opmBinary == "" {
 		return fmt.Errorf("opm binary not found after extracting opm from catalog image %v", srcRef)
 	}
 	err = os.Chmod(opmBinaryFileName, 0744)
