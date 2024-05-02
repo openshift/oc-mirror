@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,6 +44,11 @@ type BatchSchema struct {
 	Remainder  int
 }
 
+type mirrorErrorSchema struct {
+	image v2alpha1.CopyImageSchema
+	err   error
+}
+
 // Worker - the main batch processor
 func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error {
 	startTime := time.Now()
@@ -53,17 +60,11 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		mirrorMsg = "deleting"
 	}
 
-	var errArray []error
+	var errArray []mirrorErrorSchema
 
 	totalImages := len(collectorSchema.AllImages)
-	countTotal := 0
-	countErrorTotal := 0
-	countReleaseImages := 0
-	countReleaseImagesErrorTotal := 0
-	countOperatorsImages := 0
-	countOperatorsImagesErrorTotal := 0
-	countAdditionalImages := 0
-	countAdditionalImagesErrorTotal := 0
+	var countTotal, countReleaseImages, countOperatorsImages, countAdditionalImages,
+		countErrorTotal, countReleaseImagesErrorTotal, countOperatorsImagesErrorTotal, countAdditionalImagesErrorTotal int
 
 	o.Log.Info("🚀 Start " + mirrorMsg + " the images...")
 
@@ -112,7 +113,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
 
 		if err != nil {
-			errArray = append(errArray, err)
+			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
 			countErrorTotal++
 			switch img.Type {
 			case v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent, v2alpha1.TypeCincinnatiGraph:
@@ -154,10 +155,23 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	}
 
 	if len(errArray) > 0 {
-		for _, err := range errArray {
-			o.Log.Error(workerPrefix+"err: %s", err.Error())
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
+
+		file, err := os.Create(filepath.Join(o.LogsDir, filename))
+		if err != nil {
+			o.Log.Error(workerPrefix+"failed to create file: %s", err.Error())
+			return err
 		}
-		return fmt.Errorf(workerPrefix + "error in batch - refer to console logs")
+		defer file.Close()
+
+		for _, err := range errArray {
+			errorMsg := fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
+			o.Log.Error(workerPrefix + errorMsg)
+			fmt.Fprintln(file, errorMsg)
+		}
+
+		return fmt.Errorf(workerPrefix+"some errors happened during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
 	}
 
 	endTime := time.Now()
