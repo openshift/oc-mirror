@@ -78,9 +78,11 @@ func NewVersionCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.BoolVar(&o.Short, "short", o.Short, "Print just the version number")
+	// nolint: errcheck
 	fs.MarkDeprecated("short", "and will be removed in a future release. Use oc-mirror version instead.")
 	fs.StringVar(&o.Output, "output", o.Output, "One of 'yaml' or 'json'.")
 	fs.BoolVar(&o.V2, "v2", o.V2, "Redirect the flow to oc-mirror v2 - V2 is still under development and it is not production ready.")
+	// nolint: errcheck
 	fs.MarkHidden("v2")
 	cmd.PersistentFlags()
 

@@ -109,8 +109,9 @@ func TestMirrorCheck(t *testing.T) {
 	srcFlags, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
 	dstFlags, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := RetryFlags()
-	srcFlags.Set("src-tls-verify", "false")
-	dstFlags.Set("dest-tls-verify", "false")
+
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = dstFlags.Set("dest-tls-verify", "false")
 	opts := CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
@@ -172,8 +173,8 @@ func TestMirrorDelete(t *testing.T) {
 	dstFlags, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := RetryFlags()
 
-	srcFlags.Set("src-tls-verify", "false")
-	dstFlags.Set("dest-tls-verify", "false")
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = dstFlags.Set("dest-tls-verify", "false")
 
 	opts := CopyOptions{
 		Global:              global,

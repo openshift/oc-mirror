@@ -41,8 +41,8 @@ func TestImageBuilder(t *testing.T) {
 	destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	srcFlags.Set("src-tls-verify", "false")
-	destFlags.Set("dest-tls-verify", "false")
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = destFlags.Set("dest-tls-verify", "false")
 
 	opts := mirror.CopyOptions{
 		Global:              global,
@@ -59,8 +59,8 @@ func TestImageBuilder(t *testing.T) {
 	t.Run("Testing NewImageBuilder : should pass", func(t *testing.T) {
 
 		_ = NewBuilder(log, opts)
-		srcFlags.Set("src-tls-verify", "true")
-		destFlags.Set("dest-tls-verify", "true")
+		_ = srcFlags.Set("src-tls-verify", "true")
+		_ = destFlags.Set("dest-tls-verify", "true")
 		_ = NewBuilder(log, opts)
 
 		e := ErrInvalidReference{image: "broken"}
@@ -78,8 +78,8 @@ func TestImageBuilder(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		srcFlags.Set("src-tls-verify", "false")
-		destFlags.Set("dest-tls-verify", "false")
+		_ = srcFlags.Set("src-tls-verify", "false")
+		_ = destFlags.Set("dest-tls-verify", "false")
 		ex := NewBuilder(log, opts)
 		ctx := context.Background()
 
@@ -163,8 +163,8 @@ func TestProcessImageIndex(t *testing.T) {
 		destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 		_, retryOpts := mirror.RetryFlags()
 
-		srcFlags.Set("src-tls-verify", "false")
-		destFlags.Set("dest-tls-verify", "false")
+		_ = srcFlags.Set("src-tls-verify", "false")
+		_ = destFlags.Set("dest-tls-verify", "false")
 
 		opts := mirror.CopyOptions{
 			Global:              global,
