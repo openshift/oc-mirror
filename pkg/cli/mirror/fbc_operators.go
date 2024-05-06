@@ -523,7 +523,7 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 		SourceCtx:             sourceCtx,
 		DestinationCtx:        destinationCtx,
 		ForceManifestMIMEType: "",
-		ImageListSelection:    imagecopy.CopyAllImages,
+		ImageListSelection:    imagecopy.CopySystemImage,
 		OciDecryptConfig:      nil,
 		OciEncryptLayers:      nil,
 		OciEncryptConfig:      nil,

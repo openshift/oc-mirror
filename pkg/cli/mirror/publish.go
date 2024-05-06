@@ -336,7 +336,7 @@ func (o *MirrorOptions) processMirroredImages(ctx context.Context, assocs image.
 // processCustomImages builds custom images for operator catalogs or Cincinnati graph data if data is present in the archive
 func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, filesInArchive map[string]string) (image.TypedImageMapping, error) {
 	allMappings := image.TypedImageMapping{}
-	// process catalogs only when --rebuild-catalogs flag is on
+	// process catalogs
 	klog.V(2).Infof("rebuilding catalog images")
 	found, err := o.unpackCatalog(dir, filesInArchive)
 	if err != nil {
@@ -344,18 +344,11 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 	}
 
 	if found {
-		if o.RebuildCatalogs {
-			ctlgRefs, err := o.rebuildCatalogs(ctx, dir)
-			if err != nil {
-				return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
-			}
-			allMappings.Merge(ctlgRefs)
-		} else {
-			err := o.copyCatalogs(ctx, dir)
-			if err != nil {
-				return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
-			}
+		ctlgRefs, err := o.rebuildCatalogs(ctx, dir)
+		if err != nil {
+			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}
+		allMappings.Merge(ctlgRefs)
 	}
 
 	klog.V(2).Infof("building cincinnati graph data image")
