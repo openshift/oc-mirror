@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	imagecopy "github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -345,6 +347,9 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
 
 	o.remoteRegFuncs = RemoteRegFuncs{
+		copy: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
+			return imagecopy.Image(ctx, policyContext, destRef, srcRef, options)
+		},
 		newImageSource: func(ctx context.Context, sys *types.SystemContext, imgRef types.ImageReference) (types.ImageSource, error) {
 			return imgRef.NewImageSource(ctx, sys)
 		},
@@ -750,7 +755,7 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 	}
 	// process catalog FBC images
 	if len(cfg.Mirror.Operators) > 0 {
-		ctlgRefs, err := o.rebuildCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
+		ctlgRefs, err := o.rebuildOrCopyCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
 		if err != nil {
 			return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}

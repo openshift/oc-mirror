@@ -125,7 +125,7 @@ function workflow_m2d2m_oci_catalog() {
   if !$DIFF; then
     cleanup_conn
   fi
-  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://${remote_image}"
+  run_cmd --from "${CREATE_FULL_DIR}/mirror_seq1_000000.tar" "docker://${remote_image}" $PUBLISH_FLAGS
 
   popd
 }
