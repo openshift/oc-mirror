@@ -39,6 +39,7 @@ type MirrorOptions struct {
 	OCIRegistriesConfig        string // Registries config file location (it works only with local oci catalogs)
 	OCIInsecureSignaturePolicy bool   // If set, OCI catalog push will not try to push signatures
 	MaxNestedPaths             int
+	RebuildCatalogs            bool // If set, rebuilds catalogs based on filtered declarative config, and regenerates the cache of that catalog
 	// cancelCh is a channel listening for command cancellations
 	cancelCh                          <-chan struct{}
 	once                              sync.Once
@@ -76,6 +77,7 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.OCIInsecureSignaturePolicy, "oci-insecure-signature-policy", o.OCIInsecureSignaturePolicy, "If set, OCI catalog push will not try to push signatures")
 	fs.BoolVar(&o.SkipPruning, "skip-pruning", o.SkipPruning, "If set, will disable pruning globally")
 	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
+	fs.BoolVar(&o.RebuildCatalogs, "rebuild-catalogs", o.RebuildCatalogs, "If set (defaults to false), rebuilds catalogs based on filtered declarative config, and regenerates the cache of that catalog")
 }
 
 func (o *MirrorOptions) init() {

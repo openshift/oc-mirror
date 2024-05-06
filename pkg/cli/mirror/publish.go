@@ -344,7 +344,7 @@ func (o *MirrorOptions) processCustomImages(ctx context.Context, dir string, fil
 	}
 
 	if found {
-		ctlgRefs, err := o.rebuildCatalogs(ctx, dir)
+		ctlgRefs, err := o.rebuildOrCopyCatalogs(ctx, dir)
 		if err != nil {
 			return allMappings, fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}
