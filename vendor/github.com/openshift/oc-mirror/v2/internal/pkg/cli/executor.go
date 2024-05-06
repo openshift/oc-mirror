@@ -336,11 +336,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		rootDir = strings.TrimPrefix(args[0], fileProtocol)
 		o.Log.Debug("destination %s ", rootDir)
 		// destination is the local cache, which is HTTP
+		// nolint: errcheck
 		o.destFlagSet.Set("dest-tls-verify", "false")
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
 		// source is the local cache, which is HTTP
+		// nolint: errcheck
 		o.srcFlagSet.Set("src-tls-verify", "false")
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
 		o.Opts.Mode = mirror.MirrorToMirror

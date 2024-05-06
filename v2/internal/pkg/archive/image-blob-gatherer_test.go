@@ -27,8 +27,8 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 	destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	srcFlags.Set("src-tls-verify", "false")
-	destFlags.Set("dest-tls-verify", "false")
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = destFlags.Set("dest-tls-verify", "false")
 
 	opts := mirror.CopyOptions{
 		Global:              global,
@@ -119,8 +119,8 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	srcFlags.Set("src-tls-verify", "false")
-	destFlags.Set("dest-tls-verify", "false")
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = destFlags.Set("dest-tls-verify", "false")
 
 	opts := mirror.CopyOptions{
 		Global:              global,
@@ -152,8 +152,8 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 	destFlags, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	srcFlags.Set("src-tls-verify", "false")
-	destFlags.Set("dest-tls-verify", "false")
+	_ = srcFlags.Set("src-tls-verify", "false")
+	_ = destFlags.Set("dest-tls-verify", "false")
 
 	opts := mirror.CopyOptions{
 		Global:              global,

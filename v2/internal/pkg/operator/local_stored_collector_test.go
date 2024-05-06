@@ -73,6 +73,7 @@ var (
 			},
 		},
 	}
+	// nolint: unused
 	nominalConfigD2MWithTargetCatalogTag = v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 			Mirror: v2alpha1.Mirror{

@@ -191,6 +191,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 		// fake a diskToMirror Mode
 		o.Opts.Mode = mirror.DiskToMirror
 		o.Opts.RemoveSignatures = true
+		// nolint: errcheck
 		o.srcFlagSet.Set("src-tls-verify", "false")
 	}
 
@@ -337,6 +338,9 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 		}
 	}
 
+	if !o.Opts.Global.DeleteGenerate {
+		o.Log.Info("📝 Rememeber to execute a garbage collect (or similar) on your remote repository")
+	}
 	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
 
 	return nil
