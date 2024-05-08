@@ -104,7 +104,8 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			}
 			o.Log.Info(strings.Repeat("=", len(overalProgress)))
 		}
-		o.Log.Info(mirrorMsg+" image: %s", img.Origin)
+
+		o.Log.Debug(mirrorMsg+" image: %s", img.Origin)
 
 		if img.Type == v2alpha1.TypeCincinnatiGraph && (opts.Mode == mirror.MirrorToDisk || opts.Mode == mirror.MirrorToMirror) {
 			continue
@@ -131,26 +132,26 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		if countReleaseImages == collectorSchema.TotalReleaseImages && countReleaseImagesErrorTotal == 0 {
 			o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
 		} else {
-			o.Log.Info("Successfully mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
+			o.Log.Info("Images mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
 		}
 
 		if countOperatorsImages == collectorSchema.TotalOperatorImages && countOperatorsImagesErrorTotal == 0 {
 			o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
 		} else {
-			o.Log.Info("Successfully mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
+			o.Log.Info("Images mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
 		}
 
 		if countAdditionalImages == collectorSchema.TotalAdditionalImages && countAdditionalImagesErrorTotal == 0 {
 			o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
 		} else {
-			o.Log.Info("Successfully mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
+			o.Log.Info("Images mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
 		}
 	} else {
 		o.Log.Info("=== Results ===")
 		if countTotal == totalImages && countErrorTotal == 0 {
 			o.Log.Info("All images deleted successfully %d / %d ✅", countTotal, totalImages)
 		} else {
-			o.Log.Info("Successfully deleted %d / %d: Some images failed to delete ❌ - please check the logs", countTotal-countErrorTotal, totalImages)
+			o.Log.Info("Images deleted %d / %d: Some images failed to delete ❌ - please check the logs", countTotal-countErrorTotal, totalImages)
 		}
 	}
 

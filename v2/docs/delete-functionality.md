@@ -142,6 +142,15 @@ before executing the local cache delete.**
 
 ### Troubleshooting and Recovery
 
+**We highly recommend using the mirror to disk and disk to mirror workflows**
+
+The mirror to mirror workflow was added to be backward compatible with the current v1 version. Use it when you have a small amout of images to mirror or for testing in a lab environment.
+No images are cached when using the mirror to mirror workflow. 
+
+**NB If you did use the mirror to mirror workflow in previous executions and consequenlty changed to the other worklfows, and then execute the delete generation and registry delete, it will fail**
+
+To circumvent this issue, create a file called "mode.txt" as well as a folder called "info" in the "working-dir" main folder (i.e "working-dir/info/mode.txt"), with the content "mirrorToMirror" (without the quotes), this will ensure that the delete functionality will work correctly for non-cached images. Also don't use the --force-cache-delete flag.
+
 The delete functionality is split into 2 stages (as mentioned in the overview), a typical workflow would be to use the --generate flag first, this will create the delete yaml file, this file can be used to validate the images/blobs that will be deleted.
 
 We highly recommend making backup of each tar.gz file that gets created in the "work-directory" folder. You could also create a tar.gz using the --since flag (see the oc-mirror command help for more information).
@@ -157,6 +166,7 @@ If by accident the local cache is deleted, untar all the relevant <work-director
 (default is ~/.oc-mirror/.cache), the local cache directory can be configured using the envar "OC_MIRROR_CACHE"
 
 If the remote registry is also deleted by accident, re-run the oc-mirror command using the --from flag (disk to mirror mode, it will use the contents of all the relevant .tar.gz files), this will ensure your remote registry is back to the original state.
+
 
 ### Conclusion
 

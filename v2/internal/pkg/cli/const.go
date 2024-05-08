@@ -21,4 +21,6 @@ const (
 	dryRunOutDir            string = "dry-run"
 	mappingFile             string = "mapping.txt"
 	missingImgsFile         string = "missing.txt"
+	infoDir                 string = "info"
+	modeFile                string = "mode.txt"
 )
