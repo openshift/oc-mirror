@@ -194,33 +194,16 @@ func (o *OperatorOptions) run(
 		} else if targetCtlg.Ref.Tag != "" {
 			ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.Tag)
 		}
-		if o.RebuildCatalogs {
-			err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
-			if err != nil {
-				reg.Destroy()
-				return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
-			}
+		err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
+		if err != nil {
+			reg.Destroy()
+			return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
 		}
 
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
 		if err != nil {
 			reg.Destroy()
 			return nil, err
-		}
-		if !o.RebuildCatalogs {
-			var destCatalogRef string
-			if o.ToMirror != "" { // mirror to mirror
-				destCatalogRef, err = prepareDestCatalogRef(ctlg, o.ToMirror, o.UserNamespace)
-				if err != nil {
-					return nil, err
-				}
-			} else { // mirror to disk
-				destCatalogRef = "oci://" + ctlgSrcDir + "/layout"
-			}
-			_, err = o.copyImage(ctx, ctlg.Catalog, destCatalogRef, o.remoteRegFuncs)
-			if err != nil {
-				return nil, err
-			}
 		}
 		mmapping.Merge(mappings)
 		reg.Destroy()
@@ -621,23 +604,21 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 		return nil, err
 	}
 
-	if o.RebuildCatalogs {
-		// Remove the catalog image from mappings we are going to transfer this
-		// using an OCI layout.
-		var ctlgImg image.TypedImage
-		if ctlgRef.Type == "oci" {
-			ctlgImg, err = image.ParseTypedImage(ctlgRef.OCIFBCPath, v1alpha2.TypeOperatorBundle)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			ctlgImg, err = image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
-			if err != nil {
-				return nil, err
-			}
+	// Remove the catalog image from mappings we are going to transfer this
+	// using an OCI layout.
+	var ctlgImg image.TypedImage
+	if ctlgRef.Type == "oci" {
+		ctlgImg, err = image.ParseTypedImage(ctlgRef.OCIFBCPath, v1alpha2.TypeOperatorBundle)
+		if err != nil {
+			return nil, err
 		}
-		mappings.Remove(ctlgImg)
+	} else {
+		ctlgImg, err = image.ParseTypedImage(ctlgRef.Ref.Exact(), v1alpha2.TypeOperatorBundle)
+		if err != nil {
+			return nil, err
+		}
 	}
+	mappings.Remove(ctlgImg)
 	// Write catalog OCI layout file to src so it is included in the archive
 	// at a path unique to the image.
 	if ctlgRef.Type != image.DestinationOCI {
@@ -674,17 +655,15 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 	// Remove catalog namespace prefix from each mapping's destination, which is added by opts.Run().
 	for srcRef, dstRef := range mappings {
-		if srcRef.Ref.String() != ctlgRef.Ref.String() || o.RebuildCatalogs { // OCPBUGS-31536: don't do this for catalog images unless they will be rebuilt
-			newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
-			newRepoName = strings.TrimPrefix(newRepoName, "/")
-			tmpRef, err := imgreference.Parse(newRepoName)
-			if err != nil {
-				return nil, err
-			}
-			dstRef.Ref.Namespace = tmpRef.Namespace
-			dstRef.Ref.Name = tmpRef.Name
-			mappings[srcRef] = dstRef
+		newRepoName := strings.TrimPrefix(dstRef.Ref.RepositoryName(), ctlgRef.Ref.RepositoryName())
+		newRepoName = strings.TrimPrefix(newRepoName, "/")
+		tmpRef, err := imgreference.Parse(newRepoName)
+		if err != nil {
+			return nil, err
 		}
+		dstRef.Ref.Namespace = tmpRef.Namespace
+		dstRef.Ref.Name = tmpRef.Name
+		mappings[srcRef] = dstRef
 	}
 	return mappings, validateMapping(*dc, mappings)
 }

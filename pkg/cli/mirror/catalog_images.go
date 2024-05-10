@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/crane"
@@ -22,6 +24,7 @@ import (
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
+	"github.com/otiai10/copy"
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -35,6 +38,7 @@ const (
 	opmBinarySuffix = "opm"
 	cacheFolderUID  = 1001
 	cacheFolderGID  = 0
+	tempFolder      = "/tmp/temp_folder"
 )
 
 type NoCacheArgsErrorType struct{}
@@ -61,7 +65,7 @@ func (o *MirrorOptions) unpackCatalog(dstDir string, filesInArchive map[string]s
 }
 
 /*
-rebuildCatalogs will modify an OCI catalog in <some path>/src/catalogs/<repoPath>/layout with
+rebuildOrCopyCatalogs will modify an OCI catalog in <some path>/src/catalogs/<repoPath>/layout with
 the index.json files found in <some path>/src/catalogs/<repoPath>/index/index.json
 
 # Arguments
@@ -76,7 +80,7 @@ the index.json files found in <some path>/src/catalogs/<repoPath>/index/index.js
 
 • error: non-nil if error occurs, nil otherwise
 */
-func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (image.TypedImageMapping, error) {
+func (o *MirrorOptions) rebuildOrCopyCatalogs(ctx context.Context, dstDir string) (image.TypedImageMapping, error) {
 	refs := image.TypedImageMapping{}
 	var err error
 
@@ -88,80 +92,171 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 
 	dstDir = filepath.Clean(dstDir)
 	catalogsByImage := map[image.TypedImage]string{}
-	if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
+	if o.RebuildCatalogs {
+		if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
 
-		// Skip the layouts dir because we only need
-		// to process the parent directory one time
-		if filepath.Base(fpath) == config.LayoutsDir {
-			return filepath.SkipDir
-		}
-
-		if err != nil || info == nil {
-			return err
-		}
-
-		// From the index path determine the artifacts (index and layout) directory.
-		// Using that path to determine the corresponding catalog image for processing.
-		slashPath := filepath.ToSlash(fpath)
-		if base := path.Base(slashPath); base == "index.json" {
-			// remove the index.json from the path
-			// results in <some path>/src/catalogs/<repoPath>/index
-			slashPath = path.Dir(slashPath)
-			// remove the index folder from the path
-			// results in <some path>/src/catalogs/<repoPath>
-			slashPath = strings.TrimSuffix(slashPath, config.IndexDir)
-
-			// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
-			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
-			// get the repo namespace and id (where ID is a SHA or tag)
-			// example: foo.com/foo/bar/<id>
-			regRepoNs, id := path.Split(path.Dir(repoPath))
-			regRepoNs = path.Clean(regRepoNs)
-			// reconstitute the path into a valid docker ref
-			var img string
-			if strings.Contains(id, ":") {
-				// Digest.
-				img = fmt.Sprintf("%s@%s", regRepoNs, id)
-			} else {
-				// Tag.
-				img = fmt.Sprintf("%s:%s", regRepoNs, id)
+			// Skip the layouts dir because we only need
+			// to process the parent directory one time
+			if filepath.Base(fpath) == config.LayoutsDir {
+				return filepath.SkipDir
 			}
-			ctlgRef := image.TypedImage{}
-			ctlgRef.Type = imagesource.DestinationRegistry
-			sourceRef, err := image.ParseReference(img)
-			// since we can't really tell if the "img" reference originated from an actual docker
-			// reference or from an OCI file path that approximates a docker reference, ParseReference
-			// might not lowercase the name and namespace values which is required by the
-			// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
-			// Therefore we lower case name and namespace here to make sure it's done.
-			sourceRef.Ref.Name = strings.ToLower(sourceRef.Ref.Name)
-			sourceRef.Ref.Namespace = strings.ToLower(sourceRef.Ref.Namespace)
 
-			if err != nil {
-				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
+			if err != nil || info == nil {
+				return err
 			}
-			ctlgRef.Ref = sourceRef.Ref
-			// Update registry so the existing catalog image can be pulled.
-			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
-			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
-			ctlgRef = ctlgRef.SetDefaults()
-			// Unset the ID when passing to the image builder.
-			// Tags are needed here since the digest will be recalculated.
-			ctlgRef.Ref.ID = ""
 
-			catalogsByImage[ctlgRef] = slashPath
+			// From the index path determine the artifacts (index and layout) directory.
+			// Using that path to determine the corresponding catalog image for processing.
+			slashPath := filepath.ToSlash(fpath)
+			if base := path.Base(slashPath); base == "index.json" {
+				// remove the index.json from the path
+				// results in <some path>/src/catalogs/<repoPath>/index
+				slashPath = path.Dir(slashPath)
+				// remove the index folder from the path
+				// results in <some path>/src/catalogs/<repoPath>
+				slashPath = strings.TrimSuffix(slashPath, config.IndexDir)
 
-			// Add to mapping for ICSP generation
-			refs.Add(sourceRef, ctlgRef.TypedImageReference, v1alpha2.TypeOperatorCatalog)
+				// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
+				repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
+				// get the repo namespace and id (where ID is a SHA or tag)
+				// example: foo.com/foo/bar/<id>
+				regRepoNs, id := path.Split(path.Dir(repoPath))
+				regRepoNs = path.Clean(regRepoNs)
+				// reconstitute the path into a valid docker ref
+				var img string
+				if strings.Contains(id, ":") {
+					// Digest.
+					img = fmt.Sprintf("%s@%s", regRepoNs, id)
+				} else {
+					// Tag.
+					img = fmt.Sprintf("%s:%s", regRepoNs, id)
+				}
+				ctlgRef := image.TypedImage{}
+				ctlgRef.Type = imagesource.DestinationRegistry
+				sourceRef, err := image.ParseReference(img)
+				// since we can't really tell if the "img" reference originated from an actual docker
+				// reference or from an OCI file path that approximates a docker reference, ParseReference
+				// might not lowercase the name and namespace values which is required by the
+				// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+				// Therefore we lower case name and namespace here to make sure it's done.
+				sourceRef.Ref.Name = strings.ToLower(sourceRef.Ref.Name)
+				sourceRef.Ref.Namespace = strings.ToLower(sourceRef.Ref.Namespace)
+
+				if err != nil {
+					return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
+				}
+				ctlgRef.Ref = sourceRef.Ref
+				// Update registry so the existing catalog image can be pulled.
+				ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
+				ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
+				ctlgRef = ctlgRef.SetDefaults()
+				// Unset the ID when passing to the image builder.
+				// Tags are needed here since the digest will be recalculated.
+				ctlgRef.Ref.ID = ""
+
+				catalogsByImage[ctlgRef] = slashPath
+
+				// Add to mapping for ICSP generation
+				refs.Add(sourceRef, ctlgRef.TypedImageReference, v1alpha2.TypeOperatorCatalog)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
 		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
 
-	// update the catalogs in the OCI layout directory and push them to their destination
-	if err := o.processCatalogRefs(ctx, catalogsByImage); err != nil {
-		return nil, err
+		// update the catalogs in the OCI layout directory and push them to their destination
+		if err := o.processCatalogRefs(ctx, catalogsByImage); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
+			if err != nil || info == nil {
+				return err
+			}
+			slashPath := filepath.ToSlash(fpath)
+
+			if filepath.Base(fpath) == config.LayoutsDir {
+
+				// results in <some path>/src/catalogs/<repoPath>/layout
+				slashPath = path.Dir(slashPath)
+
+				// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
+				repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
+				// get the repo namespace and id (where ID is a SHA or tag)
+				// example: foo.com/foo/bar/<id>
+				regRepoNs, id := path.Split(repoPath)
+				regRepoNs = path.Clean(regRepoNs)
+				// reconstitute the path into a valid docker ref
+				var img string
+				if strings.Contains(id, ":") {
+					// Digest.
+					img = fmt.Sprintf("%s@%s", regRepoNs, id)
+				} else {
+					// Tag.
+					img = fmt.Sprintf("%s:%s", regRepoNs, id)
+				}
+
+				ctlgRef := image.TypedImage{}
+				ctlgRef.Type = imagesource.DestinationRegistry
+				originRef, err := image.ParseReference(img)
+				// since we can't really tell if the "img" reference originated from an actual docker
+				// reference or from an OCI file path that approximates a docker reference, ParseReference
+				// might not lowercase the name and namespace values which is required by the
+				// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
+				// Therefore we lower case name and namespace here to make sure it's done.
+				originRef.Ref.Name = strings.ToLower(originRef.Ref.Name)
+				originRef.Ref.Namespace = strings.ToLower(originRef.Ref.Namespace)
+
+				if err != nil {
+					return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
+				}
+				ctlgRef.Ref = originRef.Ref
+				// Update registry so the existing catalog image can be pulled.
+				ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
+				ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
+				ctlgRef = ctlgRef.SetDefaults()
+				// Unset the ID when passing to the image builder.
+				// Tags are needed here since the digest will be recalculated.
+				ctlgRef.Ref.ID = ""
+
+				catalogOCIDir := fpath
+				isValid, err := isValidOCILayout(catalogOCIDir)
+				if err != nil {
+					klog.Warningf("unable to verify that the catalog layout is valid for image %s: %v", ctlgRef.Ref.String(), err)
+				}
+				if isValid && err == nil {
+					// Add to mapping for ICSP generation
+					if strings.Contains(fpath, "sha256:") {
+						randomNumber := strconv.Itoa(rand.Int())
+						catalogOCIDir = tempFolder + randomNumber
+						err := os.Mkdir(catalogOCIDir, 0755)
+						if err != nil {
+							klog.Warningf("unable to create temp folder facilitating mirroring of catalog image %s: %v", fpath, err)
+						}
+						defer os.RemoveAll(catalogOCIDir)
+						err = copy.Copy(fpath, catalogOCIDir)
+						if err != nil {
+							klog.Warningf("unable to copy catalog to temp folder while mirroring of catalog image %s: %v", fpath, err)
+						}
+					}
+					_, err = o.copyImage(ctx, "oci://"+catalogOCIDir, "docker://"+ctlgRef.Ref.String(), o.remoteRegFuncs)
+					if err != nil {
+						return fmt.Errorf("error copying image %s to %s: %v", fpath, "docker://"+ctlgRef.Ref.String(), err)
+					}
+
+				} else {
+					_, err = o.copyImage(ctx, "docker://"+originRef.Ref.String(), "docker://"+ctlgRef.Ref.String(), o.remoteRegFuncs)
+					if err != nil {
+						return fmt.Errorf("error copying image %s to %s: %v", "docker://"+originRef.Ref.String(), "docker://"+ctlgRef.Ref.String(), err)
+					}
+				}
+				// Add to mapping for ICSP generation
+				refs.Add(originRef, ctlgRef.TypedImageReference, v1alpha2.TypeOperatorCatalog)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	// use the resolver to obtain the digests of the newly pushed images
@@ -181,80 +276,6 @@ func (o *MirrorOptions) rebuildCatalogs(ctx context.Context, dstDir string) (ima
 	}
 
 	return refs, nil
-}
-
-func (o *MirrorOptions) copyCatalogs(ctx context.Context, dstDir string) error {
-	var err error
-
-	mirrorRef := imagesource.TypedImageReference{Type: imagesource.DestinationRegistry}
-	mirrorRef.Ref, err = reference.Parse(o.ToMirror)
-	if err != nil {
-		return err
-	}
-
-	dstDir = filepath.Clean(dstDir)
-	if err := filepath.Walk(dstDir, func(fpath string, info fs.FileInfo, err error) error {
-		if err != nil || info == nil {
-			return err
-		}
-		slashPath := filepath.ToSlash(fpath)
-
-		if filepath.Base(fpath) == config.LayoutsDir {
-
-			// results in <some path>/src/catalogs/<repoPath>/layout
-			slashPath = path.Dir(slashPath)
-
-			// remove the <some path>/src/catalogs from the path to arrive at <repoPath>
-			repoPath := strings.TrimPrefix(slashPath, fmt.Sprintf("%s/%s/", dstDir, config.CatalogsDir))
-			// get the repo namespace and id (where ID is a SHA or tag)
-			// example: foo.com/foo/bar/<id>
-			regRepoNs, id := path.Split(repoPath)
-			regRepoNs = path.Clean(regRepoNs)
-			// reconstitute the path into a valid docker ref
-			var img string
-			if strings.Contains(id, ":") {
-				// Digest.
-				img = fmt.Sprintf("%s@%s", regRepoNs, id)
-			} else {
-				// Tag.
-				img = fmt.Sprintf("%s:%s", regRepoNs, id)
-			}
-
-			ctlgRef := image.TypedImage{}
-			ctlgRef.Type = imagesource.DestinationRegistry
-			originRef, err := image.ParseReference(img)
-			// since we can't really tell if the "img" reference originated from an actual docker
-			// reference or from an OCI file path that approximates a docker reference, ParseReference
-			// might not lowercase the name and namespace values which is required by the
-			// docker reference spec (see https://github.com/distribution/distribution/blob/main/reference/reference.go).
-			// Therefore we lower case name and namespace here to make sure it's done.
-			originRef.Ref.Name = strings.ToLower(originRef.Ref.Name)
-			originRef.Ref.Namespace = strings.ToLower(originRef.Ref.Namespace)
-
-			if err != nil {
-				return fmt.Errorf("error parsing index dir path %q as image %q: %v", fpath, img, err)
-			}
-			ctlgRef.Ref = originRef.Ref
-			// Update registry so the existing catalog image can be pulled.
-			ctlgRef.Ref.Registry = mirrorRef.Ref.Registry
-			ctlgRef.Ref.Namespace = path.Join(o.UserNamespace, ctlgRef.Ref.Namespace)
-			ctlgRef = ctlgRef.SetDefaults()
-			// Unset the ID when passing to the image builder.
-			// Tags are needed here since the digest will be recalculated.
-			ctlgRef.Ref.ID = ""
-
-			// Add to mapping for ICSP generation
-			_, err = o.copyImage(ctx, "oci://"+fpath, "docker://"+ctlgRef.Ref.String(), o.remoteRegFuncs)
-			if err != nil {
-				return fmt.Errorf("error copying image %s to %s: %v", "oci://"+fpath, "docker://"+ctlgRef.Ref.String(), err)
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 /*
@@ -314,15 +335,16 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 		layersToDelete = append(layersToDelete, deletedConfigLayer)
 
 		if withCacheRegeneration {
+
 			opmCmdPath := ""
 			if opmBinary := os.Getenv("OPM_BINARY"); opmBinary != "" {
 				opmCmdPath = opmBinary
 			} else {
 				opmCmdPath = filepath.Join(artifactDir, config.OpmBinDir, "opm")
-				_, err = os.Stat(opmCmdPath)
-				if err != nil {
-					return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
-				}
+			}
+			_, err = os.Stat(opmCmdPath)
+			if err != nil {
+				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
 			}
 
 			absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
@@ -433,16 +455,12 @@ func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, c
 	}
 	// cachePath exists, opm binary will be needed to regenerate it
 	opmBinaryFileName, err := copyOPMBinary(img, ctlgSrcDir)
-	opmBinary := os.Getenv("OPM_BINARY")
-	if err != nil && opmBinary == "" {
+	if err != nil {
 		return err
-	} else {
-		klog.Warning("unable to extract opm binary from the catalog %s: %v", img, err)
-		klog.Warning("ignoring, since $OPM_BINARY is provided")
 	}
 	// check for the extracted opm file (it should exist if we found something)
 	_, err = os.Stat(opmBinaryFileName)
-	if errors.Is(err, os.ErrNotExist) && opmBinary == "" {
+	if errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("opm binary not found after extracting opm from catalog image %v", srcRef)
 	}
 	err = os.Chmod(opmBinaryFileName, 0744)
@@ -724,4 +742,25 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 	}
 
 	return nil
+}
+
+func isValidOCILayout(folder string) (bool, error) {
+	_, err := os.Stat(folder)
+	if err != nil {
+		return false, err
+	}
+	indexFile := filepath.Join(folder, "index.json")
+	_, err = os.Stat(indexFile)
+	if err != nil {
+		return false, err
+	}
+	indexData, err := os.ReadFile(indexFile)
+	if err != nil {
+		return false, err
+	}
+	if strings.Contains(string(indexData), "application/vnd.oci") {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }

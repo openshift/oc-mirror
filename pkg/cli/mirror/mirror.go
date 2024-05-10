@@ -751,8 +751,8 @@ func (o *MirrorOptions) mirrorToMirrorWrapper(ctx context.Context, cfg v1alpha2.
 		return err
 	}
 	// process catalog FBC images
-	if o.RebuildCatalogs && len(cfg.Mirror.Operators) > 0 {
-		ctlgRefs, err := o.rebuildCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
+	if len(cfg.Mirror.Operators) > 0 {
+		ctlgRefs, err := o.rebuildOrCopyCatalogs(ctx, filepath.Join(o.Dir, config.SourceDir))
 		if err != nil {
 			return fmt.Errorf("error rebuilding catalog images from file-based catalogs: %v", err)
 		}

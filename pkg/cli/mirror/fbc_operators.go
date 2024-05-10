@@ -478,6 +478,7 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 		// find absolute path if from is a relative path
 		fromPath := v1alpha2.TrimProtocol(from)
 		if !strings.HasPrefix(fromPath, "/") {
+
 			absolutePath, err := filepath.Abs(fromPath)
 			if err != nil {
 				return digest.Digest(""), fmt.Errorf("unable to get absolute path of oci image %s: %v", from, err)
@@ -523,7 +524,7 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 		SourceCtx:             sourceCtx,
 		DestinationCtx:        destinationCtx,
 		ForceManifestMIMEType: "",
-		ImageListSelection:    imagecopy.CopyAllImages,
+		ImageListSelection:    imagecopy.CopySystemImage,
 		OciDecryptConfig:      nil,
 		OciEncryptLayers:      nil,
 		OciEncryptConfig:      nil,
