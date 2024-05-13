@@ -519,12 +519,11 @@ func (o *MirrorOptions) copyImage(ctx context.Context, from, to string, funcs Re
 	// call the copy.Image function with the set options
 	manifestBytes, err := funcs.copy(ctx, policyContext, destRef, srcRef, &imagecopy.Options{
 		RemoveSignatures:      true,
-		SignBy:                "",
 		ReportWriter:          os.Stdout,
 		SourceCtx:             sourceCtx,
 		DestinationCtx:        destinationCtx,
 		ForceManifestMIMEType: "",
-		ImageListSelection:    imagecopy.CopySystemImage,
+		ImageListSelection:    imagecopy.CopyAllImages,
 		OciDecryptConfig:      nil,
 		OciEncryptLayers:      nil,
 		OciEncryptConfig:      nil,
