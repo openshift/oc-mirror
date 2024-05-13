@@ -444,6 +444,13 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		err = o.RunMirrorToMirror(cmd, args)
 	}
 
+	// track the workflow - used for delete
+	wfInfo := filepath.Join(o.Opts.Global.WorkingDir, infoDir, modeFile)
+	fileErr := os.WriteFile(wfInfo, []byte(o.Opts.Mode), 0755)
+	if fileErr != nil {
+		o.Log.Warn("unable to write workflow mode %v", err)
+	}
+
 	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
 
 	if err != nil {
@@ -498,7 +505,7 @@ http:
 		LocalStorageDisk: o.LocalStorageDisk,
 		LocalStoragePort: int(o.Opts.Global.Port),
 		LogLevel:         o.Opts.Global.LogLevel,
-		LogAccessOff:     o.Opts.Global.LogLevel != "debug",
+		LogAccessOff:     true,
 	}
 
 	if o.Opts.Global.LogLevel == "debug" || o.Opts.Global.LogLevel == "trace" {
@@ -626,7 +633,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
 	if err != nil {
-		o.Log.Error(" setupWorkingDir %v ", err)
+		o.Log.Error(" setupWorkingDir for signatures %v ", err)
 		return err
 	}
 
@@ -634,7 +641,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
 	if err != nil {
-		o.Log.Error(" setupWorkingDir %v ", err)
+		o.Log.Error(" setupWorkingDir for release images %v ", err)
 		return err
 	}
 
@@ -642,7 +649,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
 	if err != nil {
-		o.Log.Error(" setupWorkingDir %v ", err)
+		o.Log.Error(" setupWorkingDir for release cache %v ", err)
 		return err
 	}
 
@@ -650,7 +657,15 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
 	if err != nil {
-		o.Log.Error(" setupWorkingDir %v ", err)
+		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
+		return err
+	}
+
+	// track the mode - this is important for delete functionality
+	o.Log.Trace("creating info directory %s ", o.Opts.Global.WorkingDir+"/"+infoDir)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+infoDir, 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for info %v ", err)
 		return err
 	}
 	return nil

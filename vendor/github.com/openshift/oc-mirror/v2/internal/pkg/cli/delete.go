@@ -188,8 +188,6 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 			},
 		}
 		o.Config = isc
-		// fake a diskToMirror Mode
-		o.Opts.Mode = mirror.DiskToMirror
 		o.Opts.RemoveSignatures = true
 		// nolint: errcheck
 		o.srcFlagSet.Set("src-tls-verify", "false")
@@ -200,15 +198,18 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 	o.Manifest = manifest.New(o.Log)
 	o.Mirror = mirror.New(mc, nil)
 
-	// logic to check mode
+	// logic to check mode and  WorkingDir
 	// always good to check - but this should have been detected in validate
 	if o.Opts.Global.DeleteGenerate {
+		o.Opts.Mode = getMode(o.Opts.Global.WorkingDir)
 		if strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
 			wd := strings.Split(o.Opts.Global.WorkingDir, fileProtocol)
 			o.Opts.Global.WorkingDir = filepath.Join(wd[1], workingDir)
 		} else {
 			return fmt.Errorf("--workspace flag must have a file:// protocol prefix")
 		}
+	} else {
+		o.Opts.Mode = getMode(o.Opts.Global.DeleteYaml)
 	}
 
 	// setup logs level, and logsDir under workingDir
@@ -329,7 +330,7 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 	execTime := endTime.Sub(startTime)
 	o.Log.Info("delete time     : %v", execTime)
 
-	if o.Opts.Global.ForceCacheDelete {
+	if o.Opts.Global.ForceCacheDelete && o.Opts.Mode != mirror.MirrorToMirror {
 		// finally execute the garbage collector
 		// this will delete all relevant blobs
 		err := o.startLocalRegistryGarbageCollect()
@@ -378,4 +379,29 @@ func (o *ExecutorSchema) startLocalRegistryGarbageCollect() error {
 	}
 
 	return nil
+}
+
+// getMode - simple utility to get the mode from file
+func getMode(path string) string {
+	// check to see what mode was used to mirror
+	// strip fileProtocol from workingir
+	mode := mirror.MirrorToMirror
+	file := ""
+	if strings.Contains(path, fileProtocol) {
+		temp := strings.Split(path, fileProtocol)
+		file = filepath.Join(temp[1], workingDir, infoDir, modeFile)
+	} else {
+		temp := strings.Split(path, "/delete/")
+		file = filepath.Join(temp[0], infoDir, modeFile)
+	}
+	// set the mode to mirror to mirror
+	// this due to the fact that local cache is not updated in m2m
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return mode
+	}
+	if !strings.Contains(string(data), mirror.MirrorToMirror) {
+		mode = mirror.DiskToMirror
+	}
+	return mode
 }

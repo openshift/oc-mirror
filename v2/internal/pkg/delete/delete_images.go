@@ -3,6 +3,7 @@ package delete
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -135,6 +136,7 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 	o.Log.Debug("deleting images from remote registry")
 	var rrUpdatedImages []v2alpha1.CopyImageSchema
 	var lsUpdatedImages []v2alpha1.CopyImageSchema
+	var lsUpdated string
 
 	for _, img := range images.Items {
 		cis := v2alpha1.CopyImageSchema{
@@ -144,22 +146,30 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 		o.Log.Debug("deleting images %v", cis.Destination)
 		rrUpdatedImages = append(rrUpdatedImages, cis)
 		// prepare for local storage delete
-		lsUpdated := strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1)
+		if o.Opts.Mode == mirror.MirrorToMirror {
+			lsUpdated = img.ImageReference
+		} else {
+			lsUpdated = strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1)
+		}
 		lsCis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
 			Destination: lsUpdated,
 		}
-		o.Log.Debug("deleting images local chache %v", lsCis.Destination)
+		o.Log.Debug("deleting images local cache %v", lsCis.Destination)
 		lsUpdatedImages = append(lsUpdatedImages, lsCis)
-
 	}
+
+	// ensure output is suppressed
+	o.Opts.Stdout = io.Discard
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
 		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
 		}
 	}
-	if o.Opts.Global.ForceCacheDelete {
+	// if mirrortoMirror mode no conetents were stored to the cache
+	// so just skip
+	if o.Opts.Global.ForceCacheDelete && o.Opts.Mode != mirror.MirrorToMirror {
 		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts)
 		if err != nil {
 			return err
@@ -201,9 +211,16 @@ func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 func (o DeleteImages) ConvertReleaseImages(ri []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	// convert and format the collection
 	var allImages []v2alpha1.CopyImageSchema
+	var err error
+	var copyIS v2alpha1.CopyImageSchema
+
 	for _, img := range ri {
 		// replace the destination registry with our local registry
-		copyIS, err := buildFormatedCopyImageSchema(img.Image, dockerProtocol+o.LocalStorageFQDN, o.Opts.Global.DeleteDestination)
+		if o.Opts.Mode == mirror.MirrorToMirror {
+			copyIS, err = buildFormatedCopyImageSchema(img.Image, o.Opts.Global.DeleteDestination, o.Opts.Global.DeleteDestination)
+		} else {
+			copyIS, err = buildFormatedCopyImageSchema(img.Image, dockerProtocol+o.LocalStorageFQDN, o.Opts.Global.DeleteDestination)
+		}
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, err
 		}

@@ -14,7 +14,8 @@ type PluggableLoggerInterface interface {
 	Debug(msg string, val ...interface{})
 	Trace(msg string, val ...interface{})
 	Warn(msg string, val ...interface{})
-	Level(levele string)
+	Level(level string)
+	GetLevel() string
 }
 
 // PluggableLogger
@@ -55,4 +56,8 @@ func (c *PluggableLogger) Warn(msg string, val ...interface{}) {
 // Level - ovveride log level
 func (c *PluggableLogger) Level(level string) {
 	c.Log.Level = level
+}
+
+func (c *PluggableLogger) GetLevel() string {
+	return c.Log.Level
 }
