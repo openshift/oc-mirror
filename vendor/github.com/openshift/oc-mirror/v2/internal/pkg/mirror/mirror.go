@@ -22,7 +22,7 @@ type Mode string
 // MirrorInterface  used to mirror images with container/images (skopeo)
 type MirrorInterface interface {
 	Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions) (retErr error)
-	Check(ctx context.Context, image string, opts *CopyOptions) (bool, error)
+	Check(ctx context.Context, image string, opts *CopyOptions, asCopySrc bool) (bool, error)
 }
 
 type MirrorCopyInterface interface {
@@ -202,7 +202,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 }
 
 // check exists - checks if image exists
-func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions) (bool, error) {
+func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asCopySrc bool) (bool, error) {
 
 	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
 		return false, err
@@ -212,10 +212,17 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions) (bo
 	if err != nil {
 		return false, fmt.Errorf("invalid source name %s: %v", image, err)
 	}
-
-	sysCtx, err := opts.SrcImage.NewSystemContext()
-	if err != nil {
-		return false, err
+	var sysCtx *types.SystemContext
+	if asCopySrc {
+		sysCtx, err = opts.SrcImage.NewSystemContext()
+		if err != nil {
+			return false, err
+		}
+	} else {
+		sysCtx, err = opts.DestImage.NewSystemContext()
+		if err != nil {
+			return false, err
+		}
 	}
 
 	ctx, cancel := opts.Global.CommandTimeoutContext()

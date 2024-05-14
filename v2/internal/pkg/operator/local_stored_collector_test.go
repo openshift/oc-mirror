@@ -587,7 +587,7 @@ func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode,
 	return nil
 }
 
-func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
 	return true, nil
 }
 

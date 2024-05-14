@@ -68,7 +68,7 @@ func (o Mirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opt
 	return nil
 }
 
-func (o Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions) (bool, error) {
+func (o Mirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
 	return true, nil
 }
 

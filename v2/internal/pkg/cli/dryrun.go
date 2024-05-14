@@ -35,7 +35,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	for _, img := range allImages {
 		buff.WriteString(img.Source + "=" + img.Destination + "\n")
 		if o.Opts.IsMirrorToDisk() {
-			exists, err := o.Mirror.Check(ctx, img.Destination, o.Opts)
+			exists, err := o.Mirror.Check(ctx, img.Destination, o.Opts, false)
 			if err != nil {
 				o.Log.Debug("unable to check existence of %s in local cache: %v", img.Destination, err)
 			}
