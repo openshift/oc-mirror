@@ -300,7 +300,9 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-
+			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+				continue
+			}
 			imgSpec, err := image.ParseRef(img.Image)
 			if err != nil {
 				o.Log.Error("%s", err.Error())
@@ -350,6 +352,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
+			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+				continue
+			}
 			imgSpec, err := image.ParseRef(img.Image)
 			if err != nil {
 				return nil, err
