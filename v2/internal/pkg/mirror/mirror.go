@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -170,7 +171,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		SignBySigstorePrivateKeyFile:     opts.SignBySigstorePrivateKey,
 		SignSigstorePrivateKeyPassphrase: []byte(passphrase),
 		SignIdentity:                     signIdentity,
-		ReportWriter:                     opts.Stdout,
+		ReportWriter:                     io.Discard,
 		SourceCtx:                        sourceCtx,
 		DestinationCtx:                   destinationCtx,
 		ForceManifestMIMEType:            manifestType,
