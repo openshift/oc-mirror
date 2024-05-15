@@ -89,10 +89,10 @@ func TestAdditionalImageCollector(t *testing.T) {
 	opts.Mode = mirror.MirrorToDisk
 	ex = New(log, cfg, opts, mockmirror, manifest, localstorageFQDN)
 
-	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should fail", func(t *testing.T) {
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
 		_, err := ex.AdditionalImagesCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
+		if err != nil {
+			t.Fatalf("should not fail")
 		}
 	})
 

@@ -303,8 +303,9 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			imgSpec, err := image.ParseRef(img.Image)
 			if err != nil {
-				o.Log.Error("%s", err.Error())
-				return nil, err
+				// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+				o.Log.Warn("mirroring skipped : %v", err)
+				continue
 			}
 
 			// prepare the src and dest references
@@ -352,7 +353,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			var dest string
 			imgSpec, err := image.ParseRef(img.Image)
 			if err != nil {
-				return nil, err
+				// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+				o.Log.Warn("%v : SKIPPING", err)
+				continue
 			}
 
 			src = imgSpec.ReferenceWithTransport

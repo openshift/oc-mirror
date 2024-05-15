@@ -43,13 +43,14 @@ type ImageSpec struct {
 
 const (
 	dockerProtocol  = "docker://"
-	errMessageImage = "unable to parse image %s correctly"
+	errMessageImage = "%s unable to parse image correctly"
 )
 
 // It expects the image reference not to have the transport prefix.
 // Otherwise, it will return an error.
 func ParseRef(imgRef string) (ImageSpec, error) {
 	var imgSpec ImageSpec
+
 	if strings.Contains(imgRef, "://") {
 		imgSpec.ReferenceWithTransport = imgRef
 		imgSplit := strings.Split(imgRef, "://")
@@ -69,7 +70,7 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 		if len(imgSplit) > 1 {
 			validDigest, err := digest.Parse(imgSplit[1])
 			if err != nil {
-				return ImageSpec{}, fmt.Errorf("unable to parse image %s correctly, invalid digest: %v", imgRef, err)
+				return ImageSpec{}, fmt.Errorf("%s unable to parse image correctly : invalid digest", imgRef)
 			}
 			imgSpec.Digest = validDigest.Encoded()
 			imgSpec.Algorithm = validDigest.Algorithm().String()
@@ -82,10 +83,10 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	}
 
 	if imgSpec.Name == "" {
-		return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
+		return ImageSpec{}, fmt.Errorf("unknown image : reference name is empty")
 	}
 	if imgSpec.Transport == dockerProtocol && imgSpec.Tag == "" && imgSpec.Digest == "" {
-		return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
+		return ImageSpec{}, fmt.Errorf(errMessageImage+" : tag and digest are empty", imgRef)
 	}
 
 	if imgSpec.Transport == dockerProtocol {
