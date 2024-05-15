@@ -201,7 +201,7 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName:        "invalid docker reference fails",
 			imgRef:          "whatever",
 			expectedImgSpec: ImageSpec{},
-			expectedError:   "unable to parse image whatever correctly",
+			expectedError:   "whatever unable to parse image correctly : tag and digest are empty",
 		},
 	}
 
@@ -279,7 +279,7 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 			imgRef:         "whatever",
 			maxNestedPaths: 2,
 			expectedOutRef: "",
-			expectedError:  "unable to parse image whatever correctly",
+			expectedError:  "whatever unable to parse image correctly : tag and digest are empty",
 		},
 	}
 	for _, aTestCase := range testCases {
