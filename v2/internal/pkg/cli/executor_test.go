@@ -636,12 +636,14 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 
 // TestExecutorSetupWorkingDir
 func TestExecutorSetupWorkingDir(t *testing.T) {
+	workingDir := t.TempDir()
+	defer os.RemoveAll(workingDir)
 	t.Run("Testing Executor : setup working dir should pass", func(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
 			SecurePolicy: false,
-			WorkingDir:   "/root",
+			WorkingDir:   workingDir,
 		}
 
 		opts := &mirror.CopyOptions{
@@ -899,7 +901,7 @@ func (o MockMakeDir) makeDirAll(dir string, mode os.FileMode) error {
 	return nil
 }
 
-func (o Mirror) Check(ctx context.Context, dest string, opts *mirror.CopyOptions) (bool, error) {
+func (o Mirror) Check(ctx context.Context, dest string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
 	if !o.Fail {
 		return true, nil
 	} else {

@@ -511,7 +511,12 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 func namespaceScope(imgSpec image.ImageSpec) string {
 	pathComponents := strings.Split(imgSpec.PathComponent, "/")
 	ns := strings.Join(pathComponents[:len(pathComponents)-1], "/")
-	return imgSpec.Domain + "/" + ns
+	if ns != "" {
+		return imgSpec.Domain + "/" + ns
+	} else {
+		return imgSpec.Domain
+	}
+
 }
 
 func repositoryScope(imgSpec image.ImageSpec) string {

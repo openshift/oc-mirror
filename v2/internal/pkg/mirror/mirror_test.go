@@ -150,14 +150,14 @@ func TestMirrorCheck(t *testing.T) {
 	}
 
 	t.Run("Testing Mirror : check should pass", func(t *testing.T) {
-		_, err := m.Check(context.Background(), dest, &opts)
+		_, err := m.Check(context.Background(), dest, &opts, false)
 		if err != nil {
 			t.Fatal("should pass")
 		}
 	})
 
 	t.Run("Testing Mirror : check should pass", func(t *testing.T) {
-		_, err := m.Check(context.Background(), "broken", &opts)
+		_, err := m.Check(context.Background(), "broken", &opts, false)
 		assert.Equal(t, "invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 }

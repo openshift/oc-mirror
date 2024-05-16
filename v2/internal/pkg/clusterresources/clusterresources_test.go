@@ -70,6 +70,12 @@ var (
 			Type:        v2alpha1.TypeOperatorCatalog,
 		},
 		{
+			Source:      "docker://localhost:55000/ubi8-minimal:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Destination: "docker://myregistry/mynamespace/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Origin:      "docker://registry.redhat.io/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Type:        v2alpha1.TypeOperatorRelatedImage,
+		},
+		{
 			Source:      "docker://localhost:5000/ubi8/ubi:latest",
 			Destination: "docker://myregistry/mynamespace/ubi8/ubi:latest",
 			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
@@ -252,6 +258,10 @@ func TestGenerateIDMS(t *testing.T) {
 							{
 								Source:  "quay.io/openshift-community-operators",
 								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift-community-operators"},
+							},
+							{
+								Source:  "registry.redhat.io",
+								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace"},
 							},
 						},
 					},
@@ -828,7 +838,7 @@ func TestGenerateImageMirrors(t *testing.T) {
 			expectedCategorizedMirrors: []categorizedMirrors{
 				{
 					category: operatorCategory,
-					mirrors:  map[string][]confv1.ImageMirror{"quay.io/openshift-community-operators": {"myregistry/mynamespace/openshift-community-operators"}},
+					mirrors:  map[string][]confv1.ImageMirror{"quay.io/openshift-community-operators": {"myregistry/mynamespace/openshift-community-operators"}, "registry.redhat.io": {"myregistry/mynamespace"}},
 				},
 				{
 					category: releaseCategory,
@@ -847,7 +857,9 @@ func TestGenerateImageMirrors(t *testing.T) {
 					category: operatorCategory,
 					mirrors: map[string][]confv1.ImageMirror{
 						"quay.io/openshift-community-operators/cockroachdb": {
-							"myregistry/mynamespace/openshift-community-operators/cockroachdb"}},
+							"myregistry/mynamespace/openshift-community-operators/cockroachdb"},
+						"registry.redhat.io/ubi8-minimal": {
+							"myregistry/mynamespace/ubi8-minimal"}},
 				},
 				{
 					category: releaseCategory,

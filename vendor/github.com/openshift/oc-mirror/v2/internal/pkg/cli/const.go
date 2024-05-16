@@ -22,5 +22,6 @@ const (
 	mappingFile             string = "mapping.txt"
 	missingImgsFile         string = "missing.txt"
 	infoDir                 string = "info"
+	clusterResourcesDir     string = "cluster-resources"
 	modeFile                string = "mode.txt"
 )
