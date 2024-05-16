@@ -43,9 +43,6 @@ type GlobalOptions struct {
 	From               string        // local storage for diskToMirror workflow
 	Port               uint16        // HTTP port used by oc-mirror's local storage instance
 	ConfigPath         string        // Path to use for imagesetconfig
-	ReleaseFrom        string        // Used for release mirroring (diskToMirror)
-	OperatorsFrom      string        // Used for operators mirroring (diskToMirror)
-	AdditionalFrom     string        // Used for additionalImages mirroring (diskToMirror)
 	Quiet              bool          // Suppress output information when copying images
 	Force              bool          // Force the copy/mirror even if there is nothing to update
 	V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
@@ -270,7 +267,8 @@ func ImageSrcFlags(global *GlobalOptions, shared *SharedImageOptions, deprecated
 func RetryFlags() (pflag.FlagSet, *retry.Options) {
 	opts := retry.Options{}
 	fs := pflag.FlagSet{}
-	fs.IntVar(&opts.MaxRetry, "retry-times", 0, "the number of times to possibly retry")
+	fs.IntVar(&opts.MaxRetry, "retry-times", 2, "the number of times to possibly retry")
+	fs.DurationVar(&opts.Delay, "retry-delay", time.Second, "delay between 2 retries. Default 1s")
 	return fs, &opts
 }
 
