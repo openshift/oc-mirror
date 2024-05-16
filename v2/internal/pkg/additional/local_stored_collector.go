@@ -61,8 +61,14 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			o.Log.Debug(collectorPrefix+"source %s", src)
 			o.Log.Debug(collectorPrefix+"destination %s", dest)
-			allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v2alpha1.TypeGeneric})
 
+			// OCPBUGS-33196 - check source image for tag and digest
+			// skip mirroring
+			if imgSpec.IsImageByTagAndDigest() {
+				o.Log.Warn(collectorPrefix + "%s has both tag and digest : SKIPPING", imgSpec.Reference)
+			} else {
+				allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v2alpha1.TypeGeneric})
+			}
 		}
 	}
 

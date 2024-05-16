@@ -378,7 +378,14 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+
+			// OCPBUGS-33196 - check source image for tag and digest
+			// skip mirroring
+			if imgSpec.IsImageByTagAndDigest() {
+				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
+			} else {
+				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+			}
 
 		}
 	}

@@ -50,6 +50,7 @@ const (
 // Otherwise, it will return an error.
 func ParseRef(imgRef string) (ImageSpec, error) {
 	var imgSpec ImageSpec
+
 	if strings.Contains(imgRef, "://") {
 		imgSpec.ReferenceWithTransport = imgRef
 		imgSplit := strings.Split(imgRef, "://")
@@ -111,6 +112,14 @@ func (i ImageSpec) IsImageByDigest() bool {
 
 func (i ImageSpec) IsImageByDigestOnly() bool {
 	return i.Tag == "" && i.Digest != ""
+}
+
+// OCPBUGS-33196
+// check to see if we have both tag and digest
+// this is really bad practice on the part of the image creator
+// we need to handle this edge case
+func (i ImageSpec) IsImageByTagAndDigest() bool {
+	return len(strings.Split(i.Reference, ":")) > 2 && strings.Contains(i.Reference, "@")
 }
 
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
