@@ -662,6 +662,7 @@ func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.Opera
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "", Image: ""}, // OCPBUGS-31622
 	}
 	return relatedImages, nil
 }
