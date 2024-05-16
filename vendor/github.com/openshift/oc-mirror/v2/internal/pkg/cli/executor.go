@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -898,6 +899,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
+	// exclude blocked images
+	rImgs = excludeImages(rImgs, o.Config.Mirror.BlockedImages)
+
 	collectorSchema.TotalReleaseImages = len(rImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
 	o.Opts.ImageType = "release" //TODO ALEX ask to Sherine about it
@@ -910,6 +914,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
+	// exclude blocked images
+	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
 	collectorSchema.TotalOperatorImages = len(oImgs)
 	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 	o.Opts.ImageType = "operator"
@@ -922,6 +928,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
+	// exclude blocked images
+	aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
 	collectorSchema.TotalAdditionalImages = len(aImgs)
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 	allRelatedImages = append(allRelatedImages, aImgs...)
@@ -955,4 +963,25 @@ func withMaxNestedPaths(in []v2alpha1.CopyImageSchema, maxNestedPaths int) ([]v2
 		out = append(out, img)
 	}
 	return out, nil
+}
+
+func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image) []v2alpha1.CopyImageSchema {
+	if excluded == nil {
+		return images
+	}
+	images = slices.DeleteFunc(images, func(image v2alpha1.CopyImageSchema) bool {
+		if image.Origin == "" {
+			return false
+		}
+		isInSlice := slices.ContainsFunc(excluded, func(excludedImage v2alpha1.Image) bool {
+			imgOrigin := image.Origin
+			if strings.Contains(imgOrigin, "://") {
+				splittedImageOrigin := strings.Split(imgOrigin, "://")
+				imgOrigin = splittedImageOrigin[1]
+			}
+			return excludedImage.Name == imgOrigin
+		})
+		return isInSlice
+	})
+	return images
 }

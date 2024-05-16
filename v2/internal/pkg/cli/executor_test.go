@@ -780,6 +780,68 @@ func TestExecutorCollectAll(t *testing.T) {
 	})
 }
 
+func TestExcludeImages(t *testing.T) {
+	allCollectedImages := []v2alpha1.CopyImageSchema{
+		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testa"},
+		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testb"},
+		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testc"},
+		{Source: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testd"},
+		{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:teste"},
+		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testf"},
+	}
+	type testCase struct {
+		caseName        string
+		collectedImages []v2alpha1.CopyImageSchema
+		blockedImages   []v2alpha1.Image
+		expectedImages  []v2alpha1.CopyImageSchema
+	}
+
+	testCases := []testCase{
+		{
+			caseName:        "empty blocked images should pass",
+			collectedImages: allCollectedImages,
+			blockedImages:   []v2alpha1.Image{},
+			expectedImages:  allCollectedImages,
+		},
+		{
+			caseName:        "non matching blocked images should pass",
+			collectedImages: allCollectedImages,
+			blockedImages: []v2alpha1.Image{
+				{
+					Name: "registry/name/namespace/sometestimage-z@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				},
+			},
+			expectedImages: allCollectedImages,
+		},
+		{
+			caseName:        "matching blocked images should pass",
+			collectedImages: allCollectedImages,
+			blockedImages: []v2alpha1.Image{
+				{
+					Name: "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				},
+				{
+					Name: "registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				},
+				{
+					Name: "registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				},
+			},
+			expectedImages: []v2alpha1.CopyImageSchema{
+				{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testb"},
+				{Source: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testd"},
+				{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testf"},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.caseName, func(t *testing.T) {
+			actualCollected := excludeImages(tc.collectedImages, tc.blockedImages)
+			assert.ElementsMatch(t, tc.expectedImages, actualCollected)
+		})
+	}
+}
+
 // setup mocks
 
 type Mirror struct {
