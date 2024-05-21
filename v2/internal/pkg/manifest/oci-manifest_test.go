@@ -1,7 +1,9 @@
 package manifest
 
 import (
+	"bytes"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +63,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 		cfg             v2alpha1.Operator
 		expectedBundles []string
 		expectedError   error
+		expectedWarning string
 	}
 
 	testCases := []testCase{
@@ -544,7 +547,53 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			expectedBundles: []string{},
 			expectedError:   errors.New("cannot use filtering by bundle selection and filtering by channels or min/max versions at the same time"),
 		},
+		{
+			caseName: "package not found - logs warning - should pass",
+			cfg: v2alpha1.Operator{
+				Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.16",
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
+						{
+							Name: "chocolate-factory-operator",
+							IncludeBundle: v2alpha1.IncludeBundle{
+								MinVersion: "0.8.0",
+								MaxVersion: "0.8.1",
+							},
+						},
+					},
+				},
+			},
+			expectedBundles: []string{},
+			expectedError:   nil,
+			expectedWarning: "package chocolate-factory-operator not found in catalog registry.redhat.io/redhat/redhat-operator-index:v4.16",
+		},
+		{
+			caseName: "filtering comes back empty - logs warning - should pass",
+			cfg: v2alpha1.Operator{
+				Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.16",
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{
+						{
+							Name: "3scale-operator",
+							IncludeBundle: v2alpha1.IncludeBundle{
+								MinVersion: "77.77.77",
+								MaxVersion: "77.77.77",
+							},
+						},
+					},
+				},
+			},
+			expectedBundles: []string{},
+			expectedError:   nil,
+			expectedWarning: "no bundles matching filtering for 3scale-operator in catalog registry.redhat.io/redhat/redhat-operator-index:v4.16",
+		},
 	}
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
 
 	log := clog.New("debug")
 	manifest := &Manifest{Log: log}
@@ -575,9 +624,16 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			assert.True(t, allPresent, "Not all expected bundles are present in the result")
 			assert.Equal(t, len(testCase.expectedBundles), len(res), "the number of expected bundles is different from the one returned")
 
-			if testCase.expectedError != nil && err.Error() != testCase.expectedError.Error() {
+			if testCase.expectedError != nil && (err == nil || err.Error() != testCase.expectedError.Error()) {
 				assert.EqualError(t, err, testCase.expectedError.Error())
 			}
+
+			if testCase.expectedWarning != "" {
+				assert.Contains(t, buf.String(), testCase.expectedWarning)
+
+			}
+			t.Log(buf.String())
+			buf.Reset()
 
 			log.Debug("completed test  %v ", res)
 		})

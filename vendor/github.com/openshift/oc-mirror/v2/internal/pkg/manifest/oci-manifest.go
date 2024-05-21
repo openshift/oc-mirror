@@ -258,10 +258,17 @@ func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, c
 	} else {
 		for _, iscOperator := range ctlgInIsc.Packages {
 			operatorConfig := parseOperatorCatalogByOperator(iscOperator.Name, operatorCatalog)
-
+			if operatorConfig.BundlesByPkgAndName[iscOperator.Name] == nil {
+				o.Log.Warn("[OperatorImageCollector] package %s not found in catalog %s", iscOperator.Name, ctlgInIsc.Catalog)
+				continue
+			}
 			ri, err := getRelatedImages(o.Log, iscOperator.Name, operatorConfig, iscOperator, ctlgInIsc.Full)
 			if err != nil {
 				return relatedImages, err
+			}
+			if ri == nil || len(ri) == 0 { // no matching bundles
+				o.Log.Warn("[OperatorImageCollector] no bundles matching filtering for %s in catalog %s", iscOperator.Name, ctlgInIsc.Catalog)
+				continue
 			}
 
 			//TODO GOLANG 1.21 required - replace the for loop with maps.Copy
