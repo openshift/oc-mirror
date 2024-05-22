@@ -77,7 +77,7 @@ function install_deps() {
     then
       crane export --platform linux/arm64/v8 registry:2 registry2.tar
     else
-      crane export ${ARCH}/registry:2 registry2.tar
+      crane export --platform linux/${ARCH} ${ARCH}/registry:2 registry2.tar
     fi
     tar xvf registry2.tar bin/registry
     mv bin/registry $GOBIN
