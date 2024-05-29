@@ -4,11 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/docker/distribution/registry/api/errcode"
+	"github.com/hashicorp/go-multierror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -112,6 +117,9 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		}
 
 		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
+		if err != nil && !isFailSafe(err) {
+			return err
+		}
 
 		if err != nil {
 			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
@@ -179,4 +187,78 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	execTime := endTime.Sub(startTime)
 	o.Log.Debug("batch time     : %v", execTime)
 	return nil
+}
+
+func isFailSafe(err error) bool {
+	switch err {
+	case nil:
+		return false
+	case context.Canceled, context.DeadlineExceeded:
+		return false
+	default: // continue
+	}
+
+	type unwrapper interface {
+		Unwrap() error
+	}
+
+	switch e := err.(type) {
+
+	case errcode.Error:
+		switch e.Code {
+		case errcode.ErrorCodeUnauthorized, errcode.ErrorCodeDenied:
+			return false
+		}
+		return true
+	case *net.OpError:
+		return isFailSafe(e.Err)
+	case *url.Error: // This includes errors returned by the net/http client.
+		if e.Err == io.EOF { // Happens when a server accepts a HTTP connection and sends EOF
+			return true
+		}
+		return isFailSafe(e.Err)
+	case syscall.Errno:
+		return isErrnoRetryable(e)
+	case errcode.Errors:
+		// if this error is a group of errors, process them all in turn
+		for i := range e {
+			if !isFailSafe(e[i]) {
+				return false
+			}
+		}
+		return true
+	case *multierror.Error:
+		// if this error is a group of errors, process them all in turn
+		for i := range e.Errors {
+			if !isFailSafe(e.Errors[i]) {
+				return false
+			}
+		}
+		return true
+	case net.Error:
+		if e.Timeout() {
+			return true
+		}
+		if unwrappable, ok := e.(unwrapper); ok {
+			err = unwrappable.Unwrap()
+			return isFailSafe(err)
+		}
+	case unwrapper: // Test this last, because various error types might implement .Unwrap()
+		err = e.Unwrap()
+		return isFailSafe(err)
+	}
+
+	return false
+}
+
+func isErrnoRetryable(e error) bool {
+	switch e {
+	case syscall.ECONNREFUSED, syscall.EINTR, syscall.EAGAIN, syscall.EBUSY, syscall.ENETDOWN, syscall.ENETUNREACH, syscall.ENETRESET, syscall.ECONNABORTED, syscall.ECONNRESET, syscall.ETIMEDOUT, syscall.EHOSTDOWN, syscall.EHOSTUNREACH:
+		return true
+	}
+	return isErrnoERESTART(e)
+}
+
+func isErrnoERESTART(e error) bool {
+	return e == syscall.ERESTART
 }
