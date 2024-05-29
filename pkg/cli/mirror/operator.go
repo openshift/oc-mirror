@@ -194,10 +194,12 @@ func (o *OperatorOptions) run(
 		} else if targetCtlg.Ref.Tag != "" {
 			ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.Tag)
 		}
-		err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
-		if err != nil {
-			reg.Destroy()
-			return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
+		if o.RebuildCatalogs {
+			err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
+			if err != nil {
+				reg.Destroy()
+				return nil, fmt.Errorf("unable to extract OPM binary from catalog %s: %v", targetName, err)
+			}
 		}
 
 		mappings, err := o.plan(ctx, dc, ic, ctlgRef, targetCtlg)
