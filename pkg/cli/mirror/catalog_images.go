@@ -245,9 +245,25 @@ func (o *MirrorOptions) rebuildOrCopyCatalogs(ctx context.Context, dstDir string
 					}
 
 				} else {
-					_, err = o.copyImage(ctx, "docker://"+originRef.Ref.String(), "docker://"+ctlgRef.Ref.String(), o.remoteRegFuncs)
+					layoutPath, err := layout.FromPath(fpath)
 					if err != nil {
-						return fmt.Errorf("error copying image %s to %s: %v", "docker://"+originRef.Ref.String(), "docker://"+ctlgRef.Ref.String(), err)
+						return fmt.Errorf("error loading local image %s from %s: %v", "docker://"+ctlgRef.Ref.String(), fpath, err)
+					}
+
+					var destInsecure bool
+					if o.DestPlainHTTP || o.DestSkipTLS {
+						destInsecure = true
+					}
+
+					// Check push permissions before trying to resolve for Quay compatibility
+					nameOpts := getNameOpts(destInsecure)
+					remoteOpts := getRemoteOpts(ctx, destInsecure)
+
+					imgBuilder := builder.NewImageBuilder(nameOpts, remoteOpts)
+					update := func(cfg *v1.ConfigFile) {}
+					err = imgBuilder.Run(ctx, ctlgRef.Ref.String(), layoutPath, update, []v1.Layer{}...)
+					if err != nil {
+						return fmt.Errorf("error copying image %s from %s: %v", "docker://"+ctlgRef.Ref.String(), fpath, err)
 					}
 				}
 				// Add to mapping for ICSP generation
