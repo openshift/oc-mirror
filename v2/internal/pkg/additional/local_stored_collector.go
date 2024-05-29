@@ -46,9 +46,11 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return nil, err
+				// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+				o.Log.Warn("%v : SKIPPING", err)
+				continue
 			}
+
 			var src string
 			var dest string
 			src = imgSpec.ReferenceWithTransport
