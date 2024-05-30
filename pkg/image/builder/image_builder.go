@@ -236,19 +236,21 @@ func (b *ImageBuilder) processImageIndex(ctx context.Context, idx v1.ImageIndex,
 
 		// Add new layers to image.
 		// Ensure they have the right media type.
-		var mt types.MediaType
-		if *v2format {
-			mt = types.DockerLayer
-		} else {
-			mt = types.OCILayer
-		}
-		additions := make([]mutate.Addendum, 0, len(layers))
-		for _, layer := range layers {
-			additions = append(additions, mutate.Addendum{Layer: layer, MediaType: mt})
-		}
-		img, err = mutate.Append(img, additions...)
-		if err != nil {
-			return nil, err
+		if len(layers) > 0 {
+			var mt types.MediaType
+			if *v2format {
+				mt = types.DockerLayer
+			} else {
+				mt = types.OCILayer
+			}
+			additions := make([]mutate.Addendum, 0, len(layers))
+			for _, layer := range layers {
+				additions = append(additions, mutate.Addendum{Layer: layer, MediaType: mt})
+			}
+			img, err = mutate.Append(img, additions...)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if update != nil {
