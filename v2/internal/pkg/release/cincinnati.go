@@ -298,18 +298,22 @@ func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInter
 // gatherUpdates
 func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v2alpha1.CopyImageSchema {
 	var allImages []v2alpha1.CopyImageSchema
+	uniqueImages := make(map[v2alpha1.CopyImageSchema]bool)
 	for _, update := range updates {
 		log.Debug("Found update %s", update.Version)
-		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: update.Image, Destination: ""})
+		uniqueImages[v2alpha1.CopyImageSchema{Source: update.Image, Destination: ""}] = true
 	}
 
 	if current.Image != "" {
-		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: current.Image, Destination: ""})
+		uniqueImages[v2alpha1.CopyImageSchema{Source: current.Image, Destination: ""}] = true
 	}
 
 	if newest.Image != "" {
-		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: newest.Image, Destination: ""})
+		uniqueImages[v2alpha1.CopyImageSchema{Source: newest.Image, Destination: ""}] = true
 	}
 
+	for img := range uniqueImages {
+		allImages = append(allImages, img)
+	}
 	return allImages
 }
