@@ -5,9 +5,9 @@ import (
 	"math"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/reference"
 	"github.com/distribution/distribution/v3/registry/storage/cache"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/distribution/reference"
+	"github.com/hashicorp/golang-lru/arc/v2"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -26,7 +26,7 @@ type descriptorCacheKey struct {
 }
 
 type inMemoryBlobDescriptorCacheProvider struct {
-	lru *lru.ARCCache
+	lru *arc.ARCCache[descriptorCacheKey, distribution.Descriptor]
 }
 
 // NewInMemoryBlobDescriptorCacheProvider returns a new mapped-based cache for
@@ -35,7 +35,7 @@ func NewInMemoryBlobDescriptorCacheProvider(size int) cache.BlobDescriptorCacheP
 	if size <= 0 {
 		size = math.MaxInt
 	}
-	lruCache, err := lru.NewARC(size)
+	lruCache, err := arc.NewARC[descriptorCacheKey, distribution.Descriptor](size)
 	if err != nil {
 		// NewARC can only fail if size is <= 0, so this unreachable
 		panic(err)
@@ -47,6 +47,12 @@ func NewInMemoryBlobDescriptorCacheProvider(size int) cache.BlobDescriptorCacheP
 
 func (imbdcp *inMemoryBlobDescriptorCacheProvider) RepositoryScoped(repo string) (distribution.BlobDescriptorService, error) {
 	if _, err := reference.ParseNormalizedNamed(repo); err != nil {
+		if err == reference.ErrNameTooLong {
+			return nil, distribution.ErrRepositoryNameInvalid{
+				Name:   repo,
+				Reason: reference.ErrNameTooLong,
+			}
+		}
 		return nil, err
 	}
 
@@ -66,11 +72,7 @@ func (imbdcp *inMemoryBlobDescriptorCacheProvider) Stat(ctx context.Context, dgs
 	}
 	descriptor, ok := imbdcp.lru.Get(key)
 	if ok {
-		// Type assertion not really necessary, but included in case
-		// it's necessary for the fuzzer
-		if desc, ok := descriptor.(distribution.Descriptor); ok {
-			return desc, nil
-		}
+		return descriptor, nil
 	}
 	return distribution.Descriptor{}, distribution.ErrBlobUnknown
 }
@@ -130,11 +132,7 @@ func (rsimbdcp *repositoryScopedInMemoryBlobDescriptorCache) Stat(ctx context.Co
 	}
 	descriptor, ok := rsimbdcp.parent.lru.Get(key)
 	if ok {
-		// Type assertion not really necessary, but included in case
-		// it's necessary for the fuzzer
-		if desc, ok := descriptor.(distribution.Descriptor); ok {
-			return desc, nil
-		}
+		return descriptor, nil
 	}
 	return distribution.Descriptor{}, distribution.ErrBlobUnknown
 }

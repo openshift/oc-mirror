@@ -349,12 +349,14 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 
 // startLocalRegistryGarbageCollect
 func (o *ExecutorSchema) startLocalRegistryGarbageCollect() error {
+	ctx := context.Background()
+
 	// setup storage driver for garbage-collect
 	config, err := o.setupLocalRegistryConfig()
 	if err != nil {
 		return err
 	}
-	storageDriver, err := factory.Create(config.Storage.Type(), config.Storage.Parameters())
+	storageDriver, err := factory.Create(ctx, config.Storage.Type(), config.Storage.Parameters())
 	if err != nil {
 		return err
 	}
@@ -363,8 +365,6 @@ func (o *ExecutorSchema) startLocalRegistryGarbageCollect() error {
 		DryRun:         false,
 		RemoveUntagged: false,
 	}
-
-	ctx := context.Background()
 
 	// used for the garbage-collect
 	storageReg, err := storage.NewRegistry(ctx, storageDriver)

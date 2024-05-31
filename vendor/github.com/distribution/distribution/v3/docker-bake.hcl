@@ -94,3 +94,33 @@ target "image-all" {
     "linux/s390x"
   ]
 }
+
+variable "DOCS_BASEURL" {
+  default = null
+}
+
+target "_common_docs" {
+  dockerfile = "./dockerfiles/docs.Dockerfile"
+  args = {
+    DOCS_BASEURL = DOCS_BASEURL
+  }
+}
+
+target "docs-export" {
+  inherits = ["_common_docs"]
+  target = "out"
+  output = ["type=local,dest=build/docs"]
+}
+
+target "docs-image" {
+  inherits = ["_common_docs"]
+  target = "server"
+  output = ["type=docker"]
+  tags = ["registry-docs:local"]
+}
+
+target "docs-test" {
+  inherits = ["_common_docs"]
+  target = "test"
+  output = ["type=cacheonly"]
+}

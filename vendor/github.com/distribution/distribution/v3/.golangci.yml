@@ -9,8 +9,10 @@ linters:
     - vet
     - unused
     - misspell
-  disable:
+    - bodyclose
+    - prealloc
     - errcheck
+    - tparallel
 
 linters-settings:
   revive:

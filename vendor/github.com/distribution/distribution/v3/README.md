@@ -8,11 +8,12 @@
 [![codecov](https://codecov.io/gh/distribution/distribution/branch/main/graph/badge.svg)](https://codecov.io/gh/distribution/distribution)
 [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B162%2Fgithub.com%2Fdistribution%2Fdistribution.svg?type=shield)](https://app.fossa.com/projects/custom%2B162%2Fgithub.com%2Fdistribution%2Fdistribution?ref=badge_shield)
 [![OCI Conformance](https://github.com/distribution/distribution/workflows/conformance/badge.svg)](https://github.com/distribution/distribution/actions?query=workflow%3Aconformance)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/distribution/distribution/badge)](https://securityscorecards.dev/viewer/?uri=github.com/distribution/distribution)
 
 The toolset to pack, ship, store, and deliver content.
 
 This repository's main product is the Open Source Registry implementation
-for storing and distributing container images using the
+for storing and distributing container images and other content using the
 [OCI Distribution Specification](https://github.com/opencontainers/distribution-spec).
 The goal of this project is to provide a simple, secure, and scalable base
 for building a large scale registry solution or running a simple private registry.
