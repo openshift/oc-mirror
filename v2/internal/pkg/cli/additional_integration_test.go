@@ -113,7 +113,7 @@ func (suite *TestEnvironmentAddditional) setupTestData(t *testing.T) {
 	assert.NoError(t, err, "should not fail to push image"+suite.sourceRegistryDomain+"/foo:v1.0")
 
 	// create the image set config
-	templatePath := "../../internal/e2e/templates/isc_templates/additional_isc.yaml"
+	templatePath := "../../e2e/templates/isc_templates/additional_isc.yaml"
 	suite.imageSetConfig = suite.tempFolder + "/isc.yaml"
 	err = testutils.FileFromTemplate(suite.imageSetConfig, templatePath, suite.additionalImageRefs)
 	assert.NoError(t, err, "should not fail to generate imageSetConfig")
