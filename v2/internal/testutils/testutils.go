@@ -303,7 +303,7 @@ func GenerateFakeRelease(imageRefs releaseContents, releaseImgRef, tempFolder st
 	if err != nil {
 		return "", err
 	}
-	releaseMetaBytes, err := os.ReadFile("../../internal/e2e/templates/release_templates/release-metadata")
+	releaseMetaBytes, err := os.ReadFile("../../e2e/templates/release_templates/release-metadata")
 	if err != nil {
 		return "", err
 	}
