@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"time"
@@ -40,7 +42,7 @@ func init() {
 // filesystemDriverFactory implements the factory.StorageDriverFactory interface
 type filesystemDriverFactory struct{}
 
-func (factory *filesystemDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *filesystemDriverFactory) Create(ctx context.Context, parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -139,10 +141,12 @@ func (d *driver) PutContent(ctx context.Context, subPath string, contents []byte
 	defer writer.Close()
 	_, err = io.Copy(writer, bytes.NewReader(contents))
 	if err != nil {
-		writer.Cancel(ctx)
+		if cErr := writer.Cancel(ctx); cErr != nil {
+			return errors.Join(err, cErr)
+		}
 		return err
 	}
-	return writer.Commit()
+	return writer.Commit(ctx)
 }
 
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
@@ -282,16 +286,15 @@ func (d *driver) Delete(ctx context.Context, subPath string) error {
 	return err
 }
 
-// URLFor returns a URL which may be used to retrieve the content stored at the given path.
-// May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
-	return "", storagedriver.ErrUnsupportedMethod{}
+// RedirectURL returns a URL which may be used to retrieve the content stored at the given path.
+func (d *driver) RedirectURL(*http.Request, string) (string, error) {
+	return "", nil
 }
 
 // Walk traverses a filesystem defined within driver, starting
 // from the given path, calling f on each file and directory
-func (d *driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn) error {
-	return storagedriver.WalkFallback(ctx, d, path, f)
+func (d *driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn, options ...func(*storagedriver.WalkOptions)) error {
+	return storagedriver.WalkFallback(ctx, d, path, f, options...)
 }
 
 // fullPath returns the absolute path of a key within the Driver's storage.
@@ -397,7 +400,7 @@ func (fw *fileWriter) Cancel(ctx context.Context) error {
 	return os.Remove(fw.file.Name())
 }
 
-func (fw *fileWriter) Commit() error {
+func (fw *fileWriter) Commit(ctx context.Context) error {
 	if fw.closed {
 		return fmt.Errorf("already closed")
 	} else if fw.committed {

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/docker/distribution/manifest"
+	"github.com/distribution/distribution/v3/manifest"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"

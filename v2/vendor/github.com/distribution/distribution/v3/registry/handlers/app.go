@@ -19,12 +19,11 @@ import (
 
 	"github.com/distribution/distribution/v3"
 	"github.com/distribution/distribution/v3/configuration"
-	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/health"
 	"github.com/distribution/distribution/v3/health/checks"
+	"github.com/distribution/distribution/v3/internal/dcontext"
 	prometheus "github.com/distribution/distribution/v3/metrics"
 	"github.com/distribution/distribution/v3/notifications"
-	"github.com/distribution/distribution/v3/reference"
 	"github.com/distribution/distribution/v3/registry/api/errcode"
 	v2 "github.com/distribution/distribution/v3/registry/api/v2"
 	"github.com/distribution/distribution/v3/registry/auth"
@@ -38,11 +37,12 @@ import (
 	"github.com/distribution/distribution/v3/registry/storage/driver/factory"
 	storagemiddleware "github.com/distribution/distribution/v3/registry/storage/driver/middleware"
 	"github.com/distribution/distribution/v3/version"
+	"github.com/distribution/reference"
 	events "github.com/docker/go-events"
 	"github.com/docker/go-metrics"
-	"github.com/docker/libtrust"
-	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
+	"github.com/redis/go-redis/extra/redisotel/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
@@ -77,12 +77,7 @@ type App struct {
 		source notifications.SourceRecord
 	}
 
-	redis *redis.Pool
-
-	// trustKey is a deprecated key used to sign manifests converted to
-	// schema1 for backward compatibility. It should not be used for any
-	// other purposes.
-	trustKey libtrust.PrivateKey
+	redis *redis.Client
 
 	// isCache is true if this registry is configured as a pull through cache
 	isCache bool
@@ -118,10 +113,12 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 	if storageParams == nil {
 		storageParams = make(configuration.Parameters)
 	}
-	storageParams["useragent"] = fmt.Sprintf("docker-distribution/%s %s", version.Version, runtime.Version())
+	if storageParams["useragent"] == "" {
+		storageParams["useragent"] = fmt.Sprintf("distribution/%s %s", version.Version, runtime.Version())
+	}
 
 	var err error
-	app.driver, err = factory.Create(config.Storage.Type(), storageParams)
+	app.driver, err = factory.Create(app, config.Storage.Type(), storageParams)
 	if err != nil {
 		// TODO(stevvooe): Move the creation of a service into a protected
 		// method, where this is created lazily. Its status can be queried via
@@ -153,7 +150,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 
 	startUploadPurger(app, app.driver, dcontext.GetLogger(app), purgeConfig)
 
-	app.driver, err = applyStorageMiddleware(app.driver, config.Middleware["storage"])
+	app.driver, err = applyStorageMiddleware(app, app.driver, config.Middleware["storage"])
 	if err != nil {
 		panic(err)
 	}
@@ -164,25 +161,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 	app.configureLogHook(config)
 
 	options := registrymiddleware.GetRegistryOptions()
-	if config.Compatibility.Schema1.TrustKey != "" {
-		app.trustKey, err = libtrust.LoadKeyFile(config.Compatibility.Schema1.TrustKey)
-		if err != nil {
-			panic(fmt.Sprintf(`could not load schema1 "signingkey" parameter: %v`, err))
-		}
-	} else {
-		// Generate an ephemeral key to be used for signing converted manifests
-		// for clients that don't support schema2.
-		app.trustKey, err = libtrust.GenerateECP256PrivateKey()
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	options = append(options, storage.Schema1SigningKey(app.trustKey))
-
-	if config.Compatibility.Schema1.Enabled {
-		options = append(options, storage.EnableSchema1)
-	}
 
 	if config.HTTP.Host != "" {
 		u, err := url.Parse(config.HTTP.Host)
@@ -372,22 +350,20 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) {
 			interval = defaultCheckInterval
 		}
 
-		storageDriverCheck := func() error {
-			_, err := app.driver.Stat(app, "/") // "/" should always exist
+		storageDriverCheck := health.CheckFunc(func(ctx context.Context) error {
+			_, err := app.driver.Stat(ctx, "/") // "/" should always exist
 			if _, ok := err.(storagedriver.PathNotFoundError); ok {
 				err = nil // pass this through, backend is responding, but this path doesn't exist.
 			}
 			if err != nil {
-				dcontext.GetLogger(app).Errorf("storage driver health check: %v", err)
+				dcontext.GetLogger(ctx).Errorf("storage driver health check: %v", err)
 			}
 			return err
-		}
+		})
 
-		if app.Config.Health.StorageDriver.Threshold != 0 {
-			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
-		} else {
-			healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
-		}
+		updater := health.NewThresholdStatusUpdater(app.Config.Health.StorageDriver.Threshold)
+		healthRegistry.Register("storagedriver_"+app.Config.Storage.Type(), updater)
+		go health.Poll(app, updater, storageDriverCheck, interval)
 	}
 
 	for _, fileChecker := range app.Config.Health.FileCheckers {
@@ -396,7 +372,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) {
 			interval = defaultCheckInterval
 		}
 		dcontext.GetLogger(app).Infof("configuring file health check path=%s, interval=%d", fileChecker.File, interval/time.Second)
-		healthRegistry.Register(fileChecker.File, health.PeriodicChecker(checks.FileChecker(fileChecker.File), interval))
+		u := health.NewStatusUpdater()
+		healthRegistry.Register(fileChecker.File, u)
+		go health.Poll(app, u, checks.FileChecker(fileChecker.File), interval)
 	}
 
 	for _, httpChecker := range app.Config.Health.HTTPCheckers {
@@ -412,13 +390,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) {
 
 		checker := checks.HTTPChecker(httpChecker.URI, statusCode, httpChecker.Timeout, httpChecker.Headers)
 
-		if httpChecker.Threshold != 0 {
-			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d, threshold=%d", httpChecker.URI, interval/time.Second, httpChecker.Threshold)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicThresholdChecker(checker, interval, httpChecker.Threshold))
-		} else {
-			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d", httpChecker.URI, interval/time.Second)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicChecker(checker, interval))
-		}
+		dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d, threshold=%d", httpChecker.URI, interval/time.Second, httpChecker.Threshold)
+		updater := health.NewThresholdStatusUpdater(httpChecker.Threshold)
+		healthRegistry.Register(httpChecker.URI, updater)
+		go health.Poll(app, updater, checker, interval)
 	}
 
 	for _, tcpChecker := range app.Config.Health.TCPCheckers {
@@ -429,13 +404,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) {
 
 		checker := checks.TCPChecker(tcpChecker.Addr, tcpChecker.Timeout)
 
-		if tcpChecker.Threshold != 0 {
-			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d, threshold=%d", tcpChecker.Addr, interval/time.Second, tcpChecker.Threshold)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicThresholdChecker(checker, interval, tcpChecker.Threshold))
-		} else {
-			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d", tcpChecker.Addr, interval/time.Second)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicChecker(checker, interval))
-		}
+		dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d, threshold=%d", tcpChecker.Addr, interval/time.Second, tcpChecker.Threshold)
+		updater := health.NewThresholdStatusUpdater(tcpChecker.Threshold)
+		healthRegistry.Register(tcpChecker.Addr, updater)
+		go health.Poll(app, updater, checker, interval)
 	}
 }
 
@@ -465,6 +437,11 @@ func (app *App) register(routeName string, dispatch dispatchFunc) {
 // configureEvents prepares the event sink for action.
 func (app *App) configureEvents(configuration *configuration.Configuration) {
 	// Configure all of the endpoint sinks.
+	// NOTE(milosgajdos): we are disabling the linter here as
+	// if an endpoint is disabled we continue with the evaluation
+	// of the next one so we do not know the exact size the slice
+	// should have at the time the iteration starts
+	// nolint:prealloc
 	var sinks []events.Sink
 	for _, endpoint := range configuration.Notifications.Endpoints {
 		if endpoint.Disabled {
@@ -509,76 +486,18 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 	}
 }
 
-type redisStartAtKey struct{}
-
-func (app *App) configureRedis(configuration *configuration.Configuration) {
-	if configuration.Redis.Addr == "" {
+func (app *App) configureRedis(cfg *configuration.Configuration) {
+	if cfg.Redis.Addr == "" {
 		dcontext.GetLogger(app).Infof("redis not configured")
 		return
 	}
 
-	pool := &redis.Pool{
-		Dial: func() (redis.Conn, error) {
-			// TODO(stevvooe): Yet another use case for contextual timing.
-			ctx := context.WithValue(app, redisStartAtKey{}, time.Now())
+	app.redis = app.createPool(cfg.Redis)
 
-			done := func(err error) {
-				logger := dcontext.GetLoggerWithField(ctx, "redis.connect.duration",
-					dcontext.Since(ctx, redisStartAtKey{}))
-				if err != nil {
-					logger.Errorf("redis: error connecting: %v", err)
-				} else {
-					logger.Infof("redis: connect %v", configuration.Redis.Addr)
-				}
-			}
-
-			conn, err := redis.Dial("tcp",
-				configuration.Redis.Addr,
-				redis.DialConnectTimeout(configuration.Redis.DialTimeout),
-				redis.DialReadTimeout(configuration.Redis.ReadTimeout),
-				redis.DialWriteTimeout(configuration.Redis.WriteTimeout),
-				redis.DialUseTLS(configuration.Redis.TLS.Enabled))
-			if err != nil {
-				dcontext.GetLogger(app).Errorf("error connecting to redis instance %s: %v",
-					configuration.Redis.Addr, err)
-				done(err)
-				return nil, err
-			}
-
-			// authorize the connection
-			if configuration.Redis.Password != "" {
-				if _, err = conn.Do("AUTH", configuration.Redis.Password); err != nil {
-					defer conn.Close()
-					done(err)
-					return nil, err
-				}
-			}
-
-			// select the database to use
-			if configuration.Redis.DB != 0 {
-				if _, err = conn.Do("SELECT", configuration.Redis.DB); err != nil {
-					defer conn.Close()
-					done(err)
-					return nil, err
-				}
-			}
-
-			done(nil)
-			return conn, nil
-		},
-		MaxIdle:     configuration.Redis.Pool.MaxIdle,
-		MaxActive:   configuration.Redis.Pool.MaxActive,
-		IdleTimeout: configuration.Redis.Pool.IdleTimeout,
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			// TODO(stevvooe): We can probably do something more interesting
-			// here with the health package.
-			_, err := c.Do("PING")
-			return err
-		},
-		Wait: false, // if a connection is not available, proceed without cache.
+	// Enable metrics instrumentation.
+	if err := redisotel.InstrumentMetrics(app.redis); err != nil {
+		dcontext.GetLogger(app).Errorf("failed to instrument metrics on redis: %v", err)
 	}
-
-	app.redis = pool
 
 	// setup expvar
 	registry := expvar.Get("registry")
@@ -587,11 +506,33 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 	}
 
 	registry.(*expvar.Map).Set("redis", expvar.Func(func() interface{} {
+		stats := app.redis.PoolStats()
 		return map[string]interface{}{
-			"Config": configuration.Redis,
-			"Active": app.redis.ActiveCount(),
+			"Config": cfg,
+			"Active": stats.TotalConns - stats.IdleConns,
 		}
 	}))
+}
+
+func (app *App) createPool(cfg configuration.Redis) *redis.Client {
+	return redis.NewClient(&redis.Options{
+		Addr: cfg.Addr,
+		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
+			res := cn.Ping(ctx)
+			return res.Err()
+		},
+		Username:        cfg.Username,
+		Password:        cfg.Password,
+		DB:              cfg.DB,
+		MaxRetries:      3,
+		DialTimeout:     cfg.DialTimeout,
+		ReadTimeout:     cfg.ReadTimeout,
+		WriteTimeout:    cfg.WriteTimeout,
+		PoolFIFO:        false,
+		MaxIdleConns:    cfg.Pool.MaxIdle,
+		PoolSize:        cfg.Pool.MaxActive,
+		ConnMaxIdleTime: cfg.Pool.IdleTimeout,
+	})
 }
 
 // configureLogHook prepares logging hook parameters.
@@ -639,8 +580,6 @@ func (app *App) configureSecret(configuration *configuration.Configuration) {
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close() // ensure that request body is always closed.
-
 	// Prepare the context with our own little decorations.
 	ctx := r.Context()
 	ctx = dcontext.WithRequest(ctx, r)
@@ -692,7 +631,7 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		// Add username to request logging
-		context.Context = dcontext.WithLogger(context.Context, dcontext.GetLogger(context.Context, auth.UserNameKey))
+		context.Context = dcontext.WithLogger(context.Context, dcontext.GetLogger(context.Context, userNameKey))
 
 		// sync up context on the request.
 		r = r.WithContext(context)
@@ -716,9 +655,9 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 
 				switch err := err.(type) {
 				case distribution.ErrRepositoryUnknown:
-					context.Errors = append(context.Errors, v2.ErrorCodeNameUnknown.WithDetail(err))
+					context.Errors = append(context.Errors, errcode.ErrorCodeNameUnknown.WithDetail(err))
 				case distribution.ErrRepositoryNameInvalid:
-					context.Errors = append(context.Errors, v2.ErrorCodeNameInvalid.WithDetail(err))
+					context.Errors = append(context.Errors, errcode.ErrorCodeNameInvalid.WithDetail(err))
 				case errcode.Error:
 					context.Errors = append(context.Errors, err)
 				}
@@ -854,7 +793,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		accessRecords = appendCatalogAccessRecord(accessRecords, r)
 	}
 
-	ctx, err := app.accessController.Authorized(context.Context, accessRecords...)
+	grant, err := app.accessController.Authorized(r.WithContext(context.Context), accessRecords...)
 	if err != nil {
 		switch err := err.(type) {
 		case auth.Challenge:
@@ -875,8 +814,14 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 
 		return err
 	}
+	if grant == nil {
+		return fmt.Errorf("access controller returned neither an access grant nor an error")
+	}
 
-	dcontext.GetLogger(ctx, auth.UserNameKey).Info("authorized request")
+	ctx := withUser(context.Context, grant.User)
+	ctx = withResources(ctx, grant.Resources)
+
+	dcontext.GetLogger(ctx, userNameKey).Info("authorized request")
 	// TODO(stevvooe): This pattern needs to be cleaned up a bit. One context
 	// should be replaced by another, rather than replacing the context on a
 	// mutable object.
@@ -995,9 +940,9 @@ func applyRepoMiddleware(ctx context.Context, repository distribution.Repository
 }
 
 // applyStorageMiddleware wraps a storage driver with the configured middlewares
-func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []configuration.Middleware) (storagedriver.StorageDriver, error) {
+func applyStorageMiddleware(ctx context.Context, driver storagedriver.StorageDriver, middlewares []configuration.Middleware) (storagedriver.StorageDriver, error) {
 	for _, mw := range middlewares {
-		smw, err := storagemiddleware.Get(mw.Name, mw.Options, driver)
+		smw, err := storagemiddleware.Get(ctx, mw.Name, mw.Options, driver)
 		if err != nil {
 			return nil, fmt.Errorf("unable to configure storage middleware (%s): %v", mw.Name, err)
 		}
