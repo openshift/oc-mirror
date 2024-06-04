@@ -320,7 +320,7 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 				log.Warn("bundle %s of operator %s not found in catalog: SKIPPING", iscSelectedBundle.Name, operatorName)
 				continue
 			}
-			relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
+			relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
 		}
 	case len(iscOperator.Channels) > 0:
 		for _, iscChannel := range iscOperator.Channels {
@@ -336,6 +336,7 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 	default:
 		chEntries := operatorConfig.ChannelEntries[operatorName][defaultChannel]
 		bundles, err := filterBundles(chEntries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
+
 		if err != nil {
 			log.Error(errorSemver, err)
 		}
@@ -347,14 +348,14 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 		if full {
 			if len(filteredBundles) > 0 && len(iscOperator.Channels) > 0 {
 				if slices.Contains(filteredBundles, bundle.Name) {
-					relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
+					relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
 				}
 			} else {
-				relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
+				relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
 			}
 		} else {
 			if slices.Contains(filteredBundles, bundle.Name) {
-				relatedImages[bundle.Name] = addTypeToRelatedImages(bundle)
+				relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
 			}
 		}
 	}
@@ -405,8 +406,10 @@ func filterBundles(channelEntries map[string]declcfg.ChannelEntry, min string, m
 	for _, chEntry := range channelEntries {
 
 		version, err := getChannelEntrySemVer(chEntry.Name)
+		// OCPBUGS-33081
+		// if we get a semver error just skip this bundle
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		if isPreRelease(version) {
@@ -469,7 +472,7 @@ func getChannelEntrySemVer(chEntryName string) (semver.Version, error) {
 
 	version, err := semver.ParseTolerant(strings.Join(nameSplit[1:], "."))
 	if err != nil {
-		return semver.Version{}, err
+		return semver.Version{}, fmt.Errorf("%s %v", chEntryName, err)
 	}
 
 	return version, err
@@ -497,10 +500,14 @@ func isPreReleaseOfFilteredVersion(version string, chEntryName string, filteredV
 	return false
 }
 
-func addTypeToRelatedImages(bundle declcfg.Bundle) []v2alpha1.RelatedImage {
+func addTypeToRelatedImages(log clog.PluggableLoggerInterface, bundle declcfg.Bundle) []v2alpha1.RelatedImage {
 	var relatedImages []v2alpha1.RelatedImage
 
 	for _, ri := range bundle.RelatedImages {
+		if strings.Contains(ri.Image, "oci://") {
+			log.Warn("%s 'oci' is not supported in operator catalogs : SKIPPING", ri.Image)
+			continue
+		}
 		relateImage := v2alpha1.RelatedImage{}
 		if ri.Image == bundle.Image {
 			relateImage.Name = ri.Name
