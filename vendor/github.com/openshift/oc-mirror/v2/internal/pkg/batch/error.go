@@ -8,7 +8,8 @@ import (
 	"net/url"
 	"syscall"
 
-	"github.com/distribution/distribution/v3/registry/api/errcode"
+	// "github.com/distribution/distribution/v3/registry/api/errcode"
+	"github.com/docker/distribution/registry/api/errcode"
 	"github.com/hashicorp/go-multierror"
 )
 

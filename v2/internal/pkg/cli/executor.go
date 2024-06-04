@@ -698,9 +698,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
-		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
+		} else {
+			copiedSchema = cs
 		}
 
 		// prepare tar.gz when mirror to disk
@@ -710,7 +713,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 
 		o.Log.Info("📦 Preparing the tarball archive...")
 		// next, generate the archive
-		err = o.MirrorArchiver.BuildArchive(cmd.Context(), collectorSchema.AllImages)
+		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -748,19 +751,22 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		}
 	}
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		//call the batch worker
-		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
+		} else {
+			copiedSchema = cs
 		}
 
 		//create IDMS/ITMS
 		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
+		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
 
-		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -824,19 +830,22 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
-		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
+		} else {
+			copiedSchema = cs
 		}
 		// create IDMS/ITMS
 		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
+		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
 
 		// create catalog source
-		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
