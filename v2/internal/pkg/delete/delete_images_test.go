@@ -731,11 +731,17 @@ type mockBlobs struct {
 
 type mockManifest struct{}
 
-func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error {
-	if o.Fail {
-		return fmt.Errorf("forced error")
+func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
+	copiedImages := v2alpha1.CollectorSchema{
+		AllImages:             []v2alpha1.CopyImageSchema{},
+		TotalReleaseImages:    0,
+		TotalOperatorImages:   0,
+		TotalAdditionalImages: 0,
 	}
-	return nil
+	if o.Fail {
+		return copiedImages, fmt.Errorf("forced error")
+	}
+	return collectorSchema, nil
 }
 
 func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]string, error) {
