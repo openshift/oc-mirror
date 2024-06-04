@@ -4,19 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/docker/distribution/registry/api/errcode"
-	"github.com/hashicorp/go-multierror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -27,16 +21,14 @@ type BatchInterface interface {
 func New(log clog.PluggableLoggerInterface,
 	logsDir string,
 	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
 ) BatchInterface {
-	return &Batch{Log: log, LogsDir: logsDir, Mirror: mirror, Manifest: manifest}
+	return &Batch{Log: log, LogsDir: logsDir, Mirror: mirror}
 }
 
 type Batch struct {
-	Log      clog.PluggableLoggerInterface
-	LogsDir  string
-	Mirror   mirror.MirrorInterface
-	Manifest manifest.ManifestInterface
+	Log     clog.PluggableLoggerInterface
+	LogsDir string
+	Mirror  mirror.MirrorInterface
 }
 
 type BatchSchema struct {
@@ -110,15 +102,22 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			o.Log.Info(strings.Repeat("=", len(overalProgress)))
 		}
 
-		o.Log.Debug(mirrorMsg+" image: %s", img.Origin)
+		o.Log.Info(mirrorMsg+" image: %s", img.Origin)
 
 		if img.Type == v2alpha1.TypeCincinnatiGraph && (opts.Mode == mirror.MirrorToDisk || opts.Mode == mirror.MirrorToMirror) {
 			continue
 		}
 
 		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
-		if err != nil && !isFailSafe(err) {
-			return err
+		isSafe := isFailSafe(err)
+		if err != nil && (!isSafe || isSafe && (img.Type == v2alpha1.TypeOCPRelease || img.Type == v2alpha1.TypeOCPReleaseContent)) {
+			currentMirrorError := mirrorErrorSchema{image: img, err: err}
+			errArray = append(errArray, currentMirrorError)
+			filename, saveError := o.saveErrors(errArray)
+			if saveError != nil {
+				o.Log.Error("unable to log these errors in %s: %v", o.LogsDir+"/"+filename, saveError)
+			}
+			return NewUnsafeError(currentMirrorError)
 		}
 
 		if err != nil {
@@ -137,22 +136,26 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 
 	if opts.Function == string(mirror.CopyMode) {
 		o.Log.Info("=== Results ===")
-		if countReleaseImages == collectorSchema.TotalReleaseImages && countReleaseImagesErrorTotal == 0 {
-			o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
+		if collectorSchema.TotalReleaseImages != 0 {
+			if countReleaseImages == collectorSchema.TotalReleaseImages && countReleaseImagesErrorTotal == 0 {
+				o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
+			}
 		}
-
-		if countOperatorsImages == collectorSchema.TotalOperatorImages && countOperatorsImagesErrorTotal == 0 {
-			o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
+		if collectorSchema.TotalOperatorImages != 0 {
+			if countOperatorsImages == collectorSchema.TotalOperatorImages && countOperatorsImagesErrorTotal == 0 {
+				o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
+			}
 		}
-
-		if countAdditionalImages == collectorSchema.TotalAdditionalImages && countAdditionalImagesErrorTotal == 0 {
-			o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
+		if collectorSchema.TotalAdditionalImages != 0 {
+			if countAdditionalImages == collectorSchema.TotalAdditionalImages && countAdditionalImagesErrorTotal == 0 {
+				o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
+			}
 		}
 	} else {
 		o.Log.Info("=== Results ===")
@@ -164,23 +167,12 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	}
 
 	if len(errArray) > 0 {
-		timestamp := time.Now().Format("20060102_150405")
-		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
-
-		file, err := os.Create(filepath.Join(o.LogsDir, filename))
+		filename, err := o.saveErrors(errArray)
 		if err != nil {
-			o.Log.Error(workerPrefix+"failed to create file: %s", err.Error())
-			return err
+			return NewSafeError(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %v", o.LogsDir+"/"+filename, err)
+		} else {
+			return NewSafeError(workerPrefix+"some errors occurred during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
 		}
-		defer file.Close()
-
-		for _, err := range errArray {
-			errorMsg := fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
-			o.Log.Error(workerPrefix + errorMsg)
-			fmt.Fprintln(file, errorMsg)
-		}
-
-		return fmt.Errorf(workerPrefix+"some errors happened during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
 	}
 
 	endTime := time.Now()
@@ -189,76 +181,23 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	return nil
 }
 
-func isFailSafe(err error) bool {
-	switch err {
-	case nil:
-		return false
-	case context.Canceled, context.DeadlineExceeded:
-		return false
-	default: // continue
+func (o *Batch) saveErrors(errArray []mirrorErrorSchema) (string, error) {
+	if len(errArray) > 0 {
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
+		file, err := os.Create(filepath.Join(o.LogsDir, filename))
+		if err != nil {
+			o.Log.Error(workerPrefix+"failed to create file: %s", err.Error())
+			return filename, err
+		}
+		defer file.Close()
+
+		for _, err := range errArray {
+			errorMsg := fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
+			o.Log.Error(workerPrefix + errorMsg)
+			fmt.Fprintln(file, errorMsg)
+		}
+		return filename, nil
 	}
-
-	type unwrapper interface {
-		Unwrap() error
-	}
-
-	switch e := err.(type) {
-
-	case errcode.Error:
-		switch e.Code {
-		case errcode.ErrorCodeUnauthorized, errcode.ErrorCodeDenied:
-			return false
-		}
-		return true
-	case *net.OpError:
-		return isFailSafe(e.Err)
-	case *url.Error: // This includes errors returned by the net/http client.
-		if e.Err == io.EOF { // Happens when a server accepts a HTTP connection and sends EOF
-			return true
-		}
-		return isFailSafe(e.Err)
-	case syscall.Errno:
-		return isErrnoRetryable(e)
-	case errcode.Errors:
-		// if this error is a group of errors, process them all in turn
-		for i := range e {
-			if !isFailSafe(e[i]) {
-				return false
-			}
-		}
-		return true
-	case *multierror.Error:
-		// if this error is a group of errors, process them all in turn
-		for i := range e.Errors {
-			if !isFailSafe(e.Errors[i]) {
-				return false
-			}
-		}
-		return true
-	case net.Error:
-		if e.Timeout() {
-			return true
-		}
-		if unwrappable, ok := e.(unwrapper); ok {
-			err = unwrappable.Unwrap()
-			return isFailSafe(err)
-		}
-	case unwrapper: // Test this last, because various error types might implement .Unwrap()
-		err = e.Unwrap()
-		return isFailSafe(err)
-	}
-
-	return false
-}
-
-func isErrnoRetryable(e error) bool {
-	switch e {
-	case syscall.ECONNREFUSED, syscall.EINTR, syscall.EAGAIN, syscall.EBUSY, syscall.ENETDOWN, syscall.ENETUNREACH, syscall.ENETRESET, syscall.ECONNABORTED, syscall.ECONNRESET, syscall.ETIMEDOUT, syscall.EHOSTDOWN, syscall.EHOSTUNREACH:
-		return true
-	}
-	return isErrnoERESTART(e)
-}
-
-func isErrnoERESTART(e error) bool {
-	return e == syscall.ERESTART
+	return "", nil
 }

@@ -2,6 +2,7 @@ package delete
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -162,16 +163,14 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 	// ensure output is suppressed
 	o.Opts.Stdout = io.Discard
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
-		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts)
-		if err != nil {
+		if err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
 		}
 	}
 	// if mirrortoMirror mode no conetents were stored to the cache
 	// so just skip
 	if o.Opts.Global.ForceCacheDelete && o.Opts.Mode != mirror.MirrorToMirror {
-		err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts)
-		if err != nil {
+		if err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
 		}
 	}

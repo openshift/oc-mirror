@@ -11,7 +11,6 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -22,16 +21,14 @@ type BatchInterface interface {
 func New(log clog.PluggableLoggerInterface,
 	logsDir string,
 	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
 ) BatchInterface {
-	return &Batch{Log: log, LogsDir: logsDir, Mirror: mirror, Manifest: manifest}
+	return &Batch{Log: log, LogsDir: logsDir, Mirror: mirror}
 }
 
 type Batch struct {
-	Log      clog.PluggableLoggerInterface
-	LogsDir  string
-	Mirror   mirror.MirrorInterface
-	Manifest manifest.ManifestInterface
+	Log     clog.PluggableLoggerInterface
+	LogsDir string
+	Mirror  mirror.MirrorInterface
 }
 
 type BatchSchema struct {
@@ -105,13 +102,23 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			o.Log.Info(strings.Repeat("=", len(overalProgress)))
 		}
 
-		o.Log.Debug(mirrorMsg+" image: %s", img.Origin)
+		o.Log.Info(mirrorMsg+" image: %s", img.Origin)
 
 		if img.Type == v2alpha1.TypeCincinnatiGraph && (opts.Mode == mirror.MirrorToDisk || opts.Mode == mirror.MirrorToMirror) {
 			continue
 		}
 
 		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
+		isSafe := isFailSafe(err)
+		if err != nil && (!isSafe || isSafe && (img.Type == v2alpha1.TypeOCPRelease || img.Type == v2alpha1.TypeOCPReleaseContent)) {
+			currentMirrorError := mirrorErrorSchema{image: img, err: err}
+			errArray = append(errArray, currentMirrorError)
+			filename, saveError := o.saveErrors(errArray)
+			if saveError != nil {
+				o.Log.Error("unable to log these errors in %s: %v", o.LogsDir+"/"+filename, saveError)
+			}
+			return NewUnsafeError(currentMirrorError)
+		}
 
 		if err != nil {
 			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
@@ -129,22 +136,26 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 
 	if opts.Function == string(mirror.CopyMode) {
 		o.Log.Info("=== Results ===")
-		if countReleaseImages == collectorSchema.TotalReleaseImages && countReleaseImagesErrorTotal == 0 {
-			o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
+		if collectorSchema.TotalReleaseImages != 0 {
+			if countReleaseImages == collectorSchema.TotalReleaseImages && countReleaseImagesErrorTotal == 0 {
+				o.Log.Info("All release images mirrored successfully %d / %d ✅", countReleaseImages, collectorSchema.TotalReleaseImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some release images failed to mirror ❌ - please check the logs", countReleaseImages-countReleaseImagesErrorTotal, collectorSchema.TotalReleaseImages)
+			}
 		}
-
-		if countOperatorsImages == collectorSchema.TotalOperatorImages && countOperatorsImagesErrorTotal == 0 {
-			o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
+		if collectorSchema.TotalOperatorImages != 0 {
+			if countOperatorsImages == collectorSchema.TotalOperatorImages && countOperatorsImagesErrorTotal == 0 {
+				o.Log.Info("All operator images mirrored successfully %d / %d ✅", countOperatorsImages, collectorSchema.TotalOperatorImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some operator images failed to mirror ❌ - please check the logs", countOperatorsImages-countOperatorsImagesErrorTotal, collectorSchema.TotalOperatorImages)
+			}
 		}
-
-		if countAdditionalImages == collectorSchema.TotalAdditionalImages && countAdditionalImagesErrorTotal == 0 {
-			o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
-		} else {
-			o.Log.Info("Images mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
+		if collectorSchema.TotalAdditionalImages != 0 {
+			if countAdditionalImages == collectorSchema.TotalAdditionalImages && countAdditionalImagesErrorTotal == 0 {
+				o.Log.Info("All additional images mirrored successfully %d / %d ✅", countAdditionalImages, collectorSchema.TotalAdditionalImages)
+			} else {
+				o.Log.Info("Images mirrored %d / %d: Some additional images failed to mirror ❌ - please check the logs", countAdditionalImages-countAdditionalImagesErrorTotal, collectorSchema.TotalAdditionalImages)
+			}
 		}
 	} else {
 		o.Log.Info("=== Results ===")
@@ -156,13 +167,28 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	}
 
 	if len(errArray) > 0 {
+		filename, err := o.saveErrors(errArray)
+		if err != nil {
+			return NewSafeError(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %v", o.LogsDir+"/"+filename, err)
+		} else {
+			return NewSafeError(workerPrefix+"some errors occurred during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
+		}
+	}
+
+	endTime := time.Now()
+	execTime := endTime.Sub(startTime)
+	o.Log.Debug("batch time     : %v", execTime)
+	return nil
+}
+
+func (o *Batch) saveErrors(errArray []mirrorErrorSchema) (string, error) {
+	if len(errArray) > 0 {
 		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
-
 		file, err := os.Create(filepath.Join(o.LogsDir, filename))
 		if err != nil {
 			o.Log.Error(workerPrefix+"failed to create file: %s", err.Error())
-			return err
+			return filename, err
 		}
 		defer file.Close()
 
@@ -171,12 +197,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			o.Log.Error(workerPrefix + errorMsg)
 			fmt.Fprintln(file, errorMsg)
 		}
-
-		return fmt.Errorf(workerPrefix+"some errors happened during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
+		return filename, nil
 	}
-
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Debug("batch time     : %v", execTime)
-	return nil
+	return "", nil
 }

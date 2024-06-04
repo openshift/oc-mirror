@@ -408,7 +408,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
-	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
+	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
@@ -699,8 +699,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 
 	if !o.Opts.IsDryRun {
 		// call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
+		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
 		}
 
@@ -750,8 +749,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	}
 	if !o.Opts.IsDryRun {
 		//call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
+		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
 		}
 
@@ -827,8 +825,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 	if !o.Opts.IsDryRun {
 		// call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
+		if err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
 			return err
 		}
 		// create IDMS/ITMS
