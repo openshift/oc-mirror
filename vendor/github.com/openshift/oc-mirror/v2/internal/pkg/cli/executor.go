@@ -17,10 +17,8 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 
 	"github.com/distribution/distribution/v3/configuration"
-	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
-	distversion "github.com/distribution/distribution/v3/version"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
@@ -545,16 +543,15 @@ func (o *ExecutorSchema) setupLocalStorage() error {
 		regLogger.Out = o.registryLogFile
 	}
 	absPath, err := filepath.Abs(registryLogPath)
+
 	o.Log.Debug("local storage registry will log to %s", absPath)
 	if err != nil {
 		o.Log.Error(err.Error())
 	}
-	regLogEntry := logrus.NewEntry(regLogger)
+	logrus.SetOutput(o.registryLogFile)
+	os.Setenv("OTEL_TRACES_EXPORTER", "none")
 
-	// setup the context
-	dcontext.SetDefaultLogger(regLogEntry)
-	ctx := dcontext.WithVersion(dcontext.Background(), distversion.Version)
-	ctx = dcontext.WithLogger(ctx, regLogEntry)
+	ctx := context.Background()
 
 	errchan := make(chan error)
 

@@ -5,10 +5,9 @@ import (
 	"regexp"
 
 	"github.com/distribution/distribution/v3"
-	"github.com/distribution/distribution/v3/reference"
 	"github.com/distribution/distribution/v3/registry/storage/cache"
 	storagedriver "github.com/distribution/distribution/v3/registry/storage/driver"
-	"github.com/docker/libtrust"
+	"github.com/distribution/reference"
 )
 
 // registry is the top-level implementation of Registry for use in the storage
@@ -19,9 +18,7 @@ type registry struct {
 	statter                      *blobStatter // global statter service.
 	blobDescriptorCacheProvider  cache.BlobDescriptorCacheProvider
 	deleteEnabled                bool
-	schema1Enabled               bool
 	resumableDigestEnabled       bool
-	schema1SigningKey            libtrust.PrivateKey
 	blobDescriptorServiceFactory distribution.BlobDescriptorServiceFactory
 	manifestURLs                 manifestURLs
 	driver                       storagedriver.StorageDriver
@@ -37,7 +34,7 @@ type manifestURLs struct {
 type RegistryOption func(*registry) error
 
 // EnableRedirect is a functional option for NewRegistry. It causes the backend
-// blob server to attempt using (StorageDriver).URLFor to serve all blobs.
+// blob server to attempt using (StorageDriver).RedirectURL to serve all blobs.
 func EnableRedirect(registry *registry) error {
 	registry.blobServer.redirect = true
 	return nil
@@ -47,13 +44,6 @@ func EnableRedirect(registry *registry) error {
 // the registry.
 func EnableDelete(registry *registry) error {
 	registry.deleteEnabled = true
-	return nil
-}
-
-// EnableSchema1 is a functional option for NewRegistry. It enables pushing of
-// schema1 manifests.
-func EnableSchema1(registry *registry) error {
-	registry.schema1Enabled = true
 	return nil
 }
 
@@ -76,15 +66,6 @@ func ManifestURLsAllowRegexp(r *regexp.Regexp) RegistryOption {
 func ManifestURLsDenyRegexp(r *regexp.Regexp) RegistryOption {
 	return func(registry *registry) error {
 		registry.manifestURLs.deny = r
-		return nil
-	}
-}
-
-// Schema1SigningKey returns a functional option for NewRegistry. It sets the
-// key for signing  all schema1 manifests.
-func Schema1SigningKey(key libtrust.PrivateKey) RegistryOption {
-	return func(registry *registry) error {
-		registry.schema1SigningKey = key
 		return nil
 	}
 }
@@ -121,7 +102,7 @@ func BlobDescriptorCacheProvider(blobDescriptorCacheProvider cache.BlobDescripto
 // NewRegistry creates a new registry instance from the provided driver. The
 // resulting registry may be shared by multiple goroutines but is cheap to
 // allocate. If the Redirect option is specified, the backend blob server will
-// attempt to use (StorageDriver).URLFor to serve all blobs.
+// attempt to use (StorageDriver).RedirectURL to serve all blobs.
 func NewRegistry(ctx context.Context, driver storagedriver.StorageDriver, options ...RegistryOption) (distribution.Namespace, error) {
 	// create global statter
 	statter := &blobStatter{
@@ -240,25 +221,6 @@ func (repo *repository) Manifests(ctx context.Context, options ...distribution.M
 		linkDirectoryPathSpec: manifestDirectoryPathSpec,
 	}
 
-	var v1Handler ManifestHandler
-	if repo.schema1Enabled {
-		v1Handler = &signedManifestHandler{
-			ctx:               ctx,
-			schema1SigningKey: repo.schema1SigningKey,
-			repository:        repo,
-			blobStore:         blobStore,
-		}
-	} else {
-		v1Handler = &v1UnsupportedHandler{
-			innerHandler: &signedManifestHandler{
-				ctx:               ctx,
-				schema1SigningKey: repo.schema1SigningKey,
-				repository:        repo,
-				blobStore:         blobStore,
-			},
-		}
-	}
-
 	manifestListHandler := &manifestListHandler{
 		ctx:        ctx,
 		repository: repo,
@@ -266,10 +228,9 @@ func (repo *repository) Manifests(ctx context.Context, options ...distribution.M
 	}
 
 	ms := &manifestStore{
-		ctx:            ctx,
-		repository:     repo,
-		blobStore:      blobStore,
-		schema1Handler: v1Handler,
+		ctx:        ctx,
+		repository: repo,
+		blobStore:  blobStore,
 		schema2Handler: &schema2ManifestHandler{
 			ctx:          ctx,
 			repository:   repo,
