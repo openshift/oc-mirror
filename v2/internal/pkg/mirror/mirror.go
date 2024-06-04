@@ -181,6 +181,10 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		MaxParallelDownloads:             opts.MaxParallelDownloads,
 	}
 
+	if opts.Global.LogLevel == "debug" {
+		co.ReportWriter = opts.Stdout
+	}
+
 	return retry.IfNecessary(ctx, func() error {
 
 		//manifestBytes, err := copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
