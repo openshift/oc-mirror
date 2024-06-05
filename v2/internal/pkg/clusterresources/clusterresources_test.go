@@ -462,6 +462,17 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
 			Log:        log,
 			WorkingDir: workingDir,
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+							},
+						},
+					},
+				},
+			},
 		}
 		err := cr.CatalogSourceGenerator(imageList)
 		if err != nil {
@@ -723,6 +734,17 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
 			Log:        log,
 			WorkingDir: workingDir,
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "registry.redhat.io/redhat/redhat-operator-index@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+							},
+						},
+					},
+				},
+			},
 		}
 		err := cr.CatalogSourceGenerator(listCatalogDigestAsTag)
 		if err != nil {
