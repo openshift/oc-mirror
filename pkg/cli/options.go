@@ -26,7 +26,7 @@ type RootOptions struct {
 
 func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", config.DefaultWorkspaceName, "Assets directory")
-	fs.IntVarP(&o.LogLevel, "verbose", "", o.LogLevel, "Number for the log level verbosity (valid 1-9, default is 0)")
+	fs.IntVarP(&o.LogLevel, "verbose", "v", o.LogLevel, "Number for the log level verbosity (valid 1-9, default is 0)")
 	if err := fs.MarkHidden("dir"); err != nil {
 		klog.Fatal(err.Error())
 	}
