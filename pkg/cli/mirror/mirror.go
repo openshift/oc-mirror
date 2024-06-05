@@ -280,6 +280,9 @@ func (o *MirrorOptions) Validate() error {
 	if mirrorToMirror || mirrorToDisk {
 		cfg, err := config.ReadConfig(o.ConfigPath)
 		if err != nil {
+			if strings.Contains(err.Error(), "config GVK not recognized") && o.LogLevel == 2 {
+				return fmt.Errorf("detected a v2 ImageSetConfiguration, please use --v2 instead of -v2")
+			}
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
 
