@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
@@ -101,8 +102,9 @@ func (o CincinnatiSchema) NewOKDClient(uuid uuid.UUID) (Client, error) {
 func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 	var (
-		allImages []v2alpha1.CopyImageSchema
-		errs      = []error{}
+		allImages  []v2alpha1.CopyImageSchema
+		errs       = []error{}
+		flagReport = false
 	)
 
 	for _, arch := range filterCopy.Architectures {
@@ -128,6 +130,20 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 			if err != nil {
 				errs = append(errs, err)
 				continue
+			}
+
+			// CLID-135
+			// detect and log as early as possible
+			if len(ch.MaxVersion) > 0 && len(ch.MinVersion) > 0 {
+				max := semver.MustParse(ch.MaxVersion)
+				min := semver.MustParse(ch.MinVersion)
+				if strings.Contains(ch.Name, "eus") && ((max.Minor - min.Minor) >= 2) && !flagReport {
+					msg := "Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
+						"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
+						"\t\t\t\tTo correctly determine the upgrade path for EUS releases"
+					flagReport = true
+					o.Log.Warn(msg)
+				}
 			}
 
 			if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 {
