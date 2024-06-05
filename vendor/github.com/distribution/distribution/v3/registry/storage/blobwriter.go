@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/distribution/distribution/v3"
-	dcontext "github.com/distribution/distribution/v3/context"
+	"github.com/distribution/distribution/v3/internal/dcontext"
 	storagedriver "github.com/distribution/distribution/v3/registry/storage/driver"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
@@ -57,7 +57,7 @@ func (bw *blobWriter) StartedAt() time.Time {
 func (bw *blobWriter) Commit(ctx context.Context, desc distribution.Descriptor) (distribution.Descriptor, error) {
 	dcontext.GetLogger(ctx).Debug("(*blobWriter).Commit")
 
-	if err := bw.fileWriter.Commit(); err != nil {
+	if err := bw.fileWriter.Commit(ctx); err != nil {
 		return distribution.Descriptor{}, err
 	}
 

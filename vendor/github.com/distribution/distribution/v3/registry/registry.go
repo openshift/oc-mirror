@@ -12,24 +12,21 @@ import (
 	"syscall"
 	"time"
 
-	logrus_bugsnag "github.com/Shopify/logrus-bugsnag"
-
 	logstash "github.com/bshuster-repo/logrus-logstash-hook"
-	"github.com/bugsnag/bugsnag-go"
 	"github.com/docker/go-metrics"
 	gorhandlers "github.com/gorilla/handlers"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/yvasiyarov/gorelic"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/distribution/distribution/v3/configuration"
-	dcontext "github.com/distribution/distribution/v3/context"
 	"github.com/distribution/distribution/v3/health"
+	"github.com/distribution/distribution/v3/internal/dcontext"
 	"github.com/distribution/distribution/v3/registry/handlers"
 	"github.com/distribution/distribution/v3/registry/listener"
-	"github.com/distribution/distribution/v3/uuid"
+	"github.com/distribution/distribution/v3/tracing"
 	"github.com/distribution/distribution/v3/version"
 )
 
@@ -107,6 +104,7 @@ var ServeCmd = &cobra.Command{
 		config, err := resolveConfiguration(args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			// nolint:errcheck
 			cmd.Usage()
 			os.Exit(1)
 		}
@@ -140,17 +138,11 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 		return nil, fmt.Errorf("error configuring logger: %v", err)
 	}
 
-	configureBugsnag(config)
-
-	// inject a logger into the uuid library. warns us if there is a problem
-	// with uuid generation under low entropy.
-	uuid.Loggerf = dcontext.GetLogger(ctx).Warnf
-
 	app := handlers.NewApp(ctx, config)
 	// TODO(aaronl): The global scope of the health checks means NewRegistry
 	// can only be called once per process.
 	app.RegisterHealthChecks()
-	handler := configureReporting(app)
+	var handler http.Handler = app
 	handler = alive("/", handler)
 	handler = health.Handler(handler)
 	handler = panicHandler(handler)
@@ -162,6 +154,12 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 		handler = applyHandlerMiddleware(config, handler)
 	}
 
+	err = tracing.InitOpenTelemetry(app.Context)
+	if err != nil {
+		return nil, fmt.Errorf("error during open telemetry initialization: %v", err)
+	}
+	handler = otelHandler(handler)
+
 	server := &http.Server{
 		Handler: handler,
 	}
@@ -171,6 +169,13 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 		config: config,
 		server: server,
 	}, nil
+}
+
+// otelHandler returns an http.Handler that wraps the provided `next` handler with OpenTelemetry instrumentation.
+// This instrumentation tracks each HTTP request, creating spans with names derived from the request method and URL path.
+func otelHandler(next http.Handler) http.Handler {
+	return otelhttp.NewHandler(next, "",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string { return r.Method + " " + r.URL.Path }))
 }
 
 // takes a list of cipher suites and converts it to a list of respective tls constants
@@ -346,29 +351,6 @@ func configurePrometheus(config *configuration.Configuration) {
 	}
 }
 
-func configureReporting(app *handlers.App) http.Handler {
-	var handler http.Handler = app
-
-	if app.Config.Reporting.Bugsnag.APIKey != "" {
-		handler = bugsnag.Handler(handler)
-	}
-
-	if app.Config.Reporting.NewRelic.LicenseKey != "" {
-		agent := gorelic.NewAgent()
-		agent.NewrelicLicense = app.Config.Reporting.NewRelic.LicenseKey
-		if app.Config.Reporting.NewRelic.Name != "" {
-			agent.NewrelicName = app.Config.Reporting.NewRelic.Name
-		}
-		agent.CollectHTTPStat = true
-		agent.Verbose = app.Config.Reporting.NewRelic.Verbose
-		agent.Run()
-
-		handler = agent.WrapHTTPHandler(handler)
-	}
-
-	return handler
-}
-
 // configureLogging prepares the context with a logger using the
 // configuration.
 func configureLogging(ctx context.Context, config *configuration.Configuration) (context.Context, error) {
@@ -422,32 +404,6 @@ func logLevel(level configuration.Loglevel) logrus.Level {
 	}
 
 	return l
-}
-
-// configureBugsnag configures bugsnag reporting, if enabled
-func configureBugsnag(config *configuration.Configuration) {
-	if config.Reporting.Bugsnag.APIKey == "" {
-		return
-	}
-
-	bugsnagConfig := bugsnag.Configuration{
-		APIKey: config.Reporting.Bugsnag.APIKey,
-	}
-	if config.Reporting.Bugsnag.ReleaseStage != "" {
-		bugsnagConfig.ReleaseStage = config.Reporting.Bugsnag.ReleaseStage
-	}
-	if config.Reporting.Bugsnag.Endpoint != "" {
-		bugsnagConfig.Endpoint = config.Reporting.Bugsnag.Endpoint
-	}
-	bugsnag.Configure(bugsnagConfig)
-
-	// configure logrus bugsnag hook
-	hook, err := logrus_bugsnag.NewBugsnagHook()
-	if err != nil {
-		logrus.Fatalln(err)
-	}
-
-	logrus.AddHook(hook)
 }
 
 // panicHandler add an HTTP handler to web app. The handler recover the happening
