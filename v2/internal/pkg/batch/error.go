@@ -22,11 +22,11 @@ type UnsafeError struct {
 }
 
 func NewSafeError(format string, a ...any) error {
-	return &SafeError{fmt.Sprintf(format, a...)}
+	return SafeError{fmt.Sprintf(format, a...)}
 }
 
 func NewUnsafeError(mes mirrorErrorSchema) error {
-	return &UnsafeError{mes}
+	return UnsafeError{mes}
 }
 
 func (e SafeError) Error() string { return e.message }
