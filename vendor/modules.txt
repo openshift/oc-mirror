@@ -954,7 +954,7 @@ github.com/openshift/oc/pkg/helpers/image/credentialprovider
 github.com/openshift/oc/pkg/helpers/image/dockerlayer
 github.com/openshift/oc/pkg/helpers/image/dockerlayer/add
 # github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044 => ./v2
-## explicit; go 1.19
+## explicit; go 1.22
 github.com/openshift/oc-mirror/v2/internal/pkg/additional
 github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1
 github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1
