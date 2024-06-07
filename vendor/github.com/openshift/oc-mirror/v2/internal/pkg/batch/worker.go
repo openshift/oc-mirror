@@ -13,10 +13,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-type BatchInterface interface {
-	Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error)
-}
-
 func New(log clog.PluggableLoggerInterface,
 	logsDir string,
 	mirror mirror.MirrorInterface,
@@ -100,7 +96,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			// error on release image, save the errArray and immediately return `UnsafeError` to caller
 			currentMirrorError := mirrorErrorSchema{image: img, err: err}
 			errArray = append(errArray, currentMirrorError)
-			filename, saveError := o.saveErrors(errArray)
+			filename, saveError := saveErrors(o.Log, o.LogsDir, errArray)
 			if saveError != nil {
 				o.Log.Error("unable to log these errors in %s: %v", o.LogsDir+"/"+filename, saveError)
 			}
@@ -144,7 +140,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	}
 
 	if len(errArray) > 0 {
-		filename, err := o.saveErrors(errArray)
+		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
 			return o.CopiedImages, NewSafeError(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %v", o.LogsDir+"/"+filename, err)
 		} else {
@@ -164,20 +160,20 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	return o.CopiedImages, nil
 }
 
-func (o *Batch) saveErrors(errArray []mirrorErrorSchema) (string, error) {
+func saveErrors(logger clog.PluggableLoggerInterface, logsDir string, errArray []mirrorErrorSchema) (string, error) {
 	if len(errArray) > 0 {
 		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
-		file, err := os.Create(filepath.Join(o.LogsDir, filename))
+		file, err := os.Create(filepath.Join(logsDir, filename))
 		if err != nil {
-			o.Log.Error(workerPrefix+"failed to create file: %s", err.Error())
+			logger.Error(workerPrefix+"failed to create file: %s", err.Error())
 			return filename, err
 		}
 		defer file.Close()
 
 		for _, err := range errArray {
 			errorMsg := fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
-			o.Log.Error(workerPrefix + errorMsg)
+			logger.Error(workerPrefix + errorMsg)
 			fmt.Fprintln(file, errorMsg)
 		}
 		return filename, nil
