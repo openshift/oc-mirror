@@ -82,14 +82,14 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		switch {
 		case err == nil:
 			o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
-			// switch img.Type {
-			// case v2alpha1.TypeCincinnatiGraph, v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent:
-			// 	o.CopiedImages.TotalReleaseImages++
-			// case v2alpha1.TypeGeneric:
-			// 	o.CopiedImages.TotalAdditionalImages++
-			// case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
-			// 	o.CopiedImages.TotalOperatorImages++
-			// }
+			switch img.Type {
+			case v2alpha1.TypeCincinnatiGraph, v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent:
+				o.CopiedImages.TotalReleaseImages++
+			case v2alpha1.TypeGeneric:
+				o.CopiedImages.TotalAdditionalImages++
+			case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
+				o.CopiedImages.TotalOperatorImages++
+			}
 		case err != nil && isSafe && img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
 			// this error is fail safe, we're continuing to mirror other images.
 			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
@@ -136,7 +136,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		}
 	} else {
 		o.Log.Info("=== Results ===")
-		if o.Progress.countTotal == totalImages && o.Progress.countErrorTotal == 0 {
+		if o.Progress.countTotal == totalImages && o.Progress.countTotal != 0 && o.Progress.countErrorTotal == 0 {
 			o.Log.Info("All images deleted successfully %d / %d ✅", o.Progress.countTotal, totalImages)
 		} else {
 			o.Log.Info("Images deleted %d / %d: Some images failed to delete ❌ - please check the logs", o.Progress.countTotal-o.Progress.countErrorTotal, totalImages)
@@ -191,7 +191,6 @@ func (o Batch) logProgress(img v2alpha1.CopyImageSchema, collectorSchema v2alpha
 
 	o.Progress.countTotal++
 	isSafe := isFailSafe(err)
-	//isSafe && img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
 	if err != nil && !isSafe { // normally logProgress should never be called for fail fast errors
 		return
 	} else if err != nil { // it is a fail safe error
