@@ -101,7 +101,9 @@ func isFailSafe(err error) bool {
 
 func isErrnoFailSafe(e error) bool {
 	switch e {
-	case syscall.ECONNREFUSED, syscall.EINTR, syscall.EAGAIN, syscall.EBUSY, syscall.ENETDOWN, syscall.ENETUNREACH, syscall.ENETRESET, syscall.ECONNABORTED, syscall.ECONNRESET, syscall.ETIMEDOUT, syscall.EHOSTDOWN, syscall.EHOSTUNREACH:
+	case syscall.ECONNREFUSED, syscall.ENETDOWN, syscall.ENETUNREACH, syscall.EHOSTDOWN, syscall.EHOSTUNREACH:
+		return false
+	case syscall.EINTR, syscall.EAGAIN, syscall.EBUSY, syscall.ENETRESET, syscall.ECONNABORTED, syscall.ECONNRESET, syscall.ETIMEDOUT:
 		return true
 	}
 	return isErrnoERESTART(e)
