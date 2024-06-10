@@ -119,13 +119,13 @@ func TestWorker(t *testing.T) {
 		assert.Equal(t, 0, len(copiedImages.AllImages))
 	})
 
-	t.Run("Testing Worker : registry connection refused for additional image: should fail safe", func(t *testing.T) {
+	t.Run("Testing Worker : registry connection busy for additional image: should fail safe", func(t *testing.T) {
 		addImages := []v2alpha1.CopyImageSchema{
 			{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testa", Type: v2alpha1.TypeGeneric},
 		}
 		opts.Function = "copy"
-		refused := syscall.ECONNREFUSED
-		w := New(log, tempDir, &Mirror{refused})
+		busy := syscall.EBUSY
+		w := New(log, tempDir, &Mirror{busy})
 		copiedImages, err := w.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: addImages}, opts)
 		if err == nil {
 			t.Fatal("should not pass")

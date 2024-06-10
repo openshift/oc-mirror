@@ -756,8 +756,12 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	if !o.Opts.IsDryRun {
 		var copiedSchema v2alpha1.CollectorSchema
 		//call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil && errors.Is(err, batch.UnsafeError{}) {
-			return err
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+			if _, ok := err.(batch.UnsafeError); ok {
+				return err
+			} else {
+				copiedSchema = cs
+			}
 		} else {
 			copiedSchema = cs
 		}
