@@ -61,7 +61,10 @@ const (
 )
 
 func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error {
-	o.Log.Info("📄 Generating IDMS and ITMS files...")
+	if len(allRelatedImages) == 0 {
+		o.Log.Info("📄 Nothing mirrored. Skipping IDMS and ITMS files generation.")
+		return nil
+	}
 
 	// byDigestMirrors
 	byDigestMirrors, err := o.generateImageMirrors(allRelatedImages, DigestsOnlyMode, forceRepositoryScope)
@@ -74,19 +77,24 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 	if err != nil {
 		return err
 	}
+	// if byTagMirrors not empty
+	if len(byDigestMirrors) > 0 {
+		o.Log.Info("📄 Generating IDMS file...")
+		idmsList, err := o.generateIDMS(byDigestMirrors)
+		if err != nil {
+			return err
+		}
 
-	idmsList, err := o.generateIDMS(byDigestMirrors)
-	if err != nil {
-		return err
+		err = writeMirrorSet(idmsList, o.WorkingDir, idmsFileName, o.Log)
+		if err != nil {
+			return err
+		}
+	} else {
+		o.Log.Info("📄 No images by digests were mirrored. Skipping IDMS generation.")
 	}
-
-	err = writeMirrorSet(idmsList, o.WorkingDir, idmsFileName, o.Log)
-	if err != nil {
-		return err
-	}
-
 	// if byTagMirrors not empty
 	if len(byTagMirrors) > 0 {
+		o.Log.Info("📄 Generating ITMS file...")
 		itmsList, err := o.generateITMS(byTagMirrors)
 		if err != nil {
 			return err
@@ -95,6 +103,8 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 		if err != nil {
 			return err
 		}
+	} else {
+		o.Log.Info("📄 No images by tag were mirrored. Skipping ITMS generation.")
 	}
 	return nil
 }
@@ -169,6 +179,11 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 }
 
 func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
+	if len(o.Config.Mirror.Operators) == 0 {
+		o.Log.Info("📄 No catalogs mirrored. Skipping CatalogSource file generation.")
+		return nil
+	}
+
 	o.Log.Info("📄 Generating CatalogSource file...")
 	for _, copyImage := range allRelatedImages {
 		if copyImage.Type == v2alpha1.TypeOperatorCatalog {
