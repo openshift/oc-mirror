@@ -138,6 +138,8 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 	var lsUpdatedImages []v2alpha1.CopyImageSchema
 	var lsUpdated string
 
+	var batchError, cacheBatchError error
+
 	for _, img := range images.Items {
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
@@ -165,6 +167,8 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 		if _, err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts); err != nil {
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
+			} else {
+				batchError = err
 			}
 		}
 	}
@@ -174,8 +178,17 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 		if _, err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts); err != nil {
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
+			} else {
+				cacheBatchError = err
 			}
 		}
+	}
+
+	if batchError != nil {
+		o.Log.Warn("error during registry deletion: %v", batchError)
+	}
+	if cacheBatchError != nil {
+		o.Log.Warn("error during cache deletion: %v", cacheBatchError)
 	}
 	return nil
 }

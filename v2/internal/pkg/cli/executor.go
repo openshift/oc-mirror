@@ -686,7 +686,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 // RunMirrorToDisk - execute the mirror to disk functionality
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
-
+	var batchError error
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
@@ -703,6 +703,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
 			} else {
+				batchError = err
 				copiedSchema = cs
 			}
 		} else {
@@ -734,13 +735,16 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
+	}
 	return nil
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
-
+	var batchError error
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
@@ -760,6 +764,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
 			} else {
+				batchError = err
 				copiedSchema = cs
 			}
 		} else {
@@ -803,7 +808,12 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	endTime := time.Now()
 	execTime := endTime.Sub(startTime)
 	o.Log.Info("mirror time     : %v", execTime)
-
+	if err != nil {
+		return err
+	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
+	}
 	return nil
 }
 
@@ -811,6 +821,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
+	var batchError error
 	// extract the archive
 	err := o.MirrorUnArchiver.Unarchive()
 	if err != nil {
@@ -843,6 +854,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
 			} else {
+				batchError = err
 				copiedSchema = cs
 			}
 		} else {
@@ -890,6 +902,9 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 	if err != nil {
 		return err
+	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
 	}
 	return nil
 }

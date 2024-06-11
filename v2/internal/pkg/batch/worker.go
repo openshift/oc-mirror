@@ -74,11 +74,13 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	for _, img := range collectorSchema.AllImages {
 
 		if img.Type == v2alpha1.TypeCincinnatiGraph && (opts.Mode == mirror.MirrorToDisk || opts.Mode == mirror.MirrorToMirror) {
+			o.CopiedImages.TotalReleaseImages++
+			o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
+			o.logProgress(img, collectorSchema, nil)
 			continue
 		}
 
 		err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
-		isSafe := isFailSafe(err)
 		switch {
 		case err == nil:
 			o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
@@ -90,14 +92,12 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 			case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
 				o.CopiedImages.TotalOperatorImages++
 			}
-		case err != nil && isSafe && img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
-			// this error is fail safe, we're continuing to mirror other images.
+		case img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
+			// error occured on anything other than release images, continue mirroring
 			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
 
-		case err != nil && isSafe && (img.Type == v2alpha1.TypeOCPRelease || img.Type == v2alpha1.TypeOCPReleaseContent):
-			fallthrough
-		case err != nil && !isSafe:
-			// this error is fail fast, we save the errArray and immediately return `UnsafeError` to caller
+		default:
+			// error on release image, save the errArray and immediately return `UnsafeError` to caller
 			currentMirrorError := mirrorErrorSchema{image: img, err: err}
 			errArray = append(errArray, currentMirrorError)
 			filename, saveError := o.saveErrors(errArray)
@@ -148,7 +148,13 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 		if err != nil {
 			return o.CopiedImages, NewSafeError(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %v", o.LogsDir+"/"+filename, err)
 		} else {
-			return o.CopiedImages, NewSafeError(workerPrefix+"some errors occurred during the mirroring - refer to %s for more details", o.LogsDir+"/"+filename)
+			msg := workerPrefix + "some errors occurred during the mirroring.\n" +
+				"\t Please review " + o.LogsDir + "/" + filename + " for a list of mirroring errors.\n" +
+				"\t You may consider:\n" +
+				"\t * removing images or operators that cause the error from the image set config, and retrying\n" +
+				"\t * keeping the image set config (images are mandatory for you), and retrying\n" +
+				"\t * mirroring the failing images manually, if retries also fail."
+			return o.CopiedImages, NewSafeError(msg)
 		}
 	}
 
@@ -190,13 +196,9 @@ func (o Batch) logProgress(img v2alpha1.CopyImageSchema, collectorSchema v2alpha
 	}
 
 	o.Progress.countTotal++
-	isSafe := isFailSafe(err)
-	if err != nil && !isSafe { // normally logProgress should never be called for fail fast errors
+	if err != nil && (img.Type == v2alpha1.TypeOCPRelease || img.Type == v2alpha1.TypeOCPReleaseContent) { // normally logProgress should never be called for fail fast errors
 		return
 	} else if err != nil { // it is a fail safe error
-		if img.Type == v2alpha1.TypeOCPRelease || img.Type == v2alpha1.TypeOCPReleaseContent { // normally logProgress should never be called for fail fast errors
-			return
-		}
 		o.Progress.countErrorTotal++
 		switch img.Type {
 		case v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent, v2alpha1.TypeCincinnatiGraph:
