@@ -68,6 +68,7 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 		releaseDownloads = downloads{}
 		mmapping         = image.TypedImageMapping{}
 		errs             = []error{}
+		flagReport       = false
 	)
 
 	prevChannels := make(map[string]string, len(lastRun.Platforms))
@@ -95,6 +96,21 @@ func (o *ReleaseOptions) Plan(ctx context.Context, lastRun v1alpha2.PastMirror, 
 			if err != nil {
 				errs = append(errs, err)
 				continue
+			}
+
+			// CLID-135
+			// detect and log as early as possible
+			if len(ch.MaxVersion) > 0 && len(ch.MinVersion) > 0 {
+				max := semver.MustParse(ch.MaxVersion)
+				min := semver.MustParse(ch.MinVersion)
+				if strings.Contains(ch.Name, "eus") && ((max.Minor - min.Minor) >= 2) && !flagReport {
+					flagReport = true
+					msg := "WARNING: Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
+						"\t Please refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
+						"\t To correctly determine the upgrade path for EUS releases"
+					// for some reason klog.Warning displays this twice
+					klog.Info(msg)
+				}
 			}
 
 			if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 {
