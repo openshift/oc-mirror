@@ -107,17 +107,17 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	os.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
 
 	// copy test registries.conf to user home
-	regConfTemplatePath := "../../internal/e2e/templates/regisitries.conf"
+	regConfTemplatePath := "../../e2e/templates/regisitries.conf"
 	err := testutils.FileFromTemplate(suite.tempFolder+"/registries.conf", regConfTemplatePath, []string{suite.sourceRegistryDomain})
 	assert.NoError(t, err, "should not fail to prepare registries.conf for test")
 
 	// prepare all images needed
-	releaseDigest, releaseImageRefs, err := testutils.GenerateReleaseAndComponents(suite.sourceRegistryDomain, suite.tempFolder, "../../internal/e2e/templates/release_templates/image-references")
+	releaseDigest, releaseImageRefs, err := testutils.GenerateReleaseAndComponents(suite.sourceRegistryDomain, suite.tempFolder, "../../e2e/templates/release_templates/image-references")
 	assert.NoError(t, err, "should not fail to generate and push release to source registry")
 	suite.releaseImageRefs = releaseImageRefs
 
 	cm := testutils.CincinnatiMock{
-		Templates: map[string]string{"stable-4.15": "../../internal/e2e/templates/release_templates/cincinnati_stable-4.15.json"},
+		Templates: map[string]string{"stable-4.15": "../../e2e/templates/release_templates/cincinnati_stable-4.15.json"},
 		Tokens:    []string{suite.sourceRegistryDomain + "/openshift-release-dev/ocp-release@" + releaseDigest},
 	}
 
@@ -129,7 +129,7 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	suite.cincinnatiEndpoint = endpoint.Host
 
 	// set up a signature in the working-dir (cached signature)
-	signatureFile, err := os.Open("../../internal/e2e/signatures/signature-1")
+	signatureFile, err := os.Open("../../e2e/signatures/signature-1")
 	assert.NoError(t, err)
 	defer signatureFile.Close()
 
@@ -144,7 +144,7 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create the image set config
-	templatePath := "../../internal/e2e/templates/isc_templates/release_isc.yaml"
+	templatePath := "../../e2e/templates/isc_templates/release_isc.yaml"
 	suite.imageSetConfig = suite.tempFolder + "/isc.yaml"
 	err = testutils.FileFromTemplate(suite.imageSetConfig, templatePath, []string{"stable-4.15"})
 	assert.NoError(t, err, "should not fail to generate imageSetConfig")

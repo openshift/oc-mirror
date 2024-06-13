@@ -408,7 +408,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
-	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror, o.Manifest)
+	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
@@ -687,7 +687,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 // RunMirrorToDisk - execute the mirror to disk functionality
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
-
+	var batchError error
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
@@ -698,10 +698,17 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
-			return err
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+			if _, ok := err.(batch.UnsafeError); ok {
+				return err
+			} else {
+				batchError = err
+				copiedSchema = cs
+			}
+		} else {
+			copiedSchema = cs
 		}
 
 		// prepare tar.gz when mirror to disk
@@ -711,7 +718,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 
 		o.Log.Info("📦 Preparing the tarball archive...")
 		// next, generate the archive
-		err = o.MirrorArchiver.BuildArchive(cmd.Context(), collectorSchema.AllImages)
+		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -729,13 +736,16 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
+	}
 	return nil
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
-
+	var batchError error
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
@@ -749,20 +759,27 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		}
 	}
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		//call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
-			return err
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+			if _, ok := err.(batch.UnsafeError); ok {
+				return err
+			} else {
+				batchError = err
+				copiedSchema = cs
+			}
+		} else {
+			copiedSchema = cs
 		}
 
 		//create IDMS/ITMS
 		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
+		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
 
-		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -792,7 +809,12 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	endTime := time.Now()
 	execTime := endTime.Sub(startTime)
 	o.Log.Info("mirror time     : %v", execTime)
-
+	if err != nil {
+		return err
+	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
+	}
 	return nil
 }
 
@@ -800,6 +822,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
+	var batchError error
 	// extract the archive
 	err := o.MirrorUnArchiver.Unarchive()
 	if err != nil {
@@ -826,20 +849,28 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
+		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
-		err = o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
-		if err != nil {
-			return err
+		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+			if _, ok := err.(batch.UnsafeError); ok {
+				return err
+			} else {
+				batchError = err
+				copiedSchema = cs
+			}
+		} else {
+			copiedSchema = cs
 		}
+
 		// create IDMS/ITMS
 		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(collectorSchema.AllImages, forceRepositoryScope)
+		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
 		if err != nil {
 			return err
 		}
 
 		// create catalog source
-		err = o.ClusterResources.CatalogSourceGenerator(collectorSchema.AllImages)
+		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
 		}
@@ -872,6 +903,9 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 	if err != nil {
 		return err
+	}
+	if batchError != nil {
+		o.Log.Warn("%v", batchError)
 	}
 	return nil
 }

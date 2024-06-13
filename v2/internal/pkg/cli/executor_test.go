@@ -930,11 +930,17 @@ func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1
 	return nil
 }
 
-func (o Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) error {
-	if o.Fail {
-		return fmt.Errorf("forced error")
+func (o Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
+	copiedImages := v2alpha1.CollectorSchema{
+		AllImages:             []v2alpha1.CopyImageSchema{},
+		TotalReleaseImages:    0,
+		TotalOperatorImages:   0,
+		TotalAdditionalImages: 0,
 	}
-	return nil
+	if o.Fail {
+		return copiedImages, fmt.Errorf("forced error")
+	}
+	return collectorSchema, nil
 }
 
 func (o *Collector) OperatorImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
