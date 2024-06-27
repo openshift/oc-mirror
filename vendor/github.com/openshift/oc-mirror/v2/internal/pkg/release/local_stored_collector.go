@@ -2,8 +2,6 @@ package release
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,11 +18,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
-
-type releasesForFilter struct {
-	Filter   v2alpha1.Platform          `json:"filter"`
-	Releases []v2alpha1.CopyImageSchema `json:"releases"`
-}
 
 type LocalStorageCollector struct {
 	CollectorInterface
@@ -58,14 +51,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	var allImages []v2alpha1.CopyImageSchema
 	var imageIndexDir string
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
-
-		releasesForFilter := releasesForFilter{
-			Filter: o.Config.Mirror.Platform,
-			//cannot directly use the array releases here as the Destinations are still empty
-			Releases: []v2alpha1.CopyImageSchema{},
-		}
 
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
@@ -73,14 +60,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
 			dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
-			//Save to releasesForFilter so that we can reuse it during Disk To Mirror flow
 			src := dockerProtocol + value.Source
 			dest := ociProtocolTrimmed + dir
-			r := v2alpha1.CopyImageSchema{
-				Source:      src,
-				Destination: dest,
-			}
-			releasesForFilter.Releases = append(releasesForFilter.Releases, r)
 
 			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
@@ -154,15 +135,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 			allImages = append(allImages, tmpAllImages...)
 		}
-		// save the releasesForFilter to json cache,
-		// so that it can be used during diskToMirror flow
-		err := o.saveReleasesForFilter(releasesForFilter, filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir))
-		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"unable to save cincinnati response: %s", err.Error())
-		}
 
-		if !o.Opts.IsPrepare() && o.Config.Mirror.Platform.Graph {
+		if o.Config.Mirror.Platform.Graph {
 			o.Log.Debug(collectorPrefix + "creating graph data image")
 			graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
 			if err != nil {
@@ -182,12 +156,12 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		}
 
 	} else if o.Opts.IsDiskToMirror() {
-
-		releaseImages, releaseFolders, err := o.identifyReleases()
+		releaseImages, releaseFolders, err := o.identifyReleases(ctx)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return allImages, err
 		}
+
 		o.Releases = []string{}
 		for _, img := range releaseImages {
 			o.Releases = append(o.Releases, img.Image)
@@ -303,25 +277,24 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 	return result, nil
 }
 
-func (o LocalStorageCollector) identifyReleases() ([]v2alpha1.RelatedImage, []string, error) {
-	//Find the filter file, containing all the images that correspond to the filter
-	rff := releasesForFilter{
-		Filter: o.Config.Mirror.Platform,
-	}
-	filter := fmt.Sprintf("%v", rff.Filter)
-	filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
-	filterFilePath := filepath.Join(o.Opts.Global.WorkingDir, releaseFiltersDir, filterFileName)
-	dat, err := os.ReadFile(filterFilePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to read file %s: %v", filterFilePath, err)
+func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1.RelatedImage, []string, error) {
+
+	releaseImageCopies := []v2alpha1.CopyImageSchema{}
+
+	for _, value := range o.Cincinnati.GetReleaseReferenceImages(ctx) {
+		hld := strings.Split(value.Source, "/")
+		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
+		dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
+
+		src := dockerProtocol + value.Source
+		dest := ociProtocolTrimmed + dir
+		r := v2alpha1.CopyImageSchema{
+			Source:      src,
+			Destination: dest,
+		}
+		releaseImageCopies = append(releaseImageCopies, r)
 	}
 
-	err = json.Unmarshal(dat, &rff)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to unmarshall contents of %s: %v", filterFilePath, err)
-	}
-
-	releaseImageCopies := rff.Releases
 	releaseFolders := []string{}
 	releaseImages := []v2alpha1.RelatedImage{}
 	for _, copy := range releaseImageCopies {
@@ -332,35 +305,6 @@ func (o LocalStorageCollector) identifyReleases() ([]v2alpha1.RelatedImage, []st
 		releaseImages = append(releaseImages, v2alpha1.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v2alpha1.TypeOCPRelease})
 	}
 	return releaseImages, releaseFolders, nil
-}
-
-func (o LocalStorageCollector) saveReleasesForFilter(r releasesForFilter, to string) error {
-	toJson, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	filter := fmt.Sprintf("%v", r.Filter)
-	filterFileName := fmt.Sprintf("%x", md5.Sum([]byte(filter)))[0:32]
-
-	if _, err := os.Stat(to); errors.Is(err, os.ErrNotExist) {
-		o.Log.Debug("copying  cincinnati response to %s", to)
-		err := os.MkdirAll(to, 0755)
-		if err != nil {
-			return err
-		}
-	}
-
-	filterFile, err := os.Create(filepath.Join(to, filterFileName))
-	if err != nil {
-		return err
-	}
-	defer filterFile.Close()
-
-	_, err = filterFile.Write([]byte(toJson))
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // assumes this is called during DiskToMirror workflow.
@@ -386,12 +330,12 @@ func (o *LocalStorageCollector) GraphImage() (string, error) {
 }
 
 // assumes that this is called during DiskToMirror workflow.
-// it relies on the previously saved release-filters in order
+// it relies on the previously saved cincinnati-graph-data in order
 // to get the list of releases to mirror (saved during mirrorToDisk
 // after the call to cincinnati API)
-func (o *LocalStorageCollector) ReleaseImage() (string, error) {
+func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error) {
 	if len(o.Releases) == 0 {
-		releaseImages, _, err := o.identifyReleases()
+		releaseImages, _, err := o.identifyReleases(ctx)
 		if err != nil {
 			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
 		}

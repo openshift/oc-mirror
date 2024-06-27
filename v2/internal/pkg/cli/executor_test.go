@@ -1147,7 +1147,7 @@ func (o *Collector) GraphImage() (string, error) {
 	return "localhost:5000/openshift/graph-image:latest", nil
 }
 
-func (o *Collector) ReleaseImage() (string, error) {
+func (o *Collector) ReleaseImage(ctx context.Context) (string, error) {
 	return "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", nil
 }
 
