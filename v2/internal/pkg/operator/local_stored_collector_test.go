@@ -38,7 +38,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog: "redhat-operator-index:v4.14",
+						Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
 					},
 					{
 						Catalog: "oci://" + common.TestFolder + "simple-test-bundle",
@@ -294,7 +294,7 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 				},
 				{
 					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
-					Destination: "docker://localhost:9999/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+					Destination: "docker://localhost:9999/simple-test-bundle:latest",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
@@ -422,7 +422,7 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 	os.RemoveAll(common.TestFolder + "tmp/")
 
 	//copy tests/hold-test-fake to working-dir
-	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "ocp-release/4.13.9-x86_64"))
+	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
 	if err != nil {
 		t.Fatalf("should not fail")
 	}
@@ -446,15 +446,15 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-					Destination: "docker://localhost:5000/test/simple-test-bundle:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+					Source:      "docker://localhost:9999/simple-test-bundle:latest",
+					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://localhost:9999/redhat-operator-index:v4.14",
-					Destination: "docker://localhost:5000/test/redhat-operator-index:v4.14",
-					Origin:      "docker://redhat-operator-index:v4.14",
+					Source:      "docker://localhost:9999/redhat/redhat-operator-index:v4.14",
+					Destination: "docker://localhost:5000/test/redhat/redhat-operator-index:v4.14",
+					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.14",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 			},
@@ -679,7 +679,7 @@ func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCI
 }
 
 func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "", nil
+	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
 }
 
 func (ex *LocalStorageCollector) withConfig(cfg v2alpha1.ImageSetConfiguration) *LocalStorageCollector {
