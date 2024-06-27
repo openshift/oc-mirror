@@ -184,9 +184,13 @@ func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2
 		return nil
 	}
 
-	o.Log.Info("📄 Generating CatalogSource file...")
+	firstCatalog := true
 	for _, copyImage := range allRelatedImages {
 		if copyImage.Type == v2alpha1.TypeOperatorCatalog {
+			if firstCatalog {
+				o.Log.Info("📄 Generating CatalogSource file...")
+				firstCatalog = false
+			}
 			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
 			template := o.getCSTemplate(copyImage.Origin)
 			err := o.generateCatalogSource(copyImage.Destination, template)
