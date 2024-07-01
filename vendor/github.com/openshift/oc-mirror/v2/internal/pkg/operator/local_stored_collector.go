@@ -72,16 +72,26 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
 		}
-
-		sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
-		if err != nil {
-			return nil, err
-		}
-
-		catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
-		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-			return []v2alpha1.CopyImageSchema{}, err
+		//OCPBUGS-36214: For diskToMirror (and delete), access to the source registry is not guaranteed
+		catalogDigest := ""
+		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == string(mirror.DeleteMode) {
+			d, err := o.catalogDigest(ctx, op)
+			if err != nil {
+				o.Log.Error(errMsg, err.Error())
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			catalogDigest = d
+		} else {
+			sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			d, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+			if err != nil {
+				o.Log.Error(errMsg, err.Error())
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			catalogDigest = d
 		}
 
 		imageIndexDir := filepath.Join(imgSpec.ComponentName(), catalogDigest)
@@ -243,7 +253,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 			// this leaves the oci imgSpec with no tag nor digest as it
 			// goes to prepareM2DCopyBatch/prepareD2MCopyBath. This is
 			// why we set the digest read from manifest in targetTag
-			targetTag = validDigest.Encoded()
+			targetTag = "latest"
 		}
 
 		if len(op.TargetCatalog) > 0 {
@@ -292,6 +302,54 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 
 func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
 	return len(oci.Manifests) > 1
+}
+
+func (o LocalStorageCollector) catalogDigest(ctx context.Context, catalog v2alpha1.Operator) (string, error) {
+	var src string
+
+	srcImgSpec, err := image.ParseRef(catalog.Catalog)
+	if err != nil {
+		return "", fmt.Errorf("unable to determine cached reference for catalog %s: %v", catalog.Catalog, err)
+	}
+
+	// prepare the src and dest references
+	switch {
+	case len(catalog.TargetCatalog) > 0:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, catalog.TargetCatalog}, "/")
+	case srcImgSpec.Transport == ociProtocol:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, path.Base(srcImgSpec.Reference)}, "/")
+	default:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, srcImgSpec.PathComponent}, "/")
+	}
+
+	switch {
+	case len(catalog.TargetTag) > 0: // applies only to catalogs
+		src = src + ":" + catalog.TargetTag
+	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
+		src = src + ":" + srcImgSpec.Digest
+	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
+		src = src + ":latest"
+	default:
+		src = src + ":" + srcImgSpec.Tag
+	}
+
+	imgSpec, err := image.ParseRef(src)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", err
+	}
+
+	sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return "", err
+	}
+
+	catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", err
+	}
+	return catalogDigest, nil
 }
 
 func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, dir string, images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
@@ -373,7 +431,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 			}
 			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0 {
 				dest = dest + ":" + img.TargetTag
-			} else if imgSpec.Tag == "" {
+			} else if imgSpec.Tag == "" && imgSpec.Transport == ociProtocol {
+				dest = dest + ":latest"
+			} else if imgSpec.Tag == "" && imgSpec.Digest != "" {
 				dest = dest + ":" + imgSpec.Digest
 			} else {
 				dest = dest + ":" + imgSpec.Tag
