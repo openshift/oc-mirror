@@ -29,7 +29,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 
 	// save graph data in a container layer modifying UID and GID to root.
 	archiveDestination := filepath.Join(o.Opts.Global.WorkingDir, graphArchive)
-	graphLayer, err := imagebuilder.LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
+	graphLayer, err := imagebuilder.LayerFromGzipByteArray(body, archiveDestination, buildGraphDataDir, 0644, 0, 0)
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +48,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 	}
 
 	// preprare the CMD to []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", graphDataDir, graphDataMountPath)}
-	cmd := []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", graphDataDir, graphDataMountPath)}
+	cmd := []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", buildGraphDataDir, graphDataMountPath)}
 
 	// update a ubi9 image with this new graphLayer and new cmd
 	graphImageRef := filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"

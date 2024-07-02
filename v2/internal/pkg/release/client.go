@@ -77,7 +77,8 @@ func (o *ocpClient) GetID() uuid.UUID {
 
 func (o *ocpClient) SetQueryParams(arch, channel, version string) {
 	queryParams := o.url.Query()
-	queryParams.Add("id", o.id.String())
+
+	queryParams.Set("id", o.id.String())
 	params := map[string]string{
 		"arch":    arch,
 		"channel": channel,
@@ -85,7 +86,7 @@ func (o *ocpClient) SetQueryParams(arch, channel, version string) {
 	}
 	for key, value := range params {
 		if value != "" {
-			queryParams.Add(key, value)
+			queryParams.Set(key, value)
 		}
 	}
 	o.url.RawQuery = queryParams.Encode()
