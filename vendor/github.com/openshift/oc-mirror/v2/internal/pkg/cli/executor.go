@@ -122,6 +122,9 @@ type ExecutorSchema struct {
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
 	Delete                       delete.DeleteInterface
+	MaxParallelOverallDownloads  uint
+	ParallelLayers               uint
+	ParallelBatchImages          uint
 	srcFlagSet                   pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
 	destFlagSet                  pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
 }
@@ -157,7 +160,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		DestImage:            destOpts,
 		RetryOpts:            retryOpts,
 		Dev:                  false,
-		MaxParallelDownloads: 1000,
+		MaxParallelDownloads: maxParallelLayerDownloads,
 		Function:             string(mirror.CopyMode),
 	}
 
@@ -222,8 +225,11 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", opts.Global.StrictArchiving, "If set (default is false), generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB).")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
-	cmd.Flags().UintVar(&opts.MaxParallelDownloads, "max-parallel-downloads", 6, "Indicates the maximum layers to pull at the same time. Applies to a single copy operation.")
+	cmd.Flags().UintVar(&ex.MaxParallelOverallDownloads, "max-parallel-downloads", 80, "Indicates the maximum registry downloads at the same time. Defaults to 80: 8 image copies in parallel, each with 10 parallel layer copies")
 	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 600*time.Second, "Timeout for mirroring an image. Defaults to 10mn")
+	cmd.Flags().UintVar(&ex.ParallelLayers, "parallel-layers", 0, "Indicates the maximum layers downloading in parallel for an image. Defaults to 10")
+	cmd.Flags().UintVar(&ex.ParallelBatchImages, "parallel-batch-images", 0, "Indicates the maximum images downloading in parallel for a batch. Defaults to 8")
+
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
@@ -267,6 +273,8 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.Flags().MarkHidden("src-registry-token")
 	cmd.Flags().MarkHidden("src-shared-blob-dir")
 	cmd.Flags().MarkHidden("src-username")
+	cmd.Flags().MarkHidden("parallel-layers")
+	cmd.Flags().MarkHidden("parallel-batch-images")
 }
 
 // Validate - cobra validation
@@ -299,6 +307,12 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
 		return fmt.Errorf("when --workspace is used, it must have file:// prefix")
+	}
+	if o.Opts.MaxParallelDownloads < maxParallelLayerDownloads {
+		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d < %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, maxParallelLayerDownloads, maxParallelLayerDownloads)
+	}
+	if o.Opts.MaxParallelDownloads > 64 {
+		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, limitOverallParallelDownloads, limitOverallParallelDownloads)
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -377,6 +391,10 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
 	o.Opts.RemoveSignatures = true
 
+	o.Opts.MaxParallelDownloads = maxParallelLayerDownloads
+	if o.ParallelLayers > 0 {
+		o.Opts.MaxParallelDownloads = o.ParallelLayers
+	}
 	// setup logs level, and logsDir under workingDir
 	err = o.setupLogsLevelAndDir()
 	if err != nil {
@@ -408,7 +426,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
-	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror)
+	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
@@ -1030,4 +1048,18 @@ func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image)
 		return isInSlice
 	})
 	return images
+}
+
+func calculateMaxBatchSize(maxParallelDownloads uint, parallelBatchImages uint) uint {
+	maxBatchSize := uint(1)
+	if parallelBatchImages > 0 {
+		return parallelBatchImages
+	}
+	if maxParallelDownloads > maxParallelLayerDownloads {
+		maxBatchSize = maxParallelDownloads / maxParallelLayerDownloads
+	}
+	if maxBatchSize > 20 {
+		maxBatchSize = 20
+	}
+	return maxBatchSize
 }
