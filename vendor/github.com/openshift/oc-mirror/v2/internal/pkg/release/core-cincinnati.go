@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/blang/semver/v4"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"k8s.io/klog/v2"
 )
 
@@ -71,13 +74,13 @@ func (o Error) Error() string {
 // upstream Cincinnati stack given the current version, architecture, and channel.
 // The shortest path is calculated between the current and requested version from the graph edge
 // data.
-func GetUpdates(ctx context.Context, c Client, arch string, channel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
+func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
 	var current Update
 	var requested Update
 	// Prepare parametrized cincinnati query.
-	c.SetQueryParams(arch, channel, version.String())
+	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, version.String())
 
-	graph, err := getGraphData(ctx, c)
+	graph, err := getGraphData(ctx, cs)
 	if err != nil {
 		return Update{}, Update{}, nil, &Error{
 			Reason:  "APIRequestError",
@@ -187,9 +190,9 @@ func GetUpdates(ctx context.Context, c Client, arch string, channel string, vers
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
 // upstream Cincinnati stack given the current and target version and channel.
-func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
+func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
 	if sourceChannel == targetChannel {
-		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)
+		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
 	}
 
 	// Check the major and minor versions are the same with different
@@ -199,7 +202,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		return Update{}, Update{}, nil, err
 	}
 	if source.EQ(target) {
-		isBlocked, err := handleBlockedEdges(ctx, c, arch, targetChannel, startVer)
+		isBlocked, err := handleBlockedEdges(ctx, cs, targetChannel, startVer)
 		if err != nil {
 			return Update{}, Update{}, nil, err
 		}
@@ -208,24 +211,24 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 		// upgrades to the caller
 		if isBlocked {
 			klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
-			return GetUpdates(ctx, c, arch, targetChannel, reqVer, reqVer)
+			return GetUpdates(ctx, cs, targetChannel, reqVer, reqVer)
 		}
-		return GetUpdates(ctx, c, arch, targetChannel, startVer, reqVer)
+		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
 	}
 
 	// Perform initial calculation for the source channel and
 	// recurse through the rest until the target or a blocked
 	// edge is hit.
-	latest, err := GetChannelMinOrMax(ctx, c, arch, sourceChannel, false)
+	latest, err := GetChannelMinOrMax(ctx, cs, sourceChannel, false)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
 	}
-	current, _, upgrades, err := GetUpdates(ctx, c, arch, sourceChannel, startVer, latest)
+	current, _, upgrades, err := GetUpdates(ctx, cs, sourceChannel, startVer, latest)
 	if err != nil {
 		return Update{}, Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
 	}
 
-	requested, newUpgrades, err := calculate(ctx, c, arch, sourceChannel, targetChannel, latest, reqVer)
+	requested, newUpgrades, err := calculate(ctx, cs, sourceChannel, targetChannel, latest, reqVer)
 	if err != nil {
 		return Update{}, Update{}, nil, err
 	}
@@ -245,7 +248,7 @@ func CalculateUpgrades(ctx context.Context, c Client, arch, sourceChannel, targe
 
 // calculate will calculate Cincinnati upgrades between channels by finding the latest versions in the source channels
 // and incrementing the minor version until the target channel is reached.
-func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
+func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
 	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
 	if err != nil {
 		return requested, upgrades, err
@@ -264,27 +267,27 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		targetVer = reqVer
 		currChannel = targetChannel
 	} else {
-		targetVer, err = GetChannelMinOrMax(ctx, c, arch, currChannel, false)
+		targetVer, err = GetChannelMinOrMax(ctx, cs, currChannel, false)
 		if err != nil {
 			return requested, upgrades, err
 		}
 	}
 
-	isBlocked, err := handleBlockedEdges(ctx, c, arch, currChannel, startVer)
+	isBlocked, err := handleBlockedEdges(ctx, cs, currChannel, startVer)
 	if err != nil {
 		return requested, upgrades, err
 	}
 	if isBlocked {
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
-		_, requested, _, err = GetUpdates(ctx, c, arch, targetChannel, targetVer, targetVer)
+		_, requested, _, err = GetUpdates(ctx, cs, targetChannel, targetVer, targetVer)
 		//Warnf is 5?
 		klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
 
 	klog.V(1).Infof("Getting updates for version %s in channel %s", startVer.String(), currChannel)
-	_, requested, upgrades, err = GetUpdates(ctx, c, arch, currChannel, startVer, targetVer)
+	_, requested, upgrades, err = GetUpdates(ctx, cs, currChannel, startVer, targetVer)
 	if err != nil {
 		return requested, upgrades, err
 	}
@@ -293,7 +296,7 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 		return requested, upgrades, nil
 	}
 
-	currRequested, currUpgrades, err := calculate(ctx, c, arch, currChannel, targetChannel, targetVer, reqVer)
+	currRequested, currUpgrades, err := calculate(ctx, cs, currChannel, targetChannel, targetVer, reqVer)
 	if err != nil {
 		return requested, upgrades, err
 	}
@@ -305,8 +308,8 @@ func calculate(ctx context.Context, c Client, arch, sourceChannel, targetChannel
 
 // handleBlockedEdges will check for the starting version in the current channel
 // if it does not exist the version is blocked.
-func handleBlockedEdges(ctx context.Context, c Client, arch, targetChannel string, startVer semver.Version) (bool, error) {
-	chanVersions, err := GetVersions(ctx, c, arch, targetChannel)
+func handleBlockedEdges(ctx context.Context, cs CincinnatiSchema, targetChannel string, startVer semver.Version) (bool, error) {
+	chanVersions, err := GetVersions(ctx, cs, targetChannel)
 	if err != nil {
 		return true, err
 	}
@@ -344,11 +347,11 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 
 // GetChannelMinOrMax fetches the minimum or maximum version from the specified
 // upstream Cincinnati stack given architecture and channel.
-func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel string, min bool) (semver.Version, error) {
+func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string, min bool) (semver.Version, error) {
 	// Prepare parametrized cincinnati query.
-	c.SetQueryParams(arch, channel, "")
+	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
 
-	graph, err := getGraphData(ctx, c)
+	graph, err := getGraphData(ctx, cs)
 	if err != nil {
 		return semver.Version{}, &Error{
 			Reason:  "APIRequestError",
@@ -383,7 +386,7 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 	if len(Vers) == 0 {
 		return semver.Version{}, &Error{
 			Reason:  "NoVersionsFound",
-			Message: fmt.Sprintf("no cluster versions found for %q in the %q channel", arch, channel),
+			Message: fmt.Sprintf("no cluster versions found for %q in the %q channel", cs.CincinnatiParams.Arch, channel),
 		}
 	}
 
@@ -396,11 +399,11 @@ func GetChannelMinOrMax(ctx context.Context, c Client, arch string, channel stri
 
 // GetVersions will return all update payloads from the specified
 // upstream Cincinnati stack given architecture and channel.
-func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.Version, error) {
+func GetVersions(ctx context.Context, cs CincinnatiSchema, channel string) ([]semver.Version, error) {
 	// Prepare parametrized cincinnati query.
-	c.SetQueryParams(arch, channel, "")
+	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
 
-	graph, err := getGraphData(ctx, c)
+	graph, err := getGraphData(ctx, cs)
 	if err != nil {
 		return nil, &Error{
 			Reason:  "APIRequestError",
@@ -428,11 +431,11 @@ func GetVersions(ctx context.Context, c Client, arch, channel string) ([]semver.
 }
 
 // GetUpdatesInRange will return all update payload within a semver range for a specified channel and architecture.
-func GetUpdatesInRange(ctx context.Context, c Client, channel, arch string, updateRange semver.Range) ([]Update, error) {
+func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string, updateRange semver.Range) ([]Update, error) {
 	// Prepare parametrized cincinnati query.
-	c.SetQueryParams(arch, channel, "")
+	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
 
-	graph, err := getGraphData(ctx, c)
+	graph, err := getGraphData(ctx, cs)
 	if err != nil {
 		return nil, &Error{
 			Reason:  "APIRequestError",
@@ -453,9 +456,37 @@ func GetUpdatesInRange(ctx context.Context, c Client, channel, arch string, upda
 }
 
 // getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel
-func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
-	transport := c.GetTransport()
-	uri := c.GetURL()
+func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err error) {
+	if cs.Opts.Mode == mirror.DiskToMirror {
+		graphDataFiles, err := os.ReadDir(cs.CincinnatiParams.GraphDataDir)
+		if err != nil {
+			return graph, &Error{Reason: "ReadDirFailed", Message: err.Error(), cause: err}
+		}
+
+		if len(graphDataFiles) == 0 {
+			return graph, &Error{Reason: "NoGraphData", Message: "No graph data found on disk"}
+		}
+
+		uri := cs.Client.GetURL()
+		queryValues := uri.Query()
+		arch := queryValues.Get("arch")
+		channel := queryValues.Get("channel")
+		filename := fmt.Sprintf("%s-%s.json", arch, channel)
+
+		fileData, err := os.ReadFile(path.Join(cs.CincinnatiParams.GraphDataDir, filename))
+		if err != nil {
+			return graph, &Error{Reason: "ReadFileFailed", Message: err.Error(), cause: err}
+		}
+
+		if err = json.Unmarshal(fileData, &graph); err != nil {
+			return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+		}
+
+		return graph, nil
+	}
+
+	transport := cs.Client.GetTransport()
+	uri := cs.Client.GetURL()
 	// Download the update graph.
 	req, err := http.NewRequest("GET", uri.String(), nil)
 	if err != nil {
@@ -463,7 +494,7 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 	}
 	req.Header.Add("Accept", GraphMediaType)
 	if transport != nil && transport.TLSClientConfig != nil {
-		if c.GetTransport().TLSClientConfig.ClientCAs == nil {
+		if cs.Client.GetTransport().TLSClientConfig.ClientCAs == nil {
 			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
 		}
 		//else {
@@ -500,11 +531,28 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 		return graph, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
 	}
 
+	if err := writeGraphDataToFile(body, *uri, cs.CincinnatiParams.GraphDataDir); err != nil {
+		return graph, err
+	}
+
 	if err = json.Unmarshal(body, &graph); err != nil {
 		return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
 	}
 
 	return graph, nil
+}
+
+func writeGraphDataToFile(body []byte, uri url.URL, graphDataDir string) error {
+	queryValues := uri.Query()
+	arch := queryValues.Get("arch")
+	channel := queryValues.Get("channel")
+	filename := fmt.Sprintf("%s-%s.json", arch, channel)
+	err := os.WriteFile(path.Join(graphDataDir, filename), body, 0644)
+	if err != nil {
+		return &Error{Reason: "FileWriteFailed", Message: err.Error(), cause: err}
+	}
+
+	return nil
 }
 
 // UnmarshalJSON unmarshals an edge in the update graph. The edge's JSON

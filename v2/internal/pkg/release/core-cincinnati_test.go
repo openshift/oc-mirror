@@ -94,7 +94,9 @@ func TestGetUpdates(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			current, requested, updates, err := GetUpdates(context.Background(), c, arch, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
+			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+
+			current, requested, updates, err := GetUpdates(context.Background(), cs, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.current, current)
@@ -153,7 +155,8 @@ func TestGetMinorMax(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			version, err := GetChannelMinOrMax(context.Background(), c, arch, channelName, test.min)
+			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			version, err := GetChannelMinOrMax(context.Background(), cs, channelName, test.min)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.version, version)
@@ -215,7 +218,8 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			versions, err := GetVersions(context.Background(), c, test.arch, test.channel)
+			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch}}
+			versions, err := GetVersions(context.Background(), cs, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.versions, versions)
@@ -276,7 +280,8 @@ func TestGetUpdatesInRange(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			versions, err := GetUpdatesInRange(context.TODO(), c, channelName, arch, test.releaseRange)
+			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			versions, err := GetUpdatesInRange(context.TODO(), cs, channelName, test.releaseRange)
 			if test.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, test.versions, versions)
@@ -405,7 +410,8 @@ func TestCalculateUpgrades(t *testing.T) {
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			cur, req, updates, err := CalculateUpgrades(context.Background(), &mockClient{url: endpoint}, arch, test.sourceChannel, test.targetChannel, test.curr, test.req)
+			cs := CincinnatiSchema{Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			cur, req, updates, err := CalculateUpgrades(context.Background(), cs, test.sourceChannel, test.targetChannel, test.curr, test.req)
 
 			if test.err == "" {
 				require.NoError(t, err)
@@ -472,7 +478,8 @@ func TestHandleBlockedEdges(t *testing.T) {
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			isBlocked, err := handleBlockedEdges(context.Background(), &mockClient{url: endpoint}, arch, test.targetChannel, test.last)
+			cs := CincinnatiSchema{Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			isBlocked, err := handleBlockedEdges(context.Background(), cs, test.targetChannel, test.last)
 
 			if test.err == "" {
 				require.NoError(t, err)

@@ -282,7 +282,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 	o.Log.Debug(collectorPrefix+"images to copy (before duplicates) %d ", count)
 	var err error
 	// check the mode
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 		allImages, err = o.prepareM2DCopyBatch(o.Log, dir, relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())

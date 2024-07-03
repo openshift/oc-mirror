@@ -3,7 +3,6 @@ package release
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
@@ -23,7 +22,7 @@ type CollectorInterface interface {
 	// of the image, rather than the exact digest or tag.
 	// This works because oc-mirror doesn't know how to mix OKD and OCP
 	// release mirroring.
-	ReleaseImage() (string, error)
+	ReleaseImage(context.Context) (string, error)
 }
 
 type GraphBuilderInterface interface {
@@ -32,8 +31,6 @@ type GraphBuilderInterface interface {
 
 type CincinnatiInterface interface {
 	GetReleaseReferenceImages(context.Context) []v2alpha1.CopyImageSchema
-	NewOCPClient(uuid.UUID) (Client, error)
-	NewOKDClient(uuid.UUID) (Client, error)
 }
 
 type SignatureInterface interface {

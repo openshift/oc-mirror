@@ -151,10 +151,6 @@ func (cp CopyOptions) IsDiskToMirror() bool {
 	return cp.Mode == DiskToMirror
 }
 
-func (cp CopyOptions) IsPrepare() bool {
-	return cp.Mode == Prepare
-}
-
 // noteCloseFailure returns (possibly-nil) err modified to account for (non-nil) closeErr.
 // The error for closeErr is annotated with description (which is not a format string)
 // Typical usage:

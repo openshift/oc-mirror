@@ -23,21 +23,6 @@ func (o MockDelete) DeleteRegistryImages(images v2alpha1.DeleteImageList) error 
 	return nil
 }
 
-func (o MockDelete) ConvertReleaseImages([]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
-	return nil, nil
-}
-
-func (o MockDelete) FilterReleasesForDelete() (map[string][]v2alpha1.RelatedImage, error) {
-	res := make(map[string][]v2alpha1.RelatedImage)
-	res["test"] = []v2alpha1.RelatedImage{
-		{
-			Name:  "test",
-			Image: "test.registry.com/test",
-		},
-	}
-	return res, nil
-}
-
 // nolint: unused
 func (o MockDelete) startLocalRegistryGarbageCollect() error {
 	return nil

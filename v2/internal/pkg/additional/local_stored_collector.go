@@ -42,7 +42,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() || o.Opts.IsPrepare() {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
@@ -67,7 +67,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			// OCPBUGS-33196 - check source image for tag and digest
 			// skip mirroring
 			if imgSpec.IsImageByTagAndDigest() {
-				o.Log.Warn(collectorPrefix + "%s has both tag and digest : SKIPPING", imgSpec.Reference)
+				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
 			} else {
 				allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v2alpha1.TypeGeneric})
 			}

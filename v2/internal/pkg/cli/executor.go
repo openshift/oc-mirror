@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -462,13 +463,6 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		err = o.RunMirrorToMirror(cmd, args)
 	}
 
-	// track the workflow - used for delete
-	wfInfo := filepath.Join(o.Opts.Global.WorkingDir, infoDir, modeFile)
-	fileErr := os.WriteFile(wfInfo, []byte(o.Opts.Mode), 0755)
-	if fileErr != nil {
-		o.Log.Warn("unable to write workflow mode %v", err)
-	}
-
 	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
 
 	if err != nil {
@@ -670,19 +664,19 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
+	// create cincinnati graph dir
+	o.Log.Trace("creating cincinnati graph data directory %s ", path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir))
+	err = o.MakeDir.makeDirAll(path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for cincinnati graph data directory %v ", err)
+		return err
+	}
+
 	// create operator cache dir
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
-		return err
-	}
-
-	// track the mode - this is important for delete functionality
-	o.Log.Trace("creating info directory %s ", o.Opts.Global.WorkingDir+"/"+infoDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+infoDir, 0755)
-	if err != nil {
-		o.Log.Error(" setupWorkingDir for info %v ", err)
 		return err
 	}
 
@@ -808,7 +802,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			if err != nil {
 				return err
 			}
-			releaseImage, err := o.Release.ReleaseImage()
+			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -899,7 +893,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 			if err != nil {
 				return err
 			}
-			releaseImage, err := o.Release.ReleaseImage()
+			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
 			if err != nil {
 				return err
 			}

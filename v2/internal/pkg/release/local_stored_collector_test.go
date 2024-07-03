@@ -69,11 +69,36 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		//copy tests/release-filters-fake to working-dir
-		err = copy.Copy(common.TestFolder+"working-dir-fake/release-filters/", filepath.Join(ex.Opts.Global.WorkingDir, releaseFiltersDir))
+
+		res, err := ex.ReleaseImageCollector(context.Background())
 		if err != nil {
-			t.Fatalf("should not fail")
+			t.Fatalf("should not fail: %v", err)
 		}
+		if len(res) == 0 {
+			t.Fatalf("should contain at least 1 image")
+		}
+		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+			t.Fatalf("source images should be from local storage")
+		}
+		log.Debug("completed test related images %v ", res)
+	})
+
+	t.Run("Testing ReleaseImageCollector with real GetReleaseReferenceImages - Disk to mirror : should pass", func(t *testing.T) {
+
+		os.RemoveAll(common.TestFolder + "hold-release/")
+		os.RemoveAll(common.TestFolder + "release-images")
+		os.RemoveAll(common.TestFolder + "tmp/")
+
+		ex := setupCollector_DiskToMirror(tempDir, log)
+
+		client := &ocpClient{}
+		client.SetQueryParams(ex.Config.Mirror.Platform.Architectures[0], ex.Config.Mirror.Platform.Channels[0].Name, "")
+		sig := MockCincinnati{}
+		cn := NewCincinnati(ex.Log, &ex.Config, ex.Opts, client, false, sig)
+
+		ex.Cincinnati = cn
+
+		ex.Opts.Global.WorkingDir = filepath.Join(common.TestFolder, "working-dir-fake")
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		if err != nil {
@@ -156,12 +181,8 @@ func TestReleaseImage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
-		//copy tests/release-filters-fake to working-dir
-		err = copy.Copy(common.TestFolder+"working-dir-fake/release-filters/", filepath.Join(ex.Opts.Global.WorkingDir, releaseFiltersDir))
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-		res, err := ex.ReleaseImage()
+
+		res, err := ex.ReleaseImage(context.Background())
 		if err != nil {
 			t.Fatalf("should pass: %v", err)
 		}
@@ -213,13 +234,18 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		},
 	}
 
+	cincinnati := &MockCincinnati{}
+	client := &ocpClient{}
+	client.SetQueryParams(cfgd2m.Mirror.Platform.Architectures[0], cfgd2m.Mirror.Platform.Channels[0].Name, "")
+	cincinnati.Client = client
+
 	ex := &LocalStorageCollector{
 		Log:              log,
 		Mirror:           &MockMirror{Fail: false},
 		Config:           cfgd2m,
 		Manifest:         manifest,
 		Opts:             d2mOpts,
-		Cincinnati:       nil,
+		Cincinnati:       cincinnati,
 		LocalStorageFQDN: "localhost:9999",
 		LogsDir:          "/tmp/",
 	}
@@ -454,6 +480,8 @@ func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
 	return o.Client, nil
 }
 
-func (o MockCincinnati) GenerateReleaseSignatures(context.Context, []v2alpha1.RelatedImage) {
+func (o MockCincinnati) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	fmt.Println("test release signature")
+
+	return images, nil
 }

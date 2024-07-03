@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/blang/semver/v4"
@@ -76,30 +77,39 @@ lpGyUoChXHLIz6E2y8sYbjEjZBGRR75Wa0ivb5z85n4kR9Dq8d8GKTE=
 )
 
 type CincinnatiSchema struct {
-	Log       clog.PluggableLoggerInterface
-	Config    *v2alpha1.ImageSetConfiguration
-	Opts      mirror.CopyOptions
-	Client    Client
-	Signature SignatureInterface
-	Fail      bool
+	Log              clog.PluggableLoggerInterface
+	Config           *v2alpha1.ImageSetConfiguration
+	Opts             mirror.CopyOptions
+	Client           Client
+	Signature        SignatureInterface
+	Fail             bool
+	CincinnatiParams CincinnatiParams
+}
+
+type CincinnatiParams struct {
+	GraphDataDir string
+	Arch         string
 }
 
 func NewCincinnati(log clog.PluggableLoggerInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
 	return &CincinnatiSchema{Log: log, Config: config, Opts: opts, Client: c, Fail: b, Signature: sig}
 }
 
-func (o CincinnatiSchema) NewOCPClient(uuid uuid.UUID) (Client, error) {
-	if o.Fail {
-		return o.Client, fmt.Errorf("forced cincinnati error")
-	}
-	return o.Client, nil
+func (o *CincinnatiSchema) NewOCPClient() error {
+	client, err := NewOCPClient(uuid.New())
+	o.Client = client
+	return err
 }
 
-func (o CincinnatiSchema) NewOKDClient(uuid uuid.UUID) (Client, error) {
-	return o.Client, nil
+func (o *CincinnatiSchema) NewOKDClient() error {
+	client, err := NewOKDClient(uuid.New())
+	o.Client = client
+	return err
 }
 
 func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
+	cincinnatiParams := CincinnatiParams{GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir)}
+
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 	var (
 		allImages  []v2alpha1.CopyImageSchema
@@ -108,18 +118,19 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 	)
 
 	for _, arch := range filterCopy.Architectures {
+		cincinnatiParams.Arch = arch
+		o.CincinnatiParams = cincinnatiParams
 		versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(filterCopy.Channels))
 		for _, ch := range filterCopy.Channels {
-			var client Client
 			var err error
 			switch ch.Type {
 			case v2alpha1.TypeOCP:
-				client, err = o.NewOCPClient(o.Opts.UUID)
+				err = o.NewOCPClient()
 				if err != nil {
 					errs = append(errs, err)
 				}
 			case v2alpha1.TypeOKD:
-				client, err = o.NewOKDClient(o.Opts.UUID)
+				err = o.NewOKDClient()
 				if err != nil {
 					errs = append(errs, err)
 				}
@@ -149,7 +160,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 			if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 {
 				// Find channel maximum value and only set the minimum as well if heads-only is true
 				if len(ch.MaxVersion) == 0 {
-					latest, err := GetChannelMinOrMax(ctx, client, arch, ch.Name, false)
+					latest, err := GetChannelMinOrMax(ctx, *o, ch.Name, false)
 					if err != nil {
 						errs = append(errs, err)
 						continue
@@ -157,7 +168,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 
 					// Update version to release channel
 					ch.MaxVersion = latest.String()
-					o.Log.Info("detected minimum version as %s", ch.MaxVersion)
+					o.Log.Debug("detected minimum version as %s", ch.MaxVersion)
 					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
 						//min, found := prevChannels[ch.Name]
 						//if !found {
@@ -165,20 +176,20 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 						min := latest.String()
 						//}
 						ch.MinVersion = min
-						o.Log.Info("detected minimum version as %s\n", ch.MinVersion)
+						o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
 					}
 				}
 
 				// Find channel minimum if full is true or just the minimum is not set
 				// in the config
 				if len(ch.MinVersion) == 0 {
-					first, err := GetChannelMinOrMax(ctx, client, arch, ch.Name, true)
+					first, err := GetChannelMinOrMax(ctx, *o, ch.Name, true)
 					if err != nil {
 						errs = append(errs, err)
 						continue
 					}
 					ch.MinVersion = first.String()
-					o.Log.Info("detected minimum version as %s\n", ch.MinVersion)
+					o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
 				}
 				versionsByChannel[ch.Name] = ch
 			} else {
@@ -189,7 +200,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 				versionsByChannel[ch.Name] = ch
 			}
 
-			downloads, err := getChannelDownloads(ctx, o.Log, client, nil, ch, arch)
+			downloads, err := getChannelDownloads(ctx, *o, nil, ch)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -207,12 +218,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 		}
 
 		if len(filterCopy.Channels) > 1 {
-			client, err := NewOCPClient(o.Opts.UUID)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			newDownloads, err := getCrossChannelDownloads(ctx, o.Log, client, arch, filterCopy.Channels)
+			newDownloads, err := getCrossChannelDownloads(ctx, *o, filterCopy.Channels)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error calculating cross channel upgrades: %v", err))
 				continue
@@ -233,7 +239,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 }
 
 // getDownloads will prepare the downloads map for mirroring
-func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, c Client, lastChannels []v2alpha1.ReleaseChannel, channel v2alpha1.ReleaseChannel, arch string) ([]v2alpha1.CopyImageSchema, error) {
+func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels []v2alpha1.ReleaseChannel, channel v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
 	var allImages []v2alpha1.CopyImageSchema
 
 	var prevChannel v2alpha1.ReleaseChannel
@@ -242,7 +248,7 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 			prevChannel = ch
 		}
 	}
-	log.Trace("previous channel %v", prevChannel)
+	cs.Log.Trace("previous channel %v", prevChannel)
 	// Plot between min and max of channel
 	first, err := semver.Parse(channel.MinVersion)
 	if err != nil {
@@ -255,11 +261,11 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 
 	var newDownloads []v2alpha1.CopyImageSchema
 	if channel.ShortestPath {
-		current, newest, updates, err := CalculateUpgrades(ctx, c, arch, channel.Name, channel.Name, first, last)
+		current, newest, updates, err := CalculateUpgrades(ctx, cs, channel.Name, channel.Name, first, last)
 		if err != nil {
 			return allImages, err
 		}
-		newDownloads = gatherUpdates(log, current, newest, updates)
+		newDownloads = gatherUpdates(cs.Log, current, newest, updates)
 
 	} else {
 		lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
@@ -270,11 +276,11 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 		if err != nil {
 			return allImages, err
 		}
-		versions, err := GetUpdatesInRange(ctx, c, channel.Name, arch, highRange.AND(lowRange))
+		versions, err := GetUpdatesInRange(ctx, cs, channel.Name, highRange.AND(lowRange))
 		if err != nil {
 			return allImages, err
 		}
-		newDownloads = gatherUpdates(log, Update{}, Update{}, versions)
+		newDownloads = gatherUpdates(cs.Log, Update{}, Update{}, versions)
 	}
 	allImages = append(allImages, newDownloads...)
 
@@ -282,7 +288,7 @@ func getChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface,
 }
 
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
-func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInterface, ocpClient Client, arch string, channels []v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
+func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels []v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
 	// Strip any OKD channels from the list
 
 	var ocpChannels []v2alpha1.ReleaseChannel
@@ -304,11 +310,11 @@ func getCrossChannelDownloads(ctx context.Context, log clog.PluggableLoggerInter
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %v", err)
 	}
-	current, newest, updates, err := CalculateUpgrades(ctx, ocpClient, arch, firstCh, lastCh, first, last)
+	current, newest, updates, err := CalculateUpgrades(ctx, cs, firstCh, lastCh, first, last)
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %v", err)
 	}
-	return gatherUpdates(log, current, newest, updates), nil
+	return gatherUpdates(cs.Log, current, newest, updates), nil
 }
 
 // gatherUpdates
