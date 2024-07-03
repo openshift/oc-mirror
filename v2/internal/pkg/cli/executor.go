@@ -991,10 +991,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 // closeAll - utility to close any open files
 func (o *ExecutorSchema) closeAll() {
 	// close registry log file
-	err := o.registryLogFile.Close()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error closing log file %s: %v\n", registryLogFilename, err)
-	}
+	// ignore errors here
+	_ = o.registryLogFile.Close()
 }
 
 func withMaxNestedPaths(in []v2alpha1.CopyImageSchema, maxNestedPaths int) ([]v2alpha1.CopyImageSchema, error) {

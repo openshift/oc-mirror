@@ -201,6 +201,17 @@ func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
 
 	operatorCatalog := newOperatorCatalog()
 
+	// OCPBUGS-36445 ensure we skip invalid catalogs
+	// avoiding SIGSEGV violation
+	if err != nil {
+		catalog := strings.Split(filePath, "hold-operator/")
+		if len(catalog) <= 1 {
+			catalog = []string{"", filePath}
+		}
+		o.Log.Warn("[GetCatalog] invalid catalog %s : SKIPPING", catalog[1])
+		return operatorCatalog, nil
+	}
+
 	for _, p := range cfg.Packages {
 		operatorCatalog.Packages[p.Name] = p
 	}
