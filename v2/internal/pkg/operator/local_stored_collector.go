@@ -224,19 +224,16 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 		fromDir := strings.Join([]string{dir, blobsDir}, "/")
 		err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, label, oci)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		operatorCatalog, err := o.Manifest.GetCatalog(filepath.Join(cacheDir, label))
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 
 		ri, err := o.Manifest.GetRelatedImagesFromCatalog(operatorCatalog, op)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 		for k, v := range ri {
