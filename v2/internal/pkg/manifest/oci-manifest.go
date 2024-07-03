@@ -28,7 +28,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/otiai10/copy"
-	"k8s.io/klog/v2"
 )
 
 type OperatorCatalog struct {
@@ -189,7 +188,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 
 			default:
 				// just ignore errors as we are only interested in the FB configs layer
-				klog.Warningf("untar: unknown type: %v in %s", header.Typeflag, header.Name)
+				// klog.Warningf("untar: unknown type: %v in %s", header.Typeflag, header.Name)
 			}
 		}
 	}
@@ -200,6 +199,17 @@ func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
 	cfg, err := declcfg.LoadFS(context.Background(), os.DirFS(filePath))
 
 	operatorCatalog := newOperatorCatalog()
+
+	// OCPBUGS-36445 and OCPBUGS-36498 (v4.16) ensure we skip invalid catalogs
+	// avoiding SIGSEGV violation
+	if err != nil {
+		catalog := strings.Split(filePath, "hold-operator/")
+		if len(catalog) <= 1 {
+			catalog = []string{"", filePath}
+		}
+		o.Log.Warn("[GetCatalog] invalid catalog %s : SKIPPING", catalog[1])
+		return operatorCatalog, nil
+	}
 
 	for _, p := range cfg.Packages {
 		operatorCatalog.Packages[p.Name] = p
