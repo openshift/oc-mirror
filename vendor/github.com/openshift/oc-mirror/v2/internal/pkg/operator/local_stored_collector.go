@@ -87,9 +87,10 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) ([]v
 				return []v2alpha1.CopyImageSchema{}, err
 			}
 			d, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+			// OCPBUGS-36548 (manifest unknown)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return []v2alpha1.CopyImageSchema{}, err
+				o.Log.Warn(collectorPrefix+"catalog %s : SKIPPING", err.Error())
+				continue
 			}
 			catalogDigest = d
 		}
