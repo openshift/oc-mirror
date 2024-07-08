@@ -28,7 +28,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/otiai10/copy"
-	"k8s.io/klog/v2"
 )
 
 type OperatorCatalog struct {
@@ -189,7 +188,6 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 
 			default:
 				// just ignore errors as we are only interested in the FB configs layer
-				klog.Warningf("untar: unknown type: %v in %s", header.Typeflag, header.Name)
 			}
 		}
 	}
