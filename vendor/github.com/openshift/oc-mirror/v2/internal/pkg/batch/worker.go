@@ -93,7 +93,7 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 				o.CopiedImages.TotalOperatorImages++
 			}
 		case img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
-			// error occured on anything other than release images, continue mirroring
+			// error occurred on anything other than release images, continue mirroring
 			errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
 
 		default:
