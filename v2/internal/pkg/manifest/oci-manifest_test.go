@@ -606,8 +606,9 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 
 			var res map[string][]v2alpha1.RelatedImage
 			var err error
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
 
-			res, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
+			res, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg, copyImageSchemaMap)
 
 			if testCase.expectedError == nil {
 				assert.NoError(t, err)
@@ -668,8 +669,9 @@ func TestTypesOnRelatedImages(t *testing.T) {
 
 			var bundles map[string][]v2alpha1.RelatedImage
 			var err error
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
 
-			bundles, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg)
+			bundles, err = manifest.GetRelatedImagesFromCatalog(operatorCatalog, testCase.cfg, copyImageSchemaMap)
 
 			assert.NoError(t, err)
 

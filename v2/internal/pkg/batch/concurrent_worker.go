@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -27,6 +31,8 @@ func NewConcurrentBatch(log clog.PluggableLoggerInterface,
 	}
 	return &ConcurrentBatch{Log: log, LogsDir: logsDir, Mirror: mirror, CopiedImages: copiedImages, BatchSize: batchSize}
 }
+
+var skippingMsg = "skipping operator bundle %s because one of its related images failed to mirror"
 
 type ConcurrentBatch struct {
 	Log          clog.PluggableLoggerInterface
@@ -89,15 +95,25 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 				barFillerClearOnAbort(),
 			)
 			wg.Go(func() error {
-				skip, reason := shouldSkipImage(img, opts.Mode)
+				mu.Lock()
+				skip, reason := shouldSkipImage(img, opts.Mode, errArray)
+				mu.Unlock()
 				if skip {
 					mu.Lock()
-					o.CopiedImages.TotalReleaseImages++
-					o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
+
 					if reason != nil {
 						errArray = append(errArray, mirrorErrorSchema{image: img, err: reason})
 					}
-					spinner.Increment()
+
+					switch img.Type {
+					case v2alpha1.TypeOperatorBundle:
+						spinner.Abort(false)
+					case v2alpha1.TypeCincinnatiGraph:
+						o.CopiedImages.TotalReleaseImages++
+						o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
+						spinner.Increment()
+					}
+
 					mu.Unlock()
 					return nil
 				}
@@ -117,10 +133,15 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
 						o.CopiedImages.TotalOperatorImages++
 					}
-				case img.Type != v2alpha1.TypeOCPRelease && img.Type != v2alpha1.TypeOCPReleaseContent:
-					_, errArray = handleError(err, errArray, img, collectorSchema.AllImages)
+				case img.Type.IsOperator():
+					operators := collectorSchema.CopyImageSchemaMap.OperatorsByImage[img.Origin]
+					bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
+					errArray = append(errArray, mirrorErrorSchema{image: img, err: err, operators: operators, bundles: bundles})
 					spinner.Abort(false)
-				default:
+				case img.Type.IsAdditionalImage():
+					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
+					spinner.Abort(false)
+				case img.Type.IsRelease(): //TODO ALEX ASK SHERINE IF CINCINNATI SHOULD BE INCLUDED HERE
 					// error on release image, save the errArray and immediately return `UnsafeError` to caller
 					currentMirrorError := mirrorErrorSchema{image: img, err: err}
 					errArray = append(errArray, currentMirrorError)
@@ -263,21 +284,57 @@ func barFillerClearOnAbort() mpb.BarOption {
 // An example would be to skip mirroring an operator bundle image when one of its related images have failed
 // to mirror.
 // in the latter case, shouldSkipImage will also return an error which will explain the reason for skipping
-func shouldSkipImage(img v2alpha1.CopyImageSchema, mode string) (bool, error) {
+func shouldSkipImage(img v2alpha1.CopyImageSchema, mode string, errArray []mirrorErrorSchema) (bool, error) {
 	if img.Type == v2alpha1.TypeCincinnatiGraph && (mode == mirror.MirrorToDisk || mode == mirror.MirrorToMirror) {
 		return true, nil
 	}
+
+	if img.Type == v2alpha1.TypeOperatorBundle {
+		for _, err := range errArray {
+			bundleImage := img.Origin
+			if strings.Contains(bundleImage, "://") {
+				bundleImage = strings.Split(img.Origin, "://")[1]
+			}
+
+			if err.bundles != nil && err.bundles.Has(bundleImage) {
+				return true, fmt.Errorf(skippingMsg, img.Origin)
+			}
+		}
+	}
+
 	return false, nil
 }
 
-// handleError makes the necessary changes to errArray and to the collectorSchema.AllImages
-// when an error occurs.
-// At the moment, only errArray is appended with the new error.
-// In a later change (CLID-133 + CLID-98), we might also choose to update
-// the "parent" image (such as the bundle image or release image) to signal the operator
-// did not get mirrored correctly (easier troubleshooting), and to skip the "parent" or "sibling"
-// images to gain more time.
-func handleError(err error, errArray []mirrorErrorSchema, img v2alpha1.CopyImageSchema, allImages []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, []mirrorErrorSchema) {
-	errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
-	return allImages, errArray
+func saveErrors(logger clog.PluggableLoggerInterface, logsDir string, errArray []mirrorErrorSchema) (string, error) {
+	if len(errArray) > 0 {
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
+		file, err := os.Create(filepath.Join(logsDir, filename))
+		if err != nil {
+			logger.Error(workerPrefix+"failed to create file: %s", err.Error())
+			return filename, err
+		}
+		defer file.Close()
+
+		for _, err := range errArray {
+			errorMsg := formatErrorMsg(err)
+			logger.Error(workerPrefix + errorMsg)
+			fmt.Fprintln(file, errorMsg)
+		}
+		return filename, nil
+	}
+	return "", nil
+}
+
+func formatErrorMsg(err mirrorErrorSchema) string {
+	if len(err.operators) > 0 || len(err.bundles) > 0 {
+		return fmt.Sprintf("error mirroring image %s (Operator bundles: %v - Operators: %v) error: %s", err.image.Origin, maps.Values(err.bundles), maps.Keys(err.operators), err.err.Error())
+	}
+
+	return fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
+}
+
+func (s StringMap) Has(key string) bool {
+	_, ok := s[key]
+	return ok
 }

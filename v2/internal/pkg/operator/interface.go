@@ -7,5 +7,5 @@ import (
 )
 
 type CollectorInterface interface {
-	OperatorImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error)
+	OperatorImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error)
 }

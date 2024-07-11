@@ -3,8 +3,6 @@ package batch
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,25 +27,6 @@ type Batch struct {
 	Mirror       mirror.MirrorInterface
 	CopiedImages v2alpha1.CollectorSchema
 	Progress     *ProgressStruct
-}
-
-type ProgressStruct struct {
-	countTotal            int
-	countReleaseImages    int
-	countOperatorsImages  int
-	countAdditionalImages int
-
-	countErrorTotal                 int
-	countReleaseImagesErrorTotal    int
-	countOperatorsImagesErrorTotal  int
-	countAdditionalImagesErrorTotal int
-
-	mirrorMessage string
-	Log           clog.PluggableLoggerInterface
-}
-type mirrorErrorSchema struct {
-	image v2alpha1.CopyImageSchema
-	err   error
 }
 
 // Worker - the main batch processor
@@ -158,27 +137,6 @@ func (o *Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSc
 	execTime := endTime.Sub(startTime)
 	o.Log.Debug("batch time     : %v", execTime)
 	return o.CopiedImages, nil
-}
-
-func saveErrors(logger clog.PluggableLoggerInterface, logsDir string, errArray []mirrorErrorSchema) (string, error) {
-	if len(errArray) > 0 {
-		timestamp := time.Now().Format("20060102_150405")
-		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
-		file, err := os.Create(filepath.Join(logsDir, filename))
-		if err != nil {
-			logger.Error(workerPrefix+"failed to create file: %s", err.Error())
-			return filename, err
-		}
-		defer file.Close()
-
-		for _, err := range errArray {
-			errorMsg := fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
-			logger.Error(workerPrefix + errorMsg)
-			fmt.Fprintln(file, errorMsg)
-		}
-		return filename, nil
-	}
-	return "", nil
 }
 
 func (o Batch) logProgress(img v2alpha1.CopyImageSchema, collectorSchema v2alpha1.CollectorSchema, err error) {
