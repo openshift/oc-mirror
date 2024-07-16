@@ -55,6 +55,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	// set up http object
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+		Proxy:           http.ProxyFromEnvironment,
 	}
 	httpClient := &http.Client{Transport: tr}
 
