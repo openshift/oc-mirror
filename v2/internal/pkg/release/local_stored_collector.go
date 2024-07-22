@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
@@ -327,8 +328,9 @@ func (o LocalStorageCollector) identifyReleases() ([]v2alpha1.RelatedImage, []st
 	for _, copy := range releaseImageCopies {
 		releasePath := strings.TrimPrefix(copy.Destination, ociProtocol)
 		releasePath = strings.TrimPrefix(releasePath, ociProtocolTrimmed)
-		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
-		releaseFolders = append(releaseFolders, releaseHoldPath)
+		re := regexp.MustCompile("^.*/" + releaseImageDir)
+		releaseHoldPath := re.ReplaceAll([]byte(releasePath), []byte(filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir)))
+		releaseFolders = append(releaseFolders, string(releaseHoldPath))
 		releaseImages = append(releaseImages, v2alpha1.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v2alpha1.TypeOCPRelease})
 	}
 	return releaseImages, releaseFolders, nil
