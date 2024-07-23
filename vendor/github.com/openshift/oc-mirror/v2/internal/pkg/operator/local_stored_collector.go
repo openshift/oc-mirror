@@ -356,7 +356,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+			// OCPBUGS-31622 skipping empty related images
+			if img.Image == "" {
 				continue
 			}
 			imgSpec, err := image.ParseRef(img.Image)
@@ -368,7 +369,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			// prepare the src and dest references
 			switch {
-			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0: // applies only to catalogs
+			// applies only to catalogs
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0:
 				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, img.TargetCatalog}, "/")
 			case imgSpec.Transport == ociProtocol:
@@ -381,7 +383,8 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			// add the tag for src and dest
 			switch {
-			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0: // applies only to catalogs
+			// applies only to catalogs
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				src = src + ":" + img.TargetTag
 				dest = dest + ":" + img.TargetTag
 			case imgSpec.Tag == "":
@@ -397,7 +400,11 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInter
 
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
-			result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
+			if img.Type == v2alpha1.TypeOperatorCatalog && o.Opts.Function == "delete" {
+				o.Log.Debug("delete mode, catalog index %s : SKIPPED", img.Image)
+			} else {
+				result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
+			}
 		}
 	}
 	return result, nil
