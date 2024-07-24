@@ -18,6 +18,7 @@ const (
 	TypeOperatorBundle
 	TypeOperatorRelatedImage
 	TypeGeneric
+	TypeKubeVirtContainer
 )
 
 // ImageTypeString defines the string

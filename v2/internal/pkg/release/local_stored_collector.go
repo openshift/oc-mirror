@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"gopkg.in/yaml.v2"
 )
 
 type LocalStorageCollector struct {
@@ -47,7 +49,8 @@ func (o LocalStorageCollector) destinationRegistry() string {
 }
 
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
-	o.Opts.MultiArch = "system" // we just care for 1 platform release, in order to read release images
+	// we just care for 1 platform release, in order to read release images
+	o.Opts.MultiArch = "system"
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	var allImages []v2alpha1.CopyImageSchema
 	var imageIndexDir string
@@ -127,6 +130,17 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
+
+			if o.Config.Mirror.Platform.KubeVirtContainer {
+				ki, err := o.getKubeVirtImage(cacheDir)
+				if err != nil {
+					// log to console as warning
+					o.Log.Warn("%v", err)
+				} else {
+					allRelatedImages = append(allRelatedImages, ki)
+				}
+			}
+
 			//add the release image itself
 			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
 			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages)
@@ -180,8 +194,21 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
+
+			if o.Config.Mirror.Platform.KubeVirtContainer {
+				cacheDir := filepath.Join(releaseDir)
+				ki, err := o.getKubeVirtImage(cacheDir)
+				if err != nil {
+					// log to console as warning
+					o.Log.Warn("%v", err)
+				} else {
+					allRelatedImages = append(allRelatedImages, ki)
+				}
+			}
+
 			allRelatedImages = append(allRelatedImages, releaseRelatedImages...)
 		}
+
 		if o.Config.Mirror.Platform.Graph {
 			o.Log.Debug("adding graph data image")
 			graphRelatedImage := v2alpha1.RelatedImage{
@@ -369,4 +396,43 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 	} else {
 		return "", fmt.Errorf("[release collector] could not establish the destination for the release image")
 	}
+}
+
+// getKubeVirtImage - CLID-179 : include coreos-bootable container image
+// if set it will be across the board for all releases
+func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2alpha1.RelatedImage, error) {
+	var ibi v2alpha1.InstallerBootableImages
+	var icm v2alpha1.InstallerConfigMap
+
+	// parse the main yaml file
+	biFile := strings.Join([]string{releaseArtifactsDir, releaseBootableImagesFullPath}, "/")
+	file, err := os.ReadFile(biFile)
+	if err != nil {
+		return v2alpha1.RelatedImage{}, fmt.Errorf("reading kubevirt yaml file %v", err)
+	}
+
+	errs := yaml.Unmarshal(file, &icm)
+	if errs != nil {
+		// this should not break the release process
+		// we just report the error and continue
+		return v2alpha1.RelatedImage{}, fmt.Errorf("marshalling kubevirt yaml file %v", errs)
+	}
+
+	o.Log.Trace(fmt.Sprintf("data %v", icm.Data.Stream))
+	// now parse the json section
+	errs = json.Unmarshal([]byte(icm.Data.Stream), &ibi)
+	if errs != nil {
+		// this should not break the release process
+		// we just report the error and continue
+		return v2alpha1.RelatedImage{}, fmt.Errorf("parsing json from kubevirt configmap data %v", errs)
+	}
+
+	image := ibi.Architectures.X86_64.Images.Kubevirt.DigestRef
+	o.Log.Info(fmt.Sprintf("kubeVirtContainer set to true [ including : %v ]", image))
+	kubeVirtImage := v2alpha1.RelatedImage{
+		Image: image,
+		Name:  "KubeVirtContainer",
+		Type:  v2alpha1.TypeOCPRelease,
+	}
+	return kubeVirtImage, nil
 }
