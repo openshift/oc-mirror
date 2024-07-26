@@ -129,7 +129,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 			//add the release image itself
 			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
-			tmpAllImages, err := o.prepareM2DCopyBatch(o.Log, allRelatedImages)
+			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, err
 			}
@@ -197,7 +197,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			// containing only the graph image. This way we can easily identify the destination
 			// of the graph image.
 			graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
-			graphCopySlice, err := o.prepareD2MCopyBatch(o.Log, graphImageSlice)
+			graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, err
@@ -211,7 +211,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			o.GraphDataImage = graphCopySlice[0].Destination
 			allImages = append(allImages, graphCopySlice...)
 		}
-		releaseCopyImages, err := o.prepareD2MCopyBatch(o.Log, allRelatedImages)
+		releaseCopyImages, err := o.prepareD2MCopyBatch(allRelatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
@@ -222,37 +222,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	return allImages, nil
 }
 
-func (o LocalStorageCollector) prepareD2MCopyBatch(log clog.PluggableLoggerInterface, images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
-	var result []v2alpha1.CopyImageSchema
-	for _, img := range images {
-		var src string
-		var dest string
-
-		imgSpec, err := image.ParseRef(img.Image)
-		if err != nil {
-			o.Log.Error("%s", err.Error())
-			return nil, err
-		}
-		if imgSpec.IsImageByDigest() {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
-			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
-		} else {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-		}
-		if src == "" || dest == "" {
-			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
-		}
-
-		o.Log.Debug("source %s", src)
-		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
-
-	}
-	return result, nil
-}
-
-func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInterface, images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	for _, img := range images {
 		var src string
@@ -265,7 +235,11 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		}
 		src = imgSpec.ReferenceWithTransport
 		if imgSpec.IsImageByDigest() {
-			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest}, "/")
+			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+			if len(tag) > 128 {
+				tag = tag[:127]
+			}
+			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + tag}, "/")
 		} else {
 			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
 
@@ -273,6 +247,40 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(log clog.PluggableLoggerInter
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
 		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+	}
+	return result, nil
+}
+
+func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	var result []v2alpha1.CopyImageSchema
+	for _, img := range images {
+		var src string
+		var dest string
+
+		imgSpec, err := image.ParseRef(img.Image)
+		if err != nil {
+			o.Log.Error("%s", err.Error())
+			return nil, err
+		}
+		if imgSpec.IsImageByDigest() {
+			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+			if len(tag) > 128 {
+				tag = tag[:127]
+			}
+			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + tag}, "/")
+			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
+		} else {
+			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+		}
+		if src == "" || dest == "" {
+			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
+		}
+
+		o.Log.Debug("source %s", src)
+		o.Log.Debug("destination %s", dest)
+		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+
 	}
 	return result, nil
 }
@@ -320,7 +328,7 @@ func (o *LocalStorageCollector) GraphImage() (string, error) {
 				Type:  v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		graphCopyImage, err := o.prepareD2MCopyBatch(nil, graphRelatedImage)
+		graphCopyImage, err := o.prepareD2MCopyBatch(graphRelatedImage)
 		if err != nil {
 			return "", fmt.Errorf("[release collector] could not establish the destination for the graph image: %v", err)
 		}
@@ -352,7 +360,7 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 				Type:  v2alpha1.TypeOCPRelease,
 			},
 		}
-		releaseCopyImage, err := o.prepareD2MCopyBatch(nil, releaseRelatedImage)
+		releaseCopyImage, err := o.prepareD2MCopyBatch(releaseRelatedImage)
 		if err != nil {
 			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
 		}
