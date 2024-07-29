@@ -9,10 +9,8 @@ import (
 	"io/fs"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -328,14 +326,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		layersToAdd := []v1.Layer{}
 		layersToDelete := []v1.Layer{}
-		withCacheRegeneration := true
-		_, err := os.Stat(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
-		if errors.Is(err, os.ErrNotExist) {
-			withCacheRegeneration = false
-		} else if err != nil {
-			return fmt.Errorf("unable to determine location of cache for image %s. Cache generation failed: %v", ctlgRef, err)
-		}
-
 		configLayerToAdd, err := builder.LayerFromPathWithUidGid("/configs", filepath.Join(artifactDir, config.IndexDir), 0, 0)
 		if err != nil {
 			return fmt.Errorf("error creating add layer: %v", err)
@@ -349,40 +339,6 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			return fmt.Errorf("error creating deleted layer: %v", err)
 		}
 		layersToDelete = append(layersToDelete, deletedConfigLayer)
-
-		if withCacheRegeneration {
-
-			opmCmdPath := ""
-			if opmBinary := os.Getenv("OPM_BINARY"); opmBinary != "" {
-				opmCmdPath = opmBinary
-			} else {
-				opmCmdPath = filepath.Join(artifactDir, config.OpmBinDir, "opm")
-			}
-			_, err = os.Stat(opmCmdPath)
-			if err != nil {
-				return fmt.Errorf("cannot find opm in the extracted catalog %v for %s on %s: %v", ctlgRef, runtime.GOOS, runtime.GOARCH, err)
-			}
-
-			absConfigPath, err := filepath.Abs(filepath.Join(artifactDir, config.IndexDir))
-			if err != nil {
-				return fmt.Errorf("error getting absolute path for catalog's index %v: %v", filepath.Join(artifactDir, config.IndexDir), err)
-			}
-			absCachePath, err := filepath.Abs(filepath.Join(artifactDir, config.TmpDir))
-			if err != nil {
-				return fmt.Errorf("error getting absolute path for catalog's cache %v: %v", filepath.Join(artifactDir, config.TmpDir), err)
-			}
-			cmd := exec.Command(opmCmdPath, "serve", absConfigPath, "--cache-dir", absCachePath, "--cache-only")
-			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("error regenerating the cache for %v: %v", ctlgRef, err)
-			}
-			// Fix OCPBUGS-17546:
-			// Add the cache under /cache in a new layer (instead of white-out /tmp/cache, which resulted in crashLoopBackoff only on some clusters)
-			cacheLayerToAdd, err := builder.LayerFromPathWithUidGid("/cache", filepath.Join(artifactDir, config.TmpDir), cacheFolderUID, cacheFolderGID)
-			if err != nil {
-				return fmt.Errorf("error creating add layer: %v", err)
-			}
-			layersToAdd = append(layersToAdd, cacheLayerToAdd)
-		}
 
 		// Deleted layers must be added first in the slice
 		// so that the /configs and /tmp directories are deleted
@@ -404,86 +360,12 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			cfg.Config.Labels = labels
 			// Although it was prefered to keep the entrypoint and command as it was
 			// we couldnt reuse /tmp/cache as the cache directory (OCPBUGS-17546)
-			if withCacheRegeneration {
-				cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/cache"}
-			} else { // this means that no cache was found in the original catalog (old catalog with opm < 1.25)
-				cfg.Config.Cmd = []string{"serve", "/configs"}
-			}
+			cfg.Config.Cmd = []string{"serve", "/configs"}
 		}
 		if err := imgBuilder.Run(ctx, refExact, layoutPath, update, layers...); err != nil {
 			return fmt.Errorf("error building catalog layers: %v", err)
 		}
 	}
-	return nil
-}
-
-// extractOPMAndCache is usually called after rendering catalog's declarative config.
-// it uses crane modules to pull the catalog image, select the manifest that corresponds to the
-// current platform architecture. It then extracts from that image any files that are suffixed `*opm` for later
-// use upon rebuilding the catalog: This is because the opm binary can be called `opm` but also
-// `darwin-amd64-opm` etc.
-func extractOPMAndCache(ctx context.Context, srcRef image.TypedImageReference, ctlgSrcDir string, insecure bool) error {
-	var img v1.Image
-	var err error
-	refExact := srcRef.Ref.Exact()
-	if srcRef.OCIFBCPath == "" {
-		remoteOpts := getCraneOpts(ctx, insecure)
-		img, err = crane.Pull(refExact, remoteOpts...)
-		if err != nil {
-			return fmt.Errorf("unable to pull image from %s: %v", refExact, err)
-		}
-	} else {
-		img, err = getPlatformImageFromOCIIndex(v1alpha2.TrimProtocol(srcRef.OCIFBCPath), runtime.GOARCH, runtime.GOOS)
-		if err != nil {
-			return err
-		}
-	}
-	// if we get here and no image was found bail out
-	if img == nil {
-		return fmt.Errorf("unable to obtain image for %v", srcRef)
-	}
-	cachePath, err := getCachePath(img)
-	if err != nil {
-		if errors.Is(err, NoCacheArgsError) {
-			return nil
-		} else {
-			return err
-		}
-	}
-
-	cacheLocationFileName := filepath.Join(ctlgSrcDir, config.OPMCacheLocationPlaceholder)
-
-	baseDir := filepath.Dir(cacheLocationFileName)
-	err = os.MkdirAll(baseDir, 0755)
-	if err != nil {
-		return err
-	}
-
-	cfl, err := os.Create(cacheLocationFileName)
-	if err != nil {
-		return err
-	}
-	defer cfl.Close()
-
-	_, err = cfl.Write([]byte(cachePath))
-	if err != nil {
-		return err
-	}
-	// cachePath exists, opm binary will be needed to regenerate it
-	opmBinaryFileName, err := copyOPMBinary(img, ctlgSrcDir)
-	if err != nil {
-		return err
-	}
-	// check for the extracted opm file (it should exist if we found something)
-	_, err = os.Stat(opmBinaryFileName)
-	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("opm binary not found after extracting opm from catalog image %v", srcRef)
-	}
-	err = os.Chmod(opmBinaryFileName, 0744)
-	if err != nil {
-		return fmt.Errorf("error changing permissions to the extracted opm binary while preparing to run opm to regenerate cache: %v", err)
-	}
-
 	return nil
 }
 
