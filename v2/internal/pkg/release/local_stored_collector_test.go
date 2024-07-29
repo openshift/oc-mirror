@@ -439,7 +439,7 @@ func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, err
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},

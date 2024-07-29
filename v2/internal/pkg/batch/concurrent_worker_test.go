@@ -2,7 +2,10 @@ package batch
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry/api/errcode"
@@ -179,6 +182,45 @@ func TestConcurrentWorker(t *testing.T) {
 		}
 
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
+	})
+
+	t.Run("Testing m2d Worker - single error on operator related image: bundle of the related image should skip", func(t *testing.T) {
+
+		relatedImages := []v2alpha1.CopyImageSchema{
+			{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testf", Type: v2alpha1.TypeOperatorRelatedImage},
+			{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testc", Type: v2alpha1.TypeOperatorBundle},
+		}
+
+		copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+		copyImageSchemaMap.OperatorsByImage[relatedImages[0].Origin] = make(map[string]struct{})
+		copyImageSchemaMap.OperatorsByImage[relatedImages[0].Origin]["operator-c"] = struct{}{}
+		copyImageSchemaMap.BundlesByImage[relatedImages[0].Origin] = make(map[string]string)
+		copyImageSchemaMap.BundlesByImage[relatedImages[0].Origin][strings.Split(relatedImages[1].Origin, "://")[1]] = "bundle-c"
+
+		collectedImages := v2alpha1.CollectorSchema{AllImages: relatedImages, TotalOperatorImages: 2, CopyImageSchemaMap: *copyImageSchemaMap}
+
+		mirrorMock := new(MirrorMock)
+		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
+		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(1))
+
+		_, err := w.Worker(context.Background(), collectedImages, m2dopts)
+		assert.Error(t, err)
+
+		errorMsg := err.Error()
+
+		pattern := `/tmp/[^\s]+`
+		regex, err := regexp.Compile(pattern)
+		assert.NoError(t, err)
+
+		filePath := regex.FindString(errorMsg)
+		assert.NotEmpty(t, filePath)
+
+		fileContent, err := os.ReadFile(filePath)
+		assert.NoError(t, err)
+
+		assert.Contains(t, string(fileContent), fmt.Sprintf(skippingMsg, relatedImages[1].Origin))
 	})
 }
 

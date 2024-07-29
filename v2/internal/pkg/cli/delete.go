@@ -287,10 +287,11 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 
 		o.Log.Info("🔍 collecting operator images...")
 		// collect operator images
-		oImgs, err := o.Operator.OperatorImageCollector(cmd.Context())
+		oCollector, err := o.Operator.OperatorImageCollector(cmd.Context())
 		if err != nil {
 			o.Log.Error(" %v", err)
 		}
+		oImgs := oCollector.AllImages
 		allImages = append(allImages, oImgs...)
 
 		o.Log.Info("🔍 collecting additional images...")

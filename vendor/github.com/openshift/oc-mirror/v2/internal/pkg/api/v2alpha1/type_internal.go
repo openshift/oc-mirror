@@ -199,6 +199,12 @@ type CollectorSchema struct {
 	TotalOperatorImages   int
 	TotalAdditionalImages int
 	AllImages             []CopyImageSchema
+	CopyImageSchemaMap    CopyImageSchemaMap
+}
+
+type CopyImageSchemaMap struct {
+	OperatorsByImage map[string]map[string]struct{} //key is the origin image name and value is an array of operators' name
+	BundlesByImage   map[string]map[string]string   //key is the image name and value is the bundle name
 }
 
 // CopyImageSchema

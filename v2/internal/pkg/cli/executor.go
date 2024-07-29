@@ -962,22 +962,22 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.TotalReleaseImages = len(rImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
-	o.Opts.ImageType = "release" //TODO ALEX ask to Sherine about it
 	allRelatedImages = append(allRelatedImages, rImgs...)
 
 	o.Log.Info("🔍 collecting operator images...")
 	// collect operators
-	oImgs, err := o.Operator.OperatorImageCollector(ctx)
+	oCollector, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
+	oImgs := oCollector.AllImages
 	// exclude blocked images
 	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
 	collectorSchema.TotalOperatorImages = len(oImgs)
 	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
-	o.Opts.ImageType = "operator"
 	allRelatedImages = append(allRelatedImages, oImgs...)
+	collectorSchema.CopyImageSchemaMap = oCollector.CopyImageSchemaMap
 
 	o.Log.Info("🔍 collecting additional images...")
 	// collect additionalImages

@@ -42,6 +42,18 @@ var imageStringsType = map[string]ImageType{
 	"generic":              TypeGeneric,
 }
 
+func (it ImageType) IsRelease() bool {
+	return it == TypeOCPRelease || it == TypeOCPReleaseContent
+}
+
+func (it ImageType) IsOperator() bool {
+	return it == TypeOperatorBundle || it == TypeOperatorCatalog || it == TypeOperatorRelatedImage
+}
+
+func (it ImageType) IsAdditionalImage() bool {
+	return it == TypeGeneric
+}
+
 // String returns the string representation
 // of an Image Type
 func (it ImageType) String() string {

@@ -201,7 +201,7 @@ func (o mockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, err
 	return manifest.OperatorCatalog{}, nil
 }
 
-func (o mockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+func (o mockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	res := map[string][]v2alpha1.RelatedImage{}
 	ri := []v2alpha1.RelatedImage{
 		{

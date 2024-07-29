@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -47,16 +49,20 @@ type OperatorCatalog struct {
 	BundlesByPkgAndName map[string]map[string]declcfg.Bundle
 }
 
+var internalLog clog.PluggableLoggerInterface
+
 type Manifest struct {
 	Log clog.PluggableLoggerInterface
 }
 
 func New(log clog.PluggableLoggerInterface) ManifestInterface {
+	internalLog = log
 	return &Manifest{Log: log}
 }
 
 // GetImageIndex - used to get the oci index.json
 func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+	setInternalLog(o.Log)
 	var oci *v2alpha1.OCISchema
 	indx, err := os.ReadFile(dir + "/" + index)
 	if err != nil {
@@ -72,6 +78,7 @@ func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 // GetImageManifest used to ge the manifest in the oci blobs/sha254
 // directory - found in index.json
 func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+	setInternalLog(o.Log)
 	var oci *v2alpha1.OCISchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
@@ -86,6 +93,7 @@ func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
 
 // GetOperatorConfig used to parse the operator json
 func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	setInternalLog(o.Log)
 	var ocs *v2alpha1.OperatorConfigSchema
 	manifest, err := os.ReadFile(file)
 	if err != nil {
@@ -100,6 +108,7 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 
 // ExtractLayersOCI
 func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
+	setInternalLog(o.Log)
 	if _, err := os.Stat(toPath + "/" + label); errors.Is(err, os.ErrNotExist) {
 		for _, blob := range oci.Layers {
 			validDigest, err := digest.Parse(blob.Digest)
@@ -123,6 +132,7 @@ func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1
 
 // GetReleaseSchema
 func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	setInternalLog(o.Log)
 	var release = v2alpha1.ReleaseSchema{}
 
 	file, err := os.ReadFile(filePath)
@@ -195,6 +205,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 }
 
 func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
+	setInternalLog(o.Log)
 	cfg, err := declcfg.LoadFS(context.Background(), os.DirFS(filePath))
 
 	operatorCatalog := newOperatorCatalog()
@@ -242,7 +253,8 @@ func (o Manifest) GetCatalog(filePath string) (OperatorCatalog, error) {
 	return operatorCatalog, err
 }
 
-func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator) (map[string][]v2alpha1.RelatedImage, error) {
+func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+	setInternalLog(o.Log)
 
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 
@@ -251,18 +263,13 @@ func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, c
 
 			operatorConfig := parseOperatorCatalogByOperator(operatorName, operatorCatalog)
 
-			ri, err := getRelatedImages(o.Log, operatorName, operatorConfig, v2alpha1.IncludePackage{}, ctlgInIsc.Full)
+			ri, err := getRelatedImages(operatorName, operatorConfig, v2alpha1.IncludePackage{}, ctlgInIsc.Full, copyImageSchemaMap)
 
 			if err != nil {
 				return relatedImages, err
 			}
 
-			//TODO GOLANG 1.21 required - replace the for loop below with maps.Copy
-			//maps.Copy(relatedImages, ri)
-
-			for k, v := range ri {
-				relatedImages[k] = v
-			}
+			maps.Copy(relatedImages, ri)
 		}
 	} else {
 		for _, iscOperator := range ctlgInIsc.Packages {
@@ -271,27 +278,23 @@ func (o Manifest) GetRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, c
 				o.Log.Warn("[OperatorImageCollector] package %s not found in catalog %s", iscOperator.Name, ctlgInIsc.Catalog)
 				continue
 			}
-			ri, err := getRelatedImages(o.Log, iscOperator.Name, operatorConfig, iscOperator, ctlgInIsc.Full)
+			ri, err := getRelatedImages(iscOperator.Name, operatorConfig, iscOperator, ctlgInIsc.Full, copyImageSchemaMap)
 			if err != nil {
 				return relatedImages, err
 			}
-			if ri == nil || len(ri) == 0 { // no matching bundles
+			if len(ri) == 0 {
 				o.Log.Warn("[OperatorImageCollector] no bundles matching filtering for %s in catalog %s", iscOperator.Name, ctlgInIsc.Catalog)
 				continue
 			}
 
-			//TODO GOLANG 1.21 required - replace the for loop with maps.Copy
-			//maps.Copy(relatedImages, ri)
-
-			for k, v := range ri {
-				relatedImages[k] = v
-			}
-			o.Log.Trace("related images %v", relatedImages)
+			maps.Copy(relatedImages, ri)
 		}
 	}
 
-	for k := range relatedImages {
-		o.Log.Debug("bundle after filtered : %s", k)
+	if o.Log.GetLevel() == "debug" {
+		for k := range relatedImages {
+			o.Log.Debug("bundle after filtered : %s", k)
+		}
 	}
 
 	return relatedImages, nil
@@ -318,7 +321,7 @@ func parseOperatorCatalogByOperator(operatorName string, operatorCatalog Operato
 	return operatorConfig
 }
 
-func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, operatorConfig OperatorCatalog, iscOperator v2alpha1.IncludePackage, full bool) (map[string][]v2alpha1.RelatedImage, error) {
+func getRelatedImages(operatorName string, operatorConfig OperatorCatalog, iscOperator v2alpha1.IncludePackage, full bool, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	invalid, err := isInvalidFiltering(iscOperator, full)
 	if invalid {
 		return nil, err
@@ -333,20 +336,20 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 		for _, iscSelectedBundle := range iscOperator.SelectedBundles {
 			bundle, found := operatorConfig.BundlesByPkgAndName[operatorName][iscSelectedBundle.Name]
 			if !found {
-				log.Warn("bundle %s of operator %s not found in catalog: SKIPPING", iscSelectedBundle.Name, operatorName)
+				internalLog.Warn("bundle %s of operator %s not found in catalog: SKIPPING", iscSelectedBundle.Name, operatorName)
 				continue
 			}
-			relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
+			relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
 		}
 	case len(iscOperator.Channels) > 0:
 		for _, iscChannel := range iscOperator.Channels {
-			log.Debug("found channel : %v", iscChannel)
+			internalLog.Debug("found channel : %v", iscChannel)
 			chEntries := operatorConfig.ChannelEntries[operatorName][iscChannel.Name]
 			bundles, err := filterBundles(chEntries, iscChannel.IncludeBundle.MinVersion, iscChannel.IncludeBundle.MaxVersion, full)
 			if err != nil {
-				log.Error(errorSemver, err)
+				internalLog.Error(errorSemver, err)
 			}
-			log.Debug("adding bundles : %s", bundles)
+			internalLog.Debug("adding bundles : %s", bundles)
 			filteredBundles = append(filteredBundles, bundles...)
 		}
 	default:
@@ -354,9 +357,9 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 		bundles, err := filterBundles(chEntries, iscOperator.MinVersion, iscOperator.MaxVersion, full)
 
 		if err != nil {
-			log.Error(errorSemver, err)
+			internalLog.Error(errorSemver, err)
 		}
-		log.Debug("adding bundles : %s", bundles)
+		internalLog.Debug("adding bundles : %s", bundles)
 		filteredBundles = append(filteredBundles, bundles...)
 	}
 
@@ -364,14 +367,14 @@ func getRelatedImages(log clog.PluggableLoggerInterface, operatorName string, op
 		if full {
 			if len(filteredBundles) > 0 && len(iscOperator.Channels) > 0 {
 				if slices.Contains(filteredBundles, bundle.Name) {
-					relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
+					relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
 				}
 			} else {
-				relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
+				relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
 			}
 		} else {
 			if slices.Contains(filteredBundles, bundle.Name) {
-				relatedImages[bundle.Name] = addTypeToRelatedImages(log, bundle)
+				relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
 			}
 		}
 	}
@@ -516,12 +519,12 @@ func isPreReleaseOfFilteredVersion(version string, chEntryName string, filteredV
 	return false
 }
 
-func addTypeToRelatedImages(log clog.PluggableLoggerInterface, bundle declcfg.Bundle) []v2alpha1.RelatedImage {
+func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) []v2alpha1.RelatedImage {
 	var relatedImages []v2alpha1.RelatedImage
 
 	for _, ri := range bundle.RelatedImages {
 		if strings.Contains(ri.Image, "oci://") {
-			log.Warn("%s 'oci' is not supported in operator catalogs : SKIPPING", ri.Image)
+			internalLog.Warn("%s 'oci' is not supported in operator catalogs : SKIPPING", ri.Image)
 			continue
 		}
 		relateImage := v2alpha1.RelatedImage{}
@@ -534,14 +537,40 @@ func addTypeToRelatedImages(log clog.PluggableLoggerInterface, bundle declcfg.Bu
 			relateImage.Image = ri.Image
 			relateImage.Type = v2alpha1.TypeOperatorRelatedImage
 		}
+
+		imgSpec, err := image.ParseRef(ri.Image)
+		if err != nil {
+			internalLog.Warn("error parsing image %s : %v", ri.Image, err)
+		}
+
+		operators := copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport]
+
+		if _, found := operators[operatorName]; !found {
+			if operators == nil {
+				copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport] = make(map[string]struct{})
+			}
+			copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport][operatorName] = struct{}{}
+		}
+
+		bundles := copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport]
+		if _, found := bundles[bundle.Name]; !found {
+			if bundles == nil {
+				copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport] = make(map[string]string)
+			}
+			copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport][bundle.Image] = bundle.Name
+		}
+
 		relatedImages = append(relatedImages, relateImage)
 	}
+
 	return relatedImages
 }
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
 func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+	setInternalLog(o.Log)
+
 	data, err := os.ReadFile(path.Join(dir, "index.json"))
 	if err != nil {
 		o.Log.Debug(err.Error())
@@ -577,6 +606,8 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISche
 }
 
 func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+	setInternalLog(o.Log)
+
 	if err := mirror.ReexecIfNecessaryForImages([]string{imgRef}...); err != nil {
 		return "", err
 	}
@@ -607,4 +638,10 @@ func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext,
 	}
 
 	return digestString, nil
+}
+
+func setInternalLog(log clog.PluggableLoggerInterface) {
+	if internalLog == nil {
+		internalLog = log
+	}
 }
