@@ -283,12 +283,6 @@ func (o *MirrorOptions) Validate() error {
 			return fmt.Errorf("unable to read the configuration file provided with --config: %v", err)
 		}
 
-		for _, op := range cfg.Mirror.Operators {
-			if op.IsFBCOCI() {
-				break
-			}
-		}
-
 		// check for defaultChannel
 		for _, op := range cfg.Mirror.Operators {
 			for _, pkg := range op.Packages {

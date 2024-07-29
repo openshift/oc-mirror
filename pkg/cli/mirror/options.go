@@ -79,8 +79,9 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.EnableOperatorSignatureVerification, "enable-operator-secure-policy", o.EnableOperatorSignatureVerification, "If set, verifies operator catalog signatures prior to mirroring")
 	fs.BoolVar(&o.SkipPruning, "skip-pruning", o.SkipPruning, "If set, will disable pruning globally")
 	fs.IntVar(&o.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
-	fs.BoolVar(&o.RebuildCatalogs, "rebuild-catalogs", o.RebuildCatalogs, "If set (defaults to false), rebuilds catalogs based on filtered declarative config, and regenerates the cache of that catalog")
+	fs.BoolVar(&o.RebuildCatalogs, "rebuild-catalogs", true, "If set (defaults to true), rebuilds catalogs based on filtered declarative config, and regenerates the cache of that catalog")
 	fs.MarkDeprecated("oci-insecure-signature-policy", "and will be removed in a future release. Use enable-operator-secure-policy instead.")
+	fs.MarkDeprecated("rebuild-catalogs", "rebuild-catalogs is deprecated and will be removed in a future release: the default behavior of oc-mirror v1 is to rebuild catalogs.")
 }
 
 func (o *MirrorOptions) init() {
