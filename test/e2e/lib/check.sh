@@ -26,9 +26,9 @@ function check_bundles() {
   mv index.json $index_dir
 
   # extract the cache from the tar file
-  # local cache_dir="${extraction_dir}/cache"
-  # tar xvf $extraction_dir/temp.tar /cache
-  # mv cache "${extraction_dir}"
+  local cache_dir="${extraction_dir}/cache"
+  tar xvf $extraction_dir/temp.tar /cache
+  mv cache "${extraction_dir}"
 
   # extract the opm binary from the tar file
   local opm_path="${extraction_dir}/opm"
@@ -40,8 +40,8 @@ function check_bundles() {
   $opm_path validate $index_dir
 
   # validate cache integrity
-  # $opm_path serve $index_dir --cache-dir=$cache_dir --cache-only --cache-enforce-integrity
-  # rm -fr "$extraction_dir"
+  $opm_path serve $index_dir --cache-dir=$cache_dir --cache-only --cache-enforce-integrity
+  rm -fr "$extraction_dir"
 
   declare -A exp_bundles_set
   for bundle in $exp_bundles_list; do
