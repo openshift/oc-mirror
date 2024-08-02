@@ -277,8 +277,10 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 
 	o.Log.Debug(collectorPrefix+"related images length %d ", len(relatedImages))
 	var count = 0
-	for _, v := range relatedImages {
-		count = count + len(v)
+	if o.Opts.Global.LogLevel == "debug" {
+		for _, v := range relatedImages {
+			count = count + len(v)
+		}
 	}
 	o.Log.Debug(collectorPrefix+"images to copy (before duplicates) %d ", count)
 	var err error
@@ -361,6 +363,7 @@ func (o LocalStorageCollector) catalogDigest(ctx context.Context, catalog v2alph
 
 func (o LocalStorageCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
+	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -412,7 +415,10 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.
 			if img.Type == v2alpha1.TypeOperatorCatalog && o.Opts.Function == "delete" {
 				o.Log.Debug("delete mode, catalog index %s : SKIPPED", img.Image)
 			} else {
-				result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
+				if _, found := alreadyIncluded[img.Image]; !found {
+					result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type})
+					alreadyIncluded[img.Image] = struct{}{}
+				}
 			}
 		}
 	}
@@ -421,6 +427,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.
 
 func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
+	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -461,7 +468,10 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.
 			if imgSpec.IsImageByTagAndDigest() {
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
 			} else {
-				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+				if _, found := alreadyIncluded[img.Image]; !found {
+					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+					alreadyIncluded[img.Image] = struct{}{}
+				}
 			}
 
 		}
