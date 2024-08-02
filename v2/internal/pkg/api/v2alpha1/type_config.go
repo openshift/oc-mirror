@@ -96,6 +96,10 @@ type Platform struct {
 	// This new field will allow the diskToMirror functionality
 	// to copy from a release location on disk
 	Release string `json:"release,omitempty"`
+	// The kubeVirtContainer flag when set to true (default false)
+	// will be used to extract the kubeVirtContainer image
+	// from the release payload file 0000_50_installer_coreos-bootimages
+	KubeVirtContainer bool `json:"kubeVirtContainer,omitempty"`
 }
 
 func (p Platform) DeepCopy() Platform {

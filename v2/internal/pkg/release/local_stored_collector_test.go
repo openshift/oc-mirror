@@ -50,6 +50,14 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
 
+		//copy kubevirt resource file to working-dir
+		workingDir := filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64/release-manifests/")
+		os.MkdirAll(workingDir, 0755)
+		err := copy.Copy(common.TestFolder+releaseBootableImages, workingDir+"/"+releaseBootableImages)
+		if err != nil {
+			t.Fatalf("should not fail %v", err)
+		}
+
 		res, err := ex.ReleaseImageCollector(ctx)
 		if err != nil {
 			t.Fatalf("should not fail")
@@ -295,7 +303,8 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 							Type: v2alpha1.TypeOKD,
 						},
 					},
-					Graph: true,
+					Graph:             true,
+					KubeVirtContainer: true,
 				},
 				Operators: []v2alpha1.Operator{
 					{
