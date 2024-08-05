@@ -428,6 +428,9 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 	}
 
 	image := ibi.Architectures.X86_64.Images.Kubevirt.DigestRef
+	if image == "" {
+		return v2alpha1.RelatedImage{}, fmt.Errorf("could not find kubevirt image in this release")
+	}
 	o.Log.Info(fmt.Sprintf("kubeVirtContainer set to true [ including : %v ]", image))
 	kubeVirtImage := v2alpha1.RelatedImage{
 		Image: image,
