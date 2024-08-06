@@ -60,7 +60,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 		res, err := ex.ReleaseImageCollector(ctx)
 		if err != nil {
-			t.Fatalf("should not fail")
+			t.Fatalf("should not fail: %v", err)
 		}
 		log.Debug("completed test related images %v ", res)
 	})
@@ -198,6 +198,46 @@ func TestReleaseImage(t *testing.T) {
 	})
 }
 
+func TestGraphURLFromUpdateURL(t *testing.T) {
+	type testCase struct {
+		name          string
+		updateURL     string
+		expectedURL   string
+		expectedError bool
+	}
+	testCases := []testCase{
+		{
+			name:          "nominal case passes",
+			updateURL:     "https://localhost.localdomain:5000/graph",
+			expectedURL:   "https://localhost.localdomain:5000/api/upgrades_info/graph-data",
+			expectedError: false,
+		},
+		{
+			name:          "malformed updateURL fails",
+			updateURL:     "https://localhost.localdomain:wrong/graph",
+			expectedURL:   "",
+			expectedError: true,
+		},
+		{
+			name:          "http scheme updateURL passes",
+			updateURL:     "http://localhost.localdomain:5000/graph",
+			expectedURL:   "http://localhost.localdomain:5000/api/upgrades_info/graph-data",
+			expectedError: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			finalGraphURL, err := graphURLFromUpdateURL(tc.updateURL)
+			if tc.expectedError && err == nil {
+				t.Error("expected error but error was nil")
+			}
+			if !tc.expectedError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			assert.Equal(t, tc.expectedURL, finalGraphURL)
+		})
+	}
+}
 func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
 	manifest := &MockManifest{Log: log}
 
