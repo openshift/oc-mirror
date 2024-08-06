@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,7 +153,16 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 		if o.Config.Mirror.Platform.Graph {
 			o.Log.Debug(collectorPrefix + "creating graph data image")
-			graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
+			finalGraphURL := graphURL
+			if updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE"); len(updateURLOverride) != 0 {
+				url, err := graphURLFromUpdateURL(updateURLOverride)
+				if err != nil {
+					o.Log.Error(errMsg, "graph image build: unable to construct graph URL from UPDATE_URL_OVERRIDE: "+err.Error())
+					return []v2alpha1.CopyImageSchema{}, err
+				}
+				finalGraphURL = url
+			}
+			graphImgRef, err := o.CreateGraphImage(ctx, finalGraphURL)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, err
@@ -435,4 +445,22 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 		Type:  v2alpha1.TypeOCPRelease,
 	}
 	return kubeVirtImage, nil
+}
+
+func graphURLFromUpdateURL(updateURL string) (string, error) {
+	finalGraphURL := graphURL
+
+	if updateURL != "" {
+		originalURLStruct, err := url.Parse(graphURL)
+		if err != nil {
+			return "", err
+		}
+		updateURLStruct, err := url.Parse(updateURL)
+		if err != nil {
+			return "", err
+		}
+		finalGraphURL = strings.Replace(finalGraphURL, originalURLStruct.Host, updateURLStruct.Host, 1)
+		finalGraphURL = strings.Replace(finalGraphURL, originalURLStruct.Scheme, updateURLStruct.Scheme, 1)
+	}
+	return finalGraphURL, nil
 }
