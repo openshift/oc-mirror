@@ -328,7 +328,7 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 
 		layersToAdd := []v1.Layer{}
 		layersToDelete := []v1.Layer{}
-		withCacheRegeneration := true
+		withCacheRegeneration := o.RebuildCatalogs && o.BuildCatalogCache
 		_, err := os.Stat(filepath.Join(artifactDir, config.OPMCacheLocationPlaceholder))
 		if errors.Is(err, os.ErrNotExist) {
 			withCacheRegeneration = false
@@ -406,7 +406,8 @@ func (o *MirrorOptions) processCatalogRefs(ctx context.Context, catalogsByImage 
 			// we couldnt reuse /tmp/cache as the cache directory (OCPBUGS-17546)
 			if withCacheRegeneration {
 				cfg.Config.Cmd = []string{"serve", "/configs", "--cache-dir=/cache"}
-			} else { // this means that no cache was found in the original catalog (old catalog with opm < 1.25)
+			} else { // this means that --build-catalog-cache flag was not used
+				// if the flag was used this means that no cache nor opm binary was found in the original catalog (old catalog with opm < 1.25)
 				cfg.Config.Cmd = []string{"serve", "/configs"}
 			}
 		}
