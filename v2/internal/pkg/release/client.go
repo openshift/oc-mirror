@@ -8,7 +8,8 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	"k8s.io/klog/v2"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var (
@@ -38,10 +39,10 @@ type okdClient struct {
 }
 
 // NewOCPClient creates a new OCP Cincinnati client with the given client identifier.
-func NewOCPClient(id uuid.UUID) (Client, error) {
+func NewOCPClient(id uuid.UUID, log clog.PluggableLoggerInterface) (Client, error) {
 	var updateGraphURL string
 	if updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE"); len(updateURLOverride) != 0 {
-		klog.Info("Usage of the UPDATE_URL_OVERRIDE environment variable is unsupported")
+		log.Info("Using the UPDATE_URL_OVERRIDE environment variable")
 		updateGraphURL = updateURLOverride
 	} else {
 		updateGraphURL = UpdateURL

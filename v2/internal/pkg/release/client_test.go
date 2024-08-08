@@ -6,13 +6,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 func TestOCPClient(t *testing.T) {
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	updateAPI, err := url.Parse(UpdateURL)
 	require.NoError(t, err)
-	client, err := NewOCPClient(id)
+	client, err := NewOCPClient(id, clog.New("trace"))
 	require.NoError(t, err)
 	expID := id
 	expURL := *updateAPI
@@ -48,7 +50,7 @@ func TestOCPClientWithOveride(t *testing.T) {
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	//updateAPI, err := url.Parse(UpdateURL)
 	//require.NoError(t, err)
-	client, err := NewOCPClient(id)
+	client, err := NewOCPClient(id, clog.New("trace"))
 	require.NoError(t, err)
 	expID := id
 	//expURL := *updateAPI

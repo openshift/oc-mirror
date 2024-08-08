@@ -249,7 +249,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 		return err
 	}
 
-	client, _ := release.NewOCPClient(uuid.New())
+	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
