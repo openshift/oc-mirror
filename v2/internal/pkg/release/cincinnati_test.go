@@ -10,7 +10,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
 
 type mockSignature struct {
