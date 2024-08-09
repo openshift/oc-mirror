@@ -2,7 +2,6 @@ package release
 
 import (
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -45,7 +44,7 @@ func TestOKDClient(t *testing.T) {
 }
 
 func TestOCPClientWithOveride(t *testing.T) {
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://localhost.localdomain")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://localhost.localdomain")
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
 	//updateAPI, err := url.Parse(UpdateURL)
 	//require.NoError(t, err)
@@ -60,5 +59,4 @@ func TestOCPClientWithOveride(t *testing.T) {
 	// Test parameter settings
 	client.SetQueryParams("arch", "channel", "version")
 	require.Equal(t, "arch=arch&channel=channel&id=01234567-0123-0123-0123-0123456789ab&version=version", client.GetURL().RawQuery)
-	os.Unsetenv("UPDATE_URL_OVERRIDE")
 }
