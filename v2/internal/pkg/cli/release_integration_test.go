@@ -54,7 +54,6 @@ func setupReleaseTest(t *testing.T) TestEnvironmentRelease {
 
 func (suite *TestEnvironmentRelease) tearDown(t *testing.T) {
 
-	os.Unsetenv("CONTAINERS_REGISTRIES_CONF")
 	os.RemoveAll(suite.tempFolder)
 	suite.sourceServer.Close()
 	suite.destinationServer.Close()
@@ -104,7 +103,7 @@ func TestIntegrationReleaseM2M(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
-	os.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
+	t.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
 
 	// copy test registries.conf to user home
 	regConfTemplatePath := "../../e2e/templates/regisitries.conf"
@@ -152,8 +151,8 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))
@@ -172,8 +171,8 @@ func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))
@@ -196,8 +195,8 @@ func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))

@@ -100,7 +100,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom PGP key - should pass", func(t *testing.T) {
-		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"custom-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"custom-ocp-sig-key.asc")
 
 		ex := NewSignatureClient(log, cfg, opts)
 
@@ -120,7 +120,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
-		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"buggy-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"buggy-ocp-sig-key.asc")
 
 		ex := NewSignatureClient(log, cfg, opts)
 
@@ -138,7 +138,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
-		os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"inexisting-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"inexisting-ocp-sig-key.asc")
 
 		ex := NewSignatureClient(log, cfg, opts)
 

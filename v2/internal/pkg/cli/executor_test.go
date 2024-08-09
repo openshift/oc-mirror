@@ -663,7 +663,7 @@ func TestExecutorComplete(t *testing.T) {
 			LogsDir: "/tmp/",
 		}
 
-		os.Setenv(cacheEnvVar, "/tmp/")
+		t.Setenv(cacheEnvVar, "/tmp/")
 
 		// file protocol
 		err := ex.Complete([]string{"file:///tmp/test"})
