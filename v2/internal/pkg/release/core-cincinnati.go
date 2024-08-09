@@ -16,7 +16,6 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -210,7 +209,7 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
 		if isBlocked {
-			klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+			cs.Log.Warn("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 			return GetUpdates(ctx, cs, targetChannel, reqVer, reqVer)
 		}
 		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
@@ -282,11 +281,11 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 		// upgrades to the caller
 		_, requested, _, err = GetUpdates(ctx, cs, targetChannel, targetVer, targetVer)
 		//Warnf is 5?
-		klog.Warningf("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
+		cs.Log.Warn("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
 
-	klog.V(1).Infof("Getting updates for version %s in channel %s", startVer.String(), currChannel)
+	cs.Log.Debug("Getting updates for version %s in channel %s", startVer.String(), currChannel)
 	_, requested, upgrades, err = GetUpdates(ctx, cs, currChannel, startVer, targetVer)
 	if err != nil {
 		return requested, upgrades, err
@@ -363,7 +362,7 @@ func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string
 	// Find the all versions within the graph.
 	var versionMatcher *regexp.Regexp
 	if versionFilter := os.Getenv("VERSION_FILTER"); len(versionFilter) != 0 {
-		klog.Info("Usage of the VERSION_FILTER environment variable is unsupported")
+		cs.Log.Info("Usage of the VERSION_FILTER environment variable is unsupported")
 		versionMatcher, err = regexp.Compile(versionFilter)
 		if err != nil {
 			return semver.Version{}, &Error{
@@ -495,7 +494,7 @@ func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err er
 	req.Header.Add("Accept", GraphMediaType)
 	if transport != nil && transport.TLSClientConfig != nil {
 		if cs.Client.GetTransport().TLSClientConfig.ClientCAs == nil {
-			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
+			cs.Log.Debug("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
 		}
 		//else {
 		//klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
@@ -505,7 +504,7 @@ func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err er
 	if transport != nil && transport.Proxy != nil {
 		proxy, err := transport.Proxy(req)
 		if err == nil && proxy != nil {
-			klog.Infof("Using proxy %s to request updates from %s", proxy.Host, uri)
+			cs.Log.Debug("Using proxy %s to request updates from %s", proxy.Host, uri)
 		}
 	}
 
