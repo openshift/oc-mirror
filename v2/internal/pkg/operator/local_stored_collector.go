@@ -445,7 +445,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.
 			src = imgSpec.ReferenceWithTransport
 			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
-			} else if imgSpec.Transport == ociProtocol {
+			} else if img.Type == v2alpha1.TypeOperatorCatalog && imgSpec.Transport == ociProtocol {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
 			} else {
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
@@ -454,8 +454,14 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.
 				dest = dest + ":" + img.TargetTag
 			} else if imgSpec.Tag == "" && imgSpec.Transport == ociProtocol {
 				dest = dest + ":latest"
-			} else if imgSpec.Tag == "" && imgSpec.Digest != "" {
+			} else if imgSpec.IsImageByDigestOnly() {
 				dest = dest + ":" + imgSpec.Digest
+			} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+				// use tag only for dest, but pull by digest
+				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
+
+				src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
+				dest = dest + ":" + imgSpec.Tag
 			} else {
 				dest = dest + ":" + imgSpec.Tag
 			}
@@ -463,15 +469,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
 
-			// OCPBUGS-33196 - check source image for tag and digest
-			// skip mirroring
-			if imgSpec.IsImageByTagAndDigest() {
-				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
-			} else {
-				if _, found := alreadyIncluded[img.Image]; !found {
-					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
-					alreadyIncluded[img.Image] = struct{}{}
-				}
+			if _, found := alreadyIncluded[img.Image]; !found {
+				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type})
+				alreadyIncluded[img.Image] = struct{}{}
 			}
 
 		}

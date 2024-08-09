@@ -275,6 +275,12 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
+					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
 					Source:      "docker://redhat-operators:v4.7",
 					Destination: "docker://localhost:9999/redhat-operators:v4.7",
 					Origin:      "docker://redhat-operators:v4.7",
@@ -318,6 +324,12 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
+					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
 					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Destination: "docker://localhost:9999/simple-test-bundle:v4.14",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
@@ -349,6 +361,12 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
+					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
 					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Destination: "docker://localhost:9999/test-catalog:v4.14",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
@@ -371,6 +389,12 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
+					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
@@ -446,6 +470,12 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
+					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: "docker://localhost:5000/test/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
 					Source:      "docker://localhost:9999/simple-test-bundle:latest",
 					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
@@ -479,6 +509,12 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 					Source:      "docker://localhost:9999/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
+					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: "docker://localhost:5000/test/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
@@ -664,6 +700,7 @@ func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.Opera
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, //OCPBUGS-37867
 		{Name: "", Image: ""}, // OCPBUGS-31622
 	}
 	return relatedImages, nil
