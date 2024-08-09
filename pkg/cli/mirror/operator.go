@@ -188,13 +188,13 @@ func (o *OperatorOptions) run(
 			return nil, o.checkValidationErr(err)
 		}
 
-		ctlgSrcDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, targetCtlg.Ref.Registry, targetCtlg.Ref.Namespace, targetCtlg.Ref.Name)
-		if targetCtlg.Ref.ID != "" {
-			ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.ID)
-		} else if targetCtlg.Ref.Tag != "" {
-			ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.Tag)
-		}
-		if o.RebuildCatalogs {
+		if o.RebuildCatalogs && o.BuildCatalogCache {
+			ctlgSrcDir := filepath.Join(o.Dir, config.SourceDir, config.CatalogsDir, targetCtlg.Ref.Registry, targetCtlg.Ref.Namespace, targetCtlg.Ref.Name)
+			if targetCtlg.Ref.ID != "" {
+				ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.ID)
+			} else if targetCtlg.Ref.Tag != "" {
+				ctlgSrcDir = filepath.Join(ctlgSrcDir, targetCtlg.Ref.Tag)
+			}
 			err = extractOPMAndCache(ctx, ctlgRef, ctlgSrcDir, o.SourceSkipTLS)
 			if err != nil {
 				reg.Destroy()
