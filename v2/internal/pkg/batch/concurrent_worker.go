@@ -279,13 +279,16 @@ func barFillerClearOnAbort() mpb.BarOption {
 
 // shouldSkipImage helps determine whether the batch should perform the mirroring of the image
 // or if the image should be skipped.
-// At the moment, only the graph image will be skipped when the mode is MirrorToDisk or MirrorToMirror.
-// In later versions, this function can evolve to also skip images that were marked shouldSkip.
-// An example would be to skip mirroring an operator bundle image when one of its related images have failed
-// to mirror.
-// in the latter case, shouldSkipImage will also return an error which will explain the reason for skipping
 func shouldSkipImage(img v2alpha1.CopyImageSchema, mode string, errArray []mirrorErrorSchema) (bool, error) {
-	if img.Type == v2alpha1.TypeCincinnatiGraph && (mode == mirror.MirrorToDisk || mode == mirror.MirrorToMirror) {
+	// In MirrorToMirror and MirrorToDisk, the release collector will generally build and push the graph image
+	// to the destination registry (disconnected registry or cache resp.)
+	// Therefore this image can be skipped.
+	// OCPBUGS-38037: The only exception to this is in the enclave environment. Enclave environment is detected by the presence
+	// of env var UPDATE_URL_OVERRIDE.
+	// When in enclave environment, release collector cannot build nor push the graph image. Therefore graph image
+	// should not be skipped.
+	updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE")
+	if img.Type == v2alpha1.TypeCincinnatiGraph && (mode == mirror.MirrorToDisk || mode == mirror.MirrorToMirror) && len(updateURLOverride) == 0 {
 		return true, nil
 	}
 

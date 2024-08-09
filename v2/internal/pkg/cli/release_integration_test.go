@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/otiai10/copy"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/testutils"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +56,6 @@ func setupReleaseTest(t *testing.T) TestEnvironmentRelease {
 
 func (suite *TestEnvironmentRelease) tearDown(t *testing.T) {
 
-	os.Unsetenv("CONTAINERS_REGISTRIES_CONF")
 	os.RemoveAll(suite.tempFolder)
 	suite.sourceServer.Close()
 	suite.destinationServer.Close()
@@ -104,7 +105,7 @@ func TestIntegrationReleaseM2M(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
-	os.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
+	t.Setenv("CONTAINERS_REGISTRIES_CONF", suite.tempFolder+"/registries.conf")
 
 	// copy test registries.conf to user home
 	regConfTemplatePath := "../../e2e/templates/regisitries.conf"
@@ -143,6 +144,11 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	_, err = io.Copy(workingDirLocation, signatureFile)
 	assert.NoError(t, err)
 
+	graphPrepDir := suite.tempFolder + "/release/m2d/working-dir/graph-preparation"
+
+	err = copy.Copy("../../../tests/graph-staging", graphPrepDir)
+	assert.NoError(t, err)
+
 	// create the image set config
 	templatePath := "../../e2e/templates/isc_templates/release_isc.yaml"
 	suite.imageSetConfig = suite.tempFolder + "/isc.yaml"
@@ -152,8 +158,8 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheM2D")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))
@@ -172,8 +178,8 @@ func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
 }
 
 func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))
@@ -191,13 +197,17 @@ func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
 		assert.True(t, exists)
 	}
 
+	graphExists, err := testutils.ImageExists(suite.destinationRegistryDomain + "/release/openshift/graph-image:latest")
+	assert.NoError(t, err)
+	assert.True(t, graphExists)
+
 	// assert IDMS is generated
 	assert.FileExists(t, filepath.Join(resultFolder, "working-dir/cluster-resources/idms-oc-mirror.yaml"))
 }
 
 func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
-	os.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
-	os.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
+	t.Setenv("UPDATE_URL_OVERRIDE", "http://"+suite.cincinnatiEndpoint)
+	t.Setenv("OC_MIRROR_CACHE", suite.tempFolder+"/.cacheD2M")
 
 	// create cobra command and run
 	ocmirror := NewMirrorCmd(clog.New("trace"))
@@ -218,6 +228,10 @@ func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
+
+	graphExists, err := testutils.ImageExists(suite.destinationRegistryDomain + "/release/openshift/graph-image:latest")
+	assert.NoError(t, err)
+	assert.True(t, graphExists)
 
 	// assert IDMS is generated
 	assert.FileExists(t, filepath.Join(resultFolder, "working-dir/cluster-resources/idms-oc-mirror.yaml"))

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 )
 
@@ -57,4 +58,35 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 		return "", err
 	}
 	return dockerProtocol + graphImageRef, nil
+}
+
+func (o *LocalStorageCollector) graphImageInWorkingDir(ctx context.Context) (string, error) {
+	layoutDir := filepath.Join(o.Opts.Global.WorkingDir, graphPreparationDir)
+	graphImageRef := ociProtocol + layoutDir
+
+	exists, err := o.imageExists(ctx, graphImageRef)
+	if err != nil {
+		return "", fmt.Errorf("no oci formatted graph image ready in cache: %v", err)
+	}
+	if !exists {
+		return "", fmt.Errorf("no oci formatted graph image ready in cache")
+	}
+	return graphImageRef, nil
+}
+
+func (o LocalStorageCollector) imageExists(ctx context.Context, ref string) (bool, error) {
+	sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return false, err
+	}
+	// local cache is http protocol
+	sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	digest, err := o.Manifest.GetDigest(ctx, sourceCtx, ref)
+	if err != nil {
+		return false, err
+	}
+	if digest == "" {
+		return false, nil
+	}
+	return true, nil
 }

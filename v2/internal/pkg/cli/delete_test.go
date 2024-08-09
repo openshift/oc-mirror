@@ -133,7 +133,7 @@ func TestExecutorCompleteDelete(t *testing.T) {
 			LogsDir: "/tmp/",
 		}
 
-		os.Setenv(cacheEnvVar, "/tmp/")
+		t.Setenv(cacheEnvVar, "/tmp/")
 
 		defer os.RemoveAll("../../pkg/cli/test")
 		defer os.RemoveAll("../../pkg/cli/tmp")

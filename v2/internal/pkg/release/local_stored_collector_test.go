@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 type MockMirror struct {
@@ -60,7 +61,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 		res, err := ex.ReleaseImageCollector(ctx)
 		if err != nil {
-			t.Fatalf("should not fail")
+			t.Fatalf("should not fail: %v", err)
 		}
 		log.Debug("completed test related images %v ", res)
 	})
@@ -196,6 +197,193 @@ func TestReleaseImage(t *testing.T) {
 		}
 		assert.Contains(t, res, "localhost:5000/test/openshift-release-dev/ocp-release")
 	})
+}
+
+func TestHandleGraphImage(t *testing.T) {
+	type testCase struct {
+		name              string
+		mode              string
+		updateURLOverride string
+		imageInCache      bool
+		imageInWorkingDir bool
+		expectedError     bool
+		expectedGraphCopy v2alpha1.CopyImageSchema
+	}
+	testCases := []testCase{
+		{
+			name:              "M2M - no UPDATE_URL_OVERRIDE: should pass",
+			mode:              mirror.MirrorToMirror,
+			updateURLOverride: "",
+			imageInCache:      false,
+			imageInWorkingDir: false,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "docker://mymirror/openshift/graph-image:latest",
+				Destination: "docker://mymirror/openshift/graph-image:latest",
+				Origin:      "docker://mymirror/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2D - no UPDATE_URL_OVERRIDE: should pass",
+			mode:              mirror.MirrorToDisk,
+			updateURLOverride: "",
+			imageInCache:      false,
+			imageInWorkingDir: false,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "docker://localhost:9999/openshift/graph-image:latest",
+				Destination: "docker://localhost:9999/openshift/graph-image:latest",
+				Origin:      "docker://localhost:9999/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2M - UPDATE_URL_OVERRIDE - image in cache: should pass",
+			mode:              mirror.MirrorToMirror,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      true,
+			imageInWorkingDir: false,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "docker://localhost:9999/openshift/graph-image:latest",
+				Destination: "docker://mymirror/openshift/graph-image:latest",
+				Origin:      "docker://localhost:9999/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2M - UPDATE_URL_OVERRIDE - image in working-dir: should pass",
+			mode:              mirror.MirrorToMirror,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      false,
+			imageInWorkingDir: true,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "oci://TEMPDIR/" + graphPreparationDir,
+				Destination: "docker://mymirror/openshift/graph-image:latest",
+				Origin:      "oci://TEMPDIR/" + graphPreparationDir,
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2M - UPDATE_URL_OVERRIDE - image nowhere: should pass",
+			mode:              mirror.MirrorToMirror,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      false,
+			imageInWorkingDir: false,
+			expectedError:     true,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{},
+		},
+		{
+			name:              "M2D - UPDATE_URL_OVERRIDE - image in cache: should pass",
+			mode:              mirror.MirrorToDisk,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      true,
+			imageInWorkingDir: false,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "docker://localhost:9999/openshift/graph-image:latest",
+				Destination: "docker://localhost:9999/openshift/graph-image:latest",
+				Origin:      "docker://localhost:9999/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2D - UPDATE_URL_OVERRIDE - image in working-dir: should pass",
+			mode:              mirror.MirrorToDisk,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      false,
+			imageInWorkingDir: true,
+			expectedError:     false,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{
+				Source:      "oci://TEMPDIR/" + graphPreparationDir,
+				Destination: "docker://localhost:9999/openshift/graph-image:latest",
+				Origin:      "oci://TEMPDIR/" + graphPreparationDir,
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		},
+		{
+			name:              "M2D - UPDATE_URL_OVERRIDE - image nowhere: should pass",
+			mode:              mirror.MirrorToDisk,
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			imageInCache:      false,
+			imageInWorkingDir: false,
+			expectedError:     true,
+			expectedGraphCopy: v2alpha1.CopyImageSchema{},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			globalOpts := &mirror.GlobalOptions{
+				SecurePolicy: false,
+				WorkingDir:   tempDir,
+			}
+
+			_, sharedOpts := mirror.SharedImageFlags()
+			_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+			_, retryOpts := mirror.RetryFlags()
+			_, srcOpts := mirror.ImageSrcFlags(globalOpts, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+			_, destOpts := mirror.ImageDestFlags(globalOpts, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+
+			copyOpts := mirror.CopyOptions{
+				Global:              globalOpts,
+				DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+				SrcImage:            srcOpts,
+				DestImage:           destOpts,
+				RetryOpts:           retryOpts,
+				Dev:                 false,
+				Mode:                testCase.mode,
+			}
+
+			if testCase.mode == mirror.MirrorToDisk {
+				copyOpts.Destination = "file://" + tempDir
+				copyOpts.Global.WorkingDir = tempDir
+			}
+			if testCase.mode == mirror.MirrorToMirror {
+				copyOpts.Destination = "docker://mymirror"
+				copyOpts.Global.WorkingDir = tempDir
+			}
+
+			log := clog.New("trace")
+			manifestMock := new(ManifestMock)
+			if testCase.imageInCache {
+				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("123456", nil)
+			} else {
+				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("", fmt.Errorf("simulating image doesn't exist in cache"))
+			}
+			if testCase.imageInWorkingDir {
+				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("123456", nil)
+			} else {
+				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("", fmt.Errorf("simulating image doesn't exist in cache"))
+			}
+			if testCase.updateURLOverride != "" {
+				t.Setenv("UPDATE_URL_OVERRIDE", testCase.updateURLOverride)
+			}
+			ex := &LocalStorageCollector{
+				Log:              log,
+				Mirror:           &MockMirror{Fail: false},
+				Opts:             copyOpts,
+				Manifest:         manifestMock,
+				LocalStorageFQDN: "localhost:9999",
+				ImageBuilder:     &mockImageBuilder{},
+				LogsDir:          "/tmp/",
+			}
+			graphImage, err := ex.handleGraphImage(context.Background())
+			if testCase.expectedError && err == nil {
+				t.Error("expecting test to fail with error, but no error returned")
+			}
+			if !testCase.expectedError && err != nil {
+				t.Errorf("unexpected failure: %v", err)
+			}
+			testCase.expectedGraphCopy.Source = strings.Replace(testCase.expectedGraphCopy.Source, "TEMPDIR", copyOpts.Global.WorkingDir, 1)
+			testCase.expectedGraphCopy.Origin = strings.Replace(testCase.expectedGraphCopy.Origin, "TEMPDIR", copyOpts.Global.WorkingDir, 1)
+			testCase.expectedGraphCopy.Destination = strings.Replace(testCase.expectedGraphCopy.Destination, "TEMPDIR", copyOpts.Global.WorkingDir, 1)
+
+			assert.Equal(t, testCase.expectedGraphCopy, graphImage)
+		})
+	}
 }
 
 func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
@@ -493,4 +681,37 @@ func (o MockCincinnati) GenerateReleaseSignatures(ctx context.Context, images []
 	fmt.Println("test release signature")
 
 	return images, nil
+}
+
+type ManifestMock struct {
+	mock.Mock
+}
+
+func (o *ManifestMock) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{}, nil
+}
+func (o *ManifestMock) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{}, nil
+}
+func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	return &v2alpha1.OperatorConfigSchema{}, nil
+}
+func (o *ManifestMock) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
+	return manifest.OperatorCatalog{}, nil
+}
+func (o *ManifestMock) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+	return map[string][]v2alpha1.RelatedImage{}, nil
+}
+func (o *ManifestMock) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+	return nil
+}
+func (o *ManifestMock) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	return []v2alpha1.RelatedImage{}, nil
+}
+func (o *ManifestMock) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+	return nil
+}
+func (o *ManifestMock) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+	args := o.Called(ctx, sourceCtx, imgRef)
+	return args.String(0), args.Error(1)
 }
