@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/otiai10/copy"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/testutils"
 	"github.com/stretchr/testify/assert"
@@ -142,6 +144,11 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	_, err = io.Copy(workingDirLocation, signatureFile)
 	assert.NoError(t, err)
 
+	graphPrepDir := suite.tempFolder + "/release/m2d/working-dir/graph-preparation"
+
+	err = copy.Copy("../../../tests/graph-staging", graphPrepDir)
+	assert.NoError(t, err)
+
 	// create the image set config
 	templatePath := "../../e2e/templates/isc_templates/release_isc.yaml"
 	suite.imageSetConfig = suite.tempFolder + "/isc.yaml"
@@ -190,6 +197,10 @@ func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
 		assert.True(t, exists)
 	}
 
+	graphExists, err := testutils.ImageExists(suite.destinationRegistryDomain + "/release/openshift/graph-image:latest")
+	assert.NoError(t, err)
+	assert.True(t, graphExists)
+
 	// assert IDMS is generated
 	assert.FileExists(t, filepath.Join(resultFolder, "working-dir/cluster-resources/idms-oc-mirror.yaml"))
 }
@@ -217,6 +228,10 @@ func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
+
+	graphExists, err := testutils.ImageExists(suite.destinationRegistryDomain + "/release/openshift/graph-image:latest")
+	assert.NoError(t, err)
+	assert.True(t, graphExists)
 
 	// assert IDMS is generated
 	assert.FileExists(t, filepath.Join(resultFolder, "working-dir/cluster-resources/idms-oc-mirror.yaml"))
