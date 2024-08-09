@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/stretchr/testify/require"
 	_ "k8s.io/klog/v2" // integration tests set glog flags.
 )
@@ -23,6 +25,19 @@ type mockClient struct {
 }
 
 func TestGetUpdates(t *testing.T) {
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	arch := "test-arch"
 	channelName := "stable-4.0"
 	tests := []struct {
@@ -94,7 +109,7 @@ func TestGetUpdates(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Opts: opts, Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 
 			current, requested, updates, err := GetUpdates(context.Background(), cs, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
@@ -124,6 +139,19 @@ func TestGetUpdates(t *testing.T) {
 func TestGetMinorMax(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	tests := []struct {
 		name string
 
@@ -155,7 +183,7 @@ func TestGetMinorMax(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Opts: opts, Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 			version, err := GetChannelMinOrMax(context.Background(), cs, channelName, test.min)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -181,6 +209,19 @@ func TestGetMinorMax(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	tests := []struct {
 		name          string
 		channel       string
@@ -218,7 +259,7 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch}}
+			cs := CincinnatiSchema{Opts: opts, Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch, GraphDataDir: tempDir}}
 			versions, err := GetVersions(context.Background(), cs, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -244,6 +285,18 @@ func TestGetVersions(t *testing.T) {
 }
 
 func TestGetUpdatesInRange(t *testing.T) {
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	arch := "test-arch"
 	channelName := "stable-4.0"
 	tests := []struct {
@@ -280,7 +333,7 @@ func TestGetUpdatesInRange(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Opts: opts, Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 			versions, err := GetUpdatesInRange(context.TODO(), cs, channelName, test.releaseRange)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -306,6 +359,18 @@ func TestGetUpdatesInRange(t *testing.T) {
 }
 
 func TestCalculateUpgrades(t *testing.T) {
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	arch := "test-arch"
 
 	tests := []struct {
@@ -410,7 +475,7 @@ func TestCalculateUpgrades(t *testing.T) {
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			cs := CincinnatiSchema{Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			cs := CincinnatiSchema{Opts: opts, Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
 			cur, req, updates, err := CalculateUpgrades(context.Background(), cs, test.sourceChannel, test.targetChannel, test.curr, test.req)
 
 			if test.err == "" {
@@ -426,6 +491,18 @@ func TestCalculateUpgrades(t *testing.T) {
 }
 
 func TestHandleBlockedEdges(t *testing.T) {
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{WorkingDir: tempDir, SecurePolicy: false}
+
+	opts := mirror.CopyOptions{
+		Global:      global,
+		Destination: "oci:test",
+		Dev:         false,
+		Mode:        mirror.MirrorToDisk,
+	}
+
 	arch := "test-arch"
 
 	tests := []struct {
@@ -478,7 +555,7 @@ func TestHandleBlockedEdges(t *testing.T) {
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
 
-			cs := CincinnatiSchema{Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			cs := CincinnatiSchema{Opts: opts, Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
 			isBlocked, err := handleBlockedEdges(context.Background(), cs, test.targetChannel, test.last)
 
 			if test.err == "" {
