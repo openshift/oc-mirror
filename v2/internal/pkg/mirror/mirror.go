@@ -81,7 +81,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 	policyContext, err := opts.Global.GetPolicyContext()
 	if err != nil {
-		return fmt.Errorf("Error loading trust policy: %v", err)
+		return fmt.Errorf("error loading trust policy: %v", err)
 	}
 	defer func() {
 		if err := policyContext.Destroy(); err != nil {
@@ -91,11 +91,11 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 	srcRef, err := alltransports.ParseImageName(src)
 	if err != nil {
-		return fmt.Errorf("Invalid source name %s: %v", src, err)
+		return fmt.Errorf("invalid source name %s: %v", src, err)
 	}
 	destRef, err := alltransports.ParseImageName(dest)
 	if err != nil {
-		return fmt.Errorf("Invalid destination name %s: %v", dest, err)
+		return fmt.Errorf("invalid destination name %s: %v", dest, err)
 	}
 
 	sourceCtx, err := opts.SrcImage.NewSystemContext()
@@ -128,7 +128,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 	imageListSelection := copy.CopySystemImage
 	if len(opts.MultiArch) > 0 && opts.All {
-		return fmt.Errorf("Cannot use --all and --multi-arch flags together")
+		return fmt.Errorf("cannot use --all and --multi-arch flags together")
 	}
 
 	if len(opts.MultiArch) > 0 {
@@ -150,7 +150,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	// with independent passphrases, but that would make the CLI probably too confusing.
 	// For now, use the passphrase with either, but only one of them.
 	if opts.SignPassphraseFile != "" && opts.SignByFingerprint != "" && opts.SignBySigstorePrivateKey != "" {
-		return fmt.Errorf("Only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file")
+		return fmt.Errorf("only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file")
 	}
 	var passphrase string
 	if opts.SignPassphraseFile != "" {
@@ -167,7 +167,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	if opts.SignIdentity != "" {
 		signIdentity, err = reference.ParseNamed(opts.SignIdentity)
 		if err != nil {
-			return fmt.Errorf("Could not parse --sign-identity: %v", err)
+			return fmt.Errorf("could not parse --sign-identity: %v", err)
 		}
 	}
 
@@ -205,7 +205,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 				return err
 			}
 			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0644); err != nil {
-				return fmt.Errorf("Failed to write digest to file %q: %w", opts.DigestFile, err)
+				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
 			}
 		}
 		return nil
@@ -265,7 +265,7 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 
 	imageRef, err := alltransports.ParseImageName(image)
 	if err != nil {
-		return fmt.Errorf("Invalid source name %s: %v", image, err)
+		return fmt.Errorf("invalid source name %s: %v", image, err)
 	}
 
 	sysCtx, err := opts.DestImage.NewSystemContext()

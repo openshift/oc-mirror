@@ -58,12 +58,12 @@ func TestMirrorCopy(t *testing.T) {
 
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), "broken", "oci:test", "copy", &opts)
-		assert.Equal(t, "Invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
+		assert.Equal(t, "invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "broken", "copy", &opts)
-		assert.Equal(t, "Invalid destination name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
+		assert.Equal(t, "invalid destination name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	opts.MultiArch = "other"
@@ -75,7 +75,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.All = true
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
-		assert.Equal(t, "Cannot use --all and --multi-arch flags together", err.Error())
+		assert.Equal(t, "cannot use --all and --multi-arch flags together", err.Error())
 	})
 
 	opts.All = true
@@ -96,7 +96,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.SignBySigstorePrivateKey = "test"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
-		assert.Equal(t, "Only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file", err.Error())
+		assert.Equal(t, "only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file", err.Error())
 	})
 }
 
@@ -218,7 +218,7 @@ func TestMirrorDelete(t *testing.T) {
 
 	t.Run("Testing Mirror : delete should fail", func(t *testing.T) {
 		err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, "broken", "delete", &opts)
-		assert.Equal(t, "Invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
+		assert.Equal(t, "invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	t.Run("Testing Mirror : delete should fail", func(t *testing.T) {
