@@ -115,7 +115,6 @@ type ExecutorSchema struct {
 	Batch                        batch.BatchInterface
 	LocalStorageService          registry.Registry
 	localStorageInterruptChannel chan error
-	LocalStorageFQDN             string
 	LocalStorageDisk             string
 	ClusterResources             clusterresources.GeneratorInterface
 	ImageBuilder                 imagebuilder.ImageBuilderInterface
@@ -405,7 +404,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
-	o.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
+	o.Opts.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
 
 	err = o.setupWorkingDir()
 	if err != nil {
@@ -423,9 +422,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
-	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.LocalStorageFQDN, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
-	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest, o.LocalStorageFQDN)
+	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
+	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
 	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 

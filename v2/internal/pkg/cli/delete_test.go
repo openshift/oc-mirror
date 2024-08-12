@@ -220,6 +220,7 @@ func TestExecutorRunDelete(t *testing.T) {
 		_ = os.MkdirAll(testFolder+"/docker/registry/v2/repositories", 0755)
 		_ = os.MkdirAll(common.TestFolder+"cache-fake-temp", 0755)
 		defer os.RemoveAll(common.TestFolder + "cache-fake-temp")
+		opts.LocalStorageFQDN = regCfg.HTTP.Addr
 
 		ex := &ExecutorSchema{
 			Log:                          log,
@@ -234,7 +235,6 @@ func TestExecutorRunDelete(t *testing.T) {
 			LogsDir:                      "/tmp/",
 			Delete:                       MockDelete{},
 			LocalStorageDisk:             common.TestFolder + "cache-fake-temp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}

@@ -102,10 +102,17 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	if err != nil {
 		return err
 	}
+	if strings.Contains(src, opts.LocalStorageFQDN) { // when copying from cache, use HTTP
+		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
 
 	destinationCtx, err := opts.DestImage.NewSystemContext()
 	if err != nil {
 		return err
+	}
+
+	if strings.Contains(dest, opts.LocalStorageFQDN) { // when copying to cache, use HTTP
+		destinationCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
 	var manifestType string
@@ -264,6 +271,10 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 	sysCtx, err := opts.DestImage.NewSystemContext()
 	if err != nil {
 		return err
+	}
+
+	if strings.Contains(image, opts.LocalStorageFQDN) { // when copying to cache, use HTTP
+		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
 	ctx, cancel := opts.Global.CommandTimeoutContext()
