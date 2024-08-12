@@ -141,7 +141,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 				case img.Type.IsAdditionalImage():
 					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
 					spinner.Abort(false)
-				case img.Type.IsRelease(): //TODO ALEX ASK SHERINE IF CINCINNATI SHOULD BE INCLUDED HERE
+				case img.Type.IsRelease():
 					// error on release image, save the errArray and immediately return `UnsafeError` to caller
 					currentMirrorError := mirrorErrorSchema{image: img, err: err}
 					errArray = append(errArray, currentMirrorError)
@@ -185,7 +185,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 		}
 		if collectorSchema.TotalAdditionalImages != 0 {
 			if o.CopiedImages.TotalAdditionalImages == collectorSchema.TotalAdditionalImages {
-				o.Log.Info("✅ %d / %dadditional images mirrored successfully", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
+				o.Log.Info("✅ %d / %d additional images mirrored successfully", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
 			} else {
 				o.Log.Info("❌ %d / %d addtional images mirrored: Some additional images failed to mirror - please check the logs", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
 			}
