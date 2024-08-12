@@ -185,7 +185,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 		}
 		if collectorSchema.TotalAdditionalImages != 0 {
 			if o.CopiedImages.TotalAdditionalImages == collectorSchema.TotalAdditionalImages {
-				o.Log.Info("✅ %d / %dadditional images mirrored successfully", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
+				o.Log.Info("✅ %d / %d additional images mirrored successfully", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
 			} else {
 				o.Log.Info("❌ %d / %d addtional images mirrored: Some additional images failed to mirror - please check the logs", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
 			}
