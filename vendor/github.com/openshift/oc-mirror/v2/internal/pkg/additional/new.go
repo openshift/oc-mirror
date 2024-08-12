@@ -12,7 +12,6 @@ func New(log clog.PluggableLoggerInterface,
 	opts mirror.CopyOptions,
 	mirror mirror.MirrorInterface,
 	manifest manifest.ManifestInterface,
-	localstorageFQDN string,
 ) CollectorInterface {
-	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: localstorageFQDN}
+	return &LocalStorageCollector{Log: log, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: opts.LocalStorageFQDN}
 }

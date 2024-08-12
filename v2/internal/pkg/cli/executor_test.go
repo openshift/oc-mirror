@@ -51,17 +51,6 @@ func TestExecutorMirroring(t *testing.T) {
 	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
-	opts := &mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		Dev:                 false,
-		Mode:                mirror.MirrorToDisk,
-		Destination:         workDir,
-	}
-
 	// storage cache for test
 	regCfg, err := setupRegForTest(testFolder)
 	if err != nil {
@@ -74,6 +63,17 @@ func TestExecutorMirroring(t *testing.T) {
 	fakeStorageInterruptChan := make(chan error)
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
+	opts := &mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+		Mode:                mirror.MirrorToDisk,
+		Destination:         workDir,
+		LocalStorageFQDN:    regCfg.HTTP.Addr,
+	}
 	// read the ImageSetConfiguration
 	res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 	if err != nil {
@@ -108,7 +108,6 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -143,7 +142,6 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -181,7 +179,6 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -218,7 +215,6 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
@@ -254,7 +250,6 @@ func TestExecutorMirroring(t *testing.T) {
 			ClusterResources:             cr,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		res := &cobra.Command{}
