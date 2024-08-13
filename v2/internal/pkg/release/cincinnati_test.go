@@ -86,6 +86,17 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		},
 	}
 
+	cfgReleaseKubeVirt := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Platform: v2alpha1.Platform{
+					Release:           "test-release-image:v1",
+					KubeVirtContainer: true,
+				},
+			},
+		},
+	}
+
 	t.Run("TestGetReleaseReferenceImages should pass", func(t *testing.T) {
 
 		c := &mockClient{}
@@ -163,6 +174,33 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should return a related images")
 		}
 	})
+
+	t.Run("TestGetReleaseReferenceImages should pass (platform.release & kubevirt)", func(t *testing.T) {
+
+		c := &mockClient{}
+		signature := &mockSignature{Log: log}
+		requestQuery := make(chan string, 1)
+		defer close(requestQuery)
+
+		handler := getHandlerMulti(t, requestQuery)
+
+		ts := httptest.NewServer(http.HandlerFunc(handler))
+		t.Cleanup(ts.Close)
+
+		endpoint, err := url.Parse(ts.URL)
+		if err != nil {
+			t.Fatalf("should not fail endpoint parse")
+		}
+		c.url = endpoint
+		sch := NewCincinnati(log, &cfgReleaseKubeVirt, opts, c, true, signature)
+		res := sch.GetReleaseReferenceImages(context.Background())
+
+		log.Debug("result from cincinnati %v", res)
+		if res == nil {
+			t.Fatalf("should return a related images")
+		}
+	})
+
 }
 
 func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
