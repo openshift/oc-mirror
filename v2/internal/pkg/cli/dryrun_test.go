@@ -45,17 +45,6 @@ func TestDryRun(t *testing.T) {
 
 		global.WorkingDir = testFolder
 
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			IsDryRun:            true,
-			Mode:                mirror.MirrorToDisk,
-			Dev:                 false,
-		}
-
 		// storage cache for test
 		regCfg, err := setupRegForTest(testFolder)
 		if err != nil {
@@ -68,6 +57,17 @@ func TestDryRun(t *testing.T) {
 		fakeStorageInterruptChan := make(chan error)
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
+		opts := &mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			IsDryRun:            true,
+			Mode:                mirror.MirrorToDisk,
+			Dev:                 false,
+			LocalStorageFQDN:    regCfg.HTTP.Addr,
+		}
 		// read the ImageSetConfiguration
 		res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 		if err != nil {
@@ -93,7 +93,6 @@ func TestDryRun(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			LogsDir:                      testFolder,
 			MakeDir:                      MakeDir{},
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)
@@ -120,16 +119,6 @@ func TestDryRun(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 
 		global.WorkingDir = testFolder
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			IsDryRun:            true,
-			Mode:                mirror.MirrorToDisk,
-			Dev:                 false,
-		}
 
 		// storage cache for test
 		regCfg, err := setupRegForTest(testFolder)
@@ -143,6 +132,17 @@ func TestDryRun(t *testing.T) {
 		fakeStorageInterruptChan := make(chan error)
 		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
+		opts := &mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			IsDryRun:            true,
+			Mode:                mirror.MirrorToDisk,
+			Dev:                 false,
+			LocalStorageFQDN:    regCfg.HTTP.Addr,
+		}
 		// read the ImageSetConfiguration
 		res, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.ImageSetConfigurationKind)
 		if err != nil {
@@ -169,7 +169,6 @@ func TestDryRun(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			LogsDir:                      "/tmp/",
 			MakeDir:                      MakeDir{},
-			LocalStorageFQDN:             regCfg.HTTP.Addr,
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)

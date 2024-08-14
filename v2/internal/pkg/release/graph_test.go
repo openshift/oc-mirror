@@ -40,6 +40,7 @@ func TestCreateGraphImage(t *testing.T) {
 		Destination:         "file://test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:9999",
 	}
 
 	cfgm2d := v2alpha1.ImageSetConfiguration{
@@ -141,7 +142,7 @@ func TestCreateGraphImage(t *testing.T) {
 		}
 
 		// just to ensure we cover new.go
-		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, &MockManifest{}, cincinnati, "localhost:9999", &mockImageBuilder{})
+		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, &MockManifest{}, cincinnati, &mockImageBuilder{})
 
 		_, err := ex.CreateGraphImage(ctx, graphURL)
 		if err != nil {

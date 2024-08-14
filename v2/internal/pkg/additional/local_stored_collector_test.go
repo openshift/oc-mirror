@@ -29,6 +29,8 @@ func TestAdditionalImageCollector(t *testing.T) {
 	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
+	localstorageFQDN := "test.registry.com"
+
 	opts := mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
@@ -38,6 +40,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 		Destination:         "oci://test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    localstorageFQDN,
 	}
 
 	// use the minamal amount of images
@@ -56,8 +59,8 @@ func TestAdditionalImageCollector(t *testing.T) {
 
 	mockmirror := MockMirror{}
 	manifest := MockManifest{Log: log}
-	localstorageFQDN := "test.registry.com"
-	ex := New(log, cfg, opts, mockmirror, manifest, localstorageFQDN)
+
+	ex := New(log, cfg, opts, mockmirror, manifest)
 	ctx := context.Background()
 
 	// this test covers mirrorToDisk
@@ -73,7 +76,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	// update opts
 	// this test covers diskToMirror
 	opts.Mode = mirror.DiskToMirror
-	ex = New(log, cfg, opts, mockmirror, manifest, localstorageFQDN)
+	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror should pass", func(t *testing.T) {
 		res, err := ex.AdditionalImagesCollector(ctx)
@@ -87,7 +90,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	// should error mirrorToDisk
 	cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
 	opts.Mode = mirror.MirrorToDisk
-	ex = New(log, cfg, opts, mockmirror, manifest, localstorageFQDN)
+	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
 		_, err := ex.AdditionalImagesCollector(ctx)
@@ -99,7 +102,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	// should error diskToMirror
 	cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
 	opts.Mode = mirror.DiskToMirror
-	ex = New(log, cfg, opts, mockmirror, manifest, localstorageFQDN)
+	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror should fail", func(t *testing.T) {
 		_, err := ex.AdditionalImagesCollector(ctx)

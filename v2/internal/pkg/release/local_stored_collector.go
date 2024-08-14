@@ -151,22 +151,13 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		}
 
 		if o.Config.Mirror.Platform.Graph {
-			o.Log.Debug(collectorPrefix + "creating graph data image")
-			graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
+			graphImage, err := o.handleGraphImage(ctx)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return []v2alpha1.CopyImageSchema{}, err
+				o.Log.Warn("error during graph image processing - SKIPPING: %v", err)
+			} else if graphImage.Source != "" {
+				allImages = append(allImages, graphImage)
 			}
-			o.Log.Debug(collectorPrefix + "graph image created and pushed to cache.")
-			// still add the graph image to the `allImages` so that we later can add it in the tar.gz archive
-			// or copied to the destination registry (case of mirror to mirror)
-			graphCopy := v2alpha1.CopyImageSchema{
-				Source:      graphImgRef,
-				Destination: graphImgRef,
-				Origin:      graphImgRef,
-				Type:        v2alpha1.TypeCincinnatiGraph,
-			}
-			allImages = append(allImages, graphCopy)
+
 		}
 
 	} else if o.Opts.IsDiskToMirror() {
@@ -219,24 +210,31 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
 				Type:  v2alpha1.TypeCincinnatiGraph,
 			}
-			// OCPBUGS-26513: In order to get the destination for the graphDataImage
-			// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
-			// containing only the graph image. This way we can easily identify the destination
-			// of the graph image.
-			graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
-			graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice)
-			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return []v2alpha1.CopyImageSchema{}, err
+			// OCPBUGS-38037: Check the graph image is in the cache before adding it
+			graphInCache, err := o.imageExists(ctx, dockerProtocol+graphRelatedImage.Image)
+			if err != nil || !graphInCache {
+				o.Log.Warn("unable to find graph image in local cache: SKIPPING. %v")
+				o.Log.Warn("%v", err)
+			} else {
+				// OCPBUGS-26513: In order to get the destination for the graphDataImage
+				// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
+				// containing only the graph image. This way we can easily identify the destination
+				// of the graph image.
+				graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
+				graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice)
+				if err != nil {
+					o.Log.Error(errMsg, err.Error())
+					return []v2alpha1.CopyImageSchema{}, err
+				}
+				// if there is no error, we are certain that the slice only contains 1 element
+				// but double checking...
+				if len(graphCopySlice) != 1 {
+					o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
+					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
+				}
+				o.GraphDataImage = graphCopySlice[0].Destination
+				allImages = append(allImages, graphCopySlice...)
 			}
-			// if there is no error, we are certain that the slice only contains 1 element
-			// but double checking...
-			if len(graphCopySlice) != 1 {
-				o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
-			}
-			o.GraphDataImage = graphCopySlice[0].Destination
-			allImages = append(allImages, graphCopySlice...)
 		}
 		releaseCopyImages, err := o.prepareD2MCopyBatch(allRelatedImages)
 		if err != nil {
@@ -438,4 +436,60 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 		Type:  v2alpha1.TypeOCPRelease,
 	}
 	return kubeVirtImage, nil
+}
+
+func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.CopyImageSchema, error) {
+	o.Log.Debug(collectorPrefix + "processing graph data image")
+	if updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE"); len(updateURLOverride) != 0 {
+		// OCPBUGS-38037: this indicates that the official cincinnati API is not reacheable
+		// and that graph image cannot be rebuilt on top the complete graph in tar.gz format
+
+		graphImgRef := dockerProtocol + filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
+
+		// 1. check if graph image is already in cache
+		cachedImageRef := dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+		alreadyInCache, err := o.imageExists(ctx, cachedImageRef)
+		if err != nil {
+			o.Log.Warn("graph image not found in cache: %v", err)
+		}
+		if alreadyInCache { // use graph image from cache
+			graphCopy := v2alpha1.CopyImageSchema{
+				Source:      cachedImageRef,
+				Destination: graphImgRef,
+				Origin:      cachedImageRef,
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			}
+			return graphCopy, nil
+		}
+		// 2. check if graph image exist in oci format in working-dir
+		workingDirGraphImageRef, err := o.graphImageInWorkingDir(ctx)
+		if err != nil || workingDirGraphImageRef == "" {
+			return v2alpha1.CopyImageSchema{}, fmt.Errorf("no graph image in cache (nor working-dir): %v", err)
+		} else {
+			//    => use OCI image in workingDir
+			graphCopy := v2alpha1.CopyImageSchema{
+				Source:      workingDirGraphImageRef,
+				Destination: graphImgRef,
+				Origin:      workingDirGraphImageRef,
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			}
+			return graphCopy, nil
+		}
+
+	} else {
+		graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
+		if err != nil {
+			return v2alpha1.CopyImageSchema{}, err
+		}
+		o.Log.Debug(collectorPrefix + "graph image created and pushed to cache.")
+		// still add the graph image to the `allImages` so that we later can add it in the tar.gz archive
+		// or copied to the destination registry (case of mirror to mirror)
+		graphCopy := v2alpha1.CopyImageSchema{
+			Source:      graphImgRef,
+			Destination: graphImgRef,
+			Origin:      graphImgRef,
+			Type:        v2alpha1.TypeCincinnatiGraph,
+		}
+		return graphCopy, nil
+	}
 }

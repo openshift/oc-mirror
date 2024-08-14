@@ -15,8 +15,7 @@ func New(log clog.PluggableLoggerInterface,
 	mirror mirror.MirrorInterface,
 	manifest manifest.ManifestInterface,
 	cincinnati CincinnatiInterface,
-	localStorageFQDN string,
 	imageBuilder imagebuilder.ImageBuilderInterface,
 ) CollectorInterface {
-	return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: localStorageFQDN, ImageBuilder: imageBuilder}
+	return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, Cincinnati: cincinnati, LocalStorageFQDN: opts.LocalStorageFQDN, ImageBuilder: imageBuilder}
 }

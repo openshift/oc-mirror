@@ -401,7 +401,7 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 	t.Run("Testing OperatorImageCollector - Mirror to disk: should pass", func(t *testing.T) {
 		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
 		// ensure coverage in new.go
-		_ = New(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifest, "localhost:9999")
+		_ = New(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifest)
 	})
 }
 func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
@@ -531,6 +531,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		Destination:         "docker://localhost:5000/test",
 		Dev:                 false,
 		Mode:                mirror.DiskToMirror,
+		LocalStorageFQDN:    "localhost:9999",
 	}
 
 	ex := &LocalStorageCollector{
@@ -567,6 +568,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		Destination:         "file://test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:9999",
 	}
 
 	ex := &LocalStorageCollector{
