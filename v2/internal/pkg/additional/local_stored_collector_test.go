@@ -9,6 +9,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/stretchr/testify/assert"
 )
 
 // setup mocks
@@ -50,8 +51,9 @@ func TestAdditionalImageCollector(t *testing.T) {
 			Mirror: v2alpha1.Mirror{
 				AdditionalImages: []v2alpha1.Image{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
+					{Name: "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"},
 					{Name: "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-					{Name: "oci://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
+					{Name: "oci:///folder-a/folder-b/testns/test"},
 				},
 			},
 		},
@@ -65,26 +67,79 @@ func TestAdditionalImageCollector(t *testing.T) {
 
 	// this test covers mirrorToDisk
 	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should pass", func(t *testing.T) {
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      "oci:///folder-a/folder-b/testns/test",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Destination: "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
 		res, err := ex.AdditionalImagesCollector(ctx)
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
-		log.Debug("completed test related images %v ", res)
+		assert.ElementsMatch(t, expected, res)
 	})
 
 	// update opts
 	// this test covers diskToMirror
 	opts.Mode = mirror.DiskToMirror
+	opts.Destination = "docker://mirror.acme.com"
 	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror should pass", func(t *testing.T) {
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
 		res, err := ex.AdditionalImagesCollector(ctx)
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
-		log.Debug("completed test related images %v ", res)
+		assert.ElementsMatch(t, expected, res)
 	})
 
 	// should error mirrorToDisk
@@ -93,22 +148,65 @@ func TestAdditionalImageCollector(t *testing.T) {
 	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
-		_, err := ex.AdditionalImagesCollector(ctx)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      "oci:///folder-a/folder-b/testns/test",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Destination: "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
 		if err != nil {
+			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
+		assert.ElementsMatch(t, expected, res)
 	})
 
-	// should error diskToMirror
-	cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
-	opts.Mode = mirror.DiskToMirror
-	ex = New(log, cfg, opts, mockmirror, manifest)
-
-	t.Run("Testing AdditionalImagesCollector : diskToMirror should fail", func(t *testing.T) {
-		_, err := ex.AdditionalImagesCollector(ctx)
-		if err == nil {
-			t.Fatalf("should fail")
+	t.Run("Testing AdditionalImagesCollector : diskToMirror should skip failing image with warning", func(t *testing.T) {
+		// should error diskToMirror
+		cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		opts.Mode = mirror.DiskToMirror
+		ex = New(log, cfg, opts, mockmirror, manifest)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
 		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+		assert.ElementsMatch(t, expected, res)
 	})
 }
 
@@ -194,5 +292,5 @@ func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCI
 }
 
 func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "", nil
+	return "123456", nil
 }
