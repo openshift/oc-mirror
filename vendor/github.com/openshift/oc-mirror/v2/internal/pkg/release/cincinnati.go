@@ -241,11 +241,11 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 
 	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
 	if err != nil {
-		o.Log.Error("error list %v ", err)
+		o.Log.Error("generate release signatures: error list %v ", err)
 	}
 
 	for _, e := range errs {
-		o.Log.Error("error list %v ", e)
+		o.Log.Error("get release images: error list %v ", e)
 	}
 	return imgs
 }

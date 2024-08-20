@@ -41,6 +41,7 @@ func TestAllDeleteImages(t *testing.T) {
 		Destination:         "docker://myregistry",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:8888",
 	}
 
 	isc := v2alpha1.ImageSetConfiguration{
@@ -63,7 +64,7 @@ func TestAllDeleteImages(t *testing.T) {
 		},
 	}
 
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp", "localhost:8888")
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp")
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		opts.Global.WorkingDir = common.TestFolder
@@ -91,7 +92,7 @@ func TestAllDeleteImages(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 		opts.Global.WorkingDir = common.TestFolder
 		opts.Global.ForceCacheDelete = true
-		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", "localhost:8888")
+		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp")
 		imgs, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
@@ -132,10 +133,11 @@ func TestWriteMetaData(t *testing.T) {
 		Destination:         "oci:test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:8888",
 	}
 
 	cfg := v2alpha1.ImageSetConfiguration{}
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp", "localhost:8888")
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp")
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		cpImages := []v2alpha1.CopyImageSchema{

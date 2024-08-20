@@ -5,4 +5,5 @@ mirror:
   platform:
     channels:
     - name: {{.}} 
+    graph: true
 {{end}}

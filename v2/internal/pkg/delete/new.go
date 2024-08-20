@@ -16,7 +16,6 @@ func New(log clog.PluggableLoggerInterface,
 	config v2alpha1.ImageSetConfiguration,
 	manifest manifest.ManifestInterface,
 	localStorageDisk string,
-	localStorageFQDN string,
 ) DeleteInterface {
 	return &DeleteImages{
 		Log:              log,
@@ -26,6 +25,6 @@ func New(log clog.PluggableLoggerInterface,
 		Config:           config,
 		Manifest:         manifest,
 		LocalStorageDisk: localStorageDisk,
-		LocalStorageFQDN: localStorageFQDN,
+		LocalStorageFQDN: opts.LocalStorageFQDN,
 	}
 }

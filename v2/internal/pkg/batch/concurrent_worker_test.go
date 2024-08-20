@@ -392,6 +392,90 @@ func TestSplitImagesToBatches(t *testing.T) {
 	}
 }
 
+func TestShouldSkipImage(t *testing.T) {
+	type testCase struct {
+		caseName          string
+		img               v2alpha1.CopyImageSchema
+		mode              string
+		errArray          []mirrorErrorSchema
+		updateURLOverride string
+		expectToSkip      bool
+		expectedError     bool
+	}
+	testCases := []testCase{
+		{
+			caseName:          "ShouldSkipImage GraphImage - M2M - no UpdateURLOVerride : should skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.MirrorToMirror,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "",
+			expectedError:     false,
+			expectToSkip:      true,
+		},
+		{
+			caseName:          "ShouldSkipImage GraphImage - M2D - no UpdateURLOVerride : should skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.MirrorToDisk,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "",
+			expectedError:     false,
+			expectToSkip:      true,
+		},
+		{
+			caseName:          "ShouldSkipImage GraphImage - D2M - no UpdateURLOVerride : should not skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.DiskToMirror,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "",
+			expectedError:     false,
+			expectToSkip:      false,
+		},
+		{
+			caseName:          "ShouldSkipImage GraphImage - M2M - UpdateURLOVerride : should not skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.MirrorToMirror,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			expectedError:     false,
+			expectToSkip:      false,
+		},
+		{
+			caseName:          "ShouldSkipImage GraphImage - M2D - UpdateURLOVerride : should not skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.MirrorToDisk,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			expectedError:     false,
+			expectToSkip:      false,
+		},
+		{
+			caseName:          "ShouldSkipImage GraphImage - D2M - UpdateURLOVerride : should not skip",
+			img:               v2alpha1.CopyImageSchema{Source: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-g@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testg", Type: v2alpha1.TypeCincinnatiGraph},
+			mode:              mirror.DiskToMirror,
+			errArray:          []mirrorErrorSchema{},
+			updateURLOverride: "https://localhost.localdomain:3443/graph",
+			expectedError:     false,
+			expectToSkip:      false,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			if testCase.updateURLOverride != "" {
+				t.Setenv("UPDATE_URL_OVERRIDE", testCase.updateURLOverride)
+			}
+
+			skip, err := shouldSkipImage(testCase.img, testCase.mode, testCase.errArray)
+			if testCase.expectedError && err == nil {
+				t.Error("expected to fail with error, but no error was returned")
+			}
+			if !testCase.expectedError && err != nil {
+				t.Errorf("unexpected failure : %v", err)
+			}
+			assert.Equal(t, testCase.expectToSkip, skip)
+		})
+	}
+}
+
 type MirrorMock struct {
 	mock.Mock
 }

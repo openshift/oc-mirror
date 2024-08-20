@@ -44,7 +44,7 @@ var imageStringsType = map[string]ImageType{
 }
 
 func (it ImageType) IsRelease() bool {
-	return it == TypeOCPRelease || it == TypeOCPReleaseContent
+	return it == TypeOCPRelease || it == TypeOCPReleaseContent || it == TypeCincinnatiGraph
 }
 
 func (it ImageType) IsOperator() bool {
