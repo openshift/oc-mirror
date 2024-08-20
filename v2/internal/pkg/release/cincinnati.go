@@ -110,12 +110,24 @@ func (o *CincinnatiSchema) NewOKDClient() error {
 func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
 	cincinnatiParams := CincinnatiParams{GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir)}
 
-	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 	var (
 		allImages  []v2alpha1.CopyImageSchema
 		errs       = []error{}
 		flagReport = false
 	)
+
+	// before making a deep copy
+	// check that the "platform.release" field is not empty
+	if len(o.Config.Mirror.Platform.Release) > 0 {
+		copyImage := v2alpha1.CopyImageSchema{
+			Source:      o.Config.Mirror.Platform.Release,
+			Destination: "",
+		}
+		allImages = append(allImages, copyImage)
+		return allImages
+	}
+
+	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 
 	for _, arch := range filterCopy.Architectures {
 		cincinnatiParams.Arch = arch
