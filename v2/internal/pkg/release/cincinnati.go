@@ -96,7 +96,7 @@ func NewCincinnati(log clog.PluggableLoggerInterface, config *v2alpha1.ImageSetC
 }
 
 func (o *CincinnatiSchema) NewOCPClient() error {
-	client, err := NewOCPClient(uuid.New())
+	client, err := NewOCPClient(uuid.New(), o.Log)
 	o.Client = client
 	return err
 }

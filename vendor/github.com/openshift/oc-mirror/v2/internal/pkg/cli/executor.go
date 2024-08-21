@@ -416,7 +416,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return err
 	}
 
-	client, _ := release.NewOCPClient(uuid.New())
+	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 
