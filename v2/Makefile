@@ -8,9 +8,7 @@ all: clean test build
 
 build: 
 	mkdir -p build
-#v2 workspace required change
-#go build -o build ./... 
-	go build -mod=vendor -o build ./... 
+	go build -o build ./... 
 	
 
 build-dev:
