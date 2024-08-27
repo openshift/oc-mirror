@@ -5,7 +5,7 @@ SOURCE_GIT_TAG := ${OS_GIT_VERSION}
 endif
 
 # Include the library makefile
-include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
+include $(addprefix ./build-machinery-go/make/, \
 	golang.mk \
 	targets/openshift/images.mk \
 	targets/openshift/deps-gomod.mk \
@@ -13,11 +13,9 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 
 GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/pkg/version)
 
-#v2 workspace required change
-#GO_MOD_FLAGS = -mod=readonly
+GO_MOD_FLAGS = -mod=readonly
 GO_BUILD_PACKAGES := ./cmd/...
-#v2 workspace required change
-#GO_PACKAGE = github.com/openshift/oc-mirror
+GO_PACKAGE = github.com/openshift/oc-mirror
 
 LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
 LIBSUBID_BUILD_TAG = $(shell hack/libsubid_tag.sh)
@@ -58,8 +56,6 @@ hack-build: clean
 
 tidy:
 	$(GO) mod tidy
-	$(GO) mod verify
-	$(GO) mod vendor
 .PHONY: tidy
 
 clean:
@@ -68,11 +64,9 @@ clean:
 .PHONY: clean
 
 test-unit:
-#v2 workspace required change
-#$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
-	$(GO) test $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/...
+	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
 	mkdir -p v2/tests/results
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -short -coverprofile=tests/results/cover.out -race -count=1 ./internal/pkg/...
+	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -short -coverprofile=tests/results/cover.out -race -count=1 ./internal/pkg/...
 .PHONY: test-unit
 
 v2cover:
@@ -81,10 +75,10 @@ v2cover:
 test-e2e: build
 	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror
 	mkdir -p v2/tests/results-integration
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditional
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationRelease
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditionalM2M
-	@cd v2 && $(GO) test $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationReleaseM2M
+	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditional
+	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationRelease
+	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./pkg/... -run TestIntegrationAdditionalM2M
+	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./pkg/... -run TestIntegrationReleaseM2M
 
 .PHONY: test-e2e
 
@@ -103,23 +97,16 @@ publish-catalog:
 .PHONY: publish-catalog
 
 format:
-#v2 workspace required change
-#$(GO) fmt $(GO_MOD_FLAGS) ./pkg/...
-#$(GO) fmt $(GO_MOD_FLAGS) ./cmd/...
-	$(GO) fmt ./pkg/...
-	$(GO) fmt ./cmd/...
+	$(GO) fmt $(GO_MOD_FLAGS) ./pkg/...
+	$(GO) fmt $(GO_MOD_FLAGS) ./cmd/...
 .PHONY: format
 
 vet:
-#v2 workspace required change
-#$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./pkg/...
-#$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./cmd/...
-	$(GO) vet $(GO_BUILD_FLAGS) ./pkg/...
-	$(GO) vet $(GO_BUILD_FLAGS) ./cmd/...
+	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./pkg/...
+	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./cmd/...
 .PHONY: vet
 
-#v2 workspace required change
-# build: 
-# 	mkdir -p $(GO_BUILD_BINDIR)
-# 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
-# .PHONY: build
+build: 
+	mkdir -p $(GO_BUILD_BINDIR)
+	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
+.PHONY: build

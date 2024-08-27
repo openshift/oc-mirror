@@ -277,8 +277,8 @@ replace github.com/openshift/oc-mirror/v2 => ./v2
 
 replace github.com/openshift/oc-mirror/v2/pkg/cli => ./v2/pkg/cli
 
-// replace github.com/containerd/stargz-snapshotter/estargz => github.com/containerd/stargz-snapshotter/estargz v0.12.0
+replace github.com/containerd/stargz-snapshotter/estargz => github.com/containerd/stargz-snapshotter/estargz v0.12.0
 
 replace github.com/google/go-containerregistry => github.com/google/go-containerregistry v0.10.0
 
-// replace github.com/vbatts/tar-split =>	github.com/vbatts/tar-split v0.11.2
+replace github.com/vbatts/tar-split => github.com/vbatts/tar-split v0.11.2
