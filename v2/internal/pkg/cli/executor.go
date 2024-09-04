@@ -213,7 +213,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.AddCommand(NewDeleteCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
-	cmd.Flags().StringVar(&opts.Global.LogLevel, "loglevel", "info", "Log level one of (info, debug, trace, error)")
+	cmd.Flags().StringVar(&opts.Global.LogLevel, "log-level", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "Local storage directory for disk to mirror workflow")
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
@@ -313,6 +313,9 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 	if o.Opts.MaxParallelDownloads > 64 {
 		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, limitOverallParallelDownloads, limitOverallParallelDownloads)
+	}
+	if !slices.Contains([]string{"info", "debug", "trace"}, o.Opts.Global.LogLevel) {
+		return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace)", o.Opts.Global.LogLevel)
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
