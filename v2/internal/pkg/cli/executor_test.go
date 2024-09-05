@@ -446,6 +446,7 @@ func TestExecutorValidate(t *testing.T) {
 		warnArgs := []interface{}{uint(2), uint(2), uint(10), uint(10)}
 		log.On("Warn", "⚠️ --max-parallel-downloads set to %d: %d < %d. Flag ignored. Setting max-parallel-downloads = %d", warnArgs).Return(nil)
 
+		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" //reset
 		opts.MaxParallelDownloads = 2
@@ -482,6 +483,8 @@ func TestExecutorValidate(t *testing.T) {
 			Opts:    opts,
 			LogsDir: "/tmp/",
 		}
+
+		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" //reset
 		opts.MaxParallelDownloads = 20
@@ -520,6 +523,7 @@ func TestExecutorValidate(t *testing.T) {
 		warnArgs := []interface{}{uint(300), uint(300), uint(200), uint(200)}
 		log.On("Warn", "⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", warnArgs).Return(nil)
 
+		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" //reset
 		opts.MaxParallelDownloads = 300
@@ -551,6 +555,7 @@ func TestExecutorValidate(t *testing.T) {
 			Dev:                 false,
 		}
 		opts.Global.ConfigPath = "test"
+		opts.Global.LogLevel = "info"
 
 		ex := &ExecutorSchema{
 			Log:     log,
