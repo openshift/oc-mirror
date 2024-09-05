@@ -543,6 +543,123 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 
 }
 
+func TestOperatorLocalStoredCollectorM2M(t *testing.T) {
+	log := clog.New("trace")
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	type testCase struct {
+		caseName       string
+		config         v2alpha1.ImageSetConfiguration
+		expectedResult []v2alpha1.CopyImageSchema
+		expectedError  bool
+	}
+
+	ctx := context.Background()
+	os.RemoveAll(common.TestFolder + "hold-operator/")
+	os.RemoveAll(common.TestFolder + "operator-images")
+	os.RemoveAll(common.TestFolder + "tmp/")
+
+	//copy tests/hold-test-fake to working-dir
+	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+
+	testCases := []testCase{
+		{
+			caseName:      "OperatorImageCollector - Mirror to disk: should pass",
+			config:        nominalConfigM2D,
+			expectedError: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://localhost:5000/test/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
+					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://localhost:5000/test/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
+					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Destination: "docker://localhost:5000/test/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
+					Type:        v2alpha1.TypeInvalid,
+				},
+				{
+					Source:      "docker://redhat-operators:v4.7",
+					Destination: "docker://localhost:5000/test/redhat-operators:v4.7",
+					Origin:      "docker://redhat-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "docker://certified-operators:v4.7",
+					Destination: "docker://localhost:5000/test/certified-operators:v4.7",
+					Origin:      "docker://certified-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "docker://community-operators:v4.7",
+					Destination: "docker://localhost:5000/test/community-operators:v4.7",
+					Origin:      "docker://community-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
+					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "docker://redhat-operators:v4.7",
+					Destination: "docker://localhost:9999/redhat-operators:v4.7",
+					Origin:      "docker://redhat-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "docker://certified-operators:v4.7",
+					Destination: "docker://localhost:9999/certified-operators:v4.7",
+					Origin:      "docker://certified-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "docker://community-operators:v4.7",
+					Destination: "docker://localhost:9999/community-operators:v4.7",
+					Origin:      "docker://community-operators:v4.7",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+				{
+					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Destination: "docker://localhost:9999/simple-test-bundle:latest",
+					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Type:        v2alpha1.TypeOperatorCatalog,
+				},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			ex := setupCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex.Opts.Mode = mirror.MirrorToMirror
+			ex.Opts.Destination = "docker://localhost:5000/test"
+			ex = ex.withConfig(testCase.config)
+			res, err := ex.OperatorImageCollector(ctx)
+			if testCase.expectedError && err == nil {
+				t.Fatalf("should fail")
+			}
+			if !testCase.expectedError && err != nil {
+				t.Fatal("should not fail")
+			}
+			assert.ElementsMatch(t, testCase.expectedResult, res.AllImages)
+		})
+	}
+
+}
+
 func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
 	manifest := &MockManifest{Log: log}
 
