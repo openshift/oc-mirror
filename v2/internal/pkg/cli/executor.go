@@ -314,6 +314,9 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if o.Opts.MaxParallelDownloads > 64 {
 		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, limitOverallParallelDownloads, limitOverallParallelDownloads)
 	}
+	if !slices.Contains([]string{"info", "debug", "trace"}, o.Opts.Global.LogLevel) {
+		return fmt.Errorf("loglevel has an invalid value %s , it should be one of (info,debug,trace)", o.Opts.Global.LogLevel)
+	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
 	} else {
