@@ -760,6 +760,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 	var batchError error
+
+	// OCPBUGS-37948 + CLID-196: local cache should be started during mirror to mirror as well:
+	// All operator catalogs will be cached.
+	o.Log.Debug(startMessage, o.Opts.Global.Port)
+	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
+
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err

@@ -287,6 +287,18 @@ func TestRunMirrorToMirror(t *testing.T) {
 	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
 	_, retryOpts := mirror.RetryFlags()
 
+	// storage cache for test
+	regCfg, err := setupRegForTest(testFolder)
+	if err != nil {
+		t.Errorf("storage cache error: %v ", err)
+	}
+	reg, err := registry.NewRegistry(context.Background(), regCfg)
+	if err != nil {
+		t.Errorf("storage cache error: %v ", err)
+	}
+	fakeStorageInterruptChan := make(chan error)
+	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
+
 	opts := &mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
@@ -296,6 +308,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 		Dev:                 false,
 		Mode:                mirror.MirrorToMirror,
 		Destination:         "docker://test",
+		LocalStorageFQDN:    regCfg.HTTP.Addr,
 	}
 
 	// read the ImageSetConfiguration
@@ -322,17 +335,18 @@ func TestRunMirrorToMirror(t *testing.T) {
 		cr := MockClusterResources{}
 
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         collector,
-			Release:          collector,
-			AdditionalImages: collector,
-			Mirror:           Mirror{},
-			Batch:            batch,
-			MakeDir:          MakeDir{},
-			LogsDir:          "/tmp/",
-			ClusterResources: cr,
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			Mirror:              Mirror{},
+			Batch:               batch,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
+			ClusterResources:    cr,
+			LocalStorageService: *reg,
 		}
 
 		res := &cobra.Command{}
@@ -352,16 +366,17 @@ func TestRunMirrorToMirror(t *testing.T) {
 		cr := MockClusterResources{}
 
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         collector,
-			Release:          collector,
-			AdditionalImages: collector,
-			Batch:            batch,
-			MakeDir:          MakeDir{},
-			LogsDir:          "/tmp/",
-			ClusterResources: cr,
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			Batch:               batch,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
+			ClusterResources:    cr,
+			LocalStorageService: *reg,
 		}
 
 		res := &cobra.Command{}
@@ -382,16 +397,17 @@ func TestRunMirrorToMirror(t *testing.T) {
 		cr := MockClusterResources{}
 
 		ex := &ExecutorSchema{
-			Log:              log,
-			Config:           cfg,
-			Opts:             opts,
-			Operator:         collector,
-			Release:          collector,
-			AdditionalImages: collector,
-			Batch:            batch,
-			MakeDir:          MakeDir{},
-			LogsDir:          "/tmp/",
-			ClusterResources: cr,
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			Batch:               batch,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
+			ClusterResources:    cr,
+			LocalStorageService: *reg,
 		}
 
 		res := &cobra.Command{}
