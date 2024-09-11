@@ -185,8 +185,9 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 
 			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
-				Log:        log,
-				WorkingDir: workingDir,
+				Log:              log,
+				WorkingDir:       workingDir,
+				LocalStorageFQDN: "localhost:55000",
 			}
 			err := cr.IDMS_ITMSGenerator(testCase.imgList, false)
 			if err != nil {
@@ -308,8 +309,9 @@ func TestGenerateIDMS(t *testing.T) {
 
 			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
-				Log:        log,
-				WorkingDir: workingDir,
+				Log:              log,
+				WorkingDir:       workingDir,
+				LocalStorageFQDN: "localhost:55000",
 			}
 			idmsList, err := cr.generateImageMirrors(testCase.imgList, DigestsOnlyMode, false)
 			if err != nil {
@@ -394,8 +396,9 @@ func TestGenerateITMS(t *testing.T) {
 
 			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
-				Log:        log,
-				WorkingDir: workingDir,
+				Log:              log,
+				WorkingDir:       workingDir,
+				LocalStorageFQDN: "localhost:55000",
 			}
 			itmsList, err := cr.generateImageMirrors(testCase.imgList, TagsOnlyMode, false)
 			if err != nil {
@@ -443,6 +446,12 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.15",
 			Type:        v2alpha1.TypeOperatorCatalog,
 		},
+		{ // OCPBUGS-41608 - this should be skipped because it mirrors to the cache
+			Source:      "docker://localhost:5000/redhat/redhat-operator-index:v4.15",
+			Destination: "docker://localhost:55000/redhat/redhat-operator-index:v4.15",
+			Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.15",
+			Type:        v2alpha1.TypeOperatorCatalog,
+		},
 		{
 			Source:      "docker://localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
 			Destination: "docker://myregistry/mynamespace/kubebuilder/kube-rbac-proxy:v0.5.0",
@@ -460,8 +469,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 	t.Run("Testing GenerateCatalogSource : should pass", func(t *testing.T) {
 
 		cr := &ClusterResourcesGenerator{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 			Config: v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 					Mirror: v2alpha1.Mirror{
@@ -533,8 +543,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 	t.Run("Testing GenerateCatalogSource with template: should pass", func(t *testing.T) {
 
 		cr := &ClusterResourcesGenerator{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 			Config: v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 					Mirror: v2alpha1.Mirror{
@@ -613,8 +624,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 
 	templateFailCases := []ClusterResourcesGenerator{
 		{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 			Config: v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 					Mirror: v2alpha1.Mirror{
@@ -629,8 +641,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			},
 		},
 		{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 			Config: v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 					Mirror: v2alpha1.Mirror{
@@ -732,8 +745,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			},
 		}
 		cr := &ClusterResourcesGenerator{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 			Config: v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 					Mirror: v2alpha1.Mirror{
@@ -912,8 +926,9 @@ func TestGenerateImageMirrors(t *testing.T) {
 	}
 
 	cr := &ClusterResourcesGenerator{
-		Log:        clog.New("trace"),
-		WorkingDir: "",
+		Log:              clog.New("trace"),
+		WorkingDir:       "",
+		LocalStorageFQDN: "localhost:55000",
 	}
 	for _, test := range testCases {
 		t.Run(test.caseName, func(t *testing.T) {
@@ -954,8 +969,9 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
-			Log:        log,
-			WorkingDir: workingDir,
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
 		}
 		err := cr.UpdateServiceGenerator(graphImage, releaseImage)
 		if err != nil {
