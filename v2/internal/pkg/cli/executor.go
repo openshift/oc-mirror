@@ -428,7 +428,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
-	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
+	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
 	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 
 	if o.Opts.IsMirrorToDisk() {
