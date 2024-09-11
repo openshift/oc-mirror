@@ -30,14 +30,16 @@ const (
 func New(log clog.PluggableLoggerInterface,
 	workingDir string,
 	conf v2alpha1.ImageSetConfiguration,
+	localStorageFQDN string,
 ) GeneratorInterface {
-	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, Config: conf}
+	return &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, Config: conf, LocalStorageFQDN: localStorageFQDN}
 }
 
 type ClusterResourcesGenerator struct {
-	Log        clog.PluggableLoggerInterface
-	WorkingDir string
-	Config     v2alpha1.ImageSetConfiguration
+	Log              clog.PluggableLoggerInterface
+	WorkingDir       string
+	Config           v2alpha1.ImageSetConfiguration
+	LocalStorageFQDN string
 }
 
 type imageMirrorsGeneratorMode int
@@ -186,7 +188,10 @@ func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2
 
 	firstCatalog := true
 	for _, copyImage := range allRelatedImages {
-		if copyImage.Type == v2alpha1.TypeOperatorCatalog {
+		// OCPBUGS-41608: when running mirror to mirror, and starting OCPBUGS-37948, the catalog image is also copied to the local cache.
+		// therefore, it will be part of the `allRelatedImages` that is handled by CatalogSourceGenerator.
+		// Since this catalog should not lead to generating a catalogSource custom resource, it should be skipped.
+		if copyImage.Type == v2alpha1.TypeOperatorCatalog && !strings.Contains(copyImage.Destination, o.LocalStorageFQDN) {
 			if firstCatalog {
 				o.Log.Info("📄 Generating CatalogSource file...")
 				firstCatalog = false
