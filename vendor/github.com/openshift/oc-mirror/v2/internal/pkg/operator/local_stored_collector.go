@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -352,6 +353,10 @@ func (o LocalStorageCollector) catalogDigest(ctx context.Context, catalog v2alph
 	if err != nil {
 		return "", err
 	}
+	// OCPBUGS-37948 : No TLS verification when getting manifests from the cache registry
+	if strings.Contains(src, o.Opts.LocalStorageFQDN) { // when copying from cache, use HTTP
+		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
 
 	catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 	if err != nil {
@@ -469,7 +474,14 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
 			} else {
 				if _, found := alreadyIncluded[img.Image]; !found {
-					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: img.Type})
+					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type})
+					// OCPBUGS-37948 + CLID-196
+					// Keep a copy of the catalog image in local cache for delete workflow
+					if img.Type == v2alpha1.TypeOperatorCatalog && o.Opts.Mode == mirror.MirrorToMirror {
+						cacheDest := strings.Replace(dest, o.destinationRegistry(), o.LocalStorageFQDN, 1)
+						result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: cacheDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type})
+
+					}
 					alreadyIncluded[img.Image] = struct{}{}
 				}
 			}

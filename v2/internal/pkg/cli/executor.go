@@ -428,7 +428,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
-	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config)
+	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
 	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 
 	if o.Opts.IsMirrorToDisk() {
@@ -760,6 +760,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 	var batchError error
+
+	// OCPBUGS-37948 + CLID-196: local cache should be started during mirror to mirror as well:
+	// All operator catalogs will be cached.
+	o.Log.Debug(startMessage, o.Opts.Global.Port)
+	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
+
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
