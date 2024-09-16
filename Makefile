@@ -55,7 +55,7 @@ hack-build: clean
 .PHONY: hack-build
 
 tidy:
-	$(GO) mod tidy
+	$(GO) work sync
 .PHONY: tidy
 
 clean:
