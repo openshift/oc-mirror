@@ -1014,7 +1014,7 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 func TestGenerateSignatureConfigMap(t *testing.T) {
 
-	t.Run("Testing configmap json should pass", func(t *testing.T) {
+	t.Run("Testing configmap both yaml&json should pass", func(t *testing.T) {
 
 		tmpDir := t.TempDir()
 		workingDir := filepath.Join(tmpDir, "working-dir")
@@ -1022,10 +1022,10 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll(workingDir)
+		//defer os.RemoveAll(workingDir)
 
 		log := clog.New("trace")
-		cm := cm.ConfigMap{}
+		cmJson := cm.ConfigMap{}
 		cr := &ClusterResourcesGenerator{
 			Log:        log,
 			WorkingDir: workingDir,
@@ -1039,16 +1039,29 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.json")
+		resJson, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.json")
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = json.Unmarshal(res, &cm)
+		err = json.Unmarshal(resJson, &cmJson)
 		if err != nil {
 			t.Fatal(err)
 		}
-		bd := len(cm.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
-		assert.Equal(t, bd, 1199)
+		bdJson := len(cmJson.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
+		assert.Equal(t, bdJson, 1199)
+
+		cmYaml := cm.ConfigMap{}
+		resYaml, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = yaml.Unmarshal(resYaml, &cmYaml)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bdYaml := len(cmYaml.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
+		assert.Equal(t, bdYaml, 1199)
+
 	})
 
 }

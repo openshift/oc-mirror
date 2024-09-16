@@ -637,5 +637,15 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(digest string, id
 	if ferr != nil {
 		return fmt.Errorf("[GenerateSignatureConfigMap] %v", ferr)
 	}
+	yamlData, err := yaml.Marshal(cm)
+	if err != nil {
+		return fmt.Errorf("[GenerateSignatureConfigMap] %v", err)
+	}
+	// write to cluster-resources directory
+	ferr = os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/"+index+".yaml", yamlData, 0644)
+	if ferr != nil {
+		return fmt.Errorf("[GenerateSignatureConfigMap] %v", ferr)
+	}
+
 	return nil
 }
