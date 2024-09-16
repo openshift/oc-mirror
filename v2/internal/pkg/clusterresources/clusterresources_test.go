@@ -1,6 +1,7 @@
 package clusterresources
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
@@ -969,9 +971,8 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
-			Log:              log,
-			WorkingDir:       workingDir,
-			LocalStorageFQDN: "localhost:55000",
+			Log:        log,
+			WorkingDir: workingDir,
 		}
 		err := cr.UpdateServiceGenerator(graphImage, releaseImage)
 		if err != nil {
@@ -1009,4 +1010,45 @@ func TestUpdateServiceGenerator(t *testing.T) {
 		assert.Equal(t, graphImage, actualOSUS.Spec.GraphDataImage)
 		assert.Equal(t, "quay.io/openshift-release-dev/ocp-release", actualOSUS.Spec.Releases)
 	})
+}
+
+func TestGenerateSignatureConfigMap(t *testing.T) {
+
+	t.Run("Testing configmap json should pass", func(t *testing.T) {
+
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		err := os.MkdirAll(workingDir+"/"+clusterResourcesDir, 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(workingDir)
+
+		log := clog.New("trace")
+		cm := cm.ConfigMap{}
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+		}
+		data, err := os.ReadFile("../../../tests/test.sig")
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := "37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531"
+		err = cr.GenerateSignatureConfigMap(digest, 0, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = json.Unmarshal(res, &cm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bd := len(cm.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
+		assert.Equal(t, bd, 1199)
+	})
+
 }

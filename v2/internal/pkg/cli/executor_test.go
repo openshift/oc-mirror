@@ -1115,6 +1115,9 @@ func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage st
 func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
+func (o MockClusterResources) GenerateSignatureConfigMap(digest string, id int, data []byte) error {
+	return nil
+}
 
 func (o Batch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
 	copiedImages := v2alpha1.CollectorSchema{

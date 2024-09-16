@@ -156,4 +156,5 @@ func TestReleaseSignature(t *testing.T) {
 		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
 
 	})
+
 }

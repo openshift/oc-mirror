@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -59,7 +60,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	}
 	httpClient := &http.Client{Transport: tr}
 
-	for _, img := range images {
+	for id, img := range images {
 		imgSpec, err := image.ParseRef(img.Source)
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
@@ -80,14 +81,14 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
 		}
 
-		// we have the current digest in cache
+		// we dont have the current digest in cache
 		if len(data) == 0 {
 			req, _ := http.NewRequest("GET", SignatureURL+"sha256="+digest+"/signature-1", nil)
 			//req.Header.Set("Authorization", "Basic "+generic.Token)
 			req.Header.Set(ContentType, ApplicationJson)
 			resp, err := httpClient.Do(req)
 			if err != nil {
-				o.Log.Error("http request %v", err)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("http request %v", err)
 			}
 			defer func() {
 				if resp != nil && resp.Body != nil {
@@ -96,7 +97,6 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			}()
 			if resp.StatusCode == http.StatusOK {
 				o.Log.Debug("response from signature lookup %d", resp.StatusCode)
-
 				data, err = io.ReadAll(resp.Body)
 				if err != nil {
 					o.Log.Error("%v", err)
@@ -160,7 +160,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			}
 
 			o.Log.Debug("content %s", string(content))
-			// update the image with the actaul reference from the contents json
+			// update the image with the actual reference from the contents json
 			var signSchema *v2alpha1.SignatureContentSchema
 			err = json.Unmarshal(content, &signSchema)
 			if err != nil {
@@ -169,14 +169,19 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			}
 			img.Source = signSchema.Critical.Identity.DockerReference
 			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
-			// o.Log.Info("public Key : %s", strings.ToUpper(fmt.Sprintf("%x", md.SignedBy.PublicKey.Fingerprint)))
-
 			// write signature to cache
 			ferr := os.WriteFile(o.Opts.Global.WorkingDir+SignatureDir+digest, data, 0644)
 			if ferr != nil {
 				o.Log.Error("%v", ferr)
 			}
 			imgs = append(imgs, img)
+
+			cr := clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, "")
+			err = cr.GenerateSignatureConfigMap(digest, id, data)
+			if err != nil {
+				o.Log.Error("%v", err)
+			}
+
 		} else {
 			o.Log.Warn("no signature found for %s", digest)
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)

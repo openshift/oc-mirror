@@ -1,8 +1,13 @@
 package clusterresources
 
 const (
-	clusterResourcesDir       string = "cluster-resources"
-	updateServiceFilename     string = "updateService.yaml"
-	updateServiceResourceName string = "update-service-oc-mirror"
-	updateServiceResourceKind string = "UpdateService"
+	clusterResourcesDir            string = "cluster-resources"
+	updateServiceFilename          string = "updateService.yaml"
+	updateServiceResourceName      string = "update-service-oc-mirror"
+	updateServiceResourceKind      string = "UpdateService"
+	configMapApiVersion                   = "v1"
+	configMapKind                         = "ConfigMap"
+	configMapBinaryDataIndexFormat        = "sha256-%s-%d"
+	signatureNamespace                    = "openshift-config-managed"
+	signatureLabel                        = "release.openshift.io/verification-signatures"
 )

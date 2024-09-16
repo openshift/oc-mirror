@@ -2,6 +2,8 @@ package clusterresources
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"unicode"
 
 	confv1 "github.com/openshift/api/config/v1"
+	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
@@ -603,4 +606,36 @@ func toRFC1035(r rune) rune {
 		// convert unacceptable character
 		return '-'
 	}
+}
+
+func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(digest string, id int, data []byte) error {
+	o.Log.Info("📄 Generating Signature Configmap...")
+	// create and store config map
+	cm := &cm.ConfigMap{
+		TypeMeta: cm.TypeMeta{
+			APIVersion: configMapApiVersion,
+			Kind:       configMapKind,
+		},
+		ObjectMeta: cm.ObjectMeta{
+			Namespace: signatureNamespace,
+			Labels: map[string]string{
+				signatureLabel: "",
+			},
+		},
+		BinaryData: make(map[string]string),
+	}
+	// base64 encode data
+	b64 := base64.RawStdEncoding.EncodeToString(data)
+	index := fmt.Sprintf(configMapBinaryDataIndexFormat, digest, id+1)
+	cm.BinaryData[index] = b64
+	jsonData, err := json.Marshal(cm)
+	if err != nil {
+		return fmt.Errorf("[GenerateSignatureConfigMap] %v", err)
+	}
+	// write to cluster-resources directory
+	ferr := os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/"+index+".json", jsonData, 0644)
+	if ferr != nil {
+		return fmt.Errorf("[GenerateSignatureConfigMap] %v", ferr)
+	}
+	return nil
 }
