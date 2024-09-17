@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
+	//"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -60,7 +60,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	}
 	httpClient := &http.Client{Transport: tr}
 
-	for id, img := range images {
+	for _, img := range images {
 		imgSpec, err := image.ParseRef(img.Source)
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
@@ -175,13 +175,6 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				o.Log.Error("%v", ferr)
 			}
 			imgs = append(imgs, img)
-
-			cr := clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, "")
-			err = cr.GenerateSignatureConfigMap(digest, id, data)
-			if err != nil {
-				o.Log.Error("%v", err)
-			}
-
 		} else {
 			o.Log.Warn("no signature found for %s", digest)
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)

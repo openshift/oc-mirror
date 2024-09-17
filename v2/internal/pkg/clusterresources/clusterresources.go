@@ -608,7 +608,7 @@ func toRFC1035(r rune) rune {
 	}
 }
 
-func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(digest string, id int, data []byte) error {
+func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap() error {
 	o.Log.Info("📄 Generating Signature Configmap...")
 	// create and store config map
 	cm := &cm.ConfigMap{
@@ -624,28 +624,45 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(digest string, id
 		},
 		BinaryData: make(map[string]string),
 	}
-	// base64 encode data
-	b64 := base64.RawStdEncoding.EncodeToString(data)
-	index := fmt.Sprintf(configMapBinaryDataIndexFormat, digest, id+1)
-	cm.BinaryData[index] = b64
+	// read the signatures directory
+	sigDir := filepath.Join(o.WorkingDir, signatureDir)
+	signatures, err := os.ReadDir(sigDir)
+	if err != nil {
+		return fmt.Errorf(signatureConfigMapMsg, err)
+	}
+
+	if len(signatures) == 0 {
+		return fmt.Errorf(signatureConfigMapMsg, "signature files not found, could not generate signature configmap")
+	}
+
+	for id, file := range signatures {
+		data, err := os.ReadFile(sigDir + "/" + file.Name())
+		if err != nil {
+			return fmt.Errorf(signatureConfigMapMsg, err)
+		}
+		// base64 encode data
+		b64 := base64.RawStdEncoding.EncodeToString(data)
+		index := fmt.Sprintf(configMapBinaryDataIndexFormat, file.Name(), id+1)
+		cm.BinaryData[index] = b64
+	}
+
 	jsonData, err := json.Marshal(cm)
 	if err != nil {
-		return fmt.Errorf("[GenerateSignatureConfigMap] %v", err)
+		return fmt.Errorf(signatureConfigMapMsg, err)
 	}
 	// write to cluster-resources directory
-	ferr := os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/"+index+".json", jsonData, 0644)
+	ferr := os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/signature-configmap.json", jsonData, 0644)
 	if ferr != nil {
-		return fmt.Errorf("[GenerateSignatureConfigMap] %v", ferr)
+		return fmt.Errorf(signatureConfigMapMsg, ferr)
 	}
 	yamlData, err := yaml.Marshal(cm)
 	if err != nil {
-		return fmt.Errorf("[GenerateSignatureConfigMap] %v", err)
+		return fmt.Errorf(signatureConfigMapMsg, err)
 	}
 	// write to cluster-resources directory
-	ferr = os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/"+index+".yaml", yamlData, 0644)
+	ferr = os.WriteFile(filepath.Join(o.WorkingDir, clusterResourcesDir)+"/signature-configmap.yaml", yamlData, 0644)
 	if ferr != nil {
-		return fmt.Errorf("[GenerateSignatureConfigMap] %v", ferr)
+		return fmt.Errorf(signatureConfigMapMsg, ferr)
 	}
-
 	return nil
 }

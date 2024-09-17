@@ -63,6 +63,7 @@ func TestExecutorMirroring(t *testing.T) {
 	fakeStorageInterruptChan := make(chan error)
 	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
+	cr := MockClusterResources{}
 	opts := &mirror.CopyOptions{
 		Global:              global,
 		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
@@ -108,6 +109,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			ClusterResources:             cr,
 		}
 
 		res := &cobra.Command{}
@@ -142,6 +144,7 @@ func TestExecutorMirroring(t *testing.T) {
 			localStorageInterruptChannel: fakeStorageInterruptChan,
 			MakeDir:                      MakeDir{},
 			LogsDir:                      "/tmp/",
+			ClusterResources:             cr,
 		}
 
 		res := &cobra.Command{}
@@ -1115,7 +1118,7 @@ func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage st
 func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
-func (o MockClusterResources) GenerateSignatureConfigMap(digest string, id int, data []byte) error {
+func (o MockClusterResources) GenerateSignatureConfigMap() error {
 	return nil
 }
 

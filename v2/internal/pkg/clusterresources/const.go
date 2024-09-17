@@ -10,4 +10,6 @@ const (
 	configMapBinaryDataIndexFormat        = "sha256-%s-%d"
 	signatureNamespace                    = "openshift-config-managed"
 	signatureLabel                        = "release.openshift.io/verification-signatures"
+	signatureConfigMapMsg                 = "[GenerateSignatureConfigMap] %v"
+	signatureDir                          = "signatures"
 )

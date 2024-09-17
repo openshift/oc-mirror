@@ -2,6 +2,7 @@ package clusterresources
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1019,10 +1021,20 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		tmpDir := t.TempDir()
 		workingDir := filepath.Join(tmpDir, "working-dir")
 		err := os.MkdirAll(workingDir+"/"+clusterResourcesDir, 0755)
+		err = os.MkdirAll(workingDir+"/"+signatureDir, 0755)
 		if err != nil {
 			t.Fatal(err)
 		}
 		//defer os.RemoveAll(workingDir)
+		files := []string{"37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531", "45867971c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"}
+
+		for _, file := range files {
+			err = copy.Copy("../../../tests/37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+				workingDir+"/"+signatureDir+"/"+file)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 
 		log := clog.New("trace")
 		cmJson := cm.ConfigMap{}
@@ -1030,16 +1042,15 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 			Log:        log,
 			WorkingDir: workingDir,
 		}
-		data, err := os.ReadFile("../../../tests/test.sig")
+
+		err = cr.GenerateSignatureConfigMap()
 		if err != nil {
 			t.Fatal(err)
 		}
-		digest := "37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531"
-		err = cr.GenerateSignatureConfigMap(digest, 0, data)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resJson, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.json")
+
+		sigFileJson := fmt.Sprintf("%s/%s/signature-configmap.json", workingDir, clusterResourcesDir)
+		sigFileYaml := fmt.Sprintf("%s/%s/signature-configmap.yaml", workingDir, clusterResourcesDir)
+		resJson, err := os.ReadFile(sigFileJson)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1047,11 +1058,8 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bdJson := len(cmJson.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
-		assert.Equal(t, bdJson, 1199)
-
 		cmYaml := cm.ConfigMap{}
-		resYaml, err := os.ReadFile(workingDir + "/" + clusterResourcesDir + "/sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1.yaml")
+		resYaml, err := os.ReadFile(sigFileYaml)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1059,8 +1067,14 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bdYaml := len(cmYaml.BinaryData["sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531-1"])
-		assert.Equal(t, bdYaml, 1199)
+
+		for id, file := range files {
+			key := fmt.Sprintf("sha256-%s-%d", file, id+1)
+			bdJson := len(cmJson.BinaryData[key])
+			assert.Equal(t, bdJson, 1199)
+			bdYaml := len(cmYaml.BinaryData[key])
+			assert.Equal(t, bdYaml, 1199)
+		}
 
 	})
 
