@@ -259,6 +259,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
+replace github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-20161010215902-5fb4217df13b
+
 replace github.com/openshift/library-go => github.com/aguidirh/library-go v0.0.0-20240911111857-f8fdb642dea5
 
 replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.0-20240911114505-f06afaaa9cd4
