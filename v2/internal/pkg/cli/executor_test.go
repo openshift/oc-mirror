@@ -1118,7 +1118,7 @@ func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage st
 func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
-func (o MockClusterResources) GenerateSignatureConfigMap() error {
+func (o MockClusterResources) GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
 

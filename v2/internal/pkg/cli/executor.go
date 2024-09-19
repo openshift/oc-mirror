@@ -725,15 +725,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 			copiedSchema = cs
 		}
 
-		// as the signatures are extracted for release in the mirror-to-disk workflow
-		// we create the configmap here to be included in the tar.
-		// this avoids adding this logic in both mirror-to-mirror and disk-to-mirror flows
-		err = o.ClusterResources.GenerateSignatureConfigMap()
-		if err != nil {
-			// as this is not a seriously fatal error we just log the error
-			o.Log.Warn("%s", err)
-		}
-
 		// prepare tar.gz when mirror to disk
 		// first stop the registry
 		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
@@ -811,6 +802,13 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
+		}
+
+		// generate signature config map
+		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
+		if err != nil {
+			// as this is not a seriously fatal error we just log the error
+			o.Log.Warn("%s", err)
 		}
 
 		// create updateService
@@ -902,6 +900,13 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
+		}
+
+		// generate signature config map
+		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
+		if err != nil {
+			// as this is not a seriously fatal error we just log the error
+			o.Log.Warn("%s", err)
 		}
 
 		// create updateService

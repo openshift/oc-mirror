@@ -9,10 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	//"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -50,9 +50,9 @@ func NewSignatureClient(log clog.PluggableLoggerInterface, config v2alpha1.Image
 // GenerateReleaseSignatures
 func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 
-	var data []byte
+	//var data []byte
 	var imgs []v2alpha1.CopyImageSchema
-	var digest string
+	var data []byte
 	// set up http object
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
@@ -63,22 +63,29 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	for _, img := range images {
 		imgSpec, err := image.ParseRef(img.Source)
 		if err != nil {
-			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] parsing image digest")
 		}
-		digest = imgSpec.Digest
+		digest := imgSpec.Digest
 
 		if digest != "" {
-			o.Log.Debug("signature %s", digest)
+			o.Log.Debug("signature digest %s with tag %", digest)
 			// check if the image is in the cache else
 			// do a lookup and download it to cache
-			data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
+			sigFiles, err := os.ReadDir(o.Opts.Global.WorkingDir + SignatureDir)
 			if err != nil {
-				if os.IsNotExist(err) {
-					o.Log.Debug("signature for %s not in cache: %v", digest, err)
+				o.Log.Debug("[GenerateReleaseSignatures] no directory found for signatures %v", err)
+			}
+			for _, file := range sigFiles {
+				if strings.Contains(file.Name(), digest) {
+					data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + file.Name())
+					if err != nil {
+						o.Log.Warn("[GenerateReleaseSignatures] could not read %s %v", file.Name(), err)
+					}
+					break
 				}
 			}
 		} else {
-			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("parsing image digest")
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] parsing image digest")
 		}
 
 		// we dont have the current digest in cache
@@ -99,7 +106,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				o.Log.Debug("response from signature lookup %d", resp.StatusCode)
 				data, err = io.ReadAll(resp.Body)
 				if err != nil {
-					o.Log.Error("%v", err)
+					return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] reading response body %v", err)
 				}
 			}
 		}
@@ -119,16 +126,16 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				o.Log.Error("%v could not read the message:", err)
 			}
 			if md == nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("unable to read signature message for %s image %s", digest, img.Source)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unable to read signature message for %s image %s", digest, img.Source)
 			}
 			if !md.IsSigned {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("message was not signed for %s image %s", digest, img.Source)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] message was not signed for %s image %s", digest, img.Source)
 			}
 			if md.SignatureError != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("signature error for %s image %s", digest, img.Source)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] signature error for %s image %s", digest, img.Source)
 			}
 			if md.SignedBy == nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("invalid signature for %s image %s", digest, img.Source)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] invalid signature for %s image %s", digest, img.Source)
 			}
 			content, err := io.ReadAll(md.UnverifiedBody)
 			if err != nil {
@@ -156,7 +163,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 					}
 				}
 			} else if md.SignatureV3 == nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set for %s image %s", digest, img.Source)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set for %s image %s", digest, img.Source)
 			}
 
 			o.Log.Debug("content %s", string(content))
@@ -164,20 +171,25 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			var signSchema *v2alpha1.SignatureContentSchema
 			err = json.Unmarshal(content, &signSchema)
 			if err != nil {
-				o.Log.Error("could not unmarshal json %v", err)
-				return []v2alpha1.CopyImageSchema{}, err
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unmarshal json %v", err)
 			}
 			img.Source = signSchema.Critical.Identity.DockerReference
 			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
 			// write signature to cache
-			ferr := os.WriteFile(o.Opts.Global.WorkingDir+SignatureDir+digest, data, 0644)
-			if ferr != nil {
-				o.Log.Error("%v", ferr)
+			newImgSpec, err := image.ParseRef(img.Source)
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] could not parse identity docker reference image %v", err)
+			}
+			sigFilePath := fmt.Sprintf("%s%s/%s-sha256-%s", o.Opts.Global.WorkingDir, SignatureDir, newImgSpec.Tag, digest)
+			if _, err := os.Stat(sigFilePath); err != nil {
+				ferr := os.WriteFile(sigFilePath, data, 0644)
+				if ferr != nil {
+					return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] writing %v", ferr)
+				}
 			}
 			imgs = append(imgs, img)
 		} else {
-			o.Log.Warn("no signature found for %s", digest)
-			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("no signature found for %s image %s", digest, img.Source)
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] no signature found for %s image %s", digest, img.Source)
 		}
 	}
 	return imgs, nil

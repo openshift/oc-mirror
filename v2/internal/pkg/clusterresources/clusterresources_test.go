@@ -1025,8 +1025,9 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		//defer os.RemoveAll(workingDir)
-		files := []string{"37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531", "45867971c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"}
+		defer os.RemoveAll(workingDir)
+		files := []string{"4.16.0-x86_64-sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+			"4.16.2-x86_64-sha256-12345678c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"}
 
 		for _, file := range files {
 			err = copy.Copy("../../../tests/37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
@@ -1043,7 +1044,18 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 			WorkingDir: workingDir,
 		}
 
-		err = cr.GenerateSignatureConfigMap()
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Origin: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.0-x86_64",
+				Type:   v2alpha1.TypeOCPRelease,
+			},
+			{
+				Origin: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.2-x86_64",
+				Type:   v2alpha1.TypeOCPRelease,
+			},
+		}
+
+		err = cr.GenerateSignatureConfigMap(imageList)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1069,7 +1081,7 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 
 		for id, file := range files {
-			key := fmt.Sprintf("sha256-%s-%d", file, id+1)
+			key := fmt.Sprintf("sha256-%s-%d", strings.Split(file, "-sha256-")[1], id+1)
 			bdJson := len(cmJson.BinaryData[key])
 			assert.Equal(t, bdJson, 1199)
 			bdYaml := len(cmYaml.BinaryData[key])

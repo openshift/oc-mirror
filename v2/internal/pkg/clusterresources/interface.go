@@ -8,5 +8,5 @@ type GeneratorInterface interface {
 	IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error
 	UpdateServiceGenerator(graphImage, releaseImage string) error
 	CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error
-	GenerateSignatureConfigMap() error
+	GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error
 }

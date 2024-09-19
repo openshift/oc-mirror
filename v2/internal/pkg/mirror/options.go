@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -150,6 +151,22 @@ func (cp CopyOptions) IsMirrorToMirror() bool {
 
 func (cp CopyOptions) IsDiskToMirror() bool {
 	return cp.Mode == DiskToMirror
+}
+
+func (cp CopyOptions) IsConnected() bool {
+	url := "https://google.com"
+	timeout := time.Duration(1000 * time.Millisecond)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	if envUrl := os.Getenv("DISCONNECTED_CHECK_URL"); len(envUrl) != 0 {
+		url = envUrl
+	}
+	_, err := client.Get(url)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // noteCloseFailure returns (possibly-nil) err modified to account for (non-nil) closeErr.

@@ -108,7 +108,9 @@ func (o *CincinnatiSchema) NewOKDClient() error {
 }
 
 func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
-	cincinnatiParams := CincinnatiParams{GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir)}
+	cincinnatiParams := CincinnatiParams{
+		GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir),
+	}
 
 	var (
 		allImages  []v2alpha1.CopyImageSchema
@@ -122,6 +124,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 		copyImage := v2alpha1.CopyImageSchema{
 			Source:      o.Config.Mirror.Platform.Release,
 			Destination: "",
+			Origin:      o.Config.Mirror.Platform.Release,
 		}
 		allImages = append(allImages, copyImage)
 		return allImages
@@ -232,7 +235,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 		if len(filterCopy.Channels) > 1 {
 			newDownloads, err := getCrossChannelDownloads(ctx, *o, filterCopy.Channels)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error calculating cross channel upgrades: %v", err))
+				errs = append(errs, fmt.Errorf("[GetReleaseReferenceImages] error calculating cross channel upgrades: %v", err))
 				continue
 			}
 			allImages = append(allImages, newDownloads...)
@@ -241,11 +244,11 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 
 	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
 	if err != nil {
-		o.Log.Error("generate release signatures: error list %v ", err)
+		o.Log.Error("%v", err)
 	}
 
 	for _, e := range errs {
-		o.Log.Error("get release images: error list %v ", e)
+		o.Log.Error("[GetReleaseReferenceImages] %v", e)
 	}
 	return imgs
 }
@@ -333,6 +336,7 @@ func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels
 func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v2alpha1.CopyImageSchema {
 	var allImages []v2alpha1.CopyImageSchema
 	uniqueImages := make(map[v2alpha1.CopyImageSchema]bool)
+
 	for _, update := range updates {
 		log.Debug("Found update %s", update.Version)
 		uniqueImages[v2alpha1.CopyImageSchema{Source: update.Image, Destination: ""}] = true
