@@ -64,7 +64,9 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		// no redundant logging to console
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
-			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
+			releaseRepoAndTag := hld[len(hld)-1]
+			imageIndexDir = strings.Replace(releaseRepoAndTag, ":", "/", -1)
+			releaseTag := releaseRepoAndTag[:strings.Index(releaseRepoAndTag, ":")]
 			cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
 			dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
@@ -148,7 +150,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 			//add the release image itself
 			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
-			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages)
+			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, err
 			}
@@ -183,6 +185,8 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		allRelatedImages = append(allRelatedImages, releaseImages...)
 
 		for _, releaseDir := range releaseFolders {
+
+			releaseTag := filepath.Base(releaseDir)
 			// get all release images from manifest (json)
 			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
 			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
@@ -198,11 +202,16 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 					// log to console as warning
 					o.Log.Warn("%v", err)
 				} else {
-					allRelatedImages = append(allRelatedImages, ki)
+					releaseRelatedImages = append(releaseRelatedImages, ki)
 				}
 			}
 
-			allRelatedImages = append(allRelatedImages, releaseRelatedImages...)
+			releaseCopyImages, err := o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
+			if err != nil {
+				o.Log.Error(errMsg, err.Error())
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			allImages = append(allImages, releaseCopyImages...)
 		}
 
 		if o.Config.Mirror.Platform.Graph {
@@ -226,7 +235,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				// containing only the graph image. This way we can easily identify the destination
 				// of the graph image.
 				graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
-				graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice)
+				graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice, "")
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, err
@@ -252,7 +261,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	return allImages, nil
 }
 
-func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	for _, img := range images {
 		var src string
@@ -264,7 +273,25 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 			return nil, err
 		}
 		src = imgSpec.ReferenceWithTransport
-		if imgSpec.IsImageByDigest() {
+		if img.Type == v2alpha1.TypeOCPRelease {
+			tag := imgSpec.Tag // 4.16.1-x86_64
+			if tag != "" {
+				tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+				if len(tag) > 128 {
+					tag = tag[:127]
+				}
+			}
+			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), releaseImagePathComponents + ":" + tag}, "/")
+		} else if img.Type == v2alpha1.TypeOCPReleaseContent {
+			tag := img.Name // name of component 4.16.1-x86_64-csi-liveprobe
+			if tag != "" {
+				tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+				if len(tag) > 128 {
+					tag = tag[:127]
+				}
+			}
+			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), releaseComponentPathComponents + ":" + img.Name}, "/")
+		} else if imgSpec.IsImageByDigest() {
 			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
 			if len(tag) > 128 {
 				tag = tag[:127]
@@ -281,7 +308,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 	return result, nil
 }
 
-func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	for _, img := range images {
 		var src string
@@ -362,7 +389,7 @@ func (o *LocalStorageCollector) GraphImage() (string, error) {
 				Type:  v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		graphCopyImage, err := o.prepareD2MCopyBatch(graphRelatedImage)
+		graphCopyImage, err := o.prepareD2MCopyBatch(graphRelatedImage, "")
 		if err != nil {
 			return "", fmt.Errorf("[release collector] could not establish the destination for the graph image: %v", err)
 		}
@@ -394,7 +421,9 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 				Type:  v2alpha1.TypeOCPRelease,
 			},
 		}
-		releaseCopyImage, err := o.prepareD2MCopyBatch(releaseRelatedImage)
+		releaseTag := o.Releases[0][:strings.LastIndex(o.Releases[0], ":")]
+
+		releaseCopyImage, err := o.prepareD2MCopyBatch(releaseRelatedImage, releaseTag)
 		if err != nil {
 			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
 		}
