@@ -7,87 +7,106 @@
   - [Table of contents](#table-of-contents)
   - [Background](#background)
   - [Feature request](#feature-request)
-  - [Implementation - rebuilding catalogs](#implementation---rebuilding-catalogs)
+  - [Selected solution for OLM-v0 catalogs](#selected-solution-for-olm-v0-catalogs)
+  - [Regarding OCPSTRAT-1417](#regarding-ocpstrat-1417)
     - [Description](#description)
-    - [TLDR; complexity + uncertainty level estimation](#tldr-complexity--uncertainty-level-estimation)
+    - [TLDR; complexity level estimation](#tldr-complexity-level-estimation)
     - [Generating the FBC](#generating-the-fbc)
-      - [Solution 1: Relying on existing POC(preferred)](#solution-1-relying-on-existing-pocpreferred)
+      - [Requirements](#requirements)
+      - [Solution](#solution)
         - [Pros](#pros)
         - [Cons](#cons)
         - [Complexity](#complexity)
-      - [Solution 2: Adapting existing filtering](#solution-2-adapting-existing-filtering)
-        - [Pros](#pros-1)
-        - [Cons](#cons-1)
-        - [Complexity](#complexity-1)
     - [Preparing catalog files](#preparing-catalog-files)
-      - [Complexity](#complexity-2)
+      - [Requirements](#requirements-1)
+      - [Solution](#solution-1)
+      - [Complexity](#complexity-1)
     - [Building the container image](#building-the-container-image)
-      - [Requirements:](#requirements)
+      - [Requirements](#requirements-2)
       - [Implementation](#implementation)
-  - [Complexity level estimation](#complexity-level-estimation)
+      - [Complexity level estimation](#complexity-level-estimation)
   - [Risks](#risks)
-  - [Alternatives](#alternatives)
-    - [Pros:](#pros-2)
-    - [Cons:](#cons-2)
-  - [Conclusion](#conclusion)
 
 
 ## Background
 
-In oc-mirror v2 (and in v1 after bug fix [OCPBUGS-31536](https://issues.redhat.com/browse/OCPBUGS-31536)), oc-mirror doesn't rebuild catalogs.
-
+In oc-mirror v2, when mirroring catalogs, catalog images are not rebuilt. 
 * The filtered declarative config isn't recreated based on the imagesetconfig filter
 * The catalog cache isn't regenerated
 * The catalog image isn't rebuilt based on the above 2 elements
 * Instead, the original catalog image is pushed as is to the mirror registry. Its declarative config will show all operators, and for each operator all channels and all bundles.
-* This behavior is causing some inconvenience to our users, especially [OCPBUGS-35386](https://issues.redhat.com/browse/OCPBUGS-35386)
+* This behavior is causing some inconvenience to our users, especially 
+  * [OCPBUGS-35386](https://issues.redhat.com/browse/OCPBUGS-35386): Since the catalogs include the unfiltered FBC, deploying the catalogsource to cluster will result in the creation of install plans for all operators founds in the catalog. These install plans are going to fail for operator bundles that haven't been mirrored.
+  * In the web console of openshift, the catalog appears to contain more operators than what was really filtered.
 
 
 ## Feature request
 
 oc-mirror customers would like the mirrored catalog to reflect the reality of the operators that are really available in the mirrored registy.
 
-This way, on air-gapped clusters, OPS engineers cannot by mistake attempt to upgrade an operator to an operator version that is listed in the catalog but isn't available in the mirror registry.
+This way, on air-gapped clusters, install plans will be generated only for bundle versions that are in fact available to the cluster. 
 
-## Implementation - rebuilding catalogs
+This behavior SHOULD NOT interfere with the ability to verify the catalog (or contents) signature verification, as requested in [OCPSTRAT-1417](https://issues.redhat.com/browse/OCPSTRAT-1417).
+
+Possible solutions were [discussed with Operator Framework team](https://drive.google.com/file/d/1-O1MX-tnGntrl7EMfdjekSIHsUm8TOD3/view?usp=drive_web), and the gist of the discussion shows that:
+* **For OLM-v1 catalogs**, several solutions for filtering out catalogs while preserving image's signature and SBOM are possible. A separate feature request should be created. Among the solutions mentioned:
+  * Adding a patch with filtering metadata as a [OCI referrer](https://github.com/oras-project/artifacts-spec/blob/main/manifest-referrers-api.md)
+  * Using extra fields in the cluster catalog custom resource
+* **For OLM-v0 catalogs**, no perfect solution exists that ensures signature validity at the same time. Among the solutions mentioned:
+  * no filtering: which keeps the image intact, and inline with its signature. On the downside, clusters will still suffer from [OCPBUGS-35386](https://issues.redhat.com/browse/OCPBUGS-35386).
+  * a release concept attached to the catalog image, that can be used by OLM, the webconsole, etc to patch the original FBC. CatalogSource can have extra stanza, `patches` for example. But SQLite catalogs cannot be patched. Additionally, extra effort on a soon to be deprecated version is going to be a waste.
+  * mirroring by minVersion only: Contrary to v1, oc-mirror v2 would not allow filtering by maxVersion. As a result, more operator bundles will be mirrored, up to each channel head. The catalog image is also kept intact in this solution, so inline with its signature. The clusters won't experience [OCPBUGS-35386](https://issues.redhat.com/browse/OCPBUGS-35386) as the channel head bundle is always available. The downside of this solution is that oc-mirror customers might choose not to migrate to oc-mirror v2 because it lacks the filtering by maxVersion filtering.
+  * filtering by minVersion and maxVersion: Preserving the oc-mirror v1 functionality, and rebuilding the catalog image from the filtered FBC. The downside here is that the signature verification will fail, and that the SBOM will not correspond to the filtered catalog image. 
+
+## Selected solution for OLM-v0 catalogs
+
+This document will only focus on the feature design for OLM-v0 catalogs. Reflecting the mirrored operators in OLM-v1 catalogs shall be handled in a different feature request, at a later time.
+
+From the above solutions for OLM-v0 catalogs, the decision was made to rebuild catalog images inserting the FBC filtered by minVersion (and maxVersion) in the image. 
+
+**This solution is TEMPORARY.** It shall be accompanied by proper documentation explaining that filtered catalogs will not benefit from signature verification, and that this problem will be **fully solved by migrating to OLM-v1 catalogs.**
+
+## Regarding [OCPSTRAT-1417](https://issues.redhat.com/browse/OCPSTRAT-1417)
+
+For the switch from OLM v0 to OLM v1, oc-mirror would need to switch from rebuilding catalogs and generating CatalogSource objects (compatible with rebuilt catalogs, without signature verification) to creating catalog patches (filtering metadata) and ClusterCatalog objects (compatible with OLM-v1, supporting signature verification). In this manner, a user cannot by mistake use a rebuilt catalog on a cluster with OLM-v1, nor a OLM-v1 compatible catalog on a cluster with OLM-v0. 
+
+A signature policy needs to be generated by oc-mirror along with catalogSources in order to instruct the cluster that it should not verify signatures for OLM-v0 catalog images: Being rebuilt images, the catalog wouldn't be usable on the cluster if the signature verification is enforced.
+
+:warning: **Future of `SelectedBundles`: OLM-v1 API would provide a much better way to pin down a bundle version (subscription API change). `SelectedBundles` should  become an invalid property when mirroring for OLM-v1**
 
 ### Description
 
-Rebuilding catalogs was oc-mirror v1's answer to the problem stated in OCPSTRATS-1515. 
-
 Building a filtered catalog entails the following tasks:
 1. **Generate a catalog FBC (File based Catalog)**, that contains the filtered operators, and their respective packages, channels and bundles. 
-2. **Prepare the binaries and files for the filtered catalog**, which include the opm binary and eventually catalog cache that is compatible with FBC AND the opm version chosen
+2. **Prepare the binaries and files for the filtered catalog**, which include the opm binary and eventually catalog cache that is compatible with FBC AND the opm version chosen.
 3. **Building the container image**, based on the above.
 
-In the following sections, we will attempt to analyze each task, describe the possible solutions and give an estimation of the level of complexity for the task. 
+In the following sections, we will attempt to analyze each task, describe the solution chosen and give an estimation of the level of complexity for the task. 
 
-### TLDR; complexity + uncertainty level estimation
+### TLDR; complexity level estimation
 
-| Task | Complexity | Uncertainty |
-|---|---|---|
-| Generate catalog FBC | medium | :red_circle::red_circle::red_circle::red_circle::white_circle:|
-| Prepare catalog files | medium |:red_circle::red_circle::red_circle::white_circle::white_circle:|
-| Build catalog image | medium | :red_circle::red_circle::red_circle::red_circle::white_circle:|
+| Task | Complexity | 
+|---|---|
+| Generate catalog FBC | medium | 
+| Prepare catalog files | medium |
+| Build catalog image | medium | 
 
 ### Generating the FBC
 
-#### Solution 1: Relying on existing [POC](https://github.com/operator-framework/operator-registry/pull/1231)(preferred)
-
-This POC proposes a new `CatalogFilter` interface that can be used when calling `opm render` in `operator-registry`. The command accepts a filtering configuration file as input, which can be used in order to generate a FBC file containing filtered packages, channels (with valid upgrade graphs) and bundles. 
-
-The implementation within the [PR](https://github.com/operator-framework/operator-registry/pull/1231) has the following specificities:
-* Allows to start from an image reference as the source FBC, or an on-disk FBC : which is a very positive point as it allows it to be easily pluggable to oc-mirror
-* Produces filtered and valid FBCs, making sure channels have a single head.
-* Weird, but it doesn't take skipRange into account at all => Question for Joe
-* The filtering configuration file uses the semVer notation to formulate a minVersion maxVersion
-* In its current format, this POC covers 2/19 oc-mirror filtering use cases. This is because: 
-  * When no filtering is set, renders all versions within the selected channel - This is not what oc-mirror expects: we'd need the head of the channel only
-  * when filtering config is empty, renders zero operators - in this case, oc-mirror expects to have the head of each operator
-  * when filtering by operator name only, renders all bundles, all channels - in this case, oc-mirror expects the channel head alone.  
-  * `full` is used in oc-mirror in order to specify that all the channel contents (not only head) needs to be rendered. This is not part of the POC PR
-  * Filtering directly on minVersion and maxVersion (without specifying a channel) is recognized as valid filtering in oc-mirror. This is not part of the POC PR
-  * Filtering by `SelectedBundles` is recognized as valid filtering in oc-mirror. This is not part of the POC PR
+#### Requirements
+From the OLM perspective, a valid FBC requires: 
+* A default channel that is included in the FBC
+* No dangling versions, ie no versions that cannot reach the channel head
+* A single channel head
+  
+#### Solution
+Based on existing [POC](https://github.com/operator-framework/operator-registry/pull/1231), a new `CatalogFilter` implementation will be created in order to respect oc-mirror's filtering specificities: 
+* When no filtering is set, only the head of the channel shall be returned
+* when filtering config is empty, oc-mirror expects to have the head of each operator
+* when filtering by operator name only, oc-mirror expects the channel head alone.  
+* `full` is used in oc-mirror in order to specify that all the channel contents (not only head) needs to be rendered. 
+* Filtering directly on minVersion and maxVersion (without specifying a channel) is recognized as valid filtering in oc-mirror. 
+* Filtering by `SelectedBundles` is recognized as valid filtering in oc-mirror, but only for v0 catalogs. 
 
 ##### Pros
 * Done by OLM, this POC closest probably to what the OLM on cluster would expect from an operator's upgrade path. 
@@ -113,55 +132,45 @@ On these grounds, **complexity is estimated to medium**, with the following iden
 * :white_square_button: Creating an independant repository: [PR#1231](https://github.com/operator-framework/operator-registry/pull/1231) won't merge into opm. Filtering needs to be a separate tool. This is because, long term, the opm binary will only be useful for v0 operations.
 
 
-#### Solution 2: Adapting existing filtering
-
-During the work on oc-mirror v2, a simple and temporary filtering implementation based on the bundle version. This filtering helps select the images that need to be mirrored, but is not used to produce a new FBC. 
-
-One possible solution is to improve this filtering in order to render an FBC as well as (as currently) a list of related images within filter. 
-
-This work shouldn't be underestimated: A valid FBC from the point of view of OLM needs to have:
-* A default channel that is included in the FBC
-* No dangling versions, ie no versions that cannot reach the channel head
-* A single channel head
-
-**The risk here remains that filtering by semver is not the same as relying on the FBC API (`skip`, `replace` and `skipRange`)** and can produce catalogs that are unuseable by OLM. To illustrate the complexity of such a task, let's consider the following channel, and an imageSetConfig that instructs oc-mirror to take `maxVersion: 6` as filtering for this channel.
-![GraphExample](../assets/tree.png)
-Following the semver filtering, bundles 1,2,3,4,5,6 are considered within the filter. 
-But a channel containing these 6 bundles is not a valid channel from the point of view of OLM as it contains 2 heads: 5 and 6.
-
-:warning: Mitigation : This type of scenario doesn’t seem to exist in redhat catalogs. Probably in community catalogs or certified catalogs.
-
-##### Pros
-
-* A solution that can be proper to oc-mirror
-
-##### Cons
-
-* May lead to invalid catalogs
-
-##### Complexity
-
-**complexity is estimated to large** as the implementation needs to be modified :
-* to produce FBC along with a list of images
-* the produced FBC should be valid, and not contain multiple heads, which requires implementing a complex logic
-
 ### Preparing catalog files
 
+#### Requirements
 A catalog image is:
 * based (FROM statement) on an opm image
 * contains the FBC catalog, under the /configs folder
 * contains the cache folder corresponding to the FBC catalog
 * proper labels and CMD are needed in order to link everything together properly
 
+#### Solution
+From the discussion we had, it appears that **the ultimate solution** for this is to :
+* update the FBC within the catalog image
+* Not care about the cache. This is what we already do in oc-mirror v1 ([OCPBUGS-35386](https://issues.redhat.com/browse/OCPBUGS-35386)), updating the image's CMD to remove `--cache-dir` as in oc-mirror v1
+* TO BE CONFIRMED for 4.18: Use the [.spec.grpcPodConfig.extractContent](https://docs.openshift.com/container-platform/4.15/rest_api/operatorhub_apis/catalogsource-operators-coreos-com-v1alpha1.html#spec-grpcpodconfig-extractcontent) api in the catalogSource in order to ignore the opm binary within the image (>4.15)
+  * Alternative: update the image's CMD to remove `--cache-dir` as in oc-mirror v1.
 
-To the best of our knowledge, the best strategy for rebuilding the catalog image is to disregard the incoming catalog image (and the opm binary it contains): we don't know if the image is binary-less ([OPRUN-3346](https://issues.redhat.com/browse/OPRUN-3346)) or cache-less([OPRUN-3347](https://issues.redhat.com/browse/OPRUN-3347)), both or none...
+This solution is valid for the following reasons:
+* OPM cache generation is loading the FBC using pogrep (proto-buf) instead of JSON
+* Cache generation is done package by package instead of loading the whole FBC
+* Introduction of `olm.csv.metadata` in replacement for the fat `olm.bundle.object`. ART pipelines can start to be modified to start replacing
 
-Instead, `operator-registry` (opm) provides a `opm generate dockerfile` which could be used to prepare a Dockerfile. This Dockerfile once built, would provide an image that includes an opm binary, the FBC and corresponding cache.
+:warning: **This solution is to be validated for 4.14 clusters and catalogs. The `olm.csv.metadata` and `.spec.grpcPodConfig.extractContent` are only available starting 4.15**
 
-Which tag should we use with ` --binary-image`? 
-* Should this tag depend on the `operator-registry` module version used in oc-mirror's go.mod?
-* Or should this tag depend on the release? Ie. For oc-mirror v4.17, we should be using quay.io/operator-framework/opm:4.17?
-* Or should this tag depend on the catalog tag (not always reliable)? ie. for redhat-operator-index:v4.14, we should be using quay.io/operator-framework/opm:4.14?
+PS: In the case where the cache generation has to be implemented, oc-mirror should adopt the same strategy as IIB:
+* build the cache outside of the image (container build with a volume mount to be able to collect the cache)
+* Use the same opm binary (in other words the catalog image as the source) to generate the cache. In this way the opm binary used to serve the FBC on cluster is the same one that generated the cache. 
+
+Something like :
+```
+# `.RefExact` is the mirrored catalog
+FROM {{ .RefExact }}
+USER root
+RUN rm -fr /configs
+COPY ./index /configs
+# In case we want to rebuild the cache
+USER 1001
+RUN rm -fr /tmp/cache/*
+RUN /bin/opm serve /configs --cache-only --cache-dir=/tmp/cache
+```
 
 #### Complexity
 
@@ -171,7 +180,7 @@ Once the uncertainty about the implementation details taken away, this task shou
 
 From the Dockerfile obtained in the previous task, we need to build the container image. 
 
-#### Requirements: 
+#### Requirements 
 * should be able to build images for catalogs that are registry based or file based . This should not be a problem: as stated in the previous section, we should not build the filtered catalog using FROM the catalog referenced in the imageSetConfig
 * should build multi-arch images
 * should be able to build images in enclave environment. ie. respect auth, tls, registries.conf and proxy as stated in flags and env vars
@@ -187,7 +196,7 @@ Several Go modules provide a way to build containers in go:
 | ORAS |No POC|
 | go-containerregistry| No POC. <br> Not compatible with registries.conf|
 
-## Complexity level estimation
+#### Complexity level estimation
 
 Without POCs on the other modules, it is hard to estimate exactly the complexity of this issue.
 
@@ -196,15 +205,3 @@ Without POCs on the other modules, it is hard to estimate exactly the complexity
 The main risk of rebuilding the catalog is that the signature, SBOM and other attestations will not match the new rebuilt catalog. 
 This may lead to customers mistaking filtered catalogs with untrusted catalogs. 
 
-## Alternatives
-
-An alternative that we previously discussed with the OLM team without reaching concensus is to not rebuild the catalogs, and include filtered bundles (or filtering instructions) as a configmap that can be referenced with the catalogsource. 
-
-### Pros:
-Signature and SBOM are not impacted
-### Cons:
-Users of `oc-mirror list` will not benefit from the metadata included in the configmap. Therefore, they cannot rely on `oc-mirror list mirror.acme.com/mirrored-catalog:latest` in order to get the list of operator bundles that are available on the mirror registry for `mirrored-catalog`. 
-
-## Conclusion
-
-We are closing CLID-226 at this time while we wait for further instructions from Program Management. This document shall be updated based on future decisions.

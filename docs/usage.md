@@ -15,7 +15,7 @@
     - [Mirroring](#mirroring)
       - [Fully Disconnected](#fully-disconnected)
       - [Partially Disconnected](#partially-disconnected)
-      - [Fully Disconnected Enclaves](#fully-disconnected-enclaves)
+      - [Fully disconnected Enclaves](#fully-disconnected-enclaves)
     - [Additional Features](#additional-features)
   - [Mirroring Process](#mirroring-process)
     - [Running `oc-mirror` For First Time](#running-oc-mirror-for-first-time)
@@ -112,7 +112,7 @@ between the last `oc mirror` run and provided configuration to show what new ver
 
 #### Fully disconnected Enclaves
 
-See [Enclave Support](./enclave_support.md)
+See [Enclave Support](../v2/docs/enclave_support.md)
 
 ### Additional Features
 - Get information on your imageset using `describe`
