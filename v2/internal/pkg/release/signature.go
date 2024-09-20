@@ -68,7 +68,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		digest := imgSpec.Digest
 
 		if digest != "" {
-			o.Log.Debug("signature digest %s with tag %", digest)
+			o.Log.Debug("signature digest %s", digest)
 			// check if the image is in the cache else
 			// do a lookup and download it to cache
 			sigFiles, err := os.ReadDir(o.Opts.Global.WorkingDir + SignatureDir)
@@ -188,6 +188,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				}
 			}
 			imgs = append(imgs, img)
+			data = nil
 		} else {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] no signature found for %s image %s", digest, img.Source)
 		}

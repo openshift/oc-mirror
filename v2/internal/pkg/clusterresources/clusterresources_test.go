@@ -1046,11 +1046,11 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 
 		imageList := []v2alpha1.CopyImageSchema{
 			{
-				Origin: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.0-x86_64",
+				Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.0-x86_64",
 				Type:   v2alpha1.TypeOCPRelease,
 			},
 			{
-				Origin: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.2-x86_64",
+				Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.2-x86_64",
 				Type:   v2alpha1.TypeOCPRelease,
 			},
 		}
@@ -1083,9 +1083,9 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		for id, file := range files {
 			key := fmt.Sprintf("sha256-%s-%d", strings.Split(file, "-sha256-")[1], id+1)
 			bdJson := len(cmJson.BinaryData[key])
-			assert.Equal(t, bdJson, 1199)
+			assert.Equal(t, bdJson, 1200)
 			bdYaml := len(cmYaml.BinaryData[key])
-			assert.Equal(t, bdYaml, 1199)
+			assert.Equal(t, bdYaml, 1200)
 		}
 
 	})

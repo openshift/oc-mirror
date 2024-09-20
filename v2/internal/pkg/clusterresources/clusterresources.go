@@ -650,7 +650,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	for _, copyImage := range allRelatedImages {
 		if copyImage.Type == v2alpha1.TypeOCPRelease {
 			o.Log.Debug("[GenerateSignatureConfigMap] release image source %v", copyImage)
-			imgSpec, err := image.ParseRef(copyImage.Origin)
+			imgSpec, err := image.ParseRef(copyImage.Source)
 			if err != nil {
 				return fmt.Errorf(signatureConfigMapMsg, err)
 			}
@@ -661,7 +661,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 					continue
 				}
 				// base64 encode data
-				b64 := base64.RawStdEncoding.EncodeToString(data)
+				b64 := base64.StdEncoding.EncodeToString(data)
 				index := fmt.Sprintf(configMapBinaryDataIndexFormat, strings.Split(file, "-sha256-")[1], id)
 				cm.BinaryData[index] = b64
 				id++
@@ -693,8 +693,8 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	} else {
 		o.Log.Warn(signatureConfigMapMsg, "no binary data assigned, configmap file/s not created")
 	}
-	o.Log.Info("%s file created", crPath+"signature-configmap.json")
-	o.Log.Info("%s file created", crPath+"signature-configmap.yaml")
+	o.Log.Info("%s file created", crPath+"/signature-configmap.json")
+	o.Log.Info("%s file created", crPath+"/signature-configmap.yaml")
 
 	return nil
 }
