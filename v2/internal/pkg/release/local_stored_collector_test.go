@@ -13,7 +13,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
@@ -632,19 +631,6 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 	}, nil
 }
 
-func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
-	return manifest.OperatorCatalog{}, nil
-}
-
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
-	relatedImages := make(map[string][]v2alpha1.RelatedImage)
-	relatedImages["abc"] = []v2alpha1.RelatedImage{
-		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-	}
-	return relatedImages, nil
-}
-
 func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
@@ -695,12 +681,6 @@ func (o *ManifestMock) GetImageManifest(file string) (*v2alpha1.OCISchema, error
 }
 func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return &v2alpha1.OperatorConfigSchema{}, nil
-}
-func (o *ManifestMock) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
-	return manifest.OperatorCatalog{}, nil
-}
-func (o *ManifestMock) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
-	return map[string][]v2alpha1.RelatedImage{}, nil
 }
 func (o *ManifestMock) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil

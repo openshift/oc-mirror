@@ -22,6 +22,7 @@ type IncludePackage struct {
 	// Channels to include.
 	Channels        []IncludeChannel `json:"channels,omitempty" yaml:"channels,omitempty"`
 	SelectedBundles []SelectedBundle `json:"bundles,omitempty" yaml:"bundles,omitempty"`
+	DefaultChannel  string           `json:"defaultChannel,omitempty"`
 
 	// All channels containing these bundles are parsed for an upgrade graph.
 	IncludeBundle `json:",inline"`
@@ -46,7 +47,7 @@ type IncludeBundle struct {
 	MaxVersion string `json:"maxVersion,omitempty" yaml:"maxVersion,omitempty"`
 	// MinBundle to include, plus all bundles in the upgrade graph to the channel head.
 	// Set this field only if the named bundle has no semantic version metadata.
-	MinBundle string `json:"minBundle,omitempty" yaml:"minBundle,omitempty"`
+	// MinBundle string `json:"minBundle,omitempty" yaml:"minBundle,omitempty"`
 }
 
 type SelectedBundle struct {

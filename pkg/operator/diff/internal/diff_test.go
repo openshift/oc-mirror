@@ -1402,7 +1402,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						Package: "etcd",
 						Image:   "reg/etcd:latest",
 						Properties: []property.Property{
-							property.MustBuildPackage("etcd", "0.9.1"),
+							property.MustBuildPackage("etcd", "0.9.0"),
 						},
 					},
 					{
@@ -1627,7 +1627,7 @@ func TestDiffHeadsOnly(t *testing.T) {
 						Package: "etcd",
 						Image:   "reg/etcd:latest",
 						Properties: []property.Property{
-							property.MustBuildPackage("etcd", "0.9.1"),
+							property.MustBuildPackage("etcd", "0.9.0"),
 						},
 					},
 					{

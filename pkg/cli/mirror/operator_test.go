@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/reference"
 	"github.com/containerd/containerd/remotes"
+	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -19,6 +18,7 @@ import (
 	"k8s.io/klog/v2"
 	ktest "k8s.io/klog/v2/test"
 
+	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
 	"github.com/openshift/oc-mirror/pkg/cli"
 	"github.com/openshift/oc-mirror/pkg/image"
@@ -31,7 +31,7 @@ func TestPinImages(t *testing.T) {
 		desc        string
 		opts        *OperatorOptions
 		dc          *declcfg.DeclarativeConfig
-		resolver    remotes.Resolver
+		resolver    mockResolver
 		expErrorStr string
 	}
 
@@ -150,7 +150,7 @@ func TestPinImages(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			ctx := context.TODO()
-			err := c.opts.pinImages(ctx, c.dc, c.resolver)
+			err := c.opts.pinImages(ctx, c.dc, image.NewSystemContext(true, ""), c.resolver.mockResolve)
 			if c.expErrorStr == "" {
 				require.NoError(t, err)
 			} else {
@@ -622,24 +622,24 @@ type mockResolver struct {
 	digestMapping map[string]string
 }
 
-func (r mockResolver) Resolve(ctx context.Context, ref string) (name string, desc ocispec.Descriptor, err error) {
+func (r mockResolver) mockResolve(ctx context.Context, sourceCtx *types.SystemContext, unresolvedImage string) (string, error) {
 	if r.digestMapping == nil {
 		panic("mockResolver has not been initialized")
 	}
 
-	spec, err := reference.Parse(ref)
+	ref, err := imgreference.Parse(unresolvedImage)
 	if err != nil {
-		return name, desc, err
+		return "", err
 	}
 
-	fmt.Printf("%#v\n", spec)
-	if d, ok := r.digestMapping[spec.String()]; ok {
-		desc.Digest = digest.Digest(d)
+	fmt.Printf("%#v\n", ref)
+	if d, ok := r.digestMapping[unresolvedImage]; ok {
+		ref.ID = digest.Digest(d).String()
 	} else {
 		err = errdefs.ErrNotFound
 	}
 
-	return spec.String(), desc, err
+	return ref.String(), err
 }
 
 func (r mockResolver) Fetcher(ctx context.Context, ref string) (remotes.Fetcher, error) {

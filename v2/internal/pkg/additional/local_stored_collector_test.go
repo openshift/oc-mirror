@@ -7,7 +7,6 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/stretchr/testify/assert"
 )
@@ -264,19 +263,6 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 			Size:      567,
 		},
 	}, nil
-}
-
-func (o MockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
-	return manifest.OperatorCatalog{}, nil
-}
-
-func (o MockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
-	relatedImages := make(map[string][]v2alpha1.RelatedImage)
-	relatedImages["abc"] = []v2alpha1.RelatedImage{
-		{Name: "testA", Image: "quay.io/name/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testB", Image: "quay.io/name/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-	}
-	return relatedImages, nil
 }
 
 func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {

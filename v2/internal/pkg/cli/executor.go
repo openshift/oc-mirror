@@ -130,6 +130,7 @@ type ExecutorSchema struct {
 	ParallelBatchImages          uint
 	srcFlagSet                   pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
 	destFlagSet                  pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
+	alphaCtlgFilter              bool
 }
 
 type MakeDirInterface interface {
@@ -232,7 +233,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 600*time.Second, "Timeout for mirroring an image. Defaults to 10mn")
 	cmd.Flags().UintVar(&ex.ParallelLayers, "parallel-layers", 0, "Indicates the maximum layers downloading in parallel for an image. Defaults to 10")
 	cmd.Flags().UintVar(&ex.ParallelBatchImages, "parallel-batch-images", 0, "Indicates the maximum images downloading in parallel for a batch. Defaults to 8")
-
+	cmd.Flags().BoolVar(&ex.alphaCtlgFilter, "alpha-ctlg-filter", false, "Enables rebuilding of catalogs when set to true")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
@@ -278,6 +279,7 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.Flags().MarkHidden("src-username")
 	cmd.Flags().MarkHidden("parallel-layers")
 	cmd.Flags().MarkHidden("parallel-batch-images")
+	cmd.Flags().MarkHidden("alpha-ctlg-filter")
 }
 
 // Validate - cobra validation
@@ -429,7 +431,11 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	if !o.alphaCtlgFilter {
+		o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	} else {
+		o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	}
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)

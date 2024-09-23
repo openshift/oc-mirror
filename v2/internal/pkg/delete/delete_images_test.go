@@ -10,7 +10,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	mirror "github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/stretchr/testify/assert"
 )
@@ -197,26 +196,6 @@ func (o mockManifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error)
 
 func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return &v2alpha1.OperatorConfigSchema{}, nil
-}
-
-func (o mockManifest) GetCatalog(filePath string) (manifest.OperatorCatalog, error) {
-	return manifest.OperatorCatalog{}, nil
-}
-
-func (o mockManifest) GetRelatedImagesFromCatalog(operatorCatalog manifest.OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
-	res := map[string][]v2alpha1.RelatedImage{}
-	ri := []v2alpha1.RelatedImage{
-		{
-			Name:  "node-observability-agent",
-			Image: "test.registry.io/test-image:v1.0.0",
-		},
-		{
-			Name:  "node-observability-controller",
-			Image: "test.registry.io/test-image-controller:v1.0.0",
-		},
-	}
-	res["node-observability-operator"] = ri
-	return res, nil
 }
 
 func (o mockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {

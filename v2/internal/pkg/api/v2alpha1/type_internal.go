@@ -201,6 +201,7 @@ type CollectorSchema struct {
 	TotalHelmImages       int
 	AllImages             []CopyImageSchema
 	CopyImageSchemaMap    CopyImageSchemaMap
+	CatalogToFBCMap       map[string]CatalogFilterResult // key is the mirror.operator.catalog
 }
 
 type CopyImageSchemaMap struct {
@@ -247,4 +248,9 @@ type DeleteImageList struct {
 type DeleteItem struct {
 	ImageName      string `json:"imageName"`
 	ImageReference string `json:"imageReference"`
+}
+
+type CatalogFilterResult struct {
+	OperatorFilter     Operator
+	FilteredConfigPath string
 }

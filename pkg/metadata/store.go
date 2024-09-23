@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/containerd/containerd/remotes"
+	"github.com/containers/image/v5/types"
 	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -52,11 +52,8 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	// Store minimum versions for new catalogs
 	klog.V(1).Info("Resolving operator metadata")
 	var operatorErrs []error
+	sysContext := image.NewSystemContext(skipTLSVerify || plainHTTP, "")
 
-	resolver, err := containerdregistry.NewResolver("", skipTLSVerify, plainHTTP, nil)
-	if err != nil {
-		return fmt.Errorf("error creating image resolver: %v", err)
-	}
 	cacheDir, err := os.MkdirTemp("", "imageset-catalog-registry-")
 	if err != nil {
 		return err
@@ -81,7 +78,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	defer reg.Destroy()
 
 	for _, operator := range mirror.Mirror.Operators {
-		operatorMeta, err := resolveOperatorMetadata(ctx, operator, reg, resolver, workspace)
+		operatorMeta, err := resolveOperatorMetadata(ctx, operator, reg, sysContext, workspace)
 		if err != nil {
 			operatorErrs = append(operatorErrs, err)
 			continue
@@ -123,7 +120,7 @@ func UpdateMetadata(ctx context.Context, backend storage.Backend, meta *v1alpha2
 	return nil
 }
 
-func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, resolver remotes.Resolver, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
+func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *containerdregistry.Registry, sysContext *types.SystemContext, workspace string) (operatorMeta v1alpha2.OperatorMetadata, err error) {
 	ctlgName, err := ctlg.GetUniqueName()
 	if err != nil {
 		return v1alpha2.OperatorMetadata{}, err
@@ -141,7 +138,7 @@ func resolveOperatorMetadata(ctx context.Context, ctlg v1alpha2.Operator, reg *c
 			operatorMeta.ImagePin = ref.String()
 		} else {
 			ctlgPin := ctlg.Catalog
-			ctlgPin, err := image.ResolveToPin(ctx, resolver, ctlg.Catalog)
+			ctlgPin, err := image.ResolveToPin(ctx, sysContext, ctlg.Catalog)
 			if err != nil {
 				return v1alpha2.OperatorMetadata{}, fmt.Errorf("error resolving catalog image %q: %v", ctlg.Catalog, err)
 			}

@@ -19,7 +19,7 @@ import (
 	"github.com/otiai10/copy"
 )
 
-type LocalStorageCollector struct {
+type FilterCollector struct {
 	OperatorCollector
 }
 
@@ -27,7 +27,7 @@ type LocalStorageCollector struct {
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded (oci format) and the index.json is inspected
 // once unmarshalled, the links to manifests are inspected
-func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
+func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 
 	var (
 		allImages   []v2alpha1.CopyImageSchema
@@ -156,7 +156,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 		validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
 			o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
+			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 		}
 
 		manifest := validDigest.Encoded()
@@ -177,7 +177,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 			subDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
 				o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
+				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 			}
 			manifestDir := filepath.Join(dir, blobsDir, subDigest.Encoded())
 			oci, err = o.Manifest.GetImageManifest(manifestDir)
@@ -192,7 +192,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 		configDigest, err := digest.Parse(oci.Config.Digest)
 		if err != nil {
 			o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
+			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 		}
 		catalogDir := filepath.Join(dir, blobsDir, configDigest.Encoded())
 		ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
@@ -212,12 +212,32 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 			return v2alpha1.CollectorSchema{}, err
 		}
 
-		operatorCatalog, err := o.ctlgHandler.getCatalog(filepath.Join(cacheDir, label))
+		dc, err := o.ctlgHandler.getDeclarativeConfig(filepath.Join(cacheDir, label))
 		if err != nil {
 			return v2alpha1.CollectorSchema{}, err
 		}
 
-		ri, err := o.ctlgHandler.filterRelatedImagesFromCatalog(operatorCatalog, op, copyImageSchemaMap)
+		filteredDC, err := filterCatalog(ctx, *dc, op)
+		if err != nil {
+			return v2alpha1.CollectorSchema{}, err
+		}
+
+		filteredDCSavingDir := filepath.Join(o.Opts.Global.WorkingDir, filteredCatalogDir, imageIndexDir)
+		err = saveDeclarativeConfig(*filteredDC, filteredDCSavingDir)
+		if err != nil {
+			return v2alpha1.CollectorSchema{}, err
+		}
+
+		if collectorSchema.CatalogToFBCMap == nil {
+			collectorSchema.CatalogToFBCMap = make(map[string]v2alpha1.CatalogFilterResult)
+		}
+		result := v2alpha1.CatalogFilterResult{
+			OperatorFilter:     op,
+			FilteredConfigPath: filteredDCSavingDir,
+		}
+		collectorSchema.CatalogToFBCMap[op.Catalog] = result
+
+		ri, err := o.ctlgHandler.getRelatedImagesFromCatalog(filteredDC, copyImageSchemaMap)
 		if err != nil {
 			return v2alpha1.CollectorSchema{}, err
 		}
