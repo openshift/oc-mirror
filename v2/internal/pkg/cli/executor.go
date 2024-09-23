@@ -804,6 +804,13 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 
+		// generate signature config map
+		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
+		if err != nil {
+			// as this is not a seriously fatal error we just log the error
+			o.Log.Warn("%s", err)
+		}
+
 		// create updateService
 		if o.Config.Mirror.Platform.Graph {
 			graphImage, err := o.Release.GraphImage()
@@ -893,6 +900,13 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
 			return err
+		}
+
+		// generate signature config map
+		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
+		if err != nil {
+			// as this is not a seriously fatal error we just log the error
+			o.Log.Warn("%s", err)
 		}
 
 		// create updateService

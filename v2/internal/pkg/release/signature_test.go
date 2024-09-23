@@ -70,7 +70,7 @@ func TestReleaseSignature(t *testing.T) {
 		})
 
 		_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
-		assert.Equal(t, "parsing image digest", err.Error())
+		assert.Equal(t, "[GenerateReleaseSignatures] parsing image digest", err.Error())
 
 		newImgs = append(newImgs, v2alpha1.CopyImageSchema{
 			Source:      "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
@@ -86,22 +86,26 @@ func TestReleaseSignature(t *testing.T) {
 		// signature not found
 		newImgs[0].Source = "quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577"
 		_, err = ex.GenerateReleaseSignatures(context.Background(), newImgs)
-		assert.Equal(t, "no signature found for 37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577 image quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577", err.Error())
+		assert.Equal(t, "[GenerateReleaseSignatures] no signature found for 37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577 image quay.io/openshift-release-dev/ocp-release@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34577", err.Error())
 
 		// write file error
 		opts.Global.WorkingDir = "none"
 		newImgs[0].Source = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531"
 
 		_, err = ex.GenerateReleaseSignatures(context.Background(), newImgs)
-		if err != nil {
-			t.Fatal(err)
+		if err == nil {
+			t.Fatal("should fail")
 		}
 
 	})
 
 	t.Run("Testing ReleaseSignature with custom PGP key - should pass", func(t *testing.T) {
 		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"custom-ocp-sig-key.asc")
-
+		tmpDir := t.TempDir()
+		workingDir := tmpDir + "/" + "working-dir"
+		os.MkdirAll(workingDir+SignatureDir, 0755)
+		defer os.RemoveAll(workingDir)
+		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
 
 		imgs := []v2alpha1.CopyImageSchema{
@@ -140,6 +144,11 @@ func TestReleaseSignature(t *testing.T) {
 	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
 		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"inexisting-ocp-sig-key.asc")
 
+		tmpDir := t.TempDir()
+		workingDir := tmpDir + "/" + "working-dir"
+		os.MkdirAll(workingDir+SignatureDir, 0755)
+		defer os.RemoveAll(workingDir)
+		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
 
 		imgs := []v2alpha1.CopyImageSchema{
@@ -156,4 +165,5 @@ func TestReleaseSignature(t *testing.T) {
 		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
 
 	})
+
 }

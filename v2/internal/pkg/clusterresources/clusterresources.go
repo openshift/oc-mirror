@@ -2,6 +2,8 @@ package clusterresources
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"unicode"
 
 	confv1 "github.com/openshift/api/config/v1"
+	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
@@ -603,4 +606,95 @@ func toRFC1035(r rune) rune {
 		// convert unacceptable character
 		return '-'
 	}
+}
+
+func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error {
+	o.Log.Info("📄 Generating Signature Configmap...")
+	// create and store config map
+	cm := &cm.ConfigMap{
+		TypeMeta: cm.TypeMeta{
+			APIVersion: configMapApiVersion,
+			Kind:       configMapKind,
+		},
+		ObjectMeta: cm.ObjectMeta{
+			Namespace: signatureNamespace,
+			Labels: map[string]string{
+				signatureLabel: "",
+			},
+		},
+		BinaryData: make(map[string]string),
+	}
+
+	// read the signatures directory
+	sigDir := filepath.Join(o.WorkingDir, signatureDir)
+	signatures, err := os.ReadDir(sigDir)
+	if err != nil {
+		return fmt.Errorf(signatureConfigMapMsg, err)
+	}
+
+	if len(signatures) == 0 {
+		return fmt.Errorf(signatureConfigMapMsg, "signature files not found, could not generate signature configmap")
+	}
+
+	signatureFiles := make(map[string]string)
+	for _, f := range signatures {
+		if strings.Contains(f.Name(), "-sha256-") {
+			key := strings.Split(f.Name(), "-sha256-")[0]
+			signatureFiles[key] = f.Name()
+		} else {
+			o.Log.Warn("[GenerateSignatureConfigMap] incorrect name for signature file %s", f.Name())
+		}
+	}
+
+	id := 1
+	for _, copyImage := range allRelatedImages {
+		if copyImage.Type == v2alpha1.TypeOCPRelease {
+			o.Log.Debug("[GenerateSignatureConfigMap] release image source %v", copyImage)
+			imgSpec, err := image.ParseRef(copyImage.Source)
+			if err != nil {
+				return fmt.Errorf(signatureConfigMapMsg, err)
+			}
+			if file, ok := signatureFiles[imgSpec.Tag]; ok {
+				data, err := os.ReadFile(sigDir + "/" + file)
+				if err != nil {
+					o.Log.Warn("[GenerateSignatureConfigMap] release index image signature with tag %s : SKIPPED", imgSpec.Tag)
+					continue
+				}
+				// base64 encode data
+				b64 := base64.StdEncoding.EncodeToString(data)
+				index := fmt.Sprintf(configMapBinaryDataIndexFormat, strings.Split(file, "-sha256-")[1], id)
+				cm.BinaryData[index] = b64
+				id++
+			}
+		}
+	}
+
+	// pointless creating configmap if there were no BinaryData found
+	crPath := filepath.Join(o.WorkingDir, clusterResourcesDir)
+	if len(cm.BinaryData) > 0 {
+		jsonData, err := json.Marshal(cm)
+		if err != nil {
+			return fmt.Errorf(signatureConfigMapMsg, err)
+		}
+		// write to cluster-resources directory
+		ferr := os.WriteFile(crPath+"/signature-configmap.json", jsonData, 0644)
+		if ferr != nil {
+			return fmt.Errorf(signatureConfigMapMsg, ferr)
+		}
+		yamlData, err := yaml.Marshal(cm)
+		if err != nil {
+			return fmt.Errorf(signatureConfigMapMsg, err)
+		}
+		// write to cluster-resources directory
+		ferr = os.WriteFile(crPath+"/signature-configmap.yaml", yamlData, 0644)
+		if ferr != nil {
+			return fmt.Errorf(signatureConfigMapMsg, ferr)
+		}
+	} else {
+		o.Log.Warn(signatureConfigMapMsg, "no binary data assigned, configmap file/s not created")
+	}
+	o.Log.Info("%s file created", crPath+"/signature-configmap.json")
+	o.Log.Info("%s file created", crPath+"/signature-configmap.yaml")
+
+	return nil
 }

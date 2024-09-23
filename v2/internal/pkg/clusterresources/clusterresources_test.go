@@ -1,6 +1,8 @@
 package clusterresources
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,11 +10,13 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -969,9 +973,8 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
-			Log:              log,
-			WorkingDir:       workingDir,
-			LocalStorageFQDN: "localhost:55000",
+			Log:        log,
+			WorkingDir: workingDir,
 		}
 		err := cr.UpdateServiceGenerator(graphImage, releaseImage)
 		if err != nil {
@@ -1009,4 +1012,82 @@ func TestUpdateServiceGenerator(t *testing.T) {
 		assert.Equal(t, graphImage, actualOSUS.Spec.GraphDataImage)
 		assert.Equal(t, "quay.io/openshift-release-dev/ocp-release", actualOSUS.Spec.Releases)
 	})
+}
+
+func TestGenerateSignatureConfigMap(t *testing.T) {
+
+	t.Run("Testing configmap both yaml&json should pass", func(t *testing.T) {
+
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		err := os.MkdirAll(workingDir+"/"+clusterResourcesDir, 0755)
+		err = os.MkdirAll(workingDir+"/"+signatureDir, 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(workingDir)
+		files := []string{"4.16.0-x86_64-sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+			"4.16.2-x86_64-sha256-12345678c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"}
+
+		for _, file := range files {
+			err = copy.Copy("../../../tests/37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+				workingDir+"/"+signatureDir+"/"+file)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		log := clog.New("trace")
+		cmJson := cm.ConfigMap{}
+		cr := &ClusterResourcesGenerator{
+			Log:        log,
+			WorkingDir: workingDir,
+		}
+
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.0-x86_64",
+				Type:   v2alpha1.TypeOCPRelease,
+			},
+			{
+				Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.2-x86_64",
+				Type:   v2alpha1.TypeOCPRelease,
+			},
+		}
+
+		err = cr.GenerateSignatureConfigMap(imageList)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sigFileJson := fmt.Sprintf("%s/%s/signature-configmap.json", workingDir, clusterResourcesDir)
+		sigFileYaml := fmt.Sprintf("%s/%s/signature-configmap.yaml", workingDir, clusterResourcesDir)
+		resJson, err := os.ReadFile(sigFileJson)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = json.Unmarshal(resJson, &cmJson)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmYaml := cm.ConfigMap{}
+		resYaml, err := os.ReadFile(sigFileYaml)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = yaml.Unmarshal(resYaml, &cmYaml)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for id, file := range files {
+			key := fmt.Sprintf("sha256-%s-%d", strings.Split(file, "-sha256-")[1], id+1)
+			bdJson := len(cmJson.BinaryData[key])
+			assert.Equal(t, bdJson, 1200)
+			bdYaml := len(cmYaml.BinaryData[key])
+			assert.Equal(t, bdYaml, 1200)
+		}
+
+	})
+
 }
