@@ -609,7 +609,6 @@ func toRFC1035(r rune) rune {
 }
 
 func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error {
-	o.Log.Info("📄 Generating Signature Configmap...")
 	// create and store config map
 	cm := &cm.ConfigMap{
 		TypeMeta: cm.TypeMeta{
@@ -631,11 +630,6 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	if err != nil {
 		return fmt.Errorf(signatureConfigMapMsg, err)
 	}
-
-	if len(signatures) == 0 {
-		return fmt.Errorf(signatureConfigMapMsg, "signature files not found, could not generate signature configmap")
-	}
-
 	signatureFiles := make(map[string]string)
 	for _, f := range signatures {
 		if strings.Contains(f.Name(), "-sha256-") {
@@ -670,8 +664,9 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	}
 
 	// pointless creating configmap if there were no BinaryData found
-	crPath := filepath.Join(o.WorkingDir, clusterResourcesDir)
 	if len(cm.BinaryData) > 0 {
+		crPath := filepath.Join(o.WorkingDir, clusterResourcesDir)
+		o.Log.Info("📄 Generating Signature Configmap...")
 		jsonData, err := json.Marshal(cm)
 		if err != nil {
 			return fmt.Errorf(signatureConfigMapMsg, err)
@@ -690,11 +685,9 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 		if ferr != nil {
 			return fmt.Errorf(signatureConfigMapMsg, ferr)
 		}
-	} else {
-		o.Log.Warn(signatureConfigMapMsg, "no binary data assigned, configmap file/s not created")
+		o.Log.Info("%s file created", crPath+"/signature-configmap.json")
+		o.Log.Info("%s file created", crPath+"/signature-configmap.yaml")
 	}
-	o.Log.Info("%s file created", crPath+"/signature-configmap.json")
-	o.Log.Info("%s file created", crPath+"/signature-configmap.yaml")
 
 	return nil
 }
