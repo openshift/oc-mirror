@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -20,7 +21,12 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 
 	log := clog.New("trace")
 
+	tmpDir := t.TempDir()
+	os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
+	defer os.RemoveAll(tmpDir)
+
 	global := &mirror.GlobalOptions{SecurePolicy: false}
+	global.WorkingDir = tmpDir
 
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
@@ -114,9 +120,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 		sch := NewCincinnati(log, &cfg, opts, c, false, signature)
-		res := sch.GetReleaseReferenceImages(context.Background())
-
-		log.Debug("result from cincinnati %v", res)
+		res, _ := sch.GetReleaseReferenceImages(context.Background())
 		if res == nil {
 			t.Fatalf("should return a related images")
 		}
@@ -140,10 +144,10 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 		sch := NewCincinnati(log, &cfgNoChannels, opts, c, false, signature)
-		res := sch.GetReleaseReferenceImages(context.Background())
+		res, err := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
-		if res == nil {
+		if res == nil || err != nil {
 			t.Fatalf("should return a related images")
 		}
 	})
@@ -166,7 +170,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 		sch := NewCincinnati(log, &cfg, opts, c, true, signature)
-		res := sch.GetReleaseReferenceImages(context.Background())
+		res, _ := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
 		if res == nil {
@@ -192,7 +196,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 		sch := NewCincinnati(log, &cfgReleaseKubeVirt, opts, c, true, signature)
-		res := sch.GetReleaseReferenceImages(context.Background())
+		res, _ := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
 		if res == nil {

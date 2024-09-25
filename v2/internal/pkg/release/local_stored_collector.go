@@ -55,8 +55,13 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	var allImages []v2alpha1.CopyImageSchema
 	var imageIndexDir string
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
-		releases := o.Cincinnati.GetReleaseReferenceImages(ctx)
+		releases, err := o.Cincinnati.GetReleaseReferenceImages(ctx)
+		if err != nil {
+			return allImages, err
+		}
 
+		// all errors will be probogated to the caller
+		// no redundant logging to console
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
 			imageIndexDir = strings.Replace(hld[len(hld)-1], ":", "/", -1)
@@ -70,7 +75,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
-					o.Log.Error(errMsg, err.Error())
+					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 
@@ -79,7 +84,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
 				if err != nil {
-					o.Log.Error(errMsg, err.Error())
+					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 				o.Log.Debug(collectorPrefix+"copied release index image %s ", value.Source)
@@ -89,18 +94,18 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 			oci, err := o.Manifest.GetImageIndex(dir)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
 			//read the link to the manifest
 			if len(oci.Manifests) == 0 {
-				o.Log.Error(errMsg, "image index not found ")
+				//o.Log.Error(errMsg, "image index not found ")
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
 			}
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
 			}
 
@@ -110,7 +115,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			manifestDir := filepath.Join(dir, blobsDir, manifest)
 			mfst, err := o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
@@ -118,7 +123,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			fromDir := strings.Join([]string{dir, blobsDir}, "/")
 			err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug("extracted layer %s ", cacheDir)
@@ -127,7 +132,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			releaseDir := strings.Join([]string{cacheDir, releaseImageExtractFullPath}, "/")
 			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
@@ -163,7 +168,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	} else if o.Opts.IsDiskToMirror() {
 		releaseImages, releaseFolders, err := o.identifyReleases(ctx)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
+			//o.Log.Error(errMsg, err.Error())
 			return allImages, err
 		}
 
@@ -182,7 +187,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
 			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
 			if err != nil {
-				o.Log.Error(errMsg, err.Error())
+				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
@@ -229,7 +234,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				// if there is no error, we are certain that the slice only contains 1 element
 				// but double checking...
 				if len(graphCopySlice) != 1 {
-					o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
+					//o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
 				}
 				o.GraphDataImage = graphCopySlice[0].Destination
@@ -238,7 +243,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		}
 		releaseCopyImages, err := o.prepareD2MCopyBatch(allRelatedImages)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
+			//o.Log.Error(errMsg, err.Error())
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 		allImages = append(allImages, releaseCopyImages...)
@@ -255,7 +260,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 
 		imgSpec, err := image.ParseRef(img.Image)
 		if err != nil {
-			o.Log.Error("%s", err.Error())
+			//o.Log.Error("%s", err.Error())
 			return nil, err
 		}
 		src = imgSpec.ReferenceWithTransport
@@ -284,7 +289,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 
 		imgSpec, err := image.ParseRef(img.Image)
 		if err != nil {
-			o.Log.Error("%s", err.Error())
+			//o.Log.Error("%s", err.Error())
 			return nil, err
 		}
 		if imgSpec.IsImageByDigest() {
@@ -314,7 +319,11 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 
 	releaseImageCopies := []v2alpha1.CopyImageSchema{}
 
-	for _, value := range o.Cincinnati.GetReleaseReferenceImages(ctx) {
+	values, err := o.Cincinnati.GetReleaseReferenceImages(ctx)
+	if err != nil {
+		return []v2alpha1.RelatedImage{}, nil, err
+	}
+	for _, value := range values {
 		hld := strings.Split(value.Source, "/")
 		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
 		dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)

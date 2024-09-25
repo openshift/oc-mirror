@@ -30,7 +30,7 @@ type GraphBuilderInterface interface {
 }
 
 type CincinnatiInterface interface {
-	GetReleaseReferenceImages(context.Context) []v2alpha1.CopyImageSchema
+	GetReleaseReferenceImages(context.Context) ([]v2alpha1.CopyImageSchema, error)
 }
 
 type SignatureInterface interface {

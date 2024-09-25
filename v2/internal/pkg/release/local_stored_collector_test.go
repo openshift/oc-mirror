@@ -660,10 +660,10 @@ func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemCont
 	return "", nil
 }
 
-func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
+func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	var res []v2alpha1.CopyImageSchema
 	res = append(res, v2alpha1.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})
-	return res
+	return res, nil
 }
 
 func (o MockCincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
