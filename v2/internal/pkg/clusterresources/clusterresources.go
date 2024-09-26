@@ -654,11 +654,28 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 					o.Log.Warn("[GenerateSignatureConfigMap] release index image signature with tag %s : SKIPPED", imgSpec.Tag)
 					continue
 				}
-				// base64 encode data
-				b64 := base64.StdEncoding.EncodeToString(data)
-				index := fmt.Sprintf(configMapBinaryDataIndexFormat, strings.Split(file, "-sha256-")[1], id)
-				cm.BinaryData[index] = b64
-				id++
+				// check if we have an entry already
+				found := false
+				for k, _ := range cm.BinaryData {
+					search := strings.Split(k, "-")
+					if len(search) != 3 {
+						o.Log.Warn("[GenerateSignatureConfigMap] configmap key seems to be malformed %s : ", k)
+						continue
+					}
+					// duplicate check
+					if strings.Contains(file, search[1]) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					// base64 encode data
+					b64 := base64.StdEncoding.EncodeToString(data)
+					index := fmt.Sprintf(configMapBinaryDataIndexFormat, strings.Split(file, "-sha256-")[1], id)
+					// this is to ensure we dont have duplcate sha256 indexes
+					cm.BinaryData[index] = b64
+					id++
+				}
 			}
 		}
 	}
