@@ -107,7 +107,7 @@ func (o *CincinnatiSchema) NewOKDClient() error {
 	return err
 }
 
-func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2alpha1.CopyImageSchema {
+func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	cincinnatiParams := CincinnatiParams{
 		GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir),
 	}
@@ -127,7 +127,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 			Origin:      o.Config.Mirror.Platform.Release,
 		}
 		allImages = append(allImages, copyImage)
-		return allImages
+		return allImages, nil
 	}
 
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
@@ -247,10 +247,14 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) []v2al
 		o.Log.Error("%v", err)
 	}
 
+	errorArray := []string{}
 	for _, e := range errs {
-		o.Log.Error("[GetReleaseReferenceImages] %v", e)
+		errorArray = append(errorArray, e.Error())
 	}
-	return imgs
+	if len(errs) > 0 {
+		return imgs, fmt.Errorf("[GetReleaseReferenceImages] error list %v", errorArray)
+	}
+	return imgs, nil
 }
 
 // getDownloads will prepare the downloads map for mirroring
