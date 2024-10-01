@@ -132,6 +132,8 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 						o.CopiedImages.TotalAdditionalImages++
 					case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
 						o.CopiedImages.TotalOperatorImages++
+					case v2alpha1.TypeHelmImage:
+						o.CopiedImages.TotalHelmImages++
 					}
 				case img.Type.IsOperator():
 					operators := collectorSchema.CopyImageSchemaMap.OperatorsByImage[img.Origin]
@@ -148,6 +150,9 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					spinner.Abort(false)
 					mu.Unlock()
 					return NewUnsafeError(currentMirrorError)
+				case img.Type.IsHelmImage():
+					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
+					spinner.Abort(false)
 				}
 				mu.Unlock()
 				return nil
@@ -188,6 +193,13 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 				o.Log.Info("✅ %d / %d additional images mirrored successfully", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
 			} else {
 				o.Log.Info("❌ %d / %d addtional images mirrored: Some additional images failed to mirror - please check the logs", o.CopiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
+			}
+		}
+		if collectorSchema.TotalHelmImages != 0 {
+			if o.CopiedImages.TotalHelmImages == collectorSchema.TotalHelmImages {
+				o.Log.Info("✅ %d / %d helm images mirrored successfully", o.CopiedImages.TotalHelmImages, collectorSchema.TotalHelmImages)
+			} else {
+				o.Log.Info("❌ %d / %d helm images mirrored: Some helm images failed to mirror - please check the logs", o.CopiedImages.TotalHelmImages, collectorSchema.TotalHelmImages)
 			}
 		}
 	} else {

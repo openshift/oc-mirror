@@ -19,6 +19,7 @@ const (
 	TypeOperatorRelatedImage
 	TypeGeneric
 	TypeKubeVirtContainer
+	TypeHelmImage
 )
 
 // ImageTypeString defines the string
@@ -31,6 +32,7 @@ var imageTypeStrings = map[ImageType]string{
 	TypeOperatorBundle:       "operatorBundle",
 	TypeOperatorRelatedImage: "operatorRelatedImage",
 	TypeGeneric:              "generic",
+	TypeHelmImage:            "helmImage",
 }
 
 var imageStringsType = map[string]ImageType{
@@ -41,6 +43,7 @@ var imageStringsType = map[string]ImageType{
 	"operatorBundle":       TypeOperatorBundle,
 	"operatorRelatedImage": TypeOperatorRelatedImage,
 	"generic":              TypeGeneric,
+	"helmImage":            TypeHelmImage,
 }
 
 func (it ImageType) IsRelease() bool {
@@ -53,6 +56,10 @@ func (it ImageType) IsOperator() bool {
 
 func (it ImageType) IsAdditionalImage() bool {
 	return it == TypeGeneric
+}
+
+func (it ImageType) IsHelmImage() bool {
+	return it == TypeHelmImage
 }
 
 // String returns the string representation
