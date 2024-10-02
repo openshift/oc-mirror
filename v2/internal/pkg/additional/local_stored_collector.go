@@ -41,74 +41,89 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 	var allImages []v2alpha1.CopyImageSchema
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
+	for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
+		var src, dest, tmpSrc, tmpDest, origin string
 
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
-		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
+		imgSpec, err := image.ParseRef(img.Name)
+		if err != nil {
+			// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+			o.Log.Warn("%v : SKIPPING", err)
+			continue
+		}
+		if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
+
+			tmpSrc = imgSpec.ReferenceWithTransport
+			origin = img.Name
+			if imgSpec.Transport == dockerProtocol {
+				if imgSpec.IsImageByDigestOnly() {
+					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Digest
+				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+					// use tag only for both src and dest
+					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
+					tmpSrc = strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
+					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				} else {
+					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+				}
+			} else { // oci image
+				// Although fetching the digest of the oci image (using o.Manifest.GetDigest) might work in mirrorToDisk and mirrorToMirror
+				// it will not work during diskToMirror as the oci image might not be on the disk any longer
+				tmpDest = strings.Join([]string{o.destinationRegistry(), strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
+			}
+
+		} else if o.Opts.IsDiskToMirror() {
+			origin = img.Name
 			imgSpec, err := image.ParseRef(img.Name)
 			if err != nil {
-				// OCPBUGS-33081 - skip if parse error (i.e semver and other)
-				o.Log.Warn("%v : SKIPPING", err)
-				continue
+				o.Log.Error(errMsg, err.Error())
+				return nil, err
 			}
 
-			var src string
-			var dest string
-			src = imgSpec.ReferenceWithTransport
-
-			if imgSpec.IsImageByDigestOnly() {
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-			} else {
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			}
-
-			o.Log.Debug(collectorPrefix+"source %s", src)
-			o.Log.Debug(collectorPrefix+"destination %s", dest)
-
-			// OCPBUGS-33196 - check source image for tag and digest
-			// skip mirroring
-			if imgSpec.IsImageByTagAndDigest() {
-				o.Log.Warn(collectorPrefix+"%s has both tag and digest : SKIPPING", imgSpec.Reference)
-			} else {
-				allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src, Type: v2alpha1.TypeGeneric})
-			}
-		}
-	}
-
-	if o.Opts.IsDiskToMirror() {
-		for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
-			var src string
-			var dest string
-
-			if !strings.HasPrefix(img.Name, ociProtocol) {
-				imgSpec, err := image.ParseRef(img.Name)
-				if err != nil {
-					o.Log.Error(errMsg, err.Error())
-					return nil, err
-				}
+			if imgSpec.Transport == dockerProtocol {
 
 				if imgSpec.IsImageByDigestOnly() {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+
+					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+
+				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+					// use tag only for both src and dest
+					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using tag only", imgSpec.Reference)
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 				} else {
-					src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-					dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 				}
 
 			} else {
-				src = img.Name
-				transportAndPath := strings.Split(img.Name, "://")
-				dest = dockerProtocol + strings.Join([]string{o.Opts.Destination, transportAndPath[1]}, "/")
+				tmpSrc = strings.Join([]string{o.LocalStorageFQDN, strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
+				tmpDest = strings.Join([]string{o.Opts.Destination, strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
 			}
 
-			if src == "" || dest == "" {
-				o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", src, dest, img.Name)
-				return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
-			}
-
-			o.Log.Debug(collectorPrefix+"source %s", src)
-			o.Log.Debug(collectorPrefix+"destination %s", dest)
-			allImages = append(allImages, v2alpha1.CopyImageSchema{Origin: img.Name, Source: src, Destination: dest, Type: v2alpha1.TypeGeneric})
 		}
+		if tmpSrc == "" || tmpDest == "" {
+			o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
+			return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
+		}
+		srcSpec, err := image.ParseRef(tmpSrc) // makes sure this ref is valid, and adds transport if needed
+		if err != nil {
+			o.Log.Error(errMsg, err.Error())
+			return nil, err
+		}
+		src = srcSpec.ReferenceWithTransport
+
+		destSpec, err := image.ParseRef(tmpDest) // makes sure this ref is valid, and adds transport if needed
+		if err != nil {
+			o.Log.Error(errMsg, err.Error())
+			return nil, err
+		}
+		dest = destSpec.ReferenceWithTransport
+
+		o.Log.Debug(collectorPrefix+"source %s", src)
+		o.Log.Debug(collectorPrefix+"destination %s", dest)
+
+		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: origin, Type: v2alpha1.TypeGeneric})
 	}
 	return allImages, nil
 }

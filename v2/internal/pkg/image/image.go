@@ -76,10 +76,17 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 			imgSpec.Algorithm = validDigest.Algorithm().String()
 			imgSpec.Name = imgSplit[0]
 		}
-	} else if strings.Contains(imgSpec.Name, ":") {
-		lastColonIndex := strings.LastIndex(imgSpec.Name, ":")
-		imgSpec.Tag = imgSpec.Name[lastColonIndex+1:]
-		imgSpec.Name = imgSpec.Name[:lastColonIndex]
+	}
+	if strings.Contains(imgSpec.Name, ":") {
+		if imgSpec.Transport == dockerProtocol {
+			lastColonIndex := strings.LastIndex(imgSpec.Name, ":")
+			indexOfDomainPathSeparation := strings.Index(imgSpec.Name, "/")
+			if indexOfDomainPathSeparation < 0 || (indexOfDomainPathSeparation > 0 && lastColonIndex > indexOfDomainPathSeparation) {
+				imgSpec.Tag = imgSpec.Name[lastColonIndex+1:]
+				imgSpec.Name = imgSpec.Name[:lastColonIndex]
+			}
+		}
+
 	}
 
 	if imgSpec.Name == "" {

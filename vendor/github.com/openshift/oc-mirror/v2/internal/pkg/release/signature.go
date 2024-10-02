@@ -73,7 +73,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + digest)
 			if err != nil {
 				if os.IsNotExist(err) {
-					o.Log.Debug("signature for %s not in cache", digest)
+					o.Log.Debug("signature for %s not in cache: %v", digest, err)
 				}
 			}
 		} else {
