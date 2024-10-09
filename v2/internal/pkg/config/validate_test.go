@@ -197,6 +197,97 @@ func TestValidate(t *testing.T) {
 			expError: "invalid configuration: catalog \"test-catalog1:latest\": operator \"operator1\": mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed",
 		},
 		{
+			name: "Invalid/CatalogFilteringIncorrectChannelVersions",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name: "operator1",
+											Channels: []v2alpha1.IncludeChannel{
+												{
+													Name: "fast",
+													IncludeBundle: v2alpha1.IncludeBundle{
+														MaxVersion: "abc",
+														MinVersion: "-+?",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: [catalog \"test-catalog1:latest\": operator \"operator1\": channel \"fast\": maxVersion \"abc\" must respect semantic versioning notation, catalog \"test-catalog1:latest\": operator \"operator1\": channel \"fast\": minVersion \"-+?\" must respect semantic versioning notation]",
+		},
+		{
+			name: "Invalid/CatalogFilteringIncorrectVersions",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name: "operator1",
+											IncludeBundle: v2alpha1.IncludeBundle{
+												MaxVersion: "abc",
+												MinVersion: "-+?",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: [catalog \"test-catalog1:latest\": operator \"operator1\": maxVersion \"abc\" must respect semantic versioning notation, catalog \"test-catalog1:latest\": operator \"operator1\": minVersion \"-+?\" must respect semantic versioning notation]",
+		},
+		{
+			name: "Invalid/CatalogFilteringByMinVersionAndChannelMaxVersion",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name: "operator1",
+											IncludeBundle: v2alpha1.IncludeBundle{
+												MinVersion: "1.2.3",
+											},
+											Channels: []v2alpha1.IncludeChannel{
+												{
+													Name: "stable",
+													IncludeBundle: v2alpha1.IncludeBundle{
+														MaxVersion: "3.2.1",
+														MinVersion: "1.1.1",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: catalog \"test-catalog1:latest\": operator \"operator1\": mixing both filtering by minVersion/maxVersion and filtering by channel minVersion/maxVersion is not allowed",
+		},
+		{
 			name: "Invalid/DuplicateChannels",
 			config: &v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{

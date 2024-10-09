@@ -27,19 +27,21 @@ When selecting bundles for mirroring, oc-mirror V2 will not attempt to bridge th
 
 When selecting bundles for mirroring, oc-mirror V2 will not attempt to figure out GVK or bundle dependencies, and will not add them to the mirroring set. It is respecting strictly the client's instructions. So the client will need to explicitly add dependant packages and their versions if needed.
 
-Regarding the way to determine the list of bundles included in the filtering. several solutions were studied, described below.
+Regarding the way to determine the list of bundles included in the filtering, several solutions were studied, described below.
 
 For a complete list of use cases that are accounted for, please see [below](#annex---acceptance-criteria-set-for-v2).
 
-:warning: In this document, we do not discuss if/how the catalog would be rebuilt with the filtered content. We are separating the two discussions, even though we are aware that according to the solution chosen here, the filtered FBC catalog might not be considered as valid from the standpoint of OLM, or might not allow an operator to be upgraded correctly with such a filtered FBC catalog.
+:warning: In this document, we do not discuss if/how the catalog would be rebuilt with the filtered content. For more about rebuilding catalogs in oc-mirror v2, please refer to [catalog rebuild](./OCPSTRAT-1515.md)
 
 ### Solutions implemented
 
-TLDR; From the following studied solutions, S1 and S4(partial) are implemented for oc-mirror V2. 
+TLDR; 
+* Up to OCP 4.17 : From the following studied solutions, S1 and S4(partially by supporting filtering through selection of bundles) are implemented for oc-mirror V2.
+* Starting OCP 4.18: S1 and S4 are used by default. S4b is implemented behind feature flag `--alpha-ctlg-filter`: it uses an external catalog filtering library developped through joint efforts between the OLM and oc-mirror teams. 
 
-The user can filter operators and bundles by operator names, channels, minVersion/maxVersion as in V1. They can also list  specific bundles that they require for mirroring in the imageSetConfig.
+The user can filter operators and bundles by operator names, channels, minVersion/maxVersion as in V1. They can also list specific bundles that they require for mirroring in the imageSetConfig.
 
-### S1 - SemVer (Selected Solution)
+### S1 - SemVer (Main solution for oc-mirror <=4.17)
 
 Most bundle versions are semver compatible. The bundles included in a channel can simply be sorted by version and any bundles that fall in the range selected in the ImageSetConfig are taken. 
 
@@ -85,7 +87,7 @@ Most of the information included in the `render-graph` output can be easily foun
 
 The question here is to determine if processing mermaid format is lighter than processing FBC (discussed in the next paragraph) in order to generate the list of filtered bundles.
 
-### S3 - Implement processing of `skip`, `skipRange` and `replaces`
+### S3 - Implement processing of `skip`, `skipRange` and `replaces` inside oc-mirror v2
 
 This solution is based on processing the FBC declarative config included within the catalog, and looking at all 3 information `skip`, `skipRange` and `replaces` in order to determine if a bundle should be included in the list of filtered bundles. 
 
@@ -121,24 +123,39 @@ It can be looked at as the longer term definitive solution.
 
 In 4.16, the API change to ImageSetConfig is implemented, allowing the user to list directly the bundles which are needed to be mirrored. ([example](../../examples/imageset-config-filter-catalog-by-bundle.yaml))
 
+### S4b - Initial API v2 for filtering
+
+Based on further discussions, it was evident that oc-mirror v2 needs to implement rebuilding of catalogs, as defined in [OCPSTRAT-1515](https://issues.redhat.com/browse/OCPSTRAT-1515).
+
+A simple list of bundle versions and/or a list of images to mirror (as described in S4 and [RFE-4930](https://issues.redhat.com/browse/RFE-4930)) is not enough to rebuild catalogs. 
+
+S4b is based on a filtering API for catalogs that is able to take the following inputs, and provide a filtered, valid declarative config as an output:
+* a declarative config
+* a filtering configuration such as [this](https://github.com/sherine-k/catalog-filter/blob/main/pkg/filter/mirror-config/v1alpha1/testdata/configs/valid.yaml)
+
+The output declarative config should be valid with rights to OLM: channels without multiple channel heads, channels without cycles.
+
+Based on joint efforts of the OLM and oc-mirror teams, this [API](https://github.com/sherine-k/catalog-filter/tree/main) has been implemented.
+
+oc-mirror v2 will rely on this new API. It will adapt its imageSetConfig stanza to create a `olm.operatorframework.io/filter/mirror/v1alpha` filter, that can be passed as the API input, and collect a filtered FBC. All bundles included in that filtered FBC are considered candidates for mirroring. 
+
 ## Conclusion - rationale
 
 
 | Solution | Pros | Cons |
 |---|---|---|
-|**S1 - SemVer (SELECTED SOLUTION)**|* **Simple to implement**<br>* **Works for most cases**| * **No guarantees for upgrades on the cluster**<br>* **Mirrored volume possibly greater** |
+|S1 - SemVer (SELECTED SOLUTION)|* Simple to implement<br>* Works for most cases| * No guarantees for upgrades on the cluster<br>* Mirrored volume possibly greater<br>* Doesn't allow for catalog rebuild |
 |S2 - Use `render-graph`|* Partially delegates graph generation to OPM| * Low performance due to multiple pulls of the >1G catalogs<br>* Still requires processing of mermaid format graph<br>* No guarantees for upgrades on the cluster side
 |S3 - Use `skip`, `skipRange`, `replace`|* Is closer in terms of algorithm to what OLM does on a cluster|* Remains a best effort to approach the OLM algorithm, with no guarantees<br>* complexity|
-|S4 - API v2 |* Inline with OLM expectations<br>* Idempotent<br>* Fastest path for upgrades (smaller mirroring volume)|* Not ready for the 4.16 timeline<br>* API break for ImageSetConfig |
+|S4 - API v2 |* Inline with OLM expectations<br>* Idempotent<br>* Fastest path for upgrades (smaller mirroring volume)|* Not ready for the 4.16 timeline<br>* API break for ImageSetConfig<br>* Doesn't allow for catalog rebuild |
+|**S4b - FBC filtering API** |* **Inline with OLM expectations**<br>* **Idempotent**<br>* **Fastest path for upgrades (smaller mirroring volume)**<br>* **Allow for catalog rebuild**| * **Complex and risky logic**|
 
 **From what we see in the table above, there is no perfect fit.
-The team proposes to use S1 - SemVer for 4.16, provide a way for customers to list the selected bundles directly (S4) and actively work with the OLM team towards full implementation of S4 and an API bump.** 
+The team proposes to use S4b - FBC filtering API as of 4.18** 
 
 ## Annex - Acceptance criteria set for V2
 
-Below is a list of scenarios, and the expected outcomes. The use cases where outcome will be different from V1 are when :
-* the filtering by checking `replaces` gives different values than the V2 algorithm
-* several channels are involved : the head of each channel will not be included in V2
+Below is a list of scenarios, and the expected outcomes. 
 
 | ImageSetConfig filtering | Expected bundle versions |
 |--------------------------|--------------------------|
@@ -146,15 +163,19 @@ Below is a list of scenarios, and the expected outcomes. The use cases where out
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true|all bundles of all channels of the specified catalog|
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator</pre>|1 bundle, corresponding to the head version of the default channel for that package|
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true<br>      - packages:<br>          - name: elasticserach-operator|all bundles of all channels for the packages specified|
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        minVersion: 5.6.0</pre>| all bundles in the default channel, from minVersion, up to  channel head for that package (not relying of shortest path from upgrade graph)|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        minVersion: 5.6.0</pre>| all bundles in the default channel, from minVersion, up to  channel head for that package |
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        maxVersion: 6.0.0</pre>| all bundles in the default channel, that are lower than maxVersion for that package |
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        minVersion: 5.6.0<br>        maxVersion: 6.0.0</pre>|all bundles in the default channel, between minVersion and maxVersion for that package. Head of channel is not included, even if multiple channels are included in the filtering| 
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable</pre>|head bundle for the selected channel of that package|
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true<br>      - packages:<br>          - name: elasticserach-operator<br>            channels:<br>               - name: 'stable-v0'|all bundles for the packages and channels specified|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        defaultChannel: stable<br>        channels:<br>          - name: stable</pre>|head bundle for the selected channel of that package.<br>`defaultChannel` should be used in case the filtered channel(s) is(are) not the default|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true<br>      - packages:<br>          - name: elasticserach-operator<br>            channels:<br>               - name: 'stable-v0'|all bundles for the packages and channels specified.<br>`defaultChannel` should be used in case the filtered channel(s) is(are) not the default|
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>          - name: stable-5.5</pre>|head bundle for the each selected channel of that package|
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            minVersion: 5.6.0</pre>|within the selected channel of that package, all version starting minVersion up to channel head (not relying of shortest path from upgrade graph)|
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            maxVersion: 6.0.0</pre>|within the selected channel of that package, all versions up to maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering|
-|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            minVersion: 5.6.0<br>            maxVersion: 6.0.0</pre>|within the selected channel of that package, all versions between minVersion and maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            minVersion: 5.6.0</pre>|within the selected channel of that package, all versions starting minVersion up to channel head.<br>`defaultChannel` should be used in case the filtered channel(s) is(are) not the default. |
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            maxVersion: 6.0.0</pre>|within the selected channel of that package, all versions up to maxVersion:<br> Head of channel is not included, even if multiple channels are included in the filtering.<br>User should expect errors if this filtering leads to a channel with multiple heads.|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            minVersion: 5.6.0<br>            maxVersion: 6.0.0</pre>|within the selected channel of that package, all versions between minVersion and maxVersion. <br> Head of channel is not included, even if multiple channels are included in the filtering.<br>User should expect errors if this filtering leads to a channel with multiple heads.|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.17<br>      - package: 3scale-operator<br>        bundles:<br>          - name: 3scale-operator.v0.8.4-0.1655690146.p<br>          - name: 3scale-operator.v0.9.0<br>          - name: 3scale-operator.v0.9.1-0.1664967752.p</pre>|all channels of that package are filtered to keep the selected bundles only. <br> Heads of channels are not included, even if multiple channels are included in the filtering.<br>User should expect errors if this filtering leads to an invalid declarative config from the OLM standpoint.|
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>        minVersion: 5.6.0<br>        maxVersion: 6.0.0</pre>|Error: filtering by channel and by package min/max should not be allowed|
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>        minVersion: 5.6.0<br>        maxVersion: 6.0.0</pre>|Error: filtering using full:true and min or max version is not allowed
 |<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10<br>      full: true<br>      - package: elastic-search-operator<br>        channels<br>          - name: stable<br>            minVersion: 5.6.0<br>            maxVersion: 6.0.0</pre>|Error: filtering using full:true and min or max version is not allowed
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.17<br>      - package: 3scale-operator<br>        bundles:<br>          - name: 3scale-operator.v0.8.4-0.1655690146.p<br>          - name: 3scale-operator.v0.9.0<br>          - name: 3scale-operator.v0.9.1-0.1664967752.p<br>        channels<br>          - name: stable<br></pre>|Error: filtering by channel and by bundles should not be allowed|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.17<br>      full: true<br>      - package: 3scale-operator<br>        bundles:<br>          - name: 3scale-operator.v0.8.4-0.1655690146.p<br>          - name: 3scale-operator.v0.9.0<br>          - name: 3scale-operator.v0.9.1-0.1664967752.p<br></pre>|Error: filtering  by bundles should not be combined with full=true|
+|<pre>mirror:<br>  operators:<br>    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.17<br>      - package: 3scale-operator<br>        minVersion: 1.1.1<br>        bundles:<br>          - name: 3scale-operator.v0.8.4-0.1655690146.p<br>          - name: 3scale-operator.v0.9.0<br>          - name: 3scale-operator.v0.9.1-0.1664967752.p<br></pre>|Error: filtering by minVersion/maxVersion and by bundles should not be allowed|

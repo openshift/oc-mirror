@@ -14,5 +14,15 @@ func New(log clog.PluggableLoggerInterface,
 	mirror mirror.MirrorInterface,
 	manifest manifest.ManifestInterface,
 ) CollectorInterface {
-	return &LocalStorageCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: opts.LocalStorageFQDN}
+	return &LocalStorageCollector{OperatorCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: opts.LocalStorageFQDN, ctlgHandler: catalogHandler{Log: log}}}
+}
+
+func NewWithFilter(log clog.PluggableLoggerInterface,
+	logsDir string,
+	config v2alpha1.ImageSetConfiguration,
+	opts mirror.CopyOptions,
+	mirror mirror.MirrorInterface,
+	manifest manifest.ManifestInterface,
+) CollectorInterface {
+	return &FilterCollector{OperatorCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: opts.LocalStorageFQDN, ctlgHandler: catalogHandler{Log: log}}}
 }

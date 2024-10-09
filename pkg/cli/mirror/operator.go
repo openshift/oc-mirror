@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/errdefs"
+	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -492,11 +492,9 @@ func (o *OperatorOptions) plan(ctx context.Context, dc *declcfg.DeclarativeConfi
 	}
 
 	if !o.SkipImagePin {
-		resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, o.SourcePlainHTTP, nil)
-		if err != nil {
-			return nil, fmt.Errorf("error creating image resolver: %v", err)
-		}
-		if err := o.pinImages(ctx, dc, resolver); err != nil {
+		sysContext := image.NewSystemContext(o.SourceSkipTLS || o.SourcePlainHTTP, o.OCIRegistriesConfig)
+
+		if err := o.pinImages(ctx, dc, sysContext, image.ResolveToPin); err != nil {
 			return nil, fmt.Errorf("error pinning images in catalog %s: %v", ctlgRef, err)
 		}
 	}
@@ -815,8 +813,10 @@ func validateMapping(dc declcfg.DeclarativeConfig, mapping image.TypedImageMappi
 	return utilerrors.NewAggregate(errs)
 }
 
+type resolverFunc func(ctx context.Context, sourceCtx *types.SystemContext, unresolvedImage string) (string, error)
+
 // pinImages resolves every image in dc to it's canonical name (includes digest).
-func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, resolver remotes.Resolver) (err error) {
+func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.DeclarativeConfig, sysContext *types.SystemContext, resolver resolverFunc) (err error) {
 
 	// Check that declarative config is not nil
 	// to avoid panics
@@ -838,7 +838,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 				klog.Warningf("bundle %s: bundle image tag not set", b.Name)
 				continue
 			}
-			if dc.Bundles[i].Image, err = image.ResolveToPin(ctx, resolver, b.Image); err != nil {
+			if dc.Bundles[i].Image, err = resolver(ctx, sysContext, b.Image); err != nil {
 				if isSkipErr(err) {
 					klog.Warningf("skipping bundle %s image %s resolve error: %v", b.Name, b.Image, err)
 				} else {
@@ -855,7 +855,7 @@ func (o *OperatorOptions) pinImages(ctx context.Context, dc *declcfg.Declarative
 					continue
 				}
 
-				if b.RelatedImages[j].Image, err = image.ResolveToPin(ctx, resolver, ri.Image); err != nil {
+				if b.RelatedImages[j].Image, err = resolver(ctx, sysContext, ri.Image); err != nil {
 					if isSkipErr(err) {
 						klog.Warningf("skipping bundle %s related image %s=%s resolve error: %v", b.Name, ri.Name, ri.Image, err)
 					} else {

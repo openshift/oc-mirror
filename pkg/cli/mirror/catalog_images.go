@@ -21,9 +21,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/openshift/library-go/pkg/image/reference"
+	imgreference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
 	"github.com/operator-framework/operator-registry/pkg/containertools"
-	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"github.com/otiai10/copy"
 	"k8s.io/klog/v2"
 
@@ -275,19 +275,19 @@ func (o *MirrorOptions) rebuildOrCopyCatalogs(ctx context.Context, dstDir string
 		}
 	}
 
-	// use the resolver to obtain the digests of the newly pushed images
-	resolver, err := containerdregistry.NewResolver("", o.DestSkipTLS, o.DestPlainHTTP, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating image resolver: %v", err)
-	}
+	sysContext := image.NewSystemContext(o.DestSkipTLS || o.DestPlainHTTP, "")
 
 	// Resolve the image's digest for ICSP creation.
 	for source, dest := range refs {
-		_, desc, err := resolver.Resolve(ctx, dest.Ref.Exact())
+		destRef, err := image.ResolveToPin(ctx, sysContext, dest.Ref.Exact())
 		if err != nil {
-			return nil, fmt.Errorf("error retrieving digest for catalog image %q: %v", dest.Ref.Exact(), err)
+			return nil, fmt.Errorf("error retrieving digest for graph image %q: %v", dest.Ref.Exact(), err)
 		}
-		dest.Ref.ID = desc.Digest.String()
+		tmpRef, err := imgreference.Parse(destRef)
+		if err != nil {
+			return nil, err
+		}
+		dest.Ref.ID = tmpRef.ID
 		refs[source] = dest
 	}
 

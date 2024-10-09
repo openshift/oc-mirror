@@ -7,7 +7,6 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/openshift/oc/pkg/cli/image/imagesource"
-	"github.com/operator-framework/operator-registry/pkg/image/containerdregistry"
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -31,10 +30,8 @@ func NewAdditionalOptions(mo *MirrorOptions) *AdditionalOptions {
 // Plan provides an image mapping with source and destination for provided AdditionalImages
 func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image) (image.TypedImageMapping, error) {
 	mmappings := make(image.TypedImageMapping, len(imageList))
-	resolver, err := containerdregistry.NewResolver("", o.SourceSkipTLS, o.SourcePlainHTTP, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating image resolver: %v", err)
-	}
+	sysContext := image.NewSystemContext(o.SourceSkipTLS || o.SourcePlainHTTP, o.OCIRegistriesConfig)
+
 	var errorImageList []ErrorImage
 	for _, img := range imageList {
 		// Get source image information
@@ -51,7 +48,7 @@ func (o *AdditionalOptions) Plan(ctx context.Context, imageList []v1alpha2.Image
 
 		ref := srcRef.Ref.Exact()
 		if !image.IsImagePinned(ref) {
-			srcImage, err := image.ResolveToPin(ctx, resolver, ref)
+			srcImage, err := image.ResolveToPin(ctx, sysContext, ref)
 			if err != nil {
 				if !isSkipErr(err) {
 					return mmappings, err
