@@ -1,7 +1,7 @@
 package cli
 
 const (
-	collecAllPrefix                      = "[CollectAll] "
+	collecAllPrefix               string = "[CollectAll] "
 	dockerProtocol                string = "docker://"
 	ociProtocol                   string = "oci://"
 	dirProtocol                   string = "dir://"
@@ -23,6 +23,9 @@ const (
 	mappingFile                   string = "mapping.txt"
 	missingImgsFile               string = "missing.txt"
 	clusterResourcesDir           string = "cluster-resources"
+	helmDir                       string = "helm"
+	helmChartDir                  string = "charts"
+	helmIndexesDir                string = "indexes"
 	maxParallelLayerDownloads     uint   = 10
 	limitOverallParallelDownloads uint   = 200
 )

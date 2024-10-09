@@ -198,6 +198,7 @@ type CollectorSchema struct {
 	TotalReleaseImages    int
 	TotalOperatorImages   int
 	TotalAdditionalImages int
+	TotalHelmImages       int
 	AllImages             []CopyImageSchema
 	CopyImageSchemaMap    CopyImageSchemaMap
 }

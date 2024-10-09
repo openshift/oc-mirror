@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -30,6 +31,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -110,6 +112,7 @@ type ExecutorSchema struct {
 	Operator                     operator.CollectorInterface
 	Release                      release.CollectorInterface
 	AdditionalImages             additional.CollectorInterface
+	HelmCollector                helm.CollectorInterface
 	Mirror                       mirror.MirrorInterface
 	Manifest                     manifest.ManifestInterface
 	Batch                        batch.BatchInterface
@@ -428,6 +431,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
 	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 
@@ -692,6 +696,18 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for cluster resources %v ", err)
+		return err
+	}
+
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmChartDir), 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for helm directory %v ", err)
+		return err
+	}
+
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmIndexesDir), 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for helm directory %v ", err)
 		return err
 	}
 
@@ -1013,6 +1029,18 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	collectorSchema.TotalAdditionalImages = len(aImgs)
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 	allRelatedImages = append(allRelatedImages, aImgs...)
+
+	o.Log.Info("🔍 collecting helm images...")
+	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
+	if err != nil {
+		o.closeAll()
+		return v2alpha1.CollectorSchema{}, err
+	}
+	// exclude blocked images
+	hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
+	collectorSchema.TotalHelmImages = len(hImgs)
+	o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
+	allRelatedImages = append(allRelatedImages, hImgs...)
 
 	collectorSchema.AllImages = allRelatedImages
 

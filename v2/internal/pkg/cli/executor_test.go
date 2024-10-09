@@ -103,6 +103,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Batch:                        batch,
 			MirrorArchiver:               archiver,
 			LocalStorageService:          *reg,
@@ -137,6 +138,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Batch:                        batch,
 			MirrorArchiver:               archiver,
 			Mirror:                       Mirror{},
@@ -174,6 +176,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Batch:                        batch,
 			Mirror:                       Mirror{},
 			MirrorUnArchiver:             archiver,
@@ -210,6 +213,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Batch:                        batch,
 			Mirror:                       Mirror{},
 			MirrorUnArchiver:             archiver,
@@ -245,6 +249,7 @@ func TestExecutorMirroring(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Batch:                        batch,
 			Mirror:                       Mirror{},
 			MirrorUnArchiver:             archiver,
@@ -344,6 +349,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 			Operator:            collector,
 			Release:             collector,
 			AdditionalImages:    collector,
+			HelmCollector:       collector,
 			Mirror:              Mirror{},
 			Batch:               batch,
 			MakeDir:             MakeDir{},
@@ -375,6 +381,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 			Operator:            collector,
 			Release:             collector,
 			AdditionalImages:    collector,
+			HelmCollector:       collector,
 			Batch:               batch,
 			MakeDir:             MakeDir{},
 			LogsDir:             "/tmp/",
@@ -406,6 +413,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 			Operator:            collector,
 			Release:             collector,
 			AdditionalImages:    collector,
+			HelmCollector:       collector,
 			Batch:               batch,
 			MakeDir:             MakeDir{},
 			LogsDir:             "/tmp/",
@@ -1186,6 +1194,10 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.C
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 	}
 	return test, nil
+}
+
+func (o *Collector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+	return []v2alpha1.CopyImageSchema{}, nil
 }
 
 func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
