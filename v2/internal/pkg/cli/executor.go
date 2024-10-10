@@ -41,7 +41,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -128,8 +127,6 @@ type ExecutorSchema struct {
 	MaxParallelOverallDownloads  uint
 	ParallelLayers               uint
 	ParallelBatchImages          uint
-	srcFlagSet                   pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
-	destFlagSet                  pflag.FlagSet // this is used so that we can set tlsVerify for the cache registry based on Mode (which is initialized in Complete func)
 	alphaCtlgFilter              bool
 }
 
@@ -170,11 +167,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	mkd := MakeDir{}
 	ex := &ExecutorSchema{
-		srcFlagSet:  flagSrcOpts,
-		destFlagSet: flagDestOpts,
-		Log:         log,
-		Opts:        opts,
-		MakeDir:     mkd,
+		Log:     log,
+		Opts:    opts,
+		MakeDir: mkd,
 	}
 
 	cmd := &cobra.Command{
@@ -359,13 +354,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		o.Log.Debug("destination %s ", rootDir)
 		// destination is the local cache, which is HTTP
 		// nolint: errcheck
-		o.destFlagSet.Set("dest-tls-verify", "false")
+		o.Opts.DestImage.TlsVerify = false
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
 		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
 		// source is the local cache, which is HTTP
 		// nolint: errcheck
-		o.srcFlagSet.Set("src-tls-verify", "false")
+		o.Opts.SrcImage.TlsVerify = false
 	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
 		o.Opts.Mode = mirror.MirrorToMirror
 		if o.Opts.Global.WorkingDir == "" { // this should have been caught by Validate function. Nevertheless...

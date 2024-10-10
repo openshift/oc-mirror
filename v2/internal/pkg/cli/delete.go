@@ -190,7 +190,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 		o.Config = isc
 		o.Opts.RemoveSignatures = true
 		// nolint: errcheck
-		o.srcFlagSet.Set("src-tls-verify", "false")
+		o.Opts.SrcImage.TlsVerify = false
 	}
 
 	o.Opts.Mode = mirror.DiskToMirror

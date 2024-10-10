@@ -7,6 +7,7 @@ import (
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/transports/alltransports"
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -40,7 +41,8 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 		return nil, fmt.Errorf("invalid source name %s: %v", imgRef, err)
 	}
 	// we are always gathering blobs from the local cache registry - skipping tls verification
-	sourceCtx, err := o.opts.SrcImage.NewSystemContextWithTLSVerificationOverride(false)
+	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
+	sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
 	if err != nil {
 		return nil, err
 	}

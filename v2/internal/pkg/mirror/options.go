@@ -117,7 +117,7 @@ type dockerImageOptions struct {
 	password            commonFlag.OptionalString  // password for accessing a registry
 	registryToken       commonFlag.OptionalString  // token to be used directly as a Bearer token when accessing the registry
 	dockerCertPath      string                     // A directory using Docker-like *.{crt,cert,key} files for connecting to a registry or a daemon
-	tlsVerify           commonFlag.OptionalBool    // Require HTTPS and verify certificates (for docker: and docker-daemon:)
+	TlsVerify           bool                       // Require HTTPS and verify certificates (for docker: and docker-daemon:)
 	noCreds             bool                       // Access the registry anonymously
 }
 
@@ -244,7 +244,8 @@ func dockerImageFlags(global *GlobalOptions, shared *SharedImageOptions, depreca
 	}
 	fs.Var(commonFlag.NewOptionalStringValue(&flags.registryToken), flagPrefix+"registry-token", "Provide a Bearer token for accessing the registry")
 	fs.StringVar(&flags.dockerCertPath, flagPrefix+"cert-dir", "", "use certificates at `PATH` (*.crt, *.cert, *.key) to connect to the registry or daemon")
-	commonFlag.OptionalBoolFlag(&fs, &flags.tlsVerify, flagPrefix+"tls-verify", "require HTTPS and verify certificates when talking to the container registry or daemon")
+
+	fs.BoolVar(&flags.TlsVerify, flagPrefix+"tls-verify", true, "require HTTPS and verify certificates when talking to the container registry or daemon")
 	fs.BoolVar(&flags.noCreds, flagPrefix+"no-creds", false, "Access the registry anonymously")
 	return fs, &flags
 }
@@ -314,15 +315,6 @@ func (opts *GlobalOptions) NewSystemContext() *types.SystemContext {
 	return ctx
 }
 
-func (opts *imageOptions) NewSystemContextWithTLSVerificationOverride(tlsVerify bool) (*types.SystemContext, error) {
-	ctx, err := opts.NewSystemContext()
-	if err != nil {
-		return nil, err
-	}
-	ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!tlsVerify)
-	return ctx, nil
-}
-
 // newSystemContext returns a *types.SystemContext corresponding to opts.
 // It is guaranteed to return a fresh instance, so it is safe to make additional updates to it.
 func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
@@ -341,12 +333,11 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
 		// If both this deprecated option and a non-deprecated option is present, we use the latter value.
 		ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!opts.deprecatedTLSVerify.tlsVerify.Value())
 	}
-	if opts.tlsVerify.Present() {
-		ctx.DockerDaemonInsecureSkipTLSVerify = !opts.tlsVerify.Value()
-	}
-	if opts.tlsVerify.Present() {
-		ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!opts.tlsVerify.Value())
-	}
+
+	ctx.DockerDaemonInsecureSkipTLSVerify = !opts.TlsVerify
+
+	ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!opts.TlsVerify)
+
 	if opts.credsOption.Present() && opts.noCreds {
 		return nil, errors.New("creds and no-creds cannot be specified at the same time")
 	}

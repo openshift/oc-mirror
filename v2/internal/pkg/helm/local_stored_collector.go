@@ -54,10 +54,10 @@ type LocalStorageCollector struct {
 	cleanup     func()
 }
 
-func NewHelmOptions() *HelmOptions {
+func NewHelmOptions(tlsVerify bool) *HelmOptions {
 	return &HelmOptions{
 		settings: helmcli.New(),
-		insecure: true,
+		insecure: !tlsVerify,
 	}
 }
 
@@ -190,6 +190,7 @@ func (cdw *ChartDownloaderWrapper) DownloadTo(ref, version, dest string) (string
 }
 
 func GetDefaultChartDownloader() chartDownloader {
+	lsc.Log.Debug("GetDefaultChartDownloader - lsc.Helm.insecure %t", lsc.Helm.insecure)
 	return &ChartDownloaderWrapper{
 		inner: &downloader.ChartDownloader{
 			Out:     lsc.Opts.Stdout,

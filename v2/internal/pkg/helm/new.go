@@ -15,7 +15,8 @@ func New(log clog.PluggableLoggerInterface,
 	chartDownloader chartDownloader,
 	httpClient webClient,
 ) CollectorInterface {
-	lsc = &LocalStorageCollector{Log: log, Config: config, Opts: opts, Helm: NewHelmOptions()}
+	lsc = &LocalStorageCollector{Log: log, Config: config, Opts: opts, Helm: NewHelmOptions(opts.SrcImage.TlsVerify)}
+	lsc.Log.Debug("helm.New opts.SrcImage.TlsVerify %t", opts.SrcImage.TlsVerify)
 
 	wClient = httpClient
 
