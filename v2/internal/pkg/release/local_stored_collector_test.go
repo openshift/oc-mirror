@@ -194,7 +194,7 @@ func TestReleaseImage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should pass: %v", err)
 		}
-		assert.Contains(t, res, "localhost:5000/test/openshift-release-dev/ocp-release")
+		assert.Contains(t, res, "localhost:5000/test/openshift/release-images")
 	})
 }
 

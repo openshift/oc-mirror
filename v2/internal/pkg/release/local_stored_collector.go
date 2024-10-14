@@ -66,7 +66,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			hld := strings.Split(value.Source, "/")
 			releaseRepoAndTag := hld[len(hld)-1]
 			imageIndexDir = strings.Replace(releaseRepoAndTag, ":", "/", -1)
-			releaseTag := releaseRepoAndTag[:strings.Index(releaseRepoAndTag, ":")]
+			releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
 			cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
 			dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
@@ -250,12 +250,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				allImages = append(allImages, graphCopySlice...)
 			}
 		}
-		releaseCopyImages, err := o.prepareD2MCopyBatch(allRelatedImages)
-		if err != nil {
-			//o.Log.Error(errMsg, err.Error())
-			return []v2alpha1.CopyImageSchema{}, err
-		}
-		allImages = append(allImages, releaseCopyImages...)
 	}
 
 	return allImages, nil
@@ -269,38 +263,30 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 
 		imgSpec, err := image.ParseRef(img.Image)
 		if err != nil {
-			//o.Log.Error("%s", err.Error())
 			return nil, err
 		}
 		src = imgSpec.ReferenceWithTransport
+		pathComponents := ""
+		tag := imgSpec.Tag
+
 		if img.Type == v2alpha1.TypeOCPRelease {
-			tag := imgSpec.Tag // 4.16.1-x86_64
-			if tag != "" {
-				tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-				if len(tag) > 128 {
-					tag = tag[:127]
-				}
-			}
-			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), releaseImagePathComponents + ":" + tag}, "/")
+			pathComponents = releaseImagePathComponents
+			tag = imgSpec.Tag
 		} else if img.Type == v2alpha1.TypeOCPReleaseContent {
-			tag := img.Name // name of component 4.16.1-x86_64-csi-liveprobe
-			if tag != "" {
-				tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-				if len(tag) > 128 {
-					tag = tag[:127]
-				}
-			}
-			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), releaseComponentPathComponents + ":" + img.Name}, "/")
-		} else if imgSpec.IsImageByDigest() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+			pathComponents = releaseComponentPathComponents
+			tag = releaseTag + "-" + img.Name
+		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
+			pathComponents = imgSpec.PathComponent
+		} else if imgSpec.IsImageByDigestOnly() {
+			pathComponents = imgSpec.PathComponent
+			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + tag}, "/")
-		} else {
-			dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
-
 		}
+
+		dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
+
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
 		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
@@ -316,20 +302,30 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 
 		imgSpec, err := image.ParseRef(img.Image)
 		if err != nil {
-			//o.Log.Error("%s", err.Error())
 			return nil, err
 		}
-		if imgSpec.IsImageByDigest() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+		pathComponents := ""
+		tag := imgSpec.Tag
+
+		if img.Type == v2alpha1.TypeOCPRelease {
+			pathComponents = releaseImagePathComponents
+			tag = imgSpec.Tag
+		} else if img.Type == v2alpha1.TypeOCPReleaseContent {
+			pathComponents = releaseComponentPathComponents
+			tag = releaseTag + "-" + img.Name
+		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
+			pathComponents = imgSpec.PathComponent
+		} else if imgSpec.IsImageByDigestOnly() {
+			pathComponents = imgSpec.PathComponent
+			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + tag}, "/")
-			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
-		} else {
-			src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 		}
+
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
+		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
+
 		if src == "" || dest == "" {
 			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
 		}
