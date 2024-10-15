@@ -32,9 +32,14 @@ import (
 
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
 type ImageBuilder struct {
-	NameOpts   []name.Option
-	RemoteOpts []remote.Option
-	Logger     log.PluggableLoggerInterface
+	NameOpts      []name.Option
+	RemoteOpts    []remote.Option
+	Logger        log.PluggableLoggerInterface
+	LocalFQDN     string
+	Destination   string
+	SrcTlsVerify  bool
+	DestTlsVerify bool
+	Mode          string
 }
 
 // ErrInvalidReference is returned the target reference is a digest.
@@ -47,7 +52,7 @@ func (e ErrInvalidReference) Error() string {
 }
 
 // NewImageBuilder creates a new instance of an ImageBuilder.
-func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) ImageBuilderInterface {
+func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions, srcTlsVerify, destTlsVerify bool) ImageBuilderInterface {
 	// preparing name options for pulling the ubi9 image:
 	// - no need to set defaultRegistry because we are using a fully qualified image name
 	nameOptions := []name.Option{
@@ -58,20 +63,27 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) Im
 		remote.WithContext(context.TODO()),
 		// doesn't seem possible to use registries.conf here.
 	}
-	ctx, err := opts.DestImage.NewSystemContext()
-	if err == nil && ctx != nil && ctx.DockerInsecureSkipTLSVerify == cimagetypesv5.OptionalBoolTrue {
-		nameOptions = append(nameOptions, name.Insecure)
-		// create our own roundTripper to pass insecure=true
-		insecureRoundTripper := createInsecureRoundTripper()
-		remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
-	} else {
-		remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
+	if opts.DestImage != nil {
+		ctx, err := opts.DestImage.NewSystemContext()
+		if err == nil && ctx != nil && ctx.DockerInsecureSkipTLSVerify == cimagetypesv5.OptionalBoolTrue {
+			nameOptions = append(nameOptions, name.Insecure)
+			// create our own roundTripper to pass insecure=true
+			insecureRoundTripper := createInsecureRoundTripper()
+			remoteOptions = append(remoteOptions, remote.WithTransport(insecureRoundTripper))
+		} else {
+			remoteOptions = append(remoteOptions, remote.WithTransport(remote.DefaultTransport))
+		}
 	}
 
 	return &ImageBuilder{
-		NameOpts:   nameOptions,
-		RemoteOpts: remoteOptions,
-		Logger:     logger,
+		NameOpts:      nameOptions,
+		RemoteOpts:    remoteOptions,
+		Logger:        logger,
+		LocalFQDN:     opts.LocalStorageFQDN,
+		SrcTlsVerify:  srcTlsVerify,
+		DestTlsVerify: destTlsVerify,
+		Destination:   opts.Destination,
+		Mode:          opts.Mode,
 	}
 }
 
