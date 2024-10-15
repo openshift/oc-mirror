@@ -191,7 +191,8 @@ func (suite *TestEnvironmentRelease) runDisk2Mirror(t *testing.T) {
 
 	// assert release images exist
 	for _, img := range suite.releaseImageRefs {
-		destImgRef := strings.Replace(img, suite.sourceRegistryDomain, suite.destinationRegistryDomain+"/release", -1)
+		destImgRef := strings.Replace(img, suite.sourceRegistryDomain+"/openshift-release-dev/ocp-v4.0-art-dev", suite.destinationRegistryDomain+"/release/openshift/release", -1)
+		destImgRef = strings.Replace(destImgRef, suite.sourceRegistryDomain+"/openshift-release-dev/ocp-release", suite.destinationRegistryDomain+"/release/openshift/release-images", -1)
 		exists, err := testutils.ImageExists(destImgRef)
 		assert.NoError(t, err)
 		assert.True(t, exists)
@@ -223,7 +224,9 @@ func (suite *TestEnvironmentRelease) runMirror2Mirror(t *testing.T) {
 
 	// assert release images exist
 	for _, img := range suite.releaseImageRefs {
-		destImgRef := strings.Replace(img, suite.sourceRegistryDomain, suite.destinationRegistryDomain+"/release", -1)
+		destImgRef := strings.Replace(img, suite.sourceRegistryDomain+"/openshift-release-dev/ocp-v4.0-art-dev", suite.destinationRegistryDomain+"/release/openshift/release", -1)
+		destImgRef = strings.Replace(destImgRef, suite.sourceRegistryDomain+"/openshift-release-dev/ocp-release", suite.destinationRegistryDomain+"/release/openshift/release-images", -1)
+
 		exists, err := testutils.ImageExists(destImgRef)
 		assert.NoError(t, err)
 		assert.True(t, exists)

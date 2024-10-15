@@ -179,14 +179,25 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			o.Releases = append(o.Releases, img.Image)
 		}
 
-		allRelatedImages := []v2alpha1.RelatedImage{}
-
-		// add the releaseImages so that they are added to the list of images to copy
-		allRelatedImages = append(allRelatedImages, releaseImages...)
+		for _, releaseImg := range releaseImages {
+			releaseRef, err := image.ParseRef(releaseImg.Image)
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
+			}
+			if releaseRef.Tag == "" {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag")
+			}
+			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, releaseRef.Tag)
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
+			}
+			allImages = append(allImages, monoReleaseSlice...)
+		}
 
 		for _, releaseDir := range releaseFolders {
 
 			releaseTag := filepath.Base(releaseDir)
+
 			// get all release images from manifest (json)
 			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
 			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
@@ -221,11 +232,11 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				// Supposing that the mirror to disk saved the image with the latest tag
 				// If this supposition is false, then we need to implement a mechanism to save
 				// the digest of the graph image and use it here
-				Image: filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+				Image: dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
 				Type:  v2alpha1.TypeCincinnatiGraph,
 			}
 			// OCPBUGS-38037: Check the graph image is in the cache before adding it
-			graphInCache, err := o.imageExists(ctx, dockerProtocol+graphRelatedImage.Image)
+			graphInCache, err := o.imageExists(ctx, graphRelatedImage.Image)
 			if err != nil || !graphInCache {
 				o.Log.Warn("unable to find graph image in local cache: SKIPPING. %v")
 				o.Log.Warn("%v", err)
@@ -272,11 +283,11 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		if img.Type == v2alpha1.TypeOCPRelease {
 			pathComponents = releaseImagePathComponents
 			tag = imgSpec.Tag
-		} else if img.Type == v2alpha1.TypeOCPReleaseContent {
-			pathComponents = releaseComponentPathComponents
-			tag = releaseTag + "-" + img.Name
 		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
 			pathComponents = imgSpec.PathComponent
+		} else if img.Type == v2alpha1.TypeOCPReleaseContent && img.Name != "" {
+			pathComponents = releaseComponentPathComponents
+			tag = releaseTag + "-" + img.Name
 		} else if imgSpec.IsImageByDigestOnly() {
 			pathComponents = imgSpec.PathComponent
 			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
@@ -310,11 +321,11 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 		if img.Type == v2alpha1.TypeOCPRelease {
 			pathComponents = releaseImagePathComponents
 			tag = imgSpec.Tag
-		} else if img.Type == v2alpha1.TypeOCPReleaseContent {
-			pathComponents = releaseComponentPathComponents
-			tag = releaseTag + "-" + img.Name
 		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
 			pathComponents = imgSpec.PathComponent
+		} else if img.Type == v2alpha1.TypeOCPReleaseContent && img.Name != "" {
+			pathComponents = releaseComponentPathComponents
+			tag = releaseTag + "-" + img.Name
 		} else if imgSpec.IsImageByDigestOnly() {
 			pathComponents = imgSpec.PathComponent
 			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
@@ -466,8 +477,8 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 	o.Log.Info(fmt.Sprintf("kubeVirtContainer set to true [ including : %v ]", image))
 	kubeVirtImage := v2alpha1.RelatedImage{
 		Image: image,
-		Name:  "KubeVirtContainer",
-		Type:  v2alpha1.TypeOCPRelease,
+		Name:  "kube-virt-container",
+		Type:  v2alpha1.TypeOCPReleaseContent,
 	}
 	return kubeVirtImage, nil
 }

@@ -422,7 +422,10 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 				toBeAdded = false
 			}
 		case DigestsOnlyMode:
-			if !srcImgSpec.IsImageByDigestOnly() {
+			// CLID-205: In order to achieve retrocompatibility with v1, and allow for the installer
+			// to have the correct mirror for the release images as well as for the release components in the IDMS
+			// we include the release image mirror in the IDMS, even though it is by tag
+			if !srcImgSpec.IsImageByDigestOnly() && relatedImage.Type != v2alpha1.TypeOCPRelease {
 				toBeAdded = false
 			}
 		}
@@ -430,17 +433,19 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 			continue
 		}
 		source := ""
-		if forceRepositoryScope {
-			source = repositoryScope(srcImgSpec)
-		} else {
-			source = namespaceScope(srcImgSpec)
-		}
 		mirror := ""
 		if forceRepositoryScope {
+			source = repositoryScope(srcImgSpec)
 			mirror = repositoryScope(dstImgSpec)
 		} else {
-			mirror = namespaceScope(dstImgSpec)
+			source, mirror = attemptNamespaceScope(srcImgSpec, dstImgSpec)
 		}
+		// mirror := ""
+		// if forceRepositoryScope {
+		// 	mirror = repositoryScope(dstImgSpec)
+		// } else {
+		// 	mirror = namespaceScope(dstImgSpec)
+		// }
 
 		categoryOfImage := imageTypeToCategory(relatedImage.Type)
 		if _, ok := mirrorsByCategory[categoryOfImage]; !ok {
@@ -533,6 +538,14 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 
 	_, err = osusFile.Write(osusBytes)
 	return err
+}
+
+func attemptNamespaceScope(srcImgSpec, dstImgSpec image.ImageSpec) (string, string) {
+	if strings.Contains(dstImgSpec.PathComponent, srcImgSpec.PathComponent) {
+		return namespaceScope(srcImgSpec), namespaceScope(dstImgSpec)
+	} else {
+		return repositoryScope(srcImgSpec), repositoryScope(dstImgSpec)
+	}
 }
 
 func namespaceScope(imgSpec image.ImageSpec) string {
