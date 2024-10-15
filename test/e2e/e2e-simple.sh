@@ -8,6 +8,9 @@ source "$DIR/lib/workflow.sh"
 source "$DIR/lib/util.sh"
 source "$DIR/testcases.sh"
 
+TEST_E2E=true
+export TEST_E2E
+
 CMD="${1:?cmd bin path is required}"
 CMD="$(cd "$(dirname "$CMD")" && pwd)/$(basename "$CMD")"
 

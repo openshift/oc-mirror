@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-/*V2Cmd is exposed only temporary and will be removed in the future, please do not use it.
-This func exists only to redirect the flow to the v2 version of the cli while v1 is still supported*/
+/*
+V2Cmd is exposed only temporary and will be removed in the future, please do not use it.
+This func exists only to redirect the flow to the v2 version of the cli while v1 is still supported
+*/
 func V2Cmd(loglevel string) *cobra.Command {
 	log := clog.New(loglevel)
 

@@ -13,9 +13,7 @@ func main() {
 	// feel free to plugin you own logger
 	// just use the PluggableLoggerInterface
 	// in the file pkg/log/logger.go
-
 	log := clog.New("info")
-
 	rootCmd := cli.NewMirrorCmd(log)
 	err := rootCmd.Execute()
 	if err != nil {

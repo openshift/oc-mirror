@@ -210,3 +210,7 @@ func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef strin
 func (o mockImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error) {
 	return nil, nil
 }
+
+func (o mockImageBuilder) RebuildCatalogs(ctx context.Context, collectorSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, []v2alpha1.Image, error) {
+	return []v2alpha1.CopyImageSchema{}, []v2alpha1.Image{}, nil
+}

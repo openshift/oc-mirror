@@ -17,6 +17,7 @@ var neededCapabilities = []capability.Cap{
 	capability.CAP_FSETID,
 	capability.CAP_MKNOD,
 	capability.CAP_SETFCAP,
+	capability.CAP_SYS_ADMIN,
 }
 
 func maybeReexec() error {
