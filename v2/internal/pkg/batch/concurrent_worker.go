@@ -62,6 +62,8 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 		mirrorMsg = "deleting"
 	}
 
+	opts.PreserveDigests = true
+
 	startTime := time.Now()
 
 	batches := splitImagesToBatches(collectorSchema, int(o.BatchSize))
