@@ -402,11 +402,13 @@ func TestHelmImageCollector(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
+			_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
 			opts := mirror.CopyOptions{
 				Mode:             testCase.mirrorMode,
 				Global:           &mirror.GlobalOptions{WorkingDir: workingDir},
 				LocalStorageFQDN: testCase.localStorage,
 				Destination:      testCase.dest,
+				SrcImage:         srcOpts,
 			}
 
 			cfg.Mirror.Helm = testCase.helmConfig
@@ -431,7 +433,7 @@ func TestHelmImageCollector(t *testing.T) {
 
 			if len(testCase.expectedResult) > 0 {
 				assert.NotEmpty(t, imgs)
-				fmt.Println(assert.ElementsMatch(t, testCase.expectedResult, imgs))
+				assert.ElementsMatch(t, testCase.expectedResult, imgs)
 			}
 
 		})

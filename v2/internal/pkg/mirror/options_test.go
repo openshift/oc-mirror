@@ -31,8 +31,7 @@ func TestOptionsNewContext(t *testing.T) {
 	}
 
 	fs := pflag.FlagSet{}
-	f := flag.OptionalBoolFlag(&fs, &dockerImageOpts.tlsVerify, "tls-verify", "whatever")
-	_ = f.Value.Set("true")
+	fs.BoolVar(&dockerImageOpts.TlsVerify, "tls-verify", false, "whatever")
 	dep := flag.OptionalBoolFlag(&fs, &dockerImageOpts.deprecatedTLSVerify.tlsVerify, "deprecatated", "whatever")
 	_ = dep.Value.Set("true")
 	dockerImageOpts.authFilePath = flag.OptionalString{}
