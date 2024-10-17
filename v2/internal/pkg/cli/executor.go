@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -104,6 +106,7 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 type ExecutorSchema struct {
 	Log                          clog.PluggableLoggerInterface
 	LogsDir                      string
+	logFile                      *os.File
 	registryLogFile              *os.File
 	Config                       v2alpha1.ImageSetConfiguration
 	Opts                         *mirror.CopyOptions
@@ -195,6 +198,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				log.Error(" %v ", err)
 				os.Exit(1)
 			}
+			defer ex.logFile.Close()
+			cmd.SetOutput(ex.logFile)
+
 			// prepare internal storage
 			err = ex.setupLocalStorage()
 			if err != nil {
@@ -379,6 +385,13 @@ func (o *ExecutorSchema) Complete(args []string) error {
 			o.Opts.Global.WorkingDir = filepath.Join(o.Opts.Global.WorkingDir, workingDir)
 		}
 	}
+
+	// setup logs level, and logsDir under workingDir
+	err = o.setupLogsLevelAndDir()
+	if err != nil {
+		return err
+	}
+
 	o.Log.Info("🔀 workflow mode: %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
@@ -397,11 +410,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Opts.MaxParallelDownloads = maxParallelLayerDownloads
 	if o.ParallelLayers > 0 {
 		o.Opts.MaxParallelDownloads = o.ParallelLayers
-	}
-	// setup logs level, and logsDir under workingDir
-	err = o.setupLogsLevelAndDir()
-	if err != nil {
-		return err
 	}
 
 	if o.isLocalStoragePortBound() {
@@ -977,6 +985,14 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 		o.Log.Error(" %v ", err)
 		return err
 	}
+
+	l, err := os.OpenFile(filepath.Join(o.LogsDir, "oc-mirror.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	o.logFile = l
+	mw := io.MultiWriter(os.Stdout, o.logFile)
+	log.SetOutput(mw)
 	return nil
 }
 
