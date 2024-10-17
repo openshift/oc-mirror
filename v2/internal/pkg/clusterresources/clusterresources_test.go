@@ -24,6 +24,33 @@ import (
 )
 
 var (
+	imageListRelease = []v2alpha1.CopyImageSchema{
+		{
+			Source:      "docker://localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-api-server",
+			Destination: "docker://myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-api-server",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			Source:      "docker://localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
+			Destination: "docker://myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c1bc9a7f035bd40bafdbc915339027d671b8b491e219a352402748ea948dc3f2",
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			Source:      "docker://localhost:55000/openshift/release-images:4.14.38-x86_64",
+			Destination: "docker://myregistry/mynamespace/openshift/release-images:4.14.38-x86_64",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-release:4.14.38-x86_64",
+			Type:        v2alpha1.TypeOCPRelease,
+		},
+		{
+			Source:      "docker://localhost:55000/openshift/graph-image:latest",
+			Destination: "docker://myregistry/mynamespace/openshift/graph-image:latest",
+			Origin:      "docker://localhost:55000/openshift/graph-image:latest",
+			Type:        v2alpha1.TypeCincinnatiGraph,
+		},
+	}
+
 	imageListMixed = []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
@@ -166,6 +193,14 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 	}
 	testCases := []testCase{
 		{
+			caseName:                     "Testing IDMS_ITMSGenerator - release use case : should generate idms and itms",
+			imgList:                      imageListRelease,
+			expectedNumberFilesGenerated: 2,
+			expectedItms:                 true,
+			expectedIdms:                 true,
+			expectedError:                false,
+		},
+		{
 			caseName:                     "Testing IDMS_ITMSGenerator - tags and digests : should generate idms and itms",
 			imgList:                      imageListMixed,
 			expectedNumberFilesGenerated: 2,
@@ -251,6 +286,29 @@ func TestGenerateIDMS(t *testing.T) {
 		expectedError    bool
 	}
 	testCases := []testCase{
+		{
+			caseName: "Testing GenerateIDMS - release use case : should pass",
+			imgList:  imageListRelease,
+			expectedIdmsList: []confv1.ImageDigestMirrorSet{
+				{
+					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					Spec: confv1.ImageDigestMirrorSetSpec{
+						ImageDigestMirrors: []confv1.ImageDigestMirrors{
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift/release"},
+							},
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-release",
+								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift/release-images"},
+							},
+						},
+					},
+				},
+			},
+			expectedError: false,
+		},
 		{
 			caseName: "Testing GenerateIDMS - tags and digests : should pass",
 			imgList:  imageListMixed,
@@ -385,6 +443,25 @@ func TestGenerateITMS(t *testing.T) {
 							{
 								Source:  "registry.redhat.io/ubi8",
 								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/ubi8"},
+							},
+						},
+					},
+				},
+			},
+			expectedError: false,
+		},
+		{
+			caseName: "Testing GenerateITMS - release use case : should pass",
+			imgList:  imageListRelease,
+			expectedItmsList: []confv1.ImageTagMirrorSet{
+				{
+					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: v1.ObjectMeta{Name: "itms-release-0"},
+					Spec: confv1.ImageTagMirrorSetSpec{
+						ImageTagMirrors: []confv1.ImageTagMirrors{
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-release",
+								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift/release-images"},
 							},
 						},
 					},
