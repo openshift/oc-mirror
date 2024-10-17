@@ -440,12 +440,6 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 		} else {
 			source, mirror = attemptNamespaceScope(srcImgSpec, dstImgSpec)
 		}
-		// mirror := ""
-		// if forceRepositoryScope {
-		// 	mirror = repositoryScope(dstImgSpec)
-		// } else {
-		// 	mirror = namespaceScope(dstImgSpec)
-		// }
 
 		categoryOfImage := imageTypeToCategory(relatedImage.Type)
 		if _, ok := mirrorsByCategory[categoryOfImage]; !ok {

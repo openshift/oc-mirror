@@ -277,24 +277,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 			return nil, err
 		}
 		src = imgSpec.ReferenceWithTransport
-		pathComponents := ""
-		tag := imgSpec.Tag
 
-		if img.Type == v2alpha1.TypeOCPRelease {
-			pathComponents = releaseImagePathComponents
-			tag = imgSpec.Tag
-		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
-			pathComponents = imgSpec.PathComponent
-		} else if img.Type == v2alpha1.TypeOCPReleaseContent && img.Name != "" {
-			pathComponents = releaseComponentPathComponents
-			tag = releaseTag + "-" + img.Name
-		} else if imgSpec.IsImageByDigestOnly() {
-			pathComponents = imgSpec.PathComponent
-			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-			if len(tag) > 128 {
-				tag = tag[:127]
-			}
-		}
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
 
@@ -315,24 +300,9 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 		if err != nil {
 			return nil, err
 		}
-		pathComponents := ""
-		tag := imgSpec.Tag
 
-		if img.Type == v2alpha1.TypeOCPRelease {
-			pathComponents = releaseImagePathComponents
-			tag = imgSpec.Tag
-		} else if img.Type == v2alpha1.TypeCincinnatiGraph {
-			pathComponents = imgSpec.PathComponent
-		} else if img.Type == v2alpha1.TypeOCPReleaseContent && img.Name != "" {
-			pathComponents = releaseComponentPathComponents
-			tag = releaseTag + "-" + img.Name
-		} else if imgSpec.IsImageByDigestOnly() {
-			pathComponents = imgSpec.PathComponent
-			tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-			if len(tag) > 128 {
-				tag = tag[:127]
-			}
-		}
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
 		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
@@ -537,4 +507,38 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		}
 		return graphCopy, nil
 	}
+}
+
+func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+	pathComponents := ""
+	switch {
+	case imgType == v2alpha1.TypeOCPRelease:
+		pathComponents = releaseImagePathComponents
+	case imgType == v2alpha1.TypeCincinnatiGraph:
+		pathComponents = imgSpec.PathComponent
+	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
+		pathComponents = releaseComponentPathComponents
+	case imgSpec.IsImageByDigestOnly():
+		pathComponents = imgSpec.PathComponent
+	}
+
+	return pathComponents
+}
+
+func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag, imgName string) string {
+	tag := imgSpec.Tag
+
+	switch {
+	case imgType == v2alpha1.TypeOCPRelease || imgType == v2alpha1.TypeCincinnatiGraph:
+		tag = imgSpec.Tag
+	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
+		tag = releaseTag + "-" + imgName
+	case imgSpec.IsImageByDigestOnly():
+		tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+		if len(tag) > 128 {
+			tag = tag[:127]
+		}
+	}
+
+	return tag
 }
