@@ -18,19 +18,21 @@ func New(log clog.PluggableLoggerInterface,
 	lsc = &LocalStorageCollector{Log: log, Config: config, Opts: opts, Helm: NewHelmOptions(opts.SrcImage.TlsVerify)}
 	lsc.Log.Debug("helm.New opts.SrcImage.TlsVerify %t", opts.SrcImage.TlsVerify)
 
-	wClient = httpClient
+	if !opts.IsDiskToMirror() {
+		wClient = httpClient
 
-	cleanup, file, _ := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
-	lsc.Helm.settings.RepositoryConfig = file
-	lsc.cleanup = cleanup
+		cleanup, file, _ := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
+		lsc.Helm.settings.RepositoryConfig = file
+		lsc.cleanup = cleanup
 
-	lsc.Downloaders.indexDownloader = indexDownloader
+		lsc.Downloaders.indexDownloader = indexDownloader
 
-	if chartDownloader == nil {
-		lsc.Downloaders.chartDownloader = GetDefaultChartDownloader()
+		if chartDownloader == nil {
+			lsc.Downloaders.chartDownloader = GetDefaultChartDownloader()
 
-	} else {
-		lsc.Downloaders.chartDownloader = chartDownloader
+		} else {
+			lsc.Downloaders.chartDownloader = chartDownloader
+		}
 	}
 
 	return lsc

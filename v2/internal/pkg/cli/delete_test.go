@@ -228,6 +228,7 @@ func TestExecutorRunDelete(t *testing.T) {
 			Operator:                     collector,
 			Release:                      collector,
 			AdditionalImages:             collector,
+			HelmCollector:                collector,
 			Mirror:                       mockMirror,
 			Batch:                        &mockBatch,
 			LocalStorageService:          *reg,

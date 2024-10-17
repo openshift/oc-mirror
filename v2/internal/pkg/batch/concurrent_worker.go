@@ -142,9 +142,6 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
 					errArray = append(errArray, mirrorErrorSchema{image: img, err: err, operators: operators, bundles: bundles})
 					spinner.Abort(false)
-				case img.Type.IsAdditionalImage():
-					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
-					spinner.Abort(false)
 				case img.Type.IsRelease():
 					// error on release image, save the errArray and immediately return `UnsafeError` to caller
 					currentMirrorError := mirrorErrorSchema{image: img, err: err}
@@ -152,7 +149,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					spinner.Abort(false)
 					mu.Unlock()
 					return NewUnsafeError(currentMirrorError)
-				case img.Type.IsHelmImage():
+				case img.Type.IsAdditionalImage() || img.Type.IsHelmImage():
 					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
 					spinner.Abort(false)
 				}
@@ -207,7 +204,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 	} else {
 		o.Log.Info("=== Results ===")
 		totalImages := len(collectorSchema.AllImages)
-		totalImagesMirrored := o.CopiedImages.TotalAdditionalImages + o.CopiedImages.TotalOperatorImages + o.CopiedImages.TotalReleaseImages
+		totalImagesMirrored := o.CopiedImages.TotalAdditionalImages + o.CopiedImages.TotalOperatorImages + o.CopiedImages.TotalReleaseImages + o.CopiedImages.TotalHelmImages
 		if totalImagesMirrored == totalImages && totalImages != 0 {
 			o.Log.Info("✅ %d / %d images deleted successfully", totalImagesMirrored, totalImages)
 		} else {
