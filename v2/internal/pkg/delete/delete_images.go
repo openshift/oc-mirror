@@ -55,6 +55,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		item := v2alpha1.DeleteItem{
 			ImageName:      img.Origin,
 			ImageReference: img.Destination,
+			Type:           img.Type,
 		}
 
 		items = append(items, item)
@@ -89,6 +90,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 				Platform:         o.Config.Mirror.Platform,
 				Operators:        o.Config.Mirror.Operators,
 				AdditionalImages: o.Config.Mirror.AdditionalImages,
+				Helm:             o.Config.Mirror.Helm,
 			},
 		},
 	}
@@ -104,36 +106,46 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 }
 
 // DeleteRegistryImages - deletes both remote and local registries
-func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) error {
+func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageList) error {
 	o.Log.Debug("deleting images from remote registry")
-	var rrUpdatedImages []v2alpha1.CopyImageSchema
-	var lsUpdatedImages []v2alpha1.CopyImageSchema
-	var lsUpdated string
+	collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{}}
 
-	var batchError, cacheBatchError error
+	var batchError error
 
-	for _, img := range images.Items {
+	for _, img := range deleteImageList.Items {
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
 			Destination: img.ImageReference,
+			Type:        img.Type,
 		}
 		o.Log.Debug("deleting images %v", cis.Destination)
-		rrUpdatedImages = append(rrUpdatedImages, cis)
-		// prepare for local storage delete
-		lsUpdated = strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1)
+		collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
 
-		lsCis := v2alpha1.CopyImageSchema{
-			Origin:      img.ImageName,
-			Destination: lsUpdated,
+		if o.Opts.Global.ForceCacheDelete {
+			cis := v2alpha1.CopyImageSchema{
+				Origin:      img.ImageName,
+				Destination: strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1),
+				Type:        img.Type,
+			}
+			o.Log.Debug("deleting images local cache %v", cis.Destination)
+			collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
 		}
-		o.Log.Debug("deleting images local cache %v", lsCis.Destination)
-		lsUpdatedImages = append(lsUpdatedImages, lsCis)
+
+		switch {
+		case img.Type.IsRelease():
+			collectorSchema.TotalReleaseImages++
+		case img.Type.IsOperator():
+			collectorSchema.TotalOperatorImages++
+		case img.Type.IsAdditionalImage():
+			collectorSchema.TotalAdditionalImages++
+		case img.Type.IsHelmImage():
+			collectorSchema.TotalHelmImages++
+		}
 	}
 
-	// ensure output is suppressed
 	o.Opts.Stdout = io.Discard
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
-		if _, err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: rrUpdatedImages}, o.Opts); err != nil {
+		if _, err := o.Batch.Worker(context.Background(), collectorSchema, o.Opts); err != nil {
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
 			} else {
@@ -141,21 +153,9 @@ func (o DeleteImages) DeleteRegistryImages(images v2alpha1.DeleteImageList) erro
 			}
 		}
 	}
-	if o.Opts.Global.ForceCacheDelete {
-		if _, err := o.Batch.Worker(context.Background(), v2alpha1.CollectorSchema{AllImages: lsUpdatedImages}, o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				cacheBatchError = err
-			}
-		}
-	}
 
 	if batchError != nil {
 		o.Log.Warn("error during registry deletion: %v", batchError)
-	}
-	if cacheBatchError != nil {
-		o.Log.Warn("error during cache deletion: %v", cacheBatchError)
 	}
 	return nil
 }

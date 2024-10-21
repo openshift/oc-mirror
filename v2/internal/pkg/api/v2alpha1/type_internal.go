@@ -246,8 +246,9 @@ type DeleteImageList struct {
 }
 
 type DeleteItem struct {
-	ImageName      string `json:"imageName"`
-	ImageReference string `json:"imageReference"`
+	ImageName      string    `json:"imageName"`
+	ImageReference string    `json:"imageReference"`
+	Type           ImageType `json:"type"`
 }
 
 type CatalogFilterResult struct {

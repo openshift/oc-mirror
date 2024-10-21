@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -32,9 +34,6 @@ const (
 	deleteErrMsg = "[delete] %v"
 	deleteYaml   = "/delete/delete-images.yaml"
 	deleteDir    = "/delete/"
-
-	deletePrefix = "[RunDelete] "
-	errMsg       = deletePrefix + "%s"
 )
 
 // NewDeleteCommand - setup all the relevant support structs
@@ -148,11 +147,11 @@ func (o ExecutorSchema) ValidateDelete(args []string) error {
 		return fmt.Errorf("the destination registry argument must have a docker:// protocol prefix")
 	}
 
-	delete_file := o.Opts.Global.DeleteYaml
+	deleteFile := o.Opts.Global.DeleteYaml
 
-	_, err := os.Stat(delete_file)
+	_, err := os.Stat(deleteFile)
 	if len(o.Opts.Global.DeleteYaml) > 0 && !o.Opts.Global.DeleteGenerate && os.IsNotExist(err) {
-		return fmt.Errorf("file not found %s", delete_file)
+		return fmt.Errorf("file not found %s", deleteFile)
 	}
 	return nil
 }
@@ -187,6 +186,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 					Platform:         converted.Delete.Platform,
 					Operators:        converted.Delete.Operators,
 					AdditionalImages: converted.Delete.AdditionalImages,
+					Helm:             converted.Delete.Helm,
 				},
 			},
 		}
@@ -256,9 +256,10 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	o.Batch = batch.New(o.Log, o.LogsDir, o.Mirror)
+	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 	o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
+	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 
 	// instantiate delete module
 	bg := archive.NewImageBlobGatherer(o.Opts)
@@ -277,35 +278,12 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 
 	if o.Opts.Global.DeleteGenerate {
 
-		o.Log.Info("🕵️  going to discover the necessary images...")
-		o.Log.Info("🔍 collecting release images...")
-		// convert release images
-		var allImages []v2alpha1.CopyImageSchema
-
-		if ri, err := o.Release.ReleaseImageCollector(cmd.Context()); err != nil {
-			o.Log.Error(" %s", err.Error())
-		} else {
-			allImages = append(allImages, ri...)
-		}
-
-		o.Log.Info("🔍 collecting operator images...")
-		// collect operator images
-		oCollector, err := o.Operator.OperatorImageCollector(cmd.Context())
+		collectorSchema, err := o.CollectAll(cmd.Context())
 		if err != nil {
-			o.Log.Error(" %v", err)
+			return err
 		}
-		oImgs := oCollector.AllImages
-		allImages = append(allImages, oImgs...)
 
-		o.Log.Info("🔍 collecting additional images...")
-		// collect additional images
-		ai, err := o.AdditionalImages.AdditionalImagesCollector(cmd.Context())
-		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-		}
-		allImages = append(allImages, ai...)
-
-		err = o.Delete.WriteDeleteMetaData(allImages)
+		err = o.Delete.WriteDeleteMetaData(collectorSchema.AllImages)
 		if err != nil {
 			return err
 		}
