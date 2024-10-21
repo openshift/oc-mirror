@@ -833,23 +833,24 @@ func TestExecutorSetupWorkingDir(t *testing.T) {
 // TestExecutorSetupLogsLevelAndDir
 func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 	t.Run("Testing Executor : setup logs level and dir should pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
 			SecurePolicy: false,
+			WorkingDir:   tmpDir,
 		}
 
 		opts := &mirror.CopyOptions{
 			Global: global,
 		}
 
-		mkdir := MockMakeDir{}
-
 		ex := &ExecutorSchema{
-			Log:     log,
-			LogsDir: "/tmp/",
-			Opts:    opts,
-			MakeDir: mkdir,
+			Log:        log,
+			LogsDir:    tmpDir,
+			Opts:       opts,
+			MakeDir:    MakeDir{},
+			WorkingDir: tmpDir,
 		}
 
 		err := ex.setupLogsLevelAndDir()

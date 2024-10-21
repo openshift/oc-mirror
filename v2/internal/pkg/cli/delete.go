@@ -84,6 +84,9 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 				log.Error("%v ", err)
 				os.Exit(1)
 			}
+			defer ex.logFile.Close()
+			cmd.SetOutput(ex.logFile)
+
 			// prepare internal storage
 			err = ex.setupLocalStorage()
 			if err != nil {
