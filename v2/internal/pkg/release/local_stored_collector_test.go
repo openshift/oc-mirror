@@ -50,18 +50,64 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
 
-		//copy kubevirt resource file to working-dir
-		workingDir := filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64/release-manifests/")
-		os.MkdirAll(workingDir, 0755)
-		err := copy.Copy(common.TestFolder+releaseBootableImages, workingDir+"/"+releaseBootableImages)
+		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		if err != nil {
-			t.Fatalf("should not fail %v", err)
+			t.Fatalf("should not fail")
 		}
 
 		res, err := ex.ReleaseImageCollector(ctx)
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
+		// must contain 4 release component images
+		// must contain 1 graph image
+		// must contain 1 release image
+		// must contain 1 kubevirt image
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e",
+				Destination: "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-api-server",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5",
+				Destination: "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-node-agent",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e",
+				Destination: "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-orchestrator",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21",
+				Destination: "docker://localhost:9999/openshift/release:4.13.10-x86_64-apiserver-network-proxy",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Type:        v2alpha1.TypeOCPReleaseContent,
+				Source:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b",
+				Destination: "docker://localhost:9999/openshift/release:4.13.10-x86_64-kube-virt-container",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b",
+			},
+			{
+				Source:      "docker://quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+				Destination: "docker://localhost:9999/openshift/release-images:4.13.10-x86_64",
+				Origin:      "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+				Type:        v2alpha1.TypeOCPRelease,
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/graph-image:latest",
+				Destination: "docker://localhost:9999/openshift/graph-image:latest",
+				Origin:      "docker://localhost:9999/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -73,7 +119,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
 		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -88,6 +134,55 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
 			t.Fatalf("source images should be from local storage")
 		}
+		// must contain 4 release component images
+		// must contain 1 graph image
+		// must contain 1 release image
+		// must contain 1 kubevirt image
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-api-server",
+				Destination: "docker://localhost:5000/test/openshift/release:4.13.10-x86_64-agent-installer-api-server",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-node-agent",
+				Destination: "docker://localhost:5000/test/openshift/release:4.13.10-x86_64-agent-installer-node-agent",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/release:4.13.10-x86_64-agent-installer-orchestrator",
+				Destination: "docker://localhost:5000/test/openshift/release:4.13.10-x86_64-agent-installer-orchestrator",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/release:4.13.10-x86_64-apiserver-network-proxy",
+				Destination: "docker://localhost:5000/test/openshift/release:4.13.10-x86_64-apiserver-network-proxy",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Type:        v2alpha1.TypeOCPReleaseContent,
+				Source:      "docker://localhost:9999/openshift/release:4.13.10-x86_64-kube-virt-container",
+				Destination: "docker://localhost:5000/test/openshift/release:4.13.10-x86_64-kube-virt-container",
+				Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b",
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/release-images:4.13.10-x86_64",
+				Destination: "docker://localhost:5000/test/openshift/release-images:4.13.10-x86_64",
+				Origin:      "docker://quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+				Type:        v2alpha1.TypeOCPRelease,
+			},
+			{
+				Source:      "docker://localhost:9999/openshift/graph-image:latest",
+				Destination: "docker://localhost:5000/test/openshift/graph-image:latest",
+				Origin:      "docker://localhost:9999/openshift/graph-image:latest",
+				Type:        v2alpha1.TypeCincinnatiGraph,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -194,7 +289,7 @@ func TestReleaseImage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should pass: %v", err)
 		}
-		assert.Contains(t, res, "localhost:5000/test/openshift-release-dev/ocp-release")
+		assert.Contains(t, res, "localhost:5000/test/openshift/release-images")
 	})
 }
 
@@ -423,7 +518,8 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 							MaxVersion: "4.13.10",
 						},
 					},
-					Graph: true,
+					Graph:             true,
+					KubeVirtContainer: true,
 				},
 			},
 		},
@@ -585,10 +681,10 @@ func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSc
 
 func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
 	relatedImages := []v2alpha1.RelatedImage{
-		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebeb"},
-		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebec"},
-		{Name: "testD", Image: "sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebed"},
+		{Name: "agent-installer-api-server", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e"},
+		{Name: "agent-installer-node-agent", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5"},
+		{Name: "agent-installer-orchestrator", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e"},
+		{Name: "apiserver-network-proxy", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21"},
 	}
 	return relatedImages, nil
 }
@@ -643,12 +739,12 @@ func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCI
 }
 
 func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "", nil
+	return "3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419", nil
 }
 
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	var res []v2alpha1.CopyImageSchema
-	res = append(res, v2alpha1.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Destination: "localhost:9999/ocp-release:4.13.10-x86_64"})
+	res = append(res, v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"})
 	return res, nil
 }
 
@@ -664,9 +760,18 @@ func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
 }
 
 func (o MockCincinnati) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
-	fmt.Println("test release signature")
-
-	return images, nil
+	imagesByTag := make([]v2alpha1.CopyImageSchema, len(images))
+	minor := 9
+	for i, img := range images {
+		digestIndex := strings.LastIndex(img.Source, "@sha256:")
+		img.Origin = img.Source[:digestIndex] + ":v4.13." + fmt.Sprint(minor)
+		img.Source = img.Source[:digestIndex] + ":v4.13." + fmt.Sprint(minor)
+		img.Destination = ""
+		img.Type = v2alpha1.TypeOCPRelease
+		minor++
+		imagesByTag[i] = img
+	}
+	return imagesByTag, nil
 }
 
 type ManifestMock struct {
