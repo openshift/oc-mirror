@@ -185,6 +185,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		SilenceErrors: false,
 		SilenceUsage:  false,
 		Run: func(cmd *cobra.Command, args []string) {
+
 			log.Info("👋 Hello, welcome to oc-mirror")
 			log.Info("⚙️  setting up the environment for you...")
 
@@ -285,6 +286,7 @@ func HideFlags(cmd *cobra.Command) {
 
 // Validate - cobra validation
 func (o ExecutorSchema) Validate(dest []string) error {
+
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
@@ -429,7 +431,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
-	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
+	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts, o.Opts.SrcImage.TlsVerify, o.Opts.DestImage.TlsVerify)
 
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
@@ -1026,7 +1028,21 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
+
+	// CLID-230 rebuild-catalogs
 	oImgs := oCollector.AllImages
+	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+		results, delImgs, err := o.ImageBuilder.RebuildCatalogs(ctx, oCollector)
+		if err != nil {
+			o.closeAll()
+			return v2alpha1.CollectorSchema{}, err
+		}
+		oImgs = excludeImages(oImgs, delImgs)
+		if o.Opts.IsMirrorToMirror() {
+			oImgs = append(oImgs, results...)
+		}
+	}
+
 	// exclude blocked images
 	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
 	collectorSchema.TotalOperatorImages = len(oImgs)
