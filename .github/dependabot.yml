@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-type: all
+    # Disable version updates
+    open-pull-requests-limit: 0
+    groups:
+      golang:
+        applies-to: security-updates
+        patterns: [ "*" ]
