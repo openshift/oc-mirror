@@ -434,7 +434,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
-	o.CatalogBuilder = imagebuilder.NewCatalogBuilder(o.Log, *o.Opts)
+	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
@@ -1049,7 +1049,15 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
-				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, operatorImgs.CatalogToFBCMap[ref.Reference].FilteredConfigPath)
+				//first try to get the filteredConfigPath (path to the filtered DeclarativeConfig) from reference (without transport): case of catalog on remote registry
+				filteredConfigPath := ""
+				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.Reference]
+				if !ok {
+					filteredConfigPath = operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport].FilteredConfigPath
+				} else {
+					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
+				}
+				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
 				if err != nil {
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)

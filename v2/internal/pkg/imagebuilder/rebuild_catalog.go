@@ -33,15 +33,15 @@ const (
 	rebuiltErrorLogFile = "rebuild-error.log"
 )
 
-type CatalogBuilder struct {
+type CatalogBuildah struct {
 	CatalogBuilderInterface
 	Logger   log.PluggableLoggerInterface
 	CopyOpts mirror.CopyOptions
 }
 
-func NewCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
+func NewCatalogBuildah(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
 
-	return &CatalogBuilder{
+	return &CatalogBuildah{
 		Logger:   logger,
 		CopyOpts: opts,
 	}
@@ -50,7 +50,7 @@ func NewCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOpti
 // RebuildCatalogs - uses buildah library that reads a containerfile and builds mult-arch manifestlist
 // NB - due to the unshare (reexec) for buildah no unit tests have been implemented
 // The final goal is to implement integration tests for this functionality
-func (o CatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error) {
+func (o CatalogBuildah) RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error) {
 
 	containerTemplate := `
 FROM {{ .Catalog }} AS builder

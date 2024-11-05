@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
 )
 
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
@@ -291,6 +292,10 @@ func (b *ImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex,
 			}
 			cfg.Config.Cmd = cmd
 			cfg.Author = "oc-mirror"
+			if _, ok := cfg.Config.Labels[containertools.ConfigsLocationLabel]; ok {
+				cfg.Config.Labels[containertools.ConfigsLocationLabel] = "/configs"
+			}
+
 			img, err = mutate.Config(img, cfg.Config)
 			if err != nil {
 				return nil, err
