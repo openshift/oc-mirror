@@ -54,6 +54,10 @@ func (it ImageType) IsOperator() bool {
 	return it == TypeOperatorBundle || it == TypeOperatorCatalog || it == TypeOperatorRelatedImage
 }
 
+func (it ImageType) IsOperatorCatalog() bool {
+	return it == TypeOperatorCatalog
+}
+
 func (it ImageType) IsAdditionalImage() bool {
 	return it == TypeGeneric
 }

@@ -211,6 +211,6 @@ func (o mockImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageInd
 	return nil, nil
 }
 
-func (o mockImageBuilder) RebuildCatalogs(ctx context.Context, collectorSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, []v2alpha1.Image, error) {
-	return []v2alpha1.CopyImageSchema{}, []v2alpha1.Image{}, nil
+func (o mockImageBuilder) RebuildCatalogs(ctx context.Context, collectorSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, error) {
+	return []v2alpha1.CopyImageSchema{}, nil
 }

@@ -16,6 +16,7 @@ const (
 	releaseImageExtractDir        string = "hold-release"
 	cincinnatiGraphDataDir        string = "cincinnati-graph-data"
 	operatorImageExtractDir       string = "hold-operator"
+	operatorCatalogsDir           string = "operator-catalogs"
 	signaturesDir                 string = "signatures"
 	registryLogFilename           string = "registry.log"
 	startMessage                  string = "starting local storage on localhost:%v"

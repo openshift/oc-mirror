@@ -33,11 +33,10 @@ const (
 // RebuildCatalogs - uses buildah library that reads a containerfile and builds mult-arch manifestlist
 // NB - due to the unshare (reexec) for buildah no unit tests have been implemented
 // The final goal is to implement integration tests for this functionality
-func (o *ImageBuilder) RebuildCatalogs(ctx context.Context, catalogSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, []v2alpha1.Image, error) {
+func (o *ImageBuilder) RebuildCatalogs(ctx context.Context, catalogSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, error) {
 
 	// set variables
 	catalogs := catalogSchema.CatalogToFBCMap
-	excludeCatalogs := []v2alpha1.Image{}
 	result := []v2alpha1.CopyImageSchema{}
 	containerTemplate := `
 FROM {{ .Catalog }} AS builder
@@ -58,57 +57,42 @@ COPY --from=builder /tmp/cache /tmp/cache
 `
 
 	for _, v := range catalogs {
+		filteredDir := filepath.Dir(v.FilteredConfigPath)
+
 		o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", v.OperatorFilter.Catalog)
 		contents := bytes.NewBufferString("")
 		tmpl, err := template.New("Containerfile").Parse(containerTemplate)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 		err = tmpl.Execute(contents, map[string]interface{}{
 			"Catalog": v.OperatorFilter.Catalog,
 		})
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		// write the Containerfile content to a file
-		containerfilePath := filepath.Join("tmp", "Containerfile")
-		os.MkdirAll("tmp", 0755)
-		defer os.RemoveAll("tmp")
+		containerfilePath := filepath.Join(filteredDir, "Containerfile")
 
 		err = os.WriteFile(containerfilePath, contents.Bytes(), 0755)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
-
-		var localDest, remoteDest string
 
 		imgSpec, err := image.ParseRef(v.OperatorFilter.Catalog)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
-		switch {
-		case len(v.OperatorFilter.TargetCatalog) > 0 && len(v.OperatorFilter.TargetTag) > 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, v.OperatorFilter.TargetCatalog}, "/") + ":" + v.OperatorFilter.TargetTag
-			remoteDest = strings.Join([]string{o.Destination, v.OperatorFilter.TargetCatalog}, "/") + ":" + v.OperatorFilter.TargetTag
-		case len(v.OperatorFilter.TargetCatalog) > 0 && len(v.OperatorFilter.TargetTag) == 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, v.OperatorFilter.TargetCatalog}, "/") + ":" + imgSpec.Tag
-			remoteDest = strings.Join([]string{o.Destination, v.OperatorFilter.TargetCatalog}, "/") + ":" + imgSpec.Tag
-		case len(v.OperatorFilter.TargetCatalog) == 0 && len(v.OperatorFilter.TargetTag) > 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, imgSpec.PathComponent}, "/") + ":" + v.OperatorFilter.TargetTag
-			remoteDest = strings.Join([]string{o.Destination, imgSpec.PathComponent}, "/") + ":" + v.OperatorFilter.TargetTag
-		case len(v.OperatorFilter.TargetCatalog) == 0 && len(v.OperatorFilter.TargetTag) == 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			remoteDest = strings.Join([]string{o.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-		}
+		srcCache := dockerProtocol + strings.Join([]string{o.LocalFQDN, imgSpec.PathComponent}, "/") + ":" + filepath.Base(filteredDir)
 
 		// this is safe as we know that there is a docker:// prefix
-		updatedDest := strings.Split(localDest, dockerProtocol)[1]
+		updatedDest := strings.Split(srcCache, dockerProtocol)[1]
 
 		buildOptions, err := getStandardBuildOptions(updatedDest, o.SrcTlsVerify)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		buildOptions.DefaultMountsFilePath = ""
@@ -117,12 +101,12 @@ COPY --from=builder /tmp/cache /tmp/cache
 
 		buildStoreOptions, err := storage.DefaultStoreOptions()
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		buildStore, err := storage.GetStore(buildStoreOptions)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 		defer buildStore.Shutdown(false)
 
@@ -137,7 +121,7 @@ COPY --from=builder /tmp/cache /tmp/cache
 			o.Logger.Debug("  image reference  : %s", ref.String())
 		}
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		var retries *uint
@@ -157,51 +141,74 @@ COPY --from=builder /tmp/cache /tmp/cache
 			MaxRetries:             retries,
 		}
 
-		destImageRef, err := alltransports.ParseImageName(localDest)
+		destImageRef, err := alltransports.ParseImageName(srcCache)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		_, list, err := manifests.LoadFromImage(buildStore, id)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
-		o.Logger.Debug("local cache destination (rebuilt-catalog) %s", localDest)
+		o.Logger.Debug("local cache destination (rebuilt-catalog) %s", srcCache)
 		o.Logger.Debug("destination image reference %v", destImageRef)
 		o.Logger.Debug("pushing manifest list to remote registry")
 		// push the manifest list to local cache
 		_, digest, err := list.Push(ctx, destImageRef, manifestPushOptions)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
+		}
+
+		digestOnly := digest.String()
+		if strings.Contains(digestOnly, ":") {
+			digestOnly = strings.Split(digest.String(), ":")[1]
+		}
+
+		err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digestOnly), 0755)
+		if err != nil {
+			return result, err
 		}
 
 		_, err = buildStore.DeleteImage(id, true)
 		if err != nil {
-			return result, excludeCatalogs, err
+			return result, err
 		}
 
 		o.Logger.Info("✅ successfully pushed catalog manifest list")
 		o.Logger.Debug("  digest           : %s", digest)
 
-		excludeImg := v2alpha1.Image{
-			Name: v.OperatorFilter.Catalog,
-		}
-		excludeCatalogs = append(excludeCatalogs, excludeImg)
-
 		if o.Mode == MirrorToMirror {
-			copyImage := v2alpha1.CopyImageSchema{
-				Origin:      v.OperatorFilter.Catalog,
-				Source:      localDest,
-				Destination: remoteDest,
-				Type:        v2alpha1.TypeOperatorCatalog,
+
+			var dest string
+			for _, img := range catalogSchema.AllImages {
+				if img.Type.IsOperatorCatalog() && strings.Split(img.Origin, dockerProtocol)[1] == v.OperatorFilter.Catalog && !strings.Contains(img.Destination, o.LocalFQDN) {
+					if v.OperatorFilter.TargetTag != "" {
+						dest = img.Destination
+					} else {
+						//TODO ALEX so far we are not considering digests only, it is needed to cover the digest only as well
+						parts := strings.Split(img.Destination, ":")
+						parts[len(parts)-1] = filepath.Base(filteredDir)
+
+						dest = strings.Join(parts, ":")
+					}
+
+				}
 			}
-			result = append(result, copyImage)
+
+			copyImage := v2alpha1.CopyImageSchema{
+				Origin:           v.OperatorFilter.Catalog,
+				Source:           srcCache,
+				Destination:      dest,
+				Type:             v2alpha1.TypeOperatorCatalog,
+				IsCatalogRebuilt: true,
+			}
+			result = append(result, copyImage) //TODO ALEX currently in mirrorToMirror both original and filtered are being mirrored, find a way to keep the original only in the cache for mirrorToMirror
 		}
 	}
 	o.Logger.Info("✅ completed rebuild catalog/s")
 	o.Logger.Debug("result %v", result)
-	return result, excludeCatalogs, nil
+	return result, nil
 }
 
 func newSystemContext(tlsVerify bool) *types.SystemContext {

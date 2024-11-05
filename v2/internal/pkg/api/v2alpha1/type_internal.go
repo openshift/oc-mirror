@@ -191,7 +191,8 @@ type RelatedImage struct {
 	TargetTag string `json:"targetTag"`
 	// Used to keep specific naming info for the related image
 	// if set should be used when mirroring
-	TargetCatalog string `json:"targetCatalog"`
+	TargetCatalog    string `json:"targetCatalog"`
+	IsCatalogRebuilt bool   `json:"isCatalogRebuilt"`
 }
 
 type CollectorSchema struct {
@@ -219,7 +220,8 @@ type CopyImageSchema struct {
 	Origin string
 	// Type: metadata to explain why this image is being copied
 	// it doesn´t need to be persisted to json
-	Type ImageType `json:"-"`
+	Type             ImageType `json:"-"`
+	IsCatalogRebuilt bool      `json:"isCatalogRebuilt"`
 }
 
 // SignatureContentSchema

@@ -689,9 +689,17 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
+	//TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
 	// create operator cache dir
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
+		return err
+	}
+
+	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
 		return err
@@ -1031,13 +1039,12 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	// CLID-230 rebuild-catalogs
 	oImgs := oCollector.AllImages
-	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
-		results, delImgs, err := o.ImageBuilder.RebuildCatalogs(ctx, oCollector)
+	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) { //TODO ALEX ADD A CHECK TO SEE IF THE CATALOG WAS ALREADY REBUILT BEFORE, IF YES, SKIP, IT WILL AVOID REBUILDING CATALOGS ALREADY REBUILT PREVIOUSLY
+		results, err := o.ImageBuilder.RebuildCatalogs(ctx, oCollector)
 		if err != nil {
 			o.closeAll()
 			return v2alpha1.CollectorSchema{}, err
 		}
-		oImgs = excludeImages(oImgs, delImgs)
 		if o.Opts.IsMirrorToMirror() {
 			oImgs = append(oImgs, results...)
 		}
