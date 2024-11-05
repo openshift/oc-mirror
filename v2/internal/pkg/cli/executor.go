@@ -431,7 +431,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
-	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts, o.Opts.SrcImage.TlsVerify, o.Opts.DestImage.TlsVerify)
+	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
