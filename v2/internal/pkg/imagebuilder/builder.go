@@ -52,7 +52,7 @@ func (e ErrInvalidReference) Error() string {
 }
 
 // NewImageBuilder creates a new instance of an ImageBuilder.
-func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions, srcTlsVerify, destTlsVerify bool) ImageBuilderInterface {
+func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) ImageBuilderInterface {
 	// preparing name options for pulling the ubi9 image:
 	// - no need to set defaultRegistry because we are using a fully qualified image name
 	nameOptions := []name.Option{
@@ -80,8 +80,8 @@ func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions, sr
 		RemoteOpts:    remoteOptions,
 		Logger:        logger,
 		LocalFQDN:     opts.LocalStorageFQDN,
-		SrcTlsVerify:  srcTlsVerify,
-		DestTlsVerify: destTlsVerify,
+		SrcTlsVerify:  opts.SrcImage.TlsVerify,
+		DestTlsVerify: opts.DestImage.TlsVerify,
 		Destination:   opts.Destination,
 		Mode:          opts.Mode,
 	}
