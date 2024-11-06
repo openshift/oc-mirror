@@ -21,7 +21,8 @@ import (
 	"github.com/containers/storage"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	filecopy "github.com/otiai10/copy"
 )
 
@@ -30,15 +31,25 @@ const (
 	MirrorToMirror = "mirrorToMirror"
 )
 
+type CatalogBuilder struct {
+	CatalogBuilderInterface
+	Logger   log.PluggableLoggerInterface
+	CopyOpts mirror.CopyOptions
+}
+
+func NewCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
+
+	return &CatalogBuilder{
+		Logger:   logger,
+		CopyOpts: opts,
+	}
+}
+
 // RebuildCatalogs - uses buildah library that reads a containerfile and builds mult-arch manifestlist
 // NB - due to the unshare (reexec) for buildah no unit tests have been implemented
 // The final goal is to implement integration tests for this functionality
-func (o *ImageBuilder) RebuildCatalogs(ctx context.Context, catalogSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, []v2alpha1.Image, error) {
+func (o CatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error) {
 
-	// set variables
-	catalogs := catalogSchema.CatalogToFBCMap
-	excludeCatalogs := []v2alpha1.Image{}
-	result := []v2alpha1.CopyImageSchema{}
 	containerTemplate := `
 FROM {{ .Catalog }} AS builder
 USER 0
@@ -57,166 +68,146 @@ RUN rm -fr /tmp/cache/*
 COPY --from=builder /tmp/cache /tmp/cache
 `
 
-	for _, v := range catalogs {
-		o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", v.OperatorFilter.Catalog)
-		contents := bytes.NewBufferString("")
-		tmpl, err := template.New("Containerfile").Parse(containerTemplate)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
-		err = tmpl.Execute(contents, map[string]interface{}{
-			"Catalog": v.OperatorFilter.Catalog,
-		})
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", catalogCopyRefs.Origin)
+	contents := bytes.NewBufferString("")
+	tmpl, err := template.New("Containerfile").Parse(containerTemplate)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
+	err = tmpl.Execute(contents, map[string]interface{}{
+		"Catalog": catalogCopyRefs.Origin,
+	})
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		// write the Containerfile content to a file
-		containerfilePath := filepath.Join("tmp", "Containerfile")
-		os.MkdirAll("tmp", 0755)
-		defer os.RemoveAll("tmp")
+	// write the Containerfile content to a file
+	containerfilePath := filepath.Join("tmp", "Containerfile")
+	os.MkdirAll("tmp", 0755)
+	defer os.RemoveAll("tmp")
 
-		err = os.WriteFile(containerfilePath, contents.Bytes(), 0755)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	err = os.WriteFile(containerfilePath, contents.Bytes(), 0755)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		var localDest, remoteDest string
+	var localDest, remoteDest string
+	switch o.CopyOpts.Mode {
+	case mirror.MirrorToDisk:
+		localDest = catalogCopyRefs.Destination
+		remoteDest = catalogCopyRefs.Destination
+	case mirror.MirrorToMirror:
+		localDest = strings.Replace(catalogCopyRefs.Destination, o.CopyOpts.Destination, dockerProtocol+o.CopyOpts.LocalStorageFQDN, 1)
+		remoteDest = catalogCopyRefs.Destination
+		o.CopyOpts.DestImage.TlsVerify = false
+	case mirror.DiskToMirror:
+		localDest = catalogCopyRefs.Source
+		remoteDest = catalogCopyRefs.Destination
+	}
 
-		imgSpec, err := image.ParseRef(v.OperatorFilter.Catalog)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	// this is safe as we know that there is a docker:// prefix
+	updatedDest := strings.Split(localDest, dockerProtocol)[1]
 
-		switch {
-		case len(v.OperatorFilter.TargetCatalog) > 0 && len(v.OperatorFilter.TargetTag) > 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, v.OperatorFilter.TargetCatalog}, "/") + ":" + v.OperatorFilter.TargetTag
-			remoteDest = strings.Join([]string{o.Destination, v.OperatorFilter.TargetCatalog}, "/") + ":" + v.OperatorFilter.TargetTag
-		case len(v.OperatorFilter.TargetCatalog) > 0 && len(v.OperatorFilter.TargetTag) == 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, v.OperatorFilter.TargetCatalog}, "/") + ":" + imgSpec.Tag
-			remoteDest = strings.Join([]string{o.Destination, v.OperatorFilter.TargetCatalog}, "/") + ":" + imgSpec.Tag
-		case len(v.OperatorFilter.TargetCatalog) == 0 && len(v.OperatorFilter.TargetTag) > 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, imgSpec.PathComponent}, "/") + ":" + v.OperatorFilter.TargetTag
-			remoteDest = strings.Join([]string{o.Destination, imgSpec.PathComponent}, "/") + ":" + v.OperatorFilter.TargetTag
-		case len(v.OperatorFilter.TargetCatalog) == 0 && len(v.OperatorFilter.TargetTag) == 0:
-			localDest = dockerProtocol + strings.Join([]string{o.LocalFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			remoteDest = strings.Join([]string{o.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-		}
+	srcSysCtx, err := o.CopyOpts.SrcImage.NewSystemContext()
+	if err != nil {
+		return catalogCopyRefs, err
+	}
+	buildOptions, err := getStandardBuildOptions(updatedDest, srcSysCtx)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		// this is safe as we know that there is a docker:// prefix
-		updatedDest := strings.Split(localDest, dockerProtocol)[1]
+	buildOptions.DefaultMountsFilePath = ""
 
-		buildOptions, err := getStandardBuildOptions(updatedDest, o.SrcTlsVerify)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	o.Logger.Trace("containerfile %s", string(contents.Bytes()))
 
-		buildOptions.DefaultMountsFilePath = ""
+	buildStoreOptions, err := storage.DefaultStoreOptions()
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		o.Logger.Trace("containerfile %s", string(contents.Bytes()))
+	buildStore, err := storage.GetStore(buildStoreOptions)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
+	defer buildStore.Shutdown(false)
 
-		buildStoreOptions, err := storage.DefaultStoreOptions()
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	os.MkdirAll("configs", 0644)
+	filecopy.Copy(configPath, "./configs")
+	defer os.RemoveAll("configs")
 
-		buildStore, err := storage.GetStore(buildStoreOptions)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
-		defer buildStore.Shutdown(false)
+	id, ref, err := imagebuildah.BuildDockerfiles(ctx, buildStore, buildOptions, []string{containerfilePath}...)
+	if err == nil && buildOptions.Manifest != "" {
+		o.Logger.Info("✅ successfully created catalog")
+		o.Logger.Debug("  manifest list id : %s", id)
+		o.Logger.Debug("  image reference  : %s", ref.String())
+	}
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		os.MkdirAll("configs", 0644)
-		filecopy.Copy(v.FilteredConfigPath, "./configs")
-		defer os.RemoveAll("configs")
+	var retries *uint
+	retries = new(uint)
+	*retries = 3
 
-		id, ref, err := imagebuildah.BuildDockerfiles(ctx, buildStore, buildOptions, []string{containerfilePath}...)
-		if err == nil && buildOptions.Manifest != "" {
-			o.Logger.Info("✅ successfully created catalog")
-			o.Logger.Debug("  manifest list id : %s", id)
-			o.Logger.Debug("  image reference  : %s", ref.String())
-		}
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	destSysContext, err := o.CopyOpts.DestImage.NewSystemContext()
+	if err != nil {
+		return catalogCopyRefs, err
+	}
+	manifestPushOptions := manifests.PushOptions{
+		Store:                  buildStore,
+		SystemContext:          destSysContext,
+		ImageListSelection:     cp.CopyAllImages,
+		Instances:              nil,
+		RemoveSignatures:       true,
+		SignBy:                 "",
+		ManifestType:           "application/vnd.oci.image.manifest.v1+json",
+		AddCompression:         []string{},
+		ForceCompressionFormat: false,
+		MaxRetries:             retries,
+	}
 
-		var retries *uint
-		retries = new(uint)
-		*retries = 3
+	destImageRef, err := alltransports.ParseImageName(localDest)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		manifestPushOptions := manifests.PushOptions{
-			Store:                  buildStore,
-			SystemContext:          newSystemContext(o.DestTlsVerify),
-			ImageListSelection:     cp.CopyAllImages,
-			Instances:              nil,
-			RemoveSignatures:       true,
-			SignBy:                 "",
-			ManifestType:           "application/vnd.oci.image.manifest.v1+json",
-			AddCompression:         []string{},
-			ForceCompressionFormat: false,
-			MaxRetries:             retries,
-		}
+	_, list, err := manifests.LoadFromImage(buildStore, id)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		destImageRef, err := alltransports.ParseImageName(localDest)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	o.Logger.Debug("local cache destination (rebuilt-catalog) %s", localDest)
+	o.Logger.Debug("destination image reference %v", destImageRef)
+	o.Logger.Debug("pushing manifest list to remote registry")
+	// push the manifest list to local cache
+	_, digest, err := list.Push(ctx, destImageRef, manifestPushOptions)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		_, list, err := manifests.LoadFromImage(buildStore, id)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	_, err = buildStore.DeleteImage(id, true)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
 
-		o.Logger.Debug("local cache destination (rebuilt-catalog) %s", localDest)
-		o.Logger.Debug("destination image reference %v", destImageRef)
-		o.Logger.Debug("pushing manifest list to remote registry")
-		// push the manifest list to local cache
-		_, digest, err := list.Push(ctx, destImageRef, manifestPushOptions)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
+	o.Logger.Info("✅ successfully pushed catalog manifest list")
+	o.Logger.Debug("  digest           : %s", digest)
 
-		_, err = buildStore.DeleteImage(id, true)
-		if err != nil {
-			return result, excludeCatalogs, err
-		}
-
-		o.Logger.Info("✅ successfully pushed catalog manifest list")
-		o.Logger.Debug("  digest           : %s", digest)
-
-		excludeImg := v2alpha1.Image{
-			Name: v.OperatorFilter.Catalog,
-		}
-		excludeCatalogs = append(excludeCatalogs, excludeImg)
-
-		if o.Mode == MirrorToMirror {
-			copyImage := v2alpha1.CopyImageSchema{
-				Origin:      v.OperatorFilter.Catalog,
-				Source:      localDest,
-				Destination: remoteDest,
-				Type:        v2alpha1.TypeOperatorCatalog,
-			}
-			result = append(result, copyImage)
+	if o.CopyOpts.Mode == MirrorToMirror {
+		catalogCopyRefs = v2alpha1.CopyImageSchema{
+			Origin:      catalogCopyRefs.Origin,
+			Source:      localDest,
+			Destination: remoteDest,
+			Type:        v2alpha1.TypeOperatorCatalog,
 		}
 	}
-	o.Logger.Info("✅ completed rebuild catalog/s")
-	o.Logger.Debug("result %v", result)
-	return result, excludeCatalogs, nil
+
+	o.Logger.Info("✅ completed rebuild catalog %s", catalogCopyRefs.Origin)
+	return catalogCopyRefs, nil
 }
 
-func newSystemContext(tlsVerify bool) *types.SystemContext {
-	ctx := &types.SystemContext{
-		RegistriesDirPath:           "",
-		ArchitectureChoice:          "",
-		OSChoice:                    "",
-		VariantChoice:               "",
-		BigFilesTemporaryDir:        "",
-		DockerInsecureSkipTLSVerify: types.NewOptionalBool(!tlsVerify),
-	}
-	return ctx
-}
-
-func getStandardBuildOptions(destination string, tlsVerify bool) (define.BuildOptions, error) {
+func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (define.BuildOptions, error) {
 	// define platforms
 	platforms := []struct{ OS, Arch, Variant string }{
 		{"linux", "amd64", ""},
@@ -303,7 +294,7 @@ func getStandardBuildOptions(destination string, tlsVerify bool) (define.BuildOp
 		SignaturePolicyPath:     "",
 		SkipUnusedStages:        types.NewOptionalBool(false),
 		Squash:                  false,
-		SystemContext:           newSystemContext(tlsVerify),
+		SystemContext:           sysCtx,
 		Target:                  "",
 		Timestamp:               nil,
 		TransientMounts:         nil,
