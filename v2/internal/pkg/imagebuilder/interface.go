@@ -12,5 +12,8 @@ type ImageBuilderInterface interface {
 	BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error
 	SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error)
 	ProcessImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error)
-	RebuildCatalogs(ctx context.Context, collectorSchema v2alpha1.CollectorSchema) ([]v2alpha1.CopyImageSchema, error)
+}
+
+type CatalogBuilderInterface interface {
+	RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error)
 }
