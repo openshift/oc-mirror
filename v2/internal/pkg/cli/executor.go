@@ -1040,9 +1040,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	// CLID-230 rebuild-catalogs
 	oImgs := operatorImgs.AllImages
-	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) { //TODO ALEX ADD A CHECK TO SEE IF THE CATALOG WAS ALREADY REBUILT BEFORE, IF YES, SKIP, IT WILL AVOID REBUILDING CATALOGS ALREADY REBUILT PREVIOUSLY
+	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
 		for _, copyImage := range oImgs {
-			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
+			if copyImage.Type == v2alpha1.TypeOperatorCatalog && copyImage.RebuiltTag == "" {
 				ref, err := image.ParseRef(copyImage.Origin)
 				if err != nil {
 					o.closeAll()

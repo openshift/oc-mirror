@@ -104,7 +104,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			return v2alpha1.CollectorSchema{}, err
 		}
 
-		var isCatalogRebuilt bool
+		rebuiltTag := ""
 		var srcFilteredCatalog string
 		filterPath := filepath.Join(filteredCatalogsDir, filterDigest, "digest")
 		filteredImageDigest, err := os.ReadFile(filterPath)
@@ -125,9 +125,13 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			} else {
 				catalogName = path.Base(imgSpec.Reference)
 			}
-			catalogImage = strings.Split(srcFilteredCatalog, dockerProtocol)[1]
+			if imgSpec.Transport == ociProtocol {
+				catalogImage = ociProtocol + catalogImageDir
+			} else {
+				catalogImage = op.Catalog
+			}
 			catalogDigest = string(filteredImageDigest)
-			isCatalogRebuilt = true
+			rebuiltTag = filterDigest
 		} else {
 			if imgSpec.Transport == ociProtocol {
 				if _, err := os.Stat(catalogImageDir); errors.Is(err, os.ErrNotExist) { //TODO ALEX CHECK IF THIS IS CORRECT AND FIX
@@ -328,12 +332,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 		relatedImages[componentName] = []v2alpha1.RelatedImage{
 			{
-				Name:             catalogName,
-				Image:            catalogImage,
-				Type:             v2alpha1.TypeOperatorCatalog,
-				TargetTag:        targetTag,
-				TargetCatalog:    targetCatalog,
-				IsCatalogRebuilt: isCatalogRebuilt,
+				Name:          catalogName,
+				Image:         catalogImage,
+				Type:          v2alpha1.TypeOperatorCatalog,
+				TargetTag:     targetTag,
+				TargetCatalog: targetCatalog,
+				RebuiltTag:    rebuiltTag,
 			},
 		}
 	}
@@ -401,7 +405,7 @@ func (o FilterCollector) isAlreadyFiltered(ctx context.Context, srcImage, filter
 
 	imgSpec, err := image.ParseRef(srcImage)
 	if err != nil {
-		o.Log.Error(errMsg, err.Error())
+		o.Log.Debug(errMsg, err.Error())
 		return false
 	}
 
@@ -416,7 +420,7 @@ func (o FilterCollector) isAlreadyFiltered(ctx context.Context, srcImage, filter
 
 	catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 	if err != nil {
-		o.Log.Error(errMsg, err.Error())
+		o.Log.Debug(errMsg, err.Error())
 		return false
 	}
 	return filteredImageDigest == catalogDigest

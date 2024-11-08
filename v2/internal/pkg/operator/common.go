@@ -128,14 +128,27 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			// add the tag for src and dest
 			switch {
 			// applies only to catalogs
+
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
-				src = src + ":" + img.TargetTag
+				if img.RebuiltTag != "" {
+					src = src + ":" + img.RebuiltTag
+				} else {
+					src = src + ":" + img.TargetTag
+				}
 				dest = dest + ":" + img.TargetTag
 			case imgSpec.Tag == "":
-				src = src + ":" + imgSpec.Digest
+				if img.RebuiltTag != "" {
+					src = src + ":" + img.RebuiltTag
+				} else {
+					src = src + ":" + imgSpec.Digest
+				}
 				dest = dest + ":" + imgSpec.Digest
 			default:
-				src = src + ":" + imgSpec.Tag
+				if img.RebuiltTag != "" {
+					src = src + ":" + img.RebuiltTag
+				} else {
+					src = src + ":" + imgSpec.Tag
+				}
 				dest = dest + ":" + imgSpec.Tag
 			}
 			if src == "" || dest == "" {
@@ -148,7 +161,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				o.Log.Debug("delete mode, catalog index %s : SKIPPED", img.Image)
 			} else {
 				if _, found := alreadyIncluded[img.Image]; !found {
-					result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type, IsCatalogRebuilt: img.IsCatalogRebuilt})
+					result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type, RebuiltTag: img.RebuiltTag})
 					alreadyIncluded[img.Image] = struct{}{}
 				}
 			}
@@ -202,12 +215,12 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			o.Log.Debug("destination %s", dest)
 
 			if _, found := alreadyIncluded[img.Image]; !found {
-				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, IsCatalogRebuilt: img.IsCatalogRebuilt})
+				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
 				// OCPBUGS-37948 + CLID-196
 				// Keep a copy of the catalog image in local cache for delete workflow
 				if img.Type == v2alpha1.TypeOperatorCatalog && o.Opts.Mode == mirror.MirrorToMirror {
 					cacheDest := strings.Replace(dest, o.destinationRegistry(), o.LocalStorageFQDN, 1)
-					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: cacheDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, IsCatalogRebuilt: img.IsCatalogRebuilt})
+					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: cacheDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
 
 				}
 				alreadyIncluded[img.Image] = struct{}{}

@@ -21,6 +21,7 @@ import (
 	"github.com/containers/storage"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	filecopy "github.com/otiai10/copy"
@@ -56,25 +57,17 @@ USER 0
 RUN rm -rf /configs
 COPY ./configs /configs
 USER 1001
-RUN rm -fr /tmp/cache/*
-RUN /bin/opm serve /configs --cache-only --cache-dir=/tmp/cache
-
-FROM {{ .Catalog }} 
-USER 0
-RUN rm -rf /configs
-COPY ./configs /configs
-USER 1001
-RUN rm -fr /tmp/cache/*
-COPY --from=builder /tmp/cache /tmp/cache
+RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp/cache
 `
 	filteredDir := filepath.Dir(configPath)
 
-	o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", catalogCopyRefs.Origin)
+	o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", catalogCopyRefs.Source)
 	contents := bytes.NewBufferString("")
 	tmpl, err := template.New("Containerfile").Parse(containerTemplate)
 	if err != nil {
 		return catalogCopyRefs, err
 	}
+
 	err = tmpl.Execute(contents, map[string]interface{}{
 		"Catalog": catalogCopyRefs.Origin,
 	})
@@ -92,14 +85,25 @@ COPY --from=builder /tmp/cache /tmp/cache
 
 	var srcCache string
 
+	destRef, err := image.ParseRef(catalogCopyRefs.Destination)
+	if err != nil {
+		return catalogCopyRefs, err
+	}
+
 	switch o.CopyOpts.Mode {
 	case mirror.MirrorToDisk:
-		srcCache = catalogCopyRefs.Destination
+		srcCache = destRef.SetTag(filepath.Base(filteredDir)).ReferenceWithTransport
 	case mirror.MirrorToMirror:
 		srcCache = strings.Replace(catalogCopyRefs.Destination, o.CopyOpts.Destination, dockerProtocol+o.CopyOpts.LocalStorageFQDN, 1)
+		destRef, err := image.ParseRef(srcCache)
+		if err != nil {
+			return catalogCopyRefs, err
+		}
+		srcCache = destRef.SetTag(filepath.Base(filteredDir)).ReferenceWithTransport
 		o.CopyOpts.DestImage.TlsVerify = false
 	case mirror.DiskToMirror:
 		srcCache = catalogCopyRefs.Source
+		o.CopyOpts.SrcImage.TlsVerify = false
 	}
 
 	updatedDest := strings.TrimPrefix(srcCache, dockerProtocol)
@@ -142,9 +146,7 @@ COPY --from=builder /tmp/cache /tmp/cache
 		return catalogCopyRefs, err
 	}
 
-	var retries *uint
-	retries = new(uint)
-	*retries = 3
+	retries := uint(3)
 
 	destSysContext, err := o.CopyOpts.DestImage.NewSystemContext()
 	if err != nil {
@@ -160,7 +162,7 @@ COPY --from=builder /tmp/cache /tmp/cache
 		ManifestType:           "application/vnd.oci.image.manifest.v1+json",
 		AddCompression:         []string{},
 		ForceCompressionFormat: false,
-		MaxRetries:             retries,
+		MaxRetries:             &retries,
 	}
 
 	destImageRef, err := alltransports.ParseImageName(srcCache)
@@ -199,11 +201,11 @@ COPY --from=builder /tmp/cache /tmp/cache
 
 	if o.CopyOpts.Mode == MirrorToMirror {
 		catalogCopyRefs = v2alpha1.CopyImageSchema{
-			Origin:           catalogCopyRefs.Origin,
-			Source:           srcCache,
-			Destination:      catalogCopyRefs.Destination,
-			Type:             v2alpha1.TypeOperatorCatalog,
-			IsCatalogRebuilt: true,
+			Origin:      catalogCopyRefs.Origin,
+			Source:      srcCache,
+			Destination: catalogCopyRefs.Destination,
+			Type:        v2alpha1.TypeOperatorCatalog,
+			RebuiltTag:  filepath.Base(filteredDir),
 		}
 	}
 
@@ -228,9 +230,7 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 		return define.BuildOptions{}, err
 	}
 
-	var jobs *int
-	jobs = new(int)
-	*jobs = 4
+	jobs := 4
 
 	buildOptions := define.BuildOptions{
 		AddCapabilities:         capabilitiesForRoot,
@@ -267,7 +267,7 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 		IgnoreFile:              "",
 		In:                      nil,
 		Isolation:               buildah.IsolationOCIRootless,
-		Jobs:                    jobs,
+		Jobs:                    &jobs,
 		Labels:                  []string{},
 		LayerLabels:             []string{},
 		Layers:                  false,
