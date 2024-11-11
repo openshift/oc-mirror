@@ -98,6 +98,9 @@ func isV2() bool {
 }
 
 func buildV1Cmd() *cobra.Command {
+
+	klog.Warning("\n\n⚠️  oc-mirror v1 is deprecated (starting in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2\n\n")
+
 	o := MirrorOptions{
 		operatorCatalogToFullArtifactPath: map[string]string{},
 	}
