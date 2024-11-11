@@ -159,3 +159,11 @@ func (i ImageSpec) ComponentName() string {
 		return i.PathComponent
 	}
 }
+
+func (i ImageSpec) SetTag(tag string) ImageSpec {
+	oldTag := i.Tag
+	i.Tag = tag
+	i.Reference = strings.Replace(i.Reference, oldTag, tag, 1)
+	i.ReferenceWithTransport = strings.Replace(i.ReferenceWithTransport, oldTag, tag, 1)
+	return i
+}

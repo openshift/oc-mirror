@@ -123,6 +123,7 @@ type ExecutorSchema struct {
 	LocalStorageDisk             string
 	ClusterResources             clusterresources.GeneratorInterface
 	ImageBuilder                 imagebuilder.ImageBuilderInterface
+	CatalogBuilder               imagebuilder.CatalogBuilderInterface
 	MirrorArchiver               archive.Archiver
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
@@ -432,7 +433,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
-
+	o.CatalogBuilder = imagebuilder.NewCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
@@ -689,9 +690,17 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
+	//TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
 	// create operator cache dir
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
+	if err != nil {
+		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
+		return err
+	}
+
+	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
 		return err
@@ -1009,37 +1018,46 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Info("🕵️  going to discover the necessary images...")
 	o.Log.Info("🔍 collecting release images...")
 	// collect releases
-	rImgs, err := o.Release.ReleaseImageCollector(ctx)
+	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 	// exclude blocked images
-	rImgs = excludeImages(rImgs, o.Config.Mirror.BlockedImages)
+	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
 
-	collectorSchema.TotalReleaseImages = len(rImgs)
+	collectorSchema.TotalReleaseImages = len(releaseImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
-	allRelatedImages = append(allRelatedImages, rImgs...)
+	allRelatedImages = append(allRelatedImages, releaseImgs...)
 
 	o.Log.Info("🔍 collecting operator images...")
 	// collect operators
-	oCollector, err := o.Operator.OperatorImageCollector(ctx)
+	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 
 	// CLID-230 rebuild-catalogs
-	oImgs := oCollector.AllImages
+	oImgs := operatorImgs.AllImages
 	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
-		results, delImgs, err := o.ImageBuilder.RebuildCatalogs(ctx, oCollector)
-		if err != nil {
-			o.closeAll()
-			return v2alpha1.CollectorSchema{}, err
-		}
-		oImgs = excludeImages(oImgs, delImgs)
-		if o.Opts.IsMirrorToMirror() {
-			oImgs = append(oImgs, results...)
+		for _, copyImage := range oImgs {
+			if copyImage.Type == v2alpha1.TypeOperatorCatalog && copyImage.RebuiltTag == "" {
+				ref, err := image.ParseRef(copyImage.Origin)
+				if err != nil {
+					o.closeAll()
+					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
+				}
+				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, operatorImgs.CatalogToFBCMap[ref.Reference].FilteredConfigPath)
+				if err != nil {
+					o.closeAll()
+					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
+				}
+
+				if o.Opts.IsMirrorToMirror() {
+					oImgs = append(oImgs, filteredCopyImage)
+				}
+			}
 		}
 	}
 
@@ -1048,7 +1066,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	collectorSchema.TotalOperatorImages = len(oImgs)
 	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 	allRelatedImages = append(allRelatedImages, oImgs...)
-	collectorSchema.CopyImageSchemaMap = oCollector.CopyImageSchemaMap
+	collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
 
 	o.Log.Info("🔍 collecting additional images...")
 	// collect additionalImages
