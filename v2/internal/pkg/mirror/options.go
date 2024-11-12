@@ -87,6 +87,7 @@ type CopyOptions struct {
 	MaxParallelDownloads     uint
 	Function                 string // copy or delete (default is copy)
 	LocalStorageFQDN         string
+	RootlessStoragePath      string // used to override the container rootlesss storage path (usually set in /etc/containers/storage.conf)
 }
 
 // deprecatedTLSVerifyOption represents a deprecated --tls-verify option,

@@ -124,6 +124,10 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		return catalogCopyRefs, err
 	}
 
+	if len(o.CopyOpts.RootlessStoragePath) > 0 {
+		buildStoreOptions.RootlessStoragePath = o.CopyOpts.RootlessStoragePath
+	}
+
 	buildStore, err := storage.GetStore(buildStoreOptions)
 	if err != nil {
 		return catalogCopyRefs, err
@@ -237,7 +241,7 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 		MaxPullPushRetries: 2,
 		NoCache:            true,
 		Out:                io.Discard,
-		OutputFormat:       buildah.OCIv1ImageManifest, //TODO currently red hat catalog is docker v2 format, converting it to oci is not going to cause problems?
+		OutputFormat:       buildah.OCIv1ImageManifest,
 		Platforms:          platforms,
 		PullPolicy:         define.PullAlways,
 		Quiet:              true,
