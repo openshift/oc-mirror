@@ -117,9 +117,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		return catalogCopyRefs, err
 	}
 
-	buildOptions.DefaultMountsFilePath = ""
-
-	o.Logger.Trace("containerfile %s", string(contents.Bytes()))
+	o.Logger.Trace("containerfile %s", contents.String())
 
 	buildStoreOptions, err := storage.DefaultStoreOptions()
 	if err != nil {
@@ -153,16 +151,12 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		return catalogCopyRefs, err
 	}
 	manifestPushOptions := manifests.PushOptions{
-		Store:                  buildStore,
-		SystemContext:          destSysContext,
-		ImageListSelection:     cp.CopyAllImages,
-		Instances:              nil,
-		RemoveSignatures:       true,
-		SignBy:                 "",
-		ManifestType:           "application/vnd.oci.image.manifest.v1+json",
-		AddCompression:         []string{},
-		ForceCompressionFormat: false,
-		MaxRetries:             &retries,
+		Store:              buildStore,
+		SystemContext:      destSysContext,
+		ImageListSelection: cp.CopyAllImages,
+		RemoveSignatures:   true,
+		ManifestType:       buildah.OCIv1ImageManifest, //TODO currently red hat catalog is docker v2 format, converting it to oci is not going to cause problems?
+		MaxRetries:         &retries,
 	}
 
 	destImageRef, err := alltransports.ParseImageName(srcCache)
@@ -233,77 +227,23 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 	jobs := 4
 
 	buildOptions := define.BuildOptions{
-		AddCapabilities:         capabilitiesForRoot,
-		AdditionalBuildContexts: nil,
-		AdditionalTags:          nil,
-		AllPlatforms:            false,
-		Annotations:             nil,
-		Architecture:            "",
-		Args:                    nil,
-		BlobDirectory:           "",
-		BuildOutput:             "",
-		CacheFrom:               nil,
-		CacheTo:                 nil,
-		CacheTTL:                0,
-		CDIConfigDir:            "",
-		CNIConfigDir:            "",
-		CNIPluginPath:           "",
-		CompatVolumes:           types.NewOptionalBool(false),
-		ConfidentialWorkload:    define.ConfidentialWorkloadOptions{},
-		CPPFlags:                nil,
-		CommonBuildOpts:         nil,
-		Compression:             imagebuildah.Uncompressed,
-		ConfigureNetwork:        buildah.NetworkDisabled,
-		ContextDirectory:        "",
-		Devices:                 []string{},
-		DropCapabilities:        nil,
-		Err:                     io.Discard,
-		Excludes:                nil,
-		ForceRmIntermediateCtrs: false,
-		From:                    "",
-		GroupAdd:                nil,
-		IDMappingOptions:        nil,
-		IIDFile:                 "",
-		IgnoreFile:              "",
-		In:                      nil,
-		Isolation:               buildah.IsolationOCIRootless,
-		Jobs:                    &jobs,
-		Labels:                  []string{},
-		LayerLabels:             []string{},
-		Layers:                  false,
-		LogFile:                 "none",
-		LogRusage:               false,
-		LogSplitByPlatform:      false,
-		Manifest:                destination,
-		MaxPullPushRetries:      2,
-		NamespaceOptions:        nil,
-		NoCache:                 true,
-		OS:                      "linux",
-		OSFeatures:              nil,
-		OSVersion:               "",
-		OciDecryptConfig:        nil,
-		Out:                     io.Discard,
-		Output:                  "",
-		OutputFormat:            "application/vnd.oci.image.manifest.v1+json",
-		Platforms:               platforms,
-		PullPolicy:              define.PullAlways,
-		Quiet:                   true,
-		RemoveIntermediateCtrs:  false,
-		ReportWriter:            io.Discard,
-		Runtime:                 "crun",
-		RuntimeArgs:             nil,
-		RusageLogFile:           "",
-		SBOMScanOptions:         nil,
-		SignBy:                  "",
-		SignaturePolicyPath:     "",
-		SkipUnusedStages:        types.NewOptionalBool(false),
-		Squash:                  false,
-		SystemContext:           sysCtx,
-		Target:                  "",
-		Timestamp:               nil,
-		TransientMounts:         nil,
-		UnsetEnvs:               nil,
-		UnsetLabels:             nil,
+		AddCapabilities:    capabilitiesForRoot,
+		ConfigureNetwork:   buildah.NetworkDisabled,
+		Err:                io.Discard,
+		Isolation:          buildah.IsolationOCIRootless,
+		Jobs:               &jobs,
+		LogFile:            "none",
+		Manifest:           destination,
+		MaxPullPushRetries: 2,
+		NoCache:            true,
+		Out:                io.Discard,
+		OutputFormat:       buildah.OCIv1ImageManifest, //TODO currently red hat catalog is docker v2 format, converting it to oci is not going to cause problems?
+		Platforms:          platforms,
+		PullPolicy:         define.PullAlways,
+		Quiet:              true,
+		ReportWriter:       io.Discard,
+		Runtime:            "crun",
+		SystemContext:      sysCtx,
 	}
 	return buildOptions, nil
 }
