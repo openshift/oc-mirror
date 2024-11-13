@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/otiai10/copy"
@@ -28,18 +29,22 @@ const (
 	c_ISGID = 02000 // Set gid
 	c_ISVTX = 01000 // Save text (sticky bit)
 
-	indexSubFolder = "operator-filtered-index"
+	operatorCatalogFilteredImageDir = "filtered-catalog-image"
+	operatorCatalogImageDir         = "catalog-image"
+	operatorCatalogConfigDir        = "catalog-config"
 )
 
 type GCRCatalogBuilder struct {
 	CatalogBuilderInterface
 	imgBuilder ImageBuilderInterface
+	CopyOpts   mirror.CopyOptions
 }
 
 func NewGCRCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
 	builder := NewBuilder(logger, opts)
 	return &GCRCatalogBuilder{
 		imgBuilder: builder,
+		CopyOpts:   opts,
 	}
 }
 
@@ -52,8 +57,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 		return catalogCopyRef, fmt.Errorf("error reading filtered config for catalog %s from %s: %v", catalogCopyRef.Origin, configPath, err)
 	}
 
-	originCatalogLayoutDir := strings.Replace(configPath, "filtered-operator", "operator-images", -1)
-	_, err = os.Stat(originCatalogLayoutDir)
+	originCatalogLayoutDir, err := catalogImageOnDisk(configPath)
 	if err != nil {
 		return catalogCopyRef, fmt.Errorf("error initializing a container image for catalog %s from %s: %v", catalogCopyRef.Origin, originCatalogLayoutDir, err)
 	}
@@ -79,7 +83,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	layers = append(layers, layersToDelete...)
 	layers = append(layers, layersToAdd...)
 
-	layoutDir := strings.Replace(configPath, "filtered-operator", indexSubFolder, -1)
+	layoutDir := strings.Replace(configPath, operatorCatalogConfigDir, operatorCatalogFilteredImageDir, -1)
 
 	err = copy.Copy(originCatalogLayoutDir, layoutDir)
 	if err != nil {
@@ -92,8 +96,35 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 
 	configCMD := []string{"serve", "/configs"}
 
-	if err := c.imgBuilder.BuildAndPush(ctx, strings.TrimPrefix(catalogCopyRef.Destination, dockerProtocol), layoutPath, configCMD, layers...); err != nil {
+	var srcCache string
+	filteredDir := filepath.Dir(configPath)
+	destRef, err := image.ParseRef(catalogCopyRef.Destination)
+	if err != nil {
+		return catalogCopyRef, err
+	}
+
+	switch c.CopyOpts.Mode {
+	case mirror.MirrorToDisk:
+		srcCache = destRef.SetTag(filepath.Base(filteredDir)).Reference
+	case mirror.MirrorToMirror:
+		srcCache = strings.Replace(catalogCopyRef.Destination, c.CopyOpts.Destination, dockerProtocol+c.CopyOpts.LocalStorageFQDN, 1)
+		destRef, err := image.ParseRef(srcCache)
+		if err != nil {
+			return catalogCopyRef, err
+		}
+		srcCache = destRef.SetTag(filepath.Base(filteredDir)).Reference
+		c.CopyOpts.DestImage.TlsVerify = false
+	case mirror.DiskToMirror:
+		srcCache = catalogCopyRef.Source
+		c.CopyOpts.SrcImage.TlsVerify = false
+	}
+	digest, err := c.imgBuilder.BuildAndPush(ctx, srcCache, layoutPath, configCMD, layers...)
+	if err != nil {
 		return catalogCopyRef, fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
+	}
+	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0755)
+	if err != nil {
+		return catalogCopyRef, err
 	}
 	return catalogCopyRef, nil
 }
@@ -227,4 +258,13 @@ func deleteLayer(old string) (v1.Layer, error) {
 	deleteMap := map[string][]byte{}
 	deleteMap[old] = []byte{}
 	return crane.Layer(deleteMap)
+}
+
+func catalogImageOnDisk(configPath string) (string, error) {
+	// working-dir/operator-catalogs/certified-operator-index/9c6629541d73bb53b42c5c3915fa99a91a17153c1e1c69cdfdd118bd82a4f73c/filtered-catalogs/64b50ef276d4c646cebfc294f3da25f4/catalog-config/
+	originCatalogDir := filepath.Dir(filepath.Dir(filepath.Dir(configPath)))
+	originCatalogLayoutDir := filepath.Join(originCatalogDir, operatorCatalogImageDir)
+	_, err := os.Stat(originCatalogLayoutDir)
+	return originCatalogLayoutDir, err
+
 }
