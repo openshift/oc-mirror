@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	dockerProtocol = "docker://"
-	MirrorToMirror = "mirrorToMirror"
+	dockerProtocol      = "docker://"
+	MirrorToMirror      = "mirrorToMirror"
+	rebuiltErrorLogFile = "rebuild-error.log"
 )
 
 type CatalogBuilder struct {
@@ -112,7 +113,14 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 	if err != nil {
 		return catalogCopyRefs, err
 	}
-	buildOptions, err := getStandardBuildOptions(updatedDest, srcSysCtx)
+
+	file, err := createErrorLog(filteredDir)
+	if err != nil {
+		o.Logger.Error("error when creating the rebuild error log %s", err.Error())
+	}
+	defer file.Close()
+
+	buildOptions, err := getStandardBuildOptions(updatedDest, srcSysCtx, file)
 	if err != nil {
 		return catalogCopyRefs, err
 	}
@@ -155,7 +163,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		SystemContext:      destSysContext,
 		ImageListSelection: cp.CopyAllImages,
 		RemoveSignatures:   true,
-		ManifestType:       buildah.OCIv1ImageManifest, //TODO currently red hat catalog is docker v2 format, converting it to oci is not going to cause problems?
+		ManifestType:       buildah.OCIv1ImageManifest,
 		MaxRetries:         &retries,
 	}
 
@@ -207,7 +215,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 	return catalogCopyRefs, nil
 }
 
-func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (define.BuildOptions, error) {
+func getStandardBuildOptions(destination string, sysCtx *types.SystemContext, rebuildErrLog *os.File) (define.BuildOptions, error) {
 	// define platforms
 	platforms := []struct{ OS, Arch, Variant string }{
 		{"linux", "amd64", ""},
@@ -229,7 +237,7 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 	buildOptions := define.BuildOptions{
 		AddCapabilities:    capabilitiesForRoot,
 		ConfigureNetwork:   buildah.NetworkDisabled,
-		Err:                io.Discard,
+		Err:                rebuildErrLog,
 		Isolation:          buildah.IsolationOCIRootless,
 		Jobs:               &jobs,
 		LogFile:            "none",
@@ -237,7 +245,7 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 		MaxPullPushRetries: 2,
 		NoCache:            true,
 		Out:                io.Discard,
-		OutputFormat:       buildah.OCIv1ImageManifest, //TODO currently red hat catalog is docker v2 format, converting it to oci is not going to cause problems?
+		OutputFormat:       buildah.OCIv1ImageManifest,
 		Platforms:          platforms,
 		PullPolicy:         define.PullAlways,
 		Quiet:              true,
@@ -246,4 +254,15 @@ func getStandardBuildOptions(destination string, sysCtx *types.SystemContext) (d
 		SystemContext:      sysCtx,
 	}
 	return buildOptions, nil
+}
+
+func createErrorLog(filteredDir string) (*os.File, error) {
+	rebuiltErrLogPath := filepath.Join(filteredDir, rebuiltErrorLogFile)
+
+	file, err := os.Create(rebuiltErrLogPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, err
 }
