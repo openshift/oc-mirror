@@ -132,6 +132,10 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		return catalogCopyRefs, err
 	}
 
+	if len(o.CopyOpts.RootlessStoragePath) > 0 {
+		buildStoreOptions.RootlessStoragePath = o.CopyOpts.RootlessStoragePath
+	}
+
 	buildStore, err := storage.GetStore(buildStoreOptions)
 	if err != nil {
 		return catalogCopyRefs, err

@@ -237,6 +237,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().UintVar(&ex.ParallelLayers, "parallel-layers", 0, "Indicates the maximum layers downloading in parallel for an image. Defaults to 10")
 	cmd.Flags().UintVar(&ex.ParallelBatchImages, "parallel-batch-images", 0, "Indicates the maximum images downloading in parallel for a batch. Defaults to 8")
 	cmd.Flags().BoolVar(&ex.alphaCtlgFilter, "alpha-ctlg-filter", false, "Enables rebuilding of catalogs when set to true")
+	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
