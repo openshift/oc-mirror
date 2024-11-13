@@ -109,7 +109,11 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		filterPath := filepath.Join(filteredCatalogsDir, filterDigest, "digest")
 		filteredImageDigest, err := os.ReadFile(filterPath)
 		if err == nil && len(filterDigest) > 0 {
-			srcFilteredCatalog = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + filterDigest
+			srcFilteredCatalog, err = o.cachedCatalog(op, filterDigest)
+			if err != nil {
+				o.Log.Error(errMsg, err.Error())
+				return v2alpha1.CollectorSchema{}, err
+			}
 			isAlreadyFiltered = o.isAlreadyFiltered(ctx, srcFilteredCatalog, string(filteredImageDigest))
 		}
 
@@ -394,7 +398,11 @@ func createFolders(paths []string) error {
 }
 
 func digestOfFilter(catalog v2alpha1.Operator) (string, error) {
-	pkgs, err := json.Marshal(catalog.IncludeConfig.Packages)
+	c := catalog
+	c.TargetCatalog = ""
+	c.TargetTag = ""
+	c.TargetCatalogSourceTemplate = ""
+	pkgs, err := json.Marshal(c)
 	if err != nil {
 		return "", err
 	}
