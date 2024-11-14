@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
 )
 
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
@@ -122,7 +123,7 @@ func createInsecureRoundTripper() http.RoundTripper {
 // # Returns
 // error: non-nil on error, nil otherwise
 
-func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
+func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) (string, error) {
 
 	var v2format bool
 
@@ -134,29 +135,29 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	// due to computed hash differences.
 	targetIdx := strings.Index(targetRef, "@")
 	if targetIdx != -1 {
-		return &ErrInvalidReference{targetRef}
+		return "", &ErrInvalidReference{targetRef}
 	}
 
 	tag, err := name.NewTag(targetRef, b.NameOpts...)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	idx, err := layoutPath.ImageIndex()
 	if err != nil {
-		return err
+		return "", err
 	}
 	// make a copy of the original manifest for later
 	originalIdxManifest, err := idx.IndexManifest()
 	if err != nil {
-		return err
+		return "", err
 	}
 	originalIdxManifest = originalIdxManifest.DeepCopy()
 
 	// process the image index for updates to images discovered along the way
 	resultIdx, err := b.ProcessImageIndex(ctx, idx, &v2format, cmd, targetRef, layers...)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Ensure the index media type is a docker manifest list
@@ -172,12 +173,12 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	// write out the index, replacing the old value
 	err = layoutPath.ReplaceIndex(resultIdx, match.Digests(originalHashes...))
 	if err != nil {
-		return err
+		return "", err
 	}
 	// "Pull" the updated index
 	idx, err = layoutPath.ImageIndex()
 	if err != nil {
-		return err
+		return "", err
 	}
 	// while it's entirely valid to have nested "manifest list" (i.e. an ImageIndex) within an OCI layout,
 	// this does NOT work for remote registries. So if we have those, then we need to get the nested
@@ -185,7 +186,7 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	// ImageIndexes, but in practice, there's only one level deep, and its a "singleton".
 	topLevelIndexManifest, err := idx.IndexManifest()
 	if err != nil {
-		return err
+		return "", err
 	}
 	var imageIndexToPush v1.ImageIndex
 	for _, descriptor := range topLevelIndexManifest.Manifests {
@@ -198,14 +199,21 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 			// if we find an image index, we can push that to the remote registry
 			imageIndexToPush, err = idx.ImageIndex(descriptor.Digest)
 			if err != nil {
-				return err
+				return "", err
 			}
 			// we're not going to look any deeper or look for other indexes at this level
 			break
 		}
 	}
+
 	// push to the remote
-	return remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
+	pushErr := remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
+	d, err := imageIndexToPush.Digest()
+	if err != nil {
+		return "", err
+	}
+	return d.Hex, pushErr
+
 }
 
 // ProcessImageIndex is a recursive helper function that allows for traversal of the hierarchy of
@@ -291,6 +299,10 @@ func (b *ImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex,
 			}
 			cfg.Config.Cmd = cmd
 			cfg.Author = "oc-mirror"
+			if _, ok := cfg.Config.Labels[containertools.ConfigsLocationLabel]; ok {
+				cfg.Config.Labels[containertools.ConfigsLocationLabel] = "/configs"
+			}
+
 			img, err = mutate.Config(img, cfg.Config)
 			if err != nil {
 				return nil, err

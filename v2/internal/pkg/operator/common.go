@@ -41,6 +41,28 @@ func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
 	return len(oci.Manifests) > 1
 }
 
+func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag string) (string, error) {
+	var src string
+	srcImgSpec, err := image.ParseRef(catalog.Catalog)
+	if err != nil {
+		return "", fmt.Errorf("unable to determine cached reference for catalog %s: %v", catalog.Catalog, err)
+	}
+
+	// prepare the src and dest references
+	switch {
+	case len(catalog.TargetCatalog) > 0:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, catalog.TargetCatalog}, "/")
+	case srcImgSpec.Transport == ociProtocol:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, path.Base(srcImgSpec.Reference)}, "/")
+	default:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, srcImgSpec.PathComponent}, "/")
+	}
+
+	src = src + ":" + filteredTag
+
+	return src, nil
+}
+
 func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.Operator) (string, error) {
 	var src string
 
@@ -188,26 +210,32 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			}
 
 			src = imgSpec.ReferenceWithTransport
-			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0 {
+			switch {
+			// applies only to catalogs
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0:
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
-			} else if img.Type == v2alpha1.TypeOperatorCatalog && imgSpec.Transport == ociProtocol {
+			case img.Type == v2alpha1.TypeOperatorCatalog && imgSpec.Transport == ociProtocol:
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
-			} else {
+			default:
 				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
 			}
-			if img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0 {
+
+			// add the tag for src and dest
+			switch {
+			// applies only to catalogs
+
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				dest = dest + ":" + img.TargetTag
-			} else if imgSpec.Tag == "" && imgSpec.Transport == ociProtocol {
-				dest = dest + ":latest"
-			} else if imgSpec.IsImageByDigestOnly() {
+			case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
+				dest = dest + "::latest"
+			case imgSpec.IsImageByDigestOnly():
 				dest = dest + ":" + imgSpec.Digest
-			} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+			case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 				// use tag only for dest, but pull by digest
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
-
 				src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
 				dest = dest + ":" + imgSpec.Tag
-			} else {
+			default:
 				dest = dest + ":" + imgSpec.Tag
 			}
 

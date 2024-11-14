@@ -140,7 +140,7 @@ func TestImageBuilder(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = ex.BuildAndPush(ctx, u.Host+"/new-build:latest", lp, []string{"ls -la"}, graphLayer)
+		_, err = ex.BuildAndPush(ctx, u.Host+"/new-build:latest", lp, []string{"ls -la"}, graphLayer)
 		if err != nil {
 			t.Fatal(err)
 		}

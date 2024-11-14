@@ -193,11 +193,11 @@ func TestCreateGraphImage(t *testing.T) {
 
 }
 
-func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) error {
+func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) (string, error) {
 	if o.Fail {
-		return fmt.Errorf("forced error")
+		return "", fmt.Errorf("forced error")
 	}
-	return nil
+	return "sha256:12345", nil
 }
 
 func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef string, layoutDir string) (layout.Path, error) {

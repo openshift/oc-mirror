@@ -131,7 +131,6 @@ type ExecutorSchema struct {
 	MaxParallelOverallDownloads  uint
 	ParallelLayers               uint
 	ParallelBatchImages          uint
-	alphaCtlgFilter              bool
 }
 
 type MakeDirInterface interface {
@@ -236,7 +235,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 600*time.Second, "Timeout for mirroring an image. Defaults to 10mn")
 	cmd.Flags().UintVar(&ex.ParallelLayers, "parallel-layers", 0, "Indicates the maximum layers downloading in parallel for an image. Defaults to 10")
 	cmd.Flags().UintVar(&ex.ParallelBatchImages, "parallel-batch-images", 0, "Indicates the maximum images downloading in parallel for a batch. Defaults to 8")
-	cmd.Flags().BoolVar(&ex.alphaCtlgFilter, "alpha-ctlg-filter", false, "Enables rebuilding of catalogs when set to true")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -283,7 +281,6 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.Flags().MarkHidden("src-username")
 	cmd.Flags().MarkHidden("parallel-layers")
 	cmd.Flags().MarkHidden("parallel-batch-images")
-	cmd.Flags().MarkHidden("alpha-ctlg-filter")
 }
 
 // Validate - cobra validation
@@ -434,15 +431,11 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
-	o.CatalogBuilder = imagebuilder.NewCatalogBuilder(o.Log, *o.Opts)
+	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	if !o.alphaCtlgFilter {
-		o.Operator = operator.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
-	} else {
-		o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
-	}
+	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
@@ -1041,7 +1034,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	// CLID-230 rebuild-catalogs
 	oImgs := operatorImgs.AllImages
-	if o.alphaCtlgFilter && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 		for _, copyImage := range oImgs {
 			if copyImage.Type == v2alpha1.TypeOperatorCatalog && copyImage.RebuiltTag == "" {
 				ref, err := image.ParseRef(copyImage.Origin)
@@ -1049,7 +1042,15 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
-				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, operatorImgs.CatalogToFBCMap[ref.Reference].FilteredConfigPath)
+				//first try to get the filteredConfigPath (path to the filtered DeclarativeConfig) from reference (without transport): case of catalog on remote registry
+				filteredConfigPath := ""
+				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.Reference]
+				if !ok {
+					filteredConfigPath = operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport].FilteredConfigPath
+				} else {
+					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
+				}
+				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
 				if err != nil {
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)

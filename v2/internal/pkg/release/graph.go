@@ -53,7 +53,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 
 	// update a ubi9 image with this new graphLayer and new cmd
 	graphImageRef := filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
-	err = o.ImageBuilder.BuildAndPush(ctx, graphImageRef, layoutPath, cmd, graphLayer)
+	_, err = o.ImageBuilder.BuildAndPush(ctx, graphImageRef, layoutPath, cmd, graphLayer)
 	if err != nil {
 		return "", err
 	}
