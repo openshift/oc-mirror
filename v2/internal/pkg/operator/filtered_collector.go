@@ -38,6 +38,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		label           string
 		catalogImageDir string
 		catalogName     string
+		rebuiltTag      string
 	)
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting operator images", o.Opts.MultiArch)
 
@@ -103,8 +104,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		if err != nil {
 			return v2alpha1.CollectorSchema{}, err
 		}
-
-		rebuiltTag := ""
+		rebuiltTag = filterDigest
 		var srcFilteredCatalog string
 		filterPath := filepath.Join(filteredCatalogsDir, filterDigest, "digest")
 		filteredImageDigest, err := os.ReadFile(filterPath)
@@ -135,7 +135,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				catalogImage = op.Catalog
 			}
 			catalogDigest = string(filteredImageDigest)
-			rebuiltTag = filterDigest
+
 		} else {
 			if imgSpec.Transport == ociProtocol {
 				if _, err := os.Stat(catalogImageDir); errors.Is(err, os.ErrNotExist) { //TODO ALEX CHECK IF THIS IS CORRECT AND FIX
@@ -264,6 +264,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			}
 
 			if !isFullCatalog(op) {
+
 				var filteredDigestPath string
 				var filterDigest string
 
@@ -300,9 +301,10 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 					OperatorFilter:     op,
 					FilteredConfigPath: filteredDigestPath,
 				}
-				collectorSchema.CatalogToFBCMap[op.Catalog] = result
+				collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 
 			} else {
+				rebuiltTag = ""
 				filteredDC = originalDC
 			}
 		}
@@ -356,15 +358,20 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 	o.Log.Debug(collectorPrefix+"images to copy (before duplicates) %d ", count)
 	var err error
 	// check the mode
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
+	switch {
+	case o.Opts.IsMirrorToDisk():
 		allImages, err = o.prepareM2DCopyBatch(relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return v2alpha1.CollectorSchema{}, err
 		}
-	}
-
-	if o.Opts.IsDiskToMirror() {
+	case o.Opts.IsMirrorToMirror():
+		allImages, err = o.dispatchImagesForM2M(relatedImages)
+		if err != nil {
+			o.Log.Error(errMsg, err.Error())
+			return v2alpha1.CollectorSchema{}, err
+		}
+	case o.Opts.IsDiskToMirror():
 		allImages, err = o.prepareD2MCopyBatch(relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())

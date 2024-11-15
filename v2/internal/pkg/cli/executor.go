@@ -1036,29 +1036,29 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	oImgs := operatorImgs.AllImages
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 		for _, copyImage := range oImgs {
-			if copyImage.Type == v2alpha1.TypeOperatorCatalog && copyImage.RebuiltTag == "" {
+			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
+				if o.Opts.IsMirrorToMirror() && strings.Contains(copyImage.Source, o.Opts.LocalStorageFQDN) {
+					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
+					continue
+				}
 				ref, err := image.ParseRef(copyImage.Origin)
 				if err != nil {
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
-				//first try to get the filteredConfigPath (path to the filtered DeclarativeConfig) from reference (without transport): case of catalog on remote registry
 				filteredConfigPath := ""
-				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.Reference]
-				if !ok {
-					filteredConfigPath = operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport].FilteredConfigPath
-				} else {
+				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport]
+				if ok {
 					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
+				} else {
+					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)
 				}
-				filteredCopyImage, err := o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
+				_, err = o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
 				if err != nil {
 					o.closeAll()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
 
-				if o.Opts.IsMirrorToMirror() {
-					oImgs = append(oImgs, filteredCopyImage)
-				}
 			}
 		}
 	}

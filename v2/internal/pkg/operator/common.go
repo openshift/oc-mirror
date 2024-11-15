@@ -41,6 +41,10 @@ func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
 	return len(oci.Manifests) > 1
 }
 
+// cachedCatalog returns the reference to the filtered catalog in the local oc-mirror cache
+// The filtered cached catalog reference is computed from:
+// * `catalog` (`v2alpha1.Operator`): the reference to the catalog in the imageSetConfig along with targetCatalog and targetTag if set
+// * the `filteredTag`: which is the expected tag to be used for the filtered catalog.
 func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag string) (string, error) {
 	var src string
 	srcImgSpec, err := image.ParseRef(catalog.Catalog)
@@ -63,6 +67,8 @@ func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag 
 	return src, nil
 }
 
+// catalogDigest: method used during diskToMirror in order to discover the catalog's digest from a reference by tag.
+// It queries the cache registry instead of the registry set in the `catalog` reference
 func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.Operator) (string, error) {
 	var src string
 
@@ -257,4 +263,214 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 		}
 	}
 	return result, nil
+}
+
+func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	var result []v2alpha1.CopyImageSchema
+	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
+	for _, relatedImgs := range images {
+		for _, img := range relatedImgs {
+			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+				continue
+			}
+			var copies []v2alpha1.CopyImageSchema
+			var err error
+			switch img.Type {
+			case v2alpha1.TypeOperatorCatalog:
+				dispatcher := CatalogImageDispatcher{
+					log:                 o.Log,
+					cacheRegistry:       dockerProtocol + o.LocalStorageFQDN,
+					destinationRegistry: o.Opts.Destination,
+				}
+				copies, err = dispatcher.dispatch(img)
+				if err != nil {
+					// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+					o.Log.Warn("%v : SKIPPING", err)
+					continue
+				}
+			default:
+				dispatcher := OtherImageDispatcher{
+					log:                 o.Log,
+					cacheRegistry:       dockerProtocol + o.LocalStorageFQDN,
+					destinationRegistry: o.Opts.Destination,
+				}
+				copies, err = dispatcher.dispatch(img)
+				if err != nil {
+					// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+					o.Log.Warn("%v : SKIPPING", err)
+					continue
+				}
+			}
+
+			if _, found := alreadyIncluded[img.Image]; !found {
+				result = append(result, copies...)
+				alreadyIncluded[img.Image] = struct{}{}
+			}
+		}
+	}
+	return result, nil
+
+}
+
+type OtherImageDispatcher struct {
+	imageDispatcher
+	log                 clog.PluggableLoggerInterface
+	destinationRegistry string
+	cacheRegistry       string
+}
+
+func (d OtherImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	var src, dest string
+	copies := []v2alpha1.CopyImageSchema{}
+	imgSpec, err := image.ParseRef(img.Image)
+	if err != nil {
+		return copies, err
+	}
+
+	src = imgSpec.ReferenceWithTransport
+	dest = strings.Join([]string{d.destinationRegistry, imgSpec.PathComponent}, "/")
+	switch {
+	case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
+		dest = dest + ":latest"
+	case imgSpec.IsImageByDigestOnly():
+		dest = dest + ":" + imgSpec.Digest
+	case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+		// use tag only for dest, but pull by digest
+		d.log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
+		src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
+		dest = dest + ":" + imgSpec.Tag
+	default:
+		dest = dest + ":" + imgSpec.Tag
+	}
+	copies = append(copies, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type})
+	return copies, nil
+}
+
+type CatalogImageDispatcher struct {
+	imageDispatcher
+	log                 clog.PluggableLoggerInterface
+	destinationRegistry string
+	cacheRegistry       string
+}
+
+func (d CatalogImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	imgSpec, err := image.ParseRef(img.Image)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	var toCacheImage, fromRebuiltImage, toDestImage string
+	toCacheImage = saveCtlgToCacheRef(imgSpec, img, d.cacheRegistry)
+	fromRebuiltImage = rebuiltCtlgRef(imgSpec, img, d.cacheRegistry)
+	toDestImage = destCtlgRef(imgSpec, img, d.destinationRegistry)
+	cacheCopy := v2alpha1.CopyImageSchema{
+		Source:      imgSpec.ReferenceWithTransport,
+		Destination: toCacheImage,
+		Origin:      imgSpec.ReferenceWithTransport,
+		RebuiltTag:  img.RebuiltTag,
+		Type:        img.Type,
+	}
+	destCopy := v2alpha1.CopyImageSchema{
+		Source:      fromRebuiltImage,
+		Destination: toDestImage,
+		Origin:      imgSpec.ReferenceWithTransport,
+		RebuiltTag:  img.RebuiltTag,
+		Type:        img.Type,
+	}
+
+	return []v2alpha1.CopyImageSchema{cacheCopy, destCopy}, nil
+}
+
+// used by CatalogImageDispatcher.dispatch()
+func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegistry string) string {
+	var saveCtlgDest string
+	switch {
+	case len(img.TargetCatalog) > 0:
+		saveCtlgDest = strings.Join([]string{cacheRegistry, img.TargetCatalog}, "/")
+	case spec.Transport == ociProtocol:
+		saveCtlgDest = strings.Join([]string{cacheRegistry, img.Name}, "/")
+	default:
+		saveCtlgDest = strings.Join([]string{cacheRegistry, spec.PathComponent}, "/")
+	}
+
+	// add the tag for src and dest
+	switch {
+	case len(img.TargetTag) > 0:
+		saveCtlgDest = saveCtlgDest + ":" + img.TargetTag
+	case spec.Tag == "" && spec.Transport == ociProtocol:
+		saveCtlgDest = saveCtlgDest + ":latest"
+	case spec.IsImageByDigestOnly():
+		saveCtlgDest = saveCtlgDest + ":" + spec.Digest
+	case spec.IsImageByTagAndDigest():
+		saveCtlgDest = saveCtlgDest + ":" + spec.Tag
+	default:
+		saveCtlgDest = saveCtlgDest + ":" + spec.Tag
+	}
+	return saveCtlgDest
+}
+
+// used by CatalogImageDispatcher.dispatch()
+func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegistry string) string {
+	var rebuiltCtlgSrc string
+	switch {
+	// applies only to catalogs
+	case len(img.TargetCatalog) > 0:
+		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, img.TargetCatalog}, "/")
+	case spec.Transport == ociProtocol:
+		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, img.Name}, "/")
+	default:
+		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, spec.PathComponent}, "/")
+	}
+
+	// add the tag for src and dest
+	switch {
+	// applies only to catalogs
+	case img.RebuiltTag != "":
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.RebuiltTag
+	case len(img.TargetTag) > 0:
+	case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.TargetTag
+	case spec.Tag == "" && spec.Transport == ociProtocol:
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":latest"
+	case spec.IsImageByDigestOnly():
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Digest
+	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+		// use tag only for dest, but pull by digest
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Tag
+	default:
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Tag
+	}
+	return rebuiltCtlgSrc
+}
+
+// used by CatalogImageDispatcher.dispatch()
+func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationRegistry string) string {
+	var dest string
+	switch {
+	// applies only to catalogs
+	case len(img.TargetCatalog) > 0:
+		dest = strings.Join([]string{destinationRegistry, img.TargetCatalog}, "/")
+	case spec.Transport == ociProtocol:
+		dest = strings.Join([]string{destinationRegistry, img.Name}, "/")
+	default:
+		dest = strings.Join([]string{destinationRegistry, spec.PathComponent}, "/")
+	}
+
+	// add the tag for src and dest
+	switch {
+	// applies only to catalogs
+
+	case len(img.TargetTag) > 0:
+		dest = dest + ":" + img.TargetTag
+	case spec.Tag == "" && spec.Transport == ociProtocol:
+		dest = dest + ":latest"
+	case spec.IsImageByDigestOnly():
+		dest = dest + ":" + spec.Digest
+	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+		// use tag only for dest, but pull by digest
+		dest = dest + ":" + spec.Tag
+	default:
+		dest = dest + ":" + spec.Tag
+
+	}
+	return dest
 }
