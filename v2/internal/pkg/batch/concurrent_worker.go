@@ -3,7 +3,6 @@ package batch
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 )
@@ -82,11 +82,11 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 			imgOverallIndex++
 			counterText := fmt.Sprintf("%d/%d : (", imgOverallIndex, total)
 			spinner := p.AddSpinner(
-				1, mpb.BarFillerMiddleware(positionSpinnerLeft),
+				1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
 				mpb.BarWidth(3),
 				mpb.PrependDecorators(
-					decor.OnComplete(emptyDecorator(), "\x1b[1;92m ✓ \x1b[0m"),
-					decor.OnAbort(emptyDecorator(), "\x1b[1;91m ✗ \x1b[0m"),
+					decor.OnComplete(spinners.EmptyDecorator(), "\x1b[1;92m ✓ \x1b[0m"),
+					decor.OnAbort(spinners.EmptyDecorator(), "\x1b[1;91m ✗ \x1b[0m"),
 				),
 				mpb.AppendDecorators(
 					decor.Name(counterText),
@@ -94,7 +94,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					decor.Name(") "+img.Origin+" "),
 				),
 				mpb.BarFillerClearOnComplete(),
-				barFillerClearOnAbort(),
+				spinners.BarFillerClearOnAbort(),
 			)
 			wg.Go(func() error {
 				mu.Lock()
@@ -264,28 +264,6 @@ func splitImagesToBatches(images v2alpha1.CollectorSchema, maxBatchSize int) []B
 		}
 		return batches
 	}
-}
-
-func positionSpinnerLeft(original mpb.BarFiller) mpb.BarFiller {
-	return mpb.SpinnerStyle("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", " ").PositionLeft().Build()
-}
-
-func emptyDecorator() decor.Decorator {
-	return decor.Any(func(s decor.Statistics) string {
-		return ""
-	})
-}
-
-func barFillerClearOnAbort() mpb.BarOption {
-	return mpb.BarFillerMiddleware(func(base mpb.BarFiller) mpb.BarFiller {
-		return mpb.BarFillerFunc(func(w io.Writer, st decor.Statistics) error {
-			if st.Aborted {
-				_, err := io.WriteString(w, "")
-				return err
-			}
-			return base.Fill(w, st)
-		})
-	})
 }
 
 // shouldSkipImage helps determine whether the batch should perform the mirroring of the image

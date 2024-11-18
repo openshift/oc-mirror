@@ -25,6 +25,8 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -41,6 +43,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -1095,8 +1098,25 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
 					continue
 				}
+				p := mpb.New()
+				spinner := p.AddSpinner(
+					1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
+					mpb.BarWidth(3),
+					mpb.PrependDecorators(
+						decor.OnComplete(spinners.EmptyDecorator(), "\x1b[1;92m ✓ \x1b[0m"),
+						decor.OnAbort(spinners.EmptyDecorator(), "\x1b[1;91m ✗ \x1b[0m"),
+					),
+					mpb.AppendDecorators(
+						decor.Name("("),
+						decor.Elapsed(decor.ET_STYLE_GO),
+						decor.Name(") Rebuilding catalog "+copyImage.Origin+" "),
+					),
+					mpb.BarFillerClearOnComplete(),
+					spinners.BarFillerClearOnAbort(),
+				)
 				ref, err := image.ParseRef(copyImage.Origin)
 				if err != nil {
+					spinner.Abort(false)
 					o.closeAll()
 					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
@@ -1105,13 +1125,17 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 				if ok {
 					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
 				} else {
+					spinner.Abort(false)
 					return fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)
 				}
 				err = o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
 				if err != nil {
+					spinner.Abort(false)
 					o.closeAll()
 					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
+				spinner.Increment()
+				p.Wait()
 			}
 		}
 	}
