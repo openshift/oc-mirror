@@ -18,3 +18,7 @@ type catalogHandlerInterface interface {
 	filterRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
 	getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
 }
+
+type imageDispatcher interface {
+	dispatch(image v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error)
+}

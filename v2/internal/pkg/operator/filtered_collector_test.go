@@ -17,6 +17,69 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 )
 
+var (
+	nominalConfigM2M = v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
+					{
+						Catalog: "registry.redhat.io/redhat/community-operator-index:v4.18",
+						Full:    true,
+					},
+					{
+						Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+						TargetCatalog: "redhat/redhat-filtered-index",
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
+								{Name: "op1"},
+							},
+						},
+					},
+					{
+						Catalog:       "registry.redhat.io/redhat/certified-operators:v4.17",
+						Full:          true,
+						TargetCatalog: "redhat/certified-operators-pinned",
+						TargetTag:     "v4.17.0-20241114",
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
+								{Name: "op1"},
+							},
+						},
+					},
+					{
+						Catalog: "oci://" + common.TestFolder + "catalog-on-disk1",
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
+								{Name: "op1"},
+							},
+						},
+					},
+					{
+						Catalog:       "oci://" + common.TestFolder + "catalog-on-disk2",
+						Full:          true,
+						TargetCatalog: "coffee-shop-index",
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
+								{Name: "op1"},
+							},
+						},
+					},
+					{
+						Catalog:       "oci://" + common.TestFolder + "catalog-on-disk3",
+						TargetCatalog: "tea-shop-index",
+						TargetTag:     "v3.14",
+						IncludeConfig: v2alpha1.IncludeConfig{
+							Packages: []v2alpha1.IncludePackage{
+								{Name: "op1"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+)
+
 func TestFilterCollectorM2D(t *testing.T) {
 	log := clog.New("trace")
 
@@ -67,18 +130,21 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/certified-operators:v4.7",
 					Origin:      "docker://certified-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "442c7ba64d56a85eea155325aa0c6537",
 				},
 				{
 					Source:      "docker://community-operators:v4.7",
 					Destination: "docker://localhost:9999/community-operators:v4.7",
 					Origin:      "docker://community-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "4dab2467f35b4d9c9ba7c2a7823de8bd",
 				},
 				{
 					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Destination: "docker://localhost:9999/simple-test-bundle:latest",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
 				},
 			},
 		},
@@ -110,6 +176,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/simple-test-bundle:v4.14",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
 				},
 			},
 		},
@@ -147,6 +214,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/test-catalog:v4.14",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
 				},
 			},
 		},
@@ -178,6 +246,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/test-namespace/test-catalog:v2.0",
 					Origin:      "docker://certified-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "442c7ba64d56a85eea155325aa0c6537",
 				},
 			},
 		},
@@ -252,16 +321,18 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/simple-test-bundle:latest",
+					Source:      "docker://localhost:9999/simple-test-bundle:9fadc6c70adb4b2571f66f674a876279",
 					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
 				},
 				{
-					Source:      "docker://localhost:9999/redhat/redhat-operator-index:v4.14",
+					Source:      "docker://localhost:9999/redhat/redhat-operator-index:6566d78129230a2e107cb5aafcb7787b",
 					Destination: "docker://localhost:5000/test/redhat/redhat-operator-index:v4.14",
 					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.14",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "6566d78129230a2e107cb5aafcb7787b",
 				},
 			},
 		},
@@ -294,10 +365,11 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/test-catalog:v4.14",
+					Source:      "docker://localhost:9999/test-catalog:9fadc6c70adb4b2571f66f674a876279",
 					Destination: "docker://localhost:5000/test/test-catalog:v4.14",
 					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
 				},
 			},
 		},
@@ -337,15 +409,15 @@ func TestFilterCollectorM2M(t *testing.T) {
 	os.RemoveAll(common.TestFolder + "tmp/")
 
 	//copy tests/hold-test-fake to working-dir
-	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
+	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat/redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
 	if err != nil {
 		t.Fatalf("should not fail")
 	}
 
 	testCases := []testCase{
 		{
-			caseName:      "OperatorImageCollector - Mirror to disk: should pass",
-			config:        nominalConfigM2D,
+			caseName:      "OperatorImageCollector - Mirror to Mirror: should pass",
+			config:        nominalConfigM2M,
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
@@ -367,52 +439,87 @@ func TestFilterCollectorM2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://redhat-operators:v4.7",
-					Destination: "docker://localhost:5000/test/redhat-operators:v4.7",
-					Origin:      "docker://redhat-operators:v4.7",
+					Source:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
+					Destination: "docker://localhost:9999/redhat/community-operator-index:v4.18",
+					Origin:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://certified-operators:v4.7",
-					Destination: "docker://localhost:5000/test/certified-operators:v4.7",
-					Origin:      "docker://certified-operators:v4.7",
+					Source:      "docker://localhost:9999/redhat/community-operator-index:v4.18",
+					Destination: "docker://localhost:5000/test/redhat/community-operator-index:v4.18",
+					Origin:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://community-operators:v4.7",
-					Destination: "docker://localhost:5000/test/community-operators:v4.7",
-					Origin:      "docker://community-operators:v4.7",
+					Source:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					Destination: "docker://localhost:9999/redhat/redhat-filtered-index:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "08a5610c0e6f72fd34b1c76d30788c66",
 				},
 				{
-					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
-					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
-					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Source:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
+					Destination: "docker://localhost:9999/redhat/certified-operators-pinned:v4.17.0-20241114",
+					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "65af60f894902a1758a30ae262c0e39e",
 				},
 				{
-					Source:      "docker://redhat-operators:v4.7",
-					Destination: "docker://localhost:9999/redhat-operators:v4.7",
-					Origin:      "docker://redhat-operators:v4.7",
+					Source:      "oci://" + common.TestFolder + "catalog-on-disk1",
+					Destination: "docker://localhost:9999/catalog-on-disk1:latest",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk1",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "fc2e113a1d6f0dbe89bd2bc5c83886e3",
 				},
 				{
-					Source:      "docker://certified-operators:v4.7",
-					Destination: "docker://localhost:9999/certified-operators:v4.7",
-					Origin:      "docker://certified-operators:v4.7",
+					Source:      "oci://" + common.TestFolder + "catalog-on-disk2",
+					Destination: "docker://localhost:9999/coffee-shop-index:latest",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk2",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "421035ded2cb0e83f50ee6445b1466a5",
 				},
 				{
-					Source:      "docker://community-operators:v4.7",
-					Destination: "docker://localhost:9999/community-operators:v4.7",
-					Origin:      "docker://community-operators:v4.7",
+					Source:      "oci://" + common.TestFolder + "catalog-on-disk3",
+					Destination: "docker://localhost:9999/tea-shop-index:v3.14",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk3",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "d81a7ad49cabfc8aa050edaf56f25a3f",
+				},
+
+				{
+					Source:      "docker://localhost:9999/redhat/redhat-filtered-index:08a5610c0e6f72fd34b1c76d30788c66",
+					Destination: "docker://localhost:5000/test/redhat/redhat-filtered-index:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "08a5610c0e6f72fd34b1c76d30788c66",
 				},
 				{
-					Source:      "oci://" + common.TestFolder + "simple-test-bundle",
-					Destination: "docker://localhost:9999/simple-test-bundle:latest",
-					Origin:      "oci://" + common.TestFolder + "simple-test-bundle",
+					Source:      "docker://localhost:9999/redhat/certified-operators-pinned:65af60f894902a1758a30ae262c0e39e",
+					Destination: "docker://localhost:5000/test/redhat/certified-operators-pinned:v4.17.0-20241114",
+					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "65af60f894902a1758a30ae262c0e39e",
+				},
+				{
+					Source:      "docker://localhost:9999/catalog-on-disk1:fc2e113a1d6f0dbe89bd2bc5c83886e3",
+					Destination: "docker://localhost:5000/test/catalog-on-disk1:latest",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk1",
+					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "fc2e113a1d6f0dbe89bd2bc5c83886e3",
+				},
+				{
+					Source:      "docker://localhost:9999/coffee-shop-index:421035ded2cb0e83f50ee6445b1466a5",
+					Destination: "docker://localhost:5000/test/coffee-shop-index:latest",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk2",
+					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "421035ded2cb0e83f50ee6445b1466a5",
+				},
+				{
+					Source:      "docker://localhost:9999/tea-shop-index:d81a7ad49cabfc8aa050edaf56f25a3f",
+					Destination: "docker://localhost:5000/test/tea-shop-index:v3.14",
+					Origin:      "oci://" + common.TestFolder + "catalog-on-disk3",
+					Type:        v2alpha1.TypeOperatorCatalog,
+					RebuiltTag:  "d81a7ad49cabfc8aa050edaf56f25a3f",
 				},
 			},
 		},
