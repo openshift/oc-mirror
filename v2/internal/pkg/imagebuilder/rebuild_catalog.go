@@ -50,7 +50,7 @@ func NewCatalogBuildah(logger log.PluggableLoggerInterface, opts mirror.CopyOpti
 // RebuildCatalogs - uses buildah library that reads a containerfile and builds mult-arch manifestlist
 // NB - due to the unshare (reexec) for buildah no unit tests have been implemented
 // The final goal is to implement integration tests for this functionality
-func (o CatalogBuildah) RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error) {
+func (o CatalogBuildah) RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) error {
 
 	containerTemplate := `
 FROM {{ .Catalog }} AS builder
@@ -66,14 +66,14 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 	contents := bytes.NewBufferString("")
 	tmpl, err := template.New("Containerfile").Parse(containerTemplate)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	err = tmpl.Execute(contents, map[string]interface{}{
 		"Catalog": catalogCopyRefs.Origin,
 	})
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	// write the Containerfile content to a file
@@ -81,14 +81,14 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	err = os.WriteFile(containerfilePath, contents.Bytes(), 0755)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	var srcCache string
 
 	destRef, err := image.ParseRef(catalogCopyRefs.Destination)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	switch o.CopyOpts.Mode {
@@ -98,7 +98,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		srcCache = strings.Replace(catalogCopyRefs.Destination, o.CopyOpts.Destination, dockerProtocol+o.CopyOpts.LocalStorageFQDN, 1)
 		destRef, err := image.ParseRef(srcCache)
 		if err != nil {
-			return catalogCopyRefs, err
+			return err
 		}
 		srcCache = destRef.SetTag(filepath.Base(filteredDir)).ReferenceWithTransport
 		o.CopyOpts.DestImage.TlsVerify = false
@@ -111,7 +111,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	srcSysCtx, err := o.CopyOpts.SrcImage.NewSystemContext()
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	file, err := createErrorLog(filteredDir)
@@ -122,14 +122,14 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	buildOptions, err := getStandardBuildOptions(updatedDest, srcSysCtx, file)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	o.Logger.Trace("containerfile %s", contents.String())
 
 	buildStoreOptions, err := storage.DefaultStoreOptions()
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	if len(o.CopyOpts.RootlessStoragePath) > 0 {
@@ -138,7 +138,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	buildStore, err := storage.GetStore(buildStoreOptions)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 	defer buildStore.Shutdown(false)
 
@@ -153,14 +153,14 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		o.Logger.Debug("  image reference  : %s", ref.String())
 	}
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	retries := uint(3)
 
 	destSysContext, err := o.CopyOpts.DestImage.NewSystemContext()
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 	manifestPushOptions := manifests.PushOptions{
 		Store:              buildStore,
@@ -173,12 +173,12 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	destImageRef, err := alltransports.ParseImageName(srcCache)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	_, list, err := manifests.LoadFromImage(buildStore, id)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	o.Logger.Debug("local cache destination (rebuilt-catalog) %s", srcCache)
@@ -187,19 +187,19 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 	// push the manifest list to local cache
 	_, digest, err := list.Push(ctx, destImageRef, manifestPushOptions)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	digestOnly := digest.Encoded()
 
 	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digestOnly), 0755)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	_, err = buildStore.DeleteImage(id, true)
 	if err != nil {
-		return catalogCopyRefs, err
+		return err
 	}
 
 	o.Logger.Info("✅ successfully pushed catalog manifest list")
@@ -216,7 +216,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 	}
 
 	o.Logger.Info("✅ completed rebuild catalog %s", catalogCopyRefs.Origin)
-	return catalogCopyRefs, nil
+	return nil
 }
 
 func getStandardBuildOptions(destination string, sysCtx *types.SystemContext, rebuildErrLog *os.File) (define.BuildOptions, error) {

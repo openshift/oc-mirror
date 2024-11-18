@@ -742,6 +742,10 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
+		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
+		if err != nil {
+			return err
+		}
 		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
 		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
@@ -809,6 +813,10 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		}
 	}
 	if !o.Opts.IsDryRun {
+		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
+		if err != nil {
+			return err
+		}
 		var copiedSchema v2alpha1.CollectorSchema
 		//call the batch worker
 		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
@@ -1031,44 +1039,14 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
-
-	// CLID-230 rebuild-catalogs
 	oImgs := operatorImgs.AllImages
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
-		for _, copyImage := range oImgs {
-			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
-				if o.Opts.IsMirrorToMirror() && strings.Contains(copyImage.Source, o.Opts.LocalStorageFQDN) {
-					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
-					continue
-				}
-				ref, err := image.ParseRef(copyImage.Origin)
-				if err != nil {
-					o.closeAll()
-					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
-				}
-				filteredConfigPath := ""
-				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport]
-				if ok {
-					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
-				} else {
-					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)
-				}
-				_, err = o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
-				if err != nil {
-					o.closeAll()
-					return v2alpha1.CollectorSchema{}, fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
-				}
-
-			}
-		}
-	}
-
 	// exclude blocked images
 	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
 	collectorSchema.TotalOperatorImages = len(oImgs)
 	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 	allRelatedImages = append(allRelatedImages, oImgs...)
 	collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
+	collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 
 	o.Log.Info("🔍 collecting additional images...")
 	// collect additionalImages
@@ -1102,6 +1080,43 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Debug("collection time     : %v", execTime)
 
 	return collectorSchema, nil
+}
+
+func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alpha1.CollectorSchema) error {
+	// CLID-230 rebuild-catalogs
+	oImgs := operatorImgs.AllImages
+	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
+		o.Log.Info("🔂 rebuilding catalogs")
+
+		for _, copyImage := range oImgs {
+
+			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
+				if o.Opts.IsMirrorToMirror() && strings.Contains(copyImage.Source, o.Opts.LocalStorageFQDN) {
+					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
+					continue
+				}
+				ref, err := image.ParseRef(copyImage.Origin)
+				if err != nil {
+					o.closeAll()
+					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
+				}
+				filteredConfigPath := ""
+				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport]
+				if ok {
+					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
+				} else {
+					return fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)
+				}
+				err = o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
+				if err != nil {
+					o.closeAll()
+					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
+				}
+			}
+		}
+	}
+	return nil
+
 }
 
 // closeAll - utility to close any open files
