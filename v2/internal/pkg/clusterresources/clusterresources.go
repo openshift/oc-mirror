@@ -249,6 +249,8 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
 	catalogRepository := pathComponents[len(pathComponents)-1]
 	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
+	// maybe needs some updating (i.e other unwanted characters !@# etc )
+	catalogSourceName = strings.Replace(catalogSourceName, ".", "-", -1)
 	errs := validation.IsDNS1035Label(catalogSourceName)
 	if len(errs) != 0 && !isValidRFC1123(catalogSourceName) {
 		return fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))

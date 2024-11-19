@@ -130,6 +130,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				catalogName = path.Base(imgSpec.Reference)
 			}
 			if imgSpec.Transport == ociProtocol {
+				catalogImageDir, err := filepath.Abs(catalogImageDir)
+				if err != nil {
+					o.Log.Error(errMsg, err.Error())
+					return v2alpha1.CollectorSchema{}, err
+				}
+				// ensure correct oci format and directory lookup
 				catalogImage = ociProtocol + catalogImageDir
 			} else {
 				catalogImage = op.Catalog
@@ -138,7 +144,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 		} else {
 			if imgSpec.Transport == ociProtocol {
-				if _, err := os.Stat(catalogImageDir); errors.Is(err, os.ErrNotExist) { //TODO ALEX CHECK IF THIS IS CORRECT AND FIX
+				if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); errors.Is(err, os.ErrNotExist) {
 					// delete the existing directory and untarred cache contents
 					os.RemoveAll(catalogImageDir)
 					os.RemoveAll(configsDir)

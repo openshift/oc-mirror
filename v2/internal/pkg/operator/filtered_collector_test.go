@@ -414,6 +414,26 @@ func TestFilterCollectorM2M(t *testing.T) {
 		t.Fatalf("should not fail")
 	}
 
+	os.MkdirAll(common.TestFolder+"/catalog-on-disk1", 0755)
+	os.MkdirAll(common.TestFolder+"/catalog-on-disk2", 0755)
+	os.MkdirAll(common.TestFolder+"/catalog-on-disk3", 0755)
+	//copy tests/hold-test-fake to working-dir
+	err = copy.Copy(common.TestFolder+"/oci-image", common.TestFolder+"/catalog-on-disk1")
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+	err = copy.Copy(common.TestFolder+"/oci-image", common.TestFolder+"/catalog-on-disk2")
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+	err = copy.Copy(common.TestFolder+"/oci-image", common.TestFolder+"/catalog-on-disk3")
+	if err != nil {
+		t.Fatalf("should not fail")
+	}
+	defer os.RemoveAll(common.TestFolder + "/catalog-on-disk1")
+	defer os.RemoveAll(common.TestFolder + "/catalog-on-disk2")
+	defer os.RemoveAll(common.TestFolder + "/catalog-on-disk3")
+
 	testCases := []testCase{
 		{
 			caseName:      "OperatorImageCollector - Mirror to Mirror: should pass",
