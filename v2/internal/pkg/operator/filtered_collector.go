@@ -141,6 +141,14 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				catalogImage = op.Catalog
 			}
 			catalogDigest = string(filteredImageDigest)
+			if collectorSchema.CatalogToFBCMap == nil {
+				collectorSchema.CatalogToFBCMap = make(map[string]v2alpha1.CatalogFilterResult)
+			}
+			result := v2alpha1.CatalogFilterResult{
+				OperatorFilter:     op,
+				FilteredConfigPath: filterConfigDir,
+			}
+			collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 
 		} else {
 			if imgSpec.Transport == ociProtocol {
