@@ -81,6 +81,10 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 		for _, img := range batch.Images.AllImages {
 			imgOverallIndex++
 			counterText := fmt.Sprintf("%d/%d : (", imgOverallIndex, total)
+			imageText := ") " + img.Origin + " "
+			if strings.Contains(img.Destination, opts.LocalStorageFQDN) {
+				imageText += "► cache "
+			}
 			spinner := p.AddSpinner(
 				1, mpb.BarFillerMiddleware(positionSpinnerLeft),
 				mpb.BarWidth(3),
@@ -91,7 +95,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 				mpb.AppendDecorators(
 					decor.Name(counterText),
 					decor.Elapsed(decor.ET_STYLE_GO),
-					decor.Name(") "+img.Origin+" "),
+					decor.Name(imageText),
 				),
 				mpb.BarFillerClearOnComplete(),
 				barFillerClearOnAbort(),
