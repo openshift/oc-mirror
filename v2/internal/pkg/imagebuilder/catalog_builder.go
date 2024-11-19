@@ -36,6 +36,7 @@ const (
 
 type GCRCatalogBuilder struct {
 	CatalogBuilderInterface
+	Logger     log.PluggableLoggerInterface
 	imgBuilder ImageBuilderInterface
 	CopyOpts   mirror.CopyOptions
 }
@@ -43,28 +44,29 @@ type GCRCatalogBuilder struct {
 func NewGCRCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
 	builder := NewBuilder(logger, opts)
 	return &GCRCatalogBuilder{
+		Logger:     logger,
 		imgBuilder: builder,
 		CopyOpts:   opts,
 	}
 }
 
-func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error) {
+func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2alpha1.CopyImageSchema, configPath string) error {
 	layersToAdd := []v1.Layer{}
 	layersToDelete := []v1.Layer{}
 
 	_, err := os.Stat(configPath)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error reading filtered config for catalog %s from %s: %v", catalogCopyRef.Origin, configPath, err)
+		return fmt.Errorf("error reading filtered config for catalog %s from %s: %v", catalogCopyRef.Origin, configPath, err)
 	}
 
 	originCatalogLayoutDir, err := catalogImageOnDisk(configPath)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error initializing a container image for catalog %s from %s: %v", catalogCopyRef.Origin, originCatalogLayoutDir, err)
+		return fmt.Errorf("error initializing a container image for catalog %s from %s: %v", catalogCopyRef.Origin, originCatalogLayoutDir, err)
 	}
 
 	configLayerToAdd, err := LayerFromPathWithUidGid("/configs", configPath, 0, 0)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error creating add layer: %v", err)
+		return fmt.Errorf("error creating add layer: %v", err)
 	}
 	layersToAdd = append(layersToAdd, configLayerToAdd)
 
@@ -72,7 +74,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	// remove anything that may currently exist
 	deletedConfigLayer, err := deleteLayer("/.wh.configs")
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error preparing to delete old /configs from catalog %s : %v", catalogCopyRef.Origin, err)
+		return fmt.Errorf("error preparing to delete old /configs from catalog %s : %v", catalogCopyRef.Origin, err)
 	}
 	layersToDelete = append(layersToDelete, deletedConfigLayer)
 
@@ -87,11 +89,11 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 
 	err = copy.Copy(originCatalogLayoutDir, layoutDir)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error creating OCI layout: %v", err)
+		return fmt.Errorf("error creating OCI layout: %v", err)
 	}
 	layoutPath, err := layout.FromPath(layoutDir)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error creating OCI layout: %v", err)
+		return fmt.Errorf("error creating OCI layout: %v", err)
 	}
 
 	configCMD := []string{"serve", "/configs"}
@@ -100,7 +102,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	filteredDir := filepath.Dir(configPath)
 	destRef, err := image.ParseRef(catalogCopyRef.Destination)
 	if err != nil {
-		return catalogCopyRef, err
+		return err
 	}
 
 	switch c.CopyOpts.Mode {
@@ -110,7 +112,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 		srcCache = strings.Replace(catalogCopyRef.Destination, c.CopyOpts.Destination, dockerProtocol+c.CopyOpts.LocalStorageFQDN, 1)
 		destRef, err := image.ParseRef(srcCache)
 		if err != nil {
-			return catalogCopyRef, err
+			return err
 		}
 		srcCache = destRef.SetTag(filepath.Base(filteredDir)).Reference
 		c.CopyOpts.DestImage.TlsVerify = false
@@ -120,13 +122,13 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	}
 	digest, err := c.imgBuilder.BuildAndPush(ctx, srcCache, layoutPath, configCMD, layers...)
 	if err != nil {
-		return catalogCopyRef, fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
+		return fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
 	}
 	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0755)
 	if err != nil {
-		return catalogCopyRef, err
+		return err
 	}
-	return catalogCopyRef, nil
+	return nil
 }
 
 // LayerFromPath will write the contents of the path(s) the target

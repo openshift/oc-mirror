@@ -15,5 +15,5 @@ type ImageBuilderInterface interface {
 }
 
 type CatalogBuilderInterface interface {
-	RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) (v2alpha1.CopyImageSchema, error)
+	RebuildCatalog(ctx context.Context, catalogCopyRefs v2alpha1.CopyImageSchema, configPath string) error
 }
