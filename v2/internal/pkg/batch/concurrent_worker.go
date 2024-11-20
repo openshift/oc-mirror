@@ -83,7 +83,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 			counterText := fmt.Sprintf("%d/%d : (", imgOverallIndex, total)
 			imageText := ") " + img.Origin + " "
 			if strings.Contains(img.Destination, opts.LocalStorageFQDN) {
-				imageText += "► cache "
+				imageText += "➡️  cache "
 			}
 			spinner := p.AddSpinner(
 				1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
