@@ -44,13 +44,14 @@ type MockChartDownloader struct{}
 type MockHttpClient struct{}
 
 type testCase struct {
-	caseName       string
-	mirrorMode     string
-	helmConfig     v2alpha1.Helm
-	localStorage   string
-	dest           string
-	expectedResult []v2alpha1.CopyImageSchema
-	expectedError  error
+	caseName           string
+	mirrorMode         string
+	helmConfig         v2alpha1.Helm
+	localStorage       string
+	dest               string
+	generateV1DestTags bool
+	expectedResult     []v2alpha1.CopyImageSchema
+	expectedError      error
 }
 
 func TestHelmImageCollector(t *testing.T) {
@@ -66,6 +67,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo-local", Path: filepath.Join(testChartsDataPath, "podinfo-5.0.0.tgz")},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -85,6 +87,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo", URL: "https://stefanprodan.github.io/podinfo", Charts: []v2alpha1.Chart{{Name: "podinfo", Version: "5.0.0"}}},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -104,6 +107,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "sbo", URL: "https://redhat-developer.github.io/service-binding-operator-helm-chart/"},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
@@ -177,6 +181,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo-local", Path: filepath.Join(testChartsDataPath, "podinfo-5.0.0.tgz")},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -196,6 +201,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo", URL: "https://stefanprodan.github.io/podinfo", Charts: []v2alpha1.Chart{{Name: "podinfo", Version: "5.0.0"}}},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -215,6 +221,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "sbo", URL: "https://redhat-developer.github.io/service-binding-operator-helm-chart/"},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
@@ -289,6 +296,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo-local", Path: filepath.Join(testChartsDataPath, "podinfo-5.0.0.tgz")},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://" + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
@@ -309,6 +317,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "podinfo", URL: "https://stefanprodan.github.io/podinfo", Charts: []v2alpha1.Chart{{Name: "podinfo", Version: "5.0.0"}}},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://" + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
@@ -329,6 +338,7 @@ func TestHelmImageCollector(t *testing.T) {
 					{Name: "sbo", URL: "https://redhat-developer.github.io/service-binding-operator-helm-chart/"},
 				},
 			},
+			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
@@ -393,6 +403,81 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			expectedError: nil,
 		},
+		{
+			caseName:     "repositories helm chart - charts not included - diskToMirror with generateV1Tags: should pass",
+			mirrorMode:   mirror.DiskToMirror,
+			localStorage: testLocalStorageFQDN,
+			dest:         testDest,
+			helmConfig: v2alpha1.Helm{
+				Repositories: []v2alpha1.Repository{
+					{Name: "sbo", URL: "https://redhat-developer.github.io/service-binding-operator-helm-chart/"},
+				},
+			},
+			generateV1DestTags: true,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
 	}
 
 	tempDir := t.TempDir()
@@ -420,7 +505,9 @@ func TestHelmImageCollector(t *testing.T) {
 			mockHttpClient := MockHttpClient{}
 
 			helmCollector := New(log, cfg, opts, mockIndexDownloader, mockChartDownloader, mockHttpClient)
-
+			if testCase.generateV1DestTags {
+				helmCollector = WithV1Tags(helmCollector)
+			}
 			if testCase.mirrorMode == mirror.DiskToMirror {
 				prepareDiskToMirror(testCase)
 			}

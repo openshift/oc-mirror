@@ -141,6 +141,45 @@ func TestAdditionalImageCollector(t *testing.T) {
 		assert.ElementsMatch(t, expected, res)
 	})
 
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with generateV1Tags should use latest for images by digest", func(t *testing.T) {
+		// should error diskToMirror
+		opts.Mode = mirror.DiskToMirror
+		ex = New(log, cfg, opts, mockmirror, manifest)
+		ex = WithV1Tags(ex)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/testns/test:latest",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		if err != nil {
+			log.Error(" %v ", err)
+			t.Fatalf("should not fail")
+		}
+		assert.ElementsMatch(t, expected, res)
+	})
+
 	// should error mirrorToDisk
 	cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
 	opts.Mode = mirror.MirrorToDisk

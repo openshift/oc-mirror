@@ -45,13 +45,14 @@ type ChartDownloaderWrapper struct {
 }
 
 type LocalStorageCollector struct {
-	Log         clog.PluggableLoggerInterface
-	Config      v2alpha1.ImageSetConfiguration
-	Opts        mirror.CopyOptions
-	destReg     string
-	Helm        *HelmOptions
-	Downloaders Downloaders
-	cleanup     func()
+	Log                clog.PluggableLoggerInterface
+	Config             v2alpha1.ImageSetConfiguration
+	Opts               mirror.CopyOptions
+	destReg            string
+	Helm               *HelmOptions
+	Downloaders        Downloaders
+	cleanup            func()
+	generateV1DestTags bool
 }
 
 func NewHelmOptions(tlsVerify bool) *HelmOptions {
@@ -59,6 +60,14 @@ func NewHelmOptions(tlsVerify bool) *HelmOptions {
 		settings: helmcli.New(),
 		insecure: !tlsVerify,
 	}
+}
+
+func WithV1Tags(o CollectorInterface) CollectorInterface {
+	switch impl := o.(type) {
+	case *LocalStorageCollector:
+		impl.generateV1DestTags = true
+	}
+	return o
 }
 
 func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
@@ -166,7 +175,7 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 		}
 
 		var err error
-		allImages, err = prepareD2MCopyBatch(allHelmImages)
+		allImages, err = prepareD2MCopyBatch(allHelmImages, o.generateV1DestTags)
 		if err != nil {
 			lsc.Log.Error(errMsg, err.Error())
 			errs = append(errs, err)
@@ -508,7 +517,7 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 	return result, nil
 }
 
-func prepareD2MCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDigests bool) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	for _, img := range images {
 		var src string
@@ -525,7 +534,11 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 				tag = tag[:127]
 			}
 			src = dockerProtocol + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent + ":" + tag}, "/")
-			dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
+			if generateV1TagsFromDigests {
+				dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":latest"}, "/")
+			} else {
+				dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
+			}
 		} else {
 			src = dockerProtocol + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
