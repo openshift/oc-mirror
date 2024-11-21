@@ -433,12 +433,13 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			o.Log.Error(errMsg, err.Error())
 			return v2alpha1.CollectorSchema{}, err
 		}
-	case o.Opts.IsDiskToMirror():
+	case o.Opts.IsDiskToMirror() || o.Opts.Mode == string(mirror.DeleteMode):
 		allImages, err = o.prepareD2MCopyBatch(relatedImages)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return v2alpha1.CollectorSchema{}, err
 		}
+
 	}
 
 	sort.Sort(ByTypePriority(allImages))

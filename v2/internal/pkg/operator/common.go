@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"path"
 	"strings"
 
@@ -15,15 +16,26 @@ import (
 )
 
 type OperatorCollector struct {
-	Log              clog.PluggableLoggerInterface
-	LogsDir          string
-	Mirror           mirror.MirrorInterface
-	Manifest         manifest.ManifestInterface
-	Config           v2alpha1.ImageSetConfiguration
-	Opts             mirror.CopyOptions
-	LocalStorageFQDN string
-	destReg          string
-	ctlgHandler      catalogHandlerInterface
+	Log                clog.PluggableLoggerInterface
+	LogsDir            string
+	Mirror             mirror.MirrorInterface
+	Manifest           manifest.ManifestInterface
+	Config             v2alpha1.ImageSetConfiguration
+	Opts               mirror.CopyOptions
+	LocalStorageFQDN   string
+	destReg            string
+	ctlgHandler        catalogHandlerInterface
+	generateV1DestTags bool
+}
+
+func WithV1Tags(o CollectorInterface) CollectorInterface {
+	switch impl := o.(type) {
+	case *FilterCollector:
+		impl.generateV1DestTags = true
+	case *LocalStorageCollector:
+		impl.generateV1DestTags = true
+	}
+	return o
 }
 
 func (o OperatorCollector) destinationRegistry() string {
@@ -170,7 +182,18 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				} else {
 					src = src + ":" + imgSpec.Digest
 				}
-				dest = dest + ":" + imgSpec.Digest
+				if o.generateV1DestTags {
+					hasher := fnv.New32a()
+					hasher.Reset()
+					_, err = hasher.Write([]byte(imgSpec.Reference))
+					if err != nil {
+						return result, fmt.Errorf("couldn't generate v1 tag for image (%s), skipping ", imgSpec.ReferenceWithTransport)
+					}
+					dest = dest + ":" + fmt.Sprintf("%x", hasher.Sum32())
+				} else {
+					dest = dest + ":" + imgSpec.Digest
+				}
+
 			default:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag

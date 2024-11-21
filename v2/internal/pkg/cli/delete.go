@@ -36,6 +36,11 @@ const (
 	deleteDir    = "/delete/"
 )
 
+type DeleteSchema struct {
+	ExecutorSchema
+	V1Tags bool
+}
+
 // NewDeleteCommand - setup all the relevant support structs
 // to eventually execute the 'delete' sub command
 func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
@@ -60,10 +65,12 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 
 	mkd := MakeDir{}
-	ex := &ExecutorSchema{
-		Log:     log,
-		Opts:    opts,
-		MakeDir: mkd,
+	ex := &DeleteSchema{
+		ExecutorSchema: ExecutorSchema{
+			Log:     log,
+			Opts:    opts,
+			MakeDir: mkd,
+		},
 	}
 
 	cmd := &cobra.Command{
@@ -109,6 +116,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", ex.Opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cahce and remote registry")
+	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -124,7 +132,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 }
 
 // Validate - cobra validation
-func (o ExecutorSchema) ValidateDelete(args []string) error {
+func (o DeleteSchema) ValidateDelete(args []string) error {
 	if o.Opts.Global.DeleteGenerate {
 		if len(o.Opts.Global.WorkingDir) == 0 {
 			return fmt.Errorf("use the --workspace flag, it is mandatory when using the delete command with the --generate flag")
@@ -139,6 +147,9 @@ func (o ExecutorSchema) ValidateDelete(args []string) error {
 		if len(o.Opts.Global.DeleteYaml) == 0 {
 			return fmt.Errorf("the --delete-yaml-file flag is mandatory when not using the --generate flag")
 		}
+	}
+	if o.V1Tags && !o.Opts.Global.DeleteGenerate {
+		return fmt.Errorf("the --delete-v1-images flag can only be used alongside the --generate flag")
 	}
 	if len(args) < 1 {
 		return fmt.Errorf("the destination registry is missing in the command arguments")
@@ -157,7 +168,7 @@ func (o ExecutorSchema) ValidateDelete(args []string) error {
 }
 
 // CompleteDelete - cobra complete
-func (o *ExecutorSchema) CompleteDelete(args []string) error {
+func (o *DeleteSchema) CompleteDelete(args []string) error {
 	if args[0] == "" {
 		return fmt.Errorf("the destination registry was not found in the command line arguments")
 	}
@@ -258,9 +269,14 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
+
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
-
+	if o.V1Tags {
+		o.Operator = operator.WithV1Tags(o.Operator)
+		o.AdditionalImages = additional.WithV1Tags(o.AdditionalImages)
+		o.HelmCollector = helm.WithV1Tags(o.HelmCollector)
+	}
 	// instantiate delete module
 	bg := archive.NewImageBlobGatherer(o.Opts)
 	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk)
@@ -269,7 +285,7 @@ func (o *ExecutorSchema) CompleteDelete(args []string) error {
 }
 
 // RunDelete - cobra run
-func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
+func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	startTime := time.Now()
 	o.Log.Debug("config %v", o.Config)
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
@@ -322,7 +338,7 @@ func (o *ExecutorSchema) RunDelete(cmd *cobra.Command) error {
 }
 
 // startLocalRegistryGarbageCollect
-func (o *ExecutorSchema) startLocalRegistryGarbageCollect() error {
+func (o *DeleteSchema) startLocalRegistryGarbageCollect() error {
 	ctx := context.Background()
 
 	// setup storage driver for garbage-collect
