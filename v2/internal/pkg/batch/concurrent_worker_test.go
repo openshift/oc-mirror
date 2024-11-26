@@ -90,7 +90,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing m2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2mopts)
 		if err != nil {
@@ -102,7 +102,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing m2d Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err != nil {
@@ -113,7 +113,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing d2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err != nil {
@@ -125,7 +125,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing delete Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
 		if err != nil {
@@ -137,7 +137,7 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err == nil {
@@ -154,7 +154,7 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
@@ -171,7 +171,7 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(8))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
@@ -203,7 +203,7 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := NewConcurrentBatch(log, tempDir, mirrorMock, uint(1))
+		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(1))
 
 		_, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		assert.Error(t, err)
@@ -464,7 +464,7 @@ func TestShouldSkipImage(t *testing.T) {
 				t.Setenv("UPDATE_URL_OVERRIDE", testCase.updateURLOverride)
 			}
 
-			skip, err := shouldSkipImage(testCase.img, testCase.mode, testCase.errArray)
+			skip, err := shouldSkipImageOld(testCase.img, testCase.mode, testCase.errArray)
 			if testCase.expectedError && err == nil {
 				t.Error("expected to fail with error, but no error was returned")
 			}

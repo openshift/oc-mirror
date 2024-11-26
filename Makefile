@@ -117,5 +117,5 @@ vet:
 
 build: 
 	mkdir -p $(GO_BUILD_BINDIR)
-	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
+	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -race -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
