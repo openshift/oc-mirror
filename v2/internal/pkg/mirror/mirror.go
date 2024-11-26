@@ -185,7 +185,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		PreserveDigests:                  opts.PreserveDigests,
-		MaxParallelDownloads:             opts.MaxParallelDownloads,
+		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
 
 	if opts.Global.LogLevel == "debug" {
