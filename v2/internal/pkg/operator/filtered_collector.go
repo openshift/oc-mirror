@@ -11,12 +11,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
@@ -60,8 +60,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
 			mpb.BarWidth(3),
 			mpb.PrependDecorators(
-				decor.OnComplete(spinners.EmptyDecorator(), "\x1b[1;92m ✓ \x1b[0m"),
-				decor.OnAbort(spinners.EmptyDecorator(), "\x1b[1;91m ✗ \x1b[0m"),
+				decor.OnComplete(spinners.EmptyDecorator(), emoji.SpinnerCheckMark),
+				decor.OnAbort(spinners.EmptyDecorator(), emoji.SpinnerCrossMark),
 			),
 			mpb.AppendDecorators(
 				decor.Name("("),
@@ -487,8 +487,6 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		}
 
 	}
-
-	sort.Sort(ByTypePriority(allImages))
 
 	collectorSchema.AllImages = allImages
 	collectorSchema.CopyImageSchemaMap = *copyImageSchemaMap

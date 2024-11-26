@@ -13,6 +13,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -34,7 +35,7 @@ type DeleteImages struct {
 
 // WriteDeleteMetaData
 func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) error {
-	o.Log.Info("📄 Generating delete file...")
+	o.Log.Info(emoji.PageFacingUp + " Generating delete file...")
 	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
 	// we write the image and related blobs in yaml format to file for further processing
@@ -118,6 +119,11 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 
 	var batchError error
 
+	increment := 1
+	if o.Opts.Global.ForceCacheDelete {
+		increment = 2
+	}
+
 	for _, img := range deleteImageList.Items {
 		// OCPBUGS-43489
 		// Verify that the "delete" destination is set correctly
@@ -170,13 +176,13 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 
 		switch {
 		case img.Type.IsRelease():
-			collectorSchema.TotalReleaseImages++
+			collectorSchema.TotalReleaseImages += increment
 		case img.Type.IsOperator():
-			collectorSchema.TotalOperatorImages++
+			collectorSchema.TotalOperatorImages += increment
 		case img.Type.IsAdditionalImage():
-			collectorSchema.TotalAdditionalImages++
+			collectorSchema.TotalAdditionalImages += increment
 		case img.Type.IsHelmImage():
-			collectorSchema.TotalHelmImages++
+			collectorSchema.TotalHelmImages += increment
 		}
 	}
 
@@ -201,7 +207,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 // used to verify the delete yaml is well formed as well as being
 // the base for both local cache delete and remote registry delete
 func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
-	o.Log.Info("👀 Reading delete file...")
+	o.Log.Info(emoji.Eyes + " Reading delete file...")
 	var list v2alpha1.DeleteImageList
 	var fileName string
 

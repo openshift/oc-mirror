@@ -17,6 +17,7 @@ import (
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,7 +68,7 @@ const (
 
 func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error {
 	if len(allRelatedImages) == 0 {
-		o.Log.Info("📄 Nothing mirrored. Skipping IDMS and ITMS files generation.")
+		o.Log.Info(emoji.PageFacingUp + " Nothing mirrored. Skipping IDMS and ITMS files generation.")
 		return nil
 	}
 
@@ -84,7 +85,7 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 	}
 	// if byTagMirrors not empty
 	if len(byDigestMirrors) > 0 {
-		o.Log.Info("📄 Generating IDMS file...")
+		o.Log.Info(emoji.PageFacingUp + " Generating IDMS file...")
 		idmsList, err := o.generateIDMS(byDigestMirrors)
 		if err != nil {
 			return err
@@ -95,11 +96,11 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 			return err
 		}
 	} else {
-		o.Log.Info("📄 No images by digests were mirrored. Skipping IDMS generation.")
+		o.Log.Info(emoji.PageFacingUp + " No images by digests were mirrored. Skipping IDMS generation.")
 	}
 	// if byTagMirrors not empty
 	if len(byTagMirrors) > 0 {
-		o.Log.Info("📄 Generating ITMS file...")
+		o.Log.Info(emoji.PageFacingUp + " Generating ITMS file...")
 		itmsList, err := o.generateITMS(byTagMirrors)
 		if err != nil {
 			return err
@@ -109,7 +110,7 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 			return err
 		}
 	} else {
-		o.Log.Info("📄 No images by tag were mirrored. Skipping ITMS generation.")
+		o.Log.Info(emoji.PageFacingUp + " No images by tag were mirrored. Skipping ITMS generation.")
 	}
 	return nil
 }
@@ -185,7 +186,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 
 func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	if len(o.Config.Mirror.Operators) == 0 {
-		o.Log.Info("📄 No catalogs mirrored. Skipping CatalogSource file generation.")
+		o.Log.Info(emoji.PageFacingUp + " No catalogs mirrored. Skipping CatalogSource file generation.")
 		return nil
 	}
 
@@ -196,7 +197,7 @@ func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2
 		// Since this catalog should not lead to generating a catalogSource custom resource, it should be skipped.
 		if copyImage.Type == v2alpha1.TypeOperatorCatalog && !strings.Contains(copyImage.Destination, o.LocalStorageFQDN) {
 			if firstCatalog {
-				o.Log.Info("📄 Generating CatalogSource file...")
+				o.Log.Info(emoji.PageFacingUp + " Generating CatalogSource file...")
 				firstCatalog = false
 			}
 			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
@@ -476,7 +477,7 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 }
 
 func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releaseImageRef string) error {
-	o.Log.Info("📄 Generating UpdateService file...")
+	o.Log.Info(emoji.PageFacingUp + " Generating UpdateService file...")
 	// truncate tag or digest from release image
 	// according to https://docs.openshift.com/container-platform/4.14/updating/updating_a_cluster/updating_disconnected_cluster/disconnected-update-osus.html#update-service-create-service-cli_updating-restricted-network-cluster-osus
 	releaseImage, err := image.ParseRef(releaseImageRef)
@@ -693,7 +694,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	// pointless creating configmap if there were no BinaryData found
 	if len(cm.BinaryData) > 0 {
 		crPath := filepath.Join(o.WorkingDir, clusterResourcesDir)
-		o.Log.Info("📄 Generating Signature Configmap...")
+		o.Log.Info(emoji.PageFacingUp + " Generating Signature Configmap...")
 		jsonData, err := json.Marshal(cm)
 		if err != nil {
 			return fmt.Errorf(signatureConfigMapMsg, err)

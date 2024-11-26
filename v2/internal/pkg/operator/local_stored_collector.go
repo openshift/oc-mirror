@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/opencontainers/go-digest"
@@ -280,8 +279,6 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 			return v2alpha1.CollectorSchema{}, err
 		}
 	}
-
-	sort.Sort(ByTypePriority(allImages))
 
 	collectorSchema.AllImages = allImages
 	collectorSchema.CopyImageSchemaMap = *copyImageSchemaMap

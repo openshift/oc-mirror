@@ -21,6 +21,7 @@ import (
 	"github.com/containers/storage"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -62,7 +63,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 `
 	filteredDir := filepath.Dir(configPath)
 
-	o.Logger.Info("🔂 rebuilding catalog (pulling catalog image) %s", catalogCopyRefs.Source)
+	o.Logger.Info(emoji.RepeatSingleButton+" rebuilding catalog (pulling catalog image) %s", catalogCopyRefs.Source)
 	contents := bytes.NewBufferString("")
 	tmpl, err := template.New("Containerfile").Parse(containerTemplate)
 	if err != nil {
@@ -148,7 +149,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 
 	id, ref, err := imagebuildah.BuildDockerfiles(ctx, buildStore, buildOptions, []string{containerfilePath}...)
 	if err == nil && buildOptions.Manifest != "" {
-		o.Logger.Info("✅ successfully created catalog")
+		o.Logger.Info(emoji.SpinnerCheckMark + " successfully created catalog")
 		o.Logger.Debug("  manifest list id : %s", id)
 		o.Logger.Debug("  image reference  : %s", ref.String())
 	}
@@ -202,7 +203,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		return err
 	}
 
-	o.Logger.Info("✅ successfully pushed catalog manifest list")
+	o.Logger.Info(emoji.SpinnerCheckMark + " successfully pushed catalog manifest list")
 	o.Logger.Debug("  digest           : %s", digest)
 
 	if o.CopyOpts.Mode == MirrorToMirror {
@@ -215,7 +216,7 @@ RUN rm -fr /tmp/cache/* && /bin/opm serve /configs --cache-only --cache-dir=/tmp
 		}
 	}
 
-	o.Logger.Info("✅ completed rebuild catalog %s", catalogCopyRefs.Origin)
+	o.Logger.Info(emoji.SpinnerCheckMark+" completed rebuild catalog %s", catalogCopyRefs.Origin)
 	return nil
 }
 
