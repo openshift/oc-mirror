@@ -1,4 +1,4 @@
-package operator
+package customsort
 
 import (
 	"sort"
@@ -29,10 +29,46 @@ func TestSort(t *testing.T) {
 				{
 					Type: v2alpha1.TypeOperatorBundle,
 				},
+				{
+					Type: v2alpha1.TypeOCPRelease,
+				},
+				{
+					Type: v2alpha1.TypeKubeVirtContainer,
+				},
+				{
+					Type: v2alpha1.TypeOCPReleaseContent,
+				},
+				{
+					Type: v2alpha1.TypeCincinnatiGraph,
+				},
+				{
+					Type: v2alpha1.TypeGeneric,
+				},
+				{
+					Type: v2alpha1.TypeHelmImage,
+				},
 			},
 			expectedOutput: []v2alpha1.CopyImageSchema{
 				{
+					Type: v2alpha1.TypeOCPReleaseContent,
+				},
+				{
+					Type: v2alpha1.TypeKubeVirtContainer,
+				},
+				{
+					Type: v2alpha1.TypeOCPRelease,
+				},
+				{
+					Type: v2alpha1.TypeCincinnatiGraph,
+				},
+				{
 					Type: v2alpha1.TypeOperatorRelatedImage,
+				},
+				{
+					Type: v2alpha1.TypeGeneric,
+				},
+				{
+					Type: v2alpha1.TypeHelmImage,
 				},
 				{
 					Type: v2alpha1.TypeOperatorBundle,
