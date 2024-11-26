@@ -441,49 +441,7 @@ func TestExecutorNewMirrorCommand(t *testing.T) {
 
 // TestExecutorValidate
 func TestExecutorValidate(t *testing.T) {
-	t.Run("Testing Executor : maxParallelDownloads =2, validate should pass with warning", func(t *testing.T) {
-		log := new(LogMock)
-
-		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "test"
-
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			LogsDir: "/tmp/",
-		}
-
-		warnArgs := []interface{}{uint(2), uint(2), uint(10), uint(10)}
-		log.On("Warn", "⚠️ --max-parallel-downloads set to %d: %d < %d. Flag ignored. Setting max-parallel-downloads = %d", warnArgs).Return(nil)
-
-		opts.Global.LogLevel = "info"
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = "" //reset
-		opts.MaxParallelDownloads = 2
-		opts.Global.WorkingDir = "file://test"
-		assert.NoError(t, ex.Validate([]string{"docker://test"}))
-		log.AssertExpectations(t)
-
-	})
-
-	t.Run("Testing Executor : maxParallelDownloads =20, validate should pass", func(t *testing.T) {
+	t.Run("Testing Executor : ParallelLayerImages = 20, validate should pass", func(t *testing.T) {
 		log := new(LogMock)
 
 		global := &mirror.GlobalOptions{
@@ -514,50 +472,10 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" //reset
-		opts.MaxParallelDownloads = 20
+		opts.ParallelLayerImages = 20
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
 		log.AssertNotCalled(t, "Warn", mock.Anything)
-	})
-	t.Run("Testing Executor : maxParallelDownloads =300, validate should pass with warning", func(t *testing.T) {
-		log := new(LogMock)
-
-		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "test"
-
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			LogsDir: "/tmp/",
-		}
-		warnArgs := []interface{}{uint(300), uint(300), uint(200), uint(200)}
-		log.On("Warn", "⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", warnArgs).Return(nil)
-
-		opts.Global.LogLevel = "info"
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = "" //reset
-		opts.MaxParallelDownloads = 300
-		opts.Global.WorkingDir = "file://test"
-		assert.NoError(t, ex.Validate([]string{"docker://test"}))
-		log.AssertExpectations(t)
-
 	})
 
 	t.Run("Testing Executor : validate should pass", func(t *testing.T) {
@@ -987,59 +905,6 @@ func TestExcludeImages(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedImages, actualCollected)
 		})
 	}
-}
-
-func TestCalculateMaxBatchSize(t *testing.T) {
-	t.Run("Testing CalculateMaxBatchSize with maxParallelDownloads = 0 should return 0", func(t *testing.T) {
-		maxParallelDownloads := uint(0)
-		expectedBatchSize := uint(1)
-
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, uint(0))
-
-		assert.Equal(t, expectedBatchSize, batchSize)
-	})
-
-	t.Run("Testing CalculateMaxBatchSize with maxParallelDownloads = 1 should return 1", func(t *testing.T) {
-		maxParallelDownloads := uint(1)
-		expectedBatchSize := uint(1)
-
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, uint(0))
-
-		assert.Equal(t, expectedBatchSize, batchSize)
-	})
-
-	t.Run("Testing CalculateMaxBatchSize with maxParallelDownloads = 8 should return 1", func(t *testing.T) {
-		maxParallelDownloads := uint(8)
-		expectedBatchSize := uint(1)
-
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, uint(0))
-
-		assert.Equal(t, expectedBatchSize, batchSize)
-	})
-	t.Run("Testing CalculateMaxBatchSize with maxParallelDownloads = 50 should return 5", func(t *testing.T) {
-		maxParallelDownloads := uint(50)
-		expectedBatchSize := uint(5)
-
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, uint(0))
-
-		assert.Equal(t, expectedBatchSize, batchSize)
-	})
-	t.Run("Testing CalculateMaxBatchSize with maxParallelDownloads = 400 should return 20", func(t *testing.T) {
-		maxParallelDownloads := uint(400)
-		expectedBatchSize := uint(20)
-
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, uint(0))
-
-		assert.Equal(t, expectedBatchSize, batchSize)
-	})
-
-	t.Run("Testing CalculateMaxBatchSize with parallel-batch-images provided should match parallel-batch-images", func(t *testing.T) {
-		maxParallelDownloads := uint(400)
-		parallelBatchImages := uint(12)
-		batchSize := calculateMaxBatchSize(maxParallelDownloads, parallelBatchImages)
-
-		assert.Equal(t, parallelBatchImages, batchSize)
-	})
 }
 
 // setup mocks
