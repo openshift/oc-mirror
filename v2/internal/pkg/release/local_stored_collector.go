@@ -530,7 +530,13 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease || imgType == v2alpha1.TypeCincinnatiGraph:
-		tag = imgSpec.Tag
+		// OCPBUGS-44033 mirroring release with no release tag
+		// i.e by digest registry.ci.openshift.org/ocp/release@sha256:0fb444ec9bb1b01f06dd387519f0fe5b4168e2d09a015697a26534fc1565c5e7
+		if len(imgSpec.Tag) == 0 {
+			tag = releaseTag
+		} else {
+			tag = imgSpec.Tag
+		}
 	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
 		tag = releaseTag + "-" + imgName
 	case imgSpec.IsImageByDigestOnly():
