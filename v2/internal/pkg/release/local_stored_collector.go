@@ -185,10 +185,14 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
-			if releaseRef.Tag == "" {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag")
+			if releaseRef.Tag == "" && len(releaseRef.Digest) == 0 {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag or digest")
 			}
-			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, releaseRef.Tag)
+			tag := releaseRef.Tag
+			if releaseRef.Tag == "" && len(releaseRef.Digest) > 0 {
+				tag = releaseRef.Digest
+			}
+			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, tag)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
