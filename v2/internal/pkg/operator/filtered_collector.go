@@ -158,13 +158,13 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				catalogName = path.Base(imgSpec.Reference)
 			}
 			if imgSpec.Transport == ociProtocol {
-				catalogImageDir, err := filepath.Abs(catalogImageDir)
+				// ensure correct oci format and directory lookup
+				sourceOCIDir, err := filepath.Abs(imgSpec.Reference)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
 					return v2alpha1.CollectorSchema{}, err
 				}
-				// ensure correct oci format and directory lookup
-				catalogImage = ociProtocol + catalogImageDir
+				catalogImage = ociProtocol + sourceOCIDir
 			} else {
 				catalogImage = op.Catalog
 			}
@@ -235,7 +235,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 					return v2alpha1.CollectorSchema{}, err
 				}
 
-				catalogImage = ociProtocol + catalogImageDir
+				sourceOCIDir, err := filepath.Abs(imgSpec.Reference)
+				if err != nil {
+					o.Log.Error(errMsg, err.Error())
+					return v2alpha1.CollectorSchema{}, err
+				}
+				catalogImage = ociProtocol + sourceOCIDir
 			} else {
 				catalogImage = op.Catalog
 			}
