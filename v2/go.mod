@@ -21,7 +21,7 @@ require (
 	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
 	github.com/operator-framework/operator-registry v1.47.0
 	github.com/otiai10/copy v1.14.0
-	github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2
+	github.com/sherine-k/catalog-filter v0.0.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
