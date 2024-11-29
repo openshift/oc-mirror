@@ -1902,8 +1902,10 @@ github.com/sherine-k/catalog-filter v0.0.0-20241002153845-3a46851dde84/go.mod h1
 github.com/sherine-k/catalog-filter v0.0.0-20241008074337-d320370f5c38/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.1 h1:4XATs+3jzB+p/OQkikdxJePVigjlyRqbLh9c7kdouxQ=
 github.com/sherine-k/catalog-filter v0.0.1/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
-github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2 h1:tdWQ4C1RwH68gyIbc1iWnqKml6Fh5M6YfYCM3vGe94k=
 github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
+github.com/sherine-k/catalog-filter v0.0.2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
+github.com/sherine-k/catalog-filter v0.0.3 h1:YBcoOfIXeYaAi22Sd9ZFgzOcCHwuj4oBDC1w9gQDbEg=
+github.com/sherine-k/catalog-filter v0.0.3/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/shibumi/go-pathspec v1.3.0/go.mod h1:Xutfslp817l2I1cZvgcfeMQJG5QnU2lh5tVaaMCl3jE=
 github.com/shirou/gopsutil/v3 v3.21.10/go.mod h1:t75NhzCZ/dYyPQjyQmrAYP6c8+LCdFANeBMdLPCNnew=
 github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24/go.mod h1:M+9NzErvs504Cn4c5DxATwIqPbtswREoFCre64PpcG4=
