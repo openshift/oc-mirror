@@ -168,9 +168,9 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 		p.Wait()
 		if batchIndex < len(batches)-1 { // for all batches except last one
 			if len(errArray) > 0 {
-				o.Log.Warn("Mirroring is ongoing. Total errors: %d.", len(errArray))
+				o.Log.Warn("%s is ongoing. Total errors: %d.", mirrorMsg, len(errArray))
 			} else {
-				o.Log.Info("Mirroring is ongoing. No errors.")
+				o.Log.Info("%s is ongoing. No errors.", mirrorMsg)
 			}
 		}
 	}
