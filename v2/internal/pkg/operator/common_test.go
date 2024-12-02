@@ -45,13 +45,13 @@ func TestPrepareDeleteForV1(t *testing.T) {
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://localhost:9999/openshift4/ose-kube-rbac-proxy:7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
+					Source:      "docker://localhost:9999/openshift4/ose-kube-rbac-proxy:sha256-7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
 					Destination: "docker://localhost:5000/test/openshift4/ose-kube-rbac-proxy:5574585a",
 					Origin:      "docker://registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
 					Type:        v2alpha1.TypeOperatorBundle,
 				},
 				{
-					Source:      "docker://localhost:9999/openshift-sandboxed-containers/osc-operator-bundle:8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
+					Source:      "docker://localhost:9999/openshift-sandboxed-containers/osc-operator-bundle:sha256-8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
 					Destination: "docker://localhost:5000/test/openshift-sandboxed-containers/osc-operator-bundle:1adce9f",
 					Origin:      "docker://registry.redhat.io/openshift-sandboxed-containers/osc-operator-bundle@sha256:8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
 					Type:        v2alpha1.TypeOperatorRelatedImage,
@@ -110,13 +110,13 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Destination: "docker://localhost:5000/test/sometestimage-a:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://localhost:5000/test/sometestimage-a:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorBundle,
 				},
 				{
 					Source:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-					Destination: "docker://localhost:5000/test/sometestimage-b:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://localhost:5000/test/sometestimage-b:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Origin:      "docker://sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorRelatedImage,
 				},
