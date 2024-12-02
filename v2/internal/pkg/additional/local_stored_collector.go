@@ -13,13 +13,22 @@ import (
 )
 
 type LocalStorageCollector struct {
-	Log              clog.PluggableLoggerInterface
-	Mirror           mirror.MirrorInterface
-	Manifest         manifest.ManifestInterface
-	Config           v2alpha1.ImageSetConfiguration
-	Opts             mirror.CopyOptions
-	LocalStorageFQDN string
-	destReg          string
+	Log                clog.PluggableLoggerInterface
+	Mirror             mirror.MirrorInterface
+	Manifest           manifest.ManifestInterface
+	Config             v2alpha1.ImageSetConfiguration
+	Opts               mirror.CopyOptions
+	LocalStorageFQDN   string
+	destReg            string
+	generateV1DestTags bool
+}
+
+func WithV1Tags(o CollectorInterface) CollectorInterface {
+	switch impl := o.(type) {
+	case *LocalStorageCollector:
+		impl.generateV1DestTags = true
+	}
+	return o
 }
 
 func (o LocalStorageCollector) destinationRegistry() string {
@@ -83,9 +92,12 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 				if imgSpec.IsImageByDigestOnly() {
 					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					if o.generateV1DestTags {
+						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":latest"}, "/")
 
-					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
-
+					} else {
+						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					}
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 					// use tag only for both src and dest
 					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using tag only", imgSpec.Reference)

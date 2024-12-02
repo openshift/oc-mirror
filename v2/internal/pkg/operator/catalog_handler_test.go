@@ -28,7 +28,7 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			caseName: "only catalog (no filtering) - only the head of the default channel - should pass",
+			caseName: "only catalog (no filtering) - heads for all channels - should pass",
 			cfg: v2alpha1.Operator{
 				IncludeConfig: v2alpha1.IncludeConfig{},
 			},
@@ -658,13 +658,15 @@ func TestFilterCatalog(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			caseName: "only catalog (no filtering) - only the head of the default channel - should pass",
+			caseName: "only catalog (no filtering) - only heads of all channels - should pass",
 			cfg: v2alpha1.Operator{
 				IncludeConfig: v2alpha1.IncludeConfig{},
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
 				"devworkspace-operator.v0.19.1-0.1682321189.p",
+				"3scale-operator.v0.9.1-0.1664967752.p",
+				"3scale-operator.v0.8.4-0.1655690146.p",
 				"jaeger-operator.v1.51.0-1",
 			},
 		},
@@ -716,7 +718,7 @@ func TestFilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			caseName: "packages with no Min Max version (no channels) - 1 bundle, corresponding to the head version of the default channel for each package - should pass",
+			caseName: "packages with no Min Max version (no channels) - 1 bundle, corresponding to the head version of any channel for selected packages - should pass",
 			cfg: v2alpha1.Operator{
 				IncludeConfig: v2alpha1.IncludeConfig{
 					Packages: []v2alpha1.IncludePackage{
@@ -734,6 +736,8 @@ func TestFilterCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
+				"3scale-operator.v0.9.1-0.1664967752.p",
+				"3scale-operator.v0.8.4-0.1655690146.p",
 				"devworkspace-operator.v0.19.1-0.1682321189.p",
 				"jaeger-operator.v1.51.0-1",
 			},
@@ -817,6 +821,8 @@ func TestFilterCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
+				"3scale-operator.v0.9.1-0.1664967752.p",
+				"3scale-operator.v0.8.4-0.1655690146.p",
 				"devworkspace-operator.v0.18.1",
 				"devworkspace-operator.v0.18.1-0.1675929565.p",
 				"devworkspace-operator.v0.19.1",
@@ -845,6 +851,8 @@ func TestFilterCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
+				"3scale-operator.v0.9.1-0.1664967752.p",
+				"3scale-operator.v0.8.4-0.1655690146.p",
 				"devworkspace-operator.v0.9.0",
 				"devworkspace-operator.v0.10.0",
 				"devworkspace-operator.v0.11.0",
@@ -884,6 +892,8 @@ func TestFilterCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{
 				"3scale-operator.v0.11.0-mas",
+				"3scale-operator.v0.9.1-0.1664967752.p",
+				"3scale-operator.v0.8.4-0.1655690146.p",
 				"devworkspace-operator.v0.16.0",
 				"devworkspace-operator.v0.16.0-0.1666668361.p",
 				"devworkspace-operator.v0.17.0",

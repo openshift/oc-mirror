@@ -11,6 +11,71 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestPrepareDeleteForV1(t *testing.T) {
+
+	log := clog.New("trace")
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	type testCase struct {
+		caseName       string
+		relatedImages  map[string][]v2alpha1.RelatedImage
+		expectedResult []v2alpha1.CopyImageSchema
+		expectedError  bool
+	}
+
+	testCases := []testCase{
+		{
+			caseName: "OperatorImageCollector - Mirror to Mirror: related images by digest should pass",
+			relatedImages: map[string][]v2alpha1.RelatedImage{
+				"operatorA": {
+					{ //=localhost:5000/43731/openshift4/ose-kube-rbac-proxy:5574585a
+
+						Name:  "testA",
+						Image: "registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
+						Type:  v2alpha1.TypeOperatorBundle,
+					},
+					{
+						Name:  "testB",
+						Image: "registry.redhat.io/openshift-sandboxed-containers/osc-operator-bundle@sha256:8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
+						Type:  v2alpha1.TypeOperatorRelatedImage,
+					},
+				},
+			},
+			expectedError: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://localhost:9999/openshift4/ose-kube-rbac-proxy:7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
+					Destination: "docker://localhost:5000/test/openshift4/ose-kube-rbac-proxy:5574585a",
+					Origin:      "docker://registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:7efeeb8b29872a6f0271f651d7ae02c91daea16d853c50e374c310f044d8c76c",
+					Type:        v2alpha1.TypeOperatorBundle,
+				},
+				{
+					Source:      "docker://localhost:9999/openshift-sandboxed-containers/osc-operator-bundle:8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
+					Destination: "docker://localhost:5000/test/openshift-sandboxed-containers/osc-operator-bundle:1adce9f",
+					Origin:      "docker://registry.redhat.io/openshift-sandboxed-containers/osc-operator-bundle@sha256:8da62ba1c19c905bc1b87a6233ead475b047a766dc2acb7569149ac5cfe7f0f1",
+					Type:        v2alpha1.TypeOperatorRelatedImage,
+				},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex.Opts.Mode = mirror.MirrorToMirror
+			ex.generateV1DestTags = true
+			ex.Opts.Destination = "docker://localhost:5000/test"
+			res, err := ex.prepareD2MCopyBatch(testCase.relatedImages)
+			if testCase.expectedError && err == nil {
+				t.Fatalf("should fail")
+			}
+			if !testCase.expectedError && err != nil {
+				t.Fatal("should not fail")
+			}
+			assert.ElementsMatch(t, testCase.expectedResult, res)
+		})
+	}
+}
 func TestPrepareM2MCopyBatch(t *testing.T) {
 
 	log := clog.New("trace")
