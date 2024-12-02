@@ -501,7 +501,7 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 		src = imgSpec.ReferenceWithTransport
 
 		if imgSpec.IsImageByDigestOnly() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+			tag := fmt.Sprintf("%s", imgSpec.Digest)
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
@@ -529,7 +529,7 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			return nil, err
 		}
 		if imgSpec.IsImageByDigestOnly() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
+			tag := fmt.Sprintf("%s", imgSpec.Digest)
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
