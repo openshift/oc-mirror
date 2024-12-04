@@ -42,10 +42,11 @@ func TestExecutorValidateDelete(t *testing.T) {
 		}
 		opts.Global.ConfigPath = common.TestFolder + "isc.yaml"
 
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			LogsDir: "/tmp/",
+		ex := &DeleteSchema{
+			ExecutorSchema: ExecutorSchema{Log: log,
+				Opts:    opts,
+				LogsDir: "/tmp/",
+			},
 		}
 
 		defer os.RemoveAll("../../pkg/cli/test")
@@ -126,11 +127,13 @@ func TestExecutorCompleteDelete(t *testing.T) {
 		opts.Global.DeleteGenerate = true
 		opts.Global.DeleteID = "test"
 
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    &opts,
-			MakeDir: MakeDir{},
-			LogsDir: "/tmp/",
+		ex := &DeleteSchema{
+			ExecutorSchema: ExecutorSchema{
+				Log:     log,
+				Opts:    &opts,
+				MakeDir: MakeDir{},
+				LogsDir: "/tmp/",
+			},
 		}
 
 		t.Setenv(cacheEnvVar, "/tmp/")
@@ -222,20 +225,22 @@ func TestExecutorRunDelete(t *testing.T) {
 		defer os.RemoveAll(common.TestFolder + "cache-fake-temp")
 		opts.LocalStorageFQDN = regCfg.HTTP.Addr
 
-		ex := &ExecutorSchema{
-			Log:                          log,
-			Opts:                         &opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Mirror:                       mockMirror,
-			Batch:                        &mockBatch,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			LogsDir:                      "/tmp/",
-			Delete:                       MockDelete{},
-			LocalStorageDisk:             common.TestFolder + "cache-fake-temp/",
+		ex := &DeleteSchema{
+			ExecutorSchema: ExecutorSchema{
+				Log:                          log,
+				Opts:                         &opts,
+				Operator:                     collector,
+				Release:                      collector,
+				AdditionalImages:             collector,
+				HelmCollector:                collector,
+				Mirror:                       mockMirror,
+				Batch:                        &mockBatch,
+				LocalStorageService:          *reg,
+				localStorageInterruptChannel: fakeStorageInterruptChan,
+				LogsDir:                      "/tmp/",
+				Delete:                       MockDelete{},
+				LocalStorageDisk:             common.TestFolder + "cache-fake-temp/",
+			},
 		}
 
 		res := &cobra.Command{}

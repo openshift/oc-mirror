@@ -1076,6 +1076,15 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
 	allRelatedImages = append(allRelatedImages, hImgs...)
 
+	// OCPBUGS-43731 - remove duplicates
+	allRelatedImages = slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
+		if o.Opts.Function == string(mirror.DeleteMode) {
+			return a.Destination == b.Destination
+		} else {
+			return a.Source == b.Source && a.Destination == b.Destination && a.Origin == b.Origin
+		}
+	})
+
 	collectorSchema.AllImages = allRelatedImages
 
 	endTime := time.Now()
