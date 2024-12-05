@@ -6,18 +6,7 @@ import (
 )
 
 type ProgressStruct struct {
-	countTotal            int
-	countReleaseImages    int
-	countOperatorsImages  int
-	countAdditionalImages int
-
-	countErrorTotal                 int
-	countReleaseImagesErrorTotal    int
-	countOperatorsImagesErrorTotal  int
-	countAdditionalImagesErrorTotal int
-
-	mirrorMessage string
-	Log           clog.PluggableLoggerInterface
+	Log clog.PluggableLoggerInterface
 }
 
 type StringMap map[string]string
@@ -27,4 +16,8 @@ type mirrorErrorSchema struct {
 	err       error
 	operators map[string]struct{}
 	bundles   StringMap
+}
+
+func (e mirrorErrorSchema) Error() string {
+	return e.err.Error()
 }
