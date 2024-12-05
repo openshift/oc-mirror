@@ -1133,6 +1133,10 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 				ctlgFilterResult, ok := operatorImgs.CatalogToFBCMap[ref.ReferenceWithTransport]
 				if ok {
 					filteredConfigPath = ctlgFilterResult.FilteredConfigPath
+					if !ctlgFilterResult.ToRebuild {
+						spinner.Abort(true)
+						continue
+					}
 				} else {
 					spinner.Abort(false)
 					return fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)

@@ -74,14 +74,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		// CLID-47 double check that targetCatalog is valid
 		if op.TargetCatalog != "" && !v2alpha1.IsValidPathComponent(op.TargetCatalog) {
 			o.Log.Error(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
-			spinner.Abort(false)
+			spinner.Abort(true)
+			spinner.Wait()
 			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
 		}
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			spinner.Abort(false)
+			spinner.Abort(true)
+			spinner.Wait()
 			return v2alpha1.CollectorSchema{}, err
 		}
 		//OCPBUGS-36214: For diskToMirror (and delete), access to the source registry is not guaranteed
@@ -90,19 +92,23 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			d, err := o.catalogDigest(ctx, op)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 			catalogDigest = d
 		} else {
 			sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
 			if err != nil {
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 			d, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 			// OCPBUGS-36548 (manifest unknown)
 			if err != nil {
+				spinner.Abort(true)
+				spinner.Wait()
 				o.Log.Warn(collectorPrefix+"catalog %s : SKIPPING", err.Error())
 				continue
 			}
@@ -118,7 +124,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		err = createFolders([]string{configsDir, catalogImageDir, filteredCatalogsDir})
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			spinner.Abort(false)
+			spinner.Abort(true)
+			spinner.Wait()
 			return v2alpha1.CollectorSchema{}, err
 		}
 
@@ -127,7 +134,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 		filterDigest, err := digestOfFilter(op)
 		if err != nil {
-			spinner.Abort(false)
+			spinner.Abort(true)
+			spinner.Wait()
 			return v2alpha1.CollectorSchema{}, err
 		}
 		rebuiltTag = filterDigest
@@ -138,7 +146,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			srcFilteredCatalog, err = o.cachedCatalog(op, filterDigest)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 			isAlreadyFiltered = o.isAlreadyFiltered(ctx, srcFilteredCatalog, string(filteredImageDigest))
@@ -149,7 +158,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			filteredDC, err = o.ctlgHandler.getDeclarativeConfig(filterConfigDir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 			if len(op.TargetCatalog) > 0 {
@@ -175,10 +185,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			result := v2alpha1.CatalogFilterResult{
 				OperatorFilter:     op,
 				FilteredConfigPath: filterConfigDir,
+				ToRebuild:          false,
 			}
 			collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 
 		} else {
+			toRebuild := true
 			if imgSpec.Transport == ociProtocol {
 				if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); errors.Is(err, os.ErrNotExist) {
 					// delete the existing directory and untarred cache contents
@@ -188,7 +200,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 					err := copy.Copy(imgSpec.PathComponent, catalogImageDir)
 					if err != nil {
 						o.Log.Error(errMsg, err.Error())
-						spinner.Abort(false)
+						spinner.Abort(true)
+						spinner.Wait()
 						return v2alpha1.CollectorSchema{}, err
 					}
 				}
@@ -216,7 +229,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			oci, err := o.Manifest.GetImageIndex(catalogImageDir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 
@@ -224,14 +238,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				err = o.Manifest.ConvertIndexToSingleManifest(catalogImageDir, oci)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
 				}
 
 				oci, err = o.Manifest.GetImageIndex(catalogImageDir)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
 				}
 
@@ -247,14 +263,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 			if len(oci.Manifests) == 0 {
 				o.Log.Error(collectorPrefix+"no manifests found for %s ", op.Catalog)
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"no manifests found for %s ", op.Catalog)
 			}
 
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
 				o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 			}
 
@@ -265,7 +283,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			oci, err = o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 
@@ -277,14 +296,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				subDigest, err := digest.Parse(oci.Manifests[0].Digest)
 				if err != nil {
 					o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 				}
 				manifestDir := filepath.Join(catalogImageDir, blobsDir, subDigest.Encoded())
 				oci, err = o.Manifest.GetImageManifest(manifestDir)
 				if err != nil {
 					o.Log.Error(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
 				}
 			}
@@ -294,14 +315,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			configDigest, err := digest.Parse(oci.Config.Digest)
 			if err != nil {
 				o.Log.Error(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"the digests seem to be incorrect for %s: %s ", op.Catalog, err.Error())
 			}
 			catalogDir := filepath.Join(catalogImageDir, blobsDir, configDigest.Encoded())
 			ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 
@@ -313,13 +336,15 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			fromDir := strings.Join([]string{catalogImageDir, blobsDir}, "/")
 			err = o.Manifest.ExtractLayersOCI(fromDir, configsDir, label, oci)
 			if err != nil {
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 
 			originalDC, err := o.ctlgHandler.getDeclarativeConfig(filepath.Join(configsDir, label))
 			if err != nil {
-				spinner.Abort(false)
+				spinner.Abort(true)
+				spinner.Wait()
 				return v2alpha1.CollectorSchema{}, err
 			}
 
@@ -330,14 +355,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 				filteredDC, err = filterCatalog(ctx, *originalDC, op)
 				if err != nil {
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
 				}
 
 				filterDigest, err = digestOfFilter(op)
 				if err != nil {
 					o.Log.Error(errMsg, err.Error())
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
 				}
 
@@ -347,14 +374,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 					err = createFolders([]string{filteredDigestPath})
 					if err != nil {
 						o.Log.Error(errMsg, err.Error())
-						spinner.Abort(false)
+						spinner.Abort(true)
+						spinner.Wait()
 						return v2alpha1.CollectorSchema{}, err
 					}
 				}
 
 				err = saveDeclarativeConfig(*filteredDC, filteredDigestPath)
 				if err != nil {
-					spinner.Abort(false)
+					spinner.Abort(true)
+					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
 				}
 
@@ -364,18 +393,30 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				result := v2alpha1.CatalogFilterResult{
 					OperatorFilter:     op,
 					FilteredConfigPath: filteredDigestPath,
+					ToRebuild:          toRebuild,
 				}
 				collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 
 			} else {
 				rebuiltTag = ""
+				toRebuild = false
 				filteredDC = originalDC
+				if collectorSchema.CatalogToFBCMap == nil {
+					collectorSchema.CatalogToFBCMap = make(map[string]v2alpha1.CatalogFilterResult)
+				}
+				result := v2alpha1.CatalogFilterResult{
+					OperatorFilter:     op,
+					FilteredConfigPath: "", // this value is not relevant: no rebuilding required
+					ToRebuild:          toRebuild,
+				}
+				collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 			}
 		}
 
 		ri, err := o.ctlgHandler.getRelatedImagesFromCatalog(filteredDC, copyImageSchemaMap)
 		if err != nil {
-			spinner.Abort(false)
+			spinner.Abort(true)
+			spinner.Wait()
 			return v2alpha1.CollectorSchema{}, err
 		}
 
