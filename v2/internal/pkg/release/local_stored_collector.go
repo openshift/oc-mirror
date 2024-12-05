@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
@@ -262,6 +263,20 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 		}
 	}
+
+	//OCPBUGS-43275: deduplicating
+	slices.SortFunc(allImages, func(a, b v2alpha1.CopyImageSchema) int {
+		cmp := strings.Compare(a.Origin, b.Origin)
+		if cmp == 0 {
+			cmp = strings.Compare(a.Source, b.Source)
+		}
+		if cmp == 0 { // this comparison is important because the same digest can be used
+			// several times in image-references for different components
+			cmp = strings.Compare(a.Destination, b.Destination)
+		}
+		return cmp
+	})
+	allImages = slices.Compact(allImages)
 
 	return allImages, nil
 }
