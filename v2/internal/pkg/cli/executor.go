@@ -288,6 +288,19 @@ func HideFlags(cmd *cobra.Command) {
 
 // Validate - cobra validation
 func (o ExecutorSchema) Validate(dest []string) error {
+	keyWords := []string{
+		"cluster-resources",
+		"dry-run",
+		"graph-preparation",
+		"helm",
+		"hold-operator",
+		"hold-release",
+		"delete",
+		"logs",
+		"operator-catalogs",
+		"release-images",
+		"signatures",
+	}
 
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
@@ -295,11 +308,24 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
 	}
+	// OCPBUGS-42862
+	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From == "" {
+		if keyWord := checkKeyWord(keyWords, dest[0]); len(keyWord) > 0 {
+			return fmt.Errorf("the destination contains an internal oc-mirror keyword '%s'", keyWord)
+		}
+	}
 	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, fileProtocol) {
 		return fmt.Errorf("when --from is used, it must have file:// prefix")
 	}
 	if len(o.Opts.Global.From) > 0 && o.Opts.Global.SinceString != "" {
 		o.Log.Warn("since flag is only taken into account during mirrorToDisk workflow")
+	}
+	// OCPBUGS-42862
+	// this should be covered in the m2d scenario, but just incase ...
+	if len(o.Opts.Global.From) > 0 {
+		if keyWord := checkKeyWord(keyWords, o.Opts.Global.From); len(keyWord) > 0 {
+			return fmt.Errorf("the path set in --from flag contains an internal oc-mirror keyword '%s'", keyWord)
+		}
 	}
 	if o.Opts.Global.SinceString != "" {
 		if _, err := time.Parse(time.DateOnly, o.Opts.Global.SinceString); err != nil {
@@ -1209,4 +1235,13 @@ func calculateMaxBatchSize(maxParallelDownloads uint, parallelBatchImages uint) 
 		maxBatchSize = 20
 	}
 	return maxBatchSize
+}
+
+func checkKeyWord(key_words []string, check string) string {
+	for _, i := range key_words {
+		if strings.Contains(check, i) {
+			return i
+		}
+	}
+	return ""
 }
