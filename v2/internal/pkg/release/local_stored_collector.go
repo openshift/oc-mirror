@@ -238,10 +238,18 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 			// OCPBUGS-38037: Check the graph image is in the cache before adding it
 			graphInCache, err := o.imageExists(ctx, graphRelatedImage.Image)
-			if err != nil || !graphInCache {
+			// OCPBUGS-43825: The check graphInCache is relevant for DiskToMirror workflow only, not for delete workflow
+			// In delete workflow, the graph image might have been mirrored with M2M, and the graph image might have
+			// therefore been pushed directly to the destination registry. It will not exist in the cache, and that should be ok.
+			// Nevertheless, in DiskToMirror, and as explained in OCPBUGS-38037, the graphInCache check is important
+			// because in enclave environment, the Cincinnati API may not have been called, so we rely on the existance of the
+			// graph image in the cache as a paliative.
+			shouldProceed := graphInCache || o.Opts.IsDeleteMode()
+			if err != nil && !o.Opts.IsDeleteMode() {
 				o.Log.Warn("unable to find graph image in local cache: SKIPPING. %v")
 				o.Log.Warn("%v", err)
-			} else {
+			}
+			if shouldProceed {
 				// OCPBUGS-26513: In order to get the destination for the graphDataImage
 				// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
 				// containing only the graph image. This way we can easily identify the destination
