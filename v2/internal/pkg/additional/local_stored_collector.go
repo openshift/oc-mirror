@@ -65,7 +65,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			origin = img.Name
 			if imgSpec.Transport == dockerProtocol {
 				if imgSpec.IsImageByDigestOnly() {
-					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Digest
+					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 					// use tag only for both src and dest
 					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
@@ -91,12 +91,12 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			if imgSpec.Transport == dockerProtocol {
 
 				if imgSpec.IsImageByDigestOnly() {
-					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
 					if o.generateV1DestTags {
 						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":latest"}, "/")
 
 					} else {
-						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Digest}, "/")
+						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
 					}
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 					// use tag only for both src and dest

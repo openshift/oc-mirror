@@ -82,7 +82,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Destination: "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -121,9 +121,9 @@ func TestAdditionalImageCollector(t *testing.T) {
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -162,7 +162,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Destination: "docker://mirror.acme.com/testns/test:latest",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -196,7 +196,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Destination: "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -227,9 +227,9 @@ func TestAdditionalImageCollector(t *testing.T) {
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
