@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/containers/image/v5/types"
@@ -487,8 +486,6 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		}
 
 	}
-
-	sort.Sort(ByTypePriority(allImages))
 
 	collectorSchema.AllImages = allImages
 	collectorSchema.CopyImageSchemaMap = *copyImageSchemaMap
