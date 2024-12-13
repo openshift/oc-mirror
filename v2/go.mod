@@ -1,6 +1,6 @@
 module github.com/openshift/oc-mirror/v2
 
-go 1.22.5
+go 1.23.0
 
 // replace github.com/sherine-k/catalog-filter => /home/skhoury/go/src/github.com/sherine-k/catalog-filter
 
