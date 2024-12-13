@@ -103,7 +103,7 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	case len(catalog.TargetTag) > 0: // applies only to catalogs
 		src = src + ":" + catalog.TargetTag
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
-		src = src + ":" + srcImgSpec.Digest
+		src = src + ":" + srcImgSpec.Algorithm + "-" + srcImgSpec.Digest
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
 		src = src + ":latest"
 	default:
@@ -168,7 +168,6 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			// add the tag for src and dest
 			switch {
 			// applies only to catalogs
-
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -180,7 +179,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
 				} else {
-					src = src + ":" + imgSpec.Digest
+					src = src + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				}
 				if o.generateV1DestTags {
 					hasher := fnv.New32a()
@@ -191,9 +190,8 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 					}
 					dest = dest + ":" + fmt.Sprintf("%x", hasher.Sum32())
 				} else {
-					dest = dest + ":" + imgSpec.Digest
+					dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				}
-
 			default:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -252,13 +250,12 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			// add the tag for src and dest
 			switch {
 			// applies only to catalogs
-
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				dest = dest + ":" + img.TargetTag
 			case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
 				dest = dest + "::latest"
 			case imgSpec.IsImageByDigestOnly():
-				dest = dest + ":" + imgSpec.Digest
+				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 			case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 				// use tag only for dest, but pull by digest
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
@@ -356,7 +353,7 @@ func (d OtherImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.Co
 	case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
 		dest = dest + ":latest"
 	case imgSpec.IsImageByDigestOnly():
-		dest = dest + ":" + imgSpec.Digest
+		dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 	case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 		// use tag only for dest, but pull by digest
 		d.log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
@@ -422,7 +419,7 @@ func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRe
 	case spec.Tag == "" && spec.Transport == ociProtocol:
 		saveCtlgDest = saveCtlgDest + ":latest"
 	case spec.IsImageByDigestOnly():
-		saveCtlgDest = saveCtlgDest + ":" + spec.Digest
+		saveCtlgDest = saveCtlgDest + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest():
 		saveCtlgDest = saveCtlgDest + ":" + spec.Tag
 	default:
@@ -455,7 +452,7 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 	case spec.Tag == "" && spec.Transport == ociProtocol:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":latest"
 	case spec.IsImageByDigestOnly():
-		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Digest
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 		// use tag only for dest, but pull by digest
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Tag
@@ -487,7 +484,7 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 	case spec.Tag == "" && spec.Transport == ociProtocol:
 		dest = dest + ":latest"
 	case spec.IsImageByDigestOnly():
-		dest = dest + ":" + spec.Digest
+		dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 		// use tag only for dest, but pull by digest
 		dest = dest + ":" + spec.Tag
