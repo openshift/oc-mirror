@@ -84,7 +84,7 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
-	MaxParallelDownloads     uint
+	ParallelLayerImages      uint
 	Function                 string // copy or delete (default is copy)
 	LocalStorageFQDN         string
 	RootlessStoragePath      string // used to override the container rootlesss storage path (usually set in /etc/containers/storage.conf)
@@ -435,4 +435,12 @@ func ParseManifestFormat(manifestFormat string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown format %q. Choose one of the supported formats: 'oci', 'v2s1', or 'v2s2'", manifestFormat)
 	}
+}
+
+func (c CopyOptions) IsCopy() bool {
+	return c.Function == "copy"
+}
+
+func (c CopyOptions) IsDelete() bool {
+	return c.Function == "delete"
 }
