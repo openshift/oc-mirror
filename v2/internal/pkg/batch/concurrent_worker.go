@@ -64,11 +64,6 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 
 	opts.PreserveDigests = true
 
-	// OCPBUGS-44448: ONLY for delete: need to track images that have same digest but different destination tags,
-	// so that we don't attempt to delete them multiple times.
-	// For copy, these images, having same image digest but different destination tags need to be mirrored
-	// so that the tag gets created on the destination registry.
-	alreadyDeleted := map[string]string{}
 	startTime := time.Now()
 
 	batches := splitImagesToBatches(collectorSchema, int(o.BatchSize))
@@ -129,57 +124,15 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					return nil
 				}
 
-				//OCPBUGS-44448: for delete only, find out if the image has already been deleted
-				isAlreadyHandled := false
-				if opts.Function == string(mirror.DeleteMode) {
-					mu.Lock()
-					if _, ok := alreadyDeleted[img.Origin]; ok {
-						isAlreadyHandled = true
-					}
-					mu.Unlock()
-				}
-
-				if !isAlreadyHandled {
-					err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
-					mu.Lock()
-					switch {
-					case err == nil:
-						o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
-						if opts.Function == string(mirror.DeleteMode) {
-							alreadyDeleted[img.Origin] = ""
-						}
-						spinner.Increment()
-
-						switch img.Type {
-						case v2alpha1.TypeCincinnatiGraph, v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent:
-							o.CopiedImages.TotalReleaseImages++
-						case v2alpha1.TypeGeneric:
-							o.CopiedImages.TotalAdditionalImages++
-						case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
-							o.CopiedImages.TotalOperatorImages++
-						case v2alpha1.TypeHelmImage:
-							o.CopiedImages.TotalHelmImages++
-						}
-					case img.Type.IsOperator():
-						operators := collectorSchema.CopyImageSchemaMap.OperatorsByImage[img.Origin]
-						bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
-						errArray = append(errArray, mirrorErrorSchema{image: img, err: err, operators: operators, bundles: bundles})
-						spinner.Abort(false)
-					case img.Type.IsRelease():
-						// error on release image, save the errArray and immediately return `UnsafeError` to caller
-						currentMirrorError := mirrorErrorSchema{image: img, err: err}
-						errArray = append(errArray, currentMirrorError)
-						spinner.Abort(false)
-						mu.Unlock()
-						return NewUnsafeError(currentMirrorError)
-					case img.Type.IsAdditionalImage() || img.Type.IsHelmImage():
-						errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
-						spinner.Abort(false)
-					}
-					mu.Unlock()
-				} else {
+				// OCPBUGS-43489
+				// Ensure local cache images get deleted when --force-delete-cache flag is used
+				// This reverts OCPBUGS-44448 (the root cause was a problem is in the DeleteDestination)
+				err := o.Mirror.Run(ctx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
+				mu.Lock()
+				switch {
+				case err == nil:
+					o.CopiedImages.AllImages = append(o.CopiedImages.AllImages, img)
 					spinner.Increment()
-
 					switch img.Type {
 					case v2alpha1.TypeCincinnatiGraph, v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent:
 						o.CopiedImages.TotalReleaseImages++
@@ -190,7 +143,23 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 					case v2alpha1.TypeHelmImage:
 						o.CopiedImages.TotalHelmImages++
 					}
+				case img.Type.IsOperator():
+					operators := collectorSchema.CopyImageSchemaMap.OperatorsByImage[img.Origin]
+					bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
+					errArray = append(errArray, mirrorErrorSchema{image: img, err: err, operators: operators, bundles: bundles})
+					spinner.Abort(false)
+				case img.Type.IsRelease():
+					// error on release image, save the errArray and immediately return `UnsafeError` to caller
+					currentMirrorError := mirrorErrorSchema{image: img, err: err}
+					errArray = append(errArray, currentMirrorError)
+					spinner.Abort(false)
+					mu.Unlock()
+					return NewUnsafeError(currentMirrorError)
+				case img.Type.IsAdditionalImage() || img.Type.IsHelmImage():
+					errArray = append(errArray, mirrorErrorSchema{image: img, err: err})
+					spinner.Abort(false)
 				}
+				mu.Unlock()
 				return nil
 			})
 
