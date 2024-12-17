@@ -626,6 +626,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 		},
 		ObjectMeta: cm.ObjectMeta{
 			Namespace: signatureNamespace,
+			Name:      configMapName,
 			Labels: map[string]string{
 				signatureLabel: "",
 			},
@@ -660,7 +661,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 			if file, ok := signatureFiles[imgSpec.Tag]; ok {
 				data, err := os.ReadFile(sigDir + "/" + file)
 				if err != nil {
-					o.Log.Warn("[GenerateSignatureConfigMap] release index image signature with tag %s : SKIPPED", imgSpec.Tag)
+					o.Log.Warn("[GenerateSignatureConfigMap] release index image signature with tag %s : SKIPPED. %v", imgSpec.Tag, err)
 					continue
 				}
 				// check if we have an entry already

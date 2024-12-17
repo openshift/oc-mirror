@@ -1159,7 +1159,13 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 
 		for id, file := range files {
 			key := fmt.Sprintf("sha256-%s-%d", strings.Split(file, "-sha256-")[1], id+1)
+			expectedCMName := configMapName
+			cmjName := cmJson.Name
+			assert.Equal(t, expectedCMName, cmjName)
 			bdJson := len(cmJson.BinaryData[key])
+
+			cmyName := cmYaml.Name
+			assert.Equal(t, expectedCMName, cmyName)
 			assert.Equal(t, bdJson, 1200)
 			bdYaml := len(cmYaml.BinaryData[key])
 			assert.Equal(t, bdYaml, 1200)
