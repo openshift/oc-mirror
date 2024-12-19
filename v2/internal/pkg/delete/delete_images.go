@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -50,16 +51,20 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		o.Log.Error("%v ", err)
 	}
 
+	duplicates := []string{}
 	var items []v2alpha1.DeleteItem
 	for _, img := range images {
-
-		item := v2alpha1.DeleteItem{
-			ImageName:      img.Origin,
-			ImageReference: img.Destination,
-			Type:           img.Type,
+		if slices.Contains(duplicates, img.Origin) {
+			o.Log.Debug("duplicate image found %s", img.Origin)
+		} else {
+			duplicates = append(duplicates, img.Origin)
+			item := v2alpha1.DeleteItem{
+				ImageName:      img.Origin,
+				ImageReference: img.Destination,
+				Type:           img.Type,
+			}
+			items = append(items, item)
 		}
-
-		items = append(items, item)
 	}
 
 	// sort the items
