@@ -788,6 +788,17 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 			copiedSchema = cs
 		}
 
+		// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
+		// it also gets added to the archive. When using the GCRCatalogBuilder implementation,
+		// the rebuilt catalog is automatically pushed to the registry, and is therefore not in
+		// the collectorSchema
+		if _, ok := o.CatalogBuilder.(*imagebuilder.GCRCatalogBuilder); ok {
+			copiedSchema, err = addRebuiltCatalogs(copiedSchema)
+			if err != nil {
+				return err
+			}
+		}
+
 		// prepare tar.gz when mirror to disk
 		// first stop the registry
 		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
@@ -1244,4 +1255,24 @@ func checkKeyWord(key_words []string, check string) string {
 		}
 	}
 	return ""
+}
+
+func addRebuiltCatalogs(cs v2alpha1.CollectorSchema) (v2alpha1.CollectorSchema, error) {
+	for _, ci := range cs.AllImages {
+		if ci.Type == v2alpha1.TypeOperatorCatalog && ci.RebuiltTag != "" {
+			imgSpec, err := image.ParseRef(ci.Destination)
+			if err != nil {
+				return cs, fmt.Errorf("unable to add rebuilt catalog for %s: %v", ci.Origin, err)
+			}
+			imgSpec = imgSpec.SetTag(ci.RebuiltTag)
+			rebuiltCI := v2alpha1.CopyImageSchema{
+				Origin:      ci.Origin,
+				Source:      imgSpec.ReferenceWithTransport,
+				Destination: imgSpec.ReferenceWithTransport,
+				Type:        v2alpha1.TypeOperatorCatalog,
+			}
+			cs.AllImages = append(cs.AllImages, rebuiltCI)
+		}
+	}
+	return cs, nil
 }
