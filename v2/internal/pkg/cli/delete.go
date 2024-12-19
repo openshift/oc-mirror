@@ -353,7 +353,7 @@ func (o *DeleteSchema) startLocalRegistryGarbageCollect() error {
 
 	opts := storage.GCOpts{
 		DryRun:         false,
-		RemoveUntagged: false,
+		RemoveUntagged: true,
 	}
 
 	// used for the garbage-collect
