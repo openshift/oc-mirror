@@ -6,12 +6,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -49,16 +51,20 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		o.Log.Error("%v ", err)
 	}
 
+	duplicates := []string{}
 	var items []v2alpha1.DeleteItem
 	for _, img := range images {
-
-		item := v2alpha1.DeleteItem{
-			ImageName:      img.Origin,
-			ImageReference: img.Destination,
-			Type:           img.Type,
+		if slices.Contains(duplicates, img.Origin) {
+			o.Log.Debug("duplicate image found %s", img.Origin)
+		} else {
+			duplicates = append(duplicates, img.Origin)
+			item := v2alpha1.DeleteItem{
+				ImageName:      img.Origin,
+				ImageReference: img.Destination,
+				Type:           img.Type,
+			}
+			items = append(items, item)
 		}
-
-		items = append(items, item)
 	}
 
 	// sort the items
@@ -113,6 +119,37 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	var batchError error
 
 	for _, img := range deleteImageList.Items {
+		// OCPBUGS-43489
+		// Verify that the "delete" destination is set correctly
+		// It does not hurt to check each entry :)
+		// This will avoid the error "Image may not exist or is not stored with a v2 Schema in a v2 registry"
+		// Reverts OCPBUGS-44448
+		imgSpecName, err := image.ParseRef(img.ImageName)
+		if err != nil {
+			return err
+		}
+		imgSpecRef, err := image.ParseRef(img.ImageReference)
+		if err != nil {
+			return err
+		}
+		// remove dockerProtocol
+		name := strings.Split(o.Opts.Global.DeleteDestination, dockerProtocol)
+		// this should not occur - but just incase
+		if len(name) < 2 {
+			return fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination)
+		}
+		assembleName := name[1] + "/" + imgSpecName.PathComponent
+		// check image type for release or release content
+		switch img.Type {
+		case v2alpha1.TypeOCPReleaseContent:
+			assembleName = name[1] + "/openshift/release"
+		case v2alpha1.TypeOCPRelease:
+			assembleName = name[1] + "/openshift/release-images"
+		}
+		// check the assembled name against the reference name
+		if assembleName != imgSpecRef.Name {
+			return fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (please verify full name)", o.Opts.Global.DeleteDestination)
+		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
 			Destination: img.ImageReference,
@@ -124,7 +161,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		if o.Opts.Global.ForceCacheDelete {
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
-				Destination: strings.Replace(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN, -1),
+				Destination: strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN),
 				Type:        img.Type,
 			}
 			o.Log.Debug("deleting images local cache %v", cis.Destination)
