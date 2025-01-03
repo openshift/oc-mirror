@@ -61,7 +61,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			return allImages, err
 		}
 
-		// all errors will be probogated to the caller
+		// all errors will be propogated to the caller
 		// no redundant logging to console
 		for _, value := range releases {
 			hld := strings.Split(value.Source, "/")
@@ -78,7 +78,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
-					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 
@@ -87,7 +86,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
 				if err != nil {
-					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 				o.Log.Debug(collectorPrefix+"copied release index image %s ", value.Source)
@@ -97,18 +95,15 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 			oci, err := o.Manifest.GetImageIndex(dir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
 			//read the link to the manifest
 			if len(oci.Manifests) == 0 {
-				//o.Log.Error(errMsg, "image index not found ")
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
 			}
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
 			}
 
@@ -118,7 +113,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			manifestDir := filepath.Join(dir, blobsDir, manifest)
 			mfst, err := o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
@@ -126,7 +120,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			fromDir := strings.Join([]string{dir, blobsDir}, "/")
 			err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug("extracted layer %s ", cacheDir)
@@ -135,14 +128,12 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			releaseDir := strings.Join([]string{cacheDir, releaseImageExtractFullPath}, "/")
 			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
 			if o.Config.Mirror.Platform.KubeVirtContainer {
 				ki, err := o.getKubeVirtImage(cacheDir)
 				if err != nil {
-					// log to console as warning
 					o.Log.Warn("%v", err)
 				} else {
 					allRelatedImages = append(allRelatedImages, ki)
@@ -171,7 +162,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	} else if o.Opts.IsDiskToMirror() {
 		releaseImages, releaseFolders, err := o.identifyReleases(ctx)
 		if err != nil {
-			//o.Log.Error(errMsg, err.Error())
 			return allImages, err
 		}
 
@@ -185,10 +175,16 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
-			if releaseRef.Tag == "" {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag")
+
+			if releaseRef.Tag == "" && len(releaseRef.Digest) == 0 {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag or digest")
 			}
-			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, releaseRef.Tag)
+			tag := releaseRef.Tag
+			if releaseRef.Tag == "" && len(releaseRef.Digest) > 0 {
+				tag = releaseRef.Digest
+			}
+			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, tag)
+
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
@@ -553,7 +549,13 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease || imgType == v2alpha1.TypeCincinnatiGraph:
-		tag = imgSpec.Tag
+		// OCPBUGS-44033 mirroring release with no release tag
+		// i.e by digest registry.ci.openshift.org/ocp/release@sha256:0fb444ec9bb1b01f06dd387519f0fe5b4168e2d09a015697a26534fc1565c5e7
+		if len(imgSpec.Tag) == 0 {
+			tag = releaseTag
+		} else {
+			tag = imgSpec.Tag
+		}
 	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
 		tag = releaseTag + "-" + imgName
 	case imgSpec.IsImageByDigestOnly():
@@ -562,6 +564,5 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 			tag = tag[:127]
 		}
 	}
-
 	return tag
 }
