@@ -54,7 +54,7 @@ func setupReleaseTest(t *testing.T) TestEnvironmentRelease {
 	return suite
 }
 
-func (suite *TestEnvironmentRelease) tearDown(t *testing.T) {
+func (suite *TestEnvironmentRelease) tearDown() {
 
 	os.RemoveAll(suite.tempFolder)
 	suite.sourceServer.Close()
@@ -87,7 +87,7 @@ func TestIntegrationRelease(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	suite := setupReleaseTest(t)
-	defer suite.tearDown(t)
+	defer suite.tearDown()
 
 	suite.runMirror2Disk(t)
 	suite.copyArchiveForD2M(t)
@@ -99,7 +99,7 @@ func TestIntegrationReleaseM2M(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	suite := setupReleaseTest(t)
-	defer suite.tearDown(t)
+	defer suite.tearDown()
 
 	suite.runMirror2Mirror(t)
 }

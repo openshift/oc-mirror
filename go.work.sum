@@ -1904,7 +1904,6 @@ github.com/sherine-k/catalog-filter v0.0.1 h1:4XATs+3jzB+p/OQkikdxJePVigjlyRqbLh
 github.com/sherine-k/catalog-filter v0.0.1/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
-github.com/sherine-k/catalog-filter v0.0.3 h1:YBcoOfIXeYaAi22Sd9ZFgzOcCHwuj4oBDC1w9gQDbEg=
 github.com/sherine-k/catalog-filter v0.0.3/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/shibumi/go-pathspec v1.3.0/go.mod h1:Xutfslp817l2I1cZvgcfeMQJG5QnU2lh5tVaaMCl3jE=
 github.com/shirou/gopsutil/v3 v3.21.10/go.mod h1:t75NhzCZ/dYyPQjyQmrAYP6c8+LCdFANeBMdLPCNnew=
@@ -2023,6 +2022,7 @@ github.com/valyala/tcplisten v1.0.0/go.mod h1:T0xQ8SeCZGxckz9qRXTfG43PvQ/mcWh7Fw
 github.com/vbatts/tar-split v0.11.3/go.mod h1:9QlHN18E+fEH7RdG+QAJJcuya3rqT7eXSTY7wGrAokY=
 github.com/vbauerster/mpb/v7 v7.5.3/go.mod h1:i+h4QY6lmLvBNK2ah1fSreiw3ajskRlBp9AhY/PnuOE=
 github.com/vbauerster/mpb/v8 v8.4.0/go.mod h1:vjp3hSTuCtR+x98/+2vW3eZ8XzxvGoP8CPseHMhiPyc=
+github.com/vbauerster/mpb/v8 v8.7.5/go.mod h1:bRCnR7K+mj5WXKsy0NWB6Or+wctYGvVwKn6huwvxKa0=
 github.com/vektah/gqlparser/v2 v2.4.5/go.mod h1:flJWIR04IMQPGz+BXLrORkrARBxv/rtyIAFvd/MceW0=
 github.com/veraison/go-cose v1.1.0/go.mod h1:7ziE85vSq4ScFTg6wyoMXjucIGOf4JkFEZi/an96Ct4=
 github.com/veraison/go-cose v1.2.0/go.mod h1:7ziE85vSq4ScFTg6wyoMXjucIGOf4JkFEZi/an96Ct4=

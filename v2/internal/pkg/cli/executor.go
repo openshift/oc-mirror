@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -34,7 +35,9 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
@@ -131,9 +134,8 @@ type ExecutorSchema struct {
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
 	Delete                       delete.DeleteInterface
-	MaxParallelOverallDownloads  uint
-	ParallelLayers               uint
-	ParallelBatchImages          uint
+	ParallelImageLayers          uint
+	ParallelImages               uint
 }
 
 type MakeDirInterface interface {
@@ -161,14 +163,14 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	flagRetryOpts, retryOpts := mirror.RetryFlags()
 
 	opts := &mirror.CopyOptions{
-		Global:               global,
-		DeprecatedTLSVerify:  deprecatedTLSVerifyOpt,
-		SrcImage:             srcOpts,
-		DestImage:            destOpts,
-		RetryOpts:            retryOpts,
-		Dev:                  false,
-		MaxParallelDownloads: maxParallelLayerDownloads,
-		Function:             string(mirror.CopyMode),
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+		ParallelLayerImages: maxParallelLayerDownloads,
+		Function:            string(mirror.CopyMode),
 	}
 
 	mkd := MakeDir{}
@@ -189,8 +191,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		SilenceUsage:  false,
 		Run: func(cmd *cobra.Command, args []string) {
 
-			log.Info("👋 Hello, welcome to oc-mirror")
-			log.Info("⚙️  setting up the environment for you...")
+			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
+			log.Info(emoji.Gear + "  setting up the environment for you...")
 
 			err := ex.Validate(args)
 			if err != nil {
@@ -234,10 +236,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", opts.Global.StrictArchiving, "If set (default is false), generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB).")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
-	cmd.Flags().UintVar(&ex.MaxParallelOverallDownloads, "max-parallel-downloads", 80, "Indicates the maximum registry downloads at the same time. Defaults to 80: 8 image copies in parallel, each with 10 parallel layer copies")
-	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 600*time.Second, "Timeout for mirroring an image. Defaults to 10mn")
-	cmd.Flags().UintVar(&ex.ParallelLayers, "parallel-layers", 0, "Indicates the maximum layers downloading in parallel for an image. Defaults to 10")
-	cmd.Flags().UintVar(&ex.ParallelBatchImages, "parallel-batch-images", 0, "Indicates the maximum images downloading in parallel for a batch. Defaults to 8")
+	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 10*time.Minute, "Timeout for mirroring an image. Defaults to 10mn")
+	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
+	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images mirrored in parallel. Defaults to 8")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -344,14 +345,8 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
 		return fmt.Errorf("when --workspace is used, it must have file:// prefix")
 	}
-	if o.Opts.MaxParallelDownloads < maxParallelLayerDownloads {
-		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d < %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, maxParallelLayerDownloads, maxParallelLayerDownloads)
-	}
-	if o.Opts.MaxParallelDownloads > 64 {
-		o.Log.Warn("⚠️ --max-parallel-downloads set to %d: %d > %d. Flag ignored. Setting max-parallel-downloads = %d", o.Opts.MaxParallelDownloads, o.Opts.MaxParallelDownloads, limitOverallParallelDownloads, limitOverallParallelDownloads)
-	}
 	if !slices.Contains([]string{"info", "debug", "trace", "error"}, o.Opts.Global.LogLevel) {
-		return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace,error)", o.Opts.Global.LogLevel)
+		return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", o.Opts.Global.LogLevel)
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -422,7 +417,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return err
 	}
 
-	o.Log.Info("🔀 workflow mode: %s ", o.Opts.Mode)
+	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
 		o.Opts.Global.Since, err = time.Parse(time.DateOnly, o.Opts.Global.SinceString)
@@ -437,9 +432,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
 	o.Opts.RemoveSignatures = true
 
-	o.Opts.MaxParallelDownloads = maxParallelLayerDownloads
-	if o.ParallelLayers > 0 {
-		o.Opts.MaxParallelDownloads = o.ParallelLayers
+	o.Opts.ParallelLayerImages = maxParallelLayerDownloads
+	if o.ParallelImageLayers > 0 {
+		o.Opts.ParallelLayerImages = o.ParallelImageLayers
 	}
 
 	if o.isLocalStoragePortBound() {
@@ -468,7 +463,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
-	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.ParallelImages)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
@@ -504,7 +499,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		err = o.RunMirrorToMirror(cmd, args)
 	}
 
-	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
+	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
 	if err != nil {
 		o.closeAll()
@@ -806,7 +801,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
 		o.localStorageInterruptChannel <- interruptSig
 
-		o.Log.Info("📦 Preparing the tarball archive...")
+		o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 		// next, generate the archive
 		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 		if err != nil {
@@ -1059,8 +1054,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	var collectorSchema v2alpha1.CollectorSchema
 	var allRelatedImages []v2alpha1.CopyImageSchema
 
-	o.Log.Info("🕵️  going to discover the necessary images...")
-	o.Log.Info("🔍 collecting release images...")
+	o.Log.Info(emoji.SleuthOrSpy + "  going to discover the necessary images...")
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
@@ -1074,7 +1069,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
 	allRelatedImages = append(allRelatedImages, releaseImgs...)
 
-	o.Log.Info("🔍 collecting operator images...")
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting operator images...")
 	// collect operators
 	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
@@ -1090,7 +1085,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
 	collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 
-	o.Log.Info("🔍 collecting additional images...")
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
 	// collect additionalImages
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
@@ -1103,7 +1098,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 	allRelatedImages = append(allRelatedImages, aImgs...)
 
-	o.Log.Info("🔍 collecting helm images...")
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
 		o.closeAll()
@@ -1124,6 +1119,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		}
 	})
 
+	sort.Sort(customsort.ByTypePriority(allRelatedImages))
+
 	collectorSchema.AllImages = allRelatedImages
 
 	endTime := time.Now()
@@ -1137,7 +1134,7 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 	// CLID-230 rebuild-catalogs
 	oImgs := operatorImgs.AllImages
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
-		o.Log.Info("🔂 rebuilding catalogs")
+		o.Log.Info(emoji.RepeatSingleButton + " rebuilding catalogs")
 
 		for _, copyImage := range oImgs {
 
@@ -1234,20 +1231,6 @@ func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image)
 		return isInSlice
 	})
 	return images
-}
-
-func calculateMaxBatchSize(maxParallelDownloads uint, parallelBatchImages uint) uint {
-	maxBatchSize := uint(1)
-	if parallelBatchImages > 0 {
-		return parallelBatchImages
-	}
-	if maxParallelDownloads > maxParallelLayerDownloads {
-		maxBatchSize = maxParallelDownloads / maxParallelLayerDownloads
-	}
-	if maxBatchSize > 20 {
-		maxBatchSize = 20
-	}
-	return maxBatchSize
 }
 
 func checkKeyWord(key_words []string, check string) string {
