@@ -731,10 +731,12 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create cluster-resources directory and clean it
 	o.Log.Trace("creating cluster-resources directory %s ", o.Opts.Global.WorkingDir+"/"+clusterResourcesDir)
-	err = os.RemoveAll(o.Opts.Global.WorkingDir + "/" + clusterResourcesDir)
-	if err != nil {
-		o.Log.Error(" setupWorkingDir for cluster resources: failed to clear folder %s: %v ", o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, err)
-		return err
+	if !o.Opts.IsDeleteMode() {
+		err = os.RemoveAll(o.Opts.Global.WorkingDir + "/" + clusterResourcesDir)
+		if err != nil {
+			o.Log.Error(" setupWorkingDir for cluster resources: failed to clear folder %s: %v ", o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, err)
+			return err
+		}
 	}
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0755)
 	if err != nil {
