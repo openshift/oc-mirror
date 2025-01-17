@@ -43,10 +43,12 @@ function cleanup_conn() {
 
 # install_deps will install crane and registry2 in go bin dir
 function install_deps() {
+  # Keep this version in sync with the version in go.mod
+  local crane_version=v0.15.2
   if [ "$(arch)" == "x86_64" ]
   then
     pushd ${DATA_TMP}
-    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@${crane_version}
     popd
     crane export registry:2 registry2.tar
     tar xvf registry2.tar bin/registry
@@ -66,7 +68,7 @@ function install_deps() {
     curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
     chmod +x $GOBIN/opm
 
-    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@latest
+    GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@${crane_version}
     mv ~/go/bin/crane $GOBIN/
 
     if [ "${ARCH}" == "arm64" ]
