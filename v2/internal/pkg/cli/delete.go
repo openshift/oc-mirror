@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -77,9 +78,8 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 		Use:   "delete",
 		Short: "Deletes all related images and manifests from a remote repository or local cache or both",
 		Run: func(cmd *cobra.Command, args []string) {
-			log.Info("👋 Hello, welcome to oc-mirror")
-			log.Info("⚙️  setting up the environment for you...")
-
+			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
+			log.Info(emoji.Gear + "  setting up the environment for you...")
 			err := ex.ValidateDelete(args)
 			if err != nil {
 				log.Error("%v ", err)
@@ -117,6 +117,8 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", ex.Opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cahce and remote registry")
 	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
+	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers deleted in parallel. Defaults to 10")
+	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images deleted in parallel. Defaults to 8")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -237,7 +239,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 
 	// ensure mirror and batch worker use delete logic
 	o.Opts.Function = string(mirror.DeleteMode)
-	o.Log.Info("🔀 workflow mode: %s / %s", o.Opts.Mode, o.Opts.Function)
+	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s / %s", o.Opts.Mode, o.Opts.Function)
 
 	if o.Opts.Global.DeleteGenerate {
 		err = o.setupWorkingDir()
@@ -267,7 +269,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	o.Batch = batch.NewConcurrentBatch(o.Log, o.LogsDir, o.Mirror, calculateMaxBatchSize(o.MaxParallelOverallDownloads, o.ParallelBatchImages))
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.ParallelImages)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
@@ -330,9 +332,9 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	}
 
 	if !o.Opts.Global.DeleteGenerate {
-		o.Log.Info("📝 Remember to execute a garbage collect (or similar) on your remote repository")
+		o.Log.Info(emoji.Memo + " Remember to execute a garbage collect (or similar) on your remote repository")
 	}
-	o.Log.Info("👋 Goodbye, thank you for using oc-mirror")
+	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
 	return nil
 }

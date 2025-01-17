@@ -55,7 +55,7 @@ func setupAdditionalTest(t *testing.T) TestEnvironmentAddditional {
 	return suite
 }
 
-func (suite *TestEnvironmentAddditional) tearDown(t *testing.T) {
+func (suite *TestEnvironmentAddditional) tearDown() {
 	suite.sourceServer.Close()
 	suite.destinationServer.Close()
 	os.RemoveAll(suite.tempFolder)
@@ -86,7 +86,7 @@ func TestIntegrationAdditional(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	suite := setupAdditionalTest(t)
-	defer suite.tearDown(t)
+	defer suite.tearDown()
 
 	suite.runMirror2Disk(t)
 	suite.copyArchiveForD2M(t)
@@ -98,7 +98,7 @@ func TestIntegrationAdditionalM2M(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	suite := setupAdditionalTest(t)
-	defer suite.tearDown(t)
+	defer suite.tearDown()
 
 	suite.runMirror2Mirror(t)
 

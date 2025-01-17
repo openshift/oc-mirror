@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 )
 
 func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
@@ -62,13 +63,13 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		if err != nil {
 			return err
 		}
-		o.Log.Warn("⚠️  %d/%d images necessary for mirroring are not available in the cache.", nbMissingImgs, len(allImages))
+		o.Log.Warn(emoji.Warning+"  %d/%d images necessary for mirroring are not available in the cache.", nbMissingImgs, len(allImages))
 		o.Log.Warn("List of missing images in : %s.\nplease re-run the mirror to disk process", missingImgsFilePath)
 	}
 
 	if len(imagesAvailable) > 0 {
 		o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", len(imagesAvailable))
 	}
-	o.Log.Info("📄 list of all images for mirroring in : %s", mappingTxtFilePath)
+	o.Log.Info(emoji.PageFacingUp+" list of all images for mirroring in : %s", mappingTxtFilePath)
 	return nil
 }

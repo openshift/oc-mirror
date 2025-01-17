@@ -123,9 +123,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		}
 	}
 
-	ctx, cancel := opts.Global.CommandTimeoutContext()
-	defer cancel()
-
 	imageListSelection := copy.CopySystemImage
 	if len(opts.MultiArch) > 0 && opts.All {
 		return fmt.Errorf("cannot use --all and --multi-arch flags together")
@@ -185,7 +182,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		PreserveDigests:                  opts.PreserveDigests,
-		MaxParallelDownloads:             opts.MaxParallelDownloads,
+		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
 
 	if opts.Global.LogLevel == "debug" {
@@ -276,9 +273,6 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 	if strings.Contains(image, opts.LocalStorageFQDN) { // when copying to cache, use HTTP
 		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
-
-	ctx, cancel := opts.Global.CommandTimeoutContext()
-	defer cancel()
 
 	return retry.IfNecessary(ctx, func() error {
 		err := imageRef.DeleteImage(ctx, sysCtx)
