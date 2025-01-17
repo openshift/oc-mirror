@@ -178,6 +178,22 @@ var (
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 	}
+	imageListOCPBUGS47688 = []v2alpha1.CopyImageSchema{
+		//docker://quay.io/openshift-release-dev/ocp-release:4.17.9-x86_64=docker://sherinefedora:5000/release/newtest/openshift/release-images:4.17.9-x86_64
+		//docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:024bb32ca49837b9ce58f0e1610e5bbb395df7ffaa90ddcffb8cf8ef1b3900dc=docker://sherinefedora:5000/release/newtest/openshift/release:4.17.9-x86_64-tools
+		{
+			Source:      "docker://localhost:55000/openshift/release-images:4.17.9-x86_64",
+			Destination: "docker://myregistry/openshift-release-dev/ocp-release/openshift/release-images:4.17.9-x86_64",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-release:4.17.9-x86_64",
+			Type:        v2alpha1.TypeOCPRelease,
+		},
+		{
+			Source:      "docker://localhost:55000/openshift/release:4.17.9-x86_64-tools",
+			Destination: "docker://myregistry/openshift-release-dev/ocp-release/openshift/release:4.17.9-x86_64-tools",
+			Origin:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:024bb32ca49837b9ce58f0e1610e5bbb395df7ffaa90ddcffb8cf8ef1b3900dc",
+			Type:        v2alpha1.TypeOCPRelease,
+		},
+	}
 )
 
 func TestIDMS_ITMSGenerator(t *testing.T) {
@@ -345,7 +361,7 @@ func TestGenerateIDMS(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			caseName: "Testing GemerateIDMS - digests only : should pass",
+			caseName: "Testing GenerateIDMS - digests only : should pass",
 			imgList:  imageListDigestsOnly,
 			expectedIdmsList: []confv1.ImageDigestMirrorSet{
 				{
@@ -356,6 +372,29 @@ func TestGenerateIDMS(t *testing.T) {
 							{
 								Source:  "quay.io/openshift-release-dev",
 								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift-release-dev"},
+							},
+						},
+					},
+				},
+			},
+			expectedError: false,
+		},
+		{
+			caseName: "Testing GenerateIDMS - OCPBUGS-47688 - should generate valid mirrors when destination has `release` in the url",
+			imgList:  imageListOCPBUGS47688,
+			expectedIdmsList: []confv1.ImageDigestMirrorSet{
+				{
+					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					Spec: confv1.ImageDigestMirrorSetSpec{
+						ImageDigestMirrors: []confv1.ImageDigestMirrors{
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-v4.0-art-dev",
+								Mirrors: []confv1.ImageMirror{"myregistry/openshift-release-dev/ocp-release/openshift/release"},
+							},
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-release",
+								Mirrors: []confv1.ImageMirror{"myregistry/openshift-release-dev/ocp-release/openshift/release-images"},
 							},
 						},
 					},
@@ -462,6 +501,25 @@ func TestGenerateITMS(t *testing.T) {
 							{
 								Source:  "quay.io/openshift-release-dev/ocp-release",
 								Mirrors: []confv1.ImageMirror{"myregistry/mynamespace/openshift/release-images"},
+							},
+						},
+					},
+				},
+			},
+			expectedError: false,
+		},
+		{
+			caseName: "Testing GenerateITMS - OCPBUGS-47688 : should generate correct mirrors when destination contains `release`",
+			imgList:  imageListOCPBUGS47688,
+			expectedItmsList: []confv1.ImageTagMirrorSet{
+				{
+					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: v1.ObjectMeta{Name: "itms-release-0"},
+					Spec: confv1.ImageTagMirrorSetSpec{
+						ImageTagMirrors: []confv1.ImageTagMirrors{
+							{
+								Source:  "quay.io/openshift-release-dev/ocp-release",
+								Mirrors: []confv1.ImageMirror{"myregistry/openshift-release-dev/ocp-release/openshift/release-images"},
 							},
 						},
 					},
