@@ -538,7 +538,7 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 }
 
 func attemptNamespaceScope(srcImgSpec, dstImgSpec image.ImageSpec) (string, string) {
-	if strings.Contains(dstImgSpec.PathComponent, srcImgSpec.PathComponent) {
+	if strings.HasSuffix(dstImgSpec.PathComponent, srcImgSpec.PathComponent) {
 		return namespaceScope(srcImgSpec), namespaceScope(dstImgSpec)
 	} else {
 		return repositoryScope(srcImgSpec), repositoryScope(dstImgSpec)
