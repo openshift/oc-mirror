@@ -21,10 +21,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
-	"github.com/docker/distribution"
-	"github.com/docker/distribution/reference"
-	"github.com/docker/distribution/registry/client/auth"
-	"github.com/docker/distribution/registry/client/transport"
+	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/registry/client/auth"
+	"github.com/distribution/distribution/v3/registry/client/transport"
+	"github.com/distribution/reference"
 	godigest "github.com/opencontainers/go-digest"
 )
 
@@ -315,7 +315,7 @@ func (s *s3BlobStore) Get(ctx context.Context, dgst godigest.Digest) ([]byte, er
 	return nil, fmt.Errorf("unimplemented")
 }
 
-func (s *s3BlobStore) Open(ctx context.Context, dgst godigest.Digest) (distribution.ReadSeekCloser, error) {
+func (s *s3BlobStore) Open(ctx context.Context, dgst godigest.Digest) (io.ReadSeekCloser, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 

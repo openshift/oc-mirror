@@ -7,6 +7,11 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=storages,scope=Cluster
+// +kubebuilder:subresource:status
+// +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/670
+// +openshift:file-pattern=cvoRunLevel=0000_50,operatorName=storage,operatorOrdering=01
 
 // Storage provides a means to configure an operator to manage the cluster storage operator. `cluster` is the canonical name.
 //
@@ -39,7 +44,6 @@ const (
 )
 
 // StorageSpec is the specification of the desired behavior of the cluster storage operator.
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.vsphereStorageDriver) || has(self.vsphereStorageDriver)", message="VSphereStorageDriver is required once set"
 type StorageSpec struct {
 	OperatorSpec `json:",inline"`
 
@@ -49,7 +53,6 @@ type StorageSpec struct {
 	// which may change over time without notice.
 	// The current default is CSIWithMigrationDriver and may not be changed.
 	// DEPRECATED: This field will be removed in a future release.
-	// +kubebuilder:validation:XValidation:rule="oldSelf != \"CSIWithMigrationDriver\" || self == \"CSIWithMigrationDriver\"",message="VSphereStorageDriver can not be changed once it is set to CSIWithMigrationDriver"
 	// +kubebuilder:validation:XValidation:rule="self != \"LegacyDeprecatedInTreeDriver\"",message="VSphereStorageDriver can not be set to LegacyDeprecatedInTreeDriver"
 	// +optional
 	VSphereStorageDriver StorageDriverType `json:"vsphereStorageDriver"`
@@ -61,7 +64,6 @@ type StorageStatus struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:object:root=true
 
 // StorageList contains a list of Storages.
 //
