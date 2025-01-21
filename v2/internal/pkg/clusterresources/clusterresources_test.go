@@ -11,6 +11,7 @@ import (
 
 	confv1 "github.com/openshift/api/config/v1"
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
+	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
@@ -951,7 +952,211 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}
 
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+	})
+}
 
+func TestClusterCatalogGenerator(t *testing.T) {
+	log := clog.New("trace")
+
+	tmpDir := t.TempDir()
+	workingDir := tmpDir + "/working-dir"
+
+	defer os.RemoveAll(tmpDir)
+	imageList := []v2alpha1.CopyImageSchema{
+		{
+			Source:      "docker://localhost:5000/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Destination: "docker://myregistry/mynamespace/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Type:        v2alpha1.TypeOCPRelease,
+		},
+		{
+			Source:      "docker://localhost:5000/redhat/redhat-operator-index:v4.15",
+			Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+			Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.15",
+			Type:        v2alpha1.TypeOperatorCatalog,
+		},
+		{ // OCPBUGS-41608 - this should be skipped because it mirrors to the cache
+			Source:      "docker://localhost:5000/redhat/redhat-operator-index:v4.15",
+			Destination: "docker://localhost:55000/redhat/redhat-operator-index:v4.15",
+			Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.15",
+			Type:        v2alpha1.TypeOperatorCatalog,
+		},
+		{
+			Source:      "docker://localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Destination: "docker://myregistry/mynamespace/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Type:        v2alpha1.TypeOperatorRelatedImage,
+		},
+		{
+			Source:      "docker://localhost:5000/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Destination: "docker://myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Origin:      "docker://quay.io/openshift-community-operators/cockroachdb@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Type:        v2alpha1.TypeOperatorBundle,
+		},
+	}
+
+	t.Run("Testing GenerateClusterCatalog : should pass", func(t *testing.T) {
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.ClusterCatalogGenerator(imageList)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		ccFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(ccFiles) != 1 {
+			t.Fatalf("output folder should contain 1 clustercatalog yaml file")
+		}
+
+		expectedCCName := "cc-redhat-operator-index-v4-15"
+		// check idmsFile has a name that is
+		// compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(ccFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("ClusterCatalog custom resource name %s doesn't  respect RFC1123", ccFiles[0].Name())
+		}
+		assert.Equal(t, expectedCCName, customResourceName)
+		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		var actualCC ofv1.ClusterCatalog
+		err = yaml.Unmarshal(bytes, &actualCC)
+		if err != nil {
+			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
+		}
+		expectedCC := ofv1.ClusterCatalog{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1.ClusterCatalogCRDAPIVersion,
+				Kind:       ofv1.ClusterCatalogKind,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      expectedCCName,
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1.ClusterCatalogSpec{
+				Source: ofv1.CatalogSource{
+					Type: ofv1.SourceTypeImage,
+					Image: &ofv1.ImageSource{
+						Ref: "myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+					},
+				},
+			},
+		}
+
+		assert.Equal(t, expectedCC, actualCC, "contents of clusterCatalog file incorrect")
+	})
+
+	t.Run("Testing GenerateClusterCatalog with catalog using a digest as tag : should pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := tmpDir + "/working-dir"
+
+		defer os.RemoveAll(tmpDir)
+		listCatalogDigestAsTag := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "registry.redhat.io/redhat/redhat-operator-index@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.ClusterCatalogGenerator(listCatalogDigestAsTag)
+		if err != nil {
+			t.Fatalf("should not fail")
+		}
+		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("output folder should exist")
+		}
+
+		ccFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(ccFiles) != 1 {
+			t.Fatalf("output folder should contain 1 clustercatalog yaml file")
+		}
+
+		expectedCCName := "cc-redhat-operator-index-7c4ef7434c97"
+		// check catalogsource has a name that is
+		// compliant with Kubernetes requested
+		// RFC-1035 + RFC1123
+		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+		customResourceName := strings.TrimSuffix(ccFiles[0].Name(), ".yaml")
+		if !isValidRFC1123(customResourceName) {
+			t.Fatalf("ClusterCatalog custom resource name %s doesn't respect RFC1123", ccFiles[0].Name())
+		}
+		assert.Equal(t, expectedCCName, customResourceName)
+		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		var actualCC ofv1.ClusterCatalog
+		err = yaml.Unmarshal(bytes, &actualCC)
+		if err != nil {
+			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
+		}
+		expectedCC := ofv1.ClusterCatalog{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1.ClusterCatalogCRDAPIVersion,
+				Kind:       ofv1.ClusterCatalogKind,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      expectedCCName,
+				Namespace: "openshift-marketplace",
+			},
+			Spec: ofv1.ClusterCatalogSpec{
+				Source: ofv1.CatalogSource{
+					Type: ofv1.SourceTypeImage,
+					Image: &ofv1.ImageSource{
+						Ref: "myregistry/mynamespace/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+					},
+				},
+			},
+		}
+
+		assert.Equal(t, expectedCC, actualCC, "contents of clusterCatalog file incorrect")
 	})
 }
 

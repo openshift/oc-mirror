@@ -14,6 +14,7 @@ import (
 
 	confv1 "github.com/openshift/api/config/v1"
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
+	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
@@ -211,6 +212,32 @@ func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2
 	return nil
 }
 
+func (o *ClusterResourcesGenerator) ClusterCatalogGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
+	if len(o.Config.Mirror.Operators) == 0 {
+		o.Log.Info(emoji.PageFacingUp + " No catalogs mirrored. Skipping ClusterCatalog file generation.")
+		return nil
+	}
+
+	firstCatalog := true
+	for _, copyImage := range allRelatedImages {
+		// OCPBUGS-41608: when running mirror to mirror, and starting OCPBUGS-37948, the catalog image is also copied to the local cache.
+		// therefore, it will be part of the `allRelatedImages` that is handled by ClusterCatalogGenerator.
+		// Since this catalog should not lead to generating a clusterCatalog custom resource, it should be skipped.
+		if copyImage.Type != v2alpha1.TypeOperatorCatalog || strings.Contains(copyImage.Destination, o.LocalStorageFQDN) {
+			continue
+		}
+		if firstCatalog {
+			o.Log.Info(emoji.PageFacingUp + " Generating ClusterCatalog file...")
+			firstCatalog = false
+		}
+		// TODO: add template support
+		if err := o.generateClusterCatalog(copyImage.Destination); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (o *ClusterResourcesGenerator) getCSTemplate(catalogRef string) string {
 	for _, op := range o.Config.ImageSetConfigurationSpec.Mirror.Operators {
 		if strings.Contains(catalogRef, op.Catalog) {
@@ -366,8 +393,98 @@ func catalogSourceContentFromTemplate(templateFile, catalogSourceName, image str
 	return obj, nil
 }
 
-func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorizedMirrors) ([]confv1.ImageDigestMirrorSet, error) {
+// TODO: support generation with template (or equivalent)
+func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) error {
+	catalogSpec, err := image.ParseRef(catalogRef)
+	if err != nil {
+		return err
+	}
 
+	var ccSuffix string
+	if catalogSpec.IsImageByDigestOnly() {
+		if len(catalogSpec.Digest) >= hashTruncLen {
+			ccSuffix = catalogSpec.Digest[:hashTruncLen]
+		} else {
+			ccSuffix = catalogSpec.Digest
+		}
+	} else {
+		tag := catalogSpec.Tag
+		if len(tag) >= hashTruncLen {
+			ccSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
+		} else {
+			ccSuffix = strings.Map(toRFC1035, tag)
+		}
+	}
+
+	if ccSuffix == "" {
+		ccSuffix = "0" // default value
+	}
+
+	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
+	catalogRepository := pathComponents[len(pathComponents)-1]
+	clusterCatalogName := "cc-" + catalogRepository + "-" + ccSuffix
+	// maybe needs some updating (i.e other unwanted characters !@# etc )
+	clusterCatalogName = strings.ReplaceAll(clusterCatalogName, ".", "-")
+	errs := validation.IsDNS1035Label(clusterCatalogName)
+	if len(errs) != 0 && !isValidRFC1123(clusterCatalogName) {
+		return fmt.Errorf("error creating cluster catalog name: %s", strings.Join(errs, ", "))
+	}
+
+	obj := ofv1.ClusterCatalog{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: ofv1.ClusterCatalogCRDAPIVersion,
+			Kind:       ofv1.ClusterCatalogKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterCatalogName,
+			Namespace: "openshift-marketplace",
+		},
+		Spec: ofv1.ClusterCatalogSpec{
+			Source: ofv1.CatalogSource{
+				Type: ofv1.SourceTypeImage,
+				Image: &ofv1.ImageSource{
+					Ref: catalogSpec.Reference,
+				},
+			},
+		},
+	}
+
+	// Create an unstructured object for removing creationTimestamp
+	unstructuredObj := unstructured.Unstructured{}
+	unstructuredObj.Object, err = runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	if err != nil {
+		return fmt.Errorf("error while sanitizing the clusterCatalog object prior to marshalling: %v", err)
+	}
+	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+
+	bytes, err := yaml.Marshal(unstructuredObj.Object)
+	if err != nil {
+		return fmt.Errorf("unable to marshal ClusterCatalog yaml: %v", err)
+	}
+
+	ccFileName := filepath.Join(o.WorkingDir, clusterResourcesDir, clusterCatalogName+".yaml")
+	// save ClusterCatalog struct to file
+	if _, err := os.Stat(ccFileName); errors.Is(err, os.ErrNotExist) {
+		o.Log.Debug("%s does not exist, creating it", ccFileName)
+		if err := os.MkdirAll(filepath.Dir(ccFileName), 0755); err != nil {
+			return err
+		}
+		o.Log.Debug("%s dir created", filepath.Dir(ccFileName))
+	}
+	ccFile, err := os.Create(ccFileName)
+	if err != nil {
+		return err
+	}
+
+	defer ccFile.Close()
+
+	_, err = ccFile.Write(bytes)
+	o.Log.Info("%s file created", ccFileName)
+
+	return err
+}
+
+func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorizedMirrors) ([]confv1.ImageDigestMirrorSet, error) {
 	// create a IDMS struct
 	idmsList := make([]confv1.ImageDigestMirrorSet, len(mirrorsByCategory))
 	for index, catMirrors := range mirrorsByCategory {
