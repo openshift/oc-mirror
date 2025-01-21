@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/pkg/version"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -47,7 +47,7 @@ import (
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 )
 
-func NewNewOptions(streams genericclioptions.IOStreams) *NewOptions {
+func NewNewOptions(streams genericiooptions.IOStreams) *NewOptions {
 	return &NewOptions{
 		IOStreams:       streams,
 		ParallelOptions: imagemanifest.ParallelOptions{MaxPerRegistry: 4},
@@ -55,11 +55,11 @@ func NewNewOptions(streams genericclioptions.IOStreams) *NewOptions {
 		// We strongly control the set of allowed component versions to prevent confusion
 		// about what component versions may be used for. Changing this list requires
 		// approval from the release architects.
-		AllowedComponents: []string{"kubernetes", "machine-os", "kernel", "crio"},
+		AllowedComponents: []string{"kubernetes", "machine-os", "kernel", "crio", "kubectl", "kubernetes-tests"},
 	}
 }
 
-func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewRelease(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewNewOptions(streams)
 	cmd := &cobra.Command{
 		Use:   "new [SRC=DST ...]",
@@ -96,7 +96,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 			registry.example.com.
 		`),
 		Example: templates.Examples(`
-			# Create a release from the latest origin images and push to a DockerHub repo
+			# Create a release from the latest origin images and push to a DockerHub repository
 			oc adm release new --from-image-stream=4.11 -n origin --to-image docker.io/mycompany/myrepo:latest
 
 			# Create a new release with updated metadata from a previous release
@@ -113,7 +113,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 		Run: func(cmd *cobra.Command, args []string) {
 			kcmdutil.CheckErr(o.Complete(f, cmd, args))
 			kcmdutil.CheckErr(o.Validate())
-			kcmdutil.CheckErr(o.Run())
+			kcmdutil.CheckErr(o.Run(cmd.Context()))
 		},
 	}
 	flags := cmd.Flags()
@@ -163,7 +163,7 @@ func NewRelease(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.
 }
 
 type NewOptions struct {
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 
 	SecurityOptions imagemanifest.SecurityOptions
 	ParallelOptions imagemanifest.ParallelOptions
@@ -311,7 +311,7 @@ func (o *NewOptions) cleanup() {
 	o.cleanupFns = nil
 }
 
-func (o *NewOptions) Run() error {
+func (o *NewOptions) Run(ctx context.Context) error {
 	defer o.cleanup()
 
 	// check parameters
@@ -369,7 +369,7 @@ func (o *NewOptions) Run() error {
 		var imageReferencesData, releaseMetadata []byte
 
 		buf := &bytes.Buffer{}
-		extractOpts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
+		extractOpts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: buf, ErrOut: o.ErrOut})
 		extractOpts.ParallelOptions = o.ParallelOptions
 		extractOpts.SecurityOptions = o.SecurityOptions
 		if o.KeepManifestList {
@@ -399,13 +399,13 @@ func (o *NewOptions) Run() error {
 		extractOpts.TarEntryCallback = func(hdr *tar.Header, _ extract.LayerInfo, r io.Reader) (bool, error) {
 			var err error
 			if hdr.Name == "image-references" {
-				imageReferencesData, err = ioutil.ReadAll(r)
+				imageReferencesData, err = io.ReadAll(r)
 				if err != nil {
 					return false, err
 				}
 			}
 			if hdr.Name == "release-metadata" {
-				releaseMetadata, err = ioutil.ReadAll(r)
+				releaseMetadata, err = io.ReadAll(r)
 				if err != nil {
 					return false, err
 				}
@@ -571,7 +571,7 @@ func (o *NewOptions) Run() error {
 
 	case len(o.FromDirectory) > 0:
 		fmt.Fprintf(o.ErrOut, "info: Using %s as the input to the release\n", o.FromDirectory)
-		files, err := ioutil.ReadDir(o.FromDirectory)
+		files, err := os.ReadDir(o.FromDirectory)
 		if err != nil {
 			return err
 		}
@@ -586,7 +586,7 @@ func (o *NewOptions) Run() error {
 				ordered = append(ordered, name)
 			}
 			if f.Name() == "image-references" {
-				data, err := ioutil.ReadFile(filepath.Join(o.FromDirectory, "image-references"))
+				data, err := os.ReadFile(filepath.Join(o.FromDirectory, "image-references"))
 				if err != nil {
 					return err
 				}
@@ -717,7 +717,7 @@ func (o *NewOptions) Run() error {
 	}
 
 	if len(o.Mirror) > 0 {
-		if err := o.mirrorImages(is); err != nil {
+		if err := o.mirrorImages(ctx, is); err != nil {
 			return err
 		}
 	}
@@ -772,7 +772,7 @@ func (o *NewOptions) Run() error {
 	pr, pw := io.Pipe()
 	go func() {
 		var err error
-		operators, err = writePayload(pw, is, cm, ordered, metadata, o.AllowMissingImages, verifiers)
+		operators, err = writePayload(pw, is, cm, ordered, metadata, o.AllowMissingImages, verifiers, o.ErrOut)
 		pw.CloseWithError(err)
 	}()
 
@@ -945,7 +945,7 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 	dir := o.Directory
 	if len(dir) == 0 {
 		var err error
-		dir, err = ioutil.TempDir("", fmt.Sprintf("release-image-%s", name))
+		dir, err = os.MkdirTemp("", fmt.Sprintf("release-image-%s", name))
 		if err != nil {
 			return err
 		}
@@ -955,7 +955,7 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 
 	verifier := imagemanifest.NewVerifier()
 	var lock sync.Mutex
-	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.ParallelOptions = o.ParallelOptions
 	opts.SecurityOptions = o.SecurityOptions
 	if o.KeepManifestList {
@@ -1077,17 +1077,17 @@ func (o *NewOptions) extractManifests(is *imageapi.ImageStream, name string, met
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, "image-references"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "image-references"), data, 0644); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (o *NewOptions) mirrorImages(is *imageapi.ImageStream) error {
+func (o *NewOptions) mirrorImages(ctx context.Context, is *imageapi.ImageStream) error {
 	klog.V(4).Infof("Mirroring release contents to %s", o.Mirror)
 	copied := is.DeepCopy()
-	opts := NewMirrorOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := NewMirrorOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.DryRun = o.DryRun
 	opts.ImageStream = copied
 	opts.To = o.Mirror
@@ -1096,7 +1096,7 @@ func (o *NewOptions) mirrorImages(is *imageapi.ImageStream) error {
 	opts.SecurityOptions = o.SecurityOptions
 	opts.KeepManifestList = o.KeepManifestList
 
-	if err := opts.Run(); err != nil {
+	if err := opts.Run(ctx); err != nil {
 		return err
 	}
 
@@ -1154,7 +1154,7 @@ func (o *NewOptions) write(r io.Reader, is *imageapi.ImageStream, now time.Time)
 			if strings.Count(name, "/") > 0 || name == "." || name == ".." || len(name) == 0 {
 				continue
 			}
-			itemPath := filepath.Join(o.ToDir, name)
+			itemPath := filepath.Clean(filepath.Join(o.ToDir, name))
 			f, err := os.OpenFile(itemPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 			if err != nil {
 				return err
@@ -1223,7 +1223,7 @@ func (o *NewOptions) write(r io.Reader, is *imageapi.ImageStream, now time.Time)
 		}
 
 		verifier := imagemanifest.NewVerifier()
-		options := imageappend.NewAppendImageOptions(genericclioptions.IOStreams{Out: ioutil.Discard, ErrOut: o.ErrOut})
+		options := imageappend.NewAppendImageOptions(genericiooptions.IOStreams{Out: io.Discard, ErrOut: o.ErrOut})
 		options.ParallelOptions = o.ParallelOptions
 		options.SecurityOptions = o.SecurityOptions
 		options.DryRun = o.DryRun
@@ -1288,7 +1288,7 @@ func (o *NewOptions) write(r io.Reader, is *imageapi.ImageStream, now time.Time)
 			return err
 		}
 		if len(o.ToSignature) > 0 {
-			if err := ioutil.WriteFile(o.ToSignature, msg, 0644); err != nil {
+			if err := os.WriteFile(o.ToSignature, msg, 0644); err != nil {
 				return fmt.Errorf("unable to write signature file: %v", err)
 			}
 		} else {
@@ -1331,7 +1331,7 @@ func writeNestedTarHeader(tw *tar.Writer, parts []string, existing map[string]st
 	return nil
 }
 
-func writePayload(w io.Writer, is *imageapi.ImageStream, cm *CincinnatiMetadata, ordered []string, metadata map[string]imageData, allowMissingImages bool, verifiers []PayloadVerifier) ([]string, error) {
+func writePayload(w io.Writer, is *imageapi.ImageStream, cm *CincinnatiMetadata, ordered []string, metadata map[string]imageData, allowMissingImages bool, verifiers []PayloadVerifier, errOut io.Writer) ([]string, error) {
 	var operators []string
 	directories := make(map[string]struct{})
 	files := make(map[string]int)
@@ -1397,7 +1397,7 @@ func writePayload(w io.Writer, is *imageapi.ImageStream, cm *CincinnatiMetadata,
 		if fi := takeFileByName(&contents, "image-references"); fi != nil {
 			path := filepath.Join(image.Directory, fi.Name())
 			klog.V(2).Infof("Perform image replacement based on inclusion of %s", path)
-			transform, err = NewTransformFromImageStreamFile(path, is, allowMissingImages)
+			transform, err = NewTransformFromImageStreamFile(path, is, allowMissingImages, errOut)
 			if err != nil {
 				return fmt.Errorf("operator %q contained an invalid image-references file: %s", name, err)
 			}
@@ -1427,7 +1427,7 @@ func writePayload(w io.Writer, is *imageapi.ImageStream, cm *CincinnatiMetadata,
 			dst := path.Join(append(append([]string{}, parts...), filename)...)
 			klog.V(4).Infof("Copying %s to %s", src, dst)
 
-			data, err := ioutil.ReadFile(src)
+			data, err := os.ReadFile(src)
 			if err != nil {
 				return err
 			}
@@ -1505,7 +1505,7 @@ func pruneEmptyDirectories(dir string) error {
 		if !info.IsDir() {
 			return nil
 		}
-		names, err := ioutil.ReadDir(path)
+		names, err := os.ReadDir(path)
 		if err != nil {
 			return err
 		}
@@ -1595,7 +1595,7 @@ type PayloadVerifier func(filename string, data []byte) error
 func pruneUnreferencedImageStreams(out io.Writer, is *imageapi.ImageStream, metadata map[string]imageData, include []string) error {
 	referenced := make(map[string]struct{})
 	for _, v := range metadata {
-		is, err := parseImageStream(filepath.Join(v.Directory, "image-references"))
+		is, err := parseImageStream(filepath.Clean(filepath.Join(v.Directory, "image-references")))
 		if os.IsNotExist(err) {
 			continue
 		}
@@ -1628,7 +1628,7 @@ func pruneUnreferencedImageStreams(out io.Writer, is *imageapi.ImageStream, meta
 func filenameContents(s string, in io.Reader) ([]byte, error) {
 	switch {
 	case s == "-":
-		return ioutil.ReadAll(in)
+		return io.ReadAll(in)
 	case strings.Index(s, "http://") == 0 || strings.Index(s, "https://") == 0:
 		resp, err := http.Get(s)
 		if err != nil {
@@ -1637,11 +1637,11 @@ func filenameContents(s string, in io.Reader) ([]byte, error) {
 		defer resp.Body.Close()
 		switch {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
-			return ioutil.ReadAll(resp.Body)
+			return io.ReadAll(resp.Body)
 		default:
 			return nil, fmt.Errorf("unable to load URL: server returned %d: %s", resp.StatusCode, resp.Status)
 		}
 	default:
-		return ioutil.ReadFile(s)
+		return os.ReadFile(s)
 	}
 }

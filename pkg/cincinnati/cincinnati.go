@@ -481,7 +481,7 @@ func getGraphData(ctx context.Context, c Client) (graph graph, err error) {
 			klog.V(5).Infof("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
 		} else {
 
-			klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
+			klog.V(5).Infof("Using a root CA pool with %d root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
 		}
 	}
 

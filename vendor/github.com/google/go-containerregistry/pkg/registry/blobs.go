@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -49,24 +48,24 @@ func isBlob(req *http.Request) bool {
 		elem[len(elem)-2] == "uploads")
 }
 
-// blobHandler represents a minimal blob storage backend, capable of serving
+// BlobHandler represents a minimal blob storage backend, capable of serving
 // blob contents.
-type blobHandler interface {
+type BlobHandler interface {
 	// Get gets the blob contents, or errNotFound if the blob wasn't found.
 	Get(ctx context.Context, repo string, h v1.Hash) (io.ReadCloser, error)
 }
 
-// blobStatHandler is an extension interface representing a blob storage
+// BlobStatHandler is an extension interface representing a blob storage
 // backend that can serve metadata about blobs.
-type blobStatHandler interface {
+type BlobStatHandler interface {
 	// Stat returns the size of the blob, or errNotFound if the blob wasn't
 	// found, or redirectError if the blob can be found elsewhere.
 	Stat(ctx context.Context, repo string, h v1.Hash) (int64, error)
 }
 
-// blobPutHandler is an extension interface representing a blob storage backend
+// BlobPutHandler is an extension interface representing a blob storage backend
 // that can write blob contents.
-type blobPutHandler interface {
+type BlobPutHandler interface {
 	// Put puts the blob contents.
 	//
 	// The contents will be verified against the expected size and digest
@@ -74,6 +73,13 @@ type blobPutHandler interface {
 	// don't match. Implementations should return that error, or a wrapper
 	// around that error, to return the correct error when these don't match.
 	Put(ctx context.Context, repo string, h v1.Hash, rc io.ReadCloser) error
+}
+
+// BlobDeleteHandler is an extension interface representing a blob storage
+// backend that can delete blob contents.
+type BlobDeleteHandler interface {
+	// Delete the blob contents.
+	Delete(ctx context.Context, repo string, h v1.Hash) error
 }
 
 // redirectError represents a signal that the blob handler doesn't have the blob
@@ -97,6 +103,8 @@ type memHandler struct {
 	lock sync.Mutex
 }
 
+func NewInMemoryBlobHandler() BlobHandler { return &memHandler{m: map[string][]byte{}} }
+
 func (m *memHandler) Stat(_ context.Context, _ string, h v1.Hash) (int64, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -115,28 +123,40 @@ func (m *memHandler) Get(_ context.Context, _ string, h v1.Hash) (io.ReadCloser,
 	if !found {
 		return nil, errNotFound
 	}
-	return ioutil.NopCloser(bytes.NewReader(b)), nil
+	return io.NopCloser(bytes.NewReader(b)), nil
 }
 func (m *memHandler) Put(_ context.Context, _ string, h v1.Hash, rc io.ReadCloser) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	defer rc.Close()
-	all, err := ioutil.ReadAll(rc)
+	all, err := io.ReadAll(rc)
 	if err != nil {
 		return err
 	}
 	m.m[h.String()] = all
 	return nil
 }
+func (m *memHandler) Delete(_ context.Context, _ string, h v1.Hash) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, found := m.m[h.String()]; !found {
+		return errNotFound
+	}
+
+	delete(m.m, h.String())
+	return nil
+}
 
 // blobs
 type blobs struct {
-	blobHandler blobHandler
+	blobHandler BlobHandler
 
 	// Each upload gets a unique id that writes occur to until finalized.
 	uploads map[string][]byte
 	lock    sync.Mutex
+	log     *log.Logger
 }
 
 func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
@@ -172,7 +192,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 		}
 
 		var size int64
-		if bsh, ok := b.blobHandler.(blobStatHandler); ok {
+		if bsh, ok := b.blobHandler.(BlobStatHandler); ok {
 			size, err = bsh.Stat(req.Context(), repo, h)
 			if errors.Is(err, errNotFound) {
 				return regErrBlobUnknown
@@ -197,7 +217,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 				return regErrInternal(err)
 			}
 			defer rc.Close()
-			size, err = io.Copy(ioutil.Discard, rc)
+			size, err = io.Copy(io.Discard, rc)
 			if err != nil {
 				return regErrInternal(err)
 			}
@@ -220,7 +240,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 
 		var size int64
 		var r io.Reader
-		if bsh, ok := b.blobHandler.(blobStatHandler); ok {
+		if bsh, ok := b.blobHandler.(BlobStatHandler); ok {
 			size, err = bsh.Stat(req.Context(), repo, h)
 			if errors.Is(err, errNotFound) {
 				return regErrBlobUnknown
@@ -274,7 +294,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 		return nil
 
 	case http.MethodPost:
-		bph, ok := b.blobHandler.(blobPutHandler)
+		bph, ok := b.blobHandler.(BlobPutHandler)
 		if !ok {
 			return regErrUnsupported
 		}
@@ -375,7 +395,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 		return nil
 
 	case http.MethodPut:
-		bph, ok := b.blobHandler.(blobPutHandler)
+		bph, ok := b.blobHandler.(BlobPutHandler)
 		if !ok {
 			return regErrUnsupported
 		}
@@ -409,7 +429,7 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 		}
 
 		defer req.Body.Close()
-		in := ioutil.NopCloser(io.MultiReader(bytes.NewBuffer(b.uploads[target]), req.Body))
+		in := io.NopCloser(io.MultiReader(bytes.NewBuffer(b.uploads[target]), req.Body))
 
 		size := int64(verify.SizeUnknown)
 		if req.ContentLength > 0 {
@@ -433,6 +453,26 @@ func (b *blobs) handle(resp http.ResponseWriter, req *http.Request) *regError {
 		delete(b.uploads, target)
 		resp.Header().Set("Docker-Content-Digest", h.String())
 		resp.WriteHeader(http.StatusCreated)
+		return nil
+
+	case http.MethodDelete:
+		bdh, ok := b.blobHandler.(BlobDeleteHandler)
+		if !ok {
+			return regErrUnsupported
+		}
+
+		h, err := v1.NewHash(target)
+		if err != nil {
+			return &regError{
+				Status:  http.StatusBadRequest,
+				Code:    "NAME_INVALID",
+				Message: "invalid digest",
+			}
+		}
+		if err := bdh.Delete(req.Context(), repo, h); err != nil {
+			return regErrInternal(err)
+		}
+		resp.WriteHeader(http.StatusAccepted)
 		return nil
 
 	default:

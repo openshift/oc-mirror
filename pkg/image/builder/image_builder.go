@@ -24,6 +24,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	// Mode constants from the USTAR spec:
+	// See http://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html#tag_20_92_13_06
+	c_ISUID = 04000 // Set uid
+	c_ISGID = 02000 // Set gid
+	c_ISVTX = 01000 // Save text (sticky bit)
+)
+
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
 type ImageBuilder struct {
 	NameOpts   []name.Option
@@ -403,8 +411,9 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 			}
 
 			hdr := &tar.Header{
-				Name: filepath.Join(targetPath, filepath.ToSlash(rel)),
-				Mode: int64(info.Mode()),
+				Name:   filepath.Join(targetPath, filepath.ToSlash(rel)),
+				Format: tar.FormatPAX,
+				Mode:   int64(info.Mode().Perm()),
 			}
 			if uid != -1 {
 				hdr.Uid = uid
@@ -412,6 +421,17 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 			if gid != -1 {
 				hdr.Gid = gid
 			}
+
+			if info.Mode()&os.ModeSetuid != 0 {
+				hdr.Mode |= c_ISUID
+			}
+			if info.Mode()&os.ModeSetgid != 0 {
+				hdr.Mode |= c_ISGID
+			}
+			if info.Mode()&os.ModeSticky != 0 {
+				hdr.Mode |= c_ISVTX
+			}
+
 			if err := processPaths(hdr, info, fp); err != nil {
 				return err
 			}
@@ -425,8 +445,9 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 	} else {
 		base := filepath.Base(path)
 		hdr := &tar.Header{
-			Name: filepath.Join(targetPath, filepath.ToSlash(base)),
-			Mode: int64(pathInfo.Mode()),
+			Name:   filepath.Join(targetPath, filepath.ToSlash(base)),
+			Format: tar.FormatPAX,
+			Mode:   int64(pathInfo.Mode().Perm()),
 		}
 		if uid != -1 { // uid was specified in the input param
 			hdr.Uid = uid
@@ -434,6 +455,17 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 		if gid != -1 { // gid was specified in the input param
 			hdr.Gid = gid
 		}
+
+		if pathInfo.Mode()&os.ModeSetuid != 0 {
+			hdr.Mode |= c_ISUID
+		}
+		if pathInfo.Mode()&os.ModeSetgid != 0 {
+			hdr.Mode |= c_ISGID
+		}
+		if pathInfo.Mode()&os.ModeSticky != 0 {
+			hdr.Mode |= c_ISVTX
+		}
+
 		if err := processPaths(hdr, pathInfo, path); err != nil {
 			return nil, err
 		}
@@ -442,5 +474,9 @@ func LayerFromPathWithUidGid(targetPath, path string, uid int, gid int) (v1.Laye
 	if err := tw.Close(); err != nil {
 		return nil, fmt.Errorf("failed to finish tar: %w", err)
 	}
-	return tarball.LayerFromReader(&b)
+
+	opener := func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(b.Bytes())), nil
+	}
+	return tarball.LayerFromOpener(opener)
 }

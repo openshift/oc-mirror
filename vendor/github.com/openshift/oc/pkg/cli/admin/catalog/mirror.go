@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,24 +13,24 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/alicebob/sqlittle"
+	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/manifest/manifestlist"
+	"github.com/joelanford/ignore"
+	"github.com/opencontainers/go-digest"
+	"github.com/spf13/cobra"
+
 	apicfgv1 "github.com/openshift/api/config/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 	"sigs.k8s.io/yaml"
-
-	"github.com/alicebob/sqlittle"
-	"github.com/docker/distribution"
-	"github.com/docker/distribution/manifest/manifestlist"
-	"github.com/joelanford/ignore"
-	"github.com/opencontainers/go-digest"
-	"github.com/spf13/cobra"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	imgextract "github.com/openshift/oc/pkg/cli/image/extract"
@@ -109,7 +108,7 @@ func init() {
 
 type MirrorCatalogOptions struct {
 	*IndexImageMirrorerOptions
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 
 	DryRun          bool
 	ManifestOnly    bool
@@ -133,7 +132,7 @@ type MirrorCatalogOptions struct {
 	DestRef   imagesource.TypedImageReference
 }
 
-func NewMirrorCatalogOptions(streams genericclioptions.IOStreams) *MirrorCatalogOptions {
+func NewMirrorCatalogOptions(streams genericiooptions.IOStreams) *MirrorCatalogOptions {
 	return &MirrorCatalogOptions{
 		IOStreams:                 streams,
 		IndexImageMirrorerOptions: DefaultImageIndexMirrorerOptions(),
@@ -143,7 +142,7 @@ func NewMirrorCatalogOptions(streams genericclioptions.IOStreams) *MirrorCatalog
 	}
 }
 
-func NewMirrorCatalog(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewMirrorCatalog(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewMirrorCatalogOptions(streams)
 
 	cmd := &cobra.Command{
@@ -295,7 +294,7 @@ func (o *MirrorCatalogOptions) Complete(cmd *cobra.Command, args []string) error
 	}
 
 	if o.IndexPath == "" {
-		tmpdir, err := ioutil.TempDir("", "")
+		tmpdir, err := os.MkdirTemp("", "")
 		if err != nil {
 			return err
 		}
@@ -695,7 +694,7 @@ func WriteManifests(out io.Writer, source, dest imagesource.TypedImageReference,
 			return nil
 		}
 
-		if err := ioutil.WriteFile(filepath.Join(dir, "imageDigestMirrorSet.yaml"), aggregateIDMSs(idmss), os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "imageDigestMirrorSet.yaml"), aggregateIDMSs(idmss), os.ModePerm); err != nil {
 			return fmt.Errorf("error writing ImageDigestMirrorSet")
 		}
 
@@ -704,7 +703,7 @@ func WriteManifests(out io.Writer, source, dest imagesource.TypedImageReference,
 			return err
 		}
 
-		if err := ioutil.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icsps), os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "imageContentSourcePolicy.yaml"), aggregateICSPs(icsps), os.ModePerm); err != nil {
 			return fmt.Errorf("error writing ImageContentSourcePolicy")
 		}
 
@@ -712,7 +711,7 @@ func WriteManifests(out io.Writer, source, dest imagesource.TypedImageReference,
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, "catalogSource.yaml"), catalogSource, os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "catalogSource.yaml"), catalogSource, os.ModePerm); err != nil {
 			return fmt.Errorf("error writing CatalogSource")
 		}
 	}

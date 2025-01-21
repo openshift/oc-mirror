@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"expvar"
 	"fmt"
 	"math"
@@ -77,7 +79,7 @@ type App struct {
 		source notifications.SourceRecord
 	}
 
-	redis *redis.Client
+	redis redis.UniversalClient
 
 	// isCache is true if this registry is configured as a pull through cache
 	isCache bool
@@ -114,7 +116,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 		storageParams = make(configuration.Parameters)
 	}
 	if storageParams["useragent"] == "" {
-		storageParams["useragent"] = fmt.Sprintf("distribution/%s %s", version.Version, runtime.Version())
+		storageParams["useragent"] = fmt.Sprintf("distribution/%s %s", version.Version(), runtime.Version())
 	}
 
 	var err error
@@ -155,7 +157,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 		panic(err)
 	}
 
-	app.configureSecret(config)
+	// Do not configure HTTP secret for a proxy registry as HTTP secret
+	// is only used for blob uploads and a proxy registry does not support blob uploads.
+	if !app.isCache {
+		app.configureSecret(config)
+	}
 	app.configureEvents(config)
 	app.configureRedis(config)
 	app.configureLogHook(config)
@@ -181,6 +187,21 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 			if deleteEnabled, ok := e.(bool); ok && deleteEnabled {
 				options = append(options, storage.EnableDelete)
 			}
+		}
+	}
+
+	// configure tag lookup concurrency limit
+	if p := config.Storage.TagParameters(); p != nil {
+		l, ok := p["concurrencylimit"]
+		if ok {
+			limit, ok := l.(int)
+			if !ok {
+				panic("tag lookup concurrency limit config key must have a integer value")
+			}
+			if limit < 0 {
+				panic("tag lookup concurrency limit should be a non-negative integer value")
+			}
+			options = append(options, storage.TagLookupConcurrencyLimit(limit))
 		}
 	}
 
@@ -235,6 +256,21 @@ func NewApp(ctx context.Context, config *configuration.Configuration) *App {
 				re := regexp.MustCompile(strings.Join(config.Validation.Manifests.URLs.Deny, "|"))
 				options = append(options, storage.ManifestURLsDenyRegexp(re))
 			}
+		}
+
+		switch config.Validation.Manifests.Indexes.Platforms {
+		case "list":
+			options = append(options, storage.EnableValidateImageIndexImagesExist)
+			for _, platform := range config.Validation.Manifests.Indexes.PlatformList {
+				options = append(options, storage.AddValidateImageIndexImagesExistPlatform(platform.Architecture, platform.OS))
+			}
+			fallthrough
+		case "none":
+			dcontext.GetLogger(app).Warn("Image index completeness validation has been disabled, which is an experimental option because other container tooling might expect all image indexes to be complete")
+		case "all":
+			fallthrough
+		default:
+			options = append(options, storage.EnableValidateImageIndexImagesExist)
 		}
 	}
 
@@ -411,6 +447,14 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) {
 	}
 }
 
+// Shutdown close the underlying registry
+func (app *App) Shutdown() error {
+	if r, ok := app.registry.(proxy.Closer); ok {
+		return r.Close()
+	}
+	return nil
+}
+
 // register a handler with the application, by route name. The handler will be
 // passed through the application filters and context will be constructed at
 // request time.
@@ -487,12 +531,41 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 }
 
 func (app *App) configureRedis(cfg *configuration.Configuration) {
-	if cfg.Redis.Addr == "" {
+	if len(cfg.Redis.Options.Addrs) == 0 {
 		dcontext.GetLogger(app).Infof("redis not configured")
 		return
 	}
 
-	app.redis = app.createPool(cfg.Redis)
+	// redis TLS config
+	if cfg.Redis.TLS.Certificate != "" || cfg.Redis.TLS.Key != "" {
+		var err error
+		tlsConf := &tls.Config{}
+		tlsConf.Certificates = make([]tls.Certificate, 1)
+		tlsConf.Certificates[0], err = tls.LoadX509KeyPair(cfg.Redis.TLS.Certificate, cfg.Redis.TLS.Key)
+		if err != nil {
+			panic(err)
+		}
+		if len(cfg.Redis.TLS.ClientCAs) != 0 {
+			pool := x509.NewCertPool()
+			for _, ca := range cfg.Redis.TLS.ClientCAs {
+				caPem, err := os.ReadFile(ca)
+				if err != nil {
+					dcontext.GetLogger(app).Errorf("failed reading redis client CA: %v", err)
+					return
+				}
+
+				if ok := pool.AppendCertsFromPEM(caPem); !ok {
+					dcontext.GetLogger(app).Error("could not add CA to pool")
+					return
+				}
+			}
+			tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
+			tlsConf.ClientCAs = pool
+		}
+		cfg.Redis.Options.TLSConfig = tlsConf
+	}
+
+	app.redis = app.createPool(cfg.Redis.Options)
 
 	// Enable metrics instrumentation.
 	if err := redisotel.InstrumentMetrics(app.redis); err != nil {
@@ -514,25 +587,12 @@ func (app *App) configureRedis(cfg *configuration.Configuration) {
 	}))
 }
 
-func (app *App) createPool(cfg configuration.Redis) *redis.Client {
-	return redis.NewClient(&redis.Options{
-		Addr: cfg.Addr,
-		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-			res := cn.Ping(ctx)
-			return res.Err()
-		},
-		Username:        cfg.Username,
-		Password:        cfg.Password,
-		DB:              cfg.DB,
-		MaxRetries:      3,
-		DialTimeout:     cfg.DialTimeout,
-		ReadTimeout:     cfg.ReadTimeout,
-		WriteTimeout:    cfg.WriteTimeout,
-		PoolFIFO:        false,
-		MaxIdleConns:    cfg.Pool.MaxIdle,
-		PoolSize:        cfg.Pool.MaxActive,
-		ConnMaxIdleTime: cfg.Pool.IdleTimeout,
-	})
+func (app *App) createPool(cfg redis.UniversalOptions) redis.UniversalClient {
+	cfg.OnConnect = func(ctx context.Context, cn *redis.Conn) error {
+		res := cn.Ping(ctx)
+		return res.Err()
+	}
+	return redis.NewUniversalClient(&cfg)
 }
 
 // configureLogHook prepares logging hook parameters.

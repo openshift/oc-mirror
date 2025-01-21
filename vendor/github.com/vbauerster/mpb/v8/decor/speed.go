@@ -69,8 +69,8 @@ func EwmaSpeed(unit interface{}, format string, age float64, wcc ...WC) Decorato
 func MovingAverageSpeed(unit interface{}, format string, average ewma.MovingAverage, wcc ...WC) Decorator {
 	d := &movingAverageSpeed{
 		WC:       initWC(wcc...),
-		average:  average,
 		producer: chooseSpeedProducer(unit, format),
+		average:  average,
 	}
 	return d
 }
@@ -79,26 +79,32 @@ type movingAverageSpeed struct {
 	WC
 	producer func(float64) string
 	average  ewma.MovingAverage
-	msg      string
+	zDur     time.Duration
 }
 
-func (d *movingAverageSpeed) Decor(s Statistics) string {
-	if !s.Completed {
-		var speed float64
-		if v := d.average.Value(); v > 0 {
-			speed = 1 / v
-		}
-		d.msg = d.producer(speed * 1e9)
+func (d *movingAverageSpeed) Decor(s Statistics) (string, int) {
+	var str string
+	// ewma implementation may return 0 before accumulating certain number of samples
+	if v := d.average.Value(); v != 0 {
+		str = d.producer(1e9 / v)
+	} else {
+		str = d.producer(0)
 	}
-	return d.FormatMsg(d.msg)
+	return d.Format(str)
 }
 
 func (d *movingAverageSpeed) EwmaUpdate(n int64, dur time.Duration) {
-	durPerByte := float64(dur) / float64(n)
-	if math.IsInf(durPerByte, 0) || math.IsNaN(durPerByte) {
-		return
+	if n <= 0 {
+		d.zDur += dur
+	} else {
+		durPerByte := float64(d.zDur+dur) / float64(n)
+		if math.IsInf(durPerByte, 0) || math.IsNaN(durPerByte) {
+			d.zDur += dur
+			return
+		}
+		d.zDur = 0
+		d.average.Add(durPerByte)
 	}
-	d.average.Add(durPerByte)
 }
 
 // AverageSpeed decorator with dynamic unit measure adjustment. It's
@@ -140,12 +146,12 @@ type averageSpeed struct {
 	msg       string
 }
 
-func (d *averageSpeed) Decor(s Statistics) string {
+func (d *averageSpeed) Decor(s Statistics) (string, int) {
 	if !s.Completed {
 		speed := float64(s.Current) / float64(time.Since(d.startTime))
 		d.msg = d.producer(speed * 1e9)
 	}
-	return d.FormatMsg(d.msg)
+	return d.Format(d.msg)
 }
 
 func (d *averageSpeed) AverageAdjust(startTime time.Time) {
