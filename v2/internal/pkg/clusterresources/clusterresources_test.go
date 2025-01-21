@@ -19,7 +19,6 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -307,8 +306,8 @@ func TestGenerateIDMS(t *testing.T) {
 			imgList:  imageListRelease,
 			expectedIdmsList: []confv1.ImageDigestMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
 							{
@@ -330,8 +329,8 @@ func TestGenerateIDMS(t *testing.T) {
 			imgList:  imageListMixed,
 			expectedIdmsList: []confv1.ImageDigestMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "idms-operator-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "idms-operator-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
 							{
@@ -346,8 +345,8 @@ func TestGenerateIDMS(t *testing.T) {
 					},
 				},
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
 							{
@@ -365,8 +364,8 @@ func TestGenerateIDMS(t *testing.T) {
 			imgList:  imageListDigestsOnly,
 			expectedIdmsList: []confv1.ImageDigestMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
 							{
@@ -384,8 +383,8 @@ func TestGenerateIDMS(t *testing.T) {
 			imgList:  imageListOCPBUGS47688,
 			expectedIdmsList: []confv1.ImageDigestMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "idms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageDigestMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
 					Spec: confv1.ImageDigestMirrorSetSpec{
 						ImageDigestMirrors: []confv1.ImageDigestMirrors{
 							{
@@ -455,8 +454,8 @@ func TestGenerateITMS(t *testing.T) {
 			imgList:  imageListMixed,
 			expectedItmsList: []confv1.ImageTagMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "itms-operator-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "itms-operator-0"},
 					Spec: confv1.ImageTagMirrorSetSpec{
 						ImageTagMirrors: []confv1.ImageTagMirrors{
 							{
@@ -475,8 +474,8 @@ func TestGenerateITMS(t *testing.T) {
 					},
 				},
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "itms-generic-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "itms-generic-0"},
 					Spec: confv1.ImageTagMirrorSetSpec{
 						ImageTagMirrors: []confv1.ImageTagMirrors{
 							{
@@ -494,8 +493,8 @@ func TestGenerateITMS(t *testing.T) {
 			imgList:  imageListRelease,
 			expectedItmsList: []confv1.ImageTagMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "itms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "itms-release-0"},
 					Spec: confv1.ImageTagMirrorSetSpec{
 						ImageTagMirrors: []confv1.ImageTagMirrors{
 							{
@@ -513,8 +512,8 @@ func TestGenerateITMS(t *testing.T) {
 			imgList:  imageListOCPBUGS47688,
 			expectedItmsList: []confv1.ImageTagMirrorSet{
 				{
-					TypeMeta:   v1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
-					ObjectMeta: v1.ObjectMeta{Name: "itms-release-0"},
+					TypeMeta:   metav1.TypeMeta{Kind: "ImageTagMirrorSet", APIVersion: "config.openshift.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "itms-release-0"},
 					Spec: confv1.ImageTagMirrorSetSpec{
 						ImageTagMirrors: []confv1.ImageTagMirrors{
 							{
