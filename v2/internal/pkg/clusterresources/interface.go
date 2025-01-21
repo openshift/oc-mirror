@@ -9,4 +9,5 @@ type GeneratorInterface interface {
 	UpdateServiceGenerator(graphImage, releaseImage string) error
 	CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error
 	GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error
+	ClusterCatalogGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error
 }
