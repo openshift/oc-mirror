@@ -39,11 +39,7 @@ target "update-vendor" {
 target "mod-outdated" {
   dockerfile = "./dockerfiles/vendor.Dockerfile"
   target = "outdated"
-  args = {
-    // used to invalidate cache for outdated run stage
-    // can be dropped when https://github.com/moby/buildkit/issues/1213 fixed
-    _RANDOM = uuidv4()
-  }
+  no-cache-filter = ["outdated"]
   output = ["type=cacheonly"]
 }
 
@@ -95,15 +91,8 @@ target "image-all" {
   ]
 }
 
-variable "DOCS_BASEURL" {
-  default = null
-}
-
 target "_common_docs" {
   dockerfile = "./dockerfiles/docs.Dockerfile"
-  args = {
-    DOCS_BASEURL = DOCS_BASEURL
-  }
 }
 
 target "docs-export" {
@@ -122,5 +111,17 @@ target "docs-image" {
 target "docs-test" {
   inherits = ["_common_docs"]
   target = "test"
+  output = ["type=cacheonly"]
+}
+
+target "authors" {
+  dockerfile = "./dockerfiles/authors.Dockerfile"
+  target = "update"
+  output = ["."]
+}
+
+target "validate-authors" {
+  dockerfile = "./dockerfiles/authors.Dockerfile"
+  target = "validate"
   output = ["type=cacheonly"]
 }

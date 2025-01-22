@@ -41,7 +41,7 @@ func ConvertToAssociationSet(assocs []v1alpha2.Association) (AssociationSet, err
 			}
 			assocSet.Add(value.Name, value)
 			for _, digest := range value.ManifestDigests {
-				klog.V(4).Info("image %q: processing child manifest %s", value.Name, digest)
+				klog.V(4).Infof("image %s: processing child manifest %s", value.Name, digest)
 				child, ok := assocMapping[digest+value.Path]
 				if !ok {
 					return assocSet, fmt.Errorf("invalid associations: association for %q is missing", digest)

@@ -12,6 +12,9 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=dnses,scope=Cluster
 // +kubebuilder:subresource:status
+// +kubebuilder:subresource:status
+// +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/475
+// +openshift:file-pattern=cvoRunLevel=0000_70,operatorName=dns,operatorOrdering=00
 
 // DNS manages the CoreDNS component to provide a name resolution service
 // for pods and services in the cluster.
@@ -290,6 +293,24 @@ type ForwardPlugin struct {
 	//
 	// +optional
 	TransportConfig DNSTransportConfig `json:"transportConfig,omitempty"`
+
+	// protocolStrategy specifies the protocol to use for upstream DNS
+	// requests.
+	// Valid values for protocolStrategy are "TCP" and omitted.
+	// When omitted, this means no opinion and the platform is left to choose
+	// a reasonable default, which is subject to change over time.
+	// The current default is to use the protocol of the original client request.
+	// "TCP" specifies that the platform should use TCP for all upstream DNS requests,
+	// even if the client request uses UDP.
+	// "TCP" is useful for UDP-specific issues such as those created by
+	// non-compliant upstream resolvers, but may consume more bandwidth or
+	// increase DNS response time. Note that protocolStrategy only affects
+	// the protocol of DNS requests that CoreDNS makes to upstream resolvers.
+	// It does not affect the protocol of DNS requests between clients and
+	// CoreDNS.
+	//
+	// +optional
+	ProtocolStrategy ProtocolStrategy `json:"protocolStrategy"`
 }
 
 // UpstreamResolvers defines a schema for configuring the CoreDNS forward plugin in the
@@ -332,14 +353,32 @@ type UpstreamResolvers struct {
 	//
 	// +optional
 	TransportConfig DNSTransportConfig `json:"transportConfig,omitempty"`
+
+	// protocolStrategy specifies the protocol to use for upstream DNS
+	// requests.
+	// Valid values for protocolStrategy are "TCP" and omitted.
+	// When omitted, this means no opinion and the platform is left to choose
+	// a reasonable default, which is subject to change over time.
+	// The current default is to use the protocol of the original client request.
+	// "TCP" specifies that the platform should use TCP for all upstream DNS requests,
+	// even if the client request uses UDP.
+	// "TCP" is useful for UDP-specific issues such as those created by
+	// non-compliant upstream resolvers, but may consume more bandwidth or
+	// increase DNS response time. Note that protocolStrategy only affects
+	// the protocol of DNS requests that CoreDNS makes to upstream resolvers.
+	// It does not affect the protocol of DNS requests between clients and
+	// CoreDNS.
+	//
+	// +optional
+	ProtocolStrategy ProtocolStrategy `json:"protocolStrategy"`
 }
 
 // Upstream can either be of type SystemResolvConf, or of type Network.
 //
-// * For an Upstream of type SystemResolvConf, no further fields are necessary:
-//   The upstream will be configured to use /etc/resolv.conf.
-// * For an Upstream of type Network, a NetworkResolver field needs to be defined
-//   with an IP address or IP:port if the upstream listens on a port other than 53.
+//   - For an Upstream of type SystemResolvConf, no further fields are necessary:
+//     The upstream will be configured to use /etc/resolv.conf.
+//   - For an Upstream of type Network, a NetworkResolver field needs to be defined
+//     with an IP address or IP:port if the upstream listens on a port other than 53.
 type Upstream struct {
 
 	// Type defines whether this upstream contains an IP/IP:port resolver or the local /etc/resolv.conf.
@@ -377,6 +416,23 @@ type UpstreamType string
 const (
 	SystemResolveConfType UpstreamType = "SystemResolvConf"
 	NetworkResolverType   UpstreamType = "Network"
+)
+
+// ProtocolStrategy is a preference for the protocol to use for DNS queries.
+// + ---
+// + When consumers observe an unknown value, they should use the default strategy.
+// +kubebuilder:validation:Enum:=TCP;""
+type ProtocolStrategy string
+
+var (
+	// ProtocolStrategyDefault specifies no opinion for DNS protocol.
+	// If empty, the default behavior of CoreDNS is used. Currently, this means that CoreDNS uses the protocol of the
+	// originating client request as the upstream protocol.
+	// Note that the default behavior of CoreDNS is subject to change.
+	ProtocolStrategyDefault ProtocolStrategy = ""
+
+	// ProtocolStrategyTCP instructs CoreDNS to always use TCP, regardless of the originating client's request protocol.
+	ProtocolStrategyTCP ProtocolStrategy = "TCP"
 )
 
 // DNSNodePlacement describes the node scheduling configuration for DNS pods.
@@ -458,7 +514,6 @@ type DNSStatus struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:object:root=true
 
 // DNSList contains a list of DNS
 //

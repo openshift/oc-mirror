@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,8 +20,8 @@ import (
 
 	"github.com/MakeNowJust/heredoc"
 	"github.com/blang/semver"
-	"github.com/docker/distribution"
-	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/distribution/distribution/v3"
+	"github.com/distribution/distribution/v3/manifest/manifestlist"
 	units "github.com/docker/go-units"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
@@ -36,12 +35,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
 	imageapi "github.com/openshift/api/image/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+	"github.com/openshift/library-go/pkg/features"
 	"github.com/openshift/library-go/pkg/image/dockerv1client"
 	imagereference "github.com/openshift/library-go/pkg/image/reference"
 	"github.com/openshift/oc/pkg/cli/image/extract"
@@ -50,7 +52,7 @@ import (
 	imagemanifest "github.com/openshift/oc/pkg/cli/image/manifest"
 )
 
-func NewInfoOptions(streams genericclioptions.IOStreams) *InfoOptions {
+func NewInfoOptions(streams genericiooptions.IOStreams) *InfoOptions {
 	return &InfoOptions{
 		IOStreams:              streams,
 		KubeTemplatePrintFlags: *genericclioptions.NewKubeTemplatePrintFlags(),
@@ -58,7 +60,7 @@ func NewInfoOptions(streams genericclioptions.IOStreams) *InfoOptions {
 	}
 }
 
-func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+func NewInfo(f kcmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
 	o := NewInfoOptions(streams)
 	cmd := &cobra.Command{
 		Use:   "info IMAGE [--changes-from=IMAGE] [--verify|--commits|--pullspecs]",
@@ -91,7 +93,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 			a tag when verifying an image is recommended since it ensures an attacker cannot trick you
 			into installing an older, potentially vulnerable version.
 
-			The --bugs and --changelog flags will use git to clone the source of the release and display
+			The --bugs and --changelog flags will use git to clone the git history of the release and display
 			the code changes that occurred between the two release arguments. This operation is slow
 			and requires sufficient disk space on the selected drive to clone all repositories.
 
@@ -113,7 +115,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --pullspecs
 
 			# Show information about linux/s390x image
-			# Note: Wildcard filter is not supported. Pass a single os/arch to extract
+			# Note: Wildcard filter is not supported; pass a single os/arch to extract
 			oc adm release info quay.io/openshift-release-dev/ocp-release:4.11.2 --filter-by-os=linux/s390x
 
 		`),
@@ -134,6 +136,8 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 	flags.BoolVar(&o.Verify, "verify", o.Verify, "Generate bug listings from the changelogs in the git repositories extracted to this path.")
 
 	flags.StringVar(&o.ICSPFile, "icsp-file", o.ICSPFile, "Path to an ImageContentSourcePolicy file. If set, data from this file will be used to find alternative locations for images.")
+	flags.MarkDeprecated("icsp-file", "support for it will be removed in a future release. Use --idms-file instead.")
+	flags.StringVar(&o.IDMSFile, "idms-file", o.IDMSFile, "Path to an ImageDigestMirrorSet file. If set, data from this file will be used to find alternative locations for images.")
 
 	flags.BoolVar(&o.ShowContents, "contents", o.ShowContents, "Display the contents of a release.")
 	flags.BoolVar(&o.ShowCommit, "commits", o.ShowCommit, "Display information about the source an image was created with.")
@@ -151,7 +155,7 @@ func NewInfo(f kcmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Com
 }
 
 type InfoOptions struct {
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 	genericclioptions.KubeTemplatePrintFlags
 
 	Images  []string
@@ -168,6 +172,7 @@ type InfoOptions struct {
 	ShowSize      bool
 	Verify        bool
 	ICSPFile      string
+	IDMSFile      string
 
 	ChangelogDir string
 	BugsDir      string
@@ -267,10 +272,10 @@ func replaceStableSemanticArgs(args []string, semanticArgs map[string]semver.Ver
 				switch resp.StatusCode {
 				case http.StatusOK:
 				default:
-					io.Copy(ioutil.Discard, resp.Body)
+					io.Copy(io.Discard, resp.Body)
 					return fmt.Errorf("unable to retrieve status for %q: %d", arg, resp.StatusCode)
 				}
-				data, err := ioutil.ReadAll(resp.Body)
+				data, err := io.ReadAll(resp.Body)
 				if err != nil {
 					return err
 				}
@@ -454,6 +459,10 @@ func (o *InfoOptions) Validate() error {
 		return fmt.Errorf("must specify a single release image as argument when comparing to another release image")
 	}
 
+	if len(o.ICSPFile) > 0 && len(o.IDMSFile) > 0 {
+		return fmt.Errorf("icsp-file and idms-file are mutually exclusive")
+	}
+
 	return o.FilterOptions.Validate()
 }
 
@@ -491,7 +500,7 @@ func (o *InfoOptions) Run() error {
 			return describeBugs(o.Out, o.ErrOut, diff, o.BugsDir, o.Output, o.SkipBugCheck)
 		}
 		if len(o.ChangelogDir) > 0 {
-			return describeChangelog(o.Out, o.ErrOut, diff, o.ChangelogDir, o.Output)
+			return describeChangelog(o.Out, o.ErrOut, release, diff, o.ChangelogDir, o.Output)
 		}
 		return describeReleaseDiff(o.Out, diff, o.ShowCommit, o.Output)
 	}
@@ -659,7 +668,7 @@ func calculateDiff(from, to *ReleaseInfo) (*ReleaseDiff, error) {
 		}
 		diff.ChangedManifests[name] = &ReleaseManifestDiff{
 			Filename: name,
-			From:     manifest,
+			To:       manifest,
 		}
 	}
 	for k, v := range diff.ChangedManifests {
@@ -764,11 +773,12 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	}
 
 	verifier := imagemanifest.NewVerifier()
-	opts := extract.NewExtractOptions(genericclioptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
+	opts := extract.NewExtractOptions(genericiooptions.IOStreams{Out: o.Out, ErrOut: o.ErrOut})
 	opts.SecurityOptions = o.SecurityOptions
 	opts.FilterOptions = o.FilterOptions
 	opts.FileDir = o.FileDir
 	opts.ICSPFile = o.ICSPFile
+	opts.IDMSFile = o.IDMSFile
 
 	release := &ReleaseInfo{
 		Image:    image,
@@ -798,7 +808,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	opts.TarEntryCallback = func(hdr *tar.Header, _ extract.LayerInfo, r io.Reader) (bool, error) {
 		switch hdr.Name {
 		case "image-references":
-			data, err := ioutil.ReadAll(r)
+			data, err := io.ReadAll(r)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("unable to read release image-references: %v", err))
 				return true, nil
@@ -811,7 +821,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 			}
 			release.References = is
 		case "release-metadata":
-			data, err := ioutil.ReadAll(r)
+			data, err := io.ReadAll(r)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("unable to read release metadata: %v", err))
 				return true, nil
@@ -826,7 +836,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 		default:
 			if ext := path.Ext(hdr.Name); len(ext) > 0 && (ext == ".yaml" || ext == ".yml" || ext == ".json") {
 				klog.V(4).Infof("Found manifest %s", hdr.Name)
-				data, err := ioutil.ReadAll(r)
+				data, err := io.ReadAll(r)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("unable to read release manifest %q: %v", hdr.Name, err))
 					return true, nil
@@ -852,7 +862,7 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 		return nil, fmt.Errorf("release image did not contain an image-references file")
 	}
 
-	release.ComponentVersions, errs = readComponentVersions(release.References)
+	release.ComponentVersions, errs = readComponentVersions(release.References, o.ErrOut)
 	for _, err := range errs {
 		release.Warnings = append(release.Warnings, err.Error())
 	}
@@ -924,10 +934,11 @@ func (o *InfoOptions) LoadReleaseInfo(image string, retrieveImages bool) (*Relea
 	return release, nil
 }
 
-func readComponentVersions(is *imageapi.ImageStream) (ComponentVersions, []error) {
+func readComponentVersions(is *imageapi.ImageStream, errOut io.Writer) (ComponentVersions, []error) {
 	var errs []error
 	combined := make(map[string]sets.String)
 	combinedDisplayNames := make(map[string]sets.String)
+	kubectlVersions := make(map[string]sets.Set[string])
 	for _, tag := range is.Spec.Tags {
 		versions, ok := tag.Annotations[annotationBuildVersions]
 		if !ok {
@@ -938,6 +949,16 @@ func readComponentVersions(is *imageapi.ImageStream) (ComponentVersions, []error
 			errs = append(errs, fmt.Errorf("the referenced image %s had an invalid version annotation: %v", tag.Name, err))
 		}
 		for k, v := range all {
+			if k == "kubectl" {
+				if val, exist := kubectlVersions[v.Version]; exist {
+					kubectlVersions[v.Version] = val.Insert(tag.Name)
+				} else {
+					kubectlVersions[v.Version] = sets.New[string](tag.Name)
+				}
+				if tag.Name != "cli" && tag.Name != "cli-artifacts" {
+					continue
+				}
+			}
 			existing, ok := combined[k]
 			if !ok {
 				existing = sets.NewString()
@@ -955,6 +976,14 @@ func readComponentVersions(is *imageapi.ImageStream) (ComponentVersions, []error
 	}
 
 	multiples := sets.NewString()
+	if len(kubectlVersions) > 2 {
+		var kubectlFormattedWarning []string
+		for k, v := range kubectlVersions {
+			kubectlFormattedWarning = append(kubectlFormattedWarning, fmt.Sprintf("%s (%s)", k, strings.Join(v.UnsortedList(), ", ")))
+		}
+
+		fmt.Fprintf(errOut, "warning: multiple versions reported for the kubectl: %s\n", strings.Join(kubectlFormattedWarning, ", "))
+	}
 	var out ComponentVersions
 	var keys []string
 	for k := range combined {
@@ -1157,8 +1186,144 @@ func describeReleaseDiff(out io.Writer, diff *ReleaseDiff, showCommit bool, outp
 			}
 		})
 	}
+
+	printFeatureSetSection(diff, w)
+
 	fmt.Fprintln(w)
 	return nil
+}
+
+func printFeatureSetSection(diff *ReleaseDiff, w io.Writer) {
+	featureSetDiff, err := calculateFeatureSetDiff(diff)
+	if err != nil {
+		fmt.Fprintf(w, "error reading .From release feature info: %v", err)
+		return
+	}
+
+	if false {
+		// TODO if we have a use for this on the CLI, then we can try to produce an ascii table
+		// for now, this does nothing and we'll only render it for mardown.
+		content, err := produceDiffMarkdown(nil, featureSetDiff)
+		if err != nil {
+			fmt.Fprintf(w, "error producing diff: %v", err)
+			return
+		}
+		w.Write(content)
+		fmt.Fprintln(w)
+		fmt.Fprintln(w)
+	}
+}
+
+func calculateFeatureSetDiff(diff *ReleaseDiff) (*features.ReleaseFeatureDiffInfo, error) {
+	toFiles := features.FilenameToContent{}
+	for filename, featureGateBytes := range diff.To.ManifestFiles {
+		if !strings.Contains(filename, "featureGate-") {
+			continue
+		}
+		toFiles[filename] = featureGateBytes
+	}
+	fromFiles := features.FilenameToContent{}
+	for filename, featureGateBytes := range diff.From.ManifestFiles {
+		if !strings.Contains(filename, "featureGate-") {
+			continue
+		}
+		fromFiles[filename] = featureGateBytes
+	}
+
+	toReleaseFeatureInfo, err := features.ReadReleaseFeatureInfo(context.TODO(), toFiles)
+	if err != nil {
+		return nil, fmt.Errorf("error reading .To release feature info: %v", err)
+	}
+	fromReleaseFeatureInfo, err := features.ReadReleaseFeatureInfo(context.TODO(), fromFiles)
+	if err != nil {
+		return nil, fmt.Errorf("error reading .From release feature info: %v", err)
+	}
+
+	return toReleaseFeatureInfo.CalculateDiff(context.TODO(), fromReleaseFeatureInfo), nil
+}
+
+func markdownFeatureSetSection(info *ReleaseInfo, diff *ReleaseDiff, w io.Writer) {
+	testReportBytes := info.ManifestFiles["0000_50_tests_test-reporting.yaml"]
+	testReport := &configv1.TestReporting{}
+	if len(testReportBytes) > 0 {
+		if err := yaml.Unmarshal(testReportBytes, testReport); err != nil {
+			fmt.Fprintf(w, "error reading test-reporting.yaml release feature info: %v", err)
+		}
+	}
+
+	featureSetDiff, err := calculateFeatureSetDiff(diff)
+	if err != nil {
+		fmt.Fprintf(w, "error reading .From release feature info: %v", err)
+		return
+	}
+
+	if len(featureSetDiff.GetOrderedFeatureGates()) == 0 {
+		return
+	}
+
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "### FeatureGate Changes")
+
+	content, err := produceDiffMarkdown(testReport, featureSetDiff)
+	if err != nil {
+		fmt.Fprintf(w, "error producing diff: %v", err)
+		return
+	}
+	w.Write(content)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w)
+}
+
+// FeatureGatesForFeatureSetChanged returns newly enabled featureGates, newly disabled featureGates, and newly removed featureGates
+func FeatureGatesForFeatureSetChanged(diff *ReleaseDiff, featureSetName string) (*configv1.FeatureGate, sets.Set[configv1.FeatureGateName], sets.Set[configv1.FeatureGateName], sets.Set[string], bool) {
+	manifestName := fmt.Sprintf("0000_50_cluster-config-api_featureGate-%v.yaml", featureSetName)
+	changed := diff.ChangedManifests[manifestName]
+	if changed == nil || len(changed.To) == 0 {
+		klog.V(2).Infof("featuregate manifest is missing in To")
+		return nil, nil, nil, nil, false
+	}
+	toFeatureGates, err := ReadFeatureGateV1(changed.To)
+	if err != nil {
+		klog.V(2).Infof("failed to decode To %v: %v", manifestName, err)
+		return nil, nil, nil, nil, false
+	}
+
+	toEntireSet := sets.Set[string]{}
+	toEnabledSet := sets.Set[configv1.FeatureGateName]{}
+	toDisabledSet := sets.Set[configv1.FeatureGateName]{}
+	for _, curr := range toFeatureGates.Status.FeatureGates[0].Enabled {
+		toEntireSet.Insert(string(curr.Name))
+		toEnabledSet.Insert(curr.Name)
+	}
+	for _, curr := range toFeatureGates.Status.FeatureGates[0].Disabled {
+		toEntireSet.Insert(string(curr.Name))
+		toDisabledSet.Insert(curr.Name)
+	}
+
+	fromEntireSet := sets.Set[string]{}
+	fromEnabledSet := sets.Set[configv1.FeatureGateName]{}
+	fromDisabledSet := sets.Set[configv1.FeatureGateName]{}
+	if len(changed.From) > 0 {
+		fromFeatureGates, err := ReadFeatureGateV1(changed.From)
+		if err != nil {
+			klog.V(2).Infof("failed to decode From %v: %v", manifestName, err)
+			return nil, nil, nil, nil, false
+		}
+		for _, curr := range fromFeatureGates.Status.FeatureGates[0].Enabled {
+			fromEntireSet.Insert(string(curr.Name))
+			fromEnabledSet.Insert(curr.Name)
+		}
+		for _, curr := range fromFeatureGates.Status.FeatureGates[0].Disabled {
+			fromEntireSet.Insert(string(curr.Name))
+			fromDisabledSet.Insert(curr.Name)
+		}
+	}
+
+	newlyEnabledFeatureGates := toEnabledSet.Difference(fromEnabledSet)
+	newlyDisabledFeatureGates := toDisabledSet.Difference(fromDisabledSet)
+	removedFeatureGates := fromEntireSet.Difference(toEntireSet)
+	haveFeaturesChange := len(newlyEnabledFeatureGates) > 0 || len(newlyDisabledFeatureGates) > 0 || len(removedFeatureGates) > 0
+	return toFeatureGates, newlyEnabledFeatureGates, newlyDisabledFeatureGates, removedFeatureGates, haveFeaturesChange
 }
 
 func repoAndCommit(ref *imageapi.TagReference) string {
@@ -1481,7 +1646,7 @@ var replaceUnsafeInput = strings.NewReplacer(
 	`>`, "&gt;",
 )
 
-func describeChangelog(out, errOut io.Writer, diff *ReleaseDiff, dir, format string) error {
+func describeChangelog(out, errOut io.Writer, releaseInfo *ReleaseInfo, diff *ReleaseDiff, dir, format string) error {
 	if diff.To.Digest == diff.From.Digest {
 		return fmt.Errorf("releases are identical")
 	}
@@ -1638,6 +1803,8 @@ func describeChangelog(out, errOut io.Writer, diff *ReleaseDiff, dir, format str
 			fmt.Fprintln(out)
 			fmt.Fprintln(out)
 		}
+
+		markdownFeatureSetSection(releaseInfo, diff, out)
 
 		if len(added) > 0 {
 			fmt.Fprintf(out, "### New images\n\n")

@@ -3,6 +3,7 @@ package release
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,11 +11,13 @@ import (
 	"sort"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
+
 	"github.com/blang/semver"
 	"github.com/ghodss/yaml"
 	imageapi "github.com/openshift/api/image/v1"
 	imagereference "github.com/openshift/library-go/pkg/image/reference"
-	"k8s.io/klog/v2"
 )
 
 type Payload struct {
@@ -119,13 +122,13 @@ func readReleaseImageReferences(data []byte) (*imageapi.ImageStream, error) {
 
 type ManifestMapper func(data []byte) ([]byte, error)
 
-func NewTransformFromImageStreamFile(path string, input *imageapi.ImageStream, allowMissingImages bool) (ManifestMapper, error) {
+func NewTransformFromImageStreamFile(path string, input *imageapi.ImageStream, allowMissingImages bool, errOut io.Writer) (ManifestMapper, error) {
 	is, err := parseImageStream(path)
 	if err != nil {
 		return nil, err
 	}
 
-	versions, tagsByName, references, err := loadImageStreamTransforms(input, is, allowMissingImages, path)
+	versions, tagsByName, references, err := loadImageStreamTransforms(input, is, allowMissingImages, path, errOut)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +148,7 @@ func NewTransformFromImageStreamFile(path string, input *imageapi.ImageStream, a
 	}, nil
 }
 
-func loadImageStreamTransforms(input, local *imageapi.ImageStream, allowMissingImages bool, src string) (ComponentVersions, map[string][]string, map[string]ImageReference, error) {
+func loadImageStreamTransforms(input, local *imageapi.ImageStream, allowMissingImages bool, src string, errOut io.Writer) (ComponentVersions, map[string][]string, map[string]ImageReference, error) {
 	references := make(map[string]ImageReference)
 	for _, tag := range local.Spec.Tags {
 		if tag.From == nil || tag.From.Kind != "DockerImage" {
@@ -174,6 +177,7 @@ func loadImageStreamTransforms(input, local *imageapi.ImageStream, allowMissingI
 	// load all version values from the input stream, including any defaults, to perform
 	// version substitution in the returned manifests.
 	versions := make(ComponentVersions)
+	kubectlVersions := sets.New[string]()
 	tagsByName := make(map[string][]string)
 	for _, tag := range input.Spec.Tags {
 		if _, ok := references[tag.Name]; !ok {
@@ -190,6 +194,12 @@ func loadImageStreamTransforms(input, local *imageapi.ImageStream, allowMissingI
 			return nil, nil, nil, fmt.Errorf("input image stream has an invalid version annotation for tag %q: %v", tag.Name, value)
 		}
 		for k, v := range items {
+			if k == "kubectl" {
+				kubectlVersions.Insert(v.Version)
+				if tag.Name != "cli" && tag.Name != "cli-artifacts" {
+					continue
+				}
+			}
 			existing, ok := versions[k]
 			if ok {
 				if existing.Version != v.Version {
@@ -201,6 +211,10 @@ func loadImageStreamTransforms(input, local *imageapi.ImageStream, allowMissingI
 			}
 			tagsByName[k] = append(tagsByName[k], tag.Name)
 		}
+	}
+
+	if kubectlVersions.Len() > 2 {
+		fmt.Fprintf(errOut, "warning: input image stream has multiple versions defined for version kubectl for all the tags %s\n", strings.Join(kubectlVersions.UnsortedList(), ","))
 	}
 
 	defaults, err := parseComponentVersionsLabel(input.Annotations[annotationBuildVersions], input.Annotations[annotationBuildVersionsDisplayNames])
