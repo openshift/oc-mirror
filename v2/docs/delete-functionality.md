@@ -154,7 +154,8 @@ For release image deletion it's recommended to be very specific with versions, i
 For operators its recommended to also ensure specific versions, also keep in mind that if only one package in a catalog is deleted, ensure that the actual catalog index is not deleted.
 
 If by accident the local cache is deleted, untar all the relevant <work-directory>/mirror-xxxx-sequence.tar.gz files and copy the docker contents to the local cache directory
-(default is ~/.oc-mirror/.cache), the local cache directory can be configured using the envar "OC_MIRROR_CACHE"
+(default is ~/.oc-mirror/.cache), the local cache directory can be configured using the envar "OC_MIRROR_CACHE" or the
+--cache-dir command line flag.
 
 If the remote registry is also deleted by accident, re-run the oc-mirror command using the --from flag (disk to mirror mode, it will use the contents of all the relevant .tar.gz files), this will ensure your remote registry is back to the original state.
 
