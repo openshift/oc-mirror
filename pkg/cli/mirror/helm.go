@@ -115,6 +115,7 @@ func (h *HelmOptions) PullCharts(ctx context.Context, cfg v1alpha2.ImageSetConfi
 			img, err := findImages(path, chart.ImagePaths...)
 			if err != nil {
 				errs = append(errs, err)
+				klog.V(2).Infof("error finding images for chart %v: %v", ref, err)
 				// return nil, err
 			}
 			for _, image := range img {
