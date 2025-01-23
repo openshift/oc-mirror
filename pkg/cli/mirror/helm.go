@@ -225,6 +225,11 @@ func render(ch *helmchart.Chart) (string, error) {
 		Name:      "NAME",
 		Namespace: "RELEASE-NAMESPACE",
 	}
+
+	if err := chartutil.ProcessDependencies(ch, valueOpts); err != nil {
+		return "", fmt.Errorf("error processing dependencies: %v", err)
+	}
+
 	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, relOps, caps)
 	if err != nil {
 		return "", fmt.Errorf("error rendering values: %v", err)
