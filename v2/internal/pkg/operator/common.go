@@ -181,14 +181,19 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				} else {
 					src = src + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				}
+				//TODO remove me when the migration from oc-mirror v1 to v2 ends
 				if o.generateV1DestTags {
-					hasher := fnv.New32a()
-					hasher.Reset()
-					_, err = hasher.Write([]byte(imgSpec.Reference))
-					if err != nil {
-						return result, fmt.Errorf("couldn't generate v1 tag for image (%s), skipping ", imgSpec.ReferenceWithTransport)
+					if img.OriginFromOperatorCatalogOnDisk {
+						dest = dest + ":" + imgSpec.Digest[0:6]
+					} else {
+						hasher := fnv.New32a()
+						hasher.Reset()
+						_, err = hasher.Write([]byte(imgSpec.Reference))
+						if err != nil {
+							return result, fmt.Errorf("couldn't generate v1 tag for image (%s), skipping ", imgSpec.ReferenceWithTransport)
+						}
+						dest = dest + ":" + fmt.Sprintf("%x", hasher.Sum32())
 					}
-					dest = dest + ":" + fmt.Sprintf("%x", hasher.Sum32())
 				} else {
 					dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				}
