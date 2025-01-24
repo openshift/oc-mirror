@@ -224,6 +224,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.AddCommand(NewDeleteCommand(log))
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
+	cmd.PersistentFlags().StringVar(&opts.Global.CacheDir, "cache-dir", "", "oc-mirror cache directory location. Default is $HOME")
 	cmd.Flags().StringVar(&opts.Global.LogLevel, "log-level", "info", "Log level one of (info, debug, trace, error)")
 	cmd.Flags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "Local storage directory for disk to mirror workflow")
@@ -240,7 +241,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
 	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images mirrored in parallel. Defaults to 8")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
-	cmd.Flags().StringVar(&opts.Global.CacheDir, "cache-dir", "", "oc-mirror cache directory location. Default is $HOME")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
