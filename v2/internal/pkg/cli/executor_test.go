@@ -583,6 +583,7 @@ func TestExecutorComplete(t *testing.T) {
 
 		global := &mirror.GlobalOptions{
 			SecurePolicy: false,
+			CacheDir:     "/tmp/",
 		}
 
 		_, sharedOpts := mirror.SharedImageFlags()
@@ -607,8 +608,6 @@ func TestExecutorComplete(t *testing.T) {
 			MakeDir: MakeDir{},
 			LogsDir: "/tmp/",
 		}
-
-		t.Setenv(cacheEnvVar, "/tmp/")
 
 		// file protocol
 		err := ex.Complete([]string{"file:///tmp/test"})

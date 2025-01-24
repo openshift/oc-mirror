@@ -240,6 +240,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
 	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images mirrored in parallel. Defaults to 8")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
+	cmd.Flags().StringVar(&opts.Global.CacheDir, "cache-dir", "", "oc-mirror cache directory location. Default is $HOME")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
 	cmd.Flags().AddFlagSet(&flagRetryOpts)
@@ -348,6 +349,9 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if !slices.Contains([]string{"info", "debug", "trace", "error"}, o.Opts.Global.LogLevel) {
 		return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", o.Opts.Global.LogLevel)
 	}
+	if os.Getenv(cacheEnvVar) != "" && o.Opts.Global.CacheDir != "" {
+		return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
+	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
 	} else {
@@ -445,6 +449,19 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	err = o.setupWorkingDir()
 	if err != nil {
 		return err
+	}
+
+	if o.Opts.Global.CacheDir == "" {
+		// Default to the env var to keep previous behavior
+		o.Opts.Global.CacheDir = os.Getenv(cacheEnvVar)
+	}
+	if o.Opts.Global.CacheDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to setup default cache directory: %w", err)
+		}
+		// ensure cache dir exists
+		o.Opts.Global.CacheDir = homeDir
 	}
 
 	err = o.setupLocalStorageDir()
@@ -646,18 +663,7 @@ func (o *ExecutorSchema) isLocalStoragePortBound() bool {
 // setupLocalStorageDir - private utility to setup
 // the correct local storage directory
 func (o *ExecutorSchema) setupLocalStorageDir() error {
-
-	requestedCachePath := os.Getenv(cacheEnvVar)
-	if requestedCachePath == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		// ensure cache dir exists
-		o.LocalStorageDisk = filepath.Join(homeDir, cacheRelativePath)
-	} else {
-		o.LocalStorageDisk = filepath.Join(requestedCachePath, cacheRelativePath)
-	}
+	o.LocalStorageDisk = filepath.Join(o.Opts.Global.CacheDir, cacheRelativePath)
 	err := os.MkdirAll(o.LocalStorageDisk, 0755)
 	if err != nil {
 		o.Log.Error("unable to setup folder for oc-mirror local storage: %v ", err)
