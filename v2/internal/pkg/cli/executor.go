@@ -879,6 +879,10 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 
+		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
+			return err
+		}
+
 		// generate signature config map
 		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
 		if err != nil {
@@ -974,6 +978,10 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		// create catalog source
 		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
 		if err != nil {
+			return err
+		}
+
+		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
 			return err
 		}
 
