@@ -106,6 +106,7 @@ func TestExecutorCompleteDelete(t *testing.T) {
 
 		global := &mirror.GlobalOptions{
 			SecurePolicy: false,
+			CacheDir:     "/tmp/",
 		}
 
 		_, sharedOpts := mirror.SharedImageFlags()
@@ -135,8 +136,6 @@ func TestExecutorCompleteDelete(t *testing.T) {
 				LogsDir: "/tmp/",
 			},
 		}
-
-		t.Setenv(cacheEnvVar, "/tmp/")
 
 		defer os.RemoveAll("../../pkg/cli/test")
 		defer os.RemoveAll("../../pkg/cli/tmp")
