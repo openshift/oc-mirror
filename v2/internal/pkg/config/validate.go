@@ -54,9 +54,6 @@ func validateOperatorFiltering(ctlg v2alpha1.Operator) []error {
 	errs := []error{}
 	if len(ctlg.Packages) > 0 {
 		for _, pkg := range ctlg.Packages {
-			if len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.MaxVersion != "" || pkg.MinVersion != "") {
-				errs = append(errs, fmt.Errorf("catalog %q: operator %q: mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed", ctlg.Catalog, pkg.Name))
-			}
 			if pkg.MaxVersion != "" || pkg.MinVersion != "" {
 				if pkg.MaxVersion != "" {
 					if _, err := semver.NewVersion(pkg.MaxVersion); err != nil {

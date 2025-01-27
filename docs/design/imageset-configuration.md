@@ -41,8 +41,6 @@ Filtering can be done by :
 * Package name and minVersion and/or maxVersion: all bundles in the default channel, between minVersion and maxVersion for that package. 
 For more examples, please check [the examples](../examples/imageset-config-filter-catalog.yaml)
 
-Starting oc-mirror V2 (introduced in OCP v4.16 as Tech Preview), it is also possible to filter operators by bundle names specifically. This helps with situations where the shortest upgrade path has been established in a separate process or tool, and that the user requires oc-mirror to mirror strictly this list of bundles needed for the upgrade. For an example of usage, please check [this example](../examples/imageset-config-filter-catalog-by-bundle.yaml)
-
 ## Additional Images
 
 Individual images can be specified in an imageset configuration. If no tag is specified, the "latest" tag will be assigned.
