@@ -420,6 +420,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			return v2alpha1.CollectorSchema{}, err
 		}
 
+		//OCPBUGS-45059
+		//TODO remove me when the migration from oc-mirror v1 to v2 ends
+		if imgSpec.Transport == ociProtocol && o.isDeleteOfV1CatalogFromDisk() {
+			addOriginFromOperatorCatalogOnDisk(&ri)
+		}
+
 		maps.Copy(relatedImages, ri)
 
 		var targetTag string
@@ -546,4 +552,21 @@ func (o FilterCollector) isAlreadyFiltered(ctx context.Context, srcImage, filter
 		return false
 	}
 	return filteredImageDigest == catalogDigest
+}
+
+// isDeleteOfV1CatalogFromDisk returns true when trying to delete an operator catalog mirrored by oc-mirror v1 and the catalog was on disk (using oci:// on the ImageSetConfiguration)
+// TODO remove me when the migration from oc-mirror v1 to v2 ends
+func (o *FilterCollector) isDeleteOfV1CatalogFromDisk() bool {
+	return o.Opts.IsDiskToMirror() && o.Opts.IsDelete() && o.generateV1DestTags
+}
+
+// TODO remove me when the migration from oc-mirror v1 to v2 ends
+func addOriginFromOperatorCatalogOnDisk(relatedImages *map[string][]v2alpha1.RelatedImage) {
+	for key, images := range *relatedImages {
+		for i := range images {
+			// Modify the RelatedImage object as needed
+			images[i].OriginFromOperatorCatalogOnDisk = true
+		}
+		(*relatedImages)[key] = images
+	}
 }
