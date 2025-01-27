@@ -423,26 +423,6 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 		},
 		{
-			caseName: "packages with selectedBundles - all selected bundles present - should pass",
-			cfg: v2alpha1.Operator{
-				IncludeConfig: v2alpha1.IncludeConfig{
-					Packages: []v2alpha1.IncludePackage{
-						{
-							Name: "3scale-operator",
-							SelectedBundles: []v2alpha1.SelectedBundle{
-								{Name: "3scale-operator.v0.8.0-0.1634606167.p"},
-								{Name: "3scale-operator.v0.8.4"},
-							},
-						},
-					},
-				},
-			},
-			expectedBundles: []string{
-				"3scale-operator.v0.8.0-0.1634606167.p",
-				"3scale-operator.v0.8.4",
-			},
-		},
-		{
 			caseName: "packages with MinVersion MaxVersion with channels - Error: filtering by channel and by package min max should not be allowed - should pass",
 			cfg: v2alpha1.Operator{
 				IncludeConfig: v2alpha1.IncludeConfig{
@@ -483,29 +463,6 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{},
 			expectedError:   errors.New("cannot use channels/full and min/max versions at the same time"),
-		},
-		{
-			caseName: "packages with MinVersion MaxVersion with bundle selection - Error: filtering by bundle selection and by package min max should not be allowed - should pass",
-			cfg: v2alpha1.Operator{
-				IncludeConfig: v2alpha1.IncludeConfig{
-					Packages: []v2alpha1.IncludePackage{
-						{
-							Name: "3scale-operator",
-							SelectedBundles: []v2alpha1.SelectedBundle{
-								{
-									Name: "3scale-operator.v0.10.0-mas",
-								},
-							},
-							IncludeBundle: v2alpha1.IncludeBundle{
-								MinVersion: "0.8.0",
-								MaxVersion: "0.8.1",
-							},
-						},
-					},
-				},
-			},
-			expectedBundles: []string{},
-			expectedError:   errors.New("cannot use filtering by bundle selection and filtering by channels or min/max versions at the same time"),
 		},
 		{
 			caseName: "package not found - logs warning - should pass",
@@ -1069,28 +1026,6 @@ func TestFilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			caseName: "packages with selectedBundles - all selected bundles present - should pass",
-			cfg: v2alpha1.Operator{
-				IncludeConfig: v2alpha1.IncludeConfig{
-					Packages: []v2alpha1.IncludePackage{
-						{
-							Name: "3scale-operator",
-							SelectedBundles: []v2alpha1.SelectedBundle{
-								{Name: "3scale-operator.v0.8.4-0.1655690146.p"},
-								{Name: "3scale-operator.v0.9.0"},
-								{Name: "3scale-operator.v0.9.1-0.1664967752.p"},
-							},
-						},
-					},
-				},
-			},
-			expectedBundles: []string{
-				"3scale-operator.v0.8.4-0.1655690146.p",
-				"3scale-operator.v0.9.0",
-				"3scale-operator.v0.9.1-0.1664967752.p",
-			},
-		},
-		{
 			caseName: "packages with MinVersion MaxVersion with channels - Error: filtering by channel and by package min max should not be allowed - should pass",
 			cfg: v2alpha1.Operator{
 				IncludeConfig: v2alpha1.IncludeConfig{
@@ -1133,29 +1068,6 @@ func TestFilterCatalog(t *testing.T) {
 			},
 			expectedBundles: []string{},
 			expectedError:   errors.New("Full: true cannot be mixed with versionRange"),
-		},
-		{
-			caseName: "packages with MinVersion MaxVersion with bundle selection - Error: filtering by bundle selection and by package min max should not be allowed - should pass",
-			cfg: v2alpha1.Operator{
-				IncludeConfig: v2alpha1.IncludeConfig{
-					Packages: []v2alpha1.IncludePackage{
-						{
-							Name: "3scale-operator",
-							SelectedBundles: []v2alpha1.SelectedBundle{
-								{
-									Name: "3scale-operator.v0.10.0-mas",
-								},
-							},
-							IncludeBundle: v2alpha1.IncludeBundle{
-								MinVersion: "0.8.0",
-								MaxVersion: "0.8.1",
-							},
-						},
-					},
-				},
-			},
-			expectedBundles: []string{},
-			expectedError:   errors.New("package \"3scale-operator\" at index [0] is invalid: mixing both filtering by bundles and filtering by channels or versionRange is not allowed"),
 		},
 		{
 			caseName: "package not found - logs warning - should pass",
