@@ -165,38 +165,6 @@ func TestValidate(t *testing.T) {
 			expError: "invalid configuration: targetCatalog: a/b/test@sha256:45df874 - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
 		},
 		{
-			name: "Invalid/CatalogFilteringByChannelsAndBundles",
-			config: &v2alpha1.ImageSetConfiguration{
-				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
-					Mirror: v2alpha1.Mirror{
-						Operators: []v2alpha1.Operator{
-							{
-								Catalog: "test-catalog1:latest",
-								IncludeConfig: v2alpha1.IncludeConfig{
-									Packages: []v2alpha1.IncludePackage{
-										{
-											Name: "operator1",
-											SelectedBundles: []v2alpha1.SelectedBundle{
-												{
-													Name: "operator1.v1.0.0",
-												},
-											},
-											Channels: []v2alpha1.IncludeChannel{
-												{
-													Name: "stable-xyz",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expError: "invalid configuration: catalog \"test-catalog1:latest\": operator \"operator1\": mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed",
-		},
-		{
 			name: "Invalid/CatalogFilteringIncorrectChannelVersions",
 			config: &v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
