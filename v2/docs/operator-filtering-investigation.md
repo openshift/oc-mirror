@@ -39,7 +39,7 @@ TLDR;
 * Up to OCP 4.17 : From the following studied solutions, S1 and S4(partially by supporting filtering through selection of bundles) are implemented for oc-mirror V2.
 * Starting OCP 4.18: S1 and S4 are used by default. S4b is implemented behind feature flag `--alpha-ctlg-filter`: it uses an external catalog filtering library developped through joint efforts between the OLM and oc-mirror teams. 
 
-The user can filter operators and bundles by operator names, channels, minVersion/maxVersion as in V1. They can also list specific bundles that they require for mirroring in the imageSetConfig.
+The user can filter operators and bundles by operator names, channels, minVersion/maxVersion as in V1.
 
 ### S1 - SemVer (Main solution for oc-mirror <=4.17)
 

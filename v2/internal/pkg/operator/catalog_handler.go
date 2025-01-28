@@ -93,12 +93,6 @@ func filterFromImageSetConfig(iscCatalogFilter v2alpha1.Operator) (filter.Filter
 					p.Channels = append(p.Channels, filterChan)
 				}
 			}
-			if len(op.SelectedBundles) > 0 {
-				p.SelectedBundles = []filter.SelectedBundle{}
-				for _, b := range op.SelectedBundles {
-					p.SelectedBundles = append(p.SelectedBundles, filter.SelectedBundle{Name: b.Name})
-				}
-			}
 			catFilter.Packages = append(catFilter.Packages, p)
 		}
 	}
@@ -254,15 +248,6 @@ func getRelatedImages(operatorName string, operatorConfig OperatorCatalog, iscOp
 	defaultChannel := operatorConfig.Packages[operatorName].DefaultChannel
 
 	switch {
-	case len(iscOperator.SelectedBundles) > 0:
-		for _, iscSelectedBundle := range iscOperator.SelectedBundles {
-			bundle, found := operatorConfig.BundlesByPkgAndName[operatorName][iscSelectedBundle.Name]
-			if !found {
-				internalLog.Warn("bundle %s of operator %s not found in catalog: SKIPPING", iscSelectedBundle.Name, operatorName)
-				continue
-			}
-			relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
-		}
 	case len(iscOperator.Channels) > 0:
 		for _, iscChannel := range iscOperator.Channels {
 			internalLog.Debug("found channel : %v", iscChannel)
@@ -309,14 +294,6 @@ func isInvalidFiltering(pkg v2alpha1.IncludePackage, full bool) (bool, error) {
 		full && (pkg.MinVersion != "" || pkg.MaxVersion != "")
 	if invalid {
 		return invalid, fmt.Errorf("cannot use channels/full and min/max versions at the same time")
-	}
-	invalid = len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.MinVersion != "" || pkg.MaxVersion != "")
-	if invalid {
-		return invalid, fmt.Errorf("cannot use filtering by bundle selection and filtering by channels or min/max versions at the same time")
-	}
-	invalid = len(pkg.SelectedBundles) > 0 && full
-	if invalid {
-		return invalid, fmt.Errorf("cannot use filtering by bundle selection and full the same time")
 	}
 	return false, nil
 }
