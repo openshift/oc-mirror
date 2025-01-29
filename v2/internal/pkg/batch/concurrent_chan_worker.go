@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -72,7 +73,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	o.Log.Info(emoji.Rocket + " Start " + mirrorMsg + " the images...")
 	o.Log.Info(emoji.Pushpin+" images to %s %d ", opts.Function, total)
 
-	p := mpb.New(mpb.PopCompletedMode())
+	p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !opts.Global.IsTerminal))
 	results := make(chan GoroutineResult, total)
 	progressCh := make(chan int, total)
 	semaphore := make(chan struct{}, o.MaxGoroutines)
@@ -168,6 +169,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 		res := <-results
 		err := res.err
 		if err == nil {
+			logImageSuccess(o.Log, &res.img, &opts)
 			copiedImages.AllImages = append(copiedImages.AllImages, res.img)
 			incrementTotals(res.imgType, &copiedImages)
 		} else {
@@ -175,6 +177,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			errArray = append(errArray, *err)
 			m.Unlock()
 
+			logImageError(o.Log, &res.img, &opts)
 			if res.imgType.IsRelease() {
 				cancel()
 				break
@@ -248,6 +251,41 @@ func logResult(log clog.PluggableLoggerInterface, copyMode, imageType string, co
 			log.Info(emoji.SpinnerCrossMark+" %d / %d %s images %s: Some %s images failed to be %s - please check the logs", copied, total, imageType, copyMode, imageType, copyMode)
 		}
 	}
+}
+
+func logImageSuccess(log clog.PluggableLoggerInterface, image *v2alpha1.CopyImageSchema, opts *mirror.CopyOptions) {
+	if opts.Global.IsTerminal {
+		// It'll be printed by the spinner
+		return
+	}
+
+	var dest string
+	if strings.Contains(image.Destination, opts.LocalStorageFQDN) {
+		dest = "cache"
+	} else {
+		dest = hostNamespace(image.Destination)
+	}
+
+	action := "copying"
+	if opts.IsDelete() {
+		action = "deleting"
+	}
+
+	log.Info("Success %s %s %s %s", action, image.Origin, emoji.RightArrow, dest)
+}
+
+func logImageError(log clog.PluggableLoggerInterface, image *v2alpha1.CopyImageSchema, opts *mirror.CopyOptions) {
+	if opts.Global.IsTerminal {
+		// It'll be printed by the spinner
+		return
+	}
+
+	action := "copy"
+	if opts.IsDelete() {
+		action = "delete"
+	}
+
+	log.Error("Failed to %s %s %s", action, image.Type, image.Origin)
 }
 
 func newSpinner(img v2alpha1.CopyImageSchema, localStorage string, p *mpb.Progress) *mpb.Bar {
