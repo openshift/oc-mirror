@@ -46,11 +46,11 @@ delete:
     - name: registry.redhat.io/ubi8/ubi-minimal@sha256:8bedbe742f140108897fb3532068e8316900d9814f399d676ac78b46e740e34e
 ```
 
-Its immediatley obvious that "kind" and "mirror" fields have changed compared to the ImageSetConfig, this is to ensure
+Its immediately obvious that "kind" and "mirror" fields have changed compared to the ImageSetConfig, this is to ensure
 that all the relevant filtering and validation are done correctly, without having to update the internal code drastically.
 
 The "delete" entry is the main entry, it contains the "platform", "operators" and "additionalImages" entries, these are used to filter the images
-to intentionaly delete these images.
+to intentionally delete these images.
 
 ### Command line examples
 
@@ -77,7 +77,7 @@ oc-mirror delete --config delete-image-set-config.yaml --workspace file://<previ
 # --delete-yaml-file for stage 2 is mandatory
 # --force-cache-delete is optional (default false)
 
-# once the generate stage has executed succesfully use the created delete yaml to delete the images from the remote registry
+# once the generate stage has executed successfully use the created delete yaml to delete the images from the remote registry
 # default setting for the delete-yaml-file is <previously-mirrored-work-folder>/delete/delete-images.yaml
 # delete remote registry only 
 oc-mirror delete --v2 --delete-yaml-file <previously-mirrored-work-folder>/delete/delete-images-v4.11.yaml docker://<remote-registry> 
@@ -92,18 +92,18 @@ oc-mirror delete --v2 --delete-yaml-file <previously-mirrored-work-folder>/delet
 The --generate flag is used to create the delete yaml files in stage 1.
 The file created can be found in the "previously-mirrored-work-folder/working-dir/delete/" folder 
 
-The flag --workspace has intentionlly been introduced as to avoid any similarity with the current oc-mirror workflow,
+The flag --workspace has intentionally been introduced as to avoid any similarity with the current oc-mirror workflow,
 ensuring no accidental deletion of images.
 
-The --workspace flag must have the `file://` prefix and with the path to the previosly mirrored images, this flag is mandatory when used with the --generate flag.
+The --workspace flag must have the `file://` prefix and with the path to the previously mirrored images, this flag is mandatory when used with the --generate flag.
 
 The --delete-id flag is used to create files in the delete folder with an id, it is optional when using the --generate flag.
 
 The delete command line has to point to the remote registry from which to delete images (generally the final argument of the command). This argument is mandatory for both stages, generate and delete. It must have a `docker://` prefix.
 
 **NB**
-The --force-cache-delete flag will delete the local cache. Before deleting the local cache , we recommend storing all previosly mirrored tar.gz files (i.e s3 bucket as an example) for recovery.
-Also note that no check is made to delete any dependant blobs in other images, so please take care when using this flag. Its always a good policy to validate the blobs that will be deleted, before exeuting the actual delete. 
+The --force-cache-delete flag will delete the local cache. Before deleting the local cache , we recommend storing all previously mirrored tar.gz files (i.e s3 bucket as an example) for recovery.
+Also note that no check is made to delete any dependant blobs in other images, so please take care when using this flag. Its always a good policy to validate the blobs that will be deleted, before executing the actual delete.
 
 An example of a "generated" delete yaml, (ubi8 image deletion):
 
@@ -154,7 +154,8 @@ For release image deletion it's recommended to be very specific with versions, i
 For operators its recommended to also ensure specific versions, also keep in mind that if only one package in a catalog is deleted, ensure that the actual catalog index is not deleted.
 
 If by accident the local cache is deleted, untar all the relevant <work-directory>/mirror-xxxx-sequence.tar.gz files and copy the docker contents to the local cache directory
-(default is ~/.oc-mirror/.cache), the local cache directory can be configured using the envar "OC_MIRROR_CACHE"
+(default is ~/.oc-mirror/.cache), the local cache directory can be configured using the envar "OC_MIRROR_CACHE" or the
+--cache-dir command line flag.
 
 If the remote registry is also deleted by accident, re-run the oc-mirror command using the --from flag (disk to mirror mode, it will use the contents of all the relevant .tar.gz files), this will ensure your remote registry is back to the original state.
 
