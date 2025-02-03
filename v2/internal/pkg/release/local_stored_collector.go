@@ -250,8 +250,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			// graph image in the cache as a paliative.
 			shouldProceed := graphInCache || o.Opts.IsDeleteMode()
 			if err != nil && !o.Opts.IsDeleteMode() {
-				o.Log.Warn("unable to find graph image in local cache: SKIPPING. %v")
-				o.Log.Warn("%v", err)
+				o.Log.Warn("unable to find graph image in local cache: %v. SKIPPING", err)
 			}
 			if shouldProceed {
 				// OCPBUGS-26513: In order to get the destination for the graphDataImage
