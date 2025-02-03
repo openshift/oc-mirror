@@ -19,5 +19,5 @@ const (
 	SpinnerCrossMark            string = "\x1b[1;91m ✗ \x1b[0m" //✗
 	Gear                        string = "\u2699\uFE0F"         // ⚙️
 	Warning                     string = "\U000026A0\U0000FE0F" // ⚠️
-
+	Exclamation                 string = "\U00002757"           //❗
 )
