@@ -1141,6 +1141,11 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	execTime := endTime.Sub(startTime)
 	o.Log.Debug("collection time     : %v", execTime)
 
+	if len(collectorSchema.AllImages) == 0 {
+		o.Log.Info(emoji.Exclamation + " No images to mirror...")
+		return v2alpha1.CollectorSchema{}, errors.New("no images to copy")
+	}
+
 	return collectorSchema, nil
 }
 
