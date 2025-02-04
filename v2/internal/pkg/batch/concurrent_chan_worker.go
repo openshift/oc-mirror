@@ -67,10 +67,11 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	opts.PreserveDigests = true
 
-	o.Log.Info(emoji.Rocket + " Start " + mirrorMsg + " the images...")
-	o.Log.Info(emoji.Pushpin+" images to %s %d ", opts.Function, len(collectorSchema.AllImages))
-
 	total := len(collectorSchema.AllImages)
+
+	o.Log.Info(emoji.Rocket + " Start " + mirrorMsg + " the images...")
+	o.Log.Info(emoji.Pushpin+" images to %s %d ", opts.Function, total)
+
 	p := mpb.New(mpb.PopCompletedMode())
 	results := make(chan GoroutineResult, total)
 	progressCh := make(chan int, total)
@@ -299,7 +300,12 @@ func runOverallProgress(overallProgress *mpb.Bar, cancelCtx context.Context, pro
 		case <-cancelCtx.Done():
 			overallProgress.Abort(false)
 			return
-		case <-progressCh:
+		case _, ok := <-progressCh:
+			if !ok {
+				// channel closed (end of progress)
+				overallProgress.Abort(false)
+				return
+			}
 			progress++
 			overallProgress.SetCurrent(int64(progress))
 		}
