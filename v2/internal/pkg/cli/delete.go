@@ -45,8 +45,6 @@ type DeleteSchema struct {
 // NewDeleteCommand - setup all the relevant support structs
 // to eventually execute the 'delete' sub command
 func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOptions) *cobra.Command {
-	opts.Function = string(mirror.DeleteMode)
-
 	mkd := MakeDir{}
 	ex := &DeleteSchema{
 		ExecutorSchema: ExecutorSchema{
@@ -59,6 +57,9 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Deletes all related images and manifests from a remote repository or local cache or both",
+		PreRun: func(cmd *cobra.Command, args []string) {
+			opts.Function = string(mirror.DeleteMode)
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := ex.ValidateDelete(args)
 			if err != nil {

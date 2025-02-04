@@ -168,7 +168,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 		ParallelLayerImages: maxParallelLayerDownloads,
-		Function:            string(mirror.CopyMode),
 	}
 
 	mkd := MakeDir{}
@@ -218,6 +217,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				// ensure cache dir exists
 				opts.Global.CacheDir = homeDir
 			}
+		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			opts.Function = string(mirror.CopyMode)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := ex.Validate(args)
