@@ -433,8 +433,8 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	// make sure we always get multi-arch images
 	o.Opts.MultiArch = "all"
-	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
-	o.Opts.RemoveSignatures = true
+	// forcing signature verification always
+	o.Opts.RemoveSignatures = false
 
 	o.Opts.ParallelLayerImages = maxParallelLayerDownloads
 	if o.ParallelImageLayers > 0 {
