@@ -118,8 +118,8 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.V2, "v2", ex.Opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cahce and remote registry")
 	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
-	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers deleted in parallel. Defaults to 10")
-	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images deleted in parallel. Defaults to 8")
+	cmd.Flags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers deleted in parallel. Defaults to 10")
+	cmd.Flags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images deleted in parallel. Defaults to 8")
 	// nolint: errcheck
 	cmd.Flags().MarkHidden("v2")
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -287,7 +287,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.ParallelImages)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)

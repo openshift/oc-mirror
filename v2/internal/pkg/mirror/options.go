@@ -85,7 +85,8 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
-	ParallelLayerImages      uint
+	ParallelLayerImages      uint   // number of image layers to copy/delete concurrently
+	ParallelImages           uint   // number of images to copy/delete concurrently
 	Function                 string // copy or delete (default is copy)
 	LocalStorageFQDN         string
 	RootlessStoragePath      string // used to override the container rootlesss storage path (usually set in /etc/containers/storage.conf)

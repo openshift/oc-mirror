@@ -134,8 +134,6 @@ type ExecutorSchema struct {
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
 	Delete                       delete.DeleteInterface
-	ParallelImageLayers          uint
-	ParallelImages               uint
 }
 
 type MakeDirInterface interface {
@@ -238,8 +236,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", opts.Global.StrictArchiving, "If set (default is false), generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB).")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
 	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 10*time.Minute, "Timeout for mirroring an image. Defaults to 10mn")
-	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
-	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images mirrored in parallel. Defaults to 8")
+	cmd.Flags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
+	cmd.Flags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel. Defaults to 8")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	// nolint: errcheck
 	cmd.Flags().AddFlagSet(&flagSharedOpts)
@@ -435,11 +433,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
 	o.Opts.RemoveSignatures = true
 
-	o.Opts.ParallelLayerImages = maxParallelLayerDownloads
-	if o.ParallelImageLayers > 0 {
-		o.Opts.ParallelLayerImages = o.ParallelImageLayers
-	}
-
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
@@ -479,7 +472,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.ParallelImages)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
