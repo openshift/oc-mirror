@@ -253,9 +253,12 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(NewDeleteCommand(log, opts))
 	// common flags
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
+	cmd.MarkPersistentFlagFilename("config", "yaml")
 	cmd.PersistentFlags().StringVar(&opts.Global.CacheDir, "cache-dir", "", "oc-mirror cache directory location. Default is $HOME")
+	cmd.MarkPersistentFlagDirname("cache-dir")
 	cmd.PersistentFlags().StringVar(&opts.Global.LogLevel, "log-level", "info", "Log level one of (info, debug, trace, error)")
 	cmd.PersistentFlags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
+	cmd.MarkPersistentFlagDirname("workspace")
 	cmd.PersistentFlags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.PersistentFlags().BoolVar(&opts.Global.V2, "v2", false, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready")
 	cmd.PersistentFlags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers mirrored in parallel")
