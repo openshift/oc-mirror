@@ -85,7 +85,8 @@ type CopyOptions struct {
 	UUID                     uuid.UUID // set uuid
 	ImageType                string    // release, catalog-operator, additionalImage
 	Stdout                   io.Writer
-	ParallelLayerImages      uint
+	ParallelLayerImages      uint   // number of image layers to copy/delete concurrently
+	ParallelImages           uint   // number of images to copy/delete concurrently
 	Function                 string // copy or delete (default is copy)
 	LocalStorageFQDN         string
 	RootlessStoragePath      string // used to override the container rootlesss storage path (usually set in /etc/containers/storage.conf)
@@ -271,7 +272,7 @@ func RetryFlags() (pflag.FlagSet, *retry.Options) {
 	opts := retry.Options{}
 	fs := pflag.FlagSet{}
 	fs.IntVar(&opts.MaxRetry, "retry-times", 2, "the number of times to possibly retry")
-	fs.DurationVar(&opts.Delay, "retry-delay", time.Second, "delay between 2 retries. Default 1s")
+	fs.DurationVar(&opts.Delay, "retry-delay", time.Second, "delay between 2 retries")
 	return fs, &opts
 }
 
