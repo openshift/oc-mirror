@@ -284,7 +284,6 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.Flags().MarkHidden("src-registry-token")
 	cmd.Flags().MarkHidden("src-shared-blob-dir")
 	cmd.Flags().MarkHidden("src-username")
-	cmd.Flags().MarkHidden("parallel-layers")
 	cmd.Flags().MarkHidden("parallel-batch-images")
 }
 
