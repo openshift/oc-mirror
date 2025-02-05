@@ -60,8 +60,6 @@ func TestExecutorMirroring(t *testing.T) {
 	if err != nil {
 		t.Errorf("storage cache error: %v ", err)
 	}
-	fakeStorageInterruptChan := make(chan error)
-	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 	cr := MockClusterResources{}
 	opts := &mirror.CopyOptions{
@@ -97,20 +95,19 @@ func TestExecutorMirroring(t *testing.T) {
 		archiver := MockArchiver{opts.Destination}
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Batch:                        batch,
-			MirrorArchiver:               archiver,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			MakeDir:                      MakeDir{},
-			LogsDir:                      "/tmp/",
-			ClusterResources:             cr,
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			HelmCollector:       collector,
+			Batch:               batch,
+			MirrorArchiver:      archiver,
+			LocalStorageService: *reg,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
+			ClusterResources:    cr,
 		}
 
 		res := &cobra.Command{}
@@ -132,21 +129,20 @@ func TestExecutorMirroring(t *testing.T) {
 		archiver := MockArchiver{opts.Destination}
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Batch:                        batch,
-			MirrorArchiver:               archiver,
-			Mirror:                       Mirror{},
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			MakeDir:                      MakeDir{},
-			LogsDir:                      "/tmp/",
-			ClusterResources:             cr,
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			HelmCollector:       collector,
+			Batch:               batch,
+			MirrorArchiver:      archiver,
+			Mirror:              Mirror{},
+			LocalStorageService: *reg,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
+			ClusterResources:    cr,
 		}
 
 		res := &cobra.Command{}
@@ -170,21 +166,20 @@ func TestExecutorMirroring(t *testing.T) {
 		cfg.Mirror.Platform.Graph = true
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Batch:                        batch,
-			Mirror:                       Mirror{},
-			MirrorUnArchiver:             archiver,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			ClusterResources:             cr,
-			MakeDir:                      MakeDir{},
-			LogsDir:                      "/tmp/",
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			HelmCollector:       collector,
+			Batch:               batch,
+			Mirror:              Mirror{},
+			MirrorUnArchiver:    archiver,
+			LocalStorageService: *reg,
+			ClusterResources:    cr,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -207,21 +202,20 @@ func TestExecutorMirroring(t *testing.T) {
 		cfg.Mirror.Platform.Graph = true
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Batch:                        batch,
-			Mirror:                       Mirror{},
-			MirrorUnArchiver:             archiver,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			ClusterResources:             cr,
-			MakeDir:                      MakeDir{},
-			LogsDir:                      "/tmp/",
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			HelmCollector:       collector,
+			Batch:               batch,
+			Mirror:              Mirror{},
+			MirrorUnArchiver:    archiver,
+			LocalStorageService: *reg,
+			ClusterResources:    cr,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -243,21 +237,20 @@ func TestExecutorMirroring(t *testing.T) {
 		cfg.Mirror.Platform.Graph = true
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Config:                       cfg,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			HelmCollector:                collector,
-			Batch:                        batch,
-			Mirror:                       Mirror{},
-			MirrorUnArchiver:             archiver,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			ClusterResources:             cr,
-			MakeDir:                      MakeDir{},
-			LogsDir:                      "/tmp/",
+			Log:                 log,
+			Config:              cfg,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			HelmCollector:       collector,
+			Batch:               batch,
+			Mirror:              Mirror{},
+			MirrorUnArchiver:    archiver,
+			LocalStorageService: *reg,
+			ClusterResources:    cr,
+			MakeDir:             MakeDir{},
+			LogsDir:             "/tmp/",
 		}
 
 		res := &cobra.Command{}
@@ -304,8 +297,6 @@ func TestRunMirrorToMirror(t *testing.T) {
 	if err != nil {
 		t.Errorf("storage cache error: %v ", err)
 	}
-	fakeStorageInterruptChan := make(chan error)
-	go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 	opts := &mirror.CopyOptions{
 		Global:              global,
@@ -688,7 +679,9 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 			MakeDir:          MockMakeDir{},
 			LogsDir:          "/tmp/",
 		}
-		err := ex.setupLocalStorage()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := ex.setupLocalStorage(ctx)
 		if err != nil {
 			t.Fatalf("should not fail %v", err)
 		}
@@ -1071,13 +1064,6 @@ func (o *Collector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImag
 func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
 	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
-}
-
-func skipSignalsToInterruptStorage(errchan chan error) {
-	err := <-errchan
-	if err != nil {
-		fmt.Printf("registry communication channel received %v", err)
-	}
 }
 
 func setupRegForTest(testFolder string) (*configuration.Configuration, error) {
