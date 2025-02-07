@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -18,6 +19,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 )
 
 type LocalStorageCollector struct {
@@ -95,13 +97,19 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 
 	var allImages []v2alpha1.CopyImageSchema
 
+	// prepare progress bar
+	p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
+
 	for _, value := range releases {
+		spinner := spinners.AddSpinner(p, "Collecting release "+value.Source)
+
 		hld := strings.Split(value.Source, "/")
 		releaseRepoAndTag := hld[len(hld)-1]
 		releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
 
 		allRelatedImages, err := o.collectReleaseImages(ctx, value)
 		if err != nil {
+			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 
@@ -109,11 +117,16 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
 		tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 		if err != nil {
+			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 		allImages = append(allImages, tmpAllImages...)
+		spinner.Increment()
+		if !o.Opts.Global.IsTerminal {
+			o.Log.Info("Success collecting release %s", value.Source)
+		}
 	}
-
+	p.Wait()
 	if o.Config.Mirror.Platform.Graph {
 		graphImage, err := o.handleGraphImage(ctx)
 		if err != nil {
@@ -619,4 +632,12 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 	}
 
 	return tag
+}
+
+func logCollectionError(log clog.PluggableLoggerInterface, spinner *mpb.Bar, isTerminal bool, releaseImage string, err error) {
+	spinner.Abort(true)
+	spinner.Wait()
+	if !isTerminal {
+		log.Error("Failed to collect release image %s: %w", releaseImage, err)
+	}
 }

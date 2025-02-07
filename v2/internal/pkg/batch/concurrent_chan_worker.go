@@ -302,23 +302,7 @@ func newSpinner(img v2alpha1.CopyImageSchema, localStorage string, p *mpb.Progre
 		imageText += emoji.RightArrow + "  " + hostNamespace(img.Destination) + " "
 	}
 
-	return p.AddSpinner(
-		1,
-		mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
-		mpb.BarWidth(3),
-		mpb.PrependDecorators(
-			decor.OnComplete(spinners.EmptyDecorator(), emoji.SpinnerCheckMark),
-			decor.OnAbort(spinners.EmptyDecorator(), emoji.SpinnerCrossMark),
-		),
-		mpb.AppendDecorators(
-			decor.Name("("),
-			decor.Elapsed(decor.ET_STYLE_GO),
-			decor.Name(")"),
-			decor.Name(imageText),
-		),
-		mpb.BarFillerClearOnComplete(),
-		spinners.BarFillerClearOnAbort(),
-	)
+	return spinners.AddSpinner(p, imageText)
 }
 
 func newOverallProgress(p *mpb.Progress, total int) *mpb.Bar {
