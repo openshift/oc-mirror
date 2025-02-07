@@ -530,12 +530,12 @@ func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err er
 		return graph, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
 	}
 
-	if err := writeGraphDataToFile(body, *uri, cs.CincinnatiParams.GraphDataDir); err != nil {
-		return graph, err
-	}
-
 	if err = json.Unmarshal(body, &graph); err != nil {
 		return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+	}
+
+	if err := writeGraphDataToFile(body, *uri, cs.CincinnatiParams.GraphDataDir); err != nil {
+		return graph, err
 	}
 
 	return graph, nil
