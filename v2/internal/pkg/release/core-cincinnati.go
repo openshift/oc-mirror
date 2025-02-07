@@ -471,14 +471,16 @@ func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err er
 		arch := queryValues.Get("arch")
 		channel := queryValues.Get("channel")
 		filename := fmt.Sprintf("%s-%s.json", arch, channel)
+		filepath := path.Join(cs.CincinnatiParams.GraphDataDir, filename)
 
-		fileData, err := os.ReadFile(path.Join(cs.CincinnatiParams.GraphDataDir, filename))
+		fileData, err := os.ReadFile(filepath)
 		if err != nil {
 			return graph, &Error{Reason: "ReadFileFailed", Message: err.Error(), cause: err}
 		}
 
 		if err = json.Unmarshal(fileData, &graph); err != nil {
-			return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
+			errMsg := fmt.Sprintf("could not parse graph data %s: %v", filepath, err)
+			return graph, &Error{Reason: "GraphDataInvalid", Message: errMsg, cause: err}
 		}
 
 		return graph, nil
