@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	confv1 "github.com/openshift/api/config/v1"
@@ -22,6 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -130,6 +132,11 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "itms-" + catMirrors.category.toString() + "-0",
+				Annotations: map[string]string{
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: confv1.ImageTagMirrorSetSpec{
 				ImageTagMirrors: []confv1.ImageTagMirrors{},
@@ -294,6 +301,12 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			generateWithoutTemplate = true
 			o.Log.Error("error generating catalog source from template. Fall back to generating catalog source without template: %v", err)
 		}
+		if obj.ObjectMeta.Annotations == nil {
+			obj.ObjectMeta.Annotations = map[string]string{}
+		}
+		obj.ObjectMeta.Annotations["createdBy"] = "oc-mirror --v2"
+		obj.ObjectMeta.Annotations["createdAt"] = time.Now().UTC().Format(time.RFC850)
+		obj.ObjectMeta.Annotations["oc-mirror_version"] = version.Get().GitVersion
 	}
 	if generateWithoutTemplate || catalogSourceTemplateFile == "" {
 		obj = ofv1alpha1.CatalogSource{
@@ -304,6 +317,11 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      catalogSourceName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -435,6 +453,11 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterCatalogName,
+			Annotations: map[string]string{
+				"createdBy":         "oc-mirror --v2",
+				"createdAt":         time.Now().UTC().Format(time.RFC850),
+				"oc-mirror_version": version.Get().GitVersion,
+			},
 		},
 		Spec: ofv1.ClusterCatalogSpec{
 			Source: ofv1.CatalogSource{
@@ -492,6 +515,11 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "idms-" + catMirrors.category.toString() + "-0",
+				Annotations: map[string]string{
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: confv1.ImageDigestMirrorSetSpec{
 				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
@@ -612,6 +640,11 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: updateServiceResourceName,
+			Annotations: map[string]string{
+				"createdBy":         "oc-mirror --v2",
+				"createdAt":         time.Now().UTC().Format(time.RFC850),
+				"oc-mirror_version": version.Get().GitVersion,
+			},
 		},
 		Spec: updateservicev1.UpdateServiceSpec{
 			Replicas:       2,
@@ -743,6 +776,11 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 			Name:      configMapName,
 			Labels: map[string]string{
 				signatureLabel: "",
+			},
+			Annotations: map[string]string{
+				"createdBy":         "oc-mirror --v2",
+				"createdAt":         time.Now().UTC().Format(time.RFC850),
+				"oc-mirror_version": version.Get().GitVersion,
 			},
 		},
 		BinaryData: make(map[string]string),
