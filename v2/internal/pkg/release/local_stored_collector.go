@@ -142,8 +142,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			if o.Config.Mirror.Platform.KubeVirtContainer {
 				ki, err := o.getKubeVirtImage(cacheDir)
 				if err != nil {
-					// log to console as warning
-					o.Log.Warn("%v", err)
+					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				} else {
 					allRelatedImages = append(allRelatedImages, ki)
 				}
@@ -161,7 +160,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		if o.Config.Mirror.Platform.Graph {
 			graphImage, err := o.handleGraphImage(ctx)
 			if err != nil {
-				o.Log.Warn("error during graph image processing - SKIPPING: %v", err)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, fmt.Sprintf("error processing graph image: %v", err))
 			} else if graphImage.Source != "" {
 				allImages = append(allImages, graphImage)
 			}
@@ -215,8 +214,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				cacheDir := filepath.Join(releaseDir)
 				ki, err := o.getKubeVirtImage(cacheDir)
 				if err != nil {
-					// log to console as warning
-					o.Log.Warn("%v", err)
+					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				} else {
 					releaseRelatedImages = append(releaseRelatedImages, ki)
 				}
@@ -242,36 +240,36 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			}
 			// OCPBUGS-38037: Check the graph image is in the cache before adding it
 			graphInCache, err := o.imageExists(ctx, graphRelatedImage.Image)
+			if err != nil && !o.Opts.IsDeleteMode() {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s error processing graph image in local cache: %w", collectorPrefix, err)
+			}
 			// OCPBUGS-43825: The check graphInCache is relevant for DiskToMirror workflow only, not for delete workflow
 			// In delete workflow, the graph image might have been mirrored with M2M, and the graph image might have
 			// therefore been pushed directly to the destination registry. It will not exist in the cache, and that should be ok.
 			// Nevertheless, in DiskToMirror, and as explained in OCPBUGS-38037, the graphInCache check is important
 			// because in enclave environment, the Cincinnati API may not have been called, so we rely on the existance of the
 			// graph image in the cache as a paliative.
-			shouldProceed := graphInCache || o.Opts.IsDeleteMode()
-			if err != nil && !o.Opts.IsDeleteMode() {
-				o.Log.Warn("unable to find graph image in local cache: %v. SKIPPING", err)
+			if !graphInCache && !o.Opts.IsDeleteMode() {
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s unable to find graph image in local cache", collectorPrefix)
 			}
-			if shouldProceed {
-				// OCPBUGS-26513: In order to get the destination for the graphDataImage
-				// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
-				// containing only the graph image. This way we can easily identify the destination
-				// of the graph image.
-				graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
-				graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice, "")
-				if err != nil {
-					o.Log.Error(errMsg, err.Error())
-					return []v2alpha1.CopyImageSchema{}, err
-				}
-				// if there is no error, we are certain that the slice only contains 1 element
-				// but double checking...
-				if len(graphCopySlice) != 1 {
-					//o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
-					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
-				}
-				o.GraphDataImage = graphCopySlice[0].Destination
-				allImages = append(allImages, graphCopySlice...)
+			// OCPBUGS-26513: In order to get the destination for the graphDataImage
+			// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
+			// containing only the graph image. This way we can easily identify the destination
+			// of the graph image.
+			graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
+			graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice, "")
+			if err != nil {
+				o.Log.Error(errMsg, err.Error())
+				return []v2alpha1.CopyImageSchema{}, err
 			}
+			// if there is no error, we are certain that the slice only contains 1 element
+			// but double checking...
+			if len(graphCopySlice) != 1 {
+				// o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
+			}
+			o.GraphDataImage = graphCopySlice[0].Destination
+			allImages = append(allImages, graphCopySlice...)
 		}
 	}
 
