@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -207,13 +208,20 @@ func (o catalogHandler) filterRelatedImagesFromCatalog(operatorCatalog OperatorC
 func (o catalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	setInternalLog(o.Log)
 
+	var errs []error
+
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 
 	for _, bundle := range dc.Bundles {
-		ris := handleRelatedImages(bundle, bundle.Package, copyImageSchemaMap)
+		ris, err := handleRelatedImages(bundle, bundle.Package, copyImageSchemaMap)
+		if err != nil {
+			internalLog.Warn("%s SKIPPING bundle %s of operator %s", err.Error(), bundle.Name, bundle.Package)
+			errs = append(errs, err)
+			continue
+		}
 		relatedImages[bundle.Name] = ris
 	}
-	return relatedImages, nil
+	return relatedImages, errors.Join(errs...)
 }
 
 func newOperatorCatalog() OperatorCatalog {
@@ -270,23 +278,39 @@ func getRelatedImages(operatorName string, operatorConfig OperatorCatalog, iscOp
 		filteredBundles = append(filteredBundles, bundles...)
 	}
 
+	var errs []error
 	for _, bundle := range operatorConfig.BundlesByPkgAndName[operatorName] {
 		if full {
 			if len(filteredBundles) > 0 && len(iscOperator.Channels) > 0 {
 				if slices.Contains(filteredBundles, bundle.Name) {
-					relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+					ris, err := handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+					if err != nil {
+						errs = append(errs, err)
+						continue
+					}
+					relatedImages[bundle.Name] = ris
 				}
 			} else {
-				relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+				ris, err := handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				relatedImages[bundle.Name] = ris
 			}
 		} else {
 			if slices.Contains(filteredBundles, bundle.Name) {
-				relatedImages[bundle.Name] = handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+				ris, err := handleRelatedImages(bundle, operatorName, copyImageSchemaMap)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				relatedImages[bundle.Name] = ris
 			}
 		}
 	}
 
-	return relatedImages, nil
+	return relatedImages, errors.Join(errs...)
 }
 
 func isInvalidFiltering(pkg v2alpha1.IncludePackage, full bool) (bool, error) {
@@ -418,28 +442,28 @@ func isPreReleaseOfFilteredVersion(version string, chEntryName string, filteredV
 	return false
 }
 
-func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) []v2alpha1.RelatedImage {
+func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
 	var relatedImages []v2alpha1.RelatedImage
 
 	for _, ri := range bundle.RelatedImages {
 		if strings.Contains(ri.Image, "oci://") {
-			internalLog.Warn("%s 'oci' is not supported in operator catalogs : SKIPPING", ri.Image)
-			continue
+			msg := fmt.Sprintf("invalid image: %s 'oci' is not supported in operator catalogs", ri.Image)
+			return relatedImages, errors.New(msg)
 		}
-		relateImage := v2alpha1.RelatedImage{}
+		relatedImage := v2alpha1.RelatedImage{}
 		if ri.Image == bundle.Image {
-			relateImage.Name = ri.Name
-			relateImage.Image = ri.Image
-			relateImage.Type = v2alpha1.TypeOperatorBundle
+			relatedImage.Name = ri.Name
+			relatedImage.Image = ri.Image
+			relatedImage.Type = v2alpha1.TypeOperatorBundle
 		} else {
-			relateImage.Name = ri.Name
-			relateImage.Image = ri.Image
-			relateImage.Type = v2alpha1.TypeOperatorRelatedImage
+			relatedImage.Name = ri.Name
+			relatedImage.Image = ri.Image
+			relatedImage.Type = v2alpha1.TypeOperatorRelatedImage
 		}
 
 		imgSpec, err := image.ParseRef(ri.Image)
 		if err != nil {
-			internalLog.Warn("error parsing image %s : %v", ri.Image, err)
+			return relatedImages, fmt.Errorf("error parsing image %s: %w", ri.Image, err)
 		}
 
 		operators := copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport]
@@ -459,8 +483,8 @@ func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSc
 			copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport][bundle.Image] = bundle.Name
 		}
 
-		relatedImages = append(relatedImages, relateImage)
+		relatedImages = append(relatedImages, relatedImage)
 	}
 
-	return relatedImages
+	return relatedImages, nil
 }
