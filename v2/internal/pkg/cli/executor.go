@@ -134,8 +134,6 @@ type ExecutorSchema struct {
 	MirrorUnArchiver             archive.UnArchiver
 	MakeDir                      MakeDirInterface
 	Delete                       delete.DeleteInterface
-	ParallelImageLayers          uint
-	ParallelImages               uint
 }
 
 type MakeDirInterface interface {
@@ -170,7 +168,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 		ParallelLayerImages: maxParallelLayerDownloads,
-		Function:            string(mirror.CopyMode),
 	}
 
 	mkd := MakeDir{}
@@ -189,11 +186,42 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: false,
 		SilenceUsage:  false,
-		Run: func(cmd *cobra.Command, args []string) {
-
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
 			log.Info(emoji.Gear + "  setting up the environment for you...")
 
+			// Validate and set common flags
+			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, fileProtocol) {
+				log.Error("when --workspace is used, it must have file:// prefix")
+				os.Exit(1)
+			}
+			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
+				log.Error("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
+				os.Exit(1)
+			}
+			if os.Getenv(cacheEnvVar) != "" && opts.Global.CacheDir != "" {
+				log.Error("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
+				os.Exit(1)
+			}
+
+			if opts.Global.CacheDir == "" {
+				// Default to the env var to keep previous behavior
+				opts.Global.CacheDir = os.Getenv(cacheEnvVar)
+			}
+			if opts.Global.CacheDir == "" {
+				homeDir, err := os.UserHomeDir()
+				if err != nil {
+					log.Error("failed to setup default cache directory: %v", err)
+					os.Exit(1)
+				}
+				// ensure cache dir exists
+				opts.Global.CacheDir = homeDir
+			}
+		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			opts.Function = string(mirror.CopyMode)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
 			err := ex.Validate(args)
 			if err != nil {
 				log.Error("%v ", err)
@@ -222,31 +250,35 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		},
 	}
 	cmd.AddCommand(version.NewVersionCommand(log))
-	cmd.AddCommand(NewDeleteCommand(log))
+	cmd.AddCommand(NewDeleteCommand(log, opts))
+	// common flags
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
+	cmd.MarkPersistentFlagFilename("config", "yaml")
 	cmd.PersistentFlags().StringVar(&opts.Global.CacheDir, "cache-dir", "", "oc-mirror cache directory location. Default is $HOME")
-	cmd.Flags().StringVar(&opts.Global.LogLevel, "log-level", "info", "Log level one of (info, debug, trace, error)")
-	cmd.Flags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
+	cmd.MarkPersistentFlagDirname("cache-dir")
+	cmd.PersistentFlags().StringVar(&opts.Global.LogLevel, "log-level", "info", "Log level one of (info, debug, trace, error)")
+	cmd.PersistentFlags().StringVar(&opts.Global.WorkingDir, "workspace", "", "oc-mirror workspace where resources and internal artifacts are generated")
+	cmd.MarkPersistentFlagDirname("workspace")
+	cmd.PersistentFlags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
+	cmd.PersistentFlags().BoolVar(&opts.Global.V2, "v2", false, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready")
+	cmd.PersistentFlags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers mirrored in parallel")
+	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel")
+	cmd.PersistentFlags().AddFlagSet(&flagSharedOpts)
+	cmd.PersistentFlags().AddFlagSet(&flagRetryOpts)
+	cmd.PersistentFlags().AddFlagSet(&flagDepTLS)
+	cmd.PersistentFlags().AddFlagSet(&flagSrcOpts)
+	cmd.PersistentFlags().AddFlagSet(&flagDestOpts)
+	// copy-only options
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "Local storage directory for disk to mirror workflow")
-	cmd.Flags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
+	cmd.Flags().BoolVarP(&opts.IsDryRun, "dry-run", "", false, "Print actions without mirroring images")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "Enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "Force the copy and mirror functionality")
-	cmd.Flags().BoolVarP(&opts.IsDryRun, "dry-run", "", false, "Print actions without mirroring images")
-	cmd.Flags().BoolVar(&opts.Global.V2, "v2", opts.Global.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
-	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", opts.Global.SecurePolicy, "If set (default is false), will enable signature verification (secure policy for signature verification).")
-	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
-	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", opts.Global.StrictArchiving, "If set (default is false), generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB).")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
-	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 10*time.Minute, "Timeout for mirroring an image. Defaults to 10mn")
-	cmd.Flags().UintVar(&ex.ParallelImageLayers, "parallel-layers", 10, "Indicates the number of image layers mirrored in parallel. Defaults to 10")
-	cmd.Flags().UintVar(&ex.ParallelImages, "parallel-images", 8, "Indicates the number of images mirrored in parallel. Defaults to 8")
+	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 10*time.Minute, "Timeout for mirroring an image")
+	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", false, "If set, will enable signature verification (secure policy for signature verification)")
+	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
+	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "If set, generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB)")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
-	// nolint: errcheck
-	cmd.Flags().AddFlagSet(&flagSharedOpts)
-	cmd.Flags().AddFlagSet(&flagRetryOpts)
-	cmd.Flags().AddFlagSet(&flagDepTLS)
-	cmd.Flags().AddFlagSet(&flagSrcOpts)
-	cmd.Flags().AddFlagSet(&flagDestOpts)
 	HideFlags(cmd)
 
 	ex.Opts.Stdout = cmd.OutOrStdout()
@@ -256,35 +288,35 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 // nolint: errcheck
 func HideFlags(cmd *cobra.Command) {
-	cmd.Flags().MarkHidden("v2")
-	cmd.Flags().MarkHidden("dest-authfile")
-	cmd.Flags().MarkHidden("dest-cert-dir")
-	cmd.Flags().MarkHidden("dest-compress")
-	cmd.Flags().MarkHidden("dest-compress-format")
-	cmd.Flags().MarkHidden("dest-compress-level")
-	cmd.Flags().MarkHidden("dest-creds")
-	cmd.Flags().MarkHidden("dest-daemon-host")
-	cmd.Flags().MarkHidden("dest-decompress")
-	cmd.Flags().MarkHidden("dest-no-creds")
-	cmd.Flags().MarkHidden("dest-oci-accept-uncompressed-layers")
-	cmd.Flags().MarkHidden("dest-password")
-	cmd.Flags().MarkHidden("dest-precompute-digests")
-	cmd.Flags().MarkHidden("dest-registry-token")
-	cmd.Flags().MarkHidden("dest-shared-blob-dir")
-	cmd.Flags().MarkHidden("dest-username")
+	cmd.PersistentFlags().MarkHidden("v2")
+	cmd.PersistentFlags().MarkHidden("dest-authfile")
+	cmd.PersistentFlags().MarkHidden("dest-cert-dir")
+	cmd.PersistentFlags().MarkHidden("dest-compress")
+	cmd.PersistentFlags().MarkHidden("dest-compress-format")
+	cmd.PersistentFlags().MarkHidden("dest-compress-level")
+	cmd.PersistentFlags().MarkHidden("dest-creds")
+	cmd.PersistentFlags().MarkHidden("dest-daemon-host")
+	cmd.PersistentFlags().MarkHidden("dest-decompress")
+	cmd.PersistentFlags().MarkHidden("dest-no-creds")
+	cmd.PersistentFlags().MarkHidden("dest-oci-accept-uncompressed-layers")
+	cmd.PersistentFlags().MarkHidden("dest-password")
+	cmd.PersistentFlags().MarkHidden("dest-precompute-digests")
+	cmd.PersistentFlags().MarkHidden("dest-registry-token")
+	cmd.PersistentFlags().MarkHidden("dest-shared-blob-dir")
+	cmd.PersistentFlags().MarkHidden("dest-username")
 	cmd.Flags().MarkHidden("dir")
 	cmd.Flags().MarkHidden("force")
 	cmd.Flags().MarkHidden("quiet")
-	cmd.Flags().MarkHidden("src-authfile")
-	cmd.Flags().MarkHidden("src-cert-dir")
-	cmd.Flags().MarkHidden("src-creds")
-	cmd.Flags().MarkHidden("src-daemon-host")
-	cmd.Flags().MarkHidden("src-no-creds")
-	cmd.Flags().MarkHidden("src-password")
-	cmd.Flags().MarkHidden("src-registry-token")
-	cmd.Flags().MarkHidden("src-shared-blob-dir")
-	cmd.Flags().MarkHidden("src-username")
-	cmd.Flags().MarkHidden("parallel-batch-images")
+	cmd.PersistentFlags().MarkHidden("src-authfile")
+	cmd.PersistentFlags().MarkHidden("src-cert-dir")
+	cmd.PersistentFlags().MarkHidden("src-creds")
+	cmd.PersistentFlags().MarkHidden("src-daemon-host")
+	cmd.PersistentFlags().MarkHidden("src-no-creds")
+	cmd.PersistentFlags().MarkHidden("src-password")
+	cmd.PersistentFlags().MarkHidden("src-registry-token")
+	cmd.PersistentFlags().MarkHidden("src-shared-blob-dir")
+	cmd.PersistentFlags().MarkHidden("src-username")
+	cmd.PersistentFlags().MarkHidden("parallel-batch-images")
 }
 
 // Validate - cobra validation
@@ -341,15 +373,6 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
 		return fmt.Errorf("when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
-	}
-	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
-		return fmt.Errorf("when --workspace is used, it must have file:// prefix")
-	}
-	if !slices.Contains([]string{"info", "debug", "trace", "error"}, o.Opts.Global.LogLevel) {
-		return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", o.Opts.Global.LogLevel)
-	}
-	if os.Getenv(cacheEnvVar) != "" && o.Opts.Global.CacheDir != "" {
-		return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
 	}
 	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
 		return nil
@@ -435,11 +458,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
 	o.Opts.RemoveSignatures = true
 
-	o.Opts.ParallelLayerImages = maxParallelLayerDownloads
-	if o.ParallelImageLayers > 0 {
-		o.Opts.ParallelLayerImages = o.ParallelImageLayers
-	}
-
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
@@ -448,19 +466,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	err = o.setupWorkingDir()
 	if err != nil {
 		return err
-	}
-
-	if o.Opts.Global.CacheDir == "" {
-		// Default to the env var to keep previous behavior
-		o.Opts.Global.CacheDir = os.Getenv(cacheEnvVar)
-	}
-	if o.Opts.Global.CacheDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to setup default cache directory: %w", err)
-		}
-		// ensure cache dir exists
-		o.Opts.Global.CacheDir = homeDir
 	}
 
 	err = o.setupLocalStorageDir()
@@ -479,7 +484,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.ParallelImages)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 
 	if o.Opts.IsMirrorToDisk() {
 		if o.Opts.Global.StrictArchiving {
