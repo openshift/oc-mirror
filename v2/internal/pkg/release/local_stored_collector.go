@@ -171,6 +171,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		}
 
 		for _, releaseImg := range releaseImages {
+
 			releaseRef, err := image.ParseRef(releaseImg.Image)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
@@ -402,7 +403,7 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 	if len(o.Releases) == 0 {
 		releaseImages, _, err := o.identifyReleases(ctx)
 		if err != nil {
-			return "", fmt.Errorf("[release collector] could not establish the destination for the release image: %v", err)
+			return "", fmt.Errorf("[release collector] could not find release images (from disk cache): %v", err)
 		}
 		o.Releases = []string{}
 		for _, img := range releaseImages {
@@ -417,7 +418,18 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 				Type:  v2alpha1.TypeOCPRelease,
 			},
 		}
-		releaseTag := o.Releases[0][:strings.LastIndex(o.Releases[0], ":")]
+		// OCPBUGS-50503
+		// This could be a digest also
+		imgSpec, err := image.ParseRef(o.Releases[0])
+		if err != nil {
+			return "", fmt.Errorf("[release collector] could not parse release image %s", o.Releases[0])
+		}
+		releaseTag := ""
+		if imgSpec.IsImageByDigestOnly() {
+			releaseTag = imgSpec.Digest
+		} else {
+			releaseTag = imgSpec.Tag
+		}
 
 		releaseCopyImage, err := o.prepareD2MCopyBatch(releaseRelatedImage, releaseTag)
 		if err != nil {
