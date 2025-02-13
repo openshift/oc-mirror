@@ -415,9 +415,11 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 		ri, err := o.ctlgHandler.getRelatedImagesFromCatalog(filteredDC, copyImageSchemaMap)
 		if err != nil {
-			spinner.Abort(true)
-			spinner.Wait()
-			return v2alpha1.CollectorSchema{}, err
+			if len(ri) == 0 {
+				spinner.Abort(true)
+				spinner.Wait()
+				continue
+			}
 		}
 
 		//OCPBUGS-45059
