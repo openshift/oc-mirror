@@ -9,6 +9,7 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	//nolint
@@ -128,6 +129,22 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 			Origin:      o.Config.Mirror.Platform.Release,
 		}
 		allImages = append(allImages, copyImage)
+		// OCPBUGS-50617
+		// include signature verify and download for rc (release candidate) by digest
+		// skip ec (engineering candidate) and other releases (by tag)
+		imgSpec, err := image.ParseRef(o.Config.Mirror.Platform.Release)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		if imgSpec.IsImageByDigestOnly() {
+			imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			return imgs, nil
+		} else {
+			o.Log.Warn("release image is not by digest: SKIPPING signature verification")
+		}
 		return allImages, nil
 	}
 
