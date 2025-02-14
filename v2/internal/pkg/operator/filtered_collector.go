@@ -220,6 +220,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 				optsCopy := o.Opts
 				optsCopy.Stdout = io.Discard
+				optsCopy.RemoveSignatures = true
 
 				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
 
