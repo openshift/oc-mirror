@@ -133,6 +133,56 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	return catalogDigest, nil
 }
 
+func (o OperatorCollector) bundleDigest(ctx context.Context, srcImgRef string) (string, error) {
+	var src string
+
+	srcImgSpec, err := image.ParseRef(srcImgRef)
+	if err != nil {
+		return "", fmt.Errorf("unable to determine cached reference for bundle %s: %v", srcImgRef, err)
+	}
+
+	// prepare the src and dest references
+	switch {
+	case srcImgSpec.Transport == ociProtocol:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, path.Base(srcImgSpec.Reference)}, "/")
+	default:
+		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, srcImgSpec.PathComponent}, "/")
+	}
+
+	switch {
+	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
+		src = src + ":" + srcImgSpec.Algorithm + "-" + srcImgSpec.Digest
+	case srcImgSpec.Tag != "" && srcImgSpec.Digest == "":
+		src = src + ":" + srcImgSpec.Tag
+	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "":
+		return "", fmt.Errorf("bundle reference %q must include tag or digest", srcImgRef)
+	default:
+		return "", fmt.Errorf("bundle references %q must not include tag and digest", srcImgRef)
+	}
+
+	imgSpec, err := image.ParseRef(src)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", err
+	}
+
+	sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return "", err
+	}
+	// OCPBUGS-37948 : No TLS verification when getting manifests from the cache registry
+	if strings.Contains(src, o.Opts.LocalStorageFQDN) { // when copying from cache, use HTTP
+		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
+
+	bundleDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", err
+	}
+	return bundleDigest, nil
+}
+
 func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})

@@ -6,11 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/containers/image/v5/oci/layout"
+	"github.com/containers/image/v5/pkg/blobinfocache/none"
+	"github.com/containers/storage/pkg/archive"
+	"github.com/operator-framework/api/pkg/operators/v1alpha1"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"io"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"sigs.k8s.io/yaml"
 	"strings"
 
 	"github.com/containers/image/v5/types"
@@ -353,8 +361,18 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				var filteredDigestPath string
 				var filterDigest string
 
+				metadataPropertyType := o.ctlgHandler.getMetadataPropertyType(originalDC)
+
 				filteredDC, err = filterCatalog(ctx, *originalDC, op)
 				if err != nil {
+					spinner.Abort(true)
+					spinner.Wait()
+					return v2alpha1.CollectorSchema{}, err
+				}
+
+				// Let's use filteredDC and metadataPropertyType to
+				// hydrate channel heads that lack metadata?
+				if err := o.hydrateChannelHeadMetadata(ctx, filteredDC, metadataPropertyType); err != nil {
 					spinner.Abort(true)
 					spinner.Wait()
 					return v2alpha1.CollectorSchema{}, err
@@ -517,6 +535,180 @@ func createFolders(paths []string) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (o FilterCollector) hydrateChannelHeadMetadata(ctx context.Context, dc *declcfg.DeclarativeConfig, metadataPropertyType string) error {
+	channelHeadsNeedingMetadata := sets.New[string]()
+	if err := func() error {
+		m, err := declcfg.ConvertToModel(*dc)
+		if err != nil {
+			return err
+		}
+		for _, mpkg := range m {
+			for _, mch := range mpkg.Channels {
+				b, err := mch.Head()
+				if err != nil {
+					return err
+				}
+				hasMetadata := false
+				for _, p := range b.Properties {
+					if p.Type == property.TypeBundleObject || p.Type == property.TypeCSVMetadata {
+						hasMetadata = true
+						break
+					}
+				}
+				if hasMetadata {
+					continue
+				}
+				channelHeadsNeedingMetadata.Insert(b.Name)
+			}
+		}
+		return nil
+	}(); err != nil {
+		return fmt.Errorf("failed to determine operator catalog channel heads: %w", err)
+	}
+
+	for i, b := range dc.Bundles {
+		if !channelHeadsNeedingMetadata.Has(b.Name) {
+			continue
+		}
+
+		csv, err := o.getBundleCSV(ctx, b)
+		if err != nil {
+			return fmt.Errorf("failed to extract CSV from bundle %q: %w", b.Name, err)
+		}
+
+		switch metadataPropertyType {
+		case property.TypeBundleObject:
+			csvJson, err := json.Marshal(csv)
+			if err != nil {
+				return err
+			}
+			dc.Bundles[i].Properties = append(dc.Bundles[i].Properties, property.MustBuildBundleObject(csvJson))
+		case property.TypeCSVMetadata:
+			dc.Bundles[i].Properties = append(dc.Bundles[i].Properties, property.MustBuildCSVMetadata(*csv))
+		default:
+			panic(fmt.Sprintf("unknown property type: %s", metadataPropertyType))
+		}
+	}
+	return nil
+}
+
+func (o FilterCollector) getBundleCSV(ctx context.Context, b declcfg.Bundle) (*v1alpha1.ClusterServiceVersion, error) {
+	imgSpec, err := image.ParseRef(b.Image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse bundle %q image %q: %w", b.Name, b.Image, err)
+	}
+
+	var bundleDigest string
+	if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == string(mirror.DeleteMode) {
+		d, err := o.bundleDigest(ctx, b.Image)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get digest for bundle %q: %w", b.Image, err)
+		}
+		bundleDigest = d
+	} else {
+		sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+		if err != nil {
+			return nil, err
+		}
+		d, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+		// OCPBUGS-36548 (manifest unknown)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get digest for bundle %q: %w", b.Image, err)
+		}
+		bundleDigest = d
+	}
+
+	imageIndex := filepath.Join(b.Package, bundleDigest)
+	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, "operator-bundles", imageIndex)
+	bundleDir := filepath.Join(imageIndexDir, "bundle")
+	bundleImageDir := filepath.Join(imageIndexDir, "oci")
+
+	err = createFolders([]string{bundleDir, bundleImageDir})
+	if err != nil {
+		return nil, err
+	}
+
+	if imgSpec.Transport == ociProtocol {
+		if _, err := os.Stat(filepath.Join(bundleImageDir, "index.json")); errors.Is(err, os.ErrNotExist) {
+			// delete the existing directory and untarred cache contents
+			os.RemoveAll(bundleDir)
+			os.RemoveAll(bundleImageDir)
+			// copy all contents to the working dir
+			err := copy.Copy(imgSpec.PathComponent, bundleImageDir)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		src := dockerProtocol + b.Image
+		dest := ociProtocolTrimmed + bundleImageDir
+
+		optsCopy := o.Opts
+		optsCopy.Stdout = io.Discard
+
+		err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy bundle %q image %q: %w", b.Name, b.Image, err)
+		}
+	}
+
+	ociImgRef, err := layout.NewReference(bundleImageDir, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oci layout reference: %w", err)
+	}
+	ociImg, err := ociImgRef.NewImage(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oci layout image: %w", err)
+	}
+	ociImgSrc, err := ociImgRef.NewImageSource(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create oci layout image source: %w", err)
+	}
+	for _, layerInfo := range ociImg.LayerInfos() {
+		layerReader, _, err := ociImgSrc.GetBlob(ctx, layerInfo, none.NoCache)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get blob: %w", err)
+		}
+		defer layerReader.Close()
+
+		if _, err := archive.ApplyLayer(bundleDir, layerReader); err != nil {
+			return nil, fmt.Errorf("failed to apply layer: %w", err)
+		}
+	}
+
+	manifestsDir := filepath.Join(bundleDir, "manifests")
+	manifestEntries, err := os.ReadDir(manifestsDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, manifestEntry := range manifestEntries {
+		if manifestEntry.IsDir() {
+			continue
+		}
+
+		fileData, err := os.ReadFile(filepath.Join(manifestsDir, manifestEntry.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		var po v1.PartialObjectMetadata
+		if err := yaml.Unmarshal(fileData, &po); err != nil {
+			return nil, err
+		}
+
+		if po.Kind != "ClusterServiceVersion" {
+			continue
+		}
+
+		var csv v1alpha1.ClusterServiceVersion
+		if err := yaml.Unmarshal(fileData, &csv); err != nil {
+			return nil, err
+		}
+		return &csv, nil
+	}
+	return nil, fmt.Errorf("no ClusterServiceVersion found in bundle %q", b.Name)
 }
 
 func digestOfFilter(catalog v2alpha1.Operator) (string, error) {
