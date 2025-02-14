@@ -6,7 +6,7 @@ endif
 
 GOMODCACHE=$(shell $(GO) env GOMODCACHE)
 
-BUILD_MACHINERY_VERSION=v0.0.0-20240419090851-af9c868bcf52
+BUILD_MACHINERY_VERSION=v0.0.0-20240910153727-5725581bdf8f
 BUILD_MACHINERY_PATH=github.com/openshift/build-machinery-go
 
 $(shell $(GO) get ${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERSION})
@@ -18,10 +18,10 @@ include $(addprefix ${GOMODCACHE}/${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERS
 	targets/openshift/deps-gomod.mk \
 )
 
-GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/pkg/version)
+#GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/pkg/version)
 
 GO_MOD_FLAGS = -mod=readonly
-GO_BUILD_PACKAGES := ./cmd/...
+GO_BUILD_PACKAGES := ./cmd/oc-mirror
 GO_PACKAGE = github.com/openshift/oc-mirror
 
 LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
@@ -62,10 +62,12 @@ hack-build: clean
 .PHONY: hack-build
 
 tidy:
-	$(GO) work sync
+	$(GO) mod tidy
+	cd v2 && $(GO) mod tidy
 .PHONY: tidy
 
 clean:
+	@rm -f cmd/oc-mirror/oc-mirror-v2
 	@rm -rf ./$(GO_BUILD_BINDIR)/*
 	@cd test/integration && make clean
 .PHONY: clean
@@ -116,6 +118,8 @@ vet:
 .PHONY: vet
 
 build: 
+	make -C v2 build
+	@cp v2/build/oc-mirror ./cmd/oc-mirror/oc-mirror-v2
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -race -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build

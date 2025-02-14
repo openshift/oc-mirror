@@ -37,8 +37,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -85,16 +83,7 @@ const (
 )
 
 func NewMirrorCmd() *cobra.Command {
-	if isV2() {
-		klog.Fatal("could not load v2 binary")
-		return nil
-	} else {
-		return buildV1Cmd()
-	}
-}
-
-func isV2() bool {
-	return len(os.Args) > 0 && slices.Contains(os.Args[:], "--v2")
+	return buildV1Cmd()
 }
 
 func buildV1Cmd() *cobra.Command {
