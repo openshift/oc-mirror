@@ -51,6 +51,8 @@ var expectedTarContents = []string{
 	"docker/registry/v2/repositories/ubi8/ubi/_uploads/97e2891e-4cb2-4289-a87a-e9b8cd006d20/hashstates/sha256/0",
 	"docker/registry/v2/repositories/ubi8/ubi/_uploads/97e2891e-4cb2-4289-a87a-e9b8cd006d20/startedat",
 	"isc",
+	"working-dir-fake/hold-release/ocp-release/v4.13.10/release-manifests/0000_50_installer_coreos-bootimages.yaml",
+	"working-dir-fake/hold-release/ocp-release/v4.13.9/release-manifests/0000_50_installer_coreos-bootimages.yaml",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/release-metadata",
 	"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/0000_50_installer_coreos-bootimages.yaml",

@@ -1,0 +1,37 @@
+apiVersion: v1
+data:
+  releaseVersion: 0.0.1-snapshot
+  stream: |
+    {
+      "stream": "rhcos-4.15",
+      "metadata": {
+        "last-modified": "2024-03-07T20:02:01Z",
+        "generator": "plume cosa2stream 743c05b"
+      },
+      "architectures": {
+        "x86_64": {
+          "images": {
+            "kubevirt": {
+              "release": "415.92.202402201450-0",
+              "image": "quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.15-9.2-kubevirt",
+              "digest-ref": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b"
+            }
+          },
+          "rhel-coreos-extensions": {
+            "azure-disk": {
+              "release": "415.92.202402201450-0",
+              "url": "https://rhcos.blob.core.windows.net/imagebucket/rhcos-415.92.202402201450-0-azure.x86_64.vhd"
+            }
+          }
+        }
+      }
+    }
+kind: ConfigMap
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+  creationTimestamp: null
+  name: coreos-bootimages
+  namespace: openshift-machine-config-operator
