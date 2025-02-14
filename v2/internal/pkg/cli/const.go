@@ -30,4 +30,11 @@ const (
 	maxParallelLayerDownloads     uint   = 10
 	maxParallelImageDownloads     uint   = 8
 	limitOverallParallelDownloads uint   = 200
+
+	// return error codes
+	genericErrorCode         uint8 = 1 << 0
+	releaseImageErrorCode    uint8 = 1 << 1
+	operatorImageErrorCode   uint8 = 1 << 2
+	helmImageErrorCode       uint8 = 1 << 3
+	additionalImageErrorCode uint8 = 1 << 4
 )
