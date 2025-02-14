@@ -94,9 +94,10 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			default:
 			}
 
+			semaphore <- struct{}{}
+
 			sp := newSpinner(img, opts.LocalStorageFQDN, p)
 
-			semaphore <- struct{}{}
 			wg.Add(1)
 			go func(cancelCtx context.Context, semaphore chan struct{}, results chan<- GoroutineResult, spinner *mpb.Bar) {
 				defer wg.Done()
