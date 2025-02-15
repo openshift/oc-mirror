@@ -1,6 +1,6 @@
 # Build artifacts.
 /bin/
-/cmd/oc-mirror/oc-mirror-v2
+/cmd/oc-mirror/data/oc-mirror-v2
 
 # Test artifacts.
 coverage.out

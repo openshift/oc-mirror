@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"errors"
 	"fmt"
 	"io"
@@ -11,19 +12,18 @@ import (
 	"slices"
 	"syscall"
 
-	_ "embed"
-
 	"github.com/openshift/oc-mirror/pkg/cli/mirror"
 	"k8s.io/klog/v2"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-//go:embed oc-mirror-v*
-var binaryV2 []byte
+//go:embed data/*
+var mirrorv2 embed.FS
 
 func main() {
 	if isV2() {
-		if err := runOcMirrorV2Cmd(os.Args[1:]); err != nil {
+		if err := runOcMirrorV2Cmd(os.Args); err != nil {
+			klog.Errorf("%s", err.Error())
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
 				os.Exit(exitErr.ExitCode())
@@ -42,11 +42,11 @@ func checkErr(err error) {
 }
 
 func isV2() bool {
-	return len(os.Args) > 0 && slices.Contains(os.Args[:], "--v2")
+	return len(os.Args) > 0 && slices.Contains(os.Args, "--v2")
 }
 
 func runOcMirrorV2Cmd(args []string) error {
-	tmpdir, err := os.MkdirTemp("", "oc-mirror")
+	tmpdir, err := os.MkdirTemp("", "oc-mirror-")
 	if err != nil {
 		return fmt.Errorf("failed to create tmpdir: %w", err)
 	}
@@ -54,6 +54,12 @@ func runOcMirrorV2Cmd(args []string) error {
 
 	path := filepath.Join(tmpdir, "oc-mirror")
 	klog.V(5).Infof("Unpacking v2 binary to %s", path)
+
+	binaryV2, err := mirrorv2.ReadFile("data/oc-mirror-v2")
+	if err != nil {
+		return fmt.Errorf("failed to read v2 binary: %w", err)
+	}
+
 	v2File, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create v2 binary: %w", err)

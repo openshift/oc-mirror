@@ -67,9 +67,10 @@ tidy:
 .PHONY: tidy
 
 clean:
-	@rm -f cmd/oc-mirror/oc-mirror-v2
+	@rm -f cmd/oc-mirror/data/oc-mirror-v2
 	@rm -rf ./$(GO_BUILD_BINDIR)/*
 	@cd test/integration && make clean
+	make -C v2 clean
 .PHONY: clean
 
 test-unit:
@@ -119,7 +120,7 @@ vet:
 
 build: 
 	make -C v2 build
-	@cp v2/build/oc-mirror ./cmd/oc-mirror/oc-mirror-v2
+	@cp v2/build/oc-mirror ./cmd/oc-mirror/data/oc-mirror-v2
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -race -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
