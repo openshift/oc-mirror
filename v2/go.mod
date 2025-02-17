@@ -16,7 +16,7 @@ require (
 	github.com/microlib/simple v1.0.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
+	github.com/openshift/api v0.0.0-20241001152557-e415140e5d5f
 	github.com/operator-framework/operator-registry v1.47.0
 	github.com/otiai10/copy v1.14.0
 	github.com/sherine-k/catalog-filter v0.0.3
