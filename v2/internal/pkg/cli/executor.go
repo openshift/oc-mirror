@@ -140,8 +140,7 @@ type MakeDirInterface interface {
 	makeDirAll(string, os.FileMode) error
 }
 
-type MakeDir struct {
-}
+type MakeDir struct{}
 
 func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 	return os.MkdirAll(dir, mode)
@@ -149,7 +148,6 @@ func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 
 // NewMirrorCmd - cobra entry point
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
-
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		IsTerminal:   term.IsTerminal(int(os.Stdout.Fd())),
@@ -388,7 +386,6 @@ func (o ExecutorSchema) Validate(dest []string) error {
 
 // Complete - do the final setup of modules
 func (o *ExecutorSchema) Complete(args []string) error {
-
 	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
 		o.Opts.Global.RegistriesConfPath = envOverride
 	}
@@ -664,7 +661,6 @@ func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
 
 // isLocalStoragePortBound - private utility to check if port is bound
 func (o *ExecutorSchema) isLocalStoragePortBound() bool {
-
 	// Check if the port is already bound
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", o.Opts.Global.Port))
 	if err != nil {
@@ -728,7 +724,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
-	//TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
+	// TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
 	// create operator cache dir
 	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
 	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
@@ -862,7 +858,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 		var copiedSchema v2alpha1.CollectorSchema
-		//call the batch worker
+		// call the batch worker
 		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
 			if _, ok := err.(batch.UnsafeError); ok {
 				return err
@@ -874,7 +870,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			copiedSchema = cs
 		}
 
-		//create IDMS/ITMS
+		// create IDMS/ITMS
 		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
 		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
 		if err != nil {
@@ -1143,7 +1139,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 		o.Log.Info(emoji.RepeatSingleButton + " rebuilding catalogs")
 
 		for _, copyImage := range oImgs {
-
 			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
 				if o.Opts.IsMirrorToMirror() && strings.Contains(copyImage.Source, o.Opts.LocalStorageFQDN) {
 					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
