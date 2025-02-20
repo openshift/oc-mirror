@@ -202,9 +202,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			return copiedImages, fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
 		}
 	}
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Debug("concurrent channel worker time     : %v", execTime)
+	o.Log.Debug("concurrent channel worker time     : %v", time.Since(startTime))
 	return collectorSchema, nil
 }
 
