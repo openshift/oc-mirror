@@ -771,7 +771,6 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 // RunMirrorToDisk - execute the mirror to disk functionality
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
-	var batchError error
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 
 	// collect all images
@@ -780,62 +779,55 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	if !o.Opts.IsDryRun {
-		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
-		if err != nil {
-			return err
-		}
-		var copiedSchema v2alpha1.CollectorSchema
-		// call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
-		} else {
-			copiedSchema = cs
-		}
-
-		// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
-		// it also gets added to the archive. When using the GCRCatalogBuilder implementation,
-		// the rebuilt catalog is automatically pushed to the registry, and is therefore not in
-		// the collectorSchema
-		if _, ok := o.CatalogBuilder.(*imagebuilder.GCRCatalogBuilder); ok {
-			copiedSchema, err = addRebuiltCatalogs(copiedSchema)
-			if err != nil {
-				return err
-			}
-		}
-
-		// prepare tar.gz when mirror to disk
-		o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-		// next, generate the archive
-		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
-	if err != nil {
+	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
 		return err
 	}
+
+	var batchError error
+	var copiedSchema v2alpha1.CollectorSchema
+	// call the batch worker
+	if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+		if _, ok := err.(batch.UnsafeError); ok {
+			return err
+		} else {
+			batchError = err
+			copiedSchema = cs
+		}
+	} else {
+		copiedSchema = cs
+	}
+
+	// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
+	// it also gets added to the archive. When using the GCRCatalogBuilder implementation,
+	// the rebuilt catalog is automatically pushed to the registry, and is therefore not in
+	// the collectorSchema
+	if _, ok := o.CatalogBuilder.(*imagebuilder.GCRCatalogBuilder); ok {
+		copiedSchema, err = addRebuiltCatalogs(copiedSchema)
+		if err != nil {
+			return err
+		}
+	}
+
+	// prepare tar.gz when mirror to disk
+	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
+	// next, generate the archive
+	if err := o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages); err != nil {
+		return err
+	}
+
 	if batchError != nil {
 		o.Log.Warn("%v", batchError)
 	}
+
 	return nil
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
-	var batchError error
-
 	// OCPBUGS-37948 + CLID-196: local cache should be started during mirror to mirror as well:
 	// All operator catalogs will be cached.
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
@@ -852,84 +844,75 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
-	if !o.Opts.IsDryRun {
-		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
-		if err != nil {
-			return err
-		}
-		var copiedSchema v2alpha1.CollectorSchema
-		// call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
-		} else {
-			copiedSchema = cs
-		}
 
-		// create IDMS/ITMS
-		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
-		if err != nil {
-			return err
-		}
-
-		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-
-		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-			return err
-		}
-
-		// generate signature config map
-		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
-		if err != nil {
-			// as this is not a seriously fatal error we just log the error
-			o.Log.Warn("%s", err)
-		}
-
-		// create updateService
-		if o.Config.Mirror.Platform.Graph {
-			graphImage, err := o.Release.GraphImage()
-			if err != nil {
-				return err
-			}
-			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-			if err != nil {
-				return err
-			}
-			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
-	if err != nil {
+	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
 		return err
 	}
+
+	var batchError error
+	var copiedSchema v2alpha1.CollectorSchema
+	// call the batch worker
+	if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+		if _, ok := err.(batch.UnsafeError); ok {
+			return err
+		} else {
+			batchError = err
+			copiedSchema = cs
+		}
+	} else {
+		copiedSchema = cs
+	}
+
+	// create IDMS/ITMS
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	// generate signature config map
+	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
+		// as this is not a seriously fatal error we just log the error
+		o.Log.Warn("%s", err)
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
+		if err != nil {
+			return err
+		}
+		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
+			return err
+		}
+	}
+
 	if batchError != nil {
 		o.Log.Warn("%v", batchError)
 	}
+
 	return nil
 }
 
 // RunDiskToMirror execute the disk to mirror functionality
 func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) error {
-	var batchError error
 	// extract the archive
-	err := o.MirrorUnArchiver.Unarchive()
-	if err != nil {
+	if err := o.MirrorUnArchiver.Unarchive(); err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
@@ -951,72 +934,64 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		}
 	}
 
-	if !o.Opts.IsDryRun {
-		var copiedSchema v2alpha1.CollectorSchema
-		// call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+	}
+
+	var batchError error
+	var copiedSchema v2alpha1.CollectorSchema
+	// call the batch worker
+	if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
+		if _, ok := err.(batch.UnsafeError); ok {
+			return err
 		} else {
+			batchError = err
 			copiedSchema = cs
 		}
-
-		// create IDMS/ITMS
-		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
-		if err != nil {
-			return err
-		}
-
-		// create catalog source
-		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-
-		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-			return err
-		}
-
-		// generate signature config map
-		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
-		if err != nil {
-			// as this is not a seriously fatal error we just log the error
-			o.Log.Warn("%s", err)
-		}
-
-		// create updateService
-		if o.Config.Mirror.Platform.Graph {
-			graphImage, err := o.Release.GraphImage()
-			if err != nil {
-				return err
-			}
-			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-			if err != nil {
-				return err
-			}
-			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
-			if err != nil {
-				return err
-			}
-		}
 	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+		copiedSchema = cs
 	}
 
-	if err != nil {
+	// create IDMS/ITMS
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
 		return err
 	}
+
+	// create catalog source
+	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	// generate signature config map
+	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
+		// as this is not a seriously fatal error we just log the error
+		o.Log.Warn("%s", err)
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
+		if err != nil {
+			return err
+		}
+		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
+			return err
+		}
+	}
+
 	if batchError != nil {
 		o.Log.Warn("%v", batchError)
 	}
+
 	return nil
 }
 
