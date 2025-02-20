@@ -195,9 +195,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	if len(errArray) > 0 {
 		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
-			return copiedImages, NewSafeError(errMsgHeader+" - unable to log these errors in %s/%s: %s", workerPrefix, o.LogsDir, filename, err.Error())
+			return copiedImages, fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
 		} else {
-			return copiedImages, NewSafeError(errMsg, workerPrefix, o.LogsDir, filename)
+			return copiedImages, fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
 		}
 	}
 	endTime := time.Now()
