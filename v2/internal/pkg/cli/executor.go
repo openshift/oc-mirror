@@ -527,7 +527,7 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 
 	o.stopLocalRegistry(cmd.Context())
 
-	o.Log.Info("mirror time     : %v", time.Now().Sub(startTime))
+	o.Log.Info("mirror time     : %v", time.Since(startTime))
 	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
 	return err
@@ -1065,9 +1065,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.AllImages = allRelatedImages
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Debug("collection time     : %v", execTime)
+	o.Log.Debug("collection time     : %v", time.Since(startTime))
 
 	if len(collectorSchema.AllImages) == 0 {
 		o.Log.Info(emoji.Exclamation + " No images to mirror...")

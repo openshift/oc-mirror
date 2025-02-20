@@ -284,9 +284,7 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 		}
 	}
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Info("delete time     : %v", execTime)
+	o.Log.Info("delete time     : %v", time.Since(startTime))
 
 	if o.Opts.Global.ForceCacheDelete {
 		// finally execute the garbage collector
