@@ -668,6 +668,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      expectedCSName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -740,6 +743,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -858,6 +864,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
 					Namespace: "openshift-marketplace",
+					Annotations: map[string]string{
+						"author": "oc-mirror",
+					},
 				},
 				Spec: ofv1alpha1.CatalogSourceSpec{
 					SourceType: "grpc",
@@ -944,6 +953,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      expectedCSName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -1056,6 +1068,9 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: expectedCCName,
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1.ClusterCatalogSpec{
 				Source: ofv1.CatalogSource{
@@ -1143,6 +1158,9 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: expectedCCName,
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1.ClusterCatalogSpec{
 				Source: ofv1.CatalogSource{
