@@ -851,6 +851,10 @@ func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, 
 	return relatedImages, nil
 }
 
+func (o MockHandler) getMetadataPropertyType(_ *declcfg.DeclarativeConfig) string {
+	return ""
+}
+
 func (o MockHandler) filterRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
