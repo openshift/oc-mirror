@@ -813,11 +813,14 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
 		o.localStorageInterruptChannel <- interruptSig
 
-		o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-		// next, generate the archive
-		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
-		if err != nil {
-			return err
+		if batchError == nil && len(copiedSchema.AllImages) > 0 {
+			o.Log.Info(emoji.Package + " Preparing the tarball archive...")
+			// next, generate the archive
+			if err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages); err != nil {
+				return err
+			}
+		} else {
+			o.Log.Debug(emoji.Package + " There were copy errors or no images were copied, skipping tarball generation")
 		}
 	} else {
 		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
