@@ -20,9 +20,7 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-var (
-	copiedImages v2alpha1.CollectorSchema
-
+const (
 	errMsgHeader = "%ssome errors occurred during the mirroring"
 	errMsg       = errMsgHeader + ".\n" +
 		"\t Please review %s/%s for a list of mirroring errors.\n" +
@@ -48,10 +46,6 @@ type GoroutineResult struct {
 // Worker - the main batch processor
 func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
 	startTime := time.Now()
-
-	copiedImages = v2alpha1.CollectorSchema{
-		AllImages: []v2alpha1.CopyImageSchema{},
-	}
 
 	var errArray []mirrorErrorSchema
 
@@ -165,6 +159,10 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
+	copiedImages := v2alpha1.CollectorSchema{
+		AllImages: []v2alpha1.CopyImageSchema{},
+	}
+
 	completed := 0
 	for completed < len(collectorSchema.AllImages) {
 		res := <-results
@@ -197,9 +195,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	if len(errArray) > 0 {
 		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
-			return copiedImages, NewSafeError(errMsgHeader+" - unable to log these errors in %s/%s: %s", workerPrefix, o.LogsDir, filename, err.Error())
+			return copiedImages, fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
 		} else {
-			return copiedImages, NewSafeError(errMsg, workerPrefix, o.LogsDir, filename)
+			return copiedImages, fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
 		}
 	}
 	endTime := time.Now()

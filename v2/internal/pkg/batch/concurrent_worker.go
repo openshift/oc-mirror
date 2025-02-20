@@ -226,7 +226,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 	if len(errArray) > 0 {
 		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
-			return o.CopiedImages, NewSafeError(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %v", o.LogsDir+"/"+filename, err)
+			return o.CopiedImages, fmt.Errorf(workerPrefix+"some errors occurred during the mirroring - unable to log these errors in %s: %w", o.LogsDir+"/"+filename, err)
 		} else {
 			msg := workerPrefix + "some errors occurred during the mirroring.\n" +
 				"\t Please review " + o.LogsDir + "/" + filename + " for a list of mirroring errors.\n" +
@@ -234,7 +234,7 @@ func (o *ConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.C
 				"\t * removing images or operators that cause the error from the image set config, and retrying\n" +
 				"\t * keeping the image set config (images are mandatory for you), and retrying\n" +
 				"\t * mirroring the failing images manually, if retries also fail."
-			return o.CopiedImages, NewSafeError(msg)
+			return o.CopiedImages, fmt.Errorf(msg)
 		}
 	}
 	endTime := time.Now()

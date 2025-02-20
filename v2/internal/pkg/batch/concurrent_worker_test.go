@@ -143,8 +143,8 @@ func TestConcurrentWorker(t *testing.T) {
 		if err == nil {
 			t.Fatal("should return safe error")
 		}
-		if safe, ok := err.(SafeError); !ok {
-			t.Fatalf("expected error type SafeError, but was %v", safe)
+		if unsafe, ok := err.(UnsafeError); ok {
+			t.Fatalf("expected error type error, but was %v", unsafe)
 		}
 
 		assert.Equal(t, len(relatedImages)-1, len(copiedImages.AllImages))
@@ -177,8 +177,8 @@ func TestConcurrentWorker(t *testing.T) {
 		if err == nil {
 			t.Fatal("should return safe error")
 		}
-		if safe, ok := err.(SafeError); !ok {
-			t.Fatalf("expected error type SafeError, but was %v", safe)
+		if unsafe, ok := err.(UnsafeError); ok {
+			t.Fatalf("expected error type error, but was %v", unsafe)
 		}
 
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
