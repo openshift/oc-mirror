@@ -110,30 +110,29 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 )
 
 type ExecutorSchema struct {
-	Log                          clog.PluggableLoggerInterface
-	LogsDir                      string
-	logFile                      *os.File
-	registryLogFile              *os.File
-	Config                       v2alpha1.ImageSetConfiguration
-	Opts                         *mirror.CopyOptions
-	WorkingDir                   string
-	Operator                     operator.CollectorInterface
-	Release                      release.CollectorInterface
-	AdditionalImages             additional.CollectorInterface
-	HelmCollector                helm.CollectorInterface
-	Mirror                       mirror.MirrorInterface
-	Manifest                     manifest.ManifestInterface
-	Batch                        batch.BatchInterface
-	LocalStorageService          registry.Registry
-	localStorageInterruptChannel chan error
-	LocalStorageDisk             string
-	ClusterResources             clusterresources.GeneratorInterface
-	ImageBuilder                 imagebuilder.ImageBuilderInterface
-	CatalogBuilder               imagebuilder.CatalogBuilderInterface
-	MirrorArchiver               archive.Archiver
-	MirrorUnArchiver             archive.UnArchiver
-	MakeDir                      MakeDirInterface
-	Delete                       delete.DeleteInterface
+	Log                 clog.PluggableLoggerInterface
+	LogsDir             string
+	logFile             *os.File
+	registryLogFile     *os.File
+	Config              v2alpha1.ImageSetConfiguration
+	Opts                *mirror.CopyOptions
+	WorkingDir          string
+	Operator            operator.CollectorInterface
+	Release             release.CollectorInterface
+	AdditionalImages    additional.CollectorInterface
+	HelmCollector       helm.CollectorInterface
+	Mirror              mirror.MirrorInterface
+	Manifest            manifest.ManifestInterface
+	Batch               batch.BatchInterface
+	LocalStorageService registry.Registry
+	LocalStorageDisk    string
+	ClusterResources    clusterresources.GeneratorInterface
+	ImageBuilder        imagebuilder.ImageBuilderInterface
+	CatalogBuilder      imagebuilder.CatalogBuilderInterface
+	MirrorArchiver      archive.Archiver
+	MirrorUnArchiver    archive.UnArchiver
+	MakeDir             MakeDirInterface
+	Delete              delete.DeleteInterface
 }
 
 type MakeDirInterface interface {
@@ -236,7 +235,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			cmd.SetOutput(ex.logFile)
 
 			// prepare internal storage
-			err = ex.setupLocalStorage()
+			err = ex.setupLocalStorage(cmd.Context())
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
@@ -511,6 +510,8 @@ func (o *ExecutorSchema) Complete(args []string) error {
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	var err error
 
+	go o.startLocalRegistry()
+
 	switch {
 	case o.Opts.IsMirrorToDisk():
 		err = o.RunMirrorToDisk(cmd, args)
@@ -520,15 +521,10 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 		err = o.RunMirrorToMirror(cmd, args)
 	}
 
+	o.stopLocalRegistry(cmd.Context())
 	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
-	if err != nil {
-		o.closeAll()
-		return err
-	}
-
-	defer o.closeAll()
-	return nil
+	return err
 }
 
 // setupLocalRegistryConfig - private function to parse registry config
@@ -597,33 +593,26 @@ http:
 
 // setupLocalStorage - private function that sets up
 // a local (distribution) registry
-func (o *ExecutorSchema) setupLocalStorage() error {
-
+func (o *ExecutorSchema) setupLocalStorage(ctx context.Context) error {
 	config, err := o.setupLocalRegistryConfig()
 	if err != nil {
 		o.Log.Error("parsing config %v", err)
 	}
-	regLogger := logrus.New()
 	// prepare the logger
 	registryLogPath := filepath.Join(o.LogsDir, registryLogFilename)
 	o.registryLogFile, err = os.Create(registryLogPath)
 	if err != nil {
-		regLogger.Warn("Failed to create log file for local storage registry, using default stderr")
+		o.Log.Warn("Failed to create log file for local storage registry, using default stderr")
 	} else {
-		regLogger.Out = o.registryLogFile
+		absPath, err := filepath.Abs(registryLogPath)
+		if err != nil {
+			o.Log.Error(err.Error())
+		} else {
+			o.Log.Debug("local storage registry will log to %s", absPath)
+		}
+		logrus.SetOutput(o.registryLogFile)
 	}
-	absPath, err := filepath.Abs(registryLogPath)
-
-	o.Log.Debug("local storage registry will log to %s", absPath)
-	if err != nil {
-		o.Log.Error(err.Error())
-	}
-	logrus.SetOutput(o.registryLogFile)
 	os.Setenv("OTEL_TRACES_EXPORTER", "none")
-
-	ctx := context.Background()
-
-	errchan := make(chan error)
 
 	reg, err := registry.NewRegistry(ctx, config)
 	if err != nil {
@@ -631,24 +620,36 @@ func (o *ExecutorSchema) setupLocalStorage() error {
 	}
 
 	o.LocalStorageService = *reg
-	o.localStorageInterruptChannel = errchan
 
-	go panicOnRegistryError(errchan)
 	return nil
 }
 
 // startLocalRegistry - private function to start the
 // local registry
-func startLocalRegistry(reg *registry.Registry, errchan chan error) {
-	err := reg.ListenAndServe()
-	errchan <- err
+func (o *ExecutorSchema) startLocalRegistry() {
+	err := o.LocalStorageService.ListenAndServe()
+	if !errors.Is(err, http.ErrServerClosed) {
+		o.Log.Error("Could not start local registry: %v", err)
+		panic(err)
+	}
 }
 
-// panicOnRegistryError - handle errors from local registry
-func panicOnRegistryError(errchan chan error) {
-	err := <-errchan
-	if err != nil && !errors.Is(err, &NormalStorageInterruptError{}) {
-		panic(err)
+// stopLocalRegistry - stops the local registry and closes the registry.log file
+func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
+	// Try to gracefully shutdown the local registry
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if err := o.LocalStorageService.Shutdown(ctx); err != nil {
+		o.Log.Warn("Registry shutdown failure: %v", err)
+	}
+
+	if o.registryLogFile != nil {
+		// NOTE: we cannot just close the registry.log file as it is set as logrus output, which could still be in use
+		// by other dependencies before we exit. First we need to make sure logrus uses a different output.
+		logrus.SetOutput(io.Discard)
+		if err := o.registryLogFile.Close(); err != nil {
+			o.Log.Warn("Close registry.log failed: %v", err)
+		}
 	}
 }
 
@@ -769,7 +770,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	startTime := time.Now()
 	var batchError error
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect all images
 	collectorSchema, err := o.CollectAll(cmd.Context())
@@ -807,10 +807,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		}
 
 		// prepare tar.gz when mirror to disk
-		// first stop the registry
-		interruptSig := NormalStorageInterruptErrorf("end of mirroring to disk. Stopping local storage to prepare the archive")
-		o.localStorageInterruptChannel <- interruptSig
-
 		o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 		// next, generate the archive
 		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
@@ -845,7 +841,6 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	// OCPBUGS-37948 + CLID-196: local cache should be started during mirror to mirror as well:
 	// All operator catalogs will be cached.
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
@@ -948,7 +943,6 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 	// start the local storage registry
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
 
 	// collect
 	collectorSchema, err := o.CollectAll(cmd.Context())
@@ -1077,7 +1071,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
-		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 	// exclude blocked images
@@ -1091,7 +1084,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect operators
 	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
-		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 	oImgs := operatorImgs.AllImages
@@ -1107,7 +1099,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect additionalImages
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
-		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 	// exclude blocked images
@@ -1119,7 +1110,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
-		o.closeAll()
 		return v2alpha1.CollectorSchema{}, err
 	}
 	// exclude blocked images
@@ -1185,7 +1175,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 				ref, err := image.ParseRef(copyImage.Origin)
 				if err != nil {
 					spinner.Abort(false)
-					o.closeAll()
 					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
 				filteredConfigPath := ""
@@ -1203,7 +1192,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 				err = o.CatalogBuilder.RebuildCatalog(ctx, copyImage, filteredConfigPath)
 				if err != nil {
 					spinner.Abort(false)
-					o.closeAll()
 					return fmt.Errorf("unable to rebuild catalog %s: %v", copyImage.Origin, err)
 				}
 				spinner.Increment()
@@ -1212,14 +1200,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 		}
 	}
 	return nil
-
-}
-
-// closeAll - utility to close any open files
-func (o *ExecutorSchema) closeAll() {
-	// close registry log file
-	// ignore errors here
-	_ = o.registryLogFile.Close()
 }
 
 func withMaxNestedPaths(in []v2alpha1.CopyImageSchema, maxNestedPaths int) ([]v2alpha1.CopyImageSchema, error) {

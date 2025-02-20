@@ -75,7 +75,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 			cmd.SetOutput(ex.logFile)
 
 			// prepare internal storage
-			err = ex.setupLocalStorage()
+			err = ex.setupLocalStorage(cmd.Context())
 			if err != nil {
 				log.Error(" %v ", err)
 				os.Exit(1)
@@ -257,7 +257,8 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	o.Log.Debug("config %v", o.Config)
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 
-	go startLocalRegistry(&o.LocalStorageService, o.localStorageInterruptChannel)
+	go o.startLocalRegistry()
+	defer o.stopLocalRegistry(cmd.Context())
 
 	if o.Opts.Global.DeleteGenerate {
 

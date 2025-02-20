@@ -54,8 +54,6 @@ func TestDryRun(t *testing.T) {
 		if err != nil {
 			t.Errorf("storage cache error: %v ", err)
 		}
-		fakeStorageInterruptChan := make(chan error)
-		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		opts := &mirror.CopyOptions{
 			Global:              global,
@@ -83,16 +81,15 @@ func TestDryRun(t *testing.T) {
 		mockMirror := Mirror{}
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			Mirror:                       mockMirror,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			LogsDir:                      testFolder,
-			MakeDir:                      MakeDir{},
+			Log:                 log,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			Mirror:              mockMirror,
+			LocalStorageService: *reg,
+			LogsDir:             testFolder,
+			MakeDir:             MakeDir{},
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)
@@ -129,8 +126,6 @@ func TestDryRun(t *testing.T) {
 		if err != nil {
 			t.Errorf("storage cache error: %v ", err)
 		}
-		fakeStorageInterruptChan := make(chan error)
-		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		opts := &mirror.CopyOptions{
 			Global:              global,
@@ -159,16 +154,15 @@ func TestDryRun(t *testing.T) {
 		mockMirror := Mirror{Fail: true}
 
 		ex := &ExecutorSchema{
-			Log:                          log,
-			Opts:                         opts,
-			Operator:                     collector,
-			Release:                      collector,
-			AdditionalImages:             collector,
-			Mirror:                       mockMirror,
-			LocalStorageService:          *reg,
-			localStorageInterruptChannel: fakeStorageInterruptChan,
-			LogsDir:                      "/tmp/",
-			MakeDir:                      MakeDir{},
+			Log:                 log,
+			Opts:                opts,
+			Operator:            collector,
+			Release:             collector,
+			AdditionalImages:    collector,
+			Mirror:              mockMirror,
+			LocalStorageService: *reg,
+			LogsDir:             "/tmp/",
+			MakeDir:             MakeDir{},
 		}
 
 		err = ex.DryRun(context.TODO(), imgs)
