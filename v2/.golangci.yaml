@@ -7,29 +7,21 @@ run:
   concurrency: 4
 
   # timeout for analysis, e.g. 30s, 5m, default is 1m
-  timeout: 1m
+  timeout: 5m
 
   # exit code when at least one issue was found, default is 1
   issues-exit-code: 1
 
   # include test files or not, default is true
   tests: true
+
   # list of build tags, all linters use it. Default is empty list.
   build-tags:
-    - e2e
-
-  # which dirs to skip: issues from them won't be reported;
-  # can use regexp here: generated.*, regexp is applied on full path;
-  # default value is empty list, but default dirs are skipped independently
-  # from this option's value (see skip-dirs-use-default).
-  # "/" will be replaced by current OS file path separator to properly work
-  # on Windows.
-  skip-dirs:
-    - vendor
-
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
+    - json1
+    - libdm_no_deferred_remove
+    - exclude_graphdriver_devicemapper
+    - exclude_graphdriver_btrfs
+    - containers_image_openpgp
 
   # by default isn't set. If set we pass it to "go list -mod={option}". From "go help modules":
   # If invoked with -mod=readonly, the go command is disallowed from the implicit
@@ -45,21 +37,26 @@ run:
   # If false (default) - golangci-lint acquires file lock on start.
   allow-parallel-runners: false
 
+issues:
+  # Enables exclude of directories:
+  # - vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  exclude-dirs-use-default: true
+
+  # make issues output unique by line, default is true
+  uniq-by-line: true
 
 # output configuration options
 output:
-  # colored-line-number|line-number|json|tab|checkstyle|code-climate|junit-xml|github-actions
-  # default is "colored-line-number"
-  format: tab
+  formats:
+    # colored-line-number|line-number|json|tab|checkstyle|code-climate|junit-xml|github-actions
+    # default is "colored-line-number"
+    - format: colored-line-number
 
   # print lines of code with issue, default is true
   print-issued-lines: true
 
   # print linter name in the end of issue text, default is true
   print-linter-name: true
-
-  # make issues output unique by line, default is true
-  uniq-by-line: true
 
   # add a prefix to the output file references; default is no prefix
   path-prefix: ""
@@ -74,16 +71,54 @@ linters:
     - gofmt
     - goimports
     - gosimple
-    - govet
     - ineffassign
     - misspell
     - staticcheck
     - typecheck
     - unused
+    - bodyclose # check http response body is closed
+    - bidichk # check dangerous unicode char sequences
+    - containedctx # detects structs with context
+    - contextcheck # check non-inherited context usage
+    - copyloopvar # check loop vars are copied
+    - cyclop # cyclomatic complexity
+    - depguard # checks for disallowed deps
+    - durationcheck # checks for durations multiplied together
+    - errchkjson # checks types passed to json encoding functions
+    - errname # error naming convention
+    - errorlint # check for error wrapping problems
+    - exhaustive # check switch-case exhaustiveness
+    - exptostd # check /x/lib can be replaced by std
+    - fatcontext # nested contexts
+    - goconst # check for repeated strings
+    - gocritic # bugs, performance, and style metalinter
+    - gosec # inspect security problems
+    - iface # interface pollution
+    - intrange # checks for loops could use int range
+    - ireturn # accept interface, return concrete type
+    - makezero # slices are not init non-zero length
+    - mirror # wrong bytes/string usage
+    - nestif # reports deeply nested ifs
+    - nilerr # checks return nil when error
+    - noctx # http requests without context
+    - nosprintfhostport # check misused of sprintf for host:port
+    - prealloc # preallocate slices
+    - recvcheck # check for receiver type consistency
+    - wrapcheck # wrap errors from external libs
   fast: false
 
 linters-settings:
   goimports:
     # put imports beginning with prefix after 3rd-party packages;
     # it's a comma-separated list of prefixes
-    local-prefixes: repo/user/name
+    local-prefixes: github.com/openshift/oc-mirror
+
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "github.com/pkg/errors"
+            desc: Should be replaced by stdlib errors package
+
+  goconst:
+    ignore-tests: true
