@@ -12,7 +12,6 @@ import (
 )
 
 func TestPrepareDeleteForV1(t *testing.T) {
-
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
@@ -76,8 +75,8 @@ func TestPrepareDeleteForV1(t *testing.T) {
 		})
 	}
 }
-func TestPrepareM2MCopyBatch(t *testing.T) {
 
+func TestPrepareM2MCopyBatch(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
@@ -126,7 +125,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			caseName: "OperatorImageCollector - Mirror to Mirror: related image by digest and tag should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
 				"operatorB": {
-
 					{
 						Name:  "kube-rbac-proxy",
 						Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
@@ -147,7 +145,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: catalog image nominal should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"redhat-operator-index.045638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Image:      "registry.redhat.io/redhat/redhat-operator-index:v4.17",
@@ -158,7 +155,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
 					Destination: "docker://localhost:9999/redhat/redhat-operator-index:v4.17",
@@ -178,7 +174,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: catalog image - targetTag should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"redhat-operator-index.543218f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Image:      "registry.redhat.io/redhat/certified-operators:v4.10",
@@ -190,7 +185,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "docker://registry.redhat.io/redhat/certified-operators:v4.10",
 					Destination: "docker://localhost:9999/redhat/certified-operators:v4.10.0",
@@ -210,7 +204,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: catalog image - targetCatalog should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"redhat-operator-index.123458f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Image:         "registry.redhat.io/redhat/certified-operators:v4.14",
@@ -222,7 +215,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "docker://registry.redhat.io/redhat/certified-operators:v4.14",
 					Destination: "docker://localhost:9999/12345/certified-operators-pinned:v4.14",
@@ -242,7 +234,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: catalog image - targetTag & targetCatalog should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"certified-operators.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Image:         "registry.redhat.io/redhat/certified-operators:v4.17",
@@ -274,7 +265,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: oci catalog image - targetTag & targetCatalog should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"catalog-on-disk2.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:          "coffee-shop-index",
@@ -288,7 +278,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "oci://../../../tests/catalog-on-disk2",
 					Destination: "docker://localhost:9999/coffee-shop-index:v1.0",
@@ -308,8 +297,9 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: oci catalog image - targetCatalog should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-				"catalog-on-disk3.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": []v2alpha1.RelatedImage{
-					{Name: "tea-shop-index",
+				"catalog-on-disk3.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
+					{
+						Name:          "tea-shop-index",
 						Image:         "oci://../../../tests/catalog-on-disk3",
 						Type:          v2alpha1.TypeOperatorCatalog,
 						TargetCatalog: "tea-shop-index",
@@ -319,7 +309,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "oci://" + common.TestFolder + "catalog-on-disk3",
 					Destination: "docker://localhost:9999/tea-shop-index:latest",
@@ -339,8 +328,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: oci catalog image - targetTag should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
-				"catalog-on-disk1.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": []v2alpha1.RelatedImage{
+				"catalog-on-disk1.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:       "catalog-on-disk1",
 						Image:      "oci://../../../tests/catalog-on-disk1",
@@ -352,7 +340,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "oci://../../../tests/catalog-on-disk1",
 					Destination: "docker://localhost:9999/catalog-on-disk1:v1.1",
@@ -372,7 +359,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: oci catalog image nominal should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"catalog-on-disk1.0987660452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:       "catalog-on-disk4",
@@ -384,7 +370,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			},
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-
 				{
 					Source:      "oci://" + common.TestFolder + "catalog-on-disk4",
 					Destination: "docker://localhost:9999/catalog-on-disk4:latest",
@@ -404,7 +389,6 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 		{
 			caseName: "OperatorImageCollector - Mirror to Mirror: Full=true catalog image nominal should pass",
 			relatedImages: map[string][]v2alpha1.RelatedImage{
-
 				"redhat-operator-index.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Image: "registry.redhat.io/redhat/redhat-operator-index:v4.18",
@@ -445,5 +429,57 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			assert.ElementsMatch(t, testCase.expectedResult, res)
 		})
 	}
+}
 
+func TestOperatorCollector(t *testing.T) {
+	log := clog.New("trace")
+
+	t.Run("OperatorCollector - cachedCatalog", func(t *testing.T) {
+		op := OperatorCollector{
+			Log:              log,
+			LocalStorageFQDN: "localhost:5000",
+		}
+
+		t.Run("should succeed", func(t *testing.T) {
+			t.Run("with path component", func(t *testing.T) {
+				catalog := v2alpha1.Operator{
+					Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+				}
+				ref, err := op.cachedCatalog(catalog, "filteredTag")
+				assert.NoError(t, err)
+				assert.Equal(t, "docker://localhost:5000/redhat/redhat-operator-index:filteredTag", ref)
+			})
+			t.Run("with target catalog", func(t *testing.T) {
+				catalog := v2alpha1.Operator{
+					Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					TargetCatalog: "targetTag",
+				}
+				ref, err := op.cachedCatalog(catalog, "filteredTag")
+				assert.NoError(t, err)
+				assert.Equal(t, "docker://localhost:5000/targetTag:filteredTag", ref)
+			})
+			t.Run("with oci protocol", func(t *testing.T) {
+				catalog := v2alpha1.Operator{
+					Catalog: "oci://registry.redhat.io/redhat/redhat-operator-index",
+				}
+				ref, err := op.cachedCatalog(catalog, "filteredTag")
+				assert.NoError(t, err)
+				assert.Equal(t, "docker://localhost:5000/redhat-operator-index:filteredTag", ref)
+			})
+			t.Run("with empty filteredTag", func(t *testing.T) {
+				catalog := v2alpha1.Operator{
+					Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					TargetCatalog: "targetTag",
+				}
+				ref, err := op.cachedCatalog(catalog, "")
+				assert.NoError(t, err)
+				assert.Equal(t, "docker://localhost:5000/targetTag", ref)
+			})
+		})
+		t.Run("should fail when parsing reference fails", func(t *testing.T) {
+			ref, err := op.cachedCatalog(v2alpha1.Operator{}, "filteredTag")
+			assert.ErrorContains(t, err, "unable to determine cached reference for catalog")
+			assert.Empty(t, ref)
+		})
+	})
 }
