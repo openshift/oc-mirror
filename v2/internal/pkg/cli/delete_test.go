@@ -43,7 +43,8 @@ func TestExecutorValidateDelete(t *testing.T) {
 		opts.Global.ConfigPath = common.TestFolder + "isc.yaml"
 
 		ex := &DeleteSchema{
-			ExecutorSchema: ExecutorSchema{Log: log,
+			ExecutorSchema: ExecutorSchema{
+				Log:     log,
 				Opts:    opts,
 				LogsDir: "/tmp/",
 			},
@@ -195,8 +196,6 @@ func TestExecutorRunDelete(t *testing.T) {
 		if err != nil {
 			t.Errorf("storage cache error: %v ", err)
 		}
-		fakeStorageInterruptChan := make(chan error)
-		go skipSignalsToInterruptStorage(fakeStorageInterruptChan)
 
 		// read the DeleteImageSetConfiguration
 		dcfg, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.DeleteImageSetConfigurationKind)
@@ -226,19 +225,18 @@ func TestExecutorRunDelete(t *testing.T) {
 
 		ex := &DeleteSchema{
 			ExecutorSchema: ExecutorSchema{
-				Log:                          log,
-				Opts:                         &opts,
-				Operator:                     collector,
-				Release:                      collector,
-				AdditionalImages:             collector,
-				HelmCollector:                collector,
-				Mirror:                       mockMirror,
-				Batch:                        &mockBatch,
-				LocalStorageService:          *reg,
-				localStorageInterruptChannel: fakeStorageInterruptChan,
-				LogsDir:                      "/tmp/",
-				Delete:                       MockDelete{},
-				LocalStorageDisk:             common.TestFolder + "cache-fake-temp/",
+				Log:                 log,
+				Opts:                &opts,
+				Operator:            collector,
+				Release:             collector,
+				AdditionalImages:    collector,
+				HelmCollector:       collector,
+				Mirror:              mockMirror,
+				Batch:               &mockBatch,
+				LocalStorageService: *reg,
+				LogsDir:             "/tmp/",
+				Delete:              MockDelete{},
+				LocalStorageDisk:    common.TestFolder + "cache-fake-temp/",
 			},
 		}
 
@@ -257,15 +255,105 @@ func TestExecutorRunDelete(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
+	})
 
-		// test generate
-		ex.Opts.Global.DeleteGenerate = true
-		ex.Opts.Global.DeleteID = "test"
-		ex.Opts.Global.WorkingDir = "file://test"
-		err = ex.RunDelete(res)
+	t.Run("Testing Executor : run delete --generate should pass", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			SecurePolicy:   false,
+			WorkingDir:     "file://test",
+			DeleteGenerate: true,
+			DeleteID:       "test",
+			ConfigPath:     common.TestFolder + "delete-isc.yaml",
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+
+		testFolder := t.TempDir()
+		defer os.RemoveAll(testFolder)
+
+		// storage cache for test
+		regCfg, err := setupRegForTest(testFolder)
+		if err != nil {
+			t.Errorf("storage cache error: %v ", err)
+		}
+		reg, err := registry.NewRegistry(context.Background(), regCfg)
+		if err != nil {
+			t.Errorf("storage cache error: %v ", err)
+		}
+
+		// read the DeleteImageSetConfiguration
+		dcfg, err := config.ReadConfig(opts.Global.ConfigPath, v2alpha1.DeleteImageSetConfigurationKind)
+		if err != nil {
+			log.Error("imagesetconfig %v ", err)
+		}
+		converted := dcfg.(v2alpha1.DeleteImageSetConfiguration)
+
+		// we now coerce deleteimagesetconfig to imagesetconfig
+		isc := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform:         converted.Delete.Platform,
+					Operators:        converted.Delete.Operators,
+					AdditionalImages: converted.Delete.AdditionalImages,
+				},
+			},
+		}
+
+		collector := &Collector{Log: log, Config: isc, Opts: opts, Fail: false}
+		mockMirror := Mirror{}
+		mockBatch := Batch{}
+		_ = os.MkdirAll(testFolder+"/docker/registry/v2/repositories", 0755)
+		_ = os.MkdirAll(common.TestFolder+"cache-fake-temp", 0755)
+		defer os.RemoveAll(common.TestFolder + "cache-fake-temp")
+		opts.LocalStorageFQDN = regCfg.HTTP.Addr
+
+		ex := &DeleteSchema{
+			ExecutorSchema: ExecutorSchema{
+				Log:                 log,
+				Opts:                &opts,
+				Operator:            collector,
+				Release:             collector,
+				AdditionalImages:    collector,
+				HelmCollector:       collector,
+				Mirror:              mockMirror,
+				Batch:               &mockBatch,
+				LocalStorageService: *reg,
+				LogsDir:             "/tmp/",
+				Delete:              MockDelete{},
+				LocalStorageDisk:    common.TestFolder + "cache-fake-temp/",
+			},
+		}
+
+		res := &cobra.Command{}
+		res.SilenceUsage = true
+		res.SetContext(context.Background())
+		ex.Opts.Mode = mirror.MirrorToDisk
+
+		// copy cache-fake to cache-fake-temp for testing
+		err = copy.Copy(common.TestFolder+"cache-fake/", common.TestFolder+"cache-fake-temp/")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
 
+		// test generate
+		err = ex.RunDelete(res)
+		if err != nil {
+			t.Fatalf("should not fail : %v", err)
+		}
 	})
 }
