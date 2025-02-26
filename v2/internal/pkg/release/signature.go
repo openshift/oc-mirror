@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -49,8 +49,6 @@ func NewSignatureClient(log clog.PluggableLoggerInterface, config v2alpha1.Image
 
 // GenerateReleaseSignatures
 func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
-
-	//var data []byte
 	var imgs []v2alpha1.CopyImageSchema
 	var data []byte
 	// set up http object
@@ -91,7 +89,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		// we dont have the current digest in cache
 		if len(data) == 0 {
 			req, _ := http.NewRequest("GET", SignatureURL+"sha256="+digest+"/signature-1", nil)
-			//req.Header.Set("Authorization", "Basic "+generic.Token)
+			// req.Header.Set("Authorization", "Basic "+generic.Token)
 			req.Header.Set(ContentType, ApplicationJson)
 			resp, err := httpClient.Do(req)
 			if err != nil {
@@ -137,10 +135,14 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			if md.SignedBy == nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] invalid signature for %s image %s", digest, img.Source)
 			}
-			content, err := io.ReadAll(md.UnverifiedBody)
+
+			// update the image with the actual reference from the contents json
+			signSchema, err := common.ParseJsonReader[v2alpha1.SignatureContentSchema](md.UnverifiedBody)
 			if err != nil {
-				o.Log.Error("%v", err)
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unmarshal json %w", err)
 			}
+			img.Source = signSchema.Critical.Identity.DockerReference
+			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
 
 			o.Log.Trace("field isEncrypted %v", md.IsEncrypted)
 			o.Log.Trace("field EencryptedToKeyIds %v", md.EncryptedToKeyIds)
@@ -166,15 +168,6 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set for %s image %s", digest, img.Source)
 			}
 
-			o.Log.Debug("content %s", string(content))
-			// update the image with the actual reference from the contents json
-			var signSchema *v2alpha1.SignatureContentSchema
-			err = json.Unmarshal(content, &signSchema)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unmarshal json %v", err)
-			}
-			img.Source = signSchema.Critical.Identity.DockerReference
-			o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
 			// write signature to cache
 			newImgSpec, err := image.ParseRef(img.Source)
 			if err != nil {

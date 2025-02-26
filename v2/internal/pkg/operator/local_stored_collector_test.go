@@ -2,10 +2,9 @@ package operator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -68,7 +67,6 @@ var (
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
-
 					{
 						Catalog:       "oci://" + common.TestFolder + "simple-test-bundle",
 						TargetTag:     "v4.14",
@@ -216,7 +214,6 @@ var (
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
-
 					{
 						TargetCatalog: "test-namespace/test-catalog",
 						TargetTag:     "v2.0",
@@ -433,6 +430,7 @@ func TestOperatorLocalStoredCollectorM2D(t *testing.T) {
 		_ = New(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifest)
 	})
 }
+
 func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 	log := clog.New("trace")
 
@@ -450,7 +448,7 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 	os.RemoveAll(common.TestFolder + "operator-images")
 	os.RemoveAll(common.TestFolder + "tmp/")
 
-	//copy tests/hold-test-fake to working-dir
+	// copy tests/hold-test-fake to working-dir
 	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
 	if err != nil {
 		t.Fatalf("should not fail")
@@ -545,7 +543,6 @@ func TestOperatorLocalStoredCollectorD2M(t *testing.T) {
 			assert.ElementsMatch(t, testCase.expectedResult, res.AllImages)
 		})
 	}
-
 }
 
 func TestOperatorLocalStoredCollectorM2M(t *testing.T) {
@@ -565,7 +562,7 @@ func TestOperatorLocalStoredCollectorM2M(t *testing.T) {
 	os.RemoveAll(common.TestFolder + "operator-images")
 	os.RemoveAll(common.TestFolder + "tmp/")
 
-	//copy tests/hold-test-fake to working-dir
+	// copy tests/hold-test-fake to working-dir
 	err := copy.Copy(common.TestFolder+"working-dir-fake/hold-operator/redhat-operator-index/v4.14", filepath.Join(tempDir, "working-dir", operatorImageExtractDir, "redhat-operator-index/f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"))
 	if err != nil {
 		t.Fatalf("should not fail")
@@ -662,7 +659,6 @@ func TestOperatorLocalStoredCollectorM2M(t *testing.T) {
 			assert.ElementsMatch(t, testCase.expectedResult, res.AllImages)
 		})
 	}
-
 }
 
 func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
@@ -693,13 +689,15 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	}
 
 	ex := &LocalStorageCollector{
-		OperatorCollector{Log: log,
+		OperatorCollector{
+			Log:              log,
 			Mirror:           &MockMirror{Fail: false},
 			Config:           nominalConfigD2M,
 			Manifest:         manifest,
 			Opts:             d2mOpts,
 			LocalStorageFQDN: "localhost:9999",
-			ctlgHandler:      handler},
+			ctlgHandler:      handler,
+		},
 	}
 
 	return ex
@@ -732,7 +730,8 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	}
 
 	ex := &LocalStorageCollector{
-		OperatorCollector{Log: log,
+		OperatorCollector{
+			Log:              log,
 			Mirror:           &MockMirror{Fail: false},
 			Config:           nominalConfigM2D,
 			Manifest:         manifest,
@@ -756,17 +755,7 @@ func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOp
 }
 
 func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	var cfs *v2alpha1.OperatorConfigSchema
-	// read the test config
-	cfg, err := os.ReadFile(common.TestFolder + "operator-config.json")
-	if err != nil {
-		o.Log.Error("%v ", err)
-	}
-	err = json.Unmarshal(cfg, &cfs)
-	if err != nil {
-		o.Log.Error("%v ", err)
-	}
-	return cfs, nil
+	return common.ParseJsonFile[*v2alpha1.OperatorConfigSchema](path.Join(common.TestFolder, "operator-config.json"))
 }
 
 func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
@@ -836,6 +825,7 @@ func (ex *LocalStorageCollector) withConfig(cfg v2alpha1.ImageSetConfiguration) 
 	ex.Config = cfg
 	return ex
 }
+
 func (o MockHandler) getCatalog(filePath string) (OperatorCatalog, error) {
 	return OperatorCatalog{}, nil
 }
@@ -845,7 +835,7 @@ func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, 
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, //OCPBUGS-37867
+		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, // OCPBUGS-37867
 		{Name: "", Image: ""}, // OCPBUGS-31622
 	}
 	return relatedImages, nil
@@ -856,7 +846,7 @@ func (o MockHandler) filterRelatedImagesFromCatalog(operatorCatalog OperatorCata
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
 		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, //OCPBUGS-37867
+		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, // OCPBUGS-37867
 		{Name: "", Image: ""}, // OCPBUGS-31622
 	}
 	return relatedImages, nil
