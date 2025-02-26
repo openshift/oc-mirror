@@ -18,6 +18,7 @@ import (
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -47,8 +48,10 @@ type ClusterResourcesGenerator struct {
 	LocalStorageFQDN string
 }
 
-type imageMirrorsGeneratorMode int
-type mirrorCategory int
+type (
+	imageMirrorsGeneratorMode int
+	mirrorCategory            int
+)
 
 type categorizedMirrors struct {
 	category mirrorCategory
@@ -79,7 +82,7 @@ func (o *ClusterResourcesGenerator) IDMS_ITMSGenerator(allRelatedImages []v2alph
 		return err
 	}
 
-	//byTagMirrors
+	// byTagMirrors
 	byTagMirrors, err := o.generateImageMirrors(allRelatedImages, TagsOnlyMode, forceRepositoryScope)
 	if err != nil {
 		return err
@@ -248,7 +251,6 @@ func (o *ClusterResourcesGenerator) getCSTemplate(catalogRef string) string {
 }
 
 func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, catalogSourceTemplateFile string) error {
-
 	catalogSpec, err := image.ParseRef(catalogRef)
 	if err != nil {
 		return err
@@ -356,11 +358,7 @@ func catalogSourceContentFromTemplate(templateFile, catalogSourceName, image str
 	if err != nil {
 		return obj, fmt.Errorf("error during CatalogSource generation using template: error accessing targetCatalogSourceTemplate file %s: %v", templateFile, err)
 	}
-	bytesRead, err := os.ReadFile(templateFile)
-	if err != nil {
-		return obj, fmt.Errorf("error during CatalogSource generation using template: error reading targetCatalogSourceTemplate file %s: %v", templateFile, err)
-	}
-	err = yaml.Unmarshal(bytesRead, &obj)
+	obj, err = common.ParseYamlFile[ofv1alpha1.CatalogSource](templateFile)
 	if err != nil {
 		return obj, fmt.Errorf("error during CatalogSource generation using template: %s is not a valid catalog source template and could not be unmarshaled: %v", templateFile, err)
 	}
@@ -384,7 +382,7 @@ func catalogSourceContentFromTemplate(templateFile, catalogSourceName, image str
 	obj.Spec.SourceType = "grpc"
 	obj.Spec.Image = image
 
-	//verify that the resulting obj is a valid CatalogSource object
+	// verify that the resulting obj is a valid CatalogSource object
 	_, err = yaml.Marshal(obj)
 	if err != nil {
 		return ofv1alpha1.CatalogSource{}, fmt.Errorf("error during CatalogSource generation using template: %v", err)
@@ -669,7 +667,6 @@ func namespaceScope(imgSpec image.ImageSpec) string {
 	} else {
 		return imgSpec.Domain
 	}
-
 }
 
 func repositoryScope(imgSpec image.ImageSpec) string {
@@ -783,7 +780,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 				}
 				// check if we have an entry already
 				found := false
-				for k, _ := range cm.BinaryData {
+				for k := range cm.BinaryData {
 					search := strings.Split(k, "-")
 					if len(search) != 3 {
 						o.Log.Warn("[GenerateSignatureConfigMap] configmap key seems to be malformed %s : ", k)

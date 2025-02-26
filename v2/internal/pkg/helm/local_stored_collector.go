@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -27,8 +29,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var lsc *LocalStorageCollector
-var wClient webClient
+var (
+	lsc     *LocalStorageCollector
+	wClient webClient
+)
 
 type HelmOptions struct {
 	settings *helmcli.EnvSettings
@@ -230,24 +234,19 @@ func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, []error) {
 	}
 
 	return allHelmImages, errs
-
 }
 
 func repoAdd(chartRepo v2alpha1.Repository) error {
-
 	entry := helmrepo.Entry{
 		Name: chartRepo.Name,
 		URL:  chartRepo.URL,
 	}
 
-	b, err := os.ReadFile(lsc.Helm.settings.RepositoryConfig)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
+	var err error
 	var helmFile helmrepo.File
-	if err := yaml.Unmarshal(b, &helmFile); err != nil {
-		return err
+	helmFile, err = common.ParseYamlFile[helmrepo.File](lsc.Helm.settings.RepositoryConfig)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("parse helm repo config: %w", err)
 	}
 
 	// Check for existing repo name
@@ -281,33 +280,29 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 }
 
 func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
-	var indexFile helmrepo.IndexFile
 	if !strings.HasSuffix(indexURL, "/index.yaml") {
 		indexURL += "index.yaml"
 	}
 	resp, err := wClient.Get(indexURL)
 	if err != nil {
-		return indexFile, err
+		return helmrepo.IndexFile{}, fmt.Errorf("request helm index: %w", err)
 	}
-	if resp.StatusCode != 200 {
-		return indexFile, fmt.Errorf("response for %v returned %v with status code %v", indexURL, resp, resp.StatusCode)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return helmrepo.IndexFile{}, fmt.Errorf("response for %v returned %v with status code %v", indexURL, resp, resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+
+	indexFile, err := common.ParseYamlReader[helmrepo.IndexFile](resp.Body)
 	if err != nil {
-		return indexFile, err
-	}
-	err = yaml.Unmarshal(body, &indexFile)
-	if err != nil {
-		return indexFile, err
+		return helmrepo.IndexFile{}, err
 	}
 
 	namespace := getNamespaceFromURL(indexURL)
 
 	indexDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmIndexesDir, namespace)
 
-	err = os.MkdirAll(indexDir, 0755)
-
-	if err != nil {
+	if err := os.MkdirAll(indexDir, 0755); err != nil {
 		return indexFile, err
 	}
 
@@ -333,12 +328,8 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 
 		indexFilePath := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmIndexesDir, namespace, helmIndexFile)
 
-		data, err := os.ReadFile(indexFilePath)
-		if err != nil {
-			return nil, err
-		}
-
-		err = yaml.Unmarshal(data, &indexFile)
+		var err error
+		indexFile, err = common.ParseYamlFile[helmrepo.IndexFile](indexFilePath)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +346,6 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 }
 
 func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
-
 	lsc.Log.Debug("Reading from path %s", path)
 
 	p := getImagesPath(imagePaths...)
@@ -373,7 +363,6 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 	// Process each YAML document seperately
 	for _, templateData := range bytes.Split([]byte(templates), []byte("\n---\n")) {
 		imgs, err := findImages(templateData, p...)
-
 		if err != nil {
 			return nil, err
 		}
@@ -443,7 +432,6 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 
 // findImages will return images from parsed object
 func findImages(templateData []byte, paths ...string) (images []v2alpha1.RelatedImage, err error) {
-
 	var data interface{}
 	if err := yaml.Unmarshal(templateData, &data); err != nil {
 		return nil, err
