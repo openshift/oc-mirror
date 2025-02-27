@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"maps"
 	"os"
 	"slices"
@@ -222,6 +223,17 @@ func (o catalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfi
 		relatedImages[bundle.Name] = ris
 	}
 	return relatedImages, errors.Join(errs...)
+}
+
+func (o catalogHandler) getMetadataPropertyType(dc *declcfg.DeclarativeConfig) string {
+	for _, b := range dc.Bundles {
+		for _, p := range b.Properties {
+			if p.Type == property.TypeCSVMetadata {
+				return property.TypeCSVMetadata
+			}
+		}
+	}
+	return property.TypeBundleObject
 }
 
 func newOperatorCatalog() OperatorCatalog {
