@@ -127,6 +127,9 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "itms-" + catMirrors.category.toString() + "-0",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: confv1.ImageTagMirrorSetSpec{
 				ImageTagMirrors: []confv1.ImageTagMirrors{},
@@ -292,6 +295,10 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			generateWithoutTemplate = true
 			o.Log.Error("error generating catalog source from template. Fall back to generating catalog source without template: %v", err)
 		}
+		if obj.ObjectMeta.Annotations == nil {
+			obj.ObjectMeta.Annotations = map[string]string{}
+		}
+		obj.ObjectMeta.Annotations["author"] = "oc-mirror"
 	}
 	if generateWithoutTemplate || catalogSourceTemplateFile == "" {
 		obj = ofv1alpha1.CatalogSource{
@@ -302,6 +309,9 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      catalogSourceName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -437,6 +447,9 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterCatalogName,
+			Annotations: map[string]string{
+				"author": "oc-mirror",
+			},
 		},
 		Spec: ofv1.ClusterCatalogSpec{
 			Source: ofv1.CatalogSource{
@@ -494,6 +507,9 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "idms-" + catMirrors.category.toString() + "-0",
+				Annotations: map[string]string{
+					"author": "oc-mirror",
+				},
 			},
 			Spec: confv1.ImageDigestMirrorSetSpec{
 				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
@@ -614,6 +630,9 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: updateServiceResourceName,
+			Annotations: map[string]string{
+				"author": "oc-mirror",
+			},
 		},
 		Spec: updateservicev1.UpdateServiceSpec{
 			Replicas:       2,
@@ -746,6 +765,9 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 			Name:      configMapName,
 			Labels: map[string]string{
 				signatureLabel: "",
+			},
+			Annotations: map[string]string{
+				"author": "oc-mirror",
 			},
 		},
 		BinaryData: make(map[string]string),
