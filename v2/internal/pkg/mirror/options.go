@@ -46,6 +46,8 @@ type GlobalOptions struct {
 	Quiet              bool          // Suppress output information when copying images
 	Force              bool          // Force the copy/mirror even if there is nothing to update
 	V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
+	CpuProf            bool          // Enable CPU profiling
+	MemProf            bool          // Enable Memory profiling
 	MaxNestedPaths     int           // Sets the maximum allowed path-components on the destination registry
 	StrictArchiving    bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
 	SinceString        string        // Sets the date since which all content mirrored after is included in the archive
