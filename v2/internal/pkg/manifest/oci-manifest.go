@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -37,7 +36,7 @@ func New(log clog.PluggableLoggerInterface) *Manifest {
 
 // GetImageIndex - used to get the oci index.json
 func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	indexPath := path.Join(dir, index)
+	indexPath := filepath.Join(dir, index)
 	oci, err := o.GetImageManifest(indexPath)
 	if err != nil {
 		return nil, fmt.Errorf("image index %q: %w", indexPath, err)
@@ -66,7 +65,7 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 
 // ExtractLayersOCI
 func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	_, err := os.Stat(path.Join(toPath, label))
+	_, err := os.Stat(filepath.Join(toPath, label))
 	if err == nil {
 		o.Log.Debug("extract directory exists (nop)")
 		return nil
@@ -80,7 +79,7 @@ func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1
 			return fmt.Errorf("digest %q: format is not correct: %w", blob.Digest, err)
 		}
 		digestString := validDigest.Encoded()
-		f, err := os.Open(path.Join(fromPath, digestString))
+		f, err := os.Open(filepath.Join(fromPath, digestString))
 		if err != nil {
 			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
 		}
@@ -165,7 +164,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
 func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	data, err := os.ReadFile(path.Join(dir, "index.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
 	if err != nil {
 		return fmt.Errorf("read index.json: %w", err)
 	}
@@ -175,7 +174,7 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISche
 	o.Log.Debug("Digest:", digest)
 	o.Log.Debug("Size:", size)
 
-	err = copy.Copy(path.Join(dir, "index.json"), path.Join(dir, "blobs", "sha256", digest))
+	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", digest))
 	if err != nil {
 		return fmt.Errorf("copy index.json to destination: %w", err)
 	}
@@ -197,7 +196,7 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISche
 	}
 
 	// Write the JSON string to a file
-	err = os.WriteFile(path.Join(dir, "index.json"), idxData, 0644) // nolint:gosec // G306: no sensitive data
+	err = os.WriteFile(filepath.Join(dir, "index.json"), idxData, 0644) // nolint:gosec // G306: no sensitive data
 	if err != nil {
 		return fmt.Errorf("write single manifest index.json: %w", err)
 	}
@@ -231,9 +230,5 @@ func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext,
 		return "", fmt.Errorf("get manifest digest: %w", err)
 	}
 
-	if strings.Contains(digest.String(), ":") {
-		return strings.Split(digest.String(), ":")[1], nil
-	}
-
-	return "", nil
+	return digest.Encoded(), nil
 }

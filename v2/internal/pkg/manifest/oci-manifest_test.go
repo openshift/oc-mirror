@@ -2,7 +2,7 @@ package manifest
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/otiai10/copy"
@@ -60,7 +60,7 @@ func TestGetAllManifests(t *testing.T) {
 				},
 			},
 		}
-		res, err := manifest.GetImageManifest(common.TestFolder + "image-manifest.json")
+		res, err := manifest.GetImageManifest(filepath.Join(common.TestFolder, "image-manifest.json"))
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOCI, res)
 	})
@@ -120,7 +120,7 @@ func TestGetAllManifests(t *testing.T) {
 				},
 			},
 		}
-		res, err := manifest.GetOperatorConfig(common.TestFolder + "operator-config.json")
+		res, err := manifest.GetOperatorConfig(filepath.Join(common.TestFolder, "operator-config.json"))
 		assert.NoError(t, err)
 		// We don't care about some fields from the Schema (e.g. History), so
 		// we cannot just compare the objects. Instead, we compare just the relevant fields
@@ -139,7 +139,7 @@ func TestGetAllManifests(t *testing.T) {
 				Type:  2,
 			},
 		}
-		res, err := manifest.GetReleaseSchema(common.TestFolder + "release-schema.json")
+		res, err := manifest.GetReleaseSchema(filepath.Join(common.TestFolder, "release-schema.json"))
 		assert.NoError(t, err)
 		assert.Equal(t, expectedRI, res)
 	})
@@ -178,20 +178,20 @@ func TestExtractOCILayers(t *testing.T) {
 		}
 		t.Run("when destination directory exists - no op", func(t *testing.T) {
 			// this should do a nop (directory exists)
-			srcDir := path.Join(common.TestFolder, "test-untar", "blobs", "sha256")
-			destDir := path.Join(common.TestFolder, "test-untar", "release-manifests")
+			srcDir := filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256")
+			destDir := filepath.Join(common.TestFolder, "test-untar", "release-manifests")
 			assert.DirExists(t, destDir, "directory should exist as precondition")
-			err := manifest.ExtractLayersOCI(srcDir, path.Join(common.TestFolder, "test-untar"), "release-manifests", oci)
+			err := manifest.ExtractLayersOCI(srcDir, filepath.Join(common.TestFolder, "test-untar"), "release-manifests", oci)
 			assert.NoError(t, err, "should not fail: no op")
 			assert.DirExists(t, destDir, "directory should still exist")
 		})
 		t.Run("when destination directory doesn't exist", func(t *testing.T) {
 			destDir := t.TempDir()
 
-			err := manifest.ExtractLayersOCI(path.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
+			err := manifest.ExtractLayersOCI(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
 			assert.NoError(t, err)
 
-			manifestsDir := path.Join(destDir, "release-manifests")
+			manifestsDir := filepath.Join(destDir, "release-manifests")
 			f, err := os.Open(manifestsDir)
 			assert.NoError(t, err, "release-manifests dir should exist")
 			defer f.Close()
@@ -206,12 +206,12 @@ func TestExtractOCILayers(t *testing.T) {
 	t.Run("Testing ExtractOCILayers : should fail", func(t *testing.T) {
 		t.Run("when cannot stat extract destination directory", func(t *testing.T) {
 			// Create a directory we don't have permission to stat
-			destDir := path.Join(t.TempDir(), "invalid-dest")
+			destDir := filepath.Join(t.TempDir(), "invalid-dest")
 			err := os.Mkdir(destDir, 0o600)
 			assert.NoError(t, err)
 
 			oci := &v2alpha1.OCISchema{}
-			err = manifest.ExtractLayersOCI(path.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
+			err = manifest.ExtractLayersOCI(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
 			assert.Error(t, err)
 			assert.Regexp(t, "extract directory: .*", err)
 		})
@@ -245,7 +245,7 @@ func TestExtractOCILayers(t *testing.T) {
 				},
 			}
 			destDir := t.TempDir()
-			err := manifest.ExtractLayersOCI(path.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
+			err := manifest.ExtractLayersOCI(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
 			assert.EqualError(t, err, "digest \"foobaz\": format is not correct: invalid checksum digest format")
 		})
 		t.Run("when OCI layer is missing", func(t *testing.T) {
@@ -278,12 +278,12 @@ func TestExtractOCILayers(t *testing.T) {
 			}
 
 			// Copy layers...
-			srcDir := path.Join(t.TempDir(), "test-untar", "blobs", "sha256")
-			err := copy.Copy(path.Join(common.TestFolder, "test-untar", "blobs", "sha256"), srcDir)
+			srcDir := filepath.Join(t.TempDir(), "test-untar", "blobs", "sha256")
+			err := copy.Copy(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), srcDir)
 			assert.NoError(t, err, "should copy blobs")
 
 			// ... but remove one of them
-			err = os.Remove(path.Join(srcDir, "5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d"))
+			err = os.Remove(filepath.Join(srcDir, "5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d"))
 			assert.NoError(t, err, "should remove blob layer")
 
 			destDir := t.TempDir()
