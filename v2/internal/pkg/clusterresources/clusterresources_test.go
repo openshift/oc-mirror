@@ -1,7 +1,6 @@
 package clusterresources
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,10 @@ import (
 	"time"
 
 	confv1 "github.com/openshift/api/config/v1"
+	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
@@ -17,10 +20,6 @@ import (
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/otiai10/copy"
-	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -179,8 +178,8 @@ var (
 		},
 	}
 	imageListOCPBUGS47688 = []v2alpha1.CopyImageSchema{
-		//docker://quay.io/openshift-release-dev/ocp-release:4.17.9-x86_64=docker://sherinefedora:5000/release/newtest/openshift/release-images:4.17.9-x86_64
-		//docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:024bb32ca49837b9ce58f0e1610e5bbb395df7ffaa90ddcffb8cf8ef1b3900dc=docker://sherinefedora:5000/release/newtest/openshift/release:4.17.9-x86_64-tools
+		// docker://quay.io/openshift-release-dev/ocp-release:4.17.9-x86_64=docker://sherinefedora:5000/release/newtest/openshift/release-images:4.17.9-x86_64
+		// docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:024bb32ca49837b9ce58f0e1610e5bbb395df7ffaa90ddcffb8cf8ef1b3900dc=docker://sherinefedora:5000/release/newtest/openshift/release:4.17.9-x86_64-tools
 		{
 			Source:      "docker://localhost:55000/openshift/release-images:4.17.9-x86_64",
 			Destination: "docker://myregistry/openshift-release-dev/ocp-release/openshift/release-images:4.17.9-x86_64",
@@ -266,7 +265,7 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 			isItmsFound := false
 			for _, file := range msFiles {
 				// check idmsFile has a name that is
-				//compliant with Kubernetes requested
+				// compliant with Kubernetes requested
 				// RFC-1035 + RFC1123
 				// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
 				filename := file.Name()
@@ -288,7 +287,6 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 				t.Fatalf("output folder should contain 1 itms file which was not found")
 			}
 		})
-
 	}
 }
 
@@ -606,7 +604,6 @@ func TestCatalogSourceGenerator(t *testing.T) {
 	}
 
 	t.Run("Testing GenerateCatalogSource : should pass", func(t *testing.T) {
-
 		cr := &ClusterResourcesGenerator{
 			Log:              log,
 			WorkingDir:       workingDir,
@@ -643,7 +640,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 
 		expectedCSName := "cs-redhat-operator-index-v4-15"
 		// check idmsFile has a name that is
-		//compliant with Kubernetes requested
+		// compliant with Kubernetes requested
 		// RFC-1035 + RFC1123
 		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
 		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
@@ -651,15 +648,12 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 		}
 		assert.Equal(t, expectedCSName, customResourceName)
-		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		var actualCS ofv1alpha1.CatalogSource
-		err = yaml.Unmarshal(bytes, &actualCS)
+
+		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
+
 		expectedCS := ofv1alpha1.CatalogSource{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
@@ -676,11 +670,9 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}
 
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
-
 	})
 
 	t.Run("Testing GenerateCatalogSource with template: should pass", func(t *testing.T) {
-
 		cr := &ClusterResourcesGenerator{
 			Log:              log,
 			WorkingDir:       workingDir,
@@ -716,22 +708,19 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("output folder should contain 1 catalogSource yaml file")
 		}
 		// check idmsFile has a name that is
-		//compliant with Kubernetes requested
+		// compliant with Kubernetes requested
 		// RFC-1035 + RFC1123
 		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
 		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
 		if !isValidRFC1123(customResourceName) {
 			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 		}
-		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		var actualCS ofv1alpha1.CatalogSource
-		err = yaml.Unmarshal(bytes, &actualCS)
+
+		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
+
 		expectedCS := ofv1alpha1.CatalogSource{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
@@ -758,7 +747,6 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}
 
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
-
 	})
 
 	templateFailCases := []ClusterResourcesGenerator{
@@ -814,7 +802,6 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		},
 	}
 	t.Run("Testing GenerateCatalogSource with KO template: should not fail", func(t *testing.T) {
-
 		for _, tc := range templateFailCases {
 			err := tc.CatalogSourceGenerator(imageList)
 			if err != nil {
@@ -834,22 +821,19 @@ func TestCatalogSourceGenerator(t *testing.T) {
 				t.Fatalf("output folder should contain 1 catalogSource yaml file")
 			}
 			// check idmsFile has a name that is
-			//compliant with Kubernetes requested
+			// compliant with Kubernetes requested
 			// RFC-1035 + RFC1123
 			// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
 			customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
 			if !isValidRFC1123(customResourceName) {
 				t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 			}
-			bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
-			if err != nil {
-				t.Fatalf("failed to read file: %v", err)
-			}
-			var actualCS ofv1alpha1.CatalogSource
-			err = yaml.Unmarshal(bytes, &actualCS)
+
+			actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 			if err != nil {
 				t.Fatalf("failed to unmarshal catalogsource: %v", err)
 			}
+
 			expectedCS := ofv1alpha1.CatalogSource{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
@@ -875,7 +859,6 @@ func TestCatalogSourceGenerator(t *testing.T) {
 
 		defer os.RemoveAll(tmpDir)
 		listCatalogDigestAsTag := []v2alpha1.CopyImageSchema{
-
 			{
 				Source:      "docker://localhost:5000/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
 				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
@@ -919,7 +902,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 
 		expectedCSName := "cs-redhat-operator-index-7c4ef7434c97"
 		// check catalogsource has a name that is
-		//compliant with Kubernetes requested
+		// compliant with Kubernetes requested
 		// RFC-1035 + RFC1123
 		// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
 		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
@@ -927,12 +910,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 		}
 		assert.Equal(t, expectedCSName, customResourceName)
-		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		var actualCS ofv1alpha1.CatalogSource
-		err = yaml.Unmarshal(bytes, &actualCS)
+		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
@@ -1040,15 +1018,12 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			t.Fatalf("ClusterCatalog custom resource name %s doesn't  respect RFC1123", ccFiles[0].Name())
 		}
 		assert.Equal(t, expectedCCName, customResourceName)
-		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		var actualCC ofv1.ClusterCatalog
-		err = yaml.Unmarshal(bytes, &actualCC)
+
+		actualCC, err := common.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
 		}
+
 		expectedCC := ofv1.ClusterCatalog{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: ofv1.ClusterCatalogCRDAPIVersion,
@@ -1127,12 +1102,8 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			t.Fatalf("ClusterCatalog custom resource name %s doesn't respect RFC1123", ccFiles[0].Name())
 		}
 		assert.Equal(t, expectedCCName, customResourceName)
-		bytes, err := os.ReadFile(filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		var actualCC ofv1.ClusterCatalog
-		err = yaml.Unmarshal(bytes, &actualCC)
+
+		actualCC, err := common.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
 		}
@@ -1234,16 +1205,20 @@ func TestGenerateImageMirrors(t *testing.T) {
 					category: operatorCategory,
 					mirrors: map[string][]confv1.ImageMirror{
 						"quay.io/openshift-community-operators/cockroachdb": {
-							"myregistry/mynamespace/openshift-community-operators/cockroachdb"},
+							"myregistry/mynamespace/openshift-community-operators/cockroachdb",
+						},
 						"registry.redhat.io/ubi8-minimal": {
-							"myregistry/mynamespace/ubi8-minimal"}},
+							"myregistry/mynamespace/ubi8-minimal",
+						},
+					},
 				},
 				{
 					category: releaseCategory,
 					mirrors: map[string][]confv1.ImageMirror{
 						"quay.io/openshift-release-dev/ocp-v4.0-art-dev": {
 							"myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev",
-						}},
+						},
+					},
 				},
 			},
 		},
@@ -1296,7 +1271,6 @@ func TestGenerateImageMirrors(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestUpdateServiceGenerator(t *testing.T) {
@@ -1336,12 +1310,7 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 		// Read the contents of resourceFiles[0]
 		filePath := filepath.Join(workingDir, clusterResourcesDir, resourceFiles[0].Name())
-		fileContents, err := os.ReadFile(filePath)
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-		actualOSUS := updateservicev1.UpdateService{}
-		err = yaml.Unmarshal(fileContents, &actualOSUS)
+		actualOSUS, err := common.ParseYamlFile[updateservicev1.UpdateService](filePath)
 		if err != nil {
 			t.Fatalf("failed to unmarshall file: %v", err)
 		}
@@ -1352,19 +1321,22 @@ func TestUpdateServiceGenerator(t *testing.T) {
 }
 
 func TestGenerateSignatureConfigMap(t *testing.T) {
-
 	t.Run("Testing configmap both yaml&json should pass", func(t *testing.T) {
-
 		tmpDir := t.TempDir()
 		workingDir := filepath.Join(tmpDir, "working-dir")
 		err := os.MkdirAll(workingDir+"/"+clusterResourcesDir, 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
 		err = os.MkdirAll(workingDir+"/"+signatureDir, 0755)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(workingDir)
-		files := []string{"4.16.0-x86_64-sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
-			"4.16.2-x86_64-sha256-12345678c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"}
+		files := []string{
+			"4.16.0-x86_64-sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+			"4.16.2-x86_64-sha256-12345678c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678",
+		}
 
 		for _, file := range files {
 			err = copy.Copy("../../../tests/37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
@@ -1375,7 +1347,6 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 
 		log := clog.New("trace")
-		cmJson := cm.ConfigMap{}
 		cr := &ClusterResourcesGenerator{
 			Log:        log,
 			WorkingDir: workingDir,
@@ -1398,21 +1369,13 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 
 		sigFileJson := fmt.Sprintf("%s/%s/signature-configmap.json", workingDir, clusterResourcesDir)
+		cmJson, err := common.ParseJsonFile[cm.ConfigMap](sigFileJson)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		sigFileYaml := fmt.Sprintf("%s/%s/signature-configmap.yaml", workingDir, clusterResourcesDir)
-		resJson, err := os.ReadFile(sigFileJson)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = json.Unmarshal(resJson, &cmJson)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cmYaml := cm.ConfigMap{}
-		resYaml, err := os.ReadFile(sigFileYaml)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = yaml.Unmarshal(resYaml, &cmYaml)
+		cmYaml, err := common.ParseYamlFile[cm.ConfigMap](sigFileYaml)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1430,7 +1393,5 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 			bdYaml := len(cmYaml.BinaryData[key])
 			assert.Equal(t, bdYaml, 1200)
 		}
-
 	})
-
 }

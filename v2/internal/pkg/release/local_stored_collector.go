@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,12 +13,12 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"gopkg.in/yaml.v2"
 )
 
 type LocalStorageCollector struct {
@@ -78,7 +77,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
-					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 
@@ -87,7 +85,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
 				if err != nil {
-					//o.Log.Error(errMsg, err.Error())
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 				o.Log.Debug(collectorPrefix+"copied release index image %s ", value.Source)
@@ -97,18 +94,15 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 			oci, err := o.Manifest.GetImageIndex(dir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
-			//read the link to the manifest
+			// read the link to the manifest
 			if len(oci.Manifests) == 0 {
-				//o.Log.Error(errMsg, "image index not found ")
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
 			}
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
 			}
 
@@ -118,7 +112,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			manifestDir := filepath.Join(dir, blobsDir, manifest)
 			mfst, err := o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
@@ -126,7 +119,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			fromDir := strings.Join([]string{dir, blobsDir}, "/")
 			err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug("extracted layer %s ", cacheDir)
@@ -135,7 +127,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			releaseDir := strings.Join([]string{cacheDir, releaseImageExtractFullPath}, "/")
 			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
@@ -148,7 +139,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				}
 			}
 
-			//add the release image itself
+			// add the release image itself
 			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
 			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 			if err != nil {
@@ -170,7 +161,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	} else if o.Opts.IsDiskToMirror() {
 		releaseImages, releaseFolders, err := o.identifyReleases(ctx)
 		if err != nil {
-			//o.Log.Error(errMsg, err.Error())
 			return allImages, err
 		}
 
@@ -207,7 +197,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
 			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
 			if err != nil {
-				//o.Log.Error(errMsg, err.Error())
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
@@ -266,7 +255,6 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			// if there is no error, we are certain that the slice only contains 1 element
 			// but double checking...
 			if len(graphCopySlice) != 1 {
-				// o.Log.Error(errMsg, "error while calculating the destination reference for the graph image")
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
 			}
 			o.GraphDataImage = graphCopySlice[0].Destination
@@ -274,7 +262,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		}
 	}
 
-	//OCPBUGS-43275: deduplicating
+	// OCPBUGS-43275: deduplicating
 	slices.SortFunc(allImages, func(a, b v2alpha1.CopyImageSchema) int {
 		cmp := strings.Compare(a.Origin, b.Origin)
 		if cmp == 0 {
@@ -345,7 +333,6 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 }
 
 func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1.RelatedImage, []string, error) {
-
 	releaseImageCopies := []v2alpha1.CopyImageSchema{}
 
 	values, err := o.Cincinnati.GetReleaseReferenceImages(ctx)
@@ -450,30 +437,22 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 // getKubeVirtImage - CLID-179 : include coreos-bootable container image
 // if set it will be across the board for all releases
 func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2alpha1.RelatedImage, error) {
-	var ibi v2alpha1.InstallerBootableImages
-	var icm v2alpha1.InstallerConfigMap
-
 	// parse the main yaml file
 	biFile := strings.Join([]string{releaseArtifactsDir, releaseBootableImagesFullPath}, "/")
-	file, err := os.ReadFile(biFile)
+	icm, err := common.ParseYamlFile[v2alpha1.InstallerConfigMap](biFile)
 	if err != nil {
-		return v2alpha1.RelatedImage{}, fmt.Errorf("reading kubevirt yaml file %v", err)
-	}
-
-	errs := yaml.Unmarshal(file, &icm)
-	if errs != nil {
 		// this should not break the release process
 		// we just report the error and continue
-		return v2alpha1.RelatedImage{}, fmt.Errorf("marshalling kubevirt yaml file %v", errs)
+		return v2alpha1.RelatedImage{}, fmt.Errorf("marshalling kubevirt yaml file %w", err)
 	}
 
 	o.Log.Trace(fmt.Sprintf("data %v", icm.Data.Stream))
 	// now parse the json section
-	errs = json.Unmarshal([]byte(icm.Data.Stream), &ibi)
-	if errs != nil {
+	ibi, err := common.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
+	if err != nil {
 		// this should not break the release process
 		// we just report the error and continue
-		return v2alpha1.RelatedImage{}, fmt.Errorf("parsing json from kubevirt configmap data %v", errs)
+		return v2alpha1.RelatedImage{}, fmt.Errorf("parsing json from kubevirt configmap data %w", err)
 	}
 
 	image := ibi.Architectures.X86_64.Images.Kubevirt.DigestRef

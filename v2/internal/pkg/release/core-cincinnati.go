@@ -280,7 +280,6 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 		// If blocked path is found, just return the requested version and any accumulated
 		// upgrades to the caller
 		_, requested, _, err = GetUpdates(ctx, cs, targetChannel, targetVer, targetVer)
-		//Warnf is 5?
 		cs.Log.Warn("No upgrade path for %s in target channel %s", startVer.String(), targetChannel)
 		return requested, upgrades, err
 	}
@@ -413,7 +412,6 @@ func GetVersions(ctx context.Context, cs CincinnatiSchema, channel string) ([]se
 	// Find the all versions within the graph.
 	var Vers []semver.Version
 	for _, node := range graph.Nodes {
-
 		Vers = append(Vers, node.Version)
 	}
 
@@ -449,7 +447,6 @@ func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string,
 		if updateRange(node.Version) {
 			updates = append(updates, Update(node))
 		}
-
 	}
 	return updates, nil
 }
