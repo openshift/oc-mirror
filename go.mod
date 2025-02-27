@@ -267,3 +267,5 @@ replace github.com/openshift/library-go => github.com/aguidirh/library-go v0.0.0
 replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.1
 
 replace github.com/distribution/distribution/v3 => github.com/aguidirh/distribution/v3 v3.0.0-beta.1.ocmirror1
+
+replace github.com/mholt/archiver/v3 => github.com/aguidirh/archiver/v3 v3.5.0-ocmirror1
