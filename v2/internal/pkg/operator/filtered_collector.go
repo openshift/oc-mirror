@@ -412,14 +412,16 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 
 	o.Log.Debug("Catalog %q already in OCI format", catalog)
 	if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// delete the existing directory and untarred cache contents
-			os.RemoveAll(catalogImageDir)
-			os.RemoveAll(filepath.Join(imageIndexDir, operatorCatalogConfigDir))
-			// copy all contents to the working dir
-			return copy.Copy(imgSpec.PathComponent, catalogImageDir)
-		} else {
-			// FIXME: what to do here?
+		// If we cannot determine whether the catalog exists in OCI format at
+		// the working-dir destination, either because of `stat` failures or
+		// because it's the first time we are doing this
+		//
+		// delete the existing directory and untarred cache contents
+		os.RemoveAll(catalogImageDir)
+		os.RemoveAll(filepath.Join(imageIndexDir, operatorCatalogConfigDir))
+		// copy all contents to the working dir
+		if err := copy.Copy(imgSpec.PathComponent, catalogImageDir); err != nil {
+			return fmt.Errorf("copy OCI contents to working-dir: %w", err)
 		}
 	}
 
