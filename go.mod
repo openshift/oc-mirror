@@ -16,8 +16,8 @@ require (
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/openshift/build-machinery-go v0.0.0-20240419090851-af9c868bcf52
-	github.com/operator-framework/operator-registry v1.47.0
+	github.com/openshift/build-machinery-go v0.0.0-20240910153727-5725581bdf8f
+	github.com/operator-framework/operator-registry v1.38.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
@@ -42,10 +42,10 @@ require (
 	github.com/containerd/errdefs v0.3.0
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
+	github.com/openshift/api v0.0.0-20241001152557-e415140e5d5f
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
-	github.com/openshift/library-go v0.0.0-20240905123346-5bdbfe35a6f5
-	github.com/openshift/oc v4.2.0-alpha.0+incompatible
+	github.com/openshift/library-go v0.0.0-20241001171606-756adf2188fc
+	github.com/openshift/oc v0.0.0-alpha.0.0.20250214165542-7c38ff702605
 	github.com/otiai10/copy v1.14.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/sync v0.10.0
@@ -146,7 +146,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru/arc/v2 v2.0.5 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
@@ -187,7 +187,7 @@ require (
 	github.com/onsi/gomega v1.35.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opencontainers/selinux v1.11.1 // indirect
-	github.com/openshift/client-go v0.0.0-20240528061634-b054aa794d87 // indirect
+	github.com/openshift/client-go v0.0.0-20241001162912-da6d55e4611f // indirect
 	github.com/openshift/custom-resource-status v1.1.0 // indirect
 	github.com/operator-framework/api v0.27.0 // indirect
 	github.com/ostreedev/ostree-go v0.0.0-20210805093236-719684c64e4f // indirect
@@ -255,6 +255,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	oras.land/oras-go v1.2.5 // indirect
+	rsc.io/letsencrypt v0.0.3 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/controller-runtime v0.19.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
