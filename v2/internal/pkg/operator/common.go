@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"hash/fnv"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/containers/image/v5/types"
+	"github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -58,23 +60,25 @@ func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
 // * `catalog` (`v2alpha1.Operator`): the reference to the catalog in the imageSetConfig along with targetCatalog and targetTag if set
 // * the `filteredTag`: which is the expected tag to be used for the filtered catalog.
 func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag string) (string, error) {
-	var src string
 	srcImgSpec, err := image.ParseRef(catalog.Catalog)
 	if err != nil {
-		return "", fmt.Errorf("unable to determine cached reference for catalog %s: %v", catalog.Catalog, err)
+		return "", fmt.Errorf("unable to determine cached reference for catalog: %w", err)
 	}
 
-	// prepare the src and dest references
+	// prepare the src reference
+	var src string
 	switch {
 	case len(catalog.TargetCatalog) > 0:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, catalog.TargetCatalog}, "/")
+		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, catalog.TargetCatalog)
 	case srcImgSpec.Transport == ociProtocol:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, path.Base(srcImgSpec.Reference)}, "/")
+		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, path.Base(srcImgSpec.Reference))
 	default:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, srcImgSpec.PathComponent}, "/")
+		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, srcImgSpec.PathComponent)
 	}
 
-	src = src + ":" + filteredTag
+	if len(filteredTag) > 0 {
+		return src + ":" + filteredTag, nil
+	}
 
 	return src, nil
 }
@@ -82,37 +86,30 @@ func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag 
 // catalogDigest: method used during diskToMirror in order to discover the catalog's digest from a reference by tag.
 // It queries the cache registry instead of the registry set in the `catalog` reference
 func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.Operator) (string, error) {
-	var src string
-
 	srcImgSpec, err := image.ParseRef(catalog.Catalog)
 	if err != nil {
-		return "", fmt.Errorf("unable to determine cached reference for catalog %s: %v", catalog.Catalog, err)
+		return "", fmt.Errorf("unable to determine cached reference for catalog: %w", err)
 	}
 
-	// prepare the src and dest references
-	switch {
-	case len(catalog.TargetCatalog) > 0:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, catalog.TargetCatalog}, "/")
-	case srcImgSpec.Transport == ociProtocol:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, path.Base(srcImgSpec.Reference)}, "/")
-	default:
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, srcImgSpec.PathComponent}, "/")
-	}
-
+	var tag string
 	switch {
 	case len(catalog.TargetTag) > 0: // applies only to catalogs
-		src = src + ":" + catalog.TargetTag
+		tag = catalog.TargetTag
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
-		src = src + ":" + srcImgSpec.Algorithm + "-" + srcImgSpec.Digest
+		tag = fmt.Sprintf("%s-%s", srcImgSpec.Algorithm, srcImgSpec.Digest)
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
-		src = src + ":latest"
+		tag = "latest"
 	default:
-		src = src + ":" + srcImgSpec.Tag
+		tag = srcImgSpec.Tag
+	}
+
+	src, err := o.cachedCatalog(catalog, tag)
+	if err != nil {
+		return "", err
 	}
 
 	imgSpec, err := image.ParseRef(src)
 	if err != nil {
-		o.Log.Error(errMsg, err.Error())
 		return "", err
 	}
 
@@ -125,12 +122,7 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
-	catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
-	if err != nil {
-		o.Log.Error(errMsg, err.Error())
-		return "", err
-	}
-	return catalogDigest, nil
+	return o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 }
 
 func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
@@ -181,7 +173,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				} else {
 					src = src + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				}
-				//TODO remove me when the migration from oc-mirror v1 to v2 ends
+				// TODO remove me when the migration from oc-mirror v1 to v2 ends
 				if o.generateV1DestTags {
 					if img.OriginFromOperatorCatalogOnDisk {
 						dest = dest + ":" + imgSpec.Digest[0:6]
@@ -334,7 +326,90 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 		}
 	}
 	return result, nil
+}
 
+func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.ImageSpec, imageIndexDir string) (string, error) {
+	configsDir := filepath.Join(imageIndexDir, operatorCatalogConfigDir)
+	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
+
+	if err := createFolders([]string{configsDir, catalogImageDir}); err != nil {
+		return "", err
+	}
+
+	// It's in oci format so we can go directly to the index.json file
+	oci, err := o.Manifest.GetImageIndex(catalogImageDir)
+	if err != nil {
+		return "", err
+	}
+
+	if isMultiManifestIndex(*oci) && imgSpec.Transport == ociProtocol {
+		if err := o.Manifest.ConvertIndexToSingleManifest(catalogImageDir, oci); err != nil {
+			return "", err
+		}
+
+		var err error
+		oci, err = o.Manifest.GetImageIndex(catalogImageDir)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if len(oci.Manifests) == 0 {
+		return "", fmt.Errorf("no manifests found for %s", catalog)
+	}
+
+	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	if err != nil {
+		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
+	}
+
+	manifest := validDigest.Encoded()
+	o.Log.Debug(collectorPrefix+"manifest %s", manifest)
+	manifestDir := filepath.Join(catalogImageDir, blobsDir, manifest)
+	oci, err = o.Manifest.GetImageManifest(manifestDir)
+	if err != nil {
+		return "", err
+	}
+
+	// we need to check if oci returns multi manifests (from manifest list)
+	// also oci.Config will be nil
+	// we are only interested in the first manifest as all architectures
+	// "configs" will be exactly the same
+	if len(oci.Manifests) > 1 && oci.Config.Size == 0 {
+		subDigest, err := digest.Parse(oci.Manifests[0].Digest)
+		if err != nil {
+			return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
+		}
+		manifestDir := filepath.Join(catalogImageDir, blobsDir, subDigest.Encoded())
+		oci, err = o.Manifest.GetImageManifest(manifestDir)
+		if err != nil {
+			return "", fmt.Errorf("manifest %s: %w", catalog, err)
+		}
+	}
+
+	// read the config digest to get the detailed manifest
+	// looking for the label to search for a specific folder
+	configDigest, err := digest.Parse(oci.Config.Digest)
+	if err != nil {
+		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
+	}
+	catalogDir := filepath.Join(catalogImageDir, blobsDir, configDigest.Encoded())
+	ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
+	if err != nil {
+		return "", err
+	}
+
+	label := ocs.Config.Labels.OperatorsOperatorframeworkIoIndexConfigsV1
+	o.Log.Debug(collectorPrefix+"label %q", label)
+
+	// untar all the blobs for the operator
+	// if the layer with "label" (from previous step) is found to a specific folder
+	fromDir := filepath.Join(catalogImageDir, blobsDir)
+	if err := o.Manifest.ExtractLayersOCI(fromDir, configsDir, label, oci); err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configsDir, label), nil
 }
 
 type OtherImageDispatcher struct {

@@ -3,6 +3,7 @@ package v2alpha1
 import (
 	"time"
 
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 )
 
@@ -49,8 +50,7 @@ type From struct {
 }
 
 // ImportPolicy
-type ImportPolicy struct {
-}
+type ImportPolicy struct{}
 
 // ReferencePolicy
 type ReferencePolicy struct {
@@ -106,8 +106,7 @@ type OperatorConfigSchema struct {
 type OperatorConfig struct {
 	User         string `json:"User"`
 	ExposedPorts struct {
-		TCP struct {
-		} `json:"tcp"`
+		TCP struct{} `json:"tcp"`
 	} `json:"ExposedPorts"`
 	Env        []string       `json:"Env"`
 	Entrypoint []string       `json:"Entrypoint"`
@@ -209,8 +208,8 @@ type CollectorSchema struct {
 }
 
 type CopyImageSchemaMap struct {
-	OperatorsByImage map[string]map[string]struct{} //key is the origin image name and value is an array of operators' name
-	BundlesByImage   map[string]map[string]string   //key is the image name and value is the bundle name
+	OperatorsByImage map[string]map[string]struct{} // key is the origin image name and value is an array of operators' name
+	BundlesByImage   map[string]map[string]string   // key is the image name and value is the bundle name
 }
 
 // CopyImageSchema
@@ -260,4 +259,6 @@ type CatalogFilterResult struct {
 	OperatorFilter     Operator
 	FilteredConfigPath string
 	ToRebuild          bool
+	DeclConfig         *declcfg.DeclarativeConfig
+	Digest             string
 }
