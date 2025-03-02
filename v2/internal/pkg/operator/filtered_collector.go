@@ -44,15 +44,20 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		BundlesByImage:   make(map[string]map[string]string),
 	}
 
+	// We are going to try to collect all operators before returning.
+	// This slice holds the errors found for each operator plus any error
+	// found during the preparation of the images.
+	allErrs := []error{}
+
+	p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
 	for _, op := range o.Config.Mirror.Operators {
 		// download the operator index image
 		o.Log.Debug(collectorPrefix+"copying operator image %s", op.Catalog)
 
 		if !o.Opts.Global.IsTerminal {
-			o.Log.Debug("Collecting catalog %s", op.Catalog)
+			o.Log.Info("Collecting catalog %s", op.Catalog)
 		}
 		// prepare spinner
-		p := mpb.New(mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
 		spinner := p.AddSpinner(
 			1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
 			mpb.BarWidth(3),
@@ -72,26 +77,27 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
 			spinner.Abort(true)
 			spinner.Wait()
-			return v2alpha1.CollectorSchema{}, err
+			allErrs = append(allErrs, fmt.Errorf("parse catalog %q: %w", op.Catalog, err))
+			continue
 		}
 
 		result, err := o.collectOperator(ctx, op, relatedImages, copyImageSchemaMap)
 		if err != nil {
 			spinner.Abort(true)
 			spinner.Wait()
-			return v2alpha1.CollectorSchema{}, err
+			allErrs = append(allErrs, fmt.Errorf("collect catalog %q: %w", op.Catalog, err))
+			continue
 		}
 		collectorSchema.CatalogToFBCMap[imgSpec.ReferenceWithTransport] = result
 
 		spinner.Increment()
-		p.Wait()
 		if !o.Opts.Global.IsTerminal {
 			o.Log.Info("Collected catalog %s", op.Catalog)
 		}
 	}
+	p.Wait()
 
 	o.Log.Debug(collectorPrefix+"related images length %d ", len(relatedImages))
 	count := 0
@@ -112,14 +118,13 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		allImages, err = o.prepareD2MCopyBatch(relatedImages)
 	}
 	if err != nil {
-		o.Log.Error(errMsg, err.Error())
-		return v2alpha1.CollectorSchema{}, err
+		allErrs = append(allErrs, err)
 	}
 
 	collectorSchema.AllImages = allImages
 	collectorSchema.CopyImageSchemaMap = *copyImageSchemaMap
 
-	return collectorSchema, nil
+	return collectorSchema, errors.Join(allErrs...)
 }
 
 func isFullCatalog(catalog v2alpha1.Operator) bool {
@@ -254,8 +259,7 @@ func (o FilterCollector) collectOperator(
 		// ensure correct oci format and directory lookup
 		sourceOCIDir, err := filepath.Abs(imgSpec.Reference)
 		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-			return v2alpha1.CatalogFilterResult{}, err
+			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("failed to get OCI image path: %w", err)
 		}
 		catalogImage = ociProtocol + sourceOCIDir
 	}
