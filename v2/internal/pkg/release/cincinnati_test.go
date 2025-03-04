@@ -8,8 +8,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/containers/image/v5/types"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -119,7 +121,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfg, opts, c, false, signature)
+		sch := NewCincinnati(log, nil, &cfg, opts, c, false, signature)
 		res, _ := sch.GetReleaseReferenceImages(context.Background())
 		if res == nil {
 			t.Fatalf("should return a related images")
@@ -143,7 +145,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfgNoChannels, opts, c, false, signature)
+		sch := NewCincinnati(log, nil, &cfgNoChannels, opts, c, false, signature)
 		res, err := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -169,7 +171,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfg, opts, c, true, signature)
+		sch := NewCincinnati(log, nil, &cfg, opts, c, true, signature)
 		res, _ := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -195,7 +197,10 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should not fail endpoint parse")
 		}
 		c.url = endpoint
-		sch := NewCincinnati(log, &cfgReleaseKubeVirt, opts, c, true, signature)
+
+		mm := NewManifest()
+
+		sch := NewCincinnati(log, mm, &cfgReleaseKubeVirt, opts, c, true, signature)
 		res, _ := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -206,7 +211,41 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 
 }
 
+type mockManifest struct{}
+
+func NewManifest() manifest.ManifestInterface {
+	return mockManifest{}
+}
+
 func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	o.Log.Info("signature verification (mock)")
 	return []v2alpha1.CopyImageSchema{}, nil
+}
+
+func (o mockManifest) GetDigest(ctx context.Context, srcContext *types.SystemContext, img string) (string, error) {
+	return "123456546546546546546546546", nil
+}
+
+func (o mockManifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{}, nil
+}
+
+func (o mockManifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+	return &v2alpha1.OCISchema{}, nil
+}
+
+func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	return &v2alpha1.OperatorConfigSchema{}, nil
+}
+
+func (o mockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+	return nil
+}
+
+func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	return []v2alpha1.RelatedImage{}, nil
+}
+
+func (o mockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+	return nil
 }
