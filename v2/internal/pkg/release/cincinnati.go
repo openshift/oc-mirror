@@ -9,7 +9,9 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	//nolint
 )
@@ -85,6 +87,7 @@ type CincinnatiSchema struct {
 	Signature        SignatureInterface
 	Fail             bool
 	CincinnatiParams CincinnatiParams
+	Manifest         manifest.ManifestInterface
 }
 
 type CincinnatiParams struct {
@@ -92,8 +95,8 @@ type CincinnatiParams struct {
 	Arch         string
 }
 
-func NewCincinnati(log clog.PluggableLoggerInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
-	return &CincinnatiSchema{Log: log, Config: config, Opts: opts, Client: c, Fail: b, Signature: sig}
+func NewCincinnati(log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
+	return &CincinnatiSchema{Log: log, Manifest: manifest, Config: config, Opts: opts, Client: c, Fail: b, Signature: sig}
 }
 
 func (o *CincinnatiSchema) NewOCPClient() error {
@@ -122,13 +125,34 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 	// before making a deep copy
 	// check that the "platform.release" field is not empty
 	if len(o.Config.Mirror.Platform.Release) > 0 {
-		copyImage := v2alpha1.CopyImageSchema{
-			Source:      o.Config.Mirror.Platform.Release,
-			Destination: "",
-			Origin:      o.Config.Mirror.Platform.Release,
+		// OCPBUGS-50617
+		// include signature verify and download for ga releases, rc (release candidate)
+		// and ec Iengineering candidate) by tag or digest
+		imgSpec, err := image.ParseRef(o.Config.Mirror.Platform.Release)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		var copyImage v2alpha1.CopyImageSchema
+		if imgSpec.IsImageByDigestOnly() {
+			copyImage = v2alpha1.CopyImageSchema{
+				Source:      o.Config.Mirror.Platform.Release,
+				Destination: "",
+				Origin:      o.Config.Mirror.Platform.Release,
+			}
+		} else {
+			digest, err := o.Manifest.GetDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
+			if err != nil {
+				return []v2alpha1.CopyImageSchema{}, err
+			}
+			copyImage = v2alpha1.CopyImageSchema{
+				// TODO:This will need to change when we use sha512
+				Source:      imgSpec.Name + "@sha256:" + digest,
+				Destination: "",
+				Origin:      o.Config.Mirror.Platform.Release,
+			}
 		}
 		allImages = append(allImages, copyImage)
-		return allImages, nil
+		return o.Signature.GenerateReleaseSignatures(ctx, allImages)
 	}
 
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()

@@ -197,7 +197,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		client := &ocpClient{}
 		client.SetQueryParams(ex.Config.Mirror.Platform.Architectures[0], ex.Config.Mirror.Platform.Channels[0].Name, "")
 		sig := MockCincinnati{}
-		cn := NewCincinnati(ex.Log, &ex.Config, ex.Opts, client, false, sig)
+		cn := NewCincinnati(ex.Log, nil, &ex.Config, ex.Opts, client, false, sig)
 
 		ex.Cincinnati = cn
 
