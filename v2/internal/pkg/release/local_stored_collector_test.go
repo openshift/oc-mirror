@@ -2,53 +2,143 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/containers/image/v5/types"
-	"github.com/google/uuid"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"go.uber.org/mock/gomock"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	imgbuildermock "github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder/mock"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
+	releasemock "github.com/openshift/oc-mirror/v2/internal/pkg/release/mock"
 )
-
-type MockMirror struct {
-	Fail bool
-}
-
-type MockManifest struct {
-	Log               clog.PluggableLoggerInterface
-	FailImageIndex    bool
-	FailImageManifest bool
-	FailExtract       bool
-}
-
-type MockCincinnati struct {
-	Config v2alpha1.ImageSetConfiguration
-	Opts   mirror.CopyOptions
-	Client Client
-	Fail   bool
-}
 
 func TestReleaseLocalStoredCollector(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	defaultImageIndex := &v2alpha1.OCISchema{
+		SchemaVersion: 2,
+		Manifests: []v2alpha1.OCIManifest{
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				Size:      567,
+			},
+		},
+	}
+
+	defaultImageManifest := &v2alpha1.OCISchema{
+		SchemaVersion: 2,
+		Manifests: []v2alpha1.OCIManifest{
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				Size:      567,
+			},
+		},
+		Config: v2alpha1.OCIManifest{
+			MediaType: "application/vnd.oci.image.manifest.v1+json",
+			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+			Size:      567,
+		},
+	}
+
+	defaultReleaseSchema := []v2alpha1.RelatedImage{
+		{Name: "agent-installer-api-server", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e"},
+		{Name: "agent-installer-node-agent", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5"},
+		{Name: "agent-installer-orchestrator", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e"},
+		{Name: "apiserver-network-proxy", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21"},
+	}
 
 	// this test should cover over 80% M2D
 	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
 		ctx := context.Background()
-		manifest := &MockManifest{Log: log}
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+		manifestMock.
+			EXPECT().
+			GetImageIndex(gomock.Any()).
+			Return(defaultImageIndex, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetImageManifest(gomock.Any()).
+			Return(defaultImageManifest, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			ExtractLayersOCI(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetReleaseSchema(gomock.Any()).
+			Return(defaultReleaseSchema, nil).
+			AnyTimes()
+
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+						Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+					},
+				}, nil,
+			).
+			AnyTimes()
+
+		imgbuilderMock := imgbuildermock.NewMockImageBuilderInterface(mockCtrl)
+
+		imgbuilderMock.
+			EXPECT().
+			BuildAndPush(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("sha256:12345", nil).
+			AnyTimes()
+
+		imgbuilderMock.
+			EXPECT().
+			SaveImageLayoutToDir(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(layout.FromPath(common.TestFolder + "test-untar")).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, mockCtrl)
+		ex.Manifest = manifestMock
+		ex.Mirror = mirrorMock
+		ex.Cincinnati = cincinnatiMock
+		ex.ImageBuilder = imgbuilderMock
 
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		if err != nil {
@@ -112,13 +202,45 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
-
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
 
-		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
+		ex := setupCollector_DiskToMirror(tempDir, log, mockCtrl)
+
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+		manifestMock.
+			EXPECT().
+			GetReleaseSchema(gomock.Any()).
+			Return(defaultReleaseSchema, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetDigest(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419", nil).
+			AnyTimes()
+
+		ex.Manifest = manifestMock // override default empty mock
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+						Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+					},
+				}, nil,
+			).AnyTimes()
+
+		ex.Cincinnati = cincinnatiMock
+
+		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
@@ -187,19 +309,47 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector with real GetReleaseReferenceImages - Disk to mirror : should pass", func(t *testing.T) {
-
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
 
-		ex := setupCollector_DiskToMirror(tempDir, log)
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+		manifestMock.
+			EXPECT().
+			GetReleaseSchema(gomock.Any()).
+			Return(defaultReleaseSchema, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetDigest(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419", nil).
+			AnyTimes()
+
+		ex := setupCollector_DiskToMirror(tempDir, log, mockCtrl)
+		ex.Manifest = manifestMock
 
 		client := &ocpClient{}
 		client.SetQueryParams(ex.Config.Mirror.Platform.Architectures[0], ex.Config.Mirror.Platform.Channels[0].Name, "")
-		sig := MockCincinnati{}
-		cn := NewCincinnati(ex.Log, &ex.Config, ex.Opts, client, false, sig)
 
-		ex.Cincinnati = cn
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:v4.13.10",
+						Origin: "quay.io/openshift-release-dev/ocp-release:v4.13.10",
+					},
+				}, nil,
+			).
+			AnyTimes()
+
+		ex.Cincinnati = cincinnatiMock
 
 		ex.Opts.Global.WorkingDir = filepath.Join(common.TestFolder, "working-dir-fake")
 
@@ -217,9 +367,33 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image index", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailImageIndex: true}
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+		manifestMock.
+			EXPECT().
+			GetImageIndex(gomock.Any()).
+			Return(nil, errors.New("force-fail image index")).
+			AnyTimes()
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+						Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+					},
+				}, nil,
+			).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, mockCtrl)
+		ex.Manifest = manifestMock
+		ex.Cincinnati = cincinnatiMock
+
 		res, err := ex.ReleaseImageCollector(context.Background())
 		if err == nil {
 			t.Fatalf("should fail")
@@ -228,8 +402,39 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail image manifest", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailImageManifest: true}
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+		manifestMock.
+			EXPECT().
+			GetImageIndex(gomock.Any()).
+			Return(defaultImageIndex, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetImageManifest(gomock.Any()).
+			Return(nil, errors.New("force-fail image manifest")).
+			AnyTimes()
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+						Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+					},
+				}, nil,
+			).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, mockCtrl)
+		ex.Manifest = manifestMock
+		ex.Cincinnati = cincinnatiMock
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		if err == nil {
@@ -239,8 +444,45 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector : should fail extract", func(t *testing.T) {
-		manifest := &MockManifest{Log: log, FailExtract: true}
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifest)
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+		manifestMock.
+			EXPECT().
+			GetImageIndex(gomock.Any()).
+			Return(defaultImageIndex, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			GetImageManifest(gomock.Any()).
+			Return(defaultImageManifest, nil).
+			AnyTimes()
+
+		manifestMock.
+			EXPECT().
+			ExtractLayersOCI(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("force-fail extract OCI")).
+			AnyTimes()
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+						Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+					},
+				}, nil,
+			).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, mockCtrl)
+		ex.Manifest = manifestMock
+		ex.Cincinnati = cincinnatiMock
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		if err == nil {
@@ -248,16 +490,17 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		}
 		log.Debug("completed test related images %v ", res)
 	})
-
 }
 
 func TestGraphImage(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
 	t.Run("Testing GraphImage : should fail", func(t *testing.T) {
-		ex := setupCollector_DiskToMirror(tempDir, log)
+		ex := setupCollector_DiskToMirror(tempDir, log, mockCtrl)
 
 		res, err := ex.GraphImage()
 		if err != nil {
@@ -265,21 +508,39 @@ func TestGraphImage(t *testing.T) {
 		}
 		assert.Equal(t, ex.Opts.Destination+"/"+graphImageName+":latest", res)
 	})
-
 }
 
 func TestReleaseImage(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
 	t.Run("Testing ReleaseImage : should pass", func(t *testing.T) {
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
 
-		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
+		ex := setupCollector_DiskToMirror(tempDir, log, mockCtrl)
+
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(
+				[]v2alpha1.CopyImageSchema{
+					{
+						Type:   v2alpha1.TypeOCPRelease,
+						Source: "quay.io/openshift-release-dev/ocp-release:v4.13.10",
+						Origin: "quay.io/openshift-release-dev/ocp-release:v4.13.10",
+					},
+				}, nil,
+			).AnyTimes()
+
+		ex.Cincinnati = cincinnatiMock
+
+		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
@@ -407,6 +668,7 @@ func TestHandleGraphImage(t *testing.T) {
 			expectedGraphCopy: v2alpha1.CopyImageSchema{},
 		},
 	}
+
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			tempDir := t.TempDir()
@@ -441,27 +703,58 @@ func TestHandleGraphImage(t *testing.T) {
 			}
 
 			log := clog.New("trace")
-			manifestMock := new(ManifestMock)
-			if testCase.imageInCache {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("123456", nil)
-			} else {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("", fmt.Errorf("simulating image doesn't exist in cache"))
-			}
-			if testCase.imageInWorkingDir {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("123456", nil)
-			} else {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("", fmt.Errorf("simulating image doesn't exist in cache"))
-			}
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+			manifestMock.
+				EXPECT().
+				GetDigest(gomock.Any(), gomock.Any(), gomock.Eq("docker://localhost:9999/openshift/graph-image:latest")).
+				DoAndReturn(func(context.Context, any, string) (string, error) {
+					if testCase.imageInCache {
+						return "123456", nil
+					}
+					return "", errors.New("force-fail image digest")
+				}).
+				AnyTimes()
+
+			manifestMock.
+				EXPECT().
+				GetDigest(gomock.Any(), gomock.Any(), fmt.Sprintf("oci://%s/%s", copyOpts.Global.WorkingDir, graphPreparationDir)).
+				DoAndReturn(func(context.Context, any, string) (string, error) {
+					if testCase.imageInWorkingDir {
+						return "123456", nil
+					}
+					return "", errors.New("force-fail image digest")
+				}).
+				AnyTimes()
+
+			imgbuilderMock := imgbuildermock.NewMockImageBuilderInterface(mockCtrl)
+
+			imgbuilderMock.
+				EXPECT().
+				BuildAndPush(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return("sha256:12345", nil).
+				AnyTimes()
+
+			imgbuilderMock.
+				EXPECT().
+				SaveImageLayoutToDir(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(layout.FromPath(common.TestFolder + "test-untar")).
+				AnyTimes()
+
 			if testCase.updateURLOverride != "" {
 				t.Setenv("UPDATE_URL_OVERRIDE", testCase.updateURLOverride)
 			}
 			ex := &LocalStorageCollector{
 				Log:              log,
-				Mirror:           &MockMirror{Fail: false},
+				Mirror:           mirrormock.NewMockMirrorInterface(mockCtrl),
 				Opts:             copyOpts,
 				Manifest:         manifestMock,
 				LocalStorageFQDN: "localhost:9999",
-				ImageBuilder:     &mockImageBuilder{},
+				ImageBuilder:     imgbuilderMock,
 				LogsDir:          "/tmp/",
 			}
 			graphImage, err := ex.handleGraphImage(context.Background())
@@ -480,9 +773,7 @@ func TestHandleGraphImage(t *testing.T) {
 	}
 }
 
-func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *LocalStorageCollector {
-	manifest := &MockManifest{Log: log}
-
+func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, mockCtrl *gomock.Controller) *LocalStorageCollector {
 	globalD2M := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir + "/working-dir",
@@ -525,18 +816,13 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		},
 	}
 
-	cincinnati := &MockCincinnati{}
-	client := &ocpClient{}
-	client.SetQueryParams(cfgd2m.Mirror.Platform.Architectures[0], cfgd2m.Mirror.Platform.Channels[0].Name, "")
-	cincinnati.Client = client
-
 	ex := &LocalStorageCollector{
 		Log:              log,
-		Mirror:           &MockMirror{Fail: false},
+		Mirror:           mirrormock.NewMockMirrorInterface(mockCtrl),
 		Config:           cfgd2m,
-		Manifest:         manifest,
+		Manifest:         manifestmock.NewMockManifestInterface(mockCtrl),
 		Opts:             d2mOpts,
-		Cincinnati:       cincinnati,
+		Cincinnati:       releasemock.NewMockCincinnatiInterface(mockCtrl),
 		LocalStorageFQDN: "localhost:9999",
 		LogsDir:          "/tmp/",
 	}
@@ -544,8 +830,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *LocalStorageCollector {
-
+func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, mockCtrl *gomock.Controller) *LocalStorageCollector {
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
@@ -649,154 +934,16 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		},
 	}
 
-	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
 	ex := &LocalStorageCollector{
 		Log:              log,
-		Mirror:           &MockMirror{Fail: false},
+		Mirror:           mirrormock.NewMockMirrorInterface(mockCtrl),
 		Config:           cfgm2d,
-		Manifest:         manifest,
+		Manifest:         manifestmock.NewMockManifestInterface(mockCtrl),
 		Opts:             m2dOpts,
-		Cincinnati:       cincinnati,
+		Cincinnati:       releasemock.NewMockCincinnatiInterface(mockCtrl),
 		LocalStorageFQDN: "localhost:9999",
-		ImageBuilder:     &mockImageBuilder{},
+		ImageBuilder:     imgbuildermock.NewMockImageBuilderInterface(mockCtrl),
 		LogsDir:          "/tmp/",
 	}
 	return ex
-}
-
-func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
-	if o.Fail {
-		return fmt.Errorf("forced mirror run fail")
-	}
-	return nil
-}
-
-func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
-	return true, nil
-}
-
-func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return nil, nil
-}
-
-func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	relatedImages := []v2alpha1.RelatedImage{
-		{Name: "agent-installer-api-server", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e"},
-		{Name: "agent-installer-node-agent", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:955faaa822dc107f4dffa6a7e457f8d57a65d10949f74f6780ddd63c115e31e5"},
-		{Name: "agent-installer-orchestrator", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e"},
-		{Name: "apiserver-network-proxy", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21"},
-	}
-	return relatedImages, nil
-}
-
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageIndex {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
-	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-	}, nil
-}
-
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageManifest {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
-	}
-
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-			Size:      567,
-		},
-	}, nil
-}
-
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	if o.FailExtract {
-		return fmt.Errorf("forced extract oci fail")
-	}
-	return nil
-}
-
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419", nil
-}
-
-func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
-	var res []v2alpha1.CopyImageSchema
-	res = append(res, v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"})
-	return res, nil
-}
-
-func (o MockCincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
-	if o.Fail {
-		return o.Client, fmt.Errorf("forced cincinnati client error")
-	}
-	return o.Client, nil
-}
-
-func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
-	return o.Client, nil
-}
-
-func (o MockCincinnati) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
-	imagesByTag := make([]v2alpha1.CopyImageSchema, len(images))
-	minor := 9
-	for i, img := range images {
-		digestIndex := strings.LastIndex(img.Source, "@sha256:")
-		img.Origin = img.Source[:digestIndex] + ":v4.13." + fmt.Sprint(minor)
-		img.Source = img.Source[:digestIndex] + ":v4.13." + fmt.Sprint(minor)
-		img.Destination = ""
-		img.Type = v2alpha1.TypeOCPRelease
-		minor++
-		imagesByTag[i] = img
-	}
-	return imagesByTag, nil
-}
-
-type ManifestMock struct {
-	mock.Mock
-}
-
-func (o *ManifestMock) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-func (o *ManifestMock) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return &v2alpha1.OperatorConfigSchema{}, nil
-}
-func (o *ManifestMock) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-func (o *ManifestMock) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	return []v2alpha1.RelatedImage{}, nil
-}
-func (o *ManifestMock) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-func (o *ManifestMock) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	args := o.Called(ctx, sourceCtx, imgRef)
-	return args.String(0), args.Error(1)
 }

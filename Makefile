@@ -95,7 +95,7 @@ test-integration: hack-build
 	@cd test/integration && make
 .PHONY: test-integration
 
-sanity: tidy format vet
+sanity: tidy format vet generate
 	git diff --exit-code
 .PHONY: sanity
 
@@ -119,3 +119,6 @@ build:
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -race -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
+
+generate:
+	make -C v2 generate

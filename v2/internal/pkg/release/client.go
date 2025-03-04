@@ -17,6 +17,8 @@ var (
 	_ Client = &okdClient{}
 )
 
+//go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
+
 // Client is a Cincinnati client which can be used to fetch update graphs from
 // an upstream Cincinnati stack.
 type Client interface {

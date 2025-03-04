@@ -44,3 +44,6 @@ container:
 
 push:
 	podman push --authfile=${HOME}/.docker/config.json ${REGISTRY_BASE}/${IMAGE_NAME}:${IMAGE_VERSION} 
+
+generate:
+	go generate ./internal/pkg/...

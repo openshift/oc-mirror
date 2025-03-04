@@ -17,6 +17,8 @@ import (
 	"github.com/distribution/reference"
 )
 
+//go:generate mockgen -source=./mirror.go -destination=./mock/mirror_generated.go -package=mock
+
 type Mode string
 
 // MirrorInterface  used to mirror images with container/images (skopeo)
@@ -40,8 +42,10 @@ type Mirror struct {
 	Mode string
 }
 
-type MirrorCopy struct{}
-type MirrorDelete struct{}
+type (
+	MirrorCopy   struct{}
+	MirrorDelete struct{}
+)
 
 // New returns new Mirror instance
 func New(mc MirrorCopyInterface, md MirrorDeleteInterface) MirrorInterface {
@@ -74,7 +78,6 @@ func (o *MirrorDelete) DeleteImage(ctx context.Context, image string, co *CopyOp
 
 // copy - copy images setup and execute
 func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) (retErr error) {
-
 	if err := ReexecIfNecessaryForImages([]string{src, dest}...); err != nil {
 		return err
 	}
@@ -190,8 +193,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	return retry.IfNecessary(ctx, func() error {
-
-		//manifestBytes, err := copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
+		// manifestBytes, err := copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
 		manifestBytes, err := o.mc.CopyImage(ctx, policyContext, destRef, srcRef, co)
 		if err != nil {
 			return err
@@ -211,7 +213,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 // check exists - checks if image exists
 func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asCopySrc bool) (bool, error) {
-
 	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
 		return false, err
 	}
@@ -255,7 +256,6 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 
 // delete - delete images
 func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) error {
-
 	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
 		return err
 	}
