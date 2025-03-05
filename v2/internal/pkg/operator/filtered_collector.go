@@ -56,15 +56,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			o.Log.Info("Collecting catalog %s", op.Catalog)
 		}
 		// prepare spinner
-		p := mpb.New(mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
 		spinner := spinners.AddSpinner(p, "Collecting catalog "+op.Catalog)
-		// CLID-47 double check that targetCatalog is valid
-		if op.TargetCatalog != "" && !v2alpha1.IsValidPathComponent(op.TargetCatalog) {
-			o.Log.Error(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
-			spinner.Abort(true)
-			spinner.Wait()
-			return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
-		}
+
 		// CLID-27 ensure we pick up oci:// (on disk) catalogs
 		imgSpec, err := image.ParseRef(op.Catalog)
 		if err != nil {
