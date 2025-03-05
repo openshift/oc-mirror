@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -24,7 +24,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
+	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
 	defer os.RemoveAll(tmpDir)
 
 	global := &mirror.GlobalOptions{SecurePolicy: false}
@@ -213,7 +213,7 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 
 type mockManifest struct{}
 
-func NewManifest() manifest.ManifestInterface {
+func NewManifest() mockManifest {
 	return mockManifest{}
 }
 

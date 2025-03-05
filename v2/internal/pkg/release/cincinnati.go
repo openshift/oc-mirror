@@ -8,12 +8,12 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	//nolint
 )
 
 const (
@@ -95,7 +95,7 @@ type CincinnatiParams struct {
 	Arch         string
 }
 
-func NewCincinnati(log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) CincinnatiInterface {
+func NewCincinnati(log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, config *v2alpha1.ImageSetConfiguration, opts mirror.CopyOptions, c Client, b bool, sig SignatureInterface) *CincinnatiSchema {
 	return &CincinnatiSchema{Log: log, Manifest: manifest, Config: config, Opts: opts, Client: c, Fail: b, Signature: sig}
 }
 
@@ -142,7 +142,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		} else {
 			digest, err := o.Manifest.GetDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
 			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, err
+				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("retrieving digest %w", err)
 			}
 			copyImage = v2alpha1.CopyImageSchema{
 				// TODO:This will need to change when we use sha512
@@ -152,7 +152,12 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 			}
 		}
 		allImages = append(allImages, copyImage)
-		return o.Signature.GenerateReleaseSignatures(ctx, allImages)
+		imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		return imgs, nil
+
 	}
 
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
@@ -210,11 +215,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 					ch.MaxVersion = latest.String()
 					o.Log.Debug("detected minimum version as %s", ch.MaxVersion)
 					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
-						//min, found := prevChannels[ch.Name]
-						//if !found {
-						// Starting at a new headsOnly channels
 						min := latest.String()
-						//}
 						ch.MinVersion = min
 						o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
 					}
@@ -260,7 +261,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		if len(filterCopy.Channels) > 1 {
 			newDownloads, err := getCrossChannelDownloads(ctx, *o, filterCopy.Channels)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("[GetReleaseReferenceImages] error calculating cross channel upgrades: %v", err))
+				errs = append(errs, fmt.Errorf("[GetReleaseReferenceImages] error calculating cross channel upgrades: %w", err))
 				continue
 			}
 			allImages = append(allImages, newDownloads...)
@@ -269,7 +270,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 
 	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
 	if err != nil {
-		o.Log.Error("%v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%w", err)
 	}
 
 	errorArray := []string{}
@@ -296,11 +297,11 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 	// Plot between min and max of channel
 	first, err := semver.Parse(channel.MinVersion)
 	if err != nil {
-		return allImages, err
+		return allImages, fmt.Errorf("min semver parsing %w", err)
 	}
 	last, err := semver.Parse(channel.MaxVersion)
 	if err != nil {
-		return allImages, err
+		return allImages, fmt.Errorf("max semver parsing %w", err)
 	}
 
 	var newDownloads []v2alpha1.CopyImageSchema
@@ -314,15 +315,15 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 	} else {
 		lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
 		if err != nil {
-			return allImages, err
+			return allImages, fmt.Errorf("low range semver parsing %w", err)
 		}
 		highRange, err := semver.ParseRange(fmt.Sprintf("<=%s", last))
 		if err != nil {
-			return allImages, err
+			return allImages, fmt.Errorf("high range semver parsing %w", err)
 		}
 		versions, err := GetUpdatesInRange(ctx, cs, channel.Name, highRange.AND(lowRange))
 		if err != nil {
-			return allImages, err
+			return allImages, fmt.Errorf("getting update in range %w", err)
 		}
 		newDownloads = gatherUpdates(cs.Log, Update{}, Update{}, versions)
 	}
@@ -348,22 +349,22 @@ func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels
 
 	firstCh, first, err := FindRelease(ocpChannels, true)
 	if err != nil {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find minimum release version: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find minimum release version: %w", err)
 	}
 	lastCh, last, err := FindRelease(ocpChannels, false)
 	if err != nil {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %w", err)
 	}
 	current, newest, updates, err := CalculateUpgrades(ctx, cs, firstCh, lastCh, first, last)
 	if err != nil {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %v", err)
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %w", err)
 	}
 	return gatherUpdates(cs.Log, current, newest, updates), nil
 }
 
 // gatherUpdates
 func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v2alpha1.CopyImageSchema {
-	var allImages []v2alpha1.CopyImageSchema
+	allImages := []v2alpha1.CopyImageSchema{}
 	uniqueImages := make(map[v2alpha1.CopyImageSchema]bool)
 
 	for _, update := range updates {

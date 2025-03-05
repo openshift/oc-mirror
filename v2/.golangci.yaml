@@ -122,10 +122,7 @@ linters-settings:
 
   goconst:
     ignore-tests: true
-<<<<<<< HEAD
 
   wrapcheck:
     ignorePackageGlobs:
       - github.com/openshift/oc-mirror/v2/*
-=======
->>>>>>> 62ee6b0e (Add digest functionality for release images by tag)
