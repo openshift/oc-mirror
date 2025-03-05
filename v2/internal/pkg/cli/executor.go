@@ -264,6 +264,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&opts.Global.V2, "v2", false, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready")
 	cmd.PersistentFlags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers mirrored in parallel")
 	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel")
+	cmd.PersistentFlags().BoolVar(&opts.Global.CpuProf, "cpu-prof", false, "Enable CPU profiling")
+	cmd.PersistentFlags().BoolVar(&opts.Global.MemProf, "mem-prof", false, "Enable Memory profiling")
 	cmd.PersistentFlags().AddFlagSet(&flagSharedOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagRetryOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagDepTLS)
@@ -318,6 +320,8 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().MarkHidden("src-shared-blob-dir")
 	cmd.PersistentFlags().MarkHidden("src-username")
 	cmd.PersistentFlags().MarkHidden("parallel-batch-images")
+	cmd.PersistentFlags().MarkHidden("cpu-prof")
+	cmd.PersistentFlags().MarkHidden("mem-prof")
 }
 
 // Validate - cobra validation
