@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/vbauerster/mpb/v8"
+	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -20,8 +22,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
-	"github.com/vbauerster/mpb/v8"
-	"gopkg.in/yaml.v2"
 )
 
 type LocalStorageCollector struct {
@@ -63,6 +63,9 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			return allImages, err
 		}
 
+		// prepare progress bar
+		p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
+
 		// all errors will be probogated to the caller
 		// no redundant logging to console
 		for _, value := range releases {
@@ -81,8 +84,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
 				err := os.MkdirAll(dir, 0755)
 				if err != nil {
-					spinner.Abort(true)
-					spinner.Wait()
+					logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 
@@ -91,8 +93,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
 				if err != nil {
-					spinner.Abort(true)
-					spinner.Wait()
+					logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 				}
 				o.Log.Debug(collectorPrefix+"copied release index image %s ", value.Source)
@@ -102,21 +103,18 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 
 			oci, err := o.Manifest.GetImageIndex(dir)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
 			//read the link to the manifest
 			if len(oci.Manifests) == 0 {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
 			}
 			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
 			}
 
@@ -126,8 +124,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			manifestDir := filepath.Join(dir, blobsDir, manifest)
 			mfst, err := o.Manifest.GetImageManifest(manifestDir)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
@@ -135,8 +132,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			fromDir := strings.Join([]string{dir, blobsDir}, "/")
 			err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 			o.Log.Debug("extracted layer %s ", cacheDir)
@@ -145,8 +141,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			releaseDir := strings.Join([]string{cacheDir, releaseImageExtractFullPath}, "/")
 			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 			}
 
@@ -163,15 +158,16 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
 			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 			if err != nil {
-				spinner.Abort(true)
-				spinner.Wait()
+				logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 				return []v2alpha1.CopyImageSchema{}, err
 			}
 			allImages = append(allImages, tmpAllImages...)
 			spinner.Increment()
-			p.Wait()
+			if !o.Opts.Global.IsTerminal {
+				o.Log.Info("Success collecting release %s", value.Source)
+			}
 		}
-
+		p.Wait()
 		if o.Config.Mirror.Platform.Graph {
 			graphImage, err := o.handleGraphImage(ctx)
 			if err != nil {
@@ -597,4 +593,12 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 	}
 
 	return tag
+}
+
+func logCollectionError(log clog.PluggableLoggerInterface, spinner *mpb.Bar, isTerminal bool, releaseImage string, err error) {
+	spinner.Abort(true)
+	spinner.Wait()
+	if !isTerminal {
+		log.Error("Failed to collect release image %s: %w", releaseImage, err)
+	}
 }
