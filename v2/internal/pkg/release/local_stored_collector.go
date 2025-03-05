@@ -13,7 +13,6 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -21,8 +20,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 type LocalStorageCollector struct {
@@ -67,23 +64,7 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		// all errors will be probogated to the caller
 		// no redundant logging to console
 		for _, value := range releases {
-			// prepare spinner
-			p := mpb.New()
-			spinner := p.AddSpinner(
-				1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
-				mpb.BarWidth(3),
-				mpb.PrependDecorators(
-					decor.OnComplete(spinners.EmptyDecorator(), emoji.SpinnerCheckMark),
-					decor.OnAbort(spinners.EmptyDecorator(), emoji.SpinnerCrossMark),
-				),
-				mpb.AppendDecorators(
-					decor.Name("("),
-					decor.Elapsed(decor.ET_STYLE_GO),
-					decor.Name(") Collecting release "+value.Origin+" "),
-				),
-				mpb.BarFillerClearOnComplete(),
-				spinners.BarFillerClearOnAbort(),
-			)
+			spinner := spinners.AddSpinner(p, "Collecting release "+value.Source)
 			hld := strings.Split(value.Source, "/")
 			releaseRepoAndTag := hld[len(hld)-1]
 			imageIndexDir = strings.Replace(releaseRepoAndTag, ":", "/", -1)
