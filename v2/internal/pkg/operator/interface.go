@@ -2,7 +2,6 @@ package operator
 
 import (
 	"context"
-
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -17,6 +16,7 @@ type catalogHandlerInterface interface {
 	getCatalog(filePath string) (OperatorCatalog, error)
 	filterRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, ctlgInIsc v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
 	getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
+	getMetadataPropertyType(dc *declcfg.DeclarativeConfig) string
 }
 
 type imageDispatcher interface {
