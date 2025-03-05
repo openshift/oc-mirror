@@ -3,9 +3,10 @@ package spinners
 import (
 	"io"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 )
 
 func PositionSpinnerLeft(original mpb.BarFiller) mpb.BarFiller {
