@@ -197,7 +197,7 @@ func addOriginFromOperatorCatalogOnDisk(relatedImages *map[string][]v2alpha1.Rel
 	}
 }
 
-func (o FilterCollector) collectOperator(
+func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs further refactoring
 	ctx context.Context,
 	op v2alpha1.Operator,
 	relatedImages map[string][]v2alpha1.RelatedImage,
@@ -307,7 +307,7 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 	return o.Manifest.GetDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
 }
 
-func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) {
+func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring
 	o.Log.Debug("Filtering catalog %q", op.Catalog)
 	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
 	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
@@ -317,31 +317,35 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
+	var isAlreadyFiltered bool
 	filteredImageDigest, err := os.ReadFile(filepath.Join(filteredCatalogsDir, filterDigest, "digest"))
 	if err != nil {
 		// If there was an error reading the digest file, we assume the catalog has not been filtered
-		o.Log.Debug("Catalog has not been filtered previously")
+		isAlreadyFiltered = false
 	} else { // digest read
 		srcFilteredCatalog, err := o.cachedCatalog(op, filterDigest)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
 		}
 
-		if o.isAlreadyFiltered(ctx, srcFilteredCatalog, string(filteredImageDigest)) {
-			filterConfigDir := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
-			filteredDC, err := o.ctlgHandler.getDeclarativeConfig(filterConfigDir)
-			if err != nil {
-				return v2alpha1.CatalogFilterResult{}, fmt.Errorf("retrieve filtered catalog config from %s: %w", filterConfigDir, err)
-			}
-			return v2alpha1.CatalogFilterResult{
-				OperatorFilter:     op,
-				FilteredConfigPath: filterConfigDir,
-				ToRebuild:          false,
-				DeclConfig:         filteredDC,
-				Digest:             string(filteredImageDigest),
-			}, nil
-		}
+		isAlreadyFiltered = o.isAlreadyFiltered(ctx, srcFilteredCatalog, string(filteredImageDigest))
 	}
+
+	if isAlreadyFiltered {
+		filterConfigDir := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
+		filteredDC, err := o.ctlgHandler.getDeclarativeConfig(filterConfigDir)
+		if err != nil {
+			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("retrieve filtered catalog config from %s: %w", filterConfigDir, err)
+		}
+		return v2alpha1.CatalogFilterResult{
+			OperatorFilter:     op,
+			FilteredConfigPath: filterConfigDir,
+			ToRebuild:          false,
+			DeclConfig:         filteredDC,
+			Digest:             string(filteredImageDigest),
+		}, nil
+	}
+	o.Log.Debug("Catalog has not been filtered previously")
 
 	if err := o.ensureCatalogInOCIFormat(ctx, imgSpec, op.Catalog, imageIndexDir); err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
