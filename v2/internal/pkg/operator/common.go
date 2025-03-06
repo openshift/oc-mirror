@@ -10,12 +10,15 @@ import (
 
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+const latestTag string = "latest"
 
 type OperatorCollector struct {
 	Log                clog.PluggableLoggerInterface
@@ -98,7 +101,7 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
 		tag = fmt.Sprintf("%s-%s", srcImgSpec.Algorithm, srcImgSpec.Digest)
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
-		tag = "latest"
+		tag = latestTag
 	default:
 		tag = srcImgSpec.Tag
 	}
@@ -250,7 +253,7 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				dest = dest + ":" + img.TargetTag
 			case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
-				dest = dest + "::latest"
+				dest = dest + "::" + latestTag
 			case imgSpec.IsImageByDigestOnly():
 				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 			case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
@@ -328,7 +331,7 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 	return result, nil
 }
 
-func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.ImageSpec, imageIndexDir string) (string, error) {
+func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.ImageSpec, imageIndexDir string) (string, error) { //nolint:cyclop // TODO: this needs further refactoring
 	o.Log.Debug("Extracting OCI catalog layers")
 	configsDir := filepath.Join(imageIndexDir, operatorCatalogConfigDir)
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
@@ -432,7 +435,7 @@ func (d OtherImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.Co
 	dest = strings.Join([]string{d.destinationRegistry, imgSpec.PathComponent}, "/")
 	switch {
 	case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
-		dest = dest + ":latest"
+		dest = dest + ":" + latestTag
 	case imgSpec.IsImageByDigestOnly():
 		dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 	case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
@@ -498,7 +501,7 @@ func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRe
 	case len(img.TargetTag) > 0:
 		saveCtlgDest = saveCtlgDest + ":" + img.TargetTag
 	case spec.Tag == "" && spec.Transport == ociProtocol:
-		saveCtlgDest = saveCtlgDest + ":latest"
+		saveCtlgDest = saveCtlgDest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		saveCtlgDest = saveCtlgDest + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest():
@@ -531,7 +534,7 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 	case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.TargetTag
 	case spec.Tag == "" && spec.Transport == ociProtocol:
-		rebuiltCtlgSrc = rebuiltCtlgSrc + ":latest"
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
@@ -563,7 +566,7 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 	case len(img.TargetTag) > 0:
 		dest = dest + ":" + img.TargetTag
 	case spec.Tag == "" && spec.Transport == ociProtocol:
-		dest = dest + ":latest"
+		dest = dest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
