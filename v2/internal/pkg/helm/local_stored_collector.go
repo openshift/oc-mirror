@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -244,7 +244,7 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 
 	var err error
 	var helmFile helmrepo.File
-	helmFile, err = common.ParseYamlFile[helmrepo.File](lsc.Helm.settings.RepositoryConfig)
+	helmFile, err = parser.ParseYamlFile[helmrepo.File](lsc.Helm.settings.RepositoryConfig)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("parse helm repo config: %w", err)
 	}
@@ -293,7 +293,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 		return helmrepo.IndexFile{}, fmt.Errorf("response for %v returned %v with status code %v", indexURL, resp, resp.StatusCode)
 	}
 
-	indexFile, err := common.ParseYamlReader[helmrepo.IndexFile](resp.Body)
+	indexFile, err := parser.ParseYamlReader[helmrepo.IndexFile](resp.Body)
 	if err != nil {
 		return helmrepo.IndexFile{}, err
 	}
@@ -329,7 +329,7 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 		indexFilePath := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmIndexesDir, namespace, helmIndexFile)
 
 		var err error
-		indexFile, err = common.ParseYamlFile[helmrepo.IndexFile](indexFilePath)
+		indexFile, err = parser.ParseYamlFile[helmrepo.IndexFile](indexFilePath)
 		if err != nil {
 			return nil, err
 		}

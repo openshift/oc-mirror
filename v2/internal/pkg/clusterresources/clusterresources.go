@@ -18,10 +18,10 @@ import (
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -358,7 +358,7 @@ func catalogSourceContentFromTemplate(templateFile, catalogSourceName, image str
 	if err != nil {
 		return obj, fmt.Errorf("error during CatalogSource generation using template: error accessing targetCatalogSourceTemplate file %s: %v", templateFile, err)
 	}
-	obj, err = common.ParseYamlFile[ofv1alpha1.CatalogSource](templateFile)
+	obj, err = parser.ParseYamlFile[ofv1alpha1.CatalogSource](templateFile)
 	if err != nil {
 		return obj, fmt.Errorf("error during CatalogSource generation using template: %s is not a valid catalog source template and could not be unmarshaled: %v", templateFile, err)
 	}

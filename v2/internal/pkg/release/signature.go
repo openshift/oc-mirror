@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 
 	// nolint
 	"golang.org/x/crypto/openpgp"
@@ -137,7 +137,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			}
 
 			// update the image with the actual reference from the contents json
-			signSchema, err := common.ParseJsonReader[v2alpha1.SignatureContentSchema](md.UnverifiedBody)
+			signSchema, err := parser.ParseJsonReader[v2alpha1.SignatureContentSchema](md.UnverifiedBody)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unmarshal json %w", err)
 			}

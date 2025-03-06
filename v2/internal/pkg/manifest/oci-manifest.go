@@ -21,9 +21,9 @@ import (
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 type Manifest struct {
@@ -47,7 +47,7 @@ func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 // GetImageManifest used to ge the manifest in the oci blobs/sha256
 // directory - found in index.json
 func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	oci, err := common.ParseJsonFile[*v2alpha1.OCISchema](file)
+	oci, err := parser.ParseJsonFile[*v2alpha1.OCISchema](file)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)
 	}
@@ -56,7 +56,7 @@ func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
 
 // GetOperatorConfig used to parse the operator json
 func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	ocs, err := common.ParseJsonFile[*v2alpha1.OperatorConfigSchema](file)
+	ocs, err := parser.ParseJsonFile[*v2alpha1.OperatorConfigSchema](file)
 	if err != nil {
 		return nil, fmt.Errorf("operator config: %w", err)
 	}
@@ -92,7 +92,7 @@ func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1
 
 // GetReleaseSchema
 func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	release, err := common.ParseJsonFile[v2alpha1.ReleaseSchema](filePath)
+	release, err := parser.ParseJsonFile[v2alpha1.ReleaseSchema](filePath)
 	if err != nil {
 		return nil, fmt.Errorf("release schema: %w", err)
 	}

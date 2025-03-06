@@ -20,6 +20,7 @@ import (
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 var (
@@ -649,7 +650,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}
 		assert.Equal(t, expectedCSName, customResourceName)
 
-		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		actualCS, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
@@ -716,7 +717,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 		}
 
-		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		actualCS, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
@@ -829,7 +830,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 				t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 			}
 
-			actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+			actualCS, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 			if err != nil {
 				t.Fatalf("failed to unmarshal catalogsource: %v", err)
 			}
@@ -910,7 +911,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("CatalogSource custom resource name %s doesn't  respect RFC1123", csFiles[0].Name())
 		}
 		assert.Equal(t, expectedCSName, customResourceName)
-		actualCS, err := common.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		actualCS, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal catalogsource: %v", err)
 		}
@@ -1019,7 +1020,7 @@ func TestClusterCatalogGenerator(t *testing.T) {
 		}
 		assert.Equal(t, expectedCCName, customResourceName)
 
-		actualCC, err := common.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
+		actualCC, err := parser.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
 		}
@@ -1103,7 +1104,7 @@ func TestClusterCatalogGenerator(t *testing.T) {
 		}
 		assert.Equal(t, expectedCCName, customResourceName)
 
-		actualCC, err := common.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
+		actualCC, err := parser.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
 		if err != nil {
 			t.Fatalf("failed to unmarshal clustercatalog: %v", err)
 		}
@@ -1310,7 +1311,7 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 		// Read the contents of resourceFiles[0]
 		filePath := filepath.Join(workingDir, clusterResourcesDir, resourceFiles[0].Name())
-		actualOSUS, err := common.ParseYamlFile[updateservicev1.UpdateService](filePath)
+		actualOSUS, err := parser.ParseYamlFile[updateservicev1.UpdateService](filePath)
 		if err != nil {
 			t.Fatalf("failed to unmarshall file: %v", err)
 		}
@@ -1369,13 +1370,13 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 
 		sigFileJson := fmt.Sprintf("%s/%s/signature-configmap.json", workingDir, clusterResourcesDir)
-		cmJson, err := common.ParseJsonFile[cm.ConfigMap](sigFileJson)
+		cmJson, err := parser.ParseJsonFile[cm.ConfigMap](sigFileJson)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		sigFileYaml := fmt.Sprintf("%s/%s/signature-configmap.yaml", workingDir, clusterResourcesDir)
-		cmYaml, err := common.ParseYamlFile[cm.ConfigMap](sigFileYaml)
+		cmYaml, err := parser.ParseYamlFile[cm.ConfigMap](sigFileYaml)
 		if err != nil {
 			t.Fatal(err)
 		}

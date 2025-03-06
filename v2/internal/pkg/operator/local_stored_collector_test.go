@@ -12,6 +12,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/otiai10/copy"
@@ -755,7 +756,7 @@ func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOp
 }
 
 func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return common.ParseJsonFile[*v2alpha1.OperatorConfigSchema](path.Join(common.TestFolder, "operator-config.json"))
+	return parser.ParseJsonFile[*v2alpha1.OperatorConfigSchema](path.Join(common.TestFolder, "operator-config.json"))
 }
 
 func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {

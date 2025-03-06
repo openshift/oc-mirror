@@ -13,12 +13,12 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -221,7 +221,7 @@ func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 	}
 
 	// lets parse the file to get the images
-	list, err := common.ParseYamlFile[v2alpha1.DeleteImageList](fileName)
+	list, err := parser.ParseYamlFile[v2alpha1.DeleteImageList](fileName)
 	if err != nil {
 		return v2alpha1.DeleteImageList{}, fmt.Errorf("delete image list: %w", err)
 	}

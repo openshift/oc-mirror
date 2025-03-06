@@ -13,12 +13,12 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 type LocalStorageCollector struct {
@@ -439,7 +439,7 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2alpha1.RelatedImage, error) {
 	// parse the main yaml file
 	biFile := strings.Join([]string{releaseArtifactsDir, releaseBootableImagesFullPath}, "/")
-	icm, err := common.ParseYamlFile[v2alpha1.InstallerConfigMap](biFile)
+	icm, err := parser.ParseYamlFile[v2alpha1.InstallerConfigMap](biFile)
 	if err != nil {
 		// this should not break the release process
 		// we just report the error and continue
@@ -448,7 +448,7 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 
 	o.Log.Trace(fmt.Sprintf("data %v", icm.Data.Stream))
 	// now parse the json section
-	ibi, err := common.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
+	ibi, err := parser.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
 	if err != nil {
 		// this should not break the release process
 		// we just report the error and continue

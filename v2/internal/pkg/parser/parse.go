@@ -1,5 +1,5 @@
 //nolint:ireturn // generic T should be fine to return here
-package common
+package parser
 
 import (
 	"encoding/json"
