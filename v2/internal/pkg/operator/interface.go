@@ -11,6 +11,10 @@ type CollectorInterface interface {
 	OperatorImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error)
 }
 
+type MetadataPopulator interface {
+	PopulateMetadata(ctx context.Context, result v2alpha1.CatalogFilterResult) error
+}
+
 type catalogHandlerInterface interface {
 	getDeclarativeConfig(filePath string) (*declcfg.DeclarativeConfig, error)
 	getCatalog(filePath string) (OperatorCatalog, error)

@@ -257,7 +257,8 @@ type DeleteItem struct {
 }
 
 type CatalogFilterResult struct {
-	OperatorFilter     Operator
-	FilteredConfigPath string
-	ToRebuild          bool
+	OperatorFilter       Operator
+	FilteredConfigPath   string
+	ToRebuild            bool
+	MetadataPropertyType string
 }

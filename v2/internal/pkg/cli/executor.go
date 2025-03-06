@@ -129,6 +129,7 @@ type ExecutorSchema struct {
 	LocalStorageDisk             string
 	ClusterResources             clusterresources.GeneratorInterface
 	ImageBuilder                 imagebuilder.ImageBuilderInterface
+	CatalogMetadataPopulator     operator.MetadataPopulator
 	CatalogBuilder               imagebuilder.CatalogBuilderInterface
 	MirrorArchiver               archive.Archiver
 	MirrorUnArchiver             archive.UnArchiver
@@ -476,6 +477,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
+	o.CatalogMetadataPopulator = operator.NewMetadataPopulator(o.Log, *o.Opts)
 	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
@@ -778,10 +780,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if !o.Opts.IsDryRun {
-		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
-		if err != nil {
-			return err
-		}
 		var copiedSchema v2alpha1.CollectorSchema
 		// call the batch worker
 		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
@@ -793,6 +791,10 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 			}
 		} else {
 			copiedSchema = cs
+		}
+
+		if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
+			return err
 		}
 
 		// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
@@ -1196,6 +1198,10 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 						spinner.Abort(true)
 						continue
 					}
+					if err := o.CatalogMetadataPopulator.PopulateMetadata(ctx, ctlgFilterResult); err != nil {
+						spinner.Abort(false)
+						return fmt.Errorf("unable to rebuild catalog %s: could not populate metadata of new channel heads: %w", copyImage.Origin, err)
+					}
 				} else {
 					spinner.Abort(false)
 					return fmt.Errorf("unable to rebuild catalog %s: filtered declarative config not found", copyImage.Origin)
@@ -1212,7 +1218,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 		}
 	}
 	return nil
-
 }
 
 // closeAll - utility to close any open files
