@@ -16,14 +16,12 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/otiai10/copy"
 	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 type FilterCollector struct {
@@ -59,21 +57,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		}
 		// prepare spinner
 		p := mpb.New(mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
-		spinner := p.AddSpinner(
-			1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
-			mpb.BarWidth(3),
-			mpb.PrependDecorators(
-				decor.OnComplete(spinners.EmptyDecorator(), emoji.SpinnerCheckMark),
-				decor.OnAbort(spinners.EmptyDecorator(), emoji.SpinnerCrossMark),
-			),
-			mpb.AppendDecorators(
-				decor.Name("("),
-				decor.Elapsed(decor.ET_STYLE_GO),
-				decor.Name(") Collecting catalog "+op.Catalog+" "),
-			),
-			mpb.BarFillerClearOnComplete(),
-			spinners.BarFillerClearOnAbort(),
-		)
+		spinner := spinners.AddSpinner(p, "Collecting catalog "+op.Catalog)
 		// CLID-47 double check that targetCatalog is valid
 		if op.TargetCatalog != "" && !v2alpha1.IsValidPathComponent(op.TargetCatalog) {
 			o.Log.Error(collectorPrefix+"invalid targetCatalog %s", op.TargetCatalog)
