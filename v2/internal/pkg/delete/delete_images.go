@@ -18,6 +18,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -208,26 +209,21 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 // the base for both local cache delete and remote registry delete
 func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 	o.Log.Info(emoji.Eyes + " Reading delete file...")
-	var list v2alpha1.DeleteImageList
 	var fileName string
 
 	if len(o.Opts.Global.DeleteYaml) == 0 {
 		fileName = filepath.Join(o.Opts.Global.WorkingDir, deleteImagesYaml)
 		if _, err := os.Stat(fileName); os.IsNotExist(err) {
-			return list, fmt.Errorf("delete yaml file %s does not exist (please perform a delete with --dry-run)", fileName)
+			return v2alpha1.DeleteImageList{}, fmt.Errorf("delete yaml file %s does not exist (please perform a delete with --dry-run)", fileName)
 		}
 	} else {
 		fileName = o.Opts.Global.DeleteYaml
 	}
 
-	data, err := os.ReadFile(fileName)
-	if err != nil {
-		return list, err
-	}
 	// lets parse the file to get the images
-	err = yaml.Unmarshal(data, &list)
+	list, err := parser.ParseYamlFile[v2alpha1.DeleteImageList](fileName)
 	if err != nil {
-		return list, err
+		return v2alpha1.DeleteImageList{}, fmt.Errorf("delete image list: %w", err)
 	}
 	return list, nil
 }
