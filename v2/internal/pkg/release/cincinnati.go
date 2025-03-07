@@ -133,24 +133,22 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 		var copyImage v2alpha1.CopyImageSchema
-		if imgSpec.IsImageByDigestOnly() {
-			copyImage = v2alpha1.CopyImageSchema{
-				Source:      o.Config.Mirror.Platform.Release,
-				Destination: "",
-				Origin:      o.Config.Mirror.Platform.Release,
-			}
-		} else {
-			digest, err := o.Manifest.GetDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
+
+		if imgSpec.Digest == "" {
+			imgSpec.Digest, err = o.Manifest.GetDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("retrieving digest %w", err)
 			}
-			copyImage = v2alpha1.CopyImageSchema{
-				// TODO:This will need to change when we use sha512
-				Source:      imgSpec.Name + "@sha256:" + digest,
-				Destination: "",
-				Origin:      o.Config.Mirror.Platform.Release,
-			}
 		}
+		if imgSpec.Algorithm == "" {
+			imgSpec.Algorithm = "sha256"
+		}
+		copyImage = v2alpha1.CopyImageSchema{
+			Source:      imgSpec.Name + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest,
+			Destination: "",
+			Origin:      o.Config.Mirror.Platform.Release,
+		}
+
 		allImages = append(allImages, copyImage)
 		imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
 		if err != nil {
