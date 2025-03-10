@@ -17,6 +17,9 @@ type ObjectMeta struct {
 
 	// +optional
 	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
+
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" protobuf:"bytes,12,rep,name=annotations"`
 }
 
 // ConfigMap holds configuration data for pods to consume.

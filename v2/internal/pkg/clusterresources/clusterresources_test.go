@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 )
 
 var (
@@ -663,6 +664,11 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      expectedCSName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -670,7 +676,14 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+		// assert actualCS, skipping annotation createdAt
+		assert.Equal(t, expectedCS.TypeMeta, actualCS.TypeMeta, "contents of catalogSource file incorrect (TypeMeta)")
+		assert.Equal(t, expectedCS.Spec, actualCS.Spec, "contents of catalogSource file incorrect (Spec)")
+		assert.Equal(t, expectedCS.ObjectMeta.Name, actualCS.ObjectMeta.Name, "contents of catalogSource file incorrect (Name)")
+		assert.Equal(t, expectedCS.ObjectMeta.Namespace, actualCS.ObjectMeta.Namespace, "contents of catalogSource file incorrect (Namespace)")
+		assert.Equal(t, len(expectedCS.ObjectMeta.Annotations), len(actualCS.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
+		assert.Equal(t, expectedCS.ObjectMeta.Annotations["createdBy"], actualCS.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
+		assert.Equal(t, expectedCS.ObjectMeta.Annotations["oc-mirror_version"], actualCS.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
 	})
 
 	t.Run("Testing GenerateCatalogSource with template: should pass", func(t *testing.T) {
@@ -730,6 +743,12 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -843,6 +862,12 @@ func TestCatalogSourceGenerator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
 					Namespace: "openshift-marketplace",
+					Annotations: map[string]string{
+
+						"createdBy":         "oc-mirror --v2",
+						"createdAt":         time.Now().UTC().Format(time.RFC850),
+						"oc-mirror_version": version.Get().GitVersion,
+					},
 				},
 				Spec: ofv1alpha1.CatalogSourceSpec{
 					SourceType: "grpc",
@@ -850,7 +875,14 @@ func TestCatalogSourceGenerator(t *testing.T) {
 				},
 			}
 
-			assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
+			// assert actualCS, skipping annotation createdAt
+			assert.Equal(t, expectedCS.TypeMeta, actualCS.TypeMeta, "contents of catalogSource file incorrect (TypeMeta)")
+			assert.Equal(t, expectedCS.Spec, actualCS.Spec, "contents of catalogSource file incorrect (Spec)")
+			assert.Equal(t, expectedCS.ObjectMeta.Name, actualCS.ObjectMeta.Name, "contents of catalogSource file incorrect (Name)")
+			assert.Equal(t, expectedCS.ObjectMeta.Namespace, actualCS.ObjectMeta.Namespace, "contents of catalogSource file incorrect (Namespace)")
+			assert.Equal(t, len(expectedCS.ObjectMeta.Annotations), len(actualCS.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
+			assert.Equal(t, expectedCS.ObjectMeta.Annotations["createdBy"], actualCS.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
+			assert.Equal(t, expectedCS.ObjectMeta.Annotations["oc-mirror_version"], actualCS.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
 
 		}
 	})
@@ -923,6 +955,12 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      expectedCSName,
 				Namespace: "openshift-marketplace",
+				Annotations: map[string]string{
+
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1alpha1.CatalogSourceSpec{
 				SourceType: "grpc",
@@ -1032,6 +1070,12 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: expectedCCName,
+				Annotations: map[string]string{
+
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1.ClusterCatalogSpec{
 				Source: ofv1.CatalogSource{
@@ -1043,7 +1087,14 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, expectedCC, actualCC, "contents of clusterCatalog file incorrect")
+		// assert actualCS, skipping annotation createdAt
+		assert.Equal(t, expectedCC.TypeMeta, actualCC.TypeMeta, "contents of catalogSource file incorrect (TypeMeta)")
+		assert.Equal(t, expectedCC.Spec, actualCC.Spec, "contents of catalogSource file incorrect (Spec)")
+		assert.Equal(t, expectedCC.ObjectMeta.Name, actualCC.ObjectMeta.Name, "contents of catalogSource file incorrect (Name)")
+		assert.Equal(t, expectedCC.ObjectMeta.Namespace, actualCC.ObjectMeta.Namespace, "contents of catalogSource file incorrect (Namespace)")
+		assert.Equal(t, len(expectedCC.ObjectMeta.Annotations), len(actualCC.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
+		assert.Equal(t, expectedCC.ObjectMeta.Annotations["createdBy"], actualCC.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
+		assert.Equal(t, expectedCC.ObjectMeta.Annotations["oc-mirror_version"], actualCC.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
 	})
 
 	t.Run("Testing GenerateClusterCatalog with catalog using a digest as tag : should pass", func(t *testing.T) {
@@ -1115,6 +1166,11 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: expectedCCName,
+				Annotations: map[string]string{
+					"createdBy":         "oc-mirror --v2",
+					"createdAt":         time.Now().UTC().Format(time.RFC850),
+					"oc-mirror_version": version.Get().GitVersion,
+				},
 			},
 			Spec: ofv1.ClusterCatalogSpec{
 				Source: ofv1.CatalogSource{
@@ -1126,7 +1182,14 @@ func TestClusterCatalogGenerator(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, expectedCC, actualCC, "contents of clusterCatalog file incorrect")
+		// assert actualCS, skipping annotation createdAt
+		assert.Equal(t, expectedCC.TypeMeta, actualCC.TypeMeta, "contents of catalogSource file incorrect (TypeMeta)")
+		assert.Equal(t, expectedCC.Spec, actualCC.Spec, "contents of catalogSource file incorrect (Spec)")
+		assert.Equal(t, expectedCC.ObjectMeta.Name, actualCC.ObjectMeta.Name, "contents of catalogSource file incorrect (Name)")
+		assert.Equal(t, expectedCC.ObjectMeta.Namespace, actualCC.ObjectMeta.Namespace, "contents of catalogSource file incorrect (Namespace)")
+		assert.Equal(t, len(expectedCC.ObjectMeta.Annotations), len(actualCC.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
+		assert.Equal(t, expectedCC.ObjectMeta.Annotations["createdBy"], actualCC.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
+		assert.Equal(t, expectedCC.ObjectMeta.Annotations["oc-mirror_version"], actualCC.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
 	})
 }
 
