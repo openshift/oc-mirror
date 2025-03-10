@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetRelatedImagesFromCatalog(t *testing.T) {
+func TestFilterRelatedImagesFromCatalog(t *testing.T) {
 	type testCase struct {
 		caseName        string
 		cfg             v2alpha1.Operator
@@ -554,6 +554,43 @@ func TestGetRelatedImagesFromCatalog(t *testing.T) {
 			buf.Reset()
 
 			log.Debug("completed test  %v ", res)
+		})
+	}
+}
+
+func TestRelatedImagesFromCatalog(t *testing.T) {
+	type testCase struct {
+		caseName        string
+		cfg             *declcfg.DeclarativeConfig
+		expectedBundles []string
+		expectedError   error
+	}
+
+	testCases := []testCase{
+		{
+			caseName:        "fail scenario - no related images found",
+			cfg:             &declcfg.DeclarativeConfig{Packages: []declcfg.Package{{Name: "netscaler-operator"}}},
+			expectedBundles: []string{},
+			expectedError:   errors.New("no related images found"),
+		},
+	}
+
+	handler := &catalogHandler{Log: clog.New("debug")}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+
+			var res map[string][]v2alpha1.RelatedImage
+			var err error
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+			res, err = handler.getRelatedImagesFromCatalog(testCase.cfg, copyImageSchemaMap)
+
+			assert.Equal(t, len(testCase.expectedBundles), len(res), "the number of expected bundles is different from the one returned")
+
+			if testCase.expectedError != nil {
+				assert.EqualError(t, err, testCase.expectedError.Error())
+			}
 		})
 	}
 }

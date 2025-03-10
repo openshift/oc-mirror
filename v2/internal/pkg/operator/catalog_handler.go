@@ -221,6 +221,11 @@ func (o catalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfi
 		}
 		relatedImages[bundle.Name] = ris
 	}
+
+	if len(relatedImages) == 0 {
+		errs = append(errs, errors.New("no related images found"))
+	}
+
 	return relatedImages, errors.Join(errs...)
 }
 
