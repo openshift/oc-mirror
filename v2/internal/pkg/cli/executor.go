@@ -27,6 +27,7 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
@@ -49,7 +51,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -241,10 +242,10 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				os.Exit(1)
 			}
 
-			err = ex.Run(cmd, args)
-			if err != nil {
+			if err := ex.Run(cmd, args); err != nil {
 				log.Error("%v ", err)
-				os.Exit(1)
+				exitCode := exitCodeFromError(err)
+				os.Exit(exitCode)
 			}
 		},
 	}
@@ -1197,4 +1198,14 @@ func addRebuiltCatalogs(cs v2alpha1.CollectorSchema) (v2alpha1.CollectorSchema, 
 		}
 	}
 	return cs, nil
+}
+
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	if e, ok := err.(CodeExiter); ok {
+		return e.ExitCode()
+	}
+	return common.GenericErrCode
 }
