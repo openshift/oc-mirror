@@ -803,18 +803,14 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		}
 	}
 
+	if batchError != nil {
+		return batchError
+	}
+
 	// prepare tar.gz when mirror to disk
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	// next, generate the archive
-	if err := o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages); err != nil {
-		return err
-	}
-
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
-	}
-
-	return nil
+	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
@@ -883,11 +879,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		}
 	}
 
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
-	}
-
-	return nil
+	return batchError
 }
 
 // RunDiskToMirror execute the disk to mirror functionality
@@ -959,11 +951,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		}
 	}
 
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
-	}
-
-	return nil
+	return batchError
 }
 
 // setupLogsLevelAndDir - private utility to setup log
