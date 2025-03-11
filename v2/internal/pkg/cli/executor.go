@@ -998,15 +998,25 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	startTime := time.Now()
 
-	var collectorSchema v2alpha1.CollectorSchema
-	var allRelatedImages []v2alpha1.CopyImageSchema
+	var (
+		// Except for release errors, we want to continue the image collection
+		// and return all errors at the end. These variables hold the errors
+		// found for each collection type.
+		operatorErr      error
+		additionalImgErr error
+		helmErr          error
+
+		collectorSchema  v2alpha1.CollectorSchema
+		allRelatedImages []v2alpha1.CopyImageSchema
+	)
 
 	o.Log.Info(emoji.SleuthOrSpy + "  going to discover the necessary images...")
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		// Release image errors are fatal: we don't want to continue collection when they happen.
+		return v2alpha1.CollectorSchema{}, &CollectionError{ReleaseErr: err}
 	}
 	// exclude blocked images
 	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
@@ -1019,39 +1029,42 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect operators
 	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		operatorErr = err
+	} else {
+		oImgs := operatorImgs.AllImages
+		// exclude blocked images
+		oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalOperatorImages = len(oImgs)
+		o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
+		allRelatedImages = append(allRelatedImages, oImgs...)
+		collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
+		collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 	}
-	oImgs := operatorImgs.AllImages
-	// exclude blocked images
-	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalOperatorImages = len(oImgs)
-	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
-	allRelatedImages = append(allRelatedImages, oImgs...)
-	collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
-	collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
 	// collect additionalImages
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		additionalImgErr = err
+	} else {
+		// exclude blocked images
+		aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalAdditionalImages = len(aImgs)
+		o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
+		allRelatedImages = append(allRelatedImages, aImgs...)
 	}
-	// exclude blocked images
-	aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalAdditionalImages = len(aImgs)
-	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
-	allRelatedImages = append(allRelatedImages, aImgs...)
 
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		helmErr = err
+	} else {
+		// exclude blocked images
+		hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalHelmImages = len(hImgs)
+		o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
+		allRelatedImages = append(allRelatedImages, hImgs...)
 	}
-	// exclude blocked images
-	hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalHelmImages = len(hImgs)
-	o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
-	allRelatedImages = append(allRelatedImages, hImgs...)
 
 	// OCPBUGS-43731 - remove duplicates
 	allRelatedImages = slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
@@ -1067,6 +1080,14 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	collectorSchema.AllImages = allRelatedImages
 
 	o.Log.Debug("collection time     : %v", time.Since(startTime))
+
+	if operatorErr != nil || additionalImgErr != nil || helmErr != nil {
+		return v2alpha1.CollectorSchema{}, &CollectionError{
+			OperatorErr:      operatorErr,
+			AdditionalImgErr: additionalImgErr,
+			HelmErr:          helmErr,
+		}
+	}
 
 	if len(collectorSchema.AllImages) == 0 {
 		o.Log.Info(emoji.Exclamation + " No images to mirror...")
