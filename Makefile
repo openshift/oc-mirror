@@ -18,7 +18,7 @@ include $(addprefix ${GOMODCACHE}/${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERS
 	targets/openshift/deps-gomod.mk \
 )
 
-GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/pkg/version)
+GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/internal/pkg/version)
 
 GO_MOD_FLAGS = -mod=readonly
 GO_BUILD_PACKAGES := ./cmd/...
