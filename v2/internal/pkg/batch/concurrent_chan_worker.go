@@ -195,15 +195,22 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
 
 	if len(errArray) > 0 {
+		batchErr := &BatchError{
+			releaseCountDiff:       collectorSchema.TotalReleaseImages - copiedImages.TotalReleaseImages,
+			operatorCountDiff:      collectorSchema.TotalOperatorImages - copiedImages.TotalOperatorImages,
+			additionalImgCountDiff: collectorSchema.TotalAdditionalImages - copiedImages.TotalAdditionalImages,
+			helmCountDiff:          collectorSchema.TotalHelmImages - copiedImages.TotalHelmImages,
+		}
 		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
-			return copiedImages, fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
+			batchErr.source = fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
 		} else {
-			return copiedImages, fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
+			batchErr.source = fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
 		}
+		return copiedImages, batchErr
 	}
 	o.Log.Debug("concurrent channel worker time     : %v", time.Since(startTime))
-	return collectorSchema, nil
+	return copiedImages, nil
 }
 
 func hostNamespace(input string) string {
