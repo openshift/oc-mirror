@@ -33,7 +33,7 @@ func TestExecutorMirroring(t *testing.T) {
 	defer os.Remove("../../pkg/cli/registry.log")
 
 	workDir := filepath.Join(testFolder, "tests")
-	//copy tests/hold-test-fake to working-dir
+	// copy tests/hold-test-fake to working-dir
 	err := copy.Copy(common.TestFolder+"working-dir-fake", workDir)
 	if err != nil {
 		t.Fatalf("should not fail to copy: %v", err)
@@ -270,7 +270,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 	defer os.Remove("../../pkg/cli/registry.log")
 
 	workDir := filepath.Join(testFolder, "tests")
-	//copy tests/hold-test-fake to working-dir
+	// copy tests/hold-test-fake to working-dir
 	err := copy.Copy(common.TestFolder+"working-dir-fake", workDir)
 	if err != nil {
 		t.Fatalf("should not fail to copy: %v", err)
@@ -462,7 +462,7 @@ func TestExecutorValidate(t *testing.T) {
 		}
 		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
-		opts.Global.From = "" //reset
+		opts.Global.From = "" // reset
 		opts.ParallelLayerImages = 20
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
@@ -540,7 +540,7 @@ func TestExecutorValidate(t *testing.T) {
 		assert.Equal(t, "--since flag needs to be in format yyyy-MM-dd", ex.Validate([]string{"file://test"}).Error())
 
 		// should not be able to use --workspace in mirror-to-disk workflow
-		opts.Global.SinceString = "" //reset
+		opts.Global.SinceString = "" // reset
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = ""
 		opts.Global.WorkingDir = "file://test"
@@ -554,16 +554,15 @@ func TestExecutorValidate(t *testing.T) {
 
 		// should be able to run mirror-to-mirror with a specific workingDir (--workspace)
 		opts.Global.ConfigPath = "test"
-		opts.Global.From = "" //reset
+		opts.Global.From = "" // reset
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
 
 		// should not be able to run mirror-to-mirror  without specifying workspace
 		opts.Global.ConfigPath = "test"
-		opts.Global.From = ""       //reset
-		opts.Global.WorkingDir = "" //reset
+		opts.Global.From = ""       // reset
+		opts.Global.WorkingDir = "" // reset
 		assert.Equal(t, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided", ex.Validate([]string{"docker://test"}).Error())
-
 	})
 }
 
@@ -770,13 +769,12 @@ func TestExecutorSetupLogsLevelAndDir(t *testing.T) {
 		ex.MakeDir = MockMakeDir{Fail: true, Dir: "logs"}
 		err = ex.setupLogsLevelAndDir()
 		assert.Equal(t, "forced mkdir logs error", err.Error())
-
 	})
 }
 
 // TestExecutorCollectAll
 func TestExecutorCollectAll(t *testing.T) {
-	t.Run("Testing Executor : collect all should pass", func(t *testing.T) {
+	t.Run("Testing Executor : collect all", func(t *testing.T) {
 		log := clog.New("trace")
 		global := &mirror.GlobalOptions{
 			SecurePolicy: false,
@@ -806,33 +804,68 @@ func TestExecutorCollectAll(t *testing.T) {
 
 		mkdir := MockMakeDir{}
 
-		ex := &ExecutorSchema{
-			Log:              log,
-			LogsDir:          "/tmp/",
-			Opts:             opts,
-			MakeDir:          mkdir,
-			Operator:         collector,
-			Release:          failCollector,
-			AdditionalImages: collector,
-		}
+		t.Run("should fail if release collection fails", func(t *testing.T) {
+			ex := &ExecutorSchema{
+				Log:              log,
+				LogsDir:          "/tmp/",
+				Opts:             opts,
+				MakeDir:          mkdir,
+				Operator:         collector,
+				Release:          failCollector,
+				AdditionalImages: collector,
+			}
+			// force release error
+			_, err := ex.CollectAll(context.Background())
+			assert.Equal(t, "collection error: forced error release collector", err.Error())
+		})
+		t.Run("should fail if operator collection fails", func(t *testing.T) {
+			ex := &ExecutorSchema{
+				Log:              log,
+				LogsDir:          "/tmp/",
+				Opts:             opts,
+				MakeDir:          mkdir,
+				Operator:         failCollector,
+				Release:          collector,
+				AdditionalImages: collector,
+				HelmCollector:    collector,
+			}
 
-		// force release error
-		_, err := ex.CollectAll(context.Background())
-		assert.Equal(t, "forced error release collector", err.Error())
+			// force operator error
+			_, err := ex.CollectAll(context.Background())
+			assert.Equal(t, "collection error: forced error operator collector", err.Error())
+		})
+		t.Run("should fail if additional images collection fails", func(t *testing.T) {
+			ex := &ExecutorSchema{
+				Log:              log,
+				LogsDir:          "/tmp/",
+				Opts:             opts,
+				MakeDir:          mkdir,
+				Operator:         collector,
+				Release:          collector,
+				AdditionalImages: failCollector,
+				HelmCollector:    collector,
+			}
 
-		// force operator error
-		ex.Operator = failCollector
-		ex.Release = collector
-		_, err = ex.CollectAll(context.Background())
-		assert.Equal(t, "forced error operator collector", err.Error())
+			// force additionalImages error
+			_, err := ex.CollectAll(context.Background())
+			assert.Equal(t, "collection error: forced error additionalImages collector", err.Error())
+		})
+		t.Run("should fail if helm collection fails", func(t *testing.T) {
+			ex := &ExecutorSchema{
+				Log:              log,
+				LogsDir:          "/tmp/",
+				Opts:             opts,
+				MakeDir:          mkdir,
+				Operator:         collector,
+				Release:          collector,
+				AdditionalImages: collector,
+				HelmCollector:    failCollector,
+			}
 
-		// force additionalImages error
-		ex.Operator = collector
-		ex.Release = collector
-		ex.AdditionalImages = failCollector
-		_, err = ex.CollectAll(context.Background())
-		assert.Equal(t, "forced error additionalImages collector", err.Error())
-
+			// force additionalImages error
+			_, err := ex.CollectAll(context.Background())
+			assert.Equal(t, "collection error: forced error helm collector", err.Error())
+		})
 	})
 }
 
@@ -937,8 +970,7 @@ type MockMirrorUnArchiver struct {
 	Fail bool
 }
 
-type MockClusterResources struct {
-}
+type MockClusterResources struct{}
 
 type MockMakeDir struct {
 	Fail bool
@@ -977,12 +1009,15 @@ func (o MockMirrorUnArchiver) Unarchive() error {
 func (o MockClusterResources) IDMS_ITMSGenerator(allRelatedImages []v2alpha1.CopyImageSchema, forceRepositoryScope bool) error {
 	return nil
 }
+
 func (o MockClusterResources) UpdateServiceGenerator(graphImage, releaseImage string) error {
 	return nil
 }
+
 func (o MockClusterResources) CatalogSourceGenerator(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
+
 func (o MockClusterResources) GenerateSignatureConfigMap(allRelatedImages []v2alpha1.CopyImageSchema) error {
 	return nil
 }
@@ -1058,6 +1093,9 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.C
 }
 
 func (o *Collector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+	if o.Fail {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error helm collector")
+	}
 	return []v2alpha1.CopyImageSchema{}, nil
 }
 
@@ -1102,7 +1140,6 @@ health:
 	}
 	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, port)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
-
 	if err != nil {
 		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v %s", err, configYamlV01)
 	}
