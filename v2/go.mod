@@ -28,8 +28,8 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/vbauerster/mpb/v8 v8.8.3
 	golang.org/x/crypto v0.32.0
-	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/sync v0.10.0
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/term v0.28.0
 	helm.sh/helm/v3 v3.17.0
 	k8s.io/api v0.32.0
