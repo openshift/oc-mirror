@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/stretchr/testify/assert"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 type MockFileCreator struct {
@@ -39,7 +40,7 @@ func TestRead(t *testing.T) {
 		workingDir    string
 		before        time.Time
 		expectedError string
-		expectedHist  map[string]string
+		expectedHist  map[string]struct{}
 	}
 
 	testCases := []testCase{
@@ -48,11 +49,11 @@ func TestRead(t *testing.T) {
 			workingDir:    historyFakePath,
 			before:        time.Time{},
 			expectedError: "",
-			expectedHist: map[string]string{
-				"sha256:1dddb0988d16": "",
-				"sha256:3658954f1990": "",
-				"sha256:e3dad360d035": "",
-				"sha256:422e4fbe1ed8": "",
+			expectedHist: map[string]struct{}{
+				"sha256:1dddb0988d16": {},
+				"sha256:3658954f1990": {},
+				"sha256:e3dad360d035": {},
+				"sha256:422e4fbe1ed8": {},
 			},
 		},
 		{
@@ -60,8 +61,8 @@ func TestRead(t *testing.T) {
 			workingDir:    historyFakePath,
 			before:        time.Date(2023, 11, 22, 0, 0, 0, 0, time.UTC),
 			expectedError: "",
-			expectedHist: map[string]string{
-				"sha256:1dddb0988d16": "",
+			expectedHist: map[string]struct{}{
+				"sha256:1dddb0988d16": {},
 			},
 		},
 		{
@@ -69,7 +70,7 @@ func TestRead(t *testing.T) {
 			workingDir:    "./invalid-workindir",
 			before:        time.Time{},
 			expectedError: "no history metadata found under invalid-workindir",
-			expectedHist:  map[string]string{},
+			expectedHist:  map[string]struct{}{},
 		},
 	}
 
@@ -93,9 +94,9 @@ func TestAppend(t *testing.T) {
 		caseName      string
 		workingDir    string
 		before        time.Time
-		blobsToAppend map[string]string
+		blobsToAppend map[string]struct{}
 		expectedError string
-		expectedHist  map[string]string
+		expectedHist  map[string]struct{}
 	}
 
 	testCases := []testCase{
@@ -103,41 +104,41 @@ func TestAppend(t *testing.T) {
 			caseName:   "valid history file - without specified time",
 			workingDir: historyFakePath,
 			before:     time.Time{},
-			blobsToAppend: map[string]string{
-				"sha256:20f695d2a913": "",
+			blobsToAppend: map[string]struct{}{
+				"sha256:20f695d2a913": {},
 			},
 			expectedError: "",
-			expectedHist: map[string]string{
-				"sha256:422e4fbe1ed8": "",
-				"sha256:1dddb0988d16": "",
-				"sha256:3658954f1990": "",
-				"sha256:e3dad360d035": "",
-				"sha256:20f695d2a913": "",
+			expectedHist: map[string]struct{}{
+				"sha256:422e4fbe1ed8": {},
+				"sha256:1dddb0988d16": {},
+				"sha256:3658954f1990": {},
+				"sha256:e3dad360d035": {},
+				"sha256:20f695d2a913": {},
 			},
 		},
 		{
 			caseName:   "valid history file - with specified time",
 			workingDir: historyFakePath,
 			before:     time.Date(2023, 11, 22, 0, 0, 0, 0, time.UTC),
-			blobsToAppend: map[string]string{
-				"sha256:20f695d2a913": "",
+			blobsToAppend: map[string]struct{}{
+				"sha256:20f695d2a913": {},
 			},
 			expectedError: "",
-			expectedHist: map[string]string{
-				"sha256:1dddb0988d16": "",
-				"sha256:20f695d2a913": "",
+			expectedHist: map[string]struct{}{
+				"sha256:1dddb0988d16": {},
+				"sha256:20f695d2a913": {},
 			},
 		},
 		{
 			caseName:   "empty working dir - error is ignored",
 			workingDir: "./empty-workindir",
 			before:     time.Time{},
-			blobsToAppend: map[string]string{
-				"sha256:20f695d2a913": "",
+			blobsToAppend: map[string]struct{}{
+				"sha256:20f695d2a913": {},
 			},
 			expectedError: "",
-			expectedHist: map[string]string{
-				"sha256:20f695d2a913": "",
+			expectedHist: map[string]struct{}{
+				"sha256:20f695d2a913": {},
 			},
 		},
 	}

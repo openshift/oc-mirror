@@ -1,0 +1,1 @@
+{"critical":{"identity":{"docker-reference":"quay.io/rh_ee_aguidi/multi-platform-container"},"image":{"docker-manifest-digest":"sha256:b15a2f174d803fd5fd7db0b3969c75cee0fe9131e0d8478f8c70ac01a4534869"},"type":"cosign container image signature"},"optional":null}

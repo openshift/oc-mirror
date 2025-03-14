@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,35 +23,27 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 		archive1Path := filepath.Join(testFolder, archive1FileName)
 		// to be closed by BuildArchive
 		archive1File, err := os.Create(archive1Path)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 		err = prepareFakeTarWorkingDir(archive1File)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 
 		// Create a new tar archive file : for cache-dir
 		archive2FileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 2)
 		archive2Path := filepath.Join(testFolder, archive2FileName)
 		// to be closed by BuildArchive
 		archive2File, err := os.Create(archive2Path)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
+
 		err = prepareFakeTarCacheDir(archive2File)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 
 		o, err := NewArchiveExtractor(testFolder, filepath.Join(testFolder, "dst", "working-dir"), filepath.Join(testFolder, "dst", "cache-dir"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		err = o.Unarchive()
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
+
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "working-dir"))
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "cache-dir"))
 
@@ -66,22 +59,14 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 		archivePath := filepath.Join(testFolder, archiveFileName)
 		// to be closed by BuildArchive
 		archiveFile, err := os.Create(archivePath)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 		err = prepareFakeTar(archiveFile)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 
 		o, err := NewArchiveExtractor(testFolder, filepath.Join(testFolder, "dst", "working-dir"), filepath.Join(testFolder, "dst", "cache-dir"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 		err = o.Unarchive()
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "working-dir"))
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "cache-dir"))
@@ -158,7 +143,7 @@ func prepareFakeTarWorkingDir(tarFile *os.File) error {
 
 		header, err := tar.FileInfoHeader(info, info.Name())
 		if err != nil {
-			return err
+			return fmt.Errorf("error getting tar.FileInfoHeader %w", err)
 		}
 
 		// Use full path as name (FileInfoHeader only takes the basename)
@@ -173,7 +158,7 @@ func prepareFakeTarWorkingDir(tarFile *os.File) error {
 
 		// Write the header to the tar archive
 		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
+			return fmt.Errorf("error writing tar header %w ", err)
 		}
 
 		// Open the file for reading
@@ -185,13 +170,17 @@ func prepareFakeTarWorkingDir(tarFile *os.File) error {
 
 		// Copy the file contents to the tar archive
 		if _, err := io.Copy(tarWriter, file); err != nil {
-			return err
+			return fmt.Errorf("error copying tar files %w", err)
 		}
 
 		return nil
 	})
 	tarWriter.Close()
-	return err
+	if err != nil {
+		return fmt.Errorf("error preparing fake tar %w", err)
+	}
+
+	return nil
 }
 
 func prepareFakeTarCacheDir(tarFile *os.File) error {
@@ -207,7 +196,7 @@ func prepareFakeTarCacheDir(tarFile *os.File) error {
 
 		header, err := tar.FileInfoHeader(info, info.Name())
 		if err != nil {
-			return err
+			return fmt.Errorf("error getting the tar file info header %w", err)
 		}
 
 		// Use full path as name (FileInfoHeader only takes the basename)
@@ -221,7 +210,7 @@ func prepareFakeTarCacheDir(tarFile *os.File) error {
 
 		// Write the header to the tar archive
 		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
+			return fmt.Errorf("error writing tar header %w", err)
 		}
 
 		// Open the file for reading
@@ -233,13 +222,13 @@ func prepareFakeTarCacheDir(tarFile *os.File) error {
 
 		// Copy the file contents to the tar archive
 		if _, err := io.Copy(tarWriter, file); err != nil {
-			return err
+			return fmt.Errorf("error copying tar files %w", err)
 		}
 
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("error preparing fake tar %w", err)
 	}
 	tarWriter.Close()
 	return nil

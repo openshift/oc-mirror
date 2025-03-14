@@ -7,7 +7,7 @@ import (
 )
 
 type BlobsGatherer interface {
-	GatherBlobs(ctx context.Context, imgRef string) (map[string]string, error)
+	GatherBlobs(ctx context.Context, imgRef string) (map[string]struct{}, error)
 }
 
 type Archiver interface {
