@@ -1,0 +1,1 @@
+{"critical":{"identity":{"docker-reference":"quay.io/rh_ee_aguidi/empty-image"},"image":{"docker-manifest-digest":"sha256:7d27ba1da0f64410102468d138f9ec8f61f2cc23bb58ff4cd63243a4434e3d99"},"type":"cosign container image signature"},"optional":null}
