@@ -57,6 +57,7 @@ cross-build-linux-arm64:
 cross-build: cross-build-linux-amd64 cross-build-linux-ppc64le cross-build-linux-s390x cross-build-linux-arm64
 .PHONY: cross-build
 
+
 hack-build: clean
 	./hack/build.sh
 .PHONY: hack-build
@@ -119,3 +120,9 @@ build:
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
+
+build-static:
+	mkdir -p $(GO_BUILD_BINDIR)
+	DISABLE_GO=1 go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -ldflags="-extldflags=-static"  $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
+.PHONY: build-static
+
