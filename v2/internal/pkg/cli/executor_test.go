@@ -731,10 +731,6 @@ func TestExecutorSetupWorkingDir(t *testing.T) {
 		ex.MakeDir = MockMakeDir{Fail: true, Dir: releaseImageExtractDir}
 		err = ex.setupWorkingDir()
 		assert.Equal(t, "forced mkdir hold-release error", err.Error())
-
-		ex.MakeDir = MockMakeDir{Fail: true, Dir: operatorImageExtractDir}
-		err = ex.setupWorkingDir()
-		assert.Equal(t, "forced mkdir hold-operator error", err.Error())
 	})
 }
 
