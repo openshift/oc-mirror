@@ -32,6 +32,7 @@ const (
 	operatorCatalogFilteredImageDir = "filtered-catalog-image"
 	operatorCatalogImageDir         = "catalog-image"
 	operatorCatalogConfigDir        = "catalog-config"
+	dockerProtocol                  = "docker://"
 )
 
 type GCRCatalogBuilder struct {
