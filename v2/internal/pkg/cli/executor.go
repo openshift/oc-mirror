@@ -725,15 +725,6 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
-	// TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
-	// create operator cache dir
-	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
-	if err != nil {
-		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
-		return err
-	}
-
 	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
 	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
 	if err != nil {
