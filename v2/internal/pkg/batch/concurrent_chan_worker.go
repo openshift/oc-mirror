@@ -36,7 +36,7 @@ type ChannelConcurrentBatch struct {
 	Log           clog.PluggableLoggerInterface
 	LogsDir       string
 	Mirror        mirror.MirrorInterface
-	MaxGoroutines int
+	MaxGoroutines uint
 }
 
 type GoroutineResult struct {
