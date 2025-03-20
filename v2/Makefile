@@ -18,7 +18,7 @@ build-dev:
 	chmod 755 build/uid_entrypoint.sh
 
 verify:
-	golangci-lint run -c .golangci.yaml --deadline=30m
+	golangci-lint run -c .golangci.yaml 
 
 test:
 	mkdir -p tests/results
