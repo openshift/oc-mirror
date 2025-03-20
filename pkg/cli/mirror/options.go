@@ -58,8 +58,8 @@ func (o *MirrorOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.DryRun, "dry-run", o.DryRun, "Print actions without mirroring images")
 	fs.BoolVar(&o.SourceSkipTLS, "source-skip-tls", o.SourceSkipTLS, "Disable TLS validation for source registry")
 	fs.BoolVar(&o.DestSkipTLS, "dest-skip-tls", o.DestSkipTLS, "Disable TLS validation for destination registry")
-	fs.BoolVar(&o.V2, "v2", o.V2, "Redirect the flow to oc-mirror v2 - This is Tech Preview, it is still under development and it is not production ready.")
-	fs.BoolVar(&o.V1, "v1", o.V1, "Redirect the flow to oc-mirror v1 - This flag is going to redirect the flow to v1 (legacy code) when v2 becomes the default (still under development).")
+	fs.BoolVar(&o.V2, "v2", o.V2, "Redirect the flow to oc-mirror v2")
+	fs.BoolVar(&o.V1, "v1", o.V1, "Redirect the flow to oc-mirror v1 (legacy code). Please migrate to v2")
 	fs.BoolVar(&o.SourcePlainHTTP, "source-use-http", o.SourcePlainHTTP, "Use plain HTTP for source registry")
 	fs.BoolVar(&o.DestPlainHTTP, "dest-use-http", o.DestPlainHTTP, "Use plain HTTP for destination registry")
 	fs.BoolVar(&o.SkipVerification, "skip-verification", o.SkipVerification, "Skip verifying the integrity of the retrieved content."+
