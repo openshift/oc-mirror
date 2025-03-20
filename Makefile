@@ -123,6 +123,5 @@ build:
 
 build-static:
 	mkdir -p $(GO_BUILD_BINDIR)
-	DISABLE_GO=1 go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -ldflags="-extldflags=-static"  $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
+	DISABLE_CGO=1 GO_ENABLED=0 go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -ldflags="-extldflags=-static"  $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build-static
-
