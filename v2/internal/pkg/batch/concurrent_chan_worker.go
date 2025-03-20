@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	skippingMsg = "skipping operator bundle %s because one of its related images failed to mirror"
+
 	errMsgHeader = "%ssome errors occurred during the mirroring"
 	errMsg       = errMsgHeader + ".\n" +
 		"\t Please review %s/%s for a list of mirroring errors.\n" +

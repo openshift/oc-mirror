@@ -16,8 +16,11 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestConcurrentWorker(t *testing.T) {
+type BatchSchema struct {
+	Images v2alpha1.CollectorSchema
+}
 
+func TestChannelConcurrentWorker(t *testing.T) {
 	log := clog.New("trace")
 
 	global := &mirror.GlobalOptions{SecurePolicy: false, Quiet: false}
@@ -73,7 +76,6 @@ func TestConcurrentWorker(t *testing.T) {
 		Function:            "copy",
 	}
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 	relatedImages := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testa", Type: v2alpha1.TypeOCPRelease},
 		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testb", Type: v2alpha1.TypeOCPReleaseContent},
@@ -90,7 +92,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing m2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2mopts)
 		if err != nil {
@@ -102,7 +104,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing m2d Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err != nil {
@@ -113,7 +115,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing d2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err != nil {
@@ -125,7 +127,7 @@ func TestConcurrentWorker(t *testing.T) {
 	t.Run("Testing delete Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
 		if err != nil {
@@ -137,14 +139,11 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err == nil {
 			t.Fatal("should return safe error")
-		}
-		if safe, ok := err.(SafeError); !ok {
-			t.Fatalf("expected error type SafeError, but was %v", safe)
 		}
 
 		assert.Equal(t, len(relatedImages)-1, len(copiedImages.AllImages))
@@ -154,14 +153,11 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
 			t.Fatal("should return unsafe error")
-		}
-		if unsafe, ok := err.(UnsafeError); !ok {
-			t.Fatalf("expected error type UnsafeError, but was %v", unsafe)
 		}
 
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
@@ -171,21 +167,17 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
 			t.Fatal("should return safe error")
 		}
-		if safe, ok := err.(SafeError); !ok {
-			t.Fatalf("expected error type SafeError, but was %v", safe)
-		}
 
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
 	})
 
-	t.Run("Testing m2d Worker - single error on operator related image: bundle of the related image should skip", func(t *testing.T) {
-
+	t.Run("Testing m2d Worker - single error on operator related image: bundle of the related image should skip but fail in the end", func(t *testing.T) {
 		relatedImages := []v2alpha1.CopyImageSchema{
 			{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testf", Type: v2alpha1.TypeOperatorRelatedImage},
 			{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testc", Type: v2alpha1.TypeOperatorBundle},
@@ -203,7 +195,7 @@ func TestConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ConcurrentWorker, log, tempDir, mirrorMock, uint(1))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1))
 
 		_, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		assert.Error(t, err)
@@ -220,7 +212,8 @@ func TestConcurrentWorker(t *testing.T) {
 		fileContent, err := os.ReadFile(filePath)
 		assert.NoError(t, err)
 
-		assert.Contains(t, string(fileContent), fmt.Sprintf(skippingMsg, relatedImages[1].Origin))
+		expectedMsg := "error mirroring image %s (Operator bundles: [bundle-c] - Operators: [operator-c]) error: unauthorized: unauthorized"
+		assert.Contains(t, string(fileContent), fmt.Sprintf(expectedMsg, relatedImages[0].Origin))
 	})
 }
 
@@ -487,4 +480,65 @@ func (o *MirrorMock) Run(ctx context.Context, src, dest string, mode mirror.Mode
 
 func (o *MirrorMock) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
 	return true, nil
+}
+
+// later, we can consider making this func smarter:
+// by putting related images, release content images first
+// and deferring operator bundle images, second
+// and lastly release images and catalog images
+// CLID-133 + CLID-98
+func splitImagesToBatches(images v2alpha1.CollectorSchema, maxBatchSize int) []BatchSchema {
+	imgsCount := len(images.AllImages)
+	if imgsCount == 0 {
+		return []BatchSchema{}
+	}
+	if imgsCount <= maxBatchSize {
+		return []BatchSchema{
+			{
+				Images: images,
+			},
+		}
+	} else {
+		batches := []BatchSchema{}
+		for index := 0; index < imgsCount; index += maxBatchSize {
+			batch := BatchSchema{}
+			batchSize := min(maxBatchSize, imgsCount-index)
+			batch.Images = v2alpha1.CollectorSchema{
+				AllImages: images.AllImages[index : index+batchSize],
+			}
+			batches = append(batches, batch)
+		}
+		return batches
+	}
+}
+
+// shouldSkipImage helps determine whether the batch should perform the mirroring of the image
+// or if the image should be skipped.
+func shouldSkipImageOld(img v2alpha1.CopyImageSchema, mode string, errArray []mirrorErrorSchema) (bool, error) {
+	// In MirrorToMirror and MirrorToDisk, the release collector will generally build and push the graph image
+	// to the destination registry (disconnected registry or cache resp.)
+	// Therefore this image can be skipped.
+	// OCPBUGS-38037: The only exception to this is in the enclave environment. Enclave environment is detected by the presence
+	// of env var UPDATE_URL_OVERRIDE.
+	// When in enclave environment, release collector cannot build nor push the graph image. Therefore graph image
+	// should not be skipped.
+	updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE")
+	if img.Type == v2alpha1.TypeCincinnatiGraph && (mode == mirror.MirrorToDisk || mode == mirror.MirrorToMirror) && len(updateURLOverride) == 0 {
+		return true, nil
+	}
+
+	if img.Type == v2alpha1.TypeOperatorBundle {
+		for _, err := range errArray {
+			bundleImage := img.Origin
+			if strings.Contains(bundleImage, "://") {
+				bundleImage = strings.Split(img.Origin, "://")[1]
+			}
+
+			if err.bundles != nil && err.bundles.Has(bundleImage) {
+				return true, fmt.Errorf(skippingMsg, img.Origin)
+			}
+		}
+	}
+
+	return false, nil
 }
