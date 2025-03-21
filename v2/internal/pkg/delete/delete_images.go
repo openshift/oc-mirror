@@ -118,8 +118,6 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	o.Log.Debug("deleting images from remote registry")
 	collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{}}
 
-	var batchError error
-
 	increment := 1
 	if o.Opts.Global.ForceCacheDelete {
 		increment = 2
@@ -190,17 +188,10 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	o.Opts.Stdout = io.Discard
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
 		if _, err := o.Batch.Worker(context.Background(), collectorSchema, o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-			}
+			o.Log.Warn("error during registry deletion: %v", err)
 		}
 	}
 
-	if batchError != nil {
-		o.Log.Warn("error during registry deletion: %v", batchError)
-	}
 	return nil
 }
 

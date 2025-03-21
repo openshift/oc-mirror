@@ -27,6 +27,7 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
@@ -49,7 +51,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -140,8 +141,7 @@ type MakeDirInterface interface {
 	makeDirAll(string, os.FileMode) error
 }
 
-type MakeDir struct {
-}
+type MakeDir struct{}
 
 func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 	return os.MkdirAll(dir, mode)
@@ -149,7 +149,6 @@ func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 
 // NewMirrorCmd - cobra entry point
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
-
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		IsTerminal:   term.IsTerminal(int(os.Stdout.Fd())),
@@ -243,10 +242,10 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				os.Exit(1)
 			}
 
-			err = ex.Run(cmd, args)
-			if err != nil {
+			if err := ex.Run(cmd, args); err != nil {
 				log.Error("%v ", err)
-				os.Exit(1)
+				exitCode := exitCodeFromError(err)
+				os.Exit(exitCode)
 			}
 		},
 	}
@@ -388,7 +387,6 @@ func (o ExecutorSchema) Validate(dest []string) error {
 
 // Complete - do the final setup of modules
 func (o *ExecutorSchema) Complete(args []string) error {
-
 	if envOverride, ok := os.LookupEnv("CONTAINERS_REGISTRIES_CONF"); ok {
 		o.Opts.Global.RegistriesConfPath = envOverride
 	}
@@ -516,6 +514,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	var err error
 
+	startTime := time.Now()
 	go o.startLocalRegistry()
 
 	switch {
@@ -528,6 +527,8 @@ func (o *ExecutorSchema) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	o.stopLocalRegistry(cmd.Context())
+
+	o.Log.Info("mirror time     : %v", time.Since(startTime))
 	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
 	return err
@@ -661,7 +662,6 @@ func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
 
 // isLocalStoragePortBound - private utility to check if port is bound
 func (o *ExecutorSchema) isLocalStoragePortBound() bool {
-
 	// Check if the port is already bound
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", o.Opts.Global.Port))
 	if err != nil {
@@ -725,15 +725,6 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 		return err
 	}
 
-	//TODO ALEX REMOVE ME WHEN filtered_collector.go is the default for operators
-	// create operator cache dir
-	o.Log.Trace("creating operator cache directory %s ", o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+operatorImageExtractDir, 0755)
-	if err != nil {
-		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
-		return err
-	}
-
 	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
 	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
 	if err != nil {
@@ -772,8 +763,6 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 // RunMirrorToDisk - execute the mirror to disk functionality
 func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) error {
-	startTime := time.Now()
-	var batchError error
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 
 	// collect all images
@@ -782,67 +771,41 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	if !o.Opts.IsDryRun {
-		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
-		if err != nil {
-			return err
-		}
-		var copiedSchema v2alpha1.CollectorSchema
-		// call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
-		} else {
-			copiedSchema = cs
-		}
-
-		// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
-		// it also gets added to the archive. When using the GCRCatalogBuilder implementation,
-		// the rebuilt catalog is automatically pushed to the registry, and is therefore not in
-		// the collectorSchema
-		if _, ok := o.CatalogBuilder.(*imagebuilder.GCRCatalogBuilder); ok {
-			copiedSchema, err = addRebuiltCatalogs(copiedSchema)
-			if err != nil {
-				return err
-			}
-		}
-
-		// prepare tar.gz when mirror to disk
-		o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-		// next, generate the archive
-		err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Info("mirror time     : %v", execTime)
-
-	if err != nil {
+	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
 		return err
 	}
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
+
+	// call the batch worker
+	// NOTE: we will check for batch errors at the end
+	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
+
+	// OCPBUGS-45580: add the rebuilt catalog image to the collectorSchema so that
+	// it also gets added to the archive. When using the GCRCatalogBuilder implementation,
+	// the rebuilt catalog is automatically pushed to the registry, and is therefore not in
+	// the collectorSchema
+	if _, ok := o.CatalogBuilder.(*imagebuilder.GCRCatalogBuilder); ok {
+		copiedSchema, err = addRebuiltCatalogs(copiedSchema)
+		if err != nil {
+			return err
+		}
 	}
-	return nil
+
+	if batchError != nil {
+		return batchError
+	}
+
+	// prepare tar.gz when mirror to disk
+	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
+	// next, generate the archive
+	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
 func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) error {
-	startTime := time.Now()
-	var batchError error
-
 	// OCPBUGS-37948 + CLID-196: local cache should be started during mirror to mirror as well:
 	// All operator catalogs will be cached.
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
@@ -859,89 +822,61 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
-	if !o.Opts.IsDryRun {
-		err = o.RebuildCatalogs(cmd.Context(), collectorSchema)
-		if err != nil {
-			return err
-		}
-		var copiedSchema v2alpha1.CollectorSchema
-		//call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
-		} else {
-			copiedSchema = cs
-		}
 
-		//create IDMS/ITMS
-		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
-		if err != nil {
-			return err
-		}
-
-		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-
-		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-			return err
-		}
-
-		// generate signature config map
-		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
-		if err != nil {
-			// as this is not a seriously fatal error we just log the error
-			o.Log.Warn("%s", err)
-		}
-
-		// create updateService
-		if o.Config.Mirror.Platform.Graph {
-			graphImage, err := o.Release.GraphImage()
-			if err != nil {
-				return err
-			}
-			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-			if err != nil {
-				return err
-			}
-			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Info("mirror time     : %v", execTime)
-	if err != nil {
+	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
 		return err
 	}
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
+
+	// call the batch worker
+	// NOTE: we will check for batch errors at the end
+	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
+
+	// create IDMS/ITMS
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
+		return err
 	}
-	return nil
+
+	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	// generate signature config map
+	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
+		// as this is not a seriously fatal error we just log the error
+		o.Log.Warn("%s", err)
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
+		if err != nil {
+			return err
+		}
+		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
+			return err
+		}
+	}
+
+	return batchError
 }
 
 // RunDiskToMirror execute the disk to mirror functionality
 func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) error {
-	startTime := time.Now()
-
-	var batchError error
 	// extract the archive
-	err := o.MirrorUnArchiver.Unarchive()
-	if err != nil {
+	if err := o.MirrorUnArchiver.Unarchive(); err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
@@ -963,77 +898,51 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		}
 	}
 
-	if !o.Opts.IsDryRun {
-		var copiedSchema v2alpha1.CollectorSchema
-		// call the batch worker
-		if cs, err := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts); err != nil {
-			if _, ok := err.(batch.UnsafeError); ok {
-				return err
-			} else {
-				batchError = err
-				copiedSchema = cs
-			}
-		} else {
-			copiedSchema = cs
-		}
-
-		// create IDMS/ITMS
-		forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-		err = o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope)
-		if err != nil {
-			return err
-		}
-
-		// create catalog source
-		err = o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages)
-		if err != nil {
-			return err
-		}
-
-		if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-			return err
-		}
-
-		// generate signature config map
-		err = o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages)
-		if err != nil {
-			// as this is not a seriously fatal error we just log the error
-			o.Log.Warn("%s", err)
-		}
-
-		// create updateService
-		if o.Config.Mirror.Platform.Graph {
-			graphImage, err := o.Release.GraphImage()
-			if err != nil {
-				return err
-			}
-			releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-			if err != nil {
-				return err
-			}
-			err = o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		err = o.DryRun(cmd.Context(), collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+	if o.Opts.IsDryRun {
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Info("mirror time     : %v", execTime)
+	// call the batch worker
+	// NOTE: we will check for batch errors at the end
+	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 
-	if err != nil {
+	// create IDMS/ITMS
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
 		return err
 	}
-	if batchError != nil {
-		o.Log.Warn("%v", batchError)
+
+	// create catalog source
+	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
+		return err
 	}
-	return nil
+
+	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
+		return err
+	}
+
+	// generate signature config map
+	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
+		// as this is not a seriously fatal error we just log the error
+		o.Log.Warn("%s", err)
+	}
+
+	// create updateService
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.Release.GraphImage()
+		if err != nil {
+			return err
+		}
+		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
+		if err != nil {
+			return err
+		}
+		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
+			return err
+		}
+	}
+
+	return batchError
 }
 
 // setupLogsLevelAndDir - private utility to setup log
@@ -1068,15 +977,25 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	startTime := time.Now()
 
-	var collectorSchema v2alpha1.CollectorSchema
-	var allRelatedImages []v2alpha1.CopyImageSchema
+	var (
+		// Except for release errors, we want to continue the image collection
+		// and return all errors at the end. These variables hold the errors
+		// found for each collection type.
+		operatorErr      error
+		additionalImgErr error
+		helmErr          error
+
+		collectorSchema  v2alpha1.CollectorSchema
+		allRelatedImages []v2alpha1.CopyImageSchema
+	)
 
 	o.Log.Info(emoji.SleuthOrSpy + "  going to discover the necessary images...")
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		// Release image errors are fatal: we don't want to continue collection when they happen.
+		return v2alpha1.CollectorSchema{}, &CollectionError{ReleaseErr: err}
 	}
 	// exclude blocked images
 	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
@@ -1089,39 +1008,42 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect operators
 	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		operatorErr = err
+	} else {
+		oImgs := operatorImgs.AllImages
+		// exclude blocked images
+		oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalOperatorImages = len(oImgs)
+		o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
+		allRelatedImages = append(allRelatedImages, oImgs...)
+		collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
+		collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 	}
-	oImgs := operatorImgs.AllImages
-	// exclude blocked images
-	oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalOperatorImages = len(oImgs)
-	o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
-	allRelatedImages = append(allRelatedImages, oImgs...)
-	collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
-	collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
 	// collect additionalImages
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		additionalImgErr = err
+	} else {
+		// exclude blocked images
+		aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalAdditionalImages = len(aImgs)
+		o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
+		allRelatedImages = append(allRelatedImages, aImgs...)
 	}
-	// exclude blocked images
-	aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalAdditionalImages = len(aImgs)
-	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
-	allRelatedImages = append(allRelatedImages, aImgs...)
 
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
-		return v2alpha1.CollectorSchema{}, err
+		helmErr = err
+	} else {
+		// exclude blocked images
+		hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
+		collectorSchema.TotalHelmImages = len(hImgs)
+		o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
+		allRelatedImages = append(allRelatedImages, hImgs...)
 	}
-	// exclude blocked images
-	hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
-	collectorSchema.TotalHelmImages = len(hImgs)
-	o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
-	allRelatedImages = append(allRelatedImages, hImgs...)
 
 	// OCPBUGS-43731 - remove duplicates
 	allRelatedImages = slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
@@ -1136,9 +1058,15 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.AllImages = allRelatedImages
 
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Debug("collection time     : %v", execTime)
+	o.Log.Debug("collection time     : %v", time.Since(startTime))
+
+	if operatorErr != nil || additionalImgErr != nil || helmErr != nil {
+		return v2alpha1.CollectorSchema{}, &CollectionError{
+			OperatorErr:      operatorErr,
+			AdditionalImgErr: additionalImgErr,
+			HelmErr:          helmErr,
+		}
+	}
 
 	if len(collectorSchema.AllImages) == 0 {
 		o.Log.Info(emoji.Exclamation + " No images to mirror...")
@@ -1155,7 +1083,6 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 		o.Log.Info(emoji.RepeatSingleButton + " rebuilding catalogs")
 
 		for _, copyImage := range oImgs {
-
 			if copyImage.Type == v2alpha1.TypeOperatorCatalog {
 				if o.Opts.IsMirrorToMirror() && strings.Contains(copyImage.Source, o.Opts.LocalStorageFQDN) {
 					// CLID-275: this is the ref to the already rebuilt catalog, which needs to be mirrored to destination.
@@ -1271,4 +1198,14 @@ func addRebuiltCatalogs(cs v2alpha1.CollectorSchema) (v2alpha1.CollectorSchema, 
 		}
 	}
 	return cs, nil
+}
+
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	if e, ok := err.(CodeExiter); ok {
+		return e.ExitCode()
+	}
+	return errcode.GenericErr
 }

@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -52,214 +51,21 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	// we just care for 1 platform release, in order to read release images
 	o.Opts.MultiArch = "system"
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
+
+	var err error
 	var allImages []v2alpha1.CopyImageSchema
-	var imageIndexDir string
-	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
-		releases, err := o.Cincinnati.GetReleaseReferenceImages(ctx)
-		if err != nil {
-			return allImages, err
-		}
-
-		// all errors will be probogated to the caller
-		// no redundant logging to console
-		for _, value := range releases {
-			hld := strings.Split(value.Source, "/")
-			releaseRepoAndTag := hld[len(hld)-1]
-			imageIndexDir = strings.Replace(releaseRepoAndTag, ":", "/", -1)
-			releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
-			cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
-			dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
-
-			src := dockerProtocol + value.Source
-			dest := ociProtocolTrimmed + dir
-
-			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
-				o.Log.Debug(collectorPrefix+"copying  release image %s ", value.Source)
-				err := os.MkdirAll(dir, 0755)
-				if err != nil {
-					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-				}
-
-				optsCopy := o.Opts
-				optsCopy.Stdout = io.Discard
-
-				err = o.Mirror.Run(ctx, src, dest, "copy", &optsCopy)
-				if err != nil {
-					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-				}
-				o.Log.Debug(collectorPrefix+"copied release index image %s ", value.Source)
-			} else {
-				o.Log.Debug(collectorPrefix+"release-images index directory alredy exists %s", dir)
-			}
-
-			oci, err := o.Manifest.GetImageIndex(dir)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-
-			// read the link to the manifest
-			if len(oci.Manifests) == 0 {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "image index not found ")
-			}
-			validDigest, err := digest.Parse(oci.Manifests[0].Digest)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
-			}
-
-			manifest := validDigest.Encoded()
-			o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
-
-			manifestDir := filepath.Join(dir, blobsDir, manifest)
-			mfst, err := o.Manifest.GetImageManifest(manifestDir)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-			o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
-
-			fromDir := strings.Join([]string{dir, blobsDir}, "/")
-			err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-			o.Log.Debug("extracted layer %s ", cacheDir)
-
-			// overkill but its used for consistency
-			releaseDir := strings.Join([]string{cacheDir, releaseImageExtractFullPath}, "/")
-			allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-
-			if o.Config.Mirror.Platform.KubeVirtContainer {
-				ki, err := o.getKubeVirtImage(cacheDir)
-				if err != nil {
-					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-				} else {
-					allRelatedImages = append(allRelatedImages, ki)
-				}
-			}
-
-			// add the release image itself
-			allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
-			tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, err
-			}
-			allImages = append(allImages, tmpAllImages...)
-		}
-
-		if o.Config.Mirror.Platform.Graph {
-			graphImage, err := o.handleGraphImage(ctx)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, fmt.Sprintf("error processing graph image: %v", err))
-			} else if graphImage.Source != "" {
-				allImages = append(allImages, graphImage)
-			}
-
-		}
-
-	} else if o.Opts.IsDiskToMirror() {
-		releaseImages, releaseFolders, err := o.identifyReleases(ctx)
-		if err != nil {
-			return allImages, err
-		}
-
-		o.Releases = []string{}
-		for _, img := range releaseImages {
-			o.Releases = append(o.Releases, img.Image)
-		}
-
-		for _, releaseImg := range releaseImages {
-
-			releaseRef, err := image.ParseRef(releaseImg.Image)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-			if releaseRef.Tag == "" && len(releaseRef.Digest) == 0 {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, "release image "+releaseImg.Image+" doesn't have a tag or digest")
-			}
-			tag := releaseRef.Tag
-			if releaseRef.Tag == "" && len(releaseRef.Digest) > 0 {
-				tag = releaseRef.Digest
-			}
-			monoReleaseSlice, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, tag)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-			allImages = append(allImages, monoReleaseSlice...)
-		}
-
-		for _, releaseDir := range releaseFolders {
-
-			releaseTag := filepath.Base(releaseDir)
-
-			// get all release images from manifest (json)
-			imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
-			releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-			}
-
-			if o.Config.Mirror.Platform.KubeVirtContainer {
-				cacheDir := filepath.Join(releaseDir)
-				ki, err := o.getKubeVirtImage(cacheDir)
-				if err != nil {
-					return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
-				} else {
-					releaseRelatedImages = append(releaseRelatedImages, ki)
-				}
-			}
-
-			releaseCopyImages, err := o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
-			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return []v2alpha1.CopyImageSchema{}, err
-			}
-			allImages = append(allImages, releaseCopyImages...)
-		}
-
-		if o.Config.Mirror.Platform.Graph {
-			o.Log.Debug("adding graph data image")
-			graphRelatedImage := v2alpha1.RelatedImage{
-				Name: graphImageName,
-				// Supposing that the mirror to disk saved the image with the latest tag
-				// If this supposition is false, then we need to implement a mechanism to save
-				// the digest of the graph image and use it here
-				Image: dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
-				Type:  v2alpha1.TypeCincinnatiGraph,
-			}
-			// OCPBUGS-38037: Check the graph image is in the cache before adding it
-			graphInCache, err := o.imageExists(ctx, graphRelatedImage.Image)
-			if err != nil && !o.Opts.IsDeleteMode() {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s error processing graph image in local cache: %w", collectorPrefix, err)
-			}
-			// OCPBUGS-43825: The check graphInCache is relevant for DiskToMirror workflow only, not for delete workflow
-			// In delete workflow, the graph image might have been mirrored with M2M, and the graph image might have
-			// therefore been pushed directly to the destination registry. It will not exist in the cache, and that should be ok.
-			// Nevertheless, in DiskToMirror, and as explained in OCPBUGS-38037, the graphInCache check is important
-			// because in enclave environment, the Cincinnati API may not have been called, so we rely on the existance of the
-			// graph image in the cache as a paliative.
-			if !graphInCache && !o.Opts.IsDeleteMode() {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s unable to find graph image in local cache", collectorPrefix)
-			}
-			// OCPBUGS-26513: In order to get the destination for the graphDataImage
-			// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
-			// containing only the graph image. This way we can easily identify the destination
-			// of the graph image.
-			graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
-			graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice, "")
-			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return []v2alpha1.CopyImageSchema{}, err
-			}
-			// if there is no error, we are certain that the slice only contains 1 element
-			// but double checking...
-			if len(graphCopySlice) != 1 {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
-			}
-			o.GraphDataImage = graphCopySlice[0].Destination
-			allImages = append(allImages, graphCopySlice...)
-		}
+	switch {
+	case o.Opts.IsMirrorToDisk():
+		fallthrough
+	case o.Opts.IsMirrorToMirror():
+		allImages, err = o.collectImageFromMirror(ctx)
+	case o.Opts.IsDiskToMirror():
+		allImages, err = o.collectImageFromDisk(ctx)
+	default:
+		err = fmt.Errorf("release collector: invalid mirror mode %s", o.Opts.Mode)
+	}
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
 	}
 
 	// OCPBUGS-43275: deduplicating
@@ -279,8 +85,257 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 	return allImages, nil
 }
 
+// collects release images from a mirror.
+// all errors will be propagated to the caller; no redundant error logging to console
+func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+	releases, err := o.Cincinnati.GetReleaseReferenceImages(ctx)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+
+	var allImages []v2alpha1.CopyImageSchema
+
+	for _, value := range releases {
+		hld := strings.Split(value.Source, "/")
+		releaseRepoAndTag := hld[len(hld)-1]
+		releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
+
+		allRelatedImages, err := o.collectReleaseImages(ctx, value)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+
+		// add the release image itself
+		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
+		tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		allImages = append(allImages, tmpAllImages...)
+	}
+
+	if o.Config.Mirror.Platform.Graph {
+		graphImage, err := o.handleGraphImage(ctx)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, fmt.Sprintf("error processing graph image: %v", err))
+		} else if graphImage.Source != "" {
+			allImages = append(allImages, graphImage)
+		}
+
+	}
+
+	return allImages, nil
+}
+
+// collects related images from a release
+func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, release v2alpha1.CopyImageSchema) ([]v2alpha1.RelatedImage, error) {
+	hld := strings.Split(release.Source, "/")
+	releaseRepoAndTag := hld[len(hld)-1]
+	imageIndexDir := strings.ReplaceAll(releaseRepoAndTag, ":", "/")
+	cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
+	dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
+
+	if err := o.ensureReleaseInOCIFormat(ctx, release, dir); err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	}
+
+	oci, err := o.Manifest.GetImageIndex(dir)
+	if err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	}
+
+	// read the link to the manifest
+	if len(oci.Manifests) == 0 {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, "image index not found ")
+	}
+	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	if err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
+	}
+
+	manifest := validDigest.Encoded()
+	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
+
+	manifestDir := filepath.Join(dir, blobsDir, manifest)
+	mfst, err := o.Manifest.GetImageManifest(manifestDir)
+	if err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	}
+	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
+
+	fromDir := filepath.Join(dir, blobsDir)
+	if err := o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst); err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	}
+	o.Log.Debug("extracted layer %s ", cacheDir)
+
+	// overkill but its used for consistency
+	releaseDir := filepath.Join(cacheDir, releaseImageExtractFullPath)
+	allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
+	if err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	}
+
+	if o.Config.Mirror.Platform.KubeVirtContainer {
+		ki, err := o.getKubeVirtImage(cacheDir)
+		if err != nil {
+			return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+		}
+		allRelatedImages = append(allRelatedImages, ki)
+	}
+
+	return allRelatedImages, nil
+}
+
+func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, release v2alpha1.CopyImageSchema, dir string) error {
+	_, err := os.Stat(dir)
+	if err == nil {
+		o.Log.Debug(collectorPrefix+"release-images index directory alredy exists %s", dir)
+		return nil
+	}
+	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create oci dir: %w", err)
+	}
+
+	optsCopy := o.Opts
+	optsCopy.Stdout = io.Discard
+
+	src := dockerProtocol + release.Source
+	dest := ociProtocolTrimmed + dir
+
+	if err := o.Mirror.Run(ctx, src, dest, "copy", &optsCopy); err != nil {
+		return fmt.Errorf("copy release index image: %w", err)
+	}
+	o.Log.Debug(collectorPrefix+"copied release index image %s ", release.Source)
+
+	return nil
+}
+
+// collects release images from the disk
+// all errors will be propagated to the caller; no redundant error logging to console
+func (o *LocalStorageCollector) collectImageFromDisk(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+	var allImages []v2alpha1.CopyImageSchema
+
+	releaseImages, releaseFolders, err := o.identifyReleases(ctx)
+	if err != nil {
+		return allImages, err
+	}
+
+	o.Releases = make([]string, 0, len(releaseImages))
+	for _, img := range releaseImages {
+		o.Releases = append(o.Releases, img.Image)
+	}
+
+	for _, releaseImg := range releaseImages {
+		monoReleaseSlice, err := o.prepareMonoReleaseBatch(releaseImg)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
+		}
+		allImages = append(allImages, monoReleaseSlice...)
+	}
+
+	for _, releaseDir := range releaseFolders {
+		releaseCopyImages, err := o.prepareReleaseBatchFromDir(releaseDir)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
+		}
+		allImages = append(allImages, releaseCopyImages...)
+	}
+
+	if !o.Config.Mirror.Platform.Graph {
+		return allImages, nil
+	}
+
+	o.Log.Debug("adding graph data image")
+	graphCopy, err := o.prepareGraphImage(ctx)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
+	}
+	o.GraphDataImage = graphCopy.Destination
+	allImages = append(allImages, graphCopy)
+
+	return allImages, nil
+}
+
+func (o *LocalStorageCollector) prepareMonoReleaseBatch(releaseImg v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
+	releaseRef, err := image.ParseRef(releaseImg.Image)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	if releaseRef.Tag == "" && len(releaseRef.Digest) == 0 {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("release image %s doesn't have a tag or digest", releaseImg.Image)
+	}
+	tag := releaseRef.Tag
+	if releaseRef.Tag == "" && len(releaseRef.Digest) > 0 {
+		tag = releaseRef.Digest
+	}
+	return o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, tag)
+}
+
+func (o *LocalStorageCollector) prepareReleaseBatchFromDir(releaseDir string) ([]v2alpha1.CopyImageSchema, error) {
+	releaseTag := filepath.Base(releaseDir)
+
+	// get all release images from manifest (json)
+	imageReferencesFile := filepath.Join(releaseDir, releaseManifests, imageReferences)
+	releaseRelatedImages, err := o.Manifest.GetReleaseSchema(imageReferencesFile)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+
+	if o.Config.Mirror.Platform.KubeVirtContainer {
+		ki, err := o.getKubeVirtImage(releaseDir)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		releaseRelatedImages = append(releaseRelatedImages, ki)
+	}
+
+	return o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
+}
+
+func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1.CopyImageSchema, error) {
+	graphRelatedImage := v2alpha1.RelatedImage{
+		Name: graphImageName,
+		// Supposing that the mirror to disk saved the image with the latest tag
+		// If this supposition is false, then we need to implement a mechanism to save
+		// the digest of the graph image and use it here
+		Image: dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+		Type:  v2alpha1.TypeCincinnatiGraph,
+	}
+	// OCPBUGS-38037: Check the graph image is in the cache before adding it
+	graphInCache, err := o.imageExists(ctx, graphRelatedImage.Image)
+	if err != nil && !o.Opts.IsDeleteMode() {
+		return v2alpha1.CopyImageSchema{}, fmt.Errorf("%s error processing graph image in local cache: %w", collectorPrefix, err)
+	}
+	// OCPBUGS-43825: The check graphInCache is relevant for DiskToMirror workflow only, not for delete workflow
+	// In delete workflow, the graph image might have been mirrored with M2M, and the graph image might have
+	// therefore been pushed directly to the destination registry. It will not exist in the cache, and that should be ok.
+	// Nevertheless, in DiskToMirror, and as explained in OCPBUGS-38037, the graphInCache check is important
+	// because in enclave environment, the Cincinnati API may not have been called, so we rely on the existence of the
+	// graph image in the cache as a paliative.
+	if !graphInCache && !o.Opts.IsDeleteMode() {
+		return v2alpha1.CopyImageSchema{}, fmt.Errorf("%s unable to find graph image in local cache", collectorPrefix)
+	}
+	// OCPBUGS-26513: In order to get the destination for the graphDataImage
+	// into `o.GraphDataImage`, we call `prepareD2MCopyBatch` on an array
+	// containing only the graph image. This way we can easily identify the destination
+	// of the graph image.
+	graphImageSlice := []v2alpha1.RelatedImage{graphRelatedImage}
+	graphCopySlice, err := o.prepareD2MCopyBatch(graphImageSlice, "")
+	if err != nil {
+		return v2alpha1.CopyImageSchema{}, err
+	}
+	// if there is no error, we are certain that the slice only contains 1 element
+	// but double checking...
+	if len(graphCopySlice) != 1 {
+		return v2alpha1.CopyImageSchema{}, fmt.Errorf(collectorPrefix + "error while calculating the destination reference for the graph image")
+	}
+	return graphCopySlice[0], nil
+}
+
 func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
-	var result []v2alpha1.CopyImageSchema
+	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
 		var src string
 		var dest string
@@ -304,7 +359,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 }
 
 func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
-	var result []v2alpha1.CopyImageSchema
+	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
 		var src string
 		var dest string
