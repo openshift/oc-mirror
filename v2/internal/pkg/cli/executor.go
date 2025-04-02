@@ -31,14 +31,13 @@ import (
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 
-	"github.com/spf13/cobra"
-
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
@@ -50,6 +49,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
@@ -267,6 +267,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel")
 	cmd.PersistentFlags().BoolVar(&opts.Global.CpuProf, "cpu-prof", false, "Enable CPU profiling")
 	cmd.PersistentFlags().BoolVar(&opts.Global.MemProf, "mem-prof", false, "Enable Memory profiling")
+	cmd.PersistentFlags().StringVar(&opts.Global.RegistriesDirPath, "registries.d", "", "use registry configuration files in `DIR` (e.g. for container signature storage)")
 	cmd.PersistentFlags().AddFlagSet(&flagSharedOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagRetryOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagDepTLS)
@@ -772,6 +773,18 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
+	}
+
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
@@ -814,6 +827,12 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
 	}
 
 	// Apply max-nested-paths processing if MaxNestedPaths>0
@@ -889,6 +908,12 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
 	}
 
 	// apply max-nested-paths processing if MaxNestedPaths>0
@@ -1059,6 +1084,22 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.AllImages = allRelatedImages
 
+	if !o.Opts.RemoveSignatures {
+		if regHostMap, err := registryHostMap(&allRelatedImages); err != nil {
+			return v2alpha1.CollectorSchema{}, err
+		} else {
+			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
+		}
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if regHostMap, err := registryHostMap(&allRelatedImages); err != nil {
+			return v2alpha1.CollectorSchema{}, err
+		} else {
+			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
+		}
+	}
+
 	o.Log.Debug("collection time     : %v", time.Since(startTime))
 
 	if operatorErr != nil || additionalImgErr != nil || helmErr != nil {
@@ -1209,4 +1250,49 @@ func exitCodeFromError(err error) int {
 		return e.ExitCode()
 	}
 	return errcode.GenericErr
+}
+
+func registryHostMap(allImages *[]v2alpha1.CopyImageSchema) (map[string]struct{}, error) {
+	var errs []error
+	registriesHost := make(map[string]struct{})
+
+	for _, image := range *allImages {
+		var srcHost, destHost string
+		var err error
+
+		if !isDiskDestination(image.Source) {
+			if srcHost, err = extractHostName(image.Source); err != nil {
+				errs = append(errs, err)
+			} else {
+				registriesHost[srcHost] = struct{}{}
+			}
+		}
+
+		if !isDiskDestination(image.Destination) {
+			if destHost, err = extractHostName(image.Destination); err != nil {
+				errs = append(errs, err)
+			} else {
+				registriesHost[destHost] = struct{}{}
+			}
+		}
+	}
+
+	return registriesHost, errors.Join(errs...)
+}
+
+func extractHostName(path string) (string, error) {
+	splits := strings.SplitN(path, "://", 2)
+	if len(splits) < 2 {
+		return "", fmt.Errorf("invalid input format - src/dest should have at least registry host, namespace and component name")
+	}
+	splits = strings.SplitN(splits[1], "/", 2)
+	if len(splits) < 2 {
+		return "", fmt.Errorf("invalid input format - src/dest should have at least registry host, namespace and component name")
+	}
+
+	return splits[0], nil
+}
+
+func isDiskDestination(registryURL string) bool {
+	return strings.HasPrefix(registryURL, consts.FileProtocol) || strings.HasPrefix(registryURL, consts.DirProtocol) || strings.HasPrefix(registryURL, "oci:")
 }

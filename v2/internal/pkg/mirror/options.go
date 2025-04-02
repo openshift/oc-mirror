@@ -190,10 +190,6 @@ func NoteCloseFailure(err error, description string, closeErr error) error {
 func CommandAction(handler func(args []string, stdout io.Writer) error) func(cmd *cobra.Command, args []string) error {
 	return func(c *cobra.Command, args []string) error {
 		err := handler(args, c.OutOrStdout())
-		//var shouldDisplayUsage = &ErrorShouldDisplayUsage{}
-		//if errors.As(err, &ErrorShouldDisplayUsage{}) {
-		//	return c.Help()
-		//}
 		return err
 	}
 }
@@ -280,20 +276,34 @@ func RetryFlags() (pflag.FlagSet, *retry.Options) {
 }
 
 // getPolicyContext returns a *signature.PolicyContext based on opts.
-func (opts *GlobalOptions) GetPolicyContext() (*signature.PolicyContext, error) {
+func (opts *GlobalOptions) GetPolicyContext(mode Mode) (*signature.PolicyContext, error) {
 	var policy *signature.Policy // This could be cached across calls in opts.
 	var err error
-	if !opts.SecurePolicy {
+	// OCPSTRAT-1869: CLID-289:
+	// Signature mirroring: when mode is disk to mirror, the source image is in the oc-mirror cache.
+	// We don't need to verify signatures coming from the cache for 2 reasons:
+	// * hard to generate a policy and guess all policyRequirements for all images in the cache
+	// * the images in the cache have already been verified during mirror to disk workflow
+
+	switch {
+	case !opts.SecurePolicy || mode == DiskToMirror:
 		policy = &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
-	} else if opts.PolicyPath == "" {
+	case opts.PolicyPath == "":
 		policy, err = signature.DefaultPolicy(nil)
-	} else {
+	default:
 		policy, err = signature.NewPolicyFromFile(opts.PolicyPath)
 	}
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting policy context %w", err)
 	}
-	return signature.NewPolicyContext(policy)
+
+	var policyCtx *signature.PolicyContext
+	if policyCtx, err = signature.NewPolicyContext(policy); err != nil {
+		return nil, fmt.Errorf("error creating new policy context %w", err)
+	}
+
+	return policyCtx, nil
 }
 
 // commandTimeoutContext returns a context.Context and a cancellation callback based on opts.
@@ -335,6 +345,7 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
 	ctx.AuthFilePath = opts.shared.authFilePath
 	ctx.DockerDaemonHost = opts.dockerDaemonHost
 	ctx.DockerDaemonCertPath = opts.dockerCertPath
+
 	if opts.dockerImageOptions.authFilePath.Present() {
 		ctx.AuthFilePath = opts.dockerImageOptions.authFilePath.Value()
 	}
@@ -344,37 +355,16 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
 	}
 
 	ctx.DockerDaemonInsecureSkipTLSVerify = !opts.TlsVerify
-
 	ctx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(!opts.TlsVerify)
 
-	if opts.credsOption.Present() && opts.noCreds {
-		return nil, errors.New("creds and no-creds cannot be specified at the same time")
+	if err := opts.validateCredentials(); err != nil {
+		return nil, err
 	}
-	if opts.userName.Present() && opts.noCreds {
-		return nil, errors.New("username and no-creds cannot be specified at the same time")
+
+	if err := opts.setAuthConfig(ctx); err != nil {
+		return nil, err
 	}
-	if opts.credsOption.Present() && opts.userName.Present() {
-		return nil, errors.New("creds and username cannot be specified at the same time")
-	}
-	// if any of username or password is present, then both are expected to be present
-	if opts.userName.Present() != opts.password.Present() {
-		if opts.userName.Present() {
-			return nil, errors.New("password must be specified when username is specified")
-		}
-		return nil, errors.New("username must be specified when password is specified")
-	}
-	if opts.credsOption.Present() {
-		var err error
-		ctx.DockerAuthConfig, err = getDockerAuth(opts.credsOption.Value())
-		if err != nil {
-			return nil, err
-		}
-	} else if opts.userName.Present() {
-		ctx.DockerAuthConfig = &types.DockerAuthConfig{
-			Username: opts.userName.Value(),
-			Password: opts.password.Value(),
-		}
-	}
+
 	if opts.registryToken.Present() {
 		ctx.DockerBearerRegistryToken = opts.registryToken.Value()
 	}
@@ -383,6 +373,44 @@ func (opts *imageOptions) NewSystemContext() (*types.SystemContext, error) {
 	}
 
 	return ctx, nil
+}
+
+func (opts *imageOptions) validateCredentials() error {
+	if opts.credsOption.Present() && opts.noCreds {
+		return errors.New("creds and no-creds cannot be specified at the same time")
+	}
+	if opts.userName.Present() && opts.noCreds {
+		return errors.New("username and no-creds cannot be specified at the same time")
+	}
+	if opts.credsOption.Present() && opts.userName.Present() {
+		return errors.New("creds and username cannot be specified at the same time")
+	}
+
+	// if any of username or password is present, then both are expected to be present
+	if opts.userName.Present() != opts.password.Present() {
+		if opts.userName.Present() {
+			return errors.New("password must be specified when username is specified")
+		}
+		return errors.New("username must be specified when password is specified")
+	}
+
+	return nil
+}
+
+func (opts *imageOptions) setAuthConfig(ctx *types.SystemContext) error {
+	if opts.credsOption.Present() {
+		var err error
+		ctx.DockerAuthConfig, err = getDockerAuth(opts.credsOption.Value())
+		if err != nil {
+			return err
+		}
+	} else if opts.userName.Present() {
+		ctx.DockerAuthConfig = &types.DockerAuthConfig{
+			Username: opts.userName.Value(),
+			Password: opts.password.Value(),
+		}
+	}
+	return nil
 }
 
 func parseCreds(creds string) (string, string, error) {
