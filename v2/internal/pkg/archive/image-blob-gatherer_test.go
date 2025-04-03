@@ -16,7 +16,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errortype"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )
 
 func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
@@ -213,19 +212,18 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 			opts.RemoveSignatures = tc.removeSignatures
 			opts.All = image.isManifestList
 
-			tmpRegistriesDirPath := filepath.Join(testFolder, "containers/registries.d")
-			err = os.MkdirAll(filepath.Dir(tmpRegistriesDirPath), 0755)
+			userRegistriesDirPath := filepath.Join(testFolder, "containers", "registries.d")
+			err = os.MkdirAll(userRegistriesDirPath, 0755)
 			assert.NoError(t, err)
 
-			if !tc.removeSignatures {
-				regs := map[string]struct{}{
-					"localhost:55000": {},
-					"mymirror.com":    {},
-				}
+			dockerDefaultContent := "default-docker:\n"
 
-				err := registriesd.PrepareRegistrydCustomDir(testFolder, tmpRegistriesDirPath, regs)
-				assert.NoError(t, err)
-			}
+			file, err := os.Create(filepath.Join(userRegistriesDirPath, "default.yaml"))
+			assert.NoError(t, err)
+			defer file.Close()
+
+			_, err = file.WriteString(dockerDefaultContent)
+			assert.NoError(t, err)
 
 			err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts)
 			assert.NoError(t, err)

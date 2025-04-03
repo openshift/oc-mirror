@@ -9,7 +9,7 @@ import (
 
 	"github.com/containers/storage/pkg/fileutils"
 	"github.com/otiai10/copy"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 const (
