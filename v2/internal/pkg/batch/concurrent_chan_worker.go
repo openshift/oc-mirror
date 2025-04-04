@@ -20,8 +20,8 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-var (
-	copiedImages v2alpha1.CollectorSchema
+const (
+	skippingMsg = "skipping operator bundle %s because one of its related images failed to mirror"
 
 	errMsgHeader = "%ssome errors occurred during the mirroring"
 	errMsg       = errMsgHeader + ".\n" +
@@ -36,7 +36,7 @@ type ChannelConcurrentBatch struct {
 	Log           clog.PluggableLoggerInterface
 	LogsDir       string
 	Mirror        mirror.MirrorInterface
-	MaxGoroutines int
+	MaxGoroutines uint
 }
 
 type GoroutineResult struct {
@@ -49,7 +49,7 @@ type GoroutineResult struct {
 func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
 	startTime := time.Now()
 
-	copiedImages = v2alpha1.CollectorSchema{
+	copiedImages := v2alpha1.CollectorSchema{
 		AllImages: []v2alpha1.CopyImageSchema{},
 	}
 
@@ -195,17 +195,22 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
 
 	if len(errArray) > 0 {
+		batchErr := &BatchError{
+			releaseCountDiff:       collectorSchema.TotalReleaseImages - copiedImages.TotalReleaseImages,
+			operatorCountDiff:      collectorSchema.TotalOperatorImages - copiedImages.TotalOperatorImages,
+			additionalImgCountDiff: collectorSchema.TotalAdditionalImages - copiedImages.TotalAdditionalImages,
+			helmCountDiff:          collectorSchema.TotalHelmImages - copiedImages.TotalHelmImages,
+		}
 		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
 		if err != nil {
-			return copiedImages, NewSafeError(errMsgHeader+" - unable to log these errors in %s/%s: %s", workerPrefix, o.LogsDir, filename, err.Error())
+			batchErr.source = fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
 		} else {
-			return copiedImages, NewSafeError(errMsg, workerPrefix, o.LogsDir, filename)
+			batchErr.source = fmt.Errorf(errMsg, workerPrefix, o.LogsDir, filename)
 		}
+		return copiedImages, batchErr
 	}
-	endTime := time.Now()
-	execTime := endTime.Sub(startTime)
-	o.Log.Debug("concurrent channel worker time     : %v", execTime)
-	return collectorSchema, nil
+	o.Log.Debug("concurrent channel worker time     : %v", time.Since(startTime))
+	return copiedImages, nil
 }
 
 func hostNamespace(input string) string {
@@ -349,7 +354,6 @@ func runOverallProgress(overallProgress *mpb.Bar, cancelCtx context.Context, pro
 			overallProgress.SetCurrent(int64(progress))
 		}
 	}
-
 }
 
 func incrementTotals(imgType v2alpha1.ImageType, copiedImages *v2alpha1.CollectorSchema) {
