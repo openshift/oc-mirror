@@ -1593,6 +1593,7 @@ github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fsouza/fake-gcs-server v1.17.0/go.mod h1:D1rTE4YCyHFNa99oyJJ5HyclvN/0uQR+pM/VdlL83bw=
 github.com/fsouza/go-dockerclient v1.7.1/go.mod h1:PHUSk8IVIp+nkIVGrQa2GK69jPOeW/43OUKQgQcOH+M=
+github.com/fsouza/go-dockerclient v1.10.0 h1:ppSBsbR60I1DFbV4Ag7LlHlHakHFRNLk9XakATW1yVQ=
 github.com/fsouza/go-dockerclient v1.10.0/go.mod h1:+iNzAW78AzClIBTZ6WFjkaMvOgz68GyCJ236b1opLTs=
 github.com/fsouza/go-dockerclient v1.11.2/go.mod h1:HZN6ky2Mg5mfZO/WZBFDe6XCricqTnDJntfXHZTYnQQ=
 github.com/fsouza/go-dockerclient v1.12.0/go.mod h1:YWUtjg8japrqD/80L98nTtCoxQFp5B5wrSsnyeB5lFo=
@@ -2389,7 +2390,6 @@ github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237/go.mod h1:qq
 github.com/rivo/uniseg v0.4.4/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
 github.com/rogpeppe/go-charset v0.0.0-20180617210344-2471d30d28b4/go.mod h1:qgYeAmZ5ZIpBWTGllZSQnw97Dj+woV0toclVaRGI8pc=
 github.com/rogpeppe/go-internal v1.6.2/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
-github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rqlite/gorqlite v0.0.0-20230708021416-2acd02b70b79/go.mod h1:xF/KoXmrRyahPfo5L7Szb5cAAUl53dMWBh9cMruGEZg=
 github.com/rs/cors v1.7.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/cors v1.9.0/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
@@ -2442,8 +2442,6 @@ github.com/sherine-k/catalog-filter v0.0.1 h1:4XATs+3jzB+p/OQkikdxJePVigjlyRqbLh
 github.com/sherine-k/catalog-filter v0.0.1/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
-github.com/sherine-k/catalog-filter v0.0.4 h1:UWM3XaktjbvKw5ktC2NoxQLP+6KNbvaplwiAaVV411g=
-github.com/sherine-k/catalog-filter v0.0.4/go.mod h1:NQ667IgdlOYYHeLwppvrtm5TtYIn7b3CCyYKGT2e3rI=
 github.com/shibumi/go-pathspec v1.3.0/go.mod h1:Xutfslp817l2I1cZvgcfeMQJG5QnU2lh5tVaaMCl3jE=
 github.com/shirou/gopsutil/v3 v3.21.10/go.mod h1:t75NhzCZ/dYyPQjyQmrAYP6c8+LCdFANeBMdLPCNnew=
 github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24/go.mod h1:M+9NzErvs504Cn4c5DxATwIqPbtswREoFCre64PpcG4=
