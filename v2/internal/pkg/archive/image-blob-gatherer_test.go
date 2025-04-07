@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -211,19 +210,6 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 
 			opts.RemoveSignatures = tc.removeSignatures
 			opts.All = image.isManifestList
-
-			userRegistriesDirPath := filepath.Join(testFolder, "containers", "registries.d")
-			err = os.MkdirAll(userRegistriesDirPath, 0755)
-			assert.NoError(t, err)
-
-			dockerDefaultContent := "default-docker:\n"
-
-			file, err := os.Create(filepath.Join(userRegistriesDirPath, "default.yaml"))
-			assert.NoError(t, err)
-			defer file.Close()
-
-			_, err = file.WriteString(dockerDefaultContent)
-			assert.NoError(t, err)
 
 			err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts)
 			assert.NoError(t, err)

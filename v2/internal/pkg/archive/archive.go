@@ -150,7 +150,6 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2al
 func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema, historyBlobs map[string]struct{}) (map[string]struct{}, error) {
 	allAddedBlobs := make(map[string]struct{})
 	for _, img := range collectedImages {
-		// TODO check with @r4f4 how the exit code should handle the signature errors returned in the line below as &errortype.SignatureBlobGathererError{}
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
 		if err != nil && !errors.As(err, &errortype.SignatureBlobGathererError{}) {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %w", img.Destination, err)

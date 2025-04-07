@@ -178,13 +178,6 @@ func imageBlobs(manifestBytes []byte, mimeType string) ([]string, error) {
 	return blobs, nil
 }
 
-// TODO investigate why even without config (registries.d) for registry.redhat.io (which means also no use-sigstore-attachments: true)
-// the operator images are being mirrored with their sigstore signatures
-
-// TODO check why the error below is happening
-// 2025/04/01 19:14:32  [ERROR]  : [Worker] error mirroring image docker://registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:4a2324acaea757bae3b01b1aec59f49f4dd79bd1868e69d3418d57c210a6dfd9 (Operator bundles: [aws-load-balancer-operator.v1.2.0] - Operators: [aws-load-balancer-operator]) error: copying image 1/4 from manifest list: reading signatures: server provided 128 signatures, assuming that's unreasonable and a server error
-// 2025/04/01 19:14:32  [ERROR]  : [Worker] error mirroring image docker://registry.redhat.io/albo/aws-load-balancer-operator-bundle@sha256:e371c45e259eaf54d79b1bfc6c47b1093d87965a8d6076205d4860047146ed43 error: skipping operator bundle docker://registry.redhat.io/albo/aws-load-balancer-operator-bundle@sha256:e371c45e259eaf54d79b1bfc6c47b1093d87965a8d6076205d4860047146ed43 because one of its related images failed to mirror
-
 // TODO check why in m2d/d2m the signatures of the catalog image are being mirrored even after the rebuild
 
 // imageSignatureBlobs returns the blobs of container image which is a signature.

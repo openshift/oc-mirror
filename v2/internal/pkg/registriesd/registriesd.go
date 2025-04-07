@@ -39,7 +39,7 @@ func PrepareRegistrydCustomDir(workingDir, registriesDirPath string, registryHos
 	}
 
 	if err := addRegistriesd(customRegistrydConfigPath, registryHosts); err != nil {
-		return fmt.Errorf("error adding registriesd to custom registryd config dir")
+		return err
 	}
 
 	return nil
@@ -59,11 +59,6 @@ func registriesDirPathWithHomeDir(homeDir string) string {
 	if err := fileutils.Exists(userRegistriesDirPath); err == nil {
 		return userRegistriesDirPath
 	}
-	// TODO remove me - explanation why: sys.RootForImplicitAbsolutePaths is never set so it is always empty, which makes the code below not necessary.
-	// if sys != nil && sys.RootForImplicitAbsolutePaths != "" {
-	// 	return filepath.Join(sys.RootForImplicitAbsolutePaths, systemRegistriesDirPath)
-	// }
-
 	return systemRegistriesDirPath
 }
 
@@ -114,7 +109,7 @@ func fileName(registryURL string) string {
 }
 
 func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
-	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0600)
+	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0755)
 	if err != nil {
 		return fmt.Errorf("error creating cache")
 	}
