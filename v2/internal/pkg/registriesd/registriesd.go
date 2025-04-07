@@ -72,10 +72,6 @@ func GetWorkingDirRegistrydConfigPath(workingDir string) string {
 }
 
 func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydConfigPath string) error {
-	// TODO should we define copyOptions such as:
-	// AddPermission
-	// OnDirExists
-	// PreserveOwner
 	if err := os.MkdirAll(filepath.Dir(customRegistrydConfigPath), 0755); err != nil {
 		return fmt.Errorf("error creating folder %s %w", filepath.Dir(customRegistrydConfigPath), err)
 	}
@@ -101,19 +97,16 @@ func addRegistriesd(customizableRegistriesDir string, registries map[string]stru
 }
 
 func addRegistryd(customizableRegistriesDir, registryHost string) error {
-	// TODO: if file exists, and use-sigstore-attachements isn't configured, what do you do?
-	// override? append? exist in error?
 	registryFileName := fileName(registryHost)
-	// check the cache file exists
 	registryFileAbsPath := filepath.Join(customizableRegistriesDir, registryFileName)
 
 	if _, err := os.Stat(registryFileAbsPath); errors.Is(err, os.ErrNotExist) {
 		return createRegistryConfigFile(registryFileAbsPath, registryHost)
-	} else if err != nil {
+	} else if err == nil {
+		return updateRegistryConfigFile(registryFileAbsPath, registryHost)
+	} else {
 		return fmt.Errorf("error trying to find the registry config file %w", err)
 	}
-	// if it exists, do you rewrite it? do you leave it?
-	return nil
 }
 
 func fileName(registryURL string) string {
@@ -121,7 +114,7 @@ func fileName(registryURL string) string {
 }
 
 func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
-	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0755)
+	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0600)
 	if err != nil {
 		return fmt.Errorf("error creating cache")
 	}
@@ -130,7 +123,6 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 		return fmt.Errorf("error creating registry config file %w", err)
 	}
 	defer registryConfigFile.Close()
-	// add the cache file yaml
 	registryConfigStruct := registryConfiguration{
 		Docker: map[string]registryNamespace{
 			registryHost: {
@@ -146,6 +138,42 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 	_, err = registryConfigFile.Write(ccBytes)
 	if err != nil {
 		return fmt.Errorf("error wring the registry config file %w", err)
+	}
+
+	return nil
+}
+
+func updateRegistryConfigFile(registryFileAbsPath, registryHost string) error {
+	configFileBytes, err := os.ReadFile(registryFileAbsPath)
+	if err != nil {
+		return fmt.Errorf("error reading registry config file %w", err)
+	}
+
+	var registryConfigStruct registryConfiguration
+	err = yaml.Unmarshal(configFileBytes, &registryConfigStruct)
+	if err != nil {
+		return fmt.Errorf("error unmarshaling registry config file %w", err)
+	}
+
+	if registryConfigStruct.Docker == nil {
+		registryConfigStruct.Docker = make(map[string]registryNamespace)
+	}
+	if _, exists := registryConfigStruct.Docker[registryHost]; !exists {
+		registryConfigStruct.Docker[registryHost] = registryNamespace{}
+	}
+	if !registryConfigStruct.Docker[registryHost].UseSigstoreAttachments {
+		reg := registryConfigStruct.Docker[registryHost]
+		reg.UseSigstoreAttachments = true
+		registryConfigStruct.Docker[registryHost] = reg
+	}
+
+	updatedConfigBytes, err := yaml.Marshal(registryConfigStruct)
+	if err != nil {
+		return fmt.Errorf("error marshaling updated registry config file %w", err)
+	}
+	err = os.WriteFile(registryFileAbsPath, updatedConfigBytes, 0600)
+	if err != nil {
+		return fmt.Errorf("error writing updated registry config file %w", err)
 	}
 
 	return nil
