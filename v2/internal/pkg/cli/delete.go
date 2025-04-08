@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -260,28 +261,14 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	go o.startLocalRegistry()
 	defer o.stopLocalRegistry(cmd.Context())
 
+	var err error
 	if o.Opts.Global.DeleteGenerate {
-
-		collectorSchema, err := o.CollectAll(cmd.Context())
-		if err != nil {
-			return err
-		}
-
-		err = o.Delete.WriteDeleteMetaData(collectorSchema.AllImages)
-		if err != nil {
-			return err
-		}
+		err = o.generateDeleteFile(cmd.Context())
 	} else {
-
-		deleteList, err := o.Delete.ReadDeleteMetaData()
-		if err != nil {
-			return err
-		}
-
-		err = o.Delete.DeleteRegistryImages(deleteList)
-		if err != nil {
-			return err
-		}
+		err = o.deleteImages()
+	}
+	if err != nil {
+		return err
 	}
 
 	o.Log.Info("delete time     : %v", time.Since(startTime))
@@ -289,17 +276,46 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	if o.Opts.Global.ForceCacheDelete {
 		// finally execute the garbage collector
 		// this will delete all relevant blobs
-		err := o.startLocalRegistryGarbageCollect()
-		if err != nil {
+		if err := o.startLocalRegistryGarbageCollect(); err != nil {
 			return err
 		}
 	}
 
-	if !o.Opts.Global.DeleteGenerate {
-		o.Log.Info(emoji.Memo + " Remember to execute a garbage collect (or similar) on your remote repository")
-	}
 	o.Log.Info(emoji.WavingHandSign + " Goodbye, thank you for using oc-mirror")
 
+	return nil
+}
+
+func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
+	collectorSchema, collectErr := o.CollectAll(ctx)
+
+	// It could be the case that collection finishes with errors (e.g. some
+	// images in the ISC cannot be found anymore). As long as images were
+	// collected, we want to generate a delete file so those images can be deleted
+	var writeErr error
+	if len(collectorSchema.AllImages) > 0 {
+		writeErr = o.Delete.WriteDeleteMetaData(collectorSchema.AllImages)
+		if collectErr != nil && writeErr == nil {
+			o.Log.Warn("image discovery finished with errors: the delete file might not be complete")
+		}
+	} else if collectErr == nil {
+		o.Log.Info(emoji.Exclamation + " no images to delete...")
+	}
+
+	return errors.Join(collectErr, writeErr)
+}
+
+func (o *DeleteSchema) deleteImages() error {
+	deleteList, err := o.Delete.ReadDeleteMetaData()
+	if err != nil {
+		return err
+	}
+
+	if err := o.Delete.DeleteRegistryImages(deleteList); err != nil {
+		return err
+	}
+
+	o.Log.Info(emoji.Memo + " Remember to execute a garbage collect (or similar) on your remote repository")
 	return nil
 }
 
