@@ -2,6 +2,7 @@ package delete
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -122,6 +123,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		increment = 2
 	}
 
+	allErrs := []error{}
 	for _, img := range deleteImageList.Items {
 		// OCPBUGS-43489
 		// Verify that the "delete" destination is set correctly
@@ -130,17 +132,20 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		// Reverts OCPBUGS-44448
 		imgSpecName, err := image.ParseRef(img.ImageName)
 		if err != nil {
-			return err
+			allErrs = append(allErrs, fmt.Errorf("parse image name %q: %w", img.ImageName, err))
+			continue
 		}
 		imgSpecRef, err := image.ParseRef(img.ImageReference)
 		if err != nil {
-			return err
+			allErrs = append(allErrs, fmt.Errorf("parse imag eref %q: %w", img.ImageReference, err))
+			continue
 		}
 		// remove dockerProtocol
 		name := strings.Split(o.Opts.Global.DeleteDestination, dockerProtocol)
 		// this should not occur - but just incase
 		if len(name) < 2 {
-			return fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination)
+			allErrs = append(allErrs, fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination))
+			continue
 		}
 		assembleName := name[1] + "/" + imgSpecName.PathComponent
 		// check image type for release or release content
@@ -152,7 +157,8 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		}
 		// check the assembled name against the reference name
 		if assembleName != imgSpecRef.Name {
-			return fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (please verify full name)", o.Opts.Global.DeleteDestination)
+			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (please verify full name)", o.Opts.Global.DeleteDestination))
+			continue
 		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
@@ -188,10 +194,11 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
 		if _, err := o.Batch.Worker(context.Background(), collectorSchema, o.Opts); err != nil {
 			o.Log.Warn("error during registry deletion: %v", err)
+			allErrs = append(allErrs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(allErrs...)
 }
 
 // ReadDeleteMetaData - read the list of images to delete
