@@ -2,8 +2,6 @@ module github.com/openshift/oc-mirror/v2
 
 go 1.22.5
 
-// replace github.com/sherine-k/catalog-filter => /home/skhoury/go/src/github.com/sherine-k/catalog-filter
-
 require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/blang/semver/v4 v4.0.0
@@ -21,7 +19,7 @@ require (
 	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
 	github.com/operator-framework/operator-registry v1.47.0
 	github.com/otiai10/copy v1.14.0
-	github.com/sherine-k/catalog-filter v0.0.3
+	github.com/sherine-k/catalog-filter v0.0.4-0.20250408175931-b43aa266b571
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5

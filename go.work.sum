@@ -706,8 +706,6 @@ github.com/StackExchange/wmi v1.2.1/go.mod h1:rcmrprowKIVzvc+NUiLncP2uuArMWLCbu9
 github.com/ThalesIgnite/crypto11 v1.2.5/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/a8m/expect v1.0.0/go.mod h1:4IwSCMumY49ScypDnjNbYEjgVeqy1/U2cEs3Lat96eA=
 github.com/agext/levenshtein v1.2.3/go.mod h1:JEDfjyjHDjOF/1e4FlBE/PkbqA9OfWu2ki2W0IB5558=
-github.com/aguidirh/archiver/v3 v3.5.0-ocmirror1 h1:cDERr1avR55JRFYhTDU3UjQ9D4wkZH2LjGAkeKc1KCw=
-github.com/aguidirh/archiver/v3 v3.5.0-ocmirror1/go.mod h1:qqTTPUK/HZPFgFQ/TJ3BzvTpF/dPtFVJXdQbCmeMxwc=
 github.com/aguidirh/oc v0.0.0-20240905134549-4457c8e8f14b/go.mod h1:sczdFTJmC+Wi37rOD8gRNEuRIBGUzbbOb8DQ2dxL1Gc=
 github.com/akavel/rsrc v0.10.2/go.mod h1:uLoCtb9J+EyAqh+26kdrTgmzRBFPGOolLWKpdxkKq+c=
 github.com/akrylysov/pogreb v0.10.2/go.mod h1:pNs6QmpQ1UlTJKDezuRWmaqkgUE2TuU0YTWyqJZ7+lI=
@@ -1901,7 +1899,6 @@ github.com/secure-systems-lab/go-securesystemslib v0.7.0/go.mod h1:/2gYnlnHVQ6xe
 github.com/securego/gosec/v2 v2.9.1/go.mod h1:oDcDLcatOJxkCGaCaq8lua1jTnYf6Sou4wdiJ1n4iHc=
 github.com/segmentio/ksuid v1.0.4/go.mod h1:/XUiZBD3kVx5SmUOl55voK5yeAbBNNIed+2O73XgrPE=
 github.com/sergi/go-diff v1.2.0/go.mod h1:STckp+ISIX8hZLjrqAeVduY0gWCT9IjLuqbuNXdaHfM=
-github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3/go.mod h1:A0bzQcvG0E7Rwjx0REVgAGH58e96+X0MeOfepqsbeW4=
 github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002/go.mod h1:/yeG0My1xr/u+HZrFQ1tOQQQQrOawfyMUH13ai5brBc=
 github.com/shazow/go-diff v0.0.0-20160112020656-b6b7b6733b8c/go.mod h1:/PevMnwAxekIXwN8qQyfc5gl2NlkB3CQlkizAbOkeBs=
 github.com/sherine-k/catalog-filter v0.0.0-20240923132931-be549836be50/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
@@ -1911,6 +1908,7 @@ github.com/sherine-k/catalog-filter v0.0.1 h1:4XATs+3jzB+p/OQkikdxJePVigjlyRqbLh
 github.com/sherine-k/catalog-filter v0.0.1/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2-0.20241126124527-d48d6997e9f2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/sherine-k/catalog-filter v0.0.2/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
+github.com/sherine-k/catalog-filter v0.0.3 h1:YBcoOfIXeYaAi22Sd9ZFgzOcCHwuj4oBDC1w9gQDbEg=
 github.com/sherine-k/catalog-filter v0.0.3/go.mod h1:brrCOvEmD3aCujZVM6AVzPbHrJuBeFK9VMFnZED5ZcU=
 github.com/shibumi/go-pathspec v1.3.0/go.mod h1:Xutfslp817l2I1cZvgcfeMQJG5QnU2lh5tVaaMCl3jE=
 github.com/shirou/gopsutil/v3 v3.21.10/go.mod h1:t75NhzCZ/dYyPQjyQmrAYP6c8+LCdFANeBMdLPCNnew=
