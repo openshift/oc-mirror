@@ -14,14 +14,15 @@ import (
 	"strings"
 
 	"github.com/containers/image/v5/types"
+	"github.com/otiai10/copy"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
-	"github.com/otiai10/copy"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 type FilterCollector struct {
@@ -403,6 +404,7 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	if imgSpec.Transport != ociProtocol {
 		opts := o.Opts
 		opts.Stdout = io.Discard
+		opts.RemoveSignatures = true
 
 		src := dockerProtocol + catalog
 		dest := ociProtocolTrimmed + catalogImageDir

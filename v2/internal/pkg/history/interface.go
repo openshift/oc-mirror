@@ -3,8 +3,8 @@ package history
 import "io"
 
 type History interface {
-	Read() (map[string]string, error)
-	Append(map[string]string) (map[string]string, error)
+	Read() (map[string]struct{}, error)
+	Append(map[string]struct{}) (map[string]struct{}, error)
 }
 
 type FileCreator interface {

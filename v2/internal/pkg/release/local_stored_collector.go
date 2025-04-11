@@ -204,6 +204,8 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 	src := dockerProtocol + release.Source
 	dest := ociProtocolTrimmed + dir
 
+	optsCopy.RemoveSignatures = true
+
 	if err := o.Mirror.Run(ctx, src, dest, "copy", &optsCopy); err != nil {
 		return fmt.Errorf("copy release index image: %w", err)
 	}

@@ -12,8 +12,9 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 )
 
 func TestMirrorCopy(t *testing.T) {
@@ -241,8 +242,6 @@ func TestMirrorParseMultiArch(t *testing.T) {
 	_, err := parseMultiArch("other")
 	assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
 }
-
-// mock
 
 type mockMirrorCopy struct{}
 type mockMirrorDelete struct{}

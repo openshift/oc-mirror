@@ -10,11 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
 )
 
 type mockBlobGatherer struct{}
@@ -203,39 +204,39 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 	}
 	defer os.RemoveAll(testFolder)
 
-	collectedBlobs := map[string]string{
-		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
-		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",
-		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": "",
-		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": "",
-		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": "",
-		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": "",
-		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": "",
-		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": "",
-		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": "",
-		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": "",
-		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": "",
-		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": "",
+	collectedBlobs := map[string]struct{}{
+		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
+		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
+		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},
+		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": {},
+		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": {},
+		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": {},
+		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": {},
+		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": {},
+		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": {},
+		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": {},
+		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": {},
+		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": {},
 	}
 
-	historyBlobs := map[string]string{
-		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
-		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",
-		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": "",
-		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": "",
-		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": "",
+	historyBlobs := map[string]struct{}{
+		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
+		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
+		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},
+		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": {},
+		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": {},
 	}
 
-	expectedAddedBlobs := map[string]string{
-		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": "",
-		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": "",
-		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": "",
-		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": "",
-		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": "",
-		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": "",
-		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": "",
+	expectedAddedBlobs := map[string]struct{}{
+		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": {},
+		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": {},
+		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": {},
+		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": {},
+		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": {},
+		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": {},
+		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": {},
 	}
-	actualAddedBlobs, err := ma.addBlobsDiff(collectedBlobs, historyBlobs, map[string]string{})
+	actualAddedBlobs, err := ma.addBlobsDiff(collectedBlobs, historyBlobs, make(map[string]struct{}))
 	assert.NoError(t, err, "call addBlobsDiff should not return an error")
 	assert.Equal(t, expectedAddedBlobs, actualAddedBlobs)
 
@@ -283,10 +284,9 @@ func TestArchive_RemovePastMirrors(t *testing.T) {
 			err := removePastArchives(tc.destination)
 			if err != nil {
 				assert.Equal(t, tc.expectedError, err.Error())
-			} else {
-				if tc.expectedError != "" {
-					t.Fatal("should fail but passed instead")
-				}
+			} else if tc.expectedError != "" {
+				t.Fatal("should fail but passed instead")
+
 			}
 			if _, err := os.Stat(tc.destination); err == nil {
 				entries, err := os.ReadDir(tc.destination)
@@ -378,44 +378,43 @@ func (ma *MirrorArchive) WithFakes(maxArchiveSize int64) (*MirrorArchive, error)
 	return ma, nil
 }
 
-func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (map[string]string, error) {
-	blobs := map[string]string{
-		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
-		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",
-		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": "",
-		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": "",
-		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": "",
-		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": "",
-		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": "",
-		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": "",
-		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": "",
-		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": "",
-		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": "",
-		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": "",
+func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (map[string]struct{}, error) {
+	blobs := map[string]struct{}{
+		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
+		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
+		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},
+		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": {},
+		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": {},
+		"sha256:e1bb0572465a9e03d7af5024abb36d7227b5bf133c448b54656d908982127874": {},
+		"sha256:6e1ac33d11e06db5e850fec4a1ec07f6c2ab15f130c2fdf0f9d0d0a5c83651e7": {},
+		"sha256:f992cb38fce665360a4d07f6f78db864a1f6e20a7ad304219f7f81d7fe608d97": {},
+		"sha256:6376a0276facf61d87fdf7c6f21d761ee25ba8ceba934d64752d43e84fe0cb98": {},
+		"sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed": {},
+		"sha256:9b6fa335dba394d437930ad79e308e01da4f624328e49d00c0ff44775d2e4769": {},
+		"sha256:e6c589cf5f402a60a83a01653304d7a8dcdd47b93a395a797b5622a18904bd66": {},
 	}
 	return blobs, nil
 }
 
-func (m mockHistory) Read() (map[string]string, error) {
-	historyMap := map[string]string{
+func (m mockHistory) Read() (map[string]struct{}, error) {
+	historyMap := map[string]struct{}{
 
-		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
-		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",
-		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": "",
-		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": "",
-		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": "",
+		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
+		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
+		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},
+		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": {},
+		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": {},
 	}
 	return historyMap, nil
 }
 
-func (m mockHistory) Append(inputMap map[string]string) (map[string]string, error) {
-	historyMap := map[string]string{
-
-		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": "",
-		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": "",
-		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": "",
-		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": "",
-		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": "",
+func (m mockHistory) Append(inputMap map[string]struct{}) (map[string]struct{}, error) {
+	historyMap := map[string]struct{}{
+		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
+		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
+		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},
+		"sha256:cfaa7496ab546c36ab14859f93fbd2d8a3588b344b18d5fbe74dd834e4a6f7eb": {},
+		"sha256:53c56977ccd20c0d87df0ad52036c55b27201e1a63874c2644383d0c532f5aee": {},
 	}
 	for k, v := range inputMap {
 		historyMap[k] = v
