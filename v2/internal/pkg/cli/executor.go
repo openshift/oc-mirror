@@ -779,12 +779,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		}
 	}
 
-	if !o.Opts.RemoveSignatures {
-		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
-			return err
-		}
-	}
-
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
@@ -1083,14 +1077,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	sort.Sort(customsort.ByTypePriority(allRelatedImages))
 
 	collectorSchema.AllImages = allRelatedImages
-
-	if !o.Opts.RemoveSignatures {
-		if regHostMap, err := registryHostMap(&allRelatedImages); err != nil {
-			return v2alpha1.CollectorSchema{}, err
-		} else {
-			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
-		}
-	}
 
 	if !o.Opts.RemoveSignatures {
 		if regHostMap, err := registryHostMap(&allRelatedImages); err != nil {
