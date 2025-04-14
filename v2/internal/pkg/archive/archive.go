@@ -11,7 +11,6 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/errortype"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/history"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -151,7 +150,7 @@ func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2a
 	allAddedBlobs := make(map[string]struct{})
 	for _, img := range collectedImages {
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
-		if err != nil && !errors.As(err, &errortype.SignatureBlobGathererError{}) {
+		if err != nil && !errors.As(err, &SignatureBlobGathererError{}) {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %w", img.Destination, err)
 		}
 

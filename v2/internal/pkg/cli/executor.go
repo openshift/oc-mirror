@@ -1280,5 +1280,5 @@ func extractHostName(path string) (string, error) {
 }
 
 func isDiskDestination(registryURL string) bool {
-	return strings.HasPrefix(registryURL, consts.FileProtocol) || strings.HasPrefix(registryURL, consts.DirProtocol) || strings.HasPrefix(registryURL, "oci:")
+	return strings.HasPrefix(registryURL, consts.FileProtocol) || strings.HasPrefix(registryURL, consts.DirProtocol) || strings.HasPrefix(registryURL, consts.Oci)
 }

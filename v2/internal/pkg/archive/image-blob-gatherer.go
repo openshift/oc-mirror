@@ -12,7 +12,6 @@ import (
 	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/errortype"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -73,7 +72,7 @@ func imageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef s
 
 	img, err := srcRef.NewImageSource(ctx, sourceCtx)
 	if err != nil {
-		return nil, "", fmt.Errorf("error when creating a new image source %w", err)
+		return nil, "", fmt.Errorf("error when creating a new image source: %w", err)
 	}
 	defer img.Close()
 
@@ -123,7 +122,7 @@ func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[stri
 
 		singleArchBlobs, err := singleArchBlobs(ctx, singleIn)
 		if err != nil {
-			if errors.As(err, &errortype.SignatureBlobGathererError{}) {
+			if errors.As(err, &SignatureBlobGathererError{}) {
 				sigErrors = append(sigErrors, err)
 			} else {
 				return nil, err
@@ -185,27 +184,27 @@ func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]s
 	var ref image.ImageSpec
 	tag, err := sigstoreAttachmentTag(in.digest)
 	if err != nil {
-		return nil, errortype.SignatureBlobGathererError{SigError: err}
+		return nil, SignatureBlobGathererError{SigError: err}
 	}
 
 	if ref, err = image.ParseRef(in.imgRef); err != nil {
-		return nil, errortype.SignatureBlobGathererError{SigError: err}
+		return nil, SignatureBlobGathererError{SigError: err}
 	}
 	ref = ref.SetTag(tag)
 
 	manifestBytes, mime, err := imageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
 	if err != nil {
-		return nil, errortype.SignatureBlobGathererError{SigError: err}
+		return nil, SignatureBlobGathererError{SigError: err}
 	}
 
 	signatureDigest, err := manifest.Digest(manifestBytes)
 	if err != nil {
-		return nil, errortype.SignatureBlobGathererError{SigError: fmt.Errorf("error to get the digest of the signature manifest %w", err)}
+		return nil, SignatureBlobGathererError{SigError: fmt.Errorf("error to get the digest of the signature manifest %w", err)}
 	}
 
 	sigBlobs, err := imageBlobs(manifestBytes, mime)
 	if err != nil {
-		return nil, errortype.SignatureBlobGathererError{SigError: err}
+		return nil, SignatureBlobGathererError{SigError: err}
 	}
 
 	sigBlobs = append(sigBlobs, signatureDigest.String())

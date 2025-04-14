@@ -13,7 +13,6 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/errortype"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -65,7 +64,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 					isParentImage: true,
 				},
 			},
-			expectedErrorType: errortype.SignatureBlobGathererError{},
+			expectedErrorType: SignatureBlobGathererError{},
 			expectedBlobs: map[string]struct{}{
 				"sha256:467829ca4ff134ef9762a8f69647fdf2515b974dfc94a8474c493a45ef922e51": {},
 				"sha256:728191dbaae078c825ffb518e15d33956353823d4da6c2e81fe9b1ed60ddef7d": {},
@@ -291,7 +290,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 
 	gatherer := NewImageBlobGatherer(&opts)
 	_, err := gatherer.GatherBlobs(ctx, "docker://localhost/test:latest")
-	assert.Equal(t, "error when creating a new image source pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused", err.Error())
+	assert.Equal(t, "error when creating a new image source: pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused", err.Error())
 
 }
 
