@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -1079,10 +1080,10 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	collectorSchema.AllImages = allRelatedImages
 
 	if !o.Opts.RemoveSignatures {
-		if regHostMap, err := registryHostMap(&allRelatedImages); err != nil {
-			return v2alpha1.CollectorSchema{}, err
-		} else {
+		if regHostMap, err := getRegistries(&collectorSchema); err == nil {
 			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
+		} else {
+			return v2alpha1.CollectorSchema{}, err
 		}
 	}
 
@@ -1236,6 +1237,17 @@ func exitCodeFromError(err error) int {
 		return e.ExitCode()
 	}
 	return errcode.GenericErr
+}
+
+func getRegistries(collectorSchema *v2alpha1.CollectorSchema) (map[string]struct{}, error) {
+	if regHostMap, err := registryHostMap(&collectorSchema.AllImages); err != nil {
+		return nil, err
+	} else {
+		if reflect.ValueOf(collectorSchema.CopyImageSchemaMap).IsZero() {
+			collectorSchema.CopyImageSchemaMap = v2alpha1.CopyImageSchemaMap{}
+		}
+		return regHostMap, nil
+	}
 }
 
 func registryHostMap(allImages *[]v2alpha1.CopyImageSchema) (map[string]struct{}, error) {
