@@ -153,8 +153,7 @@ func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 // NewMirrorCmd - cobra entry point
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	global := &mirror.GlobalOptions{
-		SecurePolicy: false,
-		IsTerminal:   term.IsTerminal(int(os.Stdout.Fd())),
+		IsTerminal: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 
 	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
@@ -269,6 +268,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&opts.Global.CpuProf, "cpu-prof", false, "Enable CPU profiling")
 	cmd.PersistentFlags().BoolVar(&opts.Global.MemProf, "mem-prof", false, "Enable Memory profiling")
 	cmd.PersistentFlags().StringVar(&opts.Global.RegistriesDirPath, "registries.d", "", "use registry configuration files in `DIR` (e.g. for container signature storage)")
+	cmd.PersistentFlags().StringVar(&opts.Global.PolicyPath, "policy", "", "Path to a trust policy file")
 	cmd.PersistentFlags().AddFlagSet(&flagSharedOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagRetryOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagDepTLS)
