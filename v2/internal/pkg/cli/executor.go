@@ -1279,16 +1279,12 @@ func registryHostMap(allImages *[]v2alpha1.CopyImageSchema) (map[string]struct{}
 }
 
 func extractHostName(path string) (string, error) {
-	splits := strings.SplitN(path, "://", 2)
-	if len(splits) < 2 {
-		return "", fmt.Errorf("invalid input format - src/dest should have at least registry host, namespace and component name")
+	ref, err := image.ParseRef(path)
+	if err == nil {
+		return ref.Domain, nil
+	} else {
+		return "", fmt.Errorf("error extracting host name: %w", err)
 	}
-	splits = strings.SplitN(splits[1], "/", 2)
-	if len(splits) < 2 {
-		return "", fmt.Errorf("invalid input format - src/dest should have at least registry host, namespace and component name")
-	}
-
-	return splits[0], nil
 }
 
 func isDiskDestination(registryURL string) bool {
