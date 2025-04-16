@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
@@ -48,6 +50,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
@@ -150,8 +153,7 @@ func (o MakeDir) makeDirAll(dir string, mode os.FileMode) error {
 // NewMirrorCmd - cobra entry point
 func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	global := &mirror.GlobalOptions{
-		SecurePolicy: false,
-		IsTerminal:   term.IsTerminal(int(os.Stdout.Fd())),
+		IsTerminal: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 
 	flagSharedOpts, sharedOpts := mirror.SharedImageFlags()
@@ -265,6 +267,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel")
 	cmd.PersistentFlags().BoolVar(&opts.Global.CpuProf, "cpu-prof", false, "Enable CPU profiling")
 	cmd.PersistentFlags().BoolVar(&opts.Global.MemProf, "mem-prof", false, "Enable Memory profiling")
+	cmd.PersistentFlags().StringVar(&opts.Global.RegistriesDirPath, "registries.d", "", "use registry configuration files in `DIR` (e.g. for container signature storage)")
+	cmd.PersistentFlags().StringVar(&opts.Global.PolicyPath, "policy", "", "Path to a trust policy file")
 	cmd.PersistentFlags().AddFlagSet(&flagSharedOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagRetryOpts)
 	cmd.PersistentFlags().AddFlagSet(&flagDepTLS)
@@ -281,6 +285,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "If set, generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB)")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
+	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", false, "Do not copy image signature")
 	HideFlags(cmd)
 
 	ex.Opts.Stdout = cmd.OutOrStdout()
@@ -458,8 +463,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	// make sure we always get multi-arch images
 	o.Opts.MultiArch = "all"
-	// for the moment, mirroring doesn't verify signatures. Expected in CLID-26
-	o.Opts.RemoveSignatures = true
 
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
@@ -771,6 +774,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
+	}
+
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
@@ -813,6 +822,12 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
 	}
 
 	// Apply max-nested-paths processing if MaxNestedPaths>0
@@ -888,6 +903,12 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	collectorSchema, err := o.CollectAll(cmd.Context())
 	if err != nil {
 		return err
+	}
+
+	if !o.Opts.RemoveSignatures {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+			return err
+		}
 	}
 
 	// apply max-nested-paths processing if MaxNestedPaths>0
@@ -1058,6 +1079,14 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.AllImages = allRelatedImages
 
+	if !o.Opts.RemoveSignatures {
+		if regHostMap, err := getRegistries(&collectorSchema); err == nil {
+			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
+		} else {
+			return v2alpha1.CollectorSchema{}, err
+		}
+	}
+
 	o.Log.Debug("collection time     : %v", time.Since(startTime))
 
 	if operatorErr != nil || additionalImgErr != nil || helmErr != nil {
@@ -1208,4 +1237,56 @@ func exitCodeFromError(err error) int {
 		return e.ExitCode()
 	}
 	return errcode.GenericErr
+}
+
+func getRegistries(collectorSchema *v2alpha1.CollectorSchema) (map[string]struct{}, error) {
+	if regHostMap, err := registryHostMap(&collectorSchema.AllImages); err != nil {
+		return nil, err
+	} else {
+		if reflect.ValueOf(collectorSchema.CopyImageSchemaMap).IsZero() {
+			collectorSchema.CopyImageSchemaMap = v2alpha1.CopyImageSchemaMap{}
+		}
+		return regHostMap, nil
+	}
+}
+
+func registryHostMap(allImages *[]v2alpha1.CopyImageSchema) (map[string]struct{}, error) {
+	var errs []error
+	registriesHost := make(map[string]struct{})
+
+	for _, image := range *allImages {
+		var srcHost, destHost string
+		var err error
+
+		if !isDiskDestination(image.Source) {
+			if srcHost, err = extractHostName(image.Source); err != nil {
+				errs = append(errs, err)
+			} else {
+				registriesHost[srcHost] = struct{}{}
+			}
+		}
+
+		if !isDiskDestination(image.Destination) {
+			if destHost, err = extractHostName(image.Destination); err != nil {
+				errs = append(errs, err)
+			} else {
+				registriesHost[destHost] = struct{}{}
+			}
+		}
+	}
+
+	return registriesHost, errors.Join(errs...)
+}
+
+func extractHostName(path string) (string, error) {
+	ref, err := image.ParseRef(path)
+	if err == nil {
+		return ref.Domain, nil
+	} else {
+		return "", fmt.Errorf("error extracting host name: %w", err)
+	}
+}
+
+func isDiskDestination(registryURL string) bool {
+	return strings.HasPrefix(registryURL, consts.FileProtocol) || strings.HasPrefix(registryURL, consts.DirProtocol) || strings.HasPrefix(registryURL, consts.Oci)
 }

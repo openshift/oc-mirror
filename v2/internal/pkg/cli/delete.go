@@ -15,6 +15,8 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 
+	"github.com/spf13/cobra"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
@@ -28,7 +30,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -169,6 +170,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 			},
 		}
 		o.Config = isc
+		// TODO ALEX check if we can remove the line below for delete when working on CLID-348
 		o.Opts.RemoveSignatures = true
 		// nolint: errcheck
 		o.Opts.SrcImage.TlsVerify = false

@@ -15,6 +15,8 @@ import (
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/distribution/reference"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )
 
 type Mode string
@@ -74,12 +76,11 @@ func (o *MirrorDelete) DeleteImage(ctx context.Context, image string, co *CopyOp
 
 // copy - copy images setup and execute
 func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) (retErr error) {
-
 	if err := ReexecIfNecessaryForImages([]string{src, dest}...); err != nil {
 		return err
 	}
 
-	policyContext, err := opts.Global.GetPolicyContext()
+	policyContext, err := opts.Global.GetPolicyContext(Mode(o.Mode))
 	if err != nil {
 		return fmt.Errorf("error loading trust policy: %v", err)
 	}
@@ -106,6 +107,10 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
+	if !opts.RemoveSignatures {
+		sourceCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.SrcImage.global.WorkingDir)
+	}
+
 	destinationCtx, err := opts.DestImage.NewSystemContext()
 	if err != nil {
 		return err
@@ -113,6 +118,10 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 	if strings.Contains(dest, opts.LocalStorageFQDN) { // when copying to cache, use HTTP
 		destinationCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	}
+
+	if !opts.RemoveSignatures {
+		destinationCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.DestImage.global.WorkingDir)
 	}
 
 	var manifestType string

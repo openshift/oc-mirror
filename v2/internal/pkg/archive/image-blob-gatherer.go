@@ -2,112 +2,220 @@ package archive
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
+	"maps"
+	"strings"
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	digest "github.com/opencontainers/go-digest"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 type ImageBlobGatherer struct {
-	BlobsGatherer
 	opts *mirror.CopyOptions
 }
 
-func NewImageBlobGatherer(opts *mirror.CopyOptions) BlobsGatherer {
+type internalImageBlobGatherer struct {
+	imgRef         string
+	sourceCtx      *types.SystemContext
+	manifestBytes  []byte
+	mimeType       string
+	digest         digest.Digest
+	copySignatures bool
+}
+
+func NewImageBlobGatherer(opts *mirror.CopyOptions) *ImageBlobGatherer {
 	return &ImageBlobGatherer{
 		opts: opts,
 	}
 }
-func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs map[string]string, retErr error) {
-	blobs = map[string]string{}
-	o.opts.DeprecatedTLSVerify.WarnIfUsed([]string{"--src-tls-verify", "--dest-tls-verify"})
-	// o.opts.All = true
-	o.opts.RemoveSignatures, _ = strconv.ParseBool("true")
 
-	if err := mirror.ReexecIfNecessaryForImages([]string{imgRef}...); err != nil {
-		return blobs, err
-	}
-
-	// TODO should we verify signatures while gathering blobs?
-	// More broadly, should we include anything in the archive to
-	// help with signature verification after the archive is untarred
-	// inside the enclave?
-
-	srcRef, err := alltransports.ParseImageName(imgRef)
-	if err != nil {
-		return nil, fmt.Errorf("invalid source name %s: %v", imgRef, err)
-	}
+// GatherBlobs returns all container image blobs (including signature blobs if they exists).
+func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs map[string]struct{}, retErr error) {
 	// we are always gathering blobs from the local cache registry - skipping tls verification
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return nil, err
+	}
 	sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
-	if err != nil {
-		return nil, err
-	}
 
-	img, err := srcRef.NewImageSource(ctx, sourceCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	manifestBytes, mime, err := img.GetManifest(ctx, nil)
+	manifestBytes, mime, err := imageManifest(ctx, sourceCtx, imgRef, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	digest, err := manifest.Digest(manifestBytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error to get the digest of the image manifest %w", err)
 	}
-	blobs[digest.String()] = ""
+
+	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
-		manifestList, err := manifest.ListFromBlob(manifestBytes, mime)
-		if err != nil {
-			return nil, err
-		}
-		instances := manifestList.Instances()
-		for _, digest := range instances {
-			blobs[digest.String()] = ""
-			singleArchManifest, singleArchMime, err := img.GetManifest(ctx, &digest)
-			if err != nil {
-				return nil, err
-			}
-			singleArchBlobs, err := o.getBlobsOfManifest(singleArchManifest, singleArchMime)
-			if err != nil {
-				return nil, err
-			}
-			for _, digest := range singleArchBlobs {
-				blobs[digest] = ""
-			}
-			if err != nil {
-				return nil, err
-			}
-		}
+		return multiArchBlobs(ctx, inImageBlogGather)
 	} else {
-
-		manifestBlobs, err := o.getBlobsOfManifest(manifestBytes, mime)
-		if err != nil {
-			return nil, err
-		}
-		for _, digest := range manifestBlobs {
-			blobs[digest] = ""
-		}
+		return singleArchBlobs(ctx, inImageBlogGather)
 	}
-	return blobs, nil
 }
 
-func (o *ImageBlobGatherer) getBlobsOfManifest(manifestBytes []byte, mimeType string) ([]string, error) {
+// imageManifest returns the container image manifest content with its type.
+func imageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	srcRef, err := alltransports.ParseImageName(imgRef)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid source name %s: %w", imgRef, err)
+	}
+
+	img, err := srcRef.NewImageSource(ctx, sourceCtx)
+	if err != nil {
+		return nil, "", fmt.Errorf("error when creating a new image source: %w", err)
+	}
+	defer img.Close()
+
+	bytesManifest, mime, err := img.GetManifest(ctx, instanceDigest)
+	if err != nil {
+		return nil, "", fmt.Errorf("error to get the image manifest and mime type %w", err)
+	}
+
+	return bytesManifest, mime, nil
+}
+
+// multiArchBlobs returns the blobs of all architectures (including signature blobs if they exists).
+func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+	var sigErrors []error
+
+	blobs := make(map[string]struct{})
+
+	blobs[in.digest.String()] = struct{}{}
+
+	manifestList, err := manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	if err != nil {
+		return nil, fmt.Errorf("error to get the manifest list %w", err)
+	}
+
+	if in.copySignatures {
+		sigBlobs, err := imageSignatureBlobs(ctx, in)
+		if err == nil {
+			for _, digest := range sigBlobs {
+				blobs[digest] = struct{}{}
+			}
+		} else {
+			sigErrors = append(sigErrors, err)
+		}
+
+	}
+
+	digests := manifestList.Instances()
+	for _, digest := range digests {
+		blobs[digest.String()] = struct{}{}
+		singleIn := in
+
+		singleIn.manifestBytes, singleIn.mimeType, err = imageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
+		if err != nil {
+			return nil, err
+		}
+		singleIn.digest = digest
+
+		singleArchBlobs, err := singleArchBlobs(ctx, singleIn)
+		if err != nil {
+			if errors.As(err, &SignatureBlobGathererError{}) {
+				sigErrors = append(sigErrors, err)
+			} else {
+				return nil, err
+			}
+		}
+
+		maps.Copy(blobs, singleArchBlobs)
+	}
+
+	return blobs, errors.Join(sigErrors...)
+}
+
+// singleArchBlobs returns the blobs of single architecture (including signature blobs if they exists).
+func singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+	var err error
+
+	blobs := make(map[string]struct{})
+
+	blobs[in.digest.String()] = struct{}{}
+
+	manifestBlobs, err := imageBlobs(in.manifestBytes, in.mimeType)
+	if err != nil {
+		return nil, err
+	}
+
+	var sigBlobs []string
+	if in.copySignatures {
+		sigBlobs, err = imageSignatureBlobs(ctx, in)
+		if err == nil {
+			manifestBlobs = append(manifestBlobs, sigBlobs...)
+		}
+	}
+
+	for _, digest := range manifestBlobs {
+		blobs[digest] = struct{}{}
+	}
+
+	return blobs, err
+}
+
+// imageBlobs returns the blobs of a container image which is not a signature.
+func imageBlobs(manifestBytes []byte, mimeType string) ([]string, error) {
 	blobs := []string{}
 	singleArchManifest, err := manifest.FromBlob(manifestBytes, mimeType)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling manifest: %v", err)
+		return nil, fmt.Errorf("error unmarshalling manifest: %w", err)
 	}
 	for _, layer := range singleArchManifest.LayerInfos() {
 		blobs = append(blobs, layer.Digest.String())
 	}
 	blobs = append(blobs, singleArchManifest.ConfigInfo().Digest.String())
 	return blobs, nil
+}
+
+// TODO check why in m2d/d2m the signatures of the catalog image are being mirrored even after the rebuild
+
+// imageSignatureBlobs returns the blobs of container image which is a signature.
+func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]string, error) {
+	var ref image.ImageSpec
+	tag, err := sigstoreAttachmentTag(in.digest)
+	if err != nil {
+		return nil, SignatureBlobGathererError{SigError: err}
+	}
+
+	if ref, err = image.ParseRef(in.imgRef); err != nil {
+		return nil, SignatureBlobGathererError{SigError: err}
+	}
+	ref = ref.SetTag(tag)
+
+	manifestBytes, mime, err := imageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
+	if err != nil {
+		return nil, SignatureBlobGathererError{SigError: err}
+	}
+
+	signatureDigest, err := manifest.Digest(manifestBytes)
+	if err != nil {
+		return nil, SignatureBlobGathererError{SigError: fmt.Errorf("error to get the digest of the signature manifest %w", err)}
+	}
+
+	sigBlobs, err := imageBlobs(manifestBytes, mime)
+	if err != nil {
+		return nil, SignatureBlobGathererError{SigError: err}
+	}
+
+	sigBlobs = append(sigBlobs, signatureDigest.String())
+
+	return sigBlobs, nil
+}
+
+// sigstoreAttachmentTag returns a sigstore attachment tag for the specified digest.
+func sigstoreAttachmentTag(d digest.Digest) (string, error) {
+	if err := d.Validate(); err != nil {
+		return "", fmt.Errorf("invalid digest %w", err)
+	}
+	return strings.Replace(d.String(), ":", "-", 1) + ".sig", nil
 }

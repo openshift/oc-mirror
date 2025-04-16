@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	mirror "github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestAllDeleteImages
@@ -178,8 +179,8 @@ func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.Collecto
 	return collectorSchema, nil
 }
 
-func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]string, error) {
-	res := map[string]string{"sha256:95ad8395795ee0460baf05458f669d3b865535f213f015519ef9a221a6a08280": ""}
+func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]struct{}, error) {
+	res := map[string]struct{}{"sha256:95ad8395795ee0460baf05458f669d3b865535f213f015519ef9a221a6a08280": {}}
 	if o.Fail {
 		return nil, fmt.Errorf("forced error")
 	}
