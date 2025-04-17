@@ -4,7 +4,7 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.23-openshift-4.19 AS 
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 # Statically link the binary so we can run it in any container base image
-RUN DISABLE_CGO=1 CGO_ENABLED=0 make build
+RUN CGO_ENABLED=0 make build
 
 FROM registry.ci.openshift.org/ocp/4.19:base-rhel9
 WORKDIR /artifacts
