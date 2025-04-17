@@ -37,9 +37,6 @@ import (
 	"github.com/openshift/oc-mirror/pkg/image"
 	"github.com/openshift/oc-mirror/pkg/metadata"
 	"github.com/openshift/oc-mirror/pkg/metadata/storage"
-
-	cliV2 "github.com/openshift/oc-mirror/v2/pkg/cli"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -86,18 +83,6 @@ const (
 )
 
 func NewMirrorCmd() *cobra.Command {
-	if isV2() {
-		return buildV2Cmd()
-	} else {
-		return buildV1Cmd()
-	}
-}
-
-func isV2() bool {
-	return len(os.Args) > 0 && slices.Contains(os.Args[:], "--v2")
-}
-
-func buildV1Cmd() *cobra.Command {
 	klog.Warning("\n\n⚠️  oc-mirror v1 is deprecated (starting in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2\n\n")
 
 	o := MirrorOptions{
@@ -145,10 +130,6 @@ func buildV1Cmd() *cobra.Command {
 	cmd.AddCommand(initcmd.NewInitCommand(f, o.RootOptions))
 
 	return cmd
-}
-
-func buildV2Cmd() *cobra.Command {
-	return cliV2.V2Cmd("info")
 }
 
 func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
