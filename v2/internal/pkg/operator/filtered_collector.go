@@ -273,7 +273,17 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		rebuiltTag = tag
 	}
 
+	// OCPBUGS-52470
+	// check if the original operator was mirrored by digest
 	componentName := imgSpec.ComponentName() + "." + result.Digest
+	if imgSpec.IsImageByDigestOnly() && o.Opts.IsMirrorToDisk() {
+		tag, err := digestOfFilter(op)
+		if err != nil {
+			return v2alpha1.CatalogFilterResult{}, err
+		}
+		componentName = imgSpec.ComponentName() + "." + tag
+	}
+
 	relatedImages[componentName] = []v2alpha1.RelatedImage{
 		{
 			Name:          catalogName,
@@ -284,7 +294,6 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 			RebuiltTag:    rebuiltTag,
 		},
 	}
-
 	return result, nil
 }
 
@@ -322,7 +331,8 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	if err != nil {
 		// If there was an error reading the digest file, we assume the catalog has not been filtered
 		isAlreadyFiltered = false
-	} else { // digest read
+	} else {
+		// digest read
 		srcFilteredCatalog, err := o.cachedCatalog(op, filterDigest)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
