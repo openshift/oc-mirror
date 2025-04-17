@@ -210,7 +210,6 @@ type CollectorSchema struct {
 type CopyImageSchemaMap struct {
 	OperatorsByImage map[string]map[string]struct{} // key is the origin image name and value is an array of operators' name
 	BundlesByImage   map[string]map[string]string   // key is the image name and value is the bundle name
-	RegistriesHost   map[string]struct{}
 }
 
 // CopyImageSchema
