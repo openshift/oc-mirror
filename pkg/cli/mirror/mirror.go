@@ -98,7 +98,6 @@ func isV2() bool {
 }
 
 func buildV1Cmd() *cobra.Command {
-
 	klog.Warning("\n\n⚠️  oc-mirror v1 is deprecated (starting in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2\n\n")
 
 	o := MirrorOptions{
@@ -153,7 +152,6 @@ func buildV2Cmd() *cobra.Command {
 }
 
 func (o *MirrorOptions) Complete(cmd *cobra.Command, args []string) error {
-
 	destination := args[0]
 	splitIdx := strings.Index(destination, "://")
 	if splitIdx == -1 {
@@ -340,7 +338,6 @@ func (o *MirrorOptions) Run(cmd *cobra.Command, f kcmdutil.Factory) (err error) 
 }
 
 func (o *MirrorOptions) mirrorImages(ctx context.Context, cleanup cleanupFunc) error {
-
 	o.remoteRegFuncs = RemoteRegFuncs{
 		copy: func(ctx context.Context, policyContext *signature.PolicyContext, destRef types.ImageReference, srcRef types.ImageReference, options *imagecopy.Options) (copiedManifest []byte, retErr error) {
 			return imagecopy.Image(ctx, policyContext, destRef, srcRef, options)
@@ -451,7 +448,6 @@ func (o *MirrorOptions) removePreviouslyMirrored(images image.TypedImageMapping,
 
 // mirrorMappings downloads individual images from an image mapping.
 func (o *MirrorOptions) mirrorMappings(cfg v1alpha2.ImageSetConfiguration, images image.TypedImageMapping, insecure bool) error {
-
 	opts, err := o.newMirrorImageOptions(insecure)
 	if err != nil {
 		return err
@@ -526,7 +522,6 @@ func (o *MirrorOptions) newMirrorImageOptions(insecure bool) (*mirror.MirrorImag
 // generateResults will generate a mapping.txt and allow applicable manifests and write
 // the data to files in the specified directory.
 func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir string) error {
-
 	mappingResultsPath := filepath.Join(dir, mappingFile)
 	if err := o.writeMappingFile(mappingResultsPath, mapping); err != nil {
 		return err
@@ -597,7 +592,6 @@ func (o *MirrorOptions) generateResults(mapping image.TypedImageMapping, dir str
 // the specified results directory from the defined source directory
 // in the config package.
 func (o *MirrorOptions) moveToResults(resultsDir string) error {
-
 	resultsDir = filepath.Clean(resultsDir)
 
 	srcSignaturePath := filepath.Join(o.Dir, config.SourceDir, config.ReleaseSignatureDir)
@@ -822,7 +816,6 @@ func (o *MirrorOptions) mirrorToDiskWrapper(ctx context.Context, cfg v1alpha2.Im
 	firstTagLatestImageByRepo := make(map[string]image.TypedImage)
 
 	for srcRef, dstRef := range mapping {
-
 		if dstRef.Ref.Tag == tagLatest {
 			if firstSrcRef, ok := firstTagLatestImageByRepo[srcRef.Ref.AsRepository().String()]; !ok {
 				firstTagLatestImageByRepo[srcRef.Ref.AsRepository().String()] = srcRef
@@ -940,7 +933,6 @@ func (o *MirrorOptions) diskToMirrorWrapper(ctx context.Context, cleanup cleanup
 }
 
 func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.TypedImageReference {
-
 	if o.MaxNestedPaths > 0 {
 		dir := ref.Ref
 		full := dir.RepositoryName()
@@ -965,7 +957,7 @@ func (o *MirrorOptions) processNestedPaths(ref *image.TypedImage) imagesource.Ty
 // removeTmpDirs - utility function to delete left over temporary files
 func removeTmpDirs() {
 	const directory string = "/tmp/"
-	var toDelete = []string{"render-unpack-*", "imageset-catalog-*"}
+	toDelete := []string{"render-unpack-*", "imageset-catalog-*"}
 
 	for _, x := range toDelete {
 		// instead of traversing through all the directories in /tmp
