@@ -95,13 +95,13 @@ func addRegistryd(customizableRegistriesDir, registryHost string) error {
 	registryFileName := fileName(registryHost)
 	registryFileAbsPath := filepath.Join(customizableRegistriesDir, registryFileName)
 
+	// TODO the default file is generated when using skopeo, podman or installing the containers-common rpm, so only checking if the file exists is not enough, because it will always exist, also the customer can define a file with another name with the field default-docker inside.
+	// it is needed to check the content of the registries.d files to see if there is a default-docker, if there is a default-docker it is needed to check if something was changed from the auto-generated default content.
 	if _, err := os.Stat(registryFileAbsPath); errors.Is(err, os.ErrNotExist) {
 		return createRegistryConfigFile(registryFileAbsPath, registryHost)
-	} else if err == nil {
-		return updateRegistryConfigFile(registryFileAbsPath, registryHost)
-	} else {
-		return fmt.Errorf("error trying to find the registry config file %w", err)
 	}
+
+	return nil
 }
 
 func fileName(registryURL string) string {
@@ -118,12 +118,21 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 		return fmt.Errorf("error creating registry config file %w", err)
 	}
 	defer registryConfigFile.Close()
-	registryConfigStruct := registryConfiguration{
-		Docker: map[string]registryNamespace{
-			registryHost: {
-				UseSigstoreAttachments: true,
+
+	var registryConfigStruct registryConfiguration
+	if registryHost != "default" {
+		registryConfigStruct = registryConfiguration{
+			Docker: map[string]registryNamespace{
+				registryHost: {
+					UseSigstoreAttachments: true,
+				},
 			},
-		},
+			DefaultDocker: nil,
+		}
+	} else {
+		registryConfigStruct = registryConfiguration{
+			DefaultDocker: &registryNamespace{UseSigstoreAttachments: true},
+		}
 	}
 
 	ccBytes, err := yaml.Marshal(registryConfigStruct)
@@ -133,42 +142,6 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 	_, err = registryConfigFile.Write(ccBytes)
 	if err != nil {
 		return fmt.Errorf("error wring the registry config file %w", err)
-	}
-
-	return nil
-}
-
-func updateRegistryConfigFile(registryFileAbsPath, registryHost string) error {
-	configFileBytes, err := os.ReadFile(registryFileAbsPath)
-	if err != nil {
-		return fmt.Errorf("error reading registry config file %w", err)
-	}
-
-	var registryConfigStruct registryConfiguration
-	err = yaml.Unmarshal(configFileBytes, &registryConfigStruct)
-	if err != nil {
-		return fmt.Errorf("error unmarshaling registry config file %w", err)
-	}
-
-	if registryConfigStruct.Docker == nil {
-		registryConfigStruct.Docker = make(map[string]registryNamespace)
-	}
-	if _, exists := registryConfigStruct.Docker[registryHost]; !exists {
-		registryConfigStruct.Docker[registryHost] = registryNamespace{}
-	}
-	if !registryConfigStruct.Docker[registryHost].UseSigstoreAttachments {
-		reg := registryConfigStruct.Docker[registryHost]
-		reg.UseSigstoreAttachments = true
-		registryConfigStruct.Docker[registryHost] = reg
-	}
-
-	updatedConfigBytes, err := yaml.Marshal(registryConfigStruct)
-	if err != nil {
-		return fmt.Errorf("error marshaling updated registry config file %w", err)
-	}
-	err = os.WriteFile(registryFileAbsPath, updatedConfigBytes, 0600)
-	if err != nil {
-		return fmt.Errorf("error writing updated registry config file %w", err)
 	}
 
 	return nil
