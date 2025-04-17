@@ -2308,6 +2308,7 @@ github.com/openshift/library-go v0.0.0-20240528110646-354b673304be/go.mod h1:PdA
 github.com/openshift/library-go v0.0.0-20240830130947-d9523164b328/go.mod h1:/wmao3qtqOQ484HDka9cWP7SIvOQOdzpmhyXkF2YdzE=
 github.com/openshift/oc v0.0.0-alpha.0.0.20240831033848-93286c926028/go.mod h1:4KO2+DLdAAgaOUkipbxV5QoP19aZ96MWgM8EWYJP+Dc=
 github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044/go.mod h1:mFyh5d1Sy8ej5UyI5fFoSugRxcOnRq4f35wfGNfE1Cw=
+github.com/opentracing/opentracing-go v1.2.0 h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=
 github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYrxe9dPLANfrWvHYVTgc=
 github.com/operator-framework/api v0.17.7/go.mod h1:lnurXgadLnoZ7pufKMHkErr2BVOIZSpHtvEkHBcKvdk=
 github.com/operator-framework/operator-registry v1.29.0/go.mod h1:4rVQu/cOuCtVt3JzKsAmwyq2lsiu9uPaH9nYNfnqj9o=
