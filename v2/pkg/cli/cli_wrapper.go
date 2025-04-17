@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/cli"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/spf13/cobra"
 )
@@ -53,8 +54,21 @@ func RunOcMirrorV2() error {
 	}
 	if err != nil {
 		log.Error("[Executor] %v ", err)
+		exitCode := exitCodeFromError(err)
+		os.Exit(exitCode)
 	}
-	return err
+
+	return nil
+}
+
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	if e, ok := err.(cli.CodeExiter); ok {
+		return e.ExitCode()
+	}
+	return errcode.GenericErr
 }
 
 func cpuProf() (*os.File, error) {
