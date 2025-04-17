@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -774,8 +773,10 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	regs := mandatoryRegistries(o.Opts)
+
 	if !o.Opts.RemoveSignatures {
-		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, regs); err != nil {
 			return err
 		}
 	}
@@ -824,8 +825,10 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		return err
 	}
 
+	regs := mandatoryRegistries(o.Opts)
+
 	if !o.Opts.RemoveSignatures {
-		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, regs); err != nil {
 			return err
 		}
 	}
@@ -905,8 +908,10 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	regs := mandatoryRegistries(o.Opts)
+
 	if !o.Opts.RemoveSignatures {
-		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, collectorSchema.CopyImageSchemaMap.RegistriesHost); err != nil {
+		if err := registriesd.PrepareRegistrydCustomDir(o.Opts.Global.WorkingDir, o.Opts.Global.RegistriesDirPath, regs); err != nil {
 			return err
 		}
 	}
@@ -1084,14 +1089,6 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	collectorSchema.AllImages = allRelatedImages
 
-	if !o.Opts.RemoveSignatures {
-		if regHostMap, err := getRegistries(&collectorSchema); err == nil {
-			collectorSchema.CopyImageSchemaMap.RegistriesHost = regHostMap
-		} else {
-			return v2alpha1.CollectorSchema{}, err
-		}
-	}
-
 	o.Log.Debug("collection time     : %v", time.Since(startTime))
 
 	if releaseErr != nil || operatorErr != nil || additionalImgErr != nil || helmErr != nil {
@@ -1245,54 +1242,15 @@ func exitCodeFromError(err error) int {
 	return errcode.GenericErr
 }
 
-func getRegistries(collectorSchema *v2alpha1.CollectorSchema) (map[string]struct{}, error) {
-	if regHostMap, err := registryHostMap(&collectorSchema.AllImages); err != nil {
-		return nil, err
-	} else {
-		if reflect.ValueOf(collectorSchema.CopyImageSchemaMap).IsZero() {
-			collectorSchema.CopyImageSchemaMap = v2alpha1.CopyImageSchemaMap{}
-		}
-		return regHostMap, nil
-	}
-}
+func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {
+	regs := make(map[string]struct{})
+	regs[opts.LocalStorageFQDN] = struct{}{}
+	regs["default"] = struct{}{}
 
-func registryHostMap(allImages *[]v2alpha1.CopyImageSchema) (map[string]struct{}, error) {
-	var errs []error
-	registriesHost := make(map[string]struct{})
-
-	for _, image := range *allImages {
-		var srcHost, destHost string
-		var err error
-
-		if !isDiskDestination(image.Source) {
-			if srcHost, err = extractHostName(image.Source); err != nil {
-				errs = append(errs, err)
-			} else {
-				registriesHost[srcHost] = struct{}{}
-			}
-		}
-
-		if !isDiskDestination(image.Destination) {
-			if destHost, err = extractHostName(image.Destination); err != nil {
-				errs = append(errs, err)
-			} else {
-				registriesHost[destHost] = struct{}{}
-			}
-		}
+	if !opts.IsMirrorToDisk() {
+		dest, _ := strings.CutPrefix(opts.Destination, consts.DockerProtocol)
+		regs[dest] = struct{}{}
 	}
 
-	return registriesHost, errors.Join(errs...)
-}
-
-func extractHostName(path string) (string, error) {
-	ref, err := image.ParseRef(path)
-	if err == nil {
-		return ref.Domain, nil
-	} else {
-		return "", fmt.Errorf("error extracting host name: %w", err)
-	}
-}
-
-func isDiskDestination(registryURL string) bool {
-	return strings.HasPrefix(registryURL, consts.FileProtocol) || strings.HasPrefix(registryURL, consts.DirProtocol) || strings.HasPrefix(registryURL, consts.Oci)
+	return regs
 }
