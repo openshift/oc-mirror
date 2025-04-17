@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime/pprof"
 	"slices"
@@ -45,7 +46,7 @@ func RunOcMirrorV2() error {
 			if err == nil {
 				err = memProfErr
 			} else {
-				log.Error("write memory profile: %s", memProfErr.Error())
+				log.Error("%s", memProfErr.Error())
 			}
 		}
 	}
@@ -62,11 +63,11 @@ func cpuProf() (*os.File, error) {
 
 	cpuProfileFile, err = os.Create("cpu.prof")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create cpu.prof file: %w", err)
 	}
 
 	if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
-		return cpuProfileFile, err
+		return cpuProfileFile, fmt.Errorf("failed to start cpu profiling: %w", err)
 	}
 
 	return cpuProfileFile, nil
@@ -80,11 +81,15 @@ func stopCloseCpuProf(cpuProfileFile *os.File) {
 func memProf() error {
 	memProfileFile, err := os.Create("mem.prof")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create mem.prof file: %w", err)
 	}
 	defer memProfileFile.Close()
 
-	return pprof.WriteHeapProfile(memProfileFile)
+	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
+		return fmt.Errorf("failed to write mem profile: %w", err)
+	}
+
+	return nil
 }
 
 func exitCodeFromError(err error) int {
