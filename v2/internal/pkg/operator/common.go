@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -161,8 +162,22 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			}
 
 			// add the tag for src and dest
-			switch {
 			// applies only to catalogs
+			switch {
+			// OCPBUGS-52470
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly():
+				// find the tag for for the catalog that was mirrored via digest
+				imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), imgSpec.Digest)
+				filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
+				entries, err := os.ReadDir(filteredCatalogsDir)
+				if err != nil {
+					return result, fmt.Errorf("could not find directory filtered catalog image %w", err)
+				}
+				if len(entries) > 1 {
+					return result, fmt.Errorf("the directory structure for digest based catalogs is incorrect")
+				}
+				src = src + ":" + entries[0].Name()
+				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -226,7 +241,8 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+			// OCPBUGS-31622 skipping empty related images
+			if img.Image == "" {
 				continue
 			}
 			imgSpec, err := image.ParseRef(img.Image)
@@ -256,8 +272,9 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 				dest = dest + "::" + latestTag
 			case imgSpec.IsImageByDigestOnly():
 				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
-			case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-				// use tag only for dest, but pull by digest
+			// OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+			// use tag only for dest, but pull by digest
+			case imgSpec.IsImageByTagAndDigest():
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
 				src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
 				dest = dest + ":" + imgSpec.Tag
