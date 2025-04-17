@@ -18,17 +18,15 @@ include $(addprefix ${GOMODCACHE}/${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERS
 	targets/openshift/deps-gomod.mk \
 )
 
-GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/internal/pkg/version)
-
 GO_MOD_FLAGS = -mod=readonly
-GO_BUILD_PACKAGES := ./cmd/...
+GO_BUILD_PACKAGES := ./cmd/oc-mirror
 GO_PACKAGE = github.com/openshift/oc-mirror
 
 LIBDM_BUILD_TAG = $(shell hack/libdm_tag.sh)
 LIBSUBID_BUILD_TAG = $(shell hack/libsubid_tag.sh)
 BTRFS_BUILD_TAG = $(shell hack/btrfs_tag.sh) $(shell hack/btrfs_installed_tag.sh)
 
-ifeq ($(DISABLE_CGO), 1)
+ifeq ($(CGO_ENABLED), 0)
 	override BTRFS_BUILD_TAG = exclude_graphdriver_devicemapper exclude_graphdriver_btrfs containers_image_openpgp
 endif
 
@@ -62,31 +60,28 @@ hack-build: clean
 .PHONY: hack-build
 
 tidy:
-	$(GO) work sync
+	$(GO) mod tidy
+	make -C v2 tidy
 .PHONY: tidy
 
 clean:
+	@rm -f cmd/oc-mirror/oc-mirror-v2
 	@rm -rf ./$(GO_BUILD_BINDIR)/*
 	@cd test/integration && make clean
+	make -C v2 clean
 .PHONY: clean
 
 test-unit:
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=coverage.out -race -count=1 ./pkg/... 
-	mkdir -p v2/tests/results
-	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -short -coverprofile=tests/results/cover.out -race -count=1 ./internal/pkg/...
+	make -C v2 test-unit
 .PHONY: test-unit
 
 v2cover:
-	go tool cover -html=v2/tests/results/cover.out -o v2/tests/results/cover.html
+	make -C v2 cover
 
 test-e2e: build
 	./test/e2e/e2e-simple.sh ./$(GO_BUILD_BINDIR)/oc-mirror
-	mkdir -p v2/tests/results-integration
-	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./internal/pkg/... -run TestIntegrationAdditional
-	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./internal/pkg/... -run TestIntegrationRelease
-	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./internal/pkg/... -run TestIntegrationAdditionalM2M
-	@cd v2 && $(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./internal/pkg/... -run TestIntegrationReleaseM2M
-
+	make -C v2 test-integration
 .PHONY: test-e2e
 
 test-integration: hack-build
@@ -106,16 +101,18 @@ publish-catalog:
 format:
 	$(GO) fmt $(GO_MOD_FLAGS) ./pkg/...
 	$(GO) fmt $(GO_MOD_FLAGS) ./cmd/...
-	cd v2 && $(GO) fmt $(GO_MOD_FLAGS) ./...
+	make -C v2 verify-gofmt
 .PHONY: format
 
 vet:
 	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./pkg/...
 	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./cmd/...
-	cd v2 && $(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./...
+	make -C v2 vet
 .PHONY: vet
 
-build: 
+build:
+	make -C v2 build
+	@cp v2/build/oc-mirror ./cmd/oc-mirror/data/oc-mirror-v2
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
