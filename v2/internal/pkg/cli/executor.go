@@ -1002,6 +1002,8 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		// Except for release errors, we want to continue the image collection
 		// and return all errors at the end. These variables hold the errors
 		// found for each collection type.
+		// NOTE: that doesn't apply to `delete` which works on a best-effort basis
+		releaseErr       error
 		operatorErr      error
 		additionalImgErr error
 		helmErr          error
@@ -1015,8 +1017,11 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
-		// Release image errors are fatal: we don't want to continue collection when they happen.
-		return v2alpha1.CollectorSchema{}, &CollectionError{ReleaseErr: err}
+		if !o.Opts.IsDelete() {
+			// Release image errors are fatal: we don't want to continue collection when they happen.
+			return v2alpha1.CollectorSchema{}, &CollectionError{ReleaseErr: err}
+		}
+		releaseErr = err
 	}
 	// exclude blocked images
 	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
@@ -1089,8 +1094,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 
 	o.Log.Debug("collection time     : %v", time.Since(startTime))
 
-	if operatorErr != nil || additionalImgErr != nil || helmErr != nil {
-		return v2alpha1.CollectorSchema{}, &CollectionError{
+	if releaseErr != nil || operatorErr != nil || additionalImgErr != nil || helmErr != nil {
+		return collectorSchema, &CollectionError{
+			ReleaseErr:       releaseErr,
 			OperatorErr:      operatorErr,
 			AdditionalImgErr: additionalImgErr,
 			HelmErr:          helmErr,
