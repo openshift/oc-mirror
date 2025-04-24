@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -166,17 +165,20 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			switch {
 			// OCPBUGS-52470
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly():
-				// find the tag for for the catalog that was mirrored via digest
-				imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), imgSpec.Digest)
-				filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
-				entries, err := os.ReadDir(filteredCatalogsDir)
+				var op v2alpha1.Operator
+				for _, ope := range o.Config.Mirror.Operators {
+					if ope.Catalog == img.Image {
+						op = ope
+					}
+				}
+				if op.Catalog == "" {
+					return result, fmt.Errorf("could not identify filtered catalog tag for image %q: no catalog matched %q in the imageSetConfiguration", img.Image, img.Image)
+				}
+				dof, err := digestOfFilter(op)
 				if err != nil {
-					return result, fmt.Errorf("could not find directory filtered catalog image %w", err)
+					return result, fmt.Errorf("could not identify filtered catalog tag for image %q: %w", img.Image, err)
 				}
-				if len(entries) > 1 {
-					return result, fmt.Errorf("the directory structure for digest based catalogs is incorrect")
-				}
-				src = src + ":" + entries[0].Name()
+				src = src + ":" + dof
 				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				if img.RebuiltTag != "" {
