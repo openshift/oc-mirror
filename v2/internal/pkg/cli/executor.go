@@ -484,7 +484,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
-	cn := release.NewCincinnati(o.Log, &o.Config, *o.Opts, client, false, signature)
+	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, signature)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
