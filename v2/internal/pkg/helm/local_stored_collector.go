@@ -494,6 +494,9 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 				tag = tag[:127]
 			}
 			dest = dockerProtocol + strings.Join([]string{destinationRegistry(), imgSpec.PathComponent + ":" + tag}, "/")
+		} else if imgSpec.IsImageByTagAndDigest() {
+			src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
+			dest = dockerProtocol + strings.Join([]string{destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 		} else {
 			dest = dockerProtocol + strings.Join([]string{destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
 		}
@@ -527,6 +530,9 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			} else {
 				dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
 			}
+		} else if imgSpec.IsImageByTagAndDigest() {
+			src = imgSpec.Transport + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
+			dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 		} else {
 			src = dockerProtocol + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
 			dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
