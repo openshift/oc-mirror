@@ -264,7 +264,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	if imgSpec.IsImageByDigestOnly() && o.Opts.IsMirrorToDisk() {
 		tag, err := digestOfFilter(op)
 		if err != nil {
-			return v2alpha1.CatalogFilterResult{}, err
+			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("failed to get filter digest for operator mirrored by digest: %w", err)
 		}
 		componentName = imgSpec.ComponentName() + "." + tag
 	}
@@ -374,6 +374,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	}
 
 	filteredDigestPath := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
+
 	if err := createFolders([]string{filteredDigestPath}); err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
