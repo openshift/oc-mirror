@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/containers/storage/pkg/fileutils"
 	"github.com/otiai10/copy"
@@ -83,6 +84,14 @@ func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydC
 }
 
 func addRegistriesd(customizableRegistriesDir string, registries map[string]struct{}) error {
+
+	configs, err := loadRegistryConfigFiles(customizableRegistriesDir)
+	if err != nil && errors.Is(err, configUnmarshalError{}) {
+		return err
+	}
+
+	mandatoryRegistriesWithoutConfig(configs, registries)
+
 	for reg := range registries {
 		if err := addRegistryd(customizableRegistriesDir, reg); err != nil {
 			return err
@@ -95,13 +104,7 @@ func addRegistryd(customizableRegistriesDir, registryHost string) error {
 	registryFileName := fileName(registryHost)
 	registryFileAbsPath := filepath.Join(customizableRegistriesDir, registryFileName)
 
-	// TODO the default file is generated when using skopeo, podman or installing the containers-common rpm, so only checking if the file exists is not enough, because it will always exist, also the customer can define a file with another name with the field default-docker inside.
-	// it is needed to check the content of the registries.d files to see if there is a default-docker, if there is a default-docker it is needed to check if something was changed from the auto-generated default content.
-	if _, err := os.Stat(registryFileAbsPath); errors.Is(err, os.ErrNotExist) {
-		return createRegistryConfigFile(registryFileAbsPath, registryHost)
-	}
-
-	return nil
+	return createRegistryConfigFile(registryFileAbsPath, registryHost)
 }
 
 func fileName(registryURL string) string {
@@ -145,4 +148,55 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 	}
 
 	return nil
+}
+
+func loadRegistryConfigFiles(customizableRegistriesDir string) ([]registryConfiguration, error) {
+	configFiles := []registryConfiguration{}
+
+	files, err := os.ReadDir(customizableRegistriesDir)
+	if err != nil {
+		return nil, fmt.Errorf("error reading custom registriesd directory %w", err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		filePath := filepath.Join(customizableRegistriesDir, file.Name())
+		configFileBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading registry config file %w", err)
+		}
+
+		var registryConfigStruct registryConfiguration
+		if err = yaml.Unmarshal(configFileBytes, &registryConfigStruct); err != nil {
+			return nil, configUnmarshalError{err: fmt.Errorf("error unmarshaling registriesd config file %w", err)}
+		}
+		configFiles = append(configFiles, registryConfigStruct)
+	}
+
+	return configFiles, nil
+}
+
+func mandatoryRegistriesWithoutConfig(configFiles []registryConfiguration, registries map[string]struct{}) {
+	zeroStruct := registryNamespace{}
+	for _, configFile := range configFiles {
+		if configFile.DefaultDocker != nil && *configFile.DefaultDocker != zeroStruct {
+			delete(registries, "default")
+		}
+
+		if len(configFile.Docker) == 0 {
+			continue
+		}
+
+		for dockerReg, dockerRegValue := range configFile.Docker {
+			for registry := range registries {
+				if strings.Contains(dockerReg, registry) && dockerRegValue != zeroStruct {
+					delete(registries, registry)
+				}
+			}
+		}
+
+	}
 }
