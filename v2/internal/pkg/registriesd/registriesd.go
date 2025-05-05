@@ -11,6 +11,8 @@ import (
 	"github.com/containers/storage/pkg/fileutils"
 	"github.com/otiai10/copy"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 const (
@@ -164,14 +166,10 @@ func loadRegistryConfigFiles(customizableRegistriesDir string) ([]registryConfig
 		}
 
 		filePath := filepath.Join(customizableRegistriesDir, file.Name())
-		configFileBytes, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("error reading registry config file %w", err)
-		}
 
 		var registryConfigStruct registryConfiguration
-		if err = yaml.Unmarshal(configFileBytes, &registryConfigStruct); err != nil {
-			return nil, configUnmarshalError{err: fmt.Errorf("error unmarshaling registriesd config file %w", err)}
+		if registryConfigStruct, err = parser.ParseYamlFile[registryConfiguration](filePath); err != nil {
+			return nil, configUnmarshalError{err: err}
 		}
 		configFiles = append(configFiles, registryConfigStruct)
 	}
