@@ -13,9 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	cimagetypesv5 "github.com/containers/image/v5/types"
+	"github.com/docker/cli/cli/config"
+	dockertypes "github.com/docker/cli/cli/config/types"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -52,15 +55,72 @@ func (e ErrInvalidReference) Error() string {
 	return fmt.Sprintf("target reference %q must have a tag reference", e.image)
 }
 
+type customKeyChain struct {
+	mu       sync.Mutex
+	authFile string
+}
+
+func newCustomKeyChain(authFile string) *customKeyChain {
+	return &customKeyChain{sync.Mutex{}, authFile}
+}
+
+// This is basically the defaultKeyChain from go-containerregistry but using a custom authfile
+func (ck *customKeyChain) Resolve(target authn.Resource) (authn.Authenticator, error) { //nolint:ireturn // as expected by go-containerregistry
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+
+	f, err := os.Open(ck.authFile)
+	if err != nil {
+		return nil, fmt.Errorf("open custom authfile: %w", err)
+	}
+	defer f.Close()
+	var empty dockertypes.AuthConfig
+	cf, err := config.LoadFromReader(f)
+	if err != nil {
+		return nil, fmt.Errorf("load custom auth file: %w", err)
+	}
+	for _, key := range []string{target.String(), target.RegistryStr()} {
+		if key == name.DefaultRegistry {
+			key = authn.DefaultAuthKey
+		}
+
+		cfg, err := cf.GetAuthConfig(key)
+		if err != nil {
+			return nil, fmt.Errorf("get creds from auth file: %w", err)
+		}
+		cfg.ServerAddress = ""
+		if cfg != empty {
+			return authn.FromConfig(authn.AuthConfig{
+				Username:      cfg.Username,
+				Password:      cfg.Password,
+				Auth:          cfg.Auth,
+				IdentityToken: cfg.IdentityToken,
+				RegistryToken: cfg.RegistryToken,
+			}), nil
+		}
+	}
+	return authn.Anonymous, nil
+}
+
 // NewImageBuilder creates a new instance of an ImageBuilder.
-func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) ImageBuilderInterface {
+func NewBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) *ImageBuilder {
 	// preparing name options for pulling the ubi9 image:
 	// - no need to set defaultRegistry because we are using a fully qualified image name
 	nameOptions := []name.Option{
 		name.StrictValidation,
 	}
+	kcs := []authn.Keychain{}
+	if opts.DestImage != nil {
+		ctx, err := opts.DestImage.NewSystemContext()
+		if err == nil && ctx.AuthFilePath != "" {
+			// OCPBUGS-54220: make sure a custom authfile is picked up by go-containerregistry
+			kcs = append(kcs, newCustomKeyChain(ctx.AuthFilePath))
+		}
+	}
+	// this will try to find .docker/config first, $XDG_RUNTIME_DIR/containers/auth.json second
+	kcs = append(kcs, authn.DefaultKeychain)
 	remoteOptions := []remote.Option{
-		remote.WithAuthFromKeychain(authn.DefaultKeychain), // this will try to find .docker/config first, $XDG_RUNTIME_DIR/containers/auth.json second
+		remote.WithAuthFromKeychain(authn.NewMultiKeychain(kcs...)),
 		remote.WithContext(context.TODO()),
 		// doesn't seem possible to use registries.conf here.
 	}
