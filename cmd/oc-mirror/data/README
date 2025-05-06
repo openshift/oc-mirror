@@ -1,0 +1,2 @@
+Directory used to embed the v2 binary into oc-mirror.
+This file only exists to appease git and go vet.
