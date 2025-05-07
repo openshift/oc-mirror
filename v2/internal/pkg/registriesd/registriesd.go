@@ -6,10 +6,13 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/containers/storage/pkg/fileutils"
 	"github.com/otiai10/copy"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 const (
@@ -83,6 +86,14 @@ func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydC
 }
 
 func addRegistriesd(customizableRegistriesDir string, registries map[string]struct{}) error {
+
+	configs, err := loadRegistryConfigFiles(customizableRegistriesDir)
+	if err != nil && errors.Is(err, configUnmarshalError{}) {
+		return err
+	}
+
+	mandatoryRegistriesWithoutConfig(configs, registries)
+
 	for reg := range registries {
 		if err := addRegistryd(customizableRegistriesDir, reg); err != nil {
 			return err
@@ -95,13 +106,7 @@ func addRegistryd(customizableRegistriesDir, registryHost string) error {
 	registryFileName := fileName(registryHost)
 	registryFileAbsPath := filepath.Join(customizableRegistriesDir, registryFileName)
 
-	if _, err := os.Stat(registryFileAbsPath); errors.Is(err, os.ErrNotExist) {
-		return createRegistryConfigFile(registryFileAbsPath, registryHost)
-	} else if err == nil {
-		return updateRegistryConfigFile(registryFileAbsPath, registryHost)
-	} else {
-		return fmt.Errorf("error trying to find the registry config file %w", err)
-	}
+	return createRegistryConfigFile(registryFileAbsPath, registryHost)
 }
 
 func fileName(registryURL string) string {
@@ -118,12 +123,21 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 		return fmt.Errorf("error creating registry config file %w", err)
 	}
 	defer registryConfigFile.Close()
-	registryConfigStruct := registryConfiguration{
-		Docker: map[string]registryNamespace{
-			registryHost: {
-				UseSigstoreAttachments: true,
+
+	var registryConfigStruct registryConfiguration
+	if registryHost != "default" {
+		registryConfigStruct = registryConfiguration{
+			Docker: map[string]registryNamespace{
+				registryHost: {
+					UseSigstoreAttachments: true,
+				},
 			},
-		},
+			DefaultDocker: nil,
+		}
+	} else {
+		registryConfigStruct = registryConfiguration{
+			DefaultDocker: &registryNamespace{UseSigstoreAttachments: true},
+		}
 	}
 
 	ccBytes, err := yaml.Marshal(registryConfigStruct)
@@ -138,38 +152,49 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 	return nil
 }
 
-func updateRegistryConfigFile(registryFileAbsPath, registryHost string) error {
-	configFileBytes, err := os.ReadFile(registryFileAbsPath)
+func loadRegistryConfigFiles(customizableRegistriesDir string) ([]registryConfiguration, error) {
+	configFiles := []registryConfiguration{}
+
+	files, err := os.ReadDir(customizableRegistriesDir)
 	if err != nil {
-		return fmt.Errorf("error reading registry config file %w", err)
+		return nil, fmt.Errorf("error reading custom registriesd directory %w", err)
 	}
 
-	var registryConfigStruct registryConfiguration
-	err = yaml.Unmarshal(configFileBytes, &registryConfigStruct)
-	if err != nil {
-		return fmt.Errorf("error unmarshaling registry config file %w", err)
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		filePath := filepath.Join(customizableRegistriesDir, file.Name())
+
+		var registryConfigStruct registryConfiguration
+		if registryConfigStruct, err = parser.ParseYamlFile[registryConfiguration](filePath); err != nil {
+			return nil, configUnmarshalError{err: err}
+		}
+		configFiles = append(configFiles, registryConfigStruct)
 	}
 
-	if registryConfigStruct.Docker == nil {
-		registryConfigStruct.Docker = make(map[string]registryNamespace)
-	}
-	if _, exists := registryConfigStruct.Docker[registryHost]; !exists {
-		registryConfigStruct.Docker[registryHost] = registryNamespace{}
-	}
-	if !registryConfigStruct.Docker[registryHost].UseSigstoreAttachments {
-		reg := registryConfigStruct.Docker[registryHost]
-		reg.UseSigstoreAttachments = true
-		registryConfigStruct.Docker[registryHost] = reg
-	}
+	return configFiles, nil
+}
 
-	updatedConfigBytes, err := yaml.Marshal(registryConfigStruct)
-	if err != nil {
-		return fmt.Errorf("error marshaling updated registry config file %w", err)
-	}
-	err = os.WriteFile(registryFileAbsPath, updatedConfigBytes, 0600)
-	if err != nil {
-		return fmt.Errorf("error writing updated registry config file %w", err)
-	}
+func mandatoryRegistriesWithoutConfig(configFiles []registryConfiguration, registries map[string]struct{}) {
+	zeroStruct := registryNamespace{}
+	for _, configFile := range configFiles {
+		if configFile.DefaultDocker != nil && *configFile.DefaultDocker != zeroStruct {
+			delete(registries, "default")
+		}
 
-	return nil
+		if len(configFile.Docker) == 0 {
+			continue
+		}
+
+		for dockerReg, dockerRegValue := range configFile.Docker {
+			for registry := range registries {
+				if strings.Contains(dockerReg, registry) && dockerRegValue != zeroStruct {
+					delete(registries, registry)
+				}
+			}
+		}
+
+	}
 }
