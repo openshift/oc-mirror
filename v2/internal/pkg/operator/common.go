@@ -37,8 +37,6 @@ func WithV1Tags(o CollectorInterface) CollectorInterface {
 	switch impl := o.(type) {
 	case *FilterCollector:
 		impl.generateV1DestTags = true
-	case *LocalStorageCollector:
-		impl.generateV1DestTags = true
 	}
 	return o
 }
