@@ -54,10 +54,6 @@ func (o OperatorCollector) destinationRegistry() string {
 	return o.destReg
 }
 
-func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
-	return len(oci.Manifests) > 1
-}
-
 // cachedCatalog returns the reference to the filtered catalog in the local oc-mirror cache
 // The filtered cached catalog reference is computed from:
 // * `catalog` (`v2alpha1.Operator`): the reference to the catalog in the imageSetConfig along with targetCatalog and targetTag if set
@@ -357,7 +353,7 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 		return "", err
 	}
 
-	if isMultiManifestIndex(*oci) && imgSpec.Transport == ociProtocol {
+	if len(oci.Manifests) > 1 && imgSpec.Transport == ociProtocol {
 		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
 			return "", err
 		}
@@ -390,7 +386,7 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	// also oci.Config will be nil
 	// we are only interested in the first manifest as all architectures
 	// "configs" will be exactly the same
-	if len(oci.Manifests) > 1 && oci.Config.Size == 0 {
+	if len(oci.Manifests) > 0 && oci.Config.Size == 0 {
 		subDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
 			return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
