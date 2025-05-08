@@ -37,8 +37,6 @@ func WithV1Tags(o CollectorInterface) CollectorInterface {
 	switch impl := o.(type) {
 	case *FilterCollector:
 		impl.generateV1DestTags = true
-	case *LocalStorageCollector:
-		impl.generateV1DestTags = true
 	}
 	return o
 }
@@ -55,7 +53,7 @@ func (o OperatorCollector) destinationRegistry() string {
 }
 
 func isMultiManifestIndex(oci v2alpha1.OCISchema) bool {
-	return len(oci.Manifests) > 1
+	return len(oci.Manifests) >= 1
 }
 
 // cachedCatalog returns the reference to the filtered catalog in the local oc-mirror cache
@@ -379,7 +377,7 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	// also oci.Config will be nil
 	// we are only interested in the first manifest as all architectures
 	// "configs" will be exactly the same
-	if len(oci.Manifests) > 1 && oci.Config.Size == 0 {
+	if isMultiManifestIndex(*oci) && oci.Config.Size == 0 {
 		subDigest, err := digest.Parse(oci.Manifests[0].Digest)
 		if err != nil {
 			return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
