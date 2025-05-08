@@ -46,11 +46,9 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "working-dir"))
 		assert.DirExists(t, filepath.Join(testFolder, "dst", "cache-dir"))
-
 	})
 
 	t.Run("unarchive with 1 archive: should pass", func(t *testing.T) {
-
 		testFolder := t.TempDir()
 		defer os.RemoveAll(testFolder)
 
@@ -76,8 +74,9 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 func TestUnArchiver_NoArchive(t *testing.T) {
 	testFolder := t.TempDir()
 	defer os.RemoveAll(testFolder)
-	o, err := NewArchiveExtractor(testFolder, "dst", "none")
-
+	workingDir := t.TempDir()
+	cacheDir := t.TempDir()
+	o, err := NewArchiveExtractor(testFolder, workingDir, cacheDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +104,7 @@ func TestUnArchiver_WorkingDirError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = o.Unarchive()
-	assert.Equal(t, "unable to create folder /dst: mkdir /dst: permission denied", err.Error())
+	assert.Equal(t, "unable to create working dir \"/dst\": mkdir /dst: permission denied", err.Error())
 }
 
 func TestUnArchiver_CacheDirError(t *testing.T) {
@@ -126,7 +125,7 @@ func TestUnArchiver_CacheDirError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = o.Unarchive()
-	assert.Equal(t, "unable to create folder /dst: mkdir /dst: permission denied", err.Error())
+	assert.Equal(t, "unable to create cache dir \"/dst\": mkdir /dst: permission denied", err.Error())
 }
 
 func prepareFakeTarWorkingDir(tarFile *os.File) error {
@@ -232,8 +231,8 @@ func prepareFakeTarCacheDir(tarFile *os.File) error {
 	}
 	tarWriter.Close()
 	return nil
-
 }
+
 func prepareFakeTar(tarFile *os.File) error {
 	err := prepareFakeTarWorkingDir(tarFile)
 	if err != nil {
@@ -241,5 +240,4 @@ func prepareFakeTar(tarFile *os.File) error {
 	}
 	err = prepareFakeTarCacheDir(tarFile)
 	return err
-
 }
