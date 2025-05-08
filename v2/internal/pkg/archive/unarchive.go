@@ -62,7 +62,7 @@ func (o MirrorUnArchiver) Unarchive() error {
 	return nil
 }
 
-func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error {
+func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error { //nolint:cyclop // cc of 12 is fine for this
 	chunkFile, err := os.Open(chunkPath)
 	if err != nil {
 		return fmt.Errorf("unable to open chunk tar file: %w", err)
@@ -96,17 +96,22 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error {
 		// for the moment we ignore imageSetConfig that is included in the tar
 		// as well as any other files that are not working-dir or cache
 
-		descriptor := ""
+		parentDir := ""
+		switch {
 		// case file belongs to working-dir
-		if strings.Contains(header.Name, workingDirectory) {
-			workingDirParent := filepath.Dir(o.workingDir)
-			descriptor = filepath.Join(workingDirParent, header.Name)
-		} else if strings.Contains(header.Name, cacheFilePrefix) {
-			// case file belongs to the cache
-			descriptor = filepath.Join(o.cacheDir, header.Name)
-		} else {
+		case strings.Contains(header.Name, workingDirectory):
+			parentDir = workingDirParent
+		// case file belongs to the cache
+		case strings.Contains(header.Name, cacheFilePrefix):
+			parentDir = o.cacheDir
+		default:
 			continue
 		}
+		descriptor, err := sanitizeArchivePath(parentDir, header.Name)
+		if err != nil {
+			return err
+		}
+
 		// if it's a file create it
 		// make sure it's at least writable and executable by the user
 		// since with every UnArchive, we should be able to rewrite the file
@@ -116,6 +121,15 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error {
 	}
 
 	return nil
+}
+
+// see https://github.com/securego/gosec/issues/324#issuecomment-935927967
+func sanitizeArchivePath(dir, filePath string) (string, error) {
+	v := filepath.Join(dir, filePath)
+	if strings.HasPrefix(v, filepath.Clean(dir)) {
+		return v, nil
+	}
+	return "", fmt.Errorf("content filepath is tainted: %s", filePath)
 }
 
 func writeFile(filePath string, reader *tar.Reader, perm os.FileMode) error {
