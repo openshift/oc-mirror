@@ -9,6 +9,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
+	"golang.org/x/term"
 )
 
 type MirrorUnArchiver struct {
@@ -53,16 +57,36 @@ func (o MirrorUnArchiver) Unarchive() error {
 		return fmt.Errorf("unable to create cache dir %q: %w", o.cacheDir, err)
 	}
 
-	for _, chunkPath := range o.archiveFiles {
-		if err := o.unarchiveChunkTarFile(chunkPath); err != nil {
+	isTerminal := term.IsTerminal(int(os.Stdout.Fd()))
+	p := mpb.New(mpb.PopCompletedMode())
+	for i, chunkPath := range o.archiveFiles {
+		if !isTerminal {
+			// FIXME: replace this by a proper log call
+			fmt.Printf("Extracting chunk file (%d / %d): %s\n", i+1, len(o.archiveFiles), chunkPath)
+		}
+		stat, _ := os.Stat(chunkPath)
+		bar := p.AddBar(stat.Size(),
+			mpb.PrependDecorators(
+				decor.Name(chunkPath+" "),
+				decor.Counters(decor.SizeB1024(0), "(% .1f / % .1f)"),
+			),
+			mpb.AppendDecorators(decor.Elapsed(decor.ET_STYLE_GO)),
+		)
+
+		if err := o.unarchiveChunkTarFile(chunkPath, bar); err != nil {
+			bar.Abort(false)
+			bar.Wait()
 			return err
 		}
+		// Force completion since we can skip extracting some content from the archive
+		bar.SetCurrent(stat.Size())
 	}
+	p.Wait()
 
 	return nil
 }
 
-func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error { //nolint:cyclop // cc of 12 is fine for this
+func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string, bar *mpb.Bar) error { //nolint:cyclop // cc of 11 is fine for this
 	chunkFile, err := os.Open(chunkPath)
 	if err != nil {
 		return fmt.Errorf("unable to open chunk tar file: %w", err)
@@ -107,15 +131,11 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string) error { //noli
 		default:
 			continue
 		}
-		descriptor, err := sanitizeArchivePath(parentDir, header.Name)
-		if err != nil {
-			return err
-		}
 
 		// if it's a file create it
 		// make sure it's at least writable and executable by the user
 		// since with every UnArchive, we should be able to rewrite the file
-		if err := writeFile(descriptor, reader, header.FileInfo().Mode()|0755); err != nil {
+		if err := createFileWithProgress(parentDir, header, reader, bar); err != nil {
 			return err
 		}
 	}
@@ -132,7 +152,17 @@ func sanitizeArchivePath(dir, filePath string) (string, error) {
 	return "", fmt.Errorf("content filepath is tainted: %s", filePath)
 }
 
-func writeFile(filePath string, reader *tar.Reader, perm os.FileMode) error {
+func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Reader, bar *mpb.Bar) error {
+	descriptor, err := sanitizeArchivePath(parentDir, header.Name)
+	if err != nil {
+		return err
+	}
+	proxyReader := bar.ProxyReader(reader)
+	defer proxyReader.Close()
+	return writeFile(descriptor, proxyReader, header.FileInfo().Mode()|0755)
+}
+
+func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
 	// make sure all the parent directories exist
 	descriptorParent := filepath.Dir(filePath)
 	if err := os.MkdirAll(descriptorParent, 0755); err != nil {
