@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -1196,11 +1197,18 @@ func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image)
 		}
 		isInSlice := slices.ContainsFunc(excluded, func(excludedImage v2alpha1.Image) bool {
 			imgOrigin := image.Origin
+			imgDest := image.Destination
 			if strings.Contains(imgOrigin, "://") {
 				splittedImageOrigin := strings.Split(imgOrigin, "://")
 				imgOrigin = splittedImageOrigin[1]
 			}
-			return excludedImage.Name == imgOrigin
+			if strings.Contains(imgDest, "://") {
+				splittedImageDest := strings.Split(imgDest, "://")
+				imgDest = splittedImageDest[1]
+			}
+			matchesOrigin, _ := regexp.MatchString(excludedImage.Name, imgOrigin)
+			matchesDest, _ := regexp.MatchString(excludedImage.Name, imgDest)
+			return matchesOrigin || matchesDest
 		})
 		return isInSlice
 	})
