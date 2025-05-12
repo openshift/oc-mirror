@@ -505,9 +505,12 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			dest = dockerProtocol + strings.Join([]string{destinationRegistry(), imgSpec.PathComponent + ":" + tag}, "/")
+			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, tag)
+		} else if imgSpec.IsImageByTagAndDigest() {
+			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, imgSpec.Domain, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
+			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
 		} else {
-			dest = dockerProtocol + strings.Join([]string{destinationRegistry(), imgSpec.PathComponent + ":" + imgSpec.Tag}, "/")
+			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
 		}
 
 		lsc.Log.Debug("source %s", src)
@@ -533,15 +536,18 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			src = dockerProtocol + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent + ":" + tag}, "/")
+			src = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, tag)
 			if generateV1TagsFromDigests {
-				dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":latest"}, "/")
+				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, "latest")
 			} else {
-				dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent + ":" + tag}, "/")
+				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, tag)
 			}
+		} else if imgSpec.IsImageByTagAndDigest() {
+			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
+			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
 		} else {
-			src = dockerProtocol + strings.Join([]string{lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-			dest = strings.Join([]string{lsc.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+			src = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Tag)
+			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
 		}
 		if src == "" || dest == "" {
 			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
