@@ -41,7 +41,6 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/customsort"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
@@ -187,22 +186,19 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: false,
 		SilenceUsage:  false,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
 			log.Info(emoji.Gear + "  setting up the environment for you...")
 
 			// Validate and set common flags
 			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, fileProtocol) {
-				log.Error("when --workspace is used, it must have file:// prefix")
-				os.Exit(1)
+				return fmt.Errorf("when --workspace is used, it must have file:// prefix")
 			}
 			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
-				log.Error("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
-				os.Exit(1)
+				return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
 			}
 			if os.Getenv(cacheEnvVar) != "" && opts.Global.CacheDir != "" {
-				log.Error("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
-				os.Exit(1)
+				return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
 			}
 
 			if opts.Global.CacheDir == "" {
@@ -212,42 +208,32 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			if opts.Global.CacheDir == "" {
 				homeDir, err := os.UserHomeDir()
 				if err != nil {
-					log.Error("failed to setup default cache directory: %v", err)
-					os.Exit(1)
+					return fmt.Errorf("failed to setup default cache directory: %w", err)
 				}
 				// ensure cache dir exists
 				opts.Global.CacheDir = homeDir
 			}
+			return nil
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
 			opts.Function = string(mirror.CopyMode)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			err := ex.Validate(args)
-			if err != nil {
-				log.Error("%v ", err)
-				os.Exit(1)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := ex.Validate(args); err != nil {
+				return err
 			}
-			err = ex.Complete(args)
-			if err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
+			if err := ex.Complete(args); err != nil {
+				return err
 			}
 			defer ex.logFile.Close()
 			cmd.SetOutput(ex.logFile)
 
 			// prepare internal storage
-			err = ex.setupLocalStorage(cmd.Context())
-			if err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
+			if err := ex.setupLocalStorage(cmd.Context()); err != nil {
+				return err
 			}
 
-			if err := ex.Run(cmd, args); err != nil {
-				log.Error("%v ", err)
-				exitCode := exitCodeFromError(err)
-				os.Exit(exitCode)
-			}
+			return ex.Run(cmd, args)
 		},
 	}
 	cmd.AddCommand(version.NewVersionCommand(log))
@@ -1230,16 +1216,6 @@ func addRebuiltCatalogs(cs v2alpha1.CollectorSchema) (v2alpha1.CollectorSchema, 
 		}
 	}
 	return cs, nil
-}
-
-func exitCodeFromError(err error) int {
-	if err == nil {
-		return 0
-	}
-	if e, ok := err.(CodeExiter); ok {
-		return e.ExitCode()
-	}
-	return errcode.GenericErr
 }
 
 func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {

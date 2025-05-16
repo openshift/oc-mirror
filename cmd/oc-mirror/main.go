@@ -1,86 +1,76 @@
 package main
 
 import (
+	"bytes"
+	"embed"
+	"errors"
+	"fmt"
+	"io"
 	"os"
-	"runtime/pprof"
+	"os/exec"
+	"path/filepath"
 	"slices"
+	"syscall"
 
-	"github.com/openshift/oc-mirror/pkg/cli/mirror"
+	"k8s.io/klog"
 	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	cliV1 "github.com/openshift/oc-mirror/pkg/cli/mirror"
 )
 
+//go:embed data/*
+var mirrorV2 embed.FS
+
 func main() {
-	cpuProfArg := slices.Contains(os.Args, "--cpu-prof")
-	memProfArg := slices.Contains(os.Args, "--mem-prof")
-
-	var cpuProfileFile, memProfileFile *os.File
-	var err error
-
-	if cpuProfArg {
-		cpuProfileFile, err = cpuProf()
-		defer stopCloseCpuProf(cpuProfileFile)
-		if err != nil {
-			stopCloseCpuProf(cpuProfileFile)
-			os.Exit(1)
+	if slices.Contains(os.Args, "--v2") {
+		err := runOcMirrorV2(os.Args)
+		var exitErr *exec.ExitError
+		if err != nil && errors.As(err, &exitErr) {
+			os.Exit(exitErr.ExitCode())
 		}
-	}
-
-	rootCmd := mirror.NewMirrorCmd()
-	err = rootCmd.Execute()
-	if err != nil && cpuProfArg {
-		stopCloseCpuProf(cpuProfileFile)
-	}
-	checkErr(err)
-
-	if memProfArg {
-		memProfileFile, err = memProf()
-		defer memProfileFile.Close()
-		if err != nil {
-			memProfileFile.Close()
-			os.Exit(1)
-		}
+	} else {
+		rootCmd := cliV1.NewMirrorCmd()
+		kcmdutil.CheckErr(rootCmd.Execute())
 	}
 }
 
-func checkErr(err error) {
+func runOcMirrorV2(args []string) error {
+	tmpdir, err := os.MkdirTemp("", "oc-mirror-")
 	if err != nil {
-		kcmdutil.CheckErr(err)
+		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-}
+	defer os.RemoveAll(tmpdir)
 
-func cpuProf() (*os.File, error) {
-	var cpuProfileFile *os.File
-	var err error
+	path := filepath.Join(tmpdir, "oc-mirror")
+	klog.V(5).Infof("Unpacking v2 binary to %s", path)
 
-	cpuProfileFile, err = os.Create("cpu.prof")
+	binaryV2, err := mirrorV2.ReadFile("data/oc-mirror-v2")
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to read v2 binary: %w", err)
 	}
 
-	if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
-		return cpuProfileFile, err
-	}
-
-	return cpuProfileFile, nil
-}
-
-func stopCloseCpuProf(cpuProfileFile *os.File) {
-	pprof.StopCPUProfile()
-	cpuProfileFile.Close()
-}
-
-func memProf() (*os.File, error) {
-	var memProfileFile *os.File
-	var err error
-
-	memProfileFile, err = os.Create("mem.prof")
+	v2File, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create v2 binary: %w", err)
+	}
+	if _, err := io.Copy(v2File, bytes.NewReader(binaryV2)); err != nil {
+		v2File.Close()
+		return fmt.Errorf("failed to write v2 binary: %w", err)
+	}
+	// We must close the binary file before we can execute it
+	v2File.Close()
+
+	cmd := exec.Cmd{
+		Path: path,
+		SysProcAttr: &syscall.SysProcAttr{
+			// Kill children if parent is dead
+			Pdeathsig: syscall.SIGKILL,
+			Setpgid:   true,
+		},
+		Args:   args,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
 
-	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
-		return memProfileFile, err
-	}
-
-	return memProfileFile, nil
+	return cmd.Run()
 }
