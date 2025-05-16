@@ -405,6 +405,7 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 		opts := o.Opts
 		opts.Stdout = io.Discard
 		opts.RemoveSignatures = true
+		opts.Global.SecurePolicy = false
 
 		src := dockerProtocol + catalog
 		dest := ociProtocolTrimmed + catalogImageDir
