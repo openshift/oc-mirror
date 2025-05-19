@@ -69,7 +69,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		// not worrying about code complexity as this module will eventually be deprecated
 		// in favor of the cosign signature work
 		// nolint: nestif
-		if o.Opts.Global.IgnoreReleaseSignature {
+		if o.Opts.Global.IgnoreReleaseSignature && len(o.Config.Mirror.Platform.Release) > 0 {
 			imgs = append(imgs, img)
 		} else {
 			if digest != "" {
