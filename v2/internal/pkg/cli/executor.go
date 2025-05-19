@@ -479,6 +479,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 
 	if o.Opts.IsMirrorToDisk() {
+		if err := archive.RemovePastArchives(rootDir); err != nil {
+			return fmt.Errorf("unable to delete past archives from %s: %w", rootDir, err)
+		}
 		if o.Opts.Global.StrictArchiving {
 			o.MirrorArchiver, err = archive.NewMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 			if err != nil {
