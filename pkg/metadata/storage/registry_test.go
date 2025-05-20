@@ -3,13 +3,16 @@ package storage
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/uuid"
 	"github.com/openshift/oc-mirror/pkg/api/v1alpha2"
@@ -118,6 +121,53 @@ func TestRegistryBackend(t *testing.T) {
 			err = backend.ReadMetadata(ctx, readMeta, config.MetadataBasePath)
 			require.Error(t, err)
 			require.NotErrorIs(t, err, ErrMetadataNotExist)
+		})
+	}
+}
+
+func TestRegistryAPIVersions(t *testing.T) {
+	const header = "Docker-Distribution-API-Version"
+
+	tests := []struct {
+		name             string
+		headerName       string
+		headerValue      string
+		expectedVersions []string
+	}{{
+		name:             "HeaderPresentExactName",
+		headerName:       header,
+		headerValue:      "registry/2.0",
+		expectedVersions: []string{"registry/2.0"},
+	}, {
+		name:             "HeaderPresentLowerCaseName",
+		headerName:       strings.ToLower(header),
+		headerValue:      "registry/2.0",
+		expectedVersions: []string{"registry/2.0"},
+	}, {
+		name:             "HeaderPresentMultipleValues",
+		headerName:       header,
+		headerValue:      "registry/2.0 registry/3.0",
+		expectedVersions: []string{"registry/2.0", "registry/3.0"},
+	}, {
+		name:             "HeaderMissing",
+		headerName:       header,
+		headerValue:      "",
+		expectedVersions: nil,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resp := http.Response{
+				Header: make(map[string][]string),
+			}
+			if test.headerValue != "" {
+				resp.Header.Set(test.headerName, test.headerValue)
+			}
+
+			versions := apiVersions(&resp, header)
+			if !cmp.Equal(test.expectedVersions, versions) {
+				t.Error("Unexpected versions slice:\n", cmp.Diff(test.expectedVersions, versions))
+			}
 		})
 	}
 }

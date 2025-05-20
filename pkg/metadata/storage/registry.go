@@ -13,9 +13,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/distribution/distribution/v3/registry/client/auth"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -310,7 +310,7 @@ func (b *registryBackend) ping(ctx context.Context, registry url.URL) error {
 	}
 	defer resp.Body.Close()
 
-	versions := auth.APIVersions(resp, "Docker-Distribution-API-Version")
+	versions := apiVersions(resp, "Docker-Distribution-API-Version")
 	if len(versions) == 0 {
 		klog.V(5).Infof("Registry responded to v2 Docker endpoint, but has no header for Docker Distribution %s: %d, %#v", req.URL, resp.StatusCode, resp.Header)
 		switch {
@@ -325,4 +325,18 @@ func (b *registryBackend) ping(ctx context.Context, registry url.URL) error {
 		}
 	}
 	return nil
+}
+
+// apiVersions gets the API versions out of an HTTP response using the provided
+// version header as the key for the HTTP header.
+func apiVersions(resp *http.Response, versionHeader string) []string {
+	var versions []string
+	if versionHeader != "" {
+		for _, supportedVersions := range resp.Header[http.CanonicalHeaderKey(versionHeader)] {
+			for _, version := range strings.Fields(supportedVersions) {
+				versions = append(versions, version)
+			}
+		}
+	}
+	return versions
 }
