@@ -11,13 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 const (
@@ -136,7 +137,12 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 							triggered = true
 							timeoutCtx, _ := opts.Global.CommandTimeoutContext()
 
-							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &opts)
+							options := opts
+							if img.Type.IsOperatorCatalog() && img.RebuiltTag != "" {
+								options.RemoveSignatures = true
+							}
+
+							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options)
 
 							switch {
 							case err == nil:
