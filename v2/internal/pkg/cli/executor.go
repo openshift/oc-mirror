@@ -884,6 +884,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 // RunDiskToMirror execute the disk to mirror functionality
 func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) error {
 	// extract the archive
+	o.Log.Info(emoji.Package + " Extracting mirror archive(s)...")
 	if err := o.MirrorUnArchiver.Unarchive(); err != nil {
 		o.Log.Error(" %v ", err)
 		return err
