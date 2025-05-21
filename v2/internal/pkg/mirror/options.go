@@ -29,36 +29,37 @@ type ErrorShouldDisplayUsage struct {
 }
 
 type GlobalOptions struct {
-	LogLevel           string        // one of info, debug, trace
-	PolicyPath         string        // Path to a signature verification policy file
-	SecurePolicy       bool          // Use an "allow everything" signature verification policy
-	RegistriesDirPath  string        // Path to a "registries.d" registry configuration directory
-	OverrideArch       string        // Architecture to use for choosing images, instead of the runtime one
-	OverrideOS         string        // OS to use for choosing images, instead of the runtime one
-	OverrideVariant    string        // Architecture variant to use for choosing images, instead of the runtime one
-	CommandTimeout     time.Duration // Timeout for the command execution
-	RegistriesConfPath string        // Path to the "registries.conf" file
-	TmpDir             string        // Path to use for big temporary files
-	WorkingDir         string        // working directory
-	From               string        // local storage for diskToMirror workflow
-	Port               uint16        // HTTP port used by oc-mirror's local storage instance
-	ConfigPath         string        // Path to use for imagesetconfig
-	Quiet              bool          // Suppress output information when copying images
-	Force              bool          // Force the copy/mirror even if there is nothing to update
-	V2                 bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
-	CpuProf            bool          // Enable CPU profiling
-	MemProf            bool          // Enable Memory profiling
-	MaxNestedPaths     int           // Sets the maximum allowed path-components on the destination registry
-	StrictArchiving    bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
-	SinceString        string        // Sets the date since which all content mirrored after is included in the archive
-	Since              time.Time     // Sets the date since which all content mirrored after is included in the archive
-	DeleteGenerate     bool          // Used to generate the delete-images.yaml file , mandatory fist step in the delete workflow
-	DeleteDestination  string        // Used primarily for delete - denotes the remote registry to delete from
-	ForceCacheDelete   bool          // Used to force delete the local cache
-	DeleteID           string        // This flag is used to append to the artifacts created by the delete functionality
-	DeleteYaml         string        // This flag will use the contents of the indicated yaml as basis to delete the local cache and remote registry
-	CacheDir           string        // Path to the cache directory
-	IsTerminal         bool          // Whether we're running in a terminal console or not
+	LogLevel               string        // one of info, debug, trace
+	PolicyPath             string        // Path to a signature verification policy file
+	SecurePolicy           bool          // Use an "allow everything" signature verification policy
+	RegistriesDirPath      string        // Path to a "registries.d" registry configuration directory
+	OverrideArch           string        // Architecture to use for choosing images, instead of the runtime one
+	OverrideOS             string        // OS to use for choosing images, instead of the runtime one
+	OverrideVariant        string        // Architecture variant to use for choosing images, instead of the runtime one
+	CommandTimeout         time.Duration // Timeout for the command execution
+	RegistriesConfPath     string        // Path to the "registries.conf" file
+	TmpDir                 string        // Path to use for big temporary files
+	WorkingDir             string        // working directory
+	From                   string        // local storage for diskToMirror workflow
+	Port                   uint16        // HTTP port used by oc-mirror's local storage instance
+	ConfigPath             string        // Path to use for imagesetconfig
+	Quiet                  bool          // Suppress output information when copying images
+	Force                  bool          // Force the copy/mirror even if there is nothing to update
+	V2                     bool          // Redirect the flow to oc-mirror v2 - PLEASE DO NOT USE that. V2 is still under development and it is not ready to be used.
+	CpuProf                bool          // Enable CPU profiling
+	MemProf                bool          // Enable Memory profiling
+	MaxNestedPaths         int           // Sets the maximum allowed path-components on the destination registry
+	StrictArchiving        bool          // If set, generates archives that are strictly less than `archiveSize`, failing for files that exceed that limit.
+	SinceString            string        // Sets the date since which all content mirrored after is included in the archive
+	Since                  time.Time     // Sets the date since which all content mirrored after is included in the archive
+	DeleteGenerate         bool          // Used to generate the delete-images.yaml file , mandatory fist step in the delete workflow
+	DeleteDestination      string        // Used primarily for delete - denotes the remote registry to delete from
+	ForceCacheDelete       bool          // Used to force delete the local cache
+	DeleteID               string        // This flag is used to append to the artifacts created by the delete functionality
+	DeleteYaml             string        // This flag will use the contents of the indicated yaml as basis to delete the local cache and remote registry
+	CacheDir               string        // Path to the cache directory
+	IsTerminal             bool          // Whether we're running in a terminal console or not
+	IgnoreReleaseSignature bool          // Ignore release signatures, used primarily for qe testing unpublished signatures
 }
 
 type CopyOptions struct {
