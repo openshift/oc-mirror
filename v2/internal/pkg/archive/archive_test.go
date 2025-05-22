@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -297,6 +298,110 @@ func TestArchive_RemovePastMirrors(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleSignatureErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		img      v2alpha1.CopyImageSchema
+		inputErr error
+		want     error
+	}{
+		{
+			name: "nil error should return nil",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeOperatorCatalog,
+			},
+			inputErr: nil,
+			want:     nil,
+		},
+		{
+			name: "non-signature error should return nil",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeOperatorCatalog,
+			},
+			inputErr: fmt.Errorf("some other error"),
+			want:     nil,
+		},
+		{
+			name: "original operator catalog image should return ArchiveError{OperatorErr: signature error}",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeOperatorCatalog,
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     &ArchiveError{OperatorErr: fmt.Errorf("signature error")},
+		},
+		{
+			name: "rebuilt operator catalog image should return nil",
+			img: v2alpha1.CopyImageSchema{
+				Type:       v2alpha1.TypeOperatorCatalog,
+				RebuiltTag: "rebuilt-catalog",
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     nil,
+		},
+		{
+			name: "release image should return ArchiveError{ReleaseErr: signature error}",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeOCPRelease,
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     &ArchiveError{ReleaseErr: fmt.Errorf("signature error")},
+		},
+		{
+			name: "graph image should return nil",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeCincinnatiGraph,
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     nil,
+		},
+		{
+			name: "additional image should return ArchiveError{AdditionalImgErr: signature error} signature error",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeGeneric,
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     &ArchiveError{AdditionalImgErr: fmt.Errorf("signature error")},
+		},
+		{
+			name: "helm image should return ArchiveError{AdditionalImgErr: signature error} signature errorsignature error",
+			img: v2alpha1.CopyImageSchema{
+				Type: v2alpha1.TypeHelmImage,
+			},
+			inputErr: &SignatureBlobGathererError{SigError: fmt.Errorf("signature error")},
+			want:     &ArchiveError{HelmErr: fmt.Errorf("signature error")},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := handleSignatureErrors(tc.img, tc.inputErr)
+			if tc.want == nil {
+				assert.Nil(t, got)
+				return
+			}
+			assert.Equal(t, tc.want.Error(), got.Error())
+
+			var wantSigErr *ArchiveError
+			var gotSigErr *ArchiveError
+			if !errors.As(tc.want, &wantSigErr) || !errors.As(got, &gotSigErr) {
+				t.Fatal("error type mismatch")
+			}
+
+			switch {
+			case tc.img.Type.IsOperator():
+				assert.Equal(t, wantSigErr.OperatorErr, gotSigErr.OperatorErr)
+			case tc.img.Type.IsRelease():
+				assert.Equal(t, wantSigErr.ReleaseErr, gotSigErr.ReleaseErr)
+			case tc.img.Type.IsAdditionalImage():
+				assert.Equal(t, wantSigErr.AdditionalImgErr, gotSigErr.AdditionalImgErr)
+			case tc.img.Type.IsHelmImage():
+				assert.Equal(t, wantSigErr.HelmErr, gotSigErr.HelmErr)
+			}
+		})
+	}
+}
+
 func assertContents(t *testing.T, archiveFile string, expectedTarContents []string) bool {
 	actualTarContents := []string{}
 	chunkFile, err := os.Open(archiveFile)
