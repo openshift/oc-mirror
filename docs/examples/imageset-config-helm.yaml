@@ -14,6 +14,14 @@ mirror:
         charts:
           - name: podinfo
             version: 5.0.0
+            # Provide values if needed. Image overrides are respected
+            # and will result in mirroring ghcr.io/example/podinfo:6.9.0 instead
+            # of the default ghcr.io/stefanprodan/podinfo:5.0.0
+            # values:
+            #   image:
+            #     repository: ghcr.io/example/podinfo
+            #     tag: 6.9.0
+
     #local:
     #  - name: podinfo-local
     #    path: /home/user/podinfo-6.0.0.tgz
