@@ -262,6 +262,8 @@ type Chart struct {
 	// ImagePaths are custom JSON paths for images location
 	// in the helm manifest or templates
 	ImagePaths []string `json:"imagePaths,omitempty"`
+	// Values are helm values to be used when rendering the chart
+	Values map[string]interface{} `json:"values,omitempty"`
 }
 
 // Image contains image pull information.

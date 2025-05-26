@@ -125,8 +125,7 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 					lsc.Log.Error("error pulling chart %s:%s", ref, err.Error())
 					continue
 				}
-
-				imgs, err := getImages(path, chart.ImagePaths...)
+				imgs, err := getImages(path, chart.Values, chart.ImagePaths...)
 				if err != nil {
 					errs = append(errs, err)
 				}
@@ -168,7 +167,7 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 				src := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
 				path := filepath.Join(src, fmt.Sprintf("%s-%s.tgz", chart.Name, chart.Version))
 
-				imgs, err := getImages(path, chart.ImagePaths...)
+				imgs, err := getImages(path, chart.Values, chart.ImagePaths...)
 				if err != nil {
 					errs = append(errs, err)
 				}
@@ -223,7 +222,7 @@ func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, []error) {
 	var errs []error
 
 	for _, chart := range lsc.Config.Mirror.Helm.Local {
-		imgs, err := getImages(chart.Path, chart.ImagePaths...)
+		imgs, err := getImages(chart.Path, chart.Values, chart.ImagePaths...)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -338,14 +337,14 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 	for key, chartVersions := range indexFile.Entries {
 		for _, chartVersion := range chartVersions {
 			if chartVersion.Type != "library" {
-				charts = append(charts, v2alpha1.Chart{Name: key, Version: chartVersion.Version})
+				charts = append(charts, v2alpha1.Chart{Name: key, Version: chartVersion.Version, Values: make(map[string]interface{})})
 			}
 		}
 	}
 	return charts, nil
 }
 
-func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
+func getImages(path string, values map[string]interface{}, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
 	lsc.Log.Debug("Reading from path %s", path)
 
 	p := getImagesPath(imagePaths...)
@@ -356,7 +355,7 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 	}
 
 	var templates string
-	if templates, err = getHelmTemplates(chart); err != nil {
+	if templates, err = getHelmTemplates(chart, values); err != nil {
 		return nil, err
 	}
 
@@ -386,16 +385,14 @@ func getImagesPath(paths ...string) []string {
 }
 
 // getHelmTemplates returns all chart templates
-func getHelmTemplates(ch *helmchart.Chart) (string, error) {
+func getHelmTemplates(ch *helmchart.Chart, values map[string]interface{}) (string, error) {
 	out := new(bytes.Buffer)
-	valueOpts := make(map[string]interface{})
 	caps := chartutil.DefaultCapabilities
 
-	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
+	valuesToRender, err := chartutil.ToRenderValues(ch, values, chartutil.ReleaseOptions{}, caps)
 	if err != nil {
 		return "", fmt.Errorf("error rendering values: %v", err)
 	}
-
 	files, err := engine.Render(ch, valuesToRender)
 	if err != nil {
 		return "", fmt.Errorf("error rendering chart %s: %v", ch.Name(), err)
