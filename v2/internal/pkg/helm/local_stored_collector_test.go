@@ -79,6 +79,26 @@ func TestHelmImageCollector(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			caseName:     "local helm chart - MirrorToDisk images by tag and digest: should pass",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "ingress-nginx", Path: filepath.Join(testChartsDataPath, "ingress-nginx-4.12.1.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: "docker://localhost:8888/ingress-nginx/controller:v1.12.1",
+					Origin:      "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
 			caseName:     "repositories helm chart - charts included - MirrorToDisk: should pass",
 			mirrorMode:   mirror.MirrorToDisk,
 			localStorage: testLocalStorageFQDN,
@@ -187,6 +207,26 @@ func TestHelmImageCollector(t *testing.T) {
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
 					Origin:      "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:   "local helm chart - MirrorToMirror images by tag and digest: should pass",
+			mirrorMode: mirror.MirrorToMirror,
+			dest:       testDest,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "ingress-nginx", Path: filepath.Join(testChartsDataPath, "ingress-nginx-4.12.1.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
+					Origin:      "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -302,6 +342,27 @@ func TestHelmImageCollector(t *testing.T) {
 					Source:      "docker://" + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
 					Origin:      "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:     "local helm chart - DiskToMirror images by tag and digest: should pass",
+			mirrorMode:   mirror.DiskToMirror,
+			localStorage: testLocalStorageFQDN,
+			dest:         testDest,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "ingress-nginx", Path: filepath.Join(testChartsDataPath, "ingress-nginx-4.12.1.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
+					Origin:      "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
