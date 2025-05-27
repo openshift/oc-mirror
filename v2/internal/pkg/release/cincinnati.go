@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	SignatureURL    string = "https://mirror.openshift.com/pub/openshift-v4/signatures/openshift/release/"
-	SignatureDir    string = "/signatures/"
-	ContentType     string = "Content-Type"
-	ApplicationJson string = "application/json"
+	defaultSignatureURL string = "https://mirror.openshift.com/pub/openshift-v4/signatures/openshift/release/"
+	SignatureDir        string = "/signatures/"
+	ContentType         string = "Content-Type"
+	ApplicationJson     string = "application/json"
 )
 
 var (
