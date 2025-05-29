@@ -147,7 +147,7 @@ func TestWriteMetaData(t *testing.T) {
 				Origin:      "test",
 			},
 		}
-		err := di.WriteDeleteMetaData(cpImages)
+		err := di.WriteDeleteMetaData(context.Background(), cpImages)
 		if err != nil {
 			t.Fatalf("should not fail %v", err)
 		}

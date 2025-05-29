@@ -296,7 +296,7 @@ func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	// collected, we want to generate a delete file so those images can be deleted
 	var writeErr error
 	if len(collectorSchema.AllImages) > 0 {
-		writeErr = o.Delete.WriteDeleteMetaData(collectorSchema.AllImages)
+		writeErr = o.Delete.WriteDeleteMetaData(ctx, collectorSchema.AllImages)
 		if collectErr != nil && writeErr == nil {
 			o.Log.Warn("image discovery finished with errors: the delete file might not be complete")
 		}
