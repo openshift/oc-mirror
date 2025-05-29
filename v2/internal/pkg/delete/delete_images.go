@@ -11,6 +11,9 @@ import (
 	"sort"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
@@ -20,8 +23,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 type DeleteImages struct {
@@ -36,7 +38,7 @@ type DeleteImages struct {
 }
 
 // WriteDeleteMetaData
-func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) error {
+func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1.CopyImageSchema) error {
 	o.Log.Info(emoji.PageFacingUp + " Generating delete file...")
 	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
@@ -54,6 +56,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		o.Log.Error("%v ", err)
 	}
 
+	sigHandler := signature.New(&o.Opts)
 	duplicates := []string{}
 	var items []v2alpha1.DeleteItem
 	for _, img := range images {
@@ -67,6 +70,37 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 				Type:           img.Type,
 			}
 			items = append(items, item)
+
+			if img.Type.IsOperatorCatalog() || img.Type == v2alpha1.TypeCincinnatiGraph {
+				continue
+			}
+
+			sigs, err := sigHandler.GetSignatureTag(ctx, img.Source) // TODO handle the error and the manifest list inside of GetSignatureTag
+			if err == nil {
+				for _, sig := range sigs {
+					if sig != "" {
+						imgOriginRef, err := image.ParseRef(img.Origin)
+						if err != nil {
+							continue
+						}
+						imgDestRef, err := image.ParseRef(img.Destination)
+						if err != nil {
+							continue
+						}
+
+						originSigRef := imgOriginRef.Name + ":" + sig
+						destSigRef := imgDestRef.SetTag(sig)
+
+						duplicates = append(duplicates, originSigRef)
+						item := v2alpha1.DeleteItem{
+							ImageName:      originSigRef,
+							ImageReference: destSigRef.ReferenceWithTransport,
+							Type:           img.Type,
+						}
+						items = append(items, item)
+					}
+				}
+			}
 		}
 	}
 

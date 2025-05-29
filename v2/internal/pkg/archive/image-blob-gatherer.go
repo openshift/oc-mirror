@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"strings"
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/transports/alltransports"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 type ImageBlobGatherer struct {
@@ -182,7 +182,7 @@ func imageBlobs(manifestBytes []byte, mimeType string) ([]string, error) {
 // imageSignatureBlobs returns the blobs of container image which is a signature.
 func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]string, error) {
 	var ref image.ImageSpec
-	tag, err := sigstoreAttachmentTag(in.digest)
+	tag, err := signature.SigstoreAttachmentTag(in.digest)
 	if err != nil {
 		return nil, SignatureBlobGathererError{SigError: err}
 	}
@@ -210,12 +210,4 @@ func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]s
 	sigBlobs = append(sigBlobs, signatureDigest.String())
 
 	return sigBlobs, nil
-}
-
-// sigstoreAttachmentTag returns a sigstore attachment tag for the specified digest.
-func sigstoreAttachmentTag(d digest.Digest) (string, error) {
-	if err := d.Validate(); err != nil {
-		return "", fmt.Errorf("invalid digest %w", err)
-	}
-	return strings.Replace(d.String(), ":", "-", 1) + ".sig", nil
 }
