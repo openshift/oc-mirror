@@ -325,7 +325,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		return v2alpha1.CatalogFilterResult{
 			OperatorFilter:     op,
 			FilteredConfigPath: filterConfigDir,
-			ToRebuild:          false,
+			ToRebuild:          true,
 			DeclConfig:         filteredDC,
 			Digest:             string(filteredImageDigest),
 		}, nil
