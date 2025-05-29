@@ -64,7 +64,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 					isParentImage: true,
 				},
 			},
-			expectedErrorType: SignatureBlobGathererError{},
+			expectedErrorType: &SignatureBlobGathererError{},
 			expectedBlobs: map[string]struct{}{
 				"sha256:467829ca4ff134ef9762a8f69647fdf2515b974dfc94a8474c493a45ef922e51": {},
 				"sha256:728191dbaae078c825ffb518e15d33956353823d4da6c2e81fe9b1ed60ddef7d": {},

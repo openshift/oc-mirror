@@ -145,8 +145,16 @@ func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2a
 	allAddedBlobs := make(map[string]struct{})
 	for _, img := range collectedImages {
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
-		if err != nil && !errors.As(err, &SignatureBlobGathererError{}) {
+		var sigErr *SignatureBlobGathererError
+		if err != nil && !errors.As(err, &sigErr) {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %w", img.Destination, err)
+		}
+
+		if err := handleSignatureErrors(img, err); err != nil {
+			var archiveErr *ArchiveError
+			if errors.As(err, &archiveErr) && archiveErr.ReleaseErr != nil {
+				return nil, archiveErr
+			}
 		}
 
 		addedBlobs, err := o.addBlobsDiff(imgBlobs, historyBlobs, allAddedBlobs)
@@ -204,5 +212,26 @@ func RemovePastArchives(destination string) error {
 			return fmt.Errorf("error removing tar file: %w", err)
 		}
 	}
+	return nil
+}
+
+func handleSignatureErrors(img v2alpha1.CopyImageSchema, err error) error {
+
+	var sigErr *SignatureBlobGathererError
+	if err == nil || !errors.As(err, &sigErr) {
+		return nil
+	}
+
+	switch {
+	case img.Type.IsOperator() && img.RebuiltTag == "":
+		return &ArchiveError{OperatorErr: sigErr.SigError}
+	case img.Type.IsRelease() && img.Type != v2alpha1.TypeCincinnatiGraph:
+		return &ArchiveError{ReleaseErr: sigErr.SigError}
+	case img.Type.IsAdditionalImage():
+		return &ArchiveError{AdditionalImgErr: sigErr.SigError}
+	case img.Type.IsHelmImage():
+		return &ArchiveError{HelmErr: sigErr.SigError}
+	}
+
 	return nil
 }
