@@ -152,7 +152,7 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
 
-	oci, err := o.Manifest.GetImageIndex(dir)
+	oci, err := o.Manifest.GetOCIImageIndex(dir)
 	if err != nil {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
@@ -170,14 +170,14 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
 
 	manifestDir := filepath.Join(dir, blobsDir, manifest)
-	mfst, err := o.Manifest.GetImageManifest(manifestDir)
+	mfst, err := o.Manifest.GetOCIImageManifest(manifestDir)
 	if err != nil {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
 	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
 
 	fromDir := filepath.Join(dir, blobsDir)
-	if err := o.Manifest.ExtractLayersOCI(fromDir, cacheDir, releaseManifests, mfst); err != nil {
+	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
 	o.Log.Debug("extracted layer %s ", cacheDir)
