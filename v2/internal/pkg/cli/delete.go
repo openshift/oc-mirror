@@ -248,7 +248,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 		o.HelmCollector = helm.WithV1Tags(o.HelmCollector)
 	}
 	// instantiate delete module
-	bg := archive.NewImageBlobGatherer(o.Opts)
+	bg := archive.NewImageBlobGatherer(o.Opts, o.Log)
 	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk)
 
 	return nil

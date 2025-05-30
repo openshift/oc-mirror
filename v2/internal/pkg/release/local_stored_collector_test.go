@@ -10,13 +10,15 @@ import (
 
 	"github.com/containers/image/v5/types"
 	"github.com/google/uuid"
+	digest "github.com/opencontainers/go-digest"
+	"github.com/otiai10/copy"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/otiai10/copy"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type MockMirror struct {
@@ -443,14 +445,14 @@ func TestHandleGraphImage(t *testing.T) {
 			log := clog.New("trace")
 			manifestMock := new(ManifestMock)
 			if testCase.imageInCache {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("123456", nil)
+				manifestMock.On("ImageDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("123456", nil)
 			} else {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("", fmt.Errorf("simulating image doesn't exist in cache"))
+				manifestMock.On("ImageDigest", mock.Anything, mock.Anything, "docker://localhost:9999/openshift/graph-image:latest").Return("", fmt.Errorf("simulating image doesn't exist in cache"))
 			}
 			if testCase.imageInWorkingDir {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("123456", nil)
+				manifestMock.On("ImageDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("123456", nil)
 			} else {
-				manifestMock.On("GetDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("", fmt.Errorf("simulating image doesn't exist in cache"))
+				manifestMock.On("ImageDigest", mock.Anything, mock.Anything, "oci://"+copyOpts.Global.WorkingDir+"/"+graphPreparationDir).Return("", fmt.Errorf("simulating image doesn't exist in cache"))
 			}
 			if testCase.updateURLOverride != "" {
 				t.Setenv("UPDATE_URL_OVERRIDE", testCase.updateURLOverride)
@@ -689,7 +691,7 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageIndex {
 		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -705,7 +707,7 @@ func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageManifest {
 		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -727,19 +729,23 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 	}, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
-func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+func (o MockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	return "3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419", nil
+}
+
+func (o MockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }
 
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
@@ -778,25 +784,29 @@ type ManifestMock struct {
 	mock.Mock
 }
 
-func (o *ManifestMock) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+func (o *ManifestMock) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
-func (o *ManifestMock) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+func (o *ManifestMock) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
 func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
-func (o *ManifestMock) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o *ManifestMock) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 func (o *ManifestMock) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
 	return []v2alpha1.RelatedImage{}, nil
 }
-func (o *ManifestMock) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o *ManifestMock) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
-func (o *ManifestMock) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+func (o *ManifestMock) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	args := o.Called(ctx, sourceCtx, imgRef)
 	return args.String(0), args.Error(1)
+}
+
+func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }
