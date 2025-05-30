@@ -12,10 +12,11 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/otiai10/copy"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/otiai10/copy"
 )
 
 type LocalStorageCollector struct {
@@ -69,7 +70,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 			if err != nil {
 				return v2alpha1.CollectorSchema{}, err
 			}
-			d, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+			d, err := o.Manifest.ImageDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 			// OCPBUGS-36548 (manifest unknown)
 			if err != nil {
 				o.Log.Warn(collectorPrefix+"catalog %s : SKIPPING", err.Error())
@@ -122,7 +123,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 		}
 
 		// it's in oci format so we can go directly to the index.json file
-		oci, err := o.Manifest.GetImageIndex(dir)
+		oci, err := o.Manifest.GetOCIImageIndex(dir)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return v2alpha1.CollectorSchema{}, err
@@ -130,13 +131,13 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 
 		var catalogImage string
 		if isMultiManifestIndex(*oci) && imgSpec.Transport == ociProtocol {
-			err = o.Manifest.ConvertIndexToSingleManifest(dir, oci)
+			err = o.Manifest.ConvertOCIIndexToSingleManifest(dir, oci)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
 				return v2alpha1.CollectorSchema{}, err
 			}
 
-			oci, err = o.Manifest.GetImageIndex(dir)
+			oci, err = o.Manifest.GetOCIImageIndex(dir)
 			if err != nil {
 				o.Log.Error(errMsg, err.Error())
 				return v2alpha1.CollectorSchema{}, err
@@ -162,7 +163,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 		o.Log.Debug(collectorPrefix+"manifest %s", manifest)
 		// read the operator image manifest
 		manifestDir := filepath.Join(dir, blobsDir, manifest)
-		oci, err = o.Manifest.GetImageManifest(manifestDir)
+		oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
 			return v2alpha1.CollectorSchema{}, err
@@ -179,7 +180,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+digestIncorrectMessage, op.Catalog, err.Error())
 			}
 			manifestDir := filepath.Join(dir, blobsDir, subDigest.Encoded())
-			oci, err = o.Manifest.GetImageManifest(manifestDir)
+			oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
 			if err != nil {
 				o.Log.Error(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
 				return v2alpha1.CollectorSchema{}, fmt.Errorf(collectorPrefix+"manifest %s: %s ", op.Catalog, err.Error())
@@ -206,7 +207,7 @@ func (o *LocalStorageCollector) OperatorImageCollector(ctx context.Context) (v2a
 		// untar all the blobs for the operator
 		// if the layer with "label (from previous step) is found to a specific folder"
 		fromDir := strings.Join([]string{dir, blobsDir}, "/")
-		err = o.Manifest.ExtractLayersOCI(fromDir, cacheDir, label, oci)
+		err = o.Manifest.ExtractOCILayers(fromDir, cacheDir, label, oci)
 		if err != nil {
 			return v2alpha1.CollectorSchema{}, err
 		}

@@ -6,20 +6,25 @@ import (
 	"strings"
 
 	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
 
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 type SignatureHandler struct {
-	opts *mirror.CopyOptions
+	opts             *mirror.CopyOptions
+	log              clog.PluggableLoggerInterface
+	ocmirrormanifest ocmirrormanifest.ManifestInterface
 }
 
-func New(opts *mirror.CopyOptions) *SignatureHandler {
+func New(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *SignatureHandler {
 	return &SignatureHandler{
-		opts: opts,
+		opts:             opts,
+		log:              log,
+		ocmirrormanifest: ocmirrormanifest.New(log),
 	}
 }
 
@@ -31,27 +36,15 @@ func SigstoreAttachmentTag(d digest.Digest) (string, error) {
 	return strings.Replace(d.String(), ":", "-", 1) + ".sig", nil
 }
 
+// GetSignatureTag returns the signature tag for the given image reference (single or multi arch).
 func (o *SignatureHandler) GetSignatureTag(ctx context.Context, imgRef string) ([]string, error) {
-	tags := []string{}
-
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
 		return nil, err
 	}
 	sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
 
-	srcRef, err := alltransports.ParseImageName(imgRef)
-	if err != nil {
-		return nil, fmt.Errorf("invalid source name %s: %w", imgRef, err)
-	}
-
-	img, err := srcRef.NewImageSource(ctx, sourceCtx)
-	if err != nil {
-		return nil, fmt.Errorf("error when creating a new image source: %w", err)
-	}
-	defer img.Close()
-
-	bytesManifest, mime, err := img.GetManifest(ctx, nil)
+	bytesManifest, mime, err := o.ocmirrormanifest.ImageManifest(ctx, sourceCtx, imgRef, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error to get the image manifest and mime type %w", err)
 	}
@@ -62,34 +55,41 @@ func (o *SignatureHandler) GetSignatureTag(ctx context.Context, imgRef string) (
 	}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
-		tag, err := SigstoreAttachmentTag(digest)
-		if err != nil {
-			return tags, err
-		}
-		tags = append(tags, tag)
+		return o.multiArchSigTags(bytesManifest, mime, digest)
+	}
+	return o.singleArchSigTags(digest)
+}
 
-		manifestList, err := manifest.ListFromBlob(bytesManifest, mime)
-		if err != nil {
-			return nil, fmt.Errorf("error to get the manifest list %w", err)
-		}
+func (o *SignatureHandler) multiArchSigTags(bytesManifest []byte, mime string, digest digest.Digest) ([]string, error) {
+	tags := []string{}
+	sigTags, err := o.singleArchSigTags(digest)
+	if err != nil {
+		return nil, err
+	}
+	tags = append(tags, sigTags...)
 
-		digests := manifestList.Instances()
-		for _, digest := range digests {
-			tag, err := SigstoreAttachmentTag(digest)
-			if err != nil {
-				return tags, err
-			}
-			tags = append(tags, tag)
-		}
-
-	} else {
-		// single arch
-		tag, err := SigstoreAttachmentTag(digest)
-		if err != nil {
-			return tags, err
-		}
-		tags = append(tags, tag)
+	manifestList, err := manifest.ListFromBlob(bytesManifest, mime)
+	if err != nil {
+		return nil, fmt.Errorf("error to get the manifest list %w", err)
 	}
 
+	digests := manifestList.Instances()
+	for _, digest := range digests {
+		sigTags, err := o.singleArchSigTags(digest)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, sigTags...)
+	}
+	return tags, nil
+}
+
+func (o *SignatureHandler) singleArchSigTags(digest digest.Digest) ([]string, error) {
+	tags := []string{}
+	tag, err := SigstoreAttachmentTag(digest)
+	if err != nil {
+		return nil, err
+	}
+	tags = append(tags, tag)
 	return tags, nil
 }

@@ -7,17 +7,20 @@ import (
 	"maps"
 
 	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 type ImageBlobGatherer struct {
-	opts *mirror.CopyOptions
+	opts             *mirror.CopyOptions
+	log              clog.PluggableLoggerInterface
+	ocmirrormanifest ocmirrormanifest.ManifestInterface
 }
 
 type internalImageBlobGatherer struct {
@@ -29,9 +32,11 @@ type internalImageBlobGatherer struct {
 	copySignatures bool
 }
 
-func NewImageBlobGatherer(opts *mirror.CopyOptions) *ImageBlobGatherer {
+func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *ImageBlobGatherer {
 	return &ImageBlobGatherer{
-		opts: opts,
+		opts:             opts,
+		log:              log,
+		ocmirrormanifest: ocmirrormanifest.New(log),
 	}
 }
 
@@ -44,7 +49,7 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 	}
 	sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
 
-	manifestBytes, mime, err := imageManifest(ctx, sourceCtx, imgRef, nil)
+	manifestBytes, mime, err := o.ocmirrormanifest.ImageManifest(ctx, sourceCtx, imgRef, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -57,35 +62,14 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
-		return multiArchBlobs(ctx, inImageBlogGather)
+		return o.multiArchBlobs(ctx, inImageBlogGather)
 	} else {
-		return singleArchBlobs(ctx, inImageBlogGather)
+		return o.singleArchBlobs(ctx, inImageBlogGather)
 	}
-}
-
-// imageManifest returns the container image manifest content with its type.
-func imageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
-	srcRef, err := alltransports.ParseImageName(imgRef)
-	if err != nil {
-		return nil, "", fmt.Errorf("invalid source name %s: %w", imgRef, err)
-	}
-
-	img, err := srcRef.NewImageSource(ctx, sourceCtx)
-	if err != nil {
-		return nil, "", fmt.Errorf("error when creating a new image source: %w", err)
-	}
-	defer img.Close()
-
-	bytesManifest, mime, err := img.GetManifest(ctx, instanceDigest)
-	if err != nil {
-		return nil, "", fmt.Errorf("error to get the image manifest and mime type %w", err)
-	}
-
-	return bytesManifest, mime, nil
 }
 
 // multiArchBlobs returns the blobs of all architectures (including signature blobs if they exists).
-func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
 	var sigErrors []error
 
 	blobs := make(map[string]struct{})
@@ -98,7 +82,7 @@ func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[stri
 	}
 
 	if in.copySignatures {
-		sigBlobs, err := imageSignatureBlobs(ctx, in)
+		sigBlobs, err := o.imageSignatureBlobs(ctx, in)
 		if err == nil {
 			for _, digest := range sigBlobs {
 				blobs[digest] = struct{}{}
@@ -114,13 +98,13 @@ func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[stri
 		blobs[digest.String()] = struct{}{}
 		singleIn := in
 
-		singleIn.manifestBytes, singleIn.mimeType, err = imageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
+		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
 			return nil, err
 		}
 		singleIn.digest = digest
 
-		singleArchBlobs, err := singleArchBlobs(ctx, singleIn)
+		singleArchBlobs, err := o.singleArchBlobs(ctx, singleIn)
 		if err != nil {
 			if errors.As(err, &SignatureBlobGathererError{}) {
 				sigErrors = append(sigErrors, err)
@@ -136,7 +120,7 @@ func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[stri
 }
 
 // singleArchBlobs returns the blobs of single architecture (including signature blobs if they exists).
-func singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+func (o *ImageBlobGatherer) singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
 	var err error
 
 	blobs := make(map[string]struct{})
@@ -150,7 +134,7 @@ func singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[str
 
 	var sigBlobs []string
 	if in.copySignatures {
-		sigBlobs, err = imageSignatureBlobs(ctx, in)
+		sigBlobs, err = o.imageSignatureBlobs(ctx, in)
 		if err == nil {
 			manifestBlobs = append(manifestBlobs, sigBlobs...)
 		}
@@ -177,10 +161,8 @@ func imageBlobs(manifestBytes []byte, mimeType string) ([]string, error) {
 	return blobs, nil
 }
 
-// TODO check why in m2d/d2m the signatures of the catalog image are being mirrored even after the rebuild
-
 // imageSignatureBlobs returns the blobs of container image which is a signature.
-func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]string, error) {
+func (o *ImageBlobGatherer) imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]string, error) {
 	var ref image.ImageSpec
 	tag, err := signature.SigstoreAttachmentTag(in.digest)
 	if err != nil {
@@ -192,7 +174,7 @@ func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]s
 	}
 	ref = ref.SetTag(tag)
 
-	manifestBytes, mime, err := imageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
+	manifestBytes, mime, err := o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
 	if err != nil {
 		return nil, SignatureBlobGathererError{SigError: err}
 	}

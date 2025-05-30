@@ -4,15 +4,18 @@ import (
 	"context"
 
 	"github.com/containers/image/v5/types"
+	digest "github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
 type ManifestInterface interface {
-	GetImageIndex(dir string) (*v2alpha1.OCISchema, error)
-	GetImageManifest(file string) (*v2alpha1.OCISchema, error)
-	GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error)
-	ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error
+	GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error)
+	GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error)
+	ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error
+	ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error
 	GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error)
-	ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error
-	GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
+	GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error)
+	ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
+	ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error)
 }

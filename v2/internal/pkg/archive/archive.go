@@ -38,7 +38,7 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 		return &MirrorArchive{}, err
 	}
 
-	bg := NewImageBlobGatherer(opts)
+	bg := NewImageBlobGatherer(opts, logg)
 
 	if maxSize == 0 {
 		maxSize = defaultSegSize
@@ -71,7 +71,7 @@ func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, 
 		return &MirrorArchive{}, err
 	}
 
-	bg := NewImageBlobGatherer(opts)
+	bg := NewImageBlobGatherer(opts, logg)
 
 	if maxSize == 0 {
 		maxSize = defaultSegSize
