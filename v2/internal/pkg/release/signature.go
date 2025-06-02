@@ -105,7 +105,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 					signatureURL = parsedURL.String()
 				}
 			}
-			req, _ := http.NewRequest("GET", signatureURL+"sha256="+digest+"/signature-1", nil)
+			req, _ := http.NewRequestWithContext(ctx, "GET", signatureURL+"sha256="+digest+"/signature-1", nil)
 			// req.Header.Set("Authorization", "Basic "+generic.Token)
 			req.Header.Set(ContentType, ApplicationJson)
 			resp, err := httpClient.Do(req)
