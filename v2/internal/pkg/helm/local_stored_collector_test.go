@@ -193,6 +193,70 @@ func TestHelmImageCollector(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			caseName:     "repositories helm chart - charts not included - MirrorToDisk: with empty values map",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Repositories: []v2alpha1.Repository{
+					{
+						Name: "sbo",
+						URL:  "https://redhat-developer.github.io/service-binding-operator-helm-chart/",
+						Charts: []v2alpha1.Chart{
+							{
+								Name:    "service-binding-operator",
+								Version: "1.4.1",
+								Values:  map[string]interface{}{},
+							},
+						},
+					},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:     "repositories helm chart - charts not included - MirrorToDisk: with values to override images",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Repositories: []v2alpha1.Repository{
+					{
+						Name: "sbo",
+						URL:  "https://redhat-developer.github.io/service-binding-operator-helm-chart/",
+						Charts: []v2alpha1.Chart{
+							{
+								Name:    "service-binding-operator",
+								Version: "1.4.1",
+								Values: map[string]interface{}{
+									"image": map[string]interface{}{
+										"image": "quay.io/redhat-developer/servicebinding-operator@sha256:dce0378be6fc88e43047be4d053d13a0dd23cfef23502e90b6985b9e6b2b0c11",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:dce0378be6fc88e43047be4d053d13a0dd23cfef23502e90b6985b9e6b2b0c11",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-dce0378be6fc88e43047be4d053d13a0dd23cfef23502e90b6985b9e6b2b0c11",
+					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:dce0378be6fc88e43047be4d053d13a0dd23cfef23502e90b6985b9e6b2b0c11",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
 			caseName:   "local helm chart - MirrorToMirror: should pass",
 			mirrorMode: mirror.MirrorToMirror,
 			dest:       testDest,

@@ -90,7 +90,6 @@ OKD is supported by the mirroring process but not the discovery `list` tools.
 ## Helm Charts
 
 - Private repositories are currently not supported.
-- Helm charts that require alterations to the `values.yaml` to render are not currently supported.
 
 
 
