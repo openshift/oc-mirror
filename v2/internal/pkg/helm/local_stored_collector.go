@@ -259,21 +259,21 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 	if lsc.Downloaders.indexDownloader == nil {
 		indexDownloader, err = helmrepo.NewChartRepository(&entry, getter.All(lsc.Helm.settings))
 		if err != nil {
-			return err
+			return fmt.Errorf("%w %s", err, strings.TrimSpace(chartRepo.Name))
 		}
 	} else {
 		indexDownloader = lsc.Downloaders.indexDownloader
 	}
 
 	if _, err := indexDownloader.DownloadIndexFile(); err != nil {
-		return fmt.Errorf("invalid chart repository %q: %v", chartRepo.URL, err)
+		return fmt.Errorf("invalid chart repository %q: %w", chartRepo.URL, err)
 	}
 
 	// Update temp file with chart entry
 	helmFile.Update(&entry)
 
 	if err := helmFile.WriteFile(lsc.Helm.settings.RepositoryConfig, 0644); err != nil {
-		return fmt.Errorf("error writing helm repo file: %v", err)
+		return fmt.Errorf("error writing helm repo file: %w %s", err, strings.TrimSpace(chartRepo.Name))
 	}
 
 	return nil
@@ -285,7 +285,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 	}
 	resp, err := wClient.Get(indexURL)
 	if err != nil {
-		return helmrepo.IndexFile{}, fmt.Errorf("request helm index: %w", err)
+		return helmrepo.IndexFile{}, fmt.Errorf("request helm index: %w for %s", err, indexURL)
 	}
 	defer resp.Body.Close()
 
@@ -295,7 +295,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 
 	indexFile, err := parser.ParseYamlReader[helmrepo.IndexFile](resp.Body)
 	if err != nil {
-		return helmrepo.IndexFile{}, err
+		return helmrepo.IndexFile{}, fmt.Errorf("%w for %s", err, indexURL)
 	}
 
 	namespace := getNamespaceFromURL(indexURL)
@@ -331,7 +331,7 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 		var err error
 		indexFile, err = parser.ParseYamlFile[helmrepo.IndexFile](indexFilePath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w for %s", err, indexFilePath)
 		}
 	}
 
@@ -352,12 +352,12 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 
 	var chart *helmchart.Chart
 	if chart, err = loader.Load(path); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w for %s", err, chart.Name())
 	}
 
 	var templates string
 	if templates, err = getHelmTemplates(chart); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w for %s", err, chart.Name())
 	}
 
 	// Process each YAML document seperately
@@ -388,7 +388,7 @@ func getImagesPath(paths ...string) []string {
 // getHelmTemplates returns all chart templates
 func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 	out := new(bytes.Buffer)
-	valueOpts := make(map[string]interface{})
+	valueOpts := make(map[string]any)
 	caps := chartutil.DefaultCapabilities
 
 	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
@@ -432,7 +432,7 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 
 // findImages will return images from parsed object
 func findImages(templateData []byte, paths ...string) (images []v2alpha1.RelatedImage, err error) {
-	var data interface{}
+	var data any
 	if err := yaml.Unmarshal(templateData, &data); err != nil {
 		return nil, err
 	}
@@ -443,7 +443,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 	for _, path := range paths {
 		results, err := parseJSONPath(data, j, path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w for %s", err, path)
 		}
 
 		for _, result := range results {
@@ -461,7 +461,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 }
 
 // parseJSONPath will parse data and filter for a provided jsonpath template
-func parseJSONPath(input interface{}, parser *jsonpath.JSONPath, template string) ([]string, error) {
+func parseJSONPath(input any, parser *jsonpath.JSONPath, template string) ([]string, error) {
 	buf := new(bytes.Buffer)
 	if err := parser.Parse(template); err != nil {
 		return nil, err
