@@ -95,6 +95,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 	cmd.MarkFlagFilename("delete-yaml-file", "yaml")
 	cmd.Flags().BoolVar(&opts.Global.ForceCacheDelete, "force-cache-delete", false, "Used to force delete  the local cache manifests and blobs")
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cache and remote registry")
+	cmd.Flags().BoolVar(&opts.Global.DeleteSignatures, "delete-signatures", false, "Used to delete the container image signatures, for multi arch images, it deletes only the manifest list signature")
 	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
 
 	// hide flags
