@@ -14,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
+	"github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
@@ -242,11 +244,21 @@ func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 }
 
 func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImageSchema) []v2alpha1.DeleteItem {
-	sigHandler := signature.New(&o.Opts, o.Log)
 	items := []v2alpha1.DeleteItem{}
+
+	if !o.Opts.Global.DeleteSignatures {
+		return items
+	}
+
+	sigHandler := signature.New(&o.Opts, o.Log)
 
 	sigs, err := sigHandler.GetSignatureTag(ctx, img.Source)
 	if err != nil {
+		item := o.getSignatureTagWithoutCache(img)
+		if item != nil {
+			items = append(items, *item)
+		}
+
 		return items
 	}
 
@@ -258,6 +270,22 @@ func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImage
 	}
 
 	return items
+}
+
+// GetSignatureTagWithoutCache tries to generate a signature tag when the image was not cached (mirror to mirror workflow).
+// it only returns the signature tag if the image was referenced by digest and it does not delete multi arch signatures
+func (o DeleteImages) getSignatureTagWithoutCache(img v2alpha1.CopyImageSchema) *v2alpha1.DeleteItem {
+	imgSpec, err := image.ParseRef(img.Origin)
+
+	if err == nil && imgSpec.Digest != "" {
+		digest := digest.NewDigestFromEncoded(digest.Algorithm(imgSpec.Algorithm), imgSpec.Digest)
+		sig, err := signature.SigstoreAttachmentTag(digest)
+		if err == nil {
+			return o.sigDeleteItem(img, sig)
+		}
+	}
+
+	return nil
 }
 
 func (o DeleteImages) sigDeleteItem(img v2alpha1.CopyImageSchema, sig string) *v2alpha1.DeleteItem {
