@@ -303,11 +303,11 @@ func (o DeleteImages) sigDeleteItem(img v2alpha1.CopyImageSchema, sig string) *v
 	}
 
 	originSigRef := imgOriginRef.Name + ":" + sig
-	destSigRef := imgDestRef.SetTag(sig)
+	destSigRef := imgDestRef.Transport + imgDestRef.Name + ":" + sig
 
 	return &v2alpha1.DeleteItem{
 		ImageName:      originSigRef,
-		ImageReference: destSigRef.ReferenceWithTransport,
+		ImageReference: destSigRef,
 		Type:           img.Type,
 	}
 }
