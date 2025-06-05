@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/containers/image/v5/types"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 )
 
@@ -81,7 +82,7 @@ func (o LocalStorageCollector) imageExists(ctx context.Context, ref string) (boo
 	}
 	// local cache is http protocol
 	sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
-	digest, err := o.Manifest.GetDigest(ctx, sourceCtx, ref)
+	digest, err := o.Manifest.ImageDigest(ctx, sourceCtx, ref)
 	if err != nil {
 		return false, err
 	}

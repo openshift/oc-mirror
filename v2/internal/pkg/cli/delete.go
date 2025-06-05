@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 const (
@@ -95,6 +96,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 	cmd.MarkFlagFilename("delete-yaml-file", "yaml")
 	cmd.Flags().BoolVar(&opts.Global.ForceCacheDelete, "force-cache-delete", false, "Used to force delete  the local cache manifests and blobs")
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cache and remote registry")
+	cmd.Flags().BoolVar(&opts.Global.DeleteSignatures, "delete-signatures", false, "Used to delete the container image signatures, for multi arch images, it deletes only the manifest list signature")
 	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
 
 	// hide flags
@@ -234,8 +236,8 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	}
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
-	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
-	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, signature)
+	releaseSignatureClient := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
+	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, releaseSignatureClient)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
@@ -248,8 +250,10 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 		o.HelmCollector = helm.WithV1Tags(o.HelmCollector)
 	}
 	// instantiate delete module
-	bg := archive.NewImageBlobGatherer(o.Opts)
-	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk)
+	bg := archive.NewImageBlobGatherer(o.Opts, o.Log)
+
+	sigHandler := signature.New(o.Opts, o.Log)
+	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk, sigHandler)
 
 	return nil
 }
@@ -296,7 +300,7 @@ func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	// collected, we want to generate a delete file so those images can be deleted
 	var writeErr error
 	if len(collectorSchema.AllImages) > 0 {
-		writeErr = o.Delete.WriteDeleteMetaData(collectorSchema.AllImages)
+		writeErr = o.Delete.WriteDeleteMetaData(ctx, collectorSchema.AllImages)
 		if collectErr != nil && writeErr == nil {
 			o.Log.Warn("image discovery finished with errors: the delete file might not be complete")
 		}

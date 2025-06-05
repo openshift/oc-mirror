@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
+	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -14,6 +15,12 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	mirror "github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+type mockSignatureHandler struct{}
+
+func (m *mockSignatureHandler) GetSignatureTag(ctx context.Context, imgRef string) ([]string, error) {
+	return []string{"sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig"}, nil
+}
 
 // TestAllDeleteImages
 func TestAllDeleteImages(t *testing.T) {
@@ -64,7 +71,7 @@ func TestAllDeleteImages(t *testing.T) {
 		},
 	}
 
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp")
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp", &mockSignatureHandler{})
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		opts.Global.WorkingDir = common.TestFolder
@@ -92,7 +99,7 @@ func TestAllDeleteImages(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 		opts.Global.WorkingDir = common.TestFolder
 		opts.Global.ForceCacheDelete = true
-		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp")
+		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
 		imgs, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
@@ -137,7 +144,7 @@ func TestWriteMetaData(t *testing.T) {
 	}
 
 	cfg := v2alpha1.ImageSetConfiguration{}
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp")
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp", &mockSignatureHandler{})
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		cpImages := []v2alpha1.CopyImageSchema{
@@ -147,11 +154,173 @@ func TestWriteMetaData(t *testing.T) {
 				Origin:      "test",
 			},
 		}
-		err := di.WriteDeleteMetaData(cpImages)
+		err := di.WriteDeleteMetaData(context.Background(), cpImages)
 		if err != nil {
 			t.Fatalf("should not fail %v", err)
 		}
 	})
+}
+
+func TestSigDeleteItems(t *testing.T) {
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy: false,
+		Quiet:        false,
+		WorkingDir:   tempDir,
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+
+	tests := []struct {
+		name     string
+		img      v2alpha1.CopyImageSchema
+		opts     mirror.CopyOptions
+		expected []v2alpha1.DeleteItem
+	}{
+		{
+			name: "SignaturesDisabled",
+			img: v2alpha1.CopyImageSchema{
+				Source:      "registry.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Origin:      "registry.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Destination: "mirror.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			opts: mirror.CopyOptions{
+				Global: &mirror.GlobalOptions{
+					DeleteSignatures: false,
+				},
+			},
+			expected: []v2alpha1.DeleteItem{},
+		},
+		{
+			name: "ValidSignatureTag",
+			img: v2alpha1.CopyImageSchema{
+				Source:      "registry.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Origin:      "registry.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Destination: "mirror.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			opts: mirror.CopyOptions{
+				Global: &mirror.GlobalOptions{
+					DeleteSignatures: true,
+				},
+				SrcImage: srcOpts,
+			},
+			expected: []v2alpha1.DeleteItem{
+				{
+					ImageName:      "registry.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+					ImageReference: "docker://mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+					Type:           v2alpha1.TypeGeneric,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := DeleteImages{
+				Opts:       tt.opts,
+				SigHandler: &mockSignatureHandler{},
+			}
+			items := d.sigDeleteItems(context.Background(), tt.img)
+			assert.Equal(t, tt.expected, items)
+		})
+	}
+}
+
+func TestGetSignatureTagWithoutCache(t *testing.T) {
+	tests := []struct {
+		name     string
+		img      v2alpha1.CopyImageSchema
+		expected *v2alpha1.DeleteItem
+	}{
+		{
+			name: "ValidDigest",
+			img: v2alpha1.CopyImageSchema{
+				Origin:      "registry.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Destination: "mirror.example.com/ns/img@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			expected: &v2alpha1.DeleteItem{
+				ImageName:      "registry.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+				ImageReference: "docker://mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+				Type:           v2alpha1.TypeGeneric,
+			},
+		},
+		{
+			name: "NoDigest",
+			img: v2alpha1.CopyImageSchema{
+				Origin:      "registry.example.com/ns/img:latest",
+				Destination: "mirror.example.com/ns/img:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			expected: nil,
+		},
+		{
+			name: "InvalidReference",
+			img: v2alpha1.CopyImageSchema{
+				Origin:      "invalid reference",
+				Destination: "invalid reference",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := DeleteImages{}
+			item := d.getSignatureTagWithoutCache(tt.img)
+			assert.Equal(t, tt.expected, item)
+		})
+	}
+}
+
+func TestSigDeleteItem(t *testing.T) {
+	tests := []struct {
+		name     string
+		img      v2alpha1.CopyImageSchema
+		sig      string
+		expected *v2alpha1.DeleteItem
+	}{
+		{
+			name: "ValidSignature",
+			img: v2alpha1.CopyImageSchema{
+				Origin:      "registry.example.com/ns/img:latest",
+				Destination: "mirror.example.com/ns/img:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			sig: "sha256-abc123.sig",
+			expected: &v2alpha1.DeleteItem{
+				ImageName:      "registry.example.com/ns/img:sha256-abc123.sig",
+				ImageReference: "docker://mirror.example.com/ns/img:sha256-abc123.sig",
+				Type:           v2alpha1.TypeGeneric,
+			},
+		},
+		{
+			name: "EmptySignature",
+			img: v2alpha1.CopyImageSchema{
+				Origin:      "registry.example.com/ns/img:latest",
+				Destination: "mirror.example.com/ns/img:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+			sig:      "",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := DeleteImages{}
+			item := d.sigDeleteItem(tt.img, tt.sig)
+			assert.Equal(t, tt.expected, item)
+		})
+	}
 }
 
 // mockBatch
@@ -187,11 +356,11 @@ func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]s
 	return res, nil
 }
 
-func (o mockManifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
 
-func (o mockManifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
 
@@ -199,7 +368,7 @@ func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSc
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
 
-func (o mockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -207,10 +376,14 @@ func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o mockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
-func (o mockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+func (o mockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	return "", nil
+}
+
+func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }

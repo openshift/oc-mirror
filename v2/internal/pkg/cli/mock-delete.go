@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
+
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
@@ -11,7 +14,7 @@ func (o MockDelete) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 	return v2alpha1.DeleteImageList{}, nil
 }
 
-func (o MockDelete) WriteDeleteMetaData([]v2alpha1.CopyImageSchema) error {
+func (o MockDelete) WriteDeleteMetaData(context.Context, []v2alpha1.CopyImageSchema) error {
 	return nil
 }
 
