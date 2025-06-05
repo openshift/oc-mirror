@@ -35,6 +35,7 @@ type DeleteImages struct {
 	Blobs            archive.BlobsGatherer
 	Config           v2alpha1.ImageSetConfiguration
 	Manifest         manifest.ManifestInterface
+	SigHandler       signature.SignatureInterface
 	LocalStorageDisk string
 	LocalStorageFQDN string
 }
@@ -250,9 +251,7 @@ func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImage
 		return items
 	}
 
-	sigHandler := signature.New(&o.Opts, o.Log)
-
-	sigs, err := sigHandler.GetSignatureTag(ctx, img.Source)
+	sigs, err := o.SigHandler.GetSignatureTag(ctx, img.Source)
 	if err != nil {
 		item := o.getSignatureTagWithoutCache(img)
 		if item != nil {

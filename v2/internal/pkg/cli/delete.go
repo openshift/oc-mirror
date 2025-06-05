@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 const (
@@ -235,8 +236,8 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	}
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
-	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
-	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, signature)
+	releaseSignatureClient := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
+	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, releaseSignatureClient)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
 	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
@@ -250,7 +251,9 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	}
 	// instantiate delete module
 	bg := archive.NewImageBlobGatherer(o.Opts, o.Log)
-	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk)
+
+	sigHandler := signature.New(o.Opts, o.Log)
+	o.Delete = delete.New(o.Log, *o.Opts, o.Batch, bg, o.Config, o.Manifest, o.LocalStorageDisk, sigHandler)
 
 	return nil
 }
