@@ -1,12 +1,15 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -259,7 +262,6 @@ delete:
 }
 
 func TestHeadsOnly(t *testing.T) {
-
 	headsOnlyCfg := `
 apiVersion: mirror.openshift.io/v2alpha1
 kind: ImageSetConfiguration
@@ -292,7 +294,6 @@ mirror:
 }
 
 func TestGetUniqueName(t *testing.T) {
-
 	ctlgCfg := `
 apiVersion: mirror.openshift.io/v2alpha1
 kind: ImageSetConfiguration
@@ -332,33 +333,90 @@ mirror:
 func TestReadConfig(t *testing.T) {
 	t.Run("Testing ReadConfig : should pass ", func(t *testing.T) {
 		res, err := ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.ImageSetConfigurationKind)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 		conv := res.(v2alpha1.ImageSetConfiguration)
 		require.Equal(t, []string{"amd64"}, conv.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
-
-		// should fail
-		_, err = ReadConfig(common.TestFolder+"delete-isc.yaml", v2alpha1.ImageSetConfigurationKind)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
+	})
+	t.Run("ReadConfig : should fail", func(t *testing.T) {
+		t.Run("with unmatched config kinds", func(t *testing.T) {
+			_, err := ReadConfig(common.TestFolder+"delete-isc.yaml", v2alpha1.ImageSetConfigurationKind)
+			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.DeleteImageSetConfigurationKind, v2alpha1.ImageSetConfigurationKind))
+		})
+		t.Run("with missing `mirror` stanza", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirrors:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
+			assert.EqualError(t, err, errMissingMirrorStanza.Error(), "config accepted with missing stanza")
+		})
+		t.Run("with extra `delete` stanza", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirror:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+delete:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
+			assert.EqualError(t, err, "delete: is not allowed in ImageSetConfiguration")
+		})
 	})
 }
 
 func TestReadConfigDelete(t *testing.T) {
 	t.Run("Testing ReadConfigDelete : should pass ", func(t *testing.T) {
 		res, err := ReadConfig(common.TestFolder+"delete-isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should not fail")
 		conv := res.(v2alpha1.DeleteImageSetConfiguration)
 		require.Equal(t, []string{"amd64"}, conv.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
-
-		// should fail
-		_, err = ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
+	})
+	t.Run("ReadConfig : should fail", func(t *testing.T) {
+		t.Run("with unmatched config kinds", func(t *testing.T) {
+			_, err := ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
+			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.ImageSetConfigurationKind, v2alpha1.DeleteImageSetConfigurationKind), "parsed unmatched config kinds")
+		})
+		t.Run("with missing `delete` stanza", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: DeleteImageSetConfiguration
+remove:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.DeleteImageSetConfigurationKind)
+			assert.EqualError(t, err, errMissingDeleteStanza.Error(), "config accepted with missing stanza")
+		})
+		t.Run("with extra `mirror` stanza", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: DeleteImageSetConfiguration
+delete:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+mirror:
+  additionalImages:
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.DeleteImageSetConfigurationKind)
+			assert.EqualError(t, err, "mirror: is not allowed in DeleteImageSetConfiguration")
+		})
 	})
 }

@@ -3,83 +3,89 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
+var (
+	errMissingMirrorStanza = errors.New("configuration missing the `mirror` stanza")
+	errMissingDeleteStanza = errors.New("configuration missing the `delete` stanza")
+	errMissingKind         = errors.New("configuration missing `kind`")
+)
+
 // ReadConfig opens an imageset configuration file at the given path
 // and loads it into a v2alpha1.ImageSetConfiguration instance for processing and validation.
 func ReadConfig(configPath string, kind string) (interface{}, error) {
-
-	result := interface{}(nil)
 	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
-		return result, err
+		return nil, fmt.Errorf("could not parse config: %w", err)
 	}
 
-	if strings.Contains(string(data), "mirror:") && kind == "DeleteImageSetConfiguration" {
-		return result, fmt.Errorf("mirror: is not allowed in DeleteImageSetConfigurationKind")
+	var configMap map[string]any
+	if err := yaml.Unmarshal(data, &configMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	if strings.Contains(string(data), "delete:") && kind == "ImageSetConfiguration" {
-		return result, fmt.Errorf("delete: is not allowed in ImageSetConfigurationKind")
+	configKind, ok := configMap["kind"]
+	if !ok {
+		return nil, errMissingKind
 	}
-
-	typeMeta, err := getTypeMeta(data)
-	if err != nil {
-		return result, err
+	if configKind != kind {
+		return nil, fmt.Errorf("cannot parse %q as %q", configKind, kind)
 	}
-
-	switch typeMeta.GroupVersionKind() {
-	case v2alpha1.GroupVersion.WithKind(v2alpha1.ImageSetConfigurationKind):
-		if strings.Contains(string(data), "delete:") {
-			return result, fmt.Errorf("delete: is not allowed in ImageSetConfiguration")
+	switch kind {
+	case v2alpha1.ImageSetConfigurationKind:
+		if _, ok := configMap["mirror"]; !ok {
+			return nil, errMissingMirrorStanza
+		}
+		if _, ok := configMap["delete"]; ok {
+			return nil, fmt.Errorf("delete: is not allowed in %s", kind)
 		}
 		cfg, err := LoadConfig[v2alpha1.ImageSetConfiguration](data, v2alpha1.ImageSetConfigurationKind)
 		gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.ImageSetConfigurationKind)
 		cfg.SetGroupVersionKind(gvk)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		Complete(&cfg)
 		err = Validate(&cfg)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		return cfg, nil
-	case v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind):
-		if strings.Contains(string(data), "mirror:") {
-			return result, fmt.Errorf("mirror: is not allowed in DeleteImageSetConfiguration")
+	case v2alpha1.DeleteImageSetConfigurationKind:
+		if _, ok := configMap["delete"]; !ok {
+			return nil, errMissingDeleteStanza
+		}
+		if _, ok := configMap["mirror"]; ok {
+			return nil, fmt.Errorf("mirror: is not allowed in %s", kind)
 		}
 		cfg, err := LoadConfig[v2alpha1.DeleteImageSetConfiguration](data, v2alpha1.DeleteImageSetConfigurationKind)
 		gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind)
 		cfg.SetGroupVersionKind(gvk)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		CompleteDelete(&cfg)
 		err = ValidateDelete(&cfg)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		return cfg, nil
-
 	default:
-		return result, fmt.Errorf("config GVK not recognized: %s", typeMeta.GroupVersionKind())
+		return nil, fmt.Errorf("config kind %q not supported", kind)
 	}
 }
 
 // LoadConfig loads data into a v2alpha1.ImageSetConfiguration or
 // v2alpha1.DeleteImageSetConfiguration instance
 func LoadConfig[T any](data []byte, kind string) (c T, err error) {
-
 	if data, err = yaml.YAMLToJSON(data); err != nil {
 		return c, fmt.Errorf("yaml to json %s: %v", kind, err)
 	}
@@ -95,7 +101,6 @@ func LoadConfig[T any](data []byte, kind string) (c T, err error) {
 
 // LoadConfigDelete loads data into a v2alpha1.ImageSetConfiguration instance
 func LoadConfigDelete(data []byte) (c v2alpha1.DeleteImageSetConfiguration, err error) {
-
 	gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind)
 
 	if data, err = yaml.YAMLToJSON(data); err != nil {
@@ -111,11 +116,4 @@ func LoadConfigDelete(data []byte) (c v2alpha1.DeleteImageSetConfiguration, err 
 	c.SetGroupVersionKind(gvk)
 
 	return c, nil
-}
-
-func getTypeMeta(data []byte) (typeMeta metav1.TypeMeta, err error) {
-	if err := yaml.Unmarshal(data, &typeMeta); err != nil {
-		return typeMeta, fmt.Errorf("get type meta: %v", err)
-	}
-	return typeMeta, nil
 }
