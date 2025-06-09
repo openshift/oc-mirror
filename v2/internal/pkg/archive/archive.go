@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -30,7 +31,6 @@ type MirrorArchive struct {
 // any files that exceed the maxArchiveSize specified in the imageSetConfig will
 // cause the BuildArchive method to stop and return in error.
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
-
 	err := removePastArchives(destination)
 	if err != nil {
 		logg.Warn("unable to delete past archives from %s: %v", destination, err)
@@ -68,7 +68,6 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 // any files that exceed the maxArchiveSize specified in the imageSetConfig will
 // be added to standalone archives, and flagged in a warning at the end of the execution
 func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
-
 	// create the history interface
 	history, err := history.NewHistory(workingDir, opts.Global.Since, logg, history.OSFileCreator{})
 	if err != nil {
@@ -136,7 +135,7 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2al
 	if err != nil {
 		return fmt.Errorf("unable to add image blobs to the archive : %v", err)
 	}
-	//5 - update history file with addedBlobs
+	// 5 - update history file with addedBlobs
 	_, err = o.history.Append(addedBlobs)
 	if err != nil {
 		return fmt.Errorf("unable to update history metadata: %v", err)
@@ -191,17 +190,21 @@ func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 }
 
 func removePastArchives(destination string) error {
-	_, err := os.Stat(destination)
-	if err == nil {
-		files, err := filepath.Glob(filepath.Join(destination, "mirror_*.tar"))
-		if err != nil {
-			return err
+	if _, err := os.Stat(destination); err != nil {
+		// Destination directory doesn't exist: no-op
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
 		}
-		for _, file := range files {
-			err := os.Remove(file)
-			if err != nil {
-				return err
-			}
+		return fmt.Errorf("failed to get past archives: %w", err)
+	}
+	const globPat string = "mirror_*.tar"
+	files, err := filepath.Glob(filepath.Join(destination, globPat))
+	if err != nil {
+		return fmt.Errorf("error getting glob %q matches: %w", globPat, err)
+	}
+	for _, file := range files {
+		if err := os.Remove(file); err != nil {
+			return fmt.Errorf("error removing tar file: %w", err)
 		}
 	}
 	return nil
