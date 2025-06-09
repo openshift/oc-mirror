@@ -31,10 +31,6 @@ type MirrorArchive struct {
 // any files that exceed the maxArchiveSize specified in the imageSetConfig will
 // cause the BuildArchive method to stop and return in error.
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
-	err := removePastArchives(destination)
-	if err != nil {
-		logg.Warn("unable to delete past archives from %s: %v", destination, err)
-	}
 	// create the history interface
 	history, err := history.NewHistory(workingDir, opts.Global.Since, logg, history.OSFileCreator{})
 	if err != nil {
@@ -189,7 +185,7 @@ func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]str
 	return blobsInDiff, nil
 }
 
-func removePastArchives(destination string) error {
+func RemovePastArchives(destination string) error {
 	if _, err := os.Stat(destination); err != nil {
 		// Destination directory doesn't exist: no-op
 		if errors.Is(err, fs.ErrNotExist) {
