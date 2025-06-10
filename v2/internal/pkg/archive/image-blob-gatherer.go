@@ -122,7 +122,8 @@ func multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[stri
 
 		singleArchBlobs, err := singleArchBlobs(ctx, singleIn)
 		if err != nil {
-			if errors.As(err, &SignatureBlobGathererError{}) {
+			var sigErr *SignatureBlobGathererError
+			if errors.As(err, &sigErr) {
 				sigErrors = append(sigErrors, err)
 			} else {
 				return nil, err
@@ -184,27 +185,27 @@ func imageSignatureBlobs(ctx context.Context, in internalImageBlobGatherer) ([]s
 	var ref image.ImageSpec
 	tag, err := sigstoreAttachmentTag(in.digest)
 	if err != nil {
-		return nil, SignatureBlobGathererError{SigError: err}
+		return nil, &SignatureBlobGathererError{SigError: err}
 	}
 
 	if ref, err = image.ParseRef(in.imgRef); err != nil {
-		return nil, SignatureBlobGathererError{SigError: err}
+		return nil, &SignatureBlobGathererError{SigError: err}
 	}
 	ref = ref.SetTag(tag)
 
 	manifestBytes, mime, err := imageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
 	if err != nil {
-		return nil, SignatureBlobGathererError{SigError: err}
+		return nil, &SignatureBlobGathererError{SigError: err}
 	}
 
 	signatureDigest, err := manifest.Digest(manifestBytes)
 	if err != nil {
-		return nil, SignatureBlobGathererError{SigError: fmt.Errorf("error to get the digest of the signature manifest %w", err)}
+		return nil, &SignatureBlobGathererError{SigError: fmt.Errorf("error to get the digest of the signature manifest %w", err)}
 	}
 
 	sigBlobs, err := imageBlobs(manifestBytes, mime)
 	if err != nil {
-		return nil, SignatureBlobGathererError{SigError: err}
+		return nil, &SignatureBlobGathererError{SigError: err}
 	}
 
 	sigBlobs = append(sigBlobs, signatureDigest.String())
