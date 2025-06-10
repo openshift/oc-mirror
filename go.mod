@@ -41,6 +41,7 @@ require golang.org/x/sys v0.31.0 // indirect
 require (
 	github.com/containerd/errdefs v0.3.0
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
+	github.com/google/go-cmp v0.7.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
@@ -133,7 +134,6 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/cel-go v0.22.0 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
