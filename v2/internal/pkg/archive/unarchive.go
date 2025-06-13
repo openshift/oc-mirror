@@ -146,10 +146,20 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string, bar *mpb.Bar) 
 // see https://github.com/securego/gosec/issues/324#issuecomment-935927967
 func sanitizeArchivePath(dir, filePath string) (string, error) {
 	v := filepath.Join(dir, filePath)
-	if strings.HasPrefix(v, filepath.Clean(dir)) {
+	// OCPBUGS-57387: use absolute paths otherwise the `.` needs special
+	// treatment because of the way Golang handles it after `Clean`
+	absV, err := filepath.Abs(v)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", v, err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", dir, err)
+	}
+	if strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
 		return v, nil
 	}
-	return "", fmt.Errorf("content filepath is tainted: %s", filePath)
+	return "", fmt.Errorf("content filepath is tainted: %s", v)
 }
 
 func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Reader, bar *mpb.Bar) error {
