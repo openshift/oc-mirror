@@ -11,12 +11,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 const (
@@ -534,6 +535,32 @@ func TestHelmImageCollector(t *testing.T) {
 					Source:      "docker://" + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
 					Origin:      "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:     "local helm chart with images on deployment env vars- MirrorToDisk: should pass",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "test-mirror-helm", Path: filepath.Join(testChartsDataPath, "test-mirror-helm-0.3.0.tgz"), ImagePaths: []string{"{.spec.template.spec.containers[*].env[*].value}"}},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://quay.io/nginx/nginx-ingress:latest",
+					Destination: "docker://localhost:8888/nginx/nginx-ingress:latest",
+					Origin:      "quay.io/nginx/nginx-ingress:latest",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/prometheus/prometheus:latest",
+					Destination: "docker://localhost:8888/prometheus/prometheus:latest",
+					Origin:      "quay.io/prometheus/prometheus:latest",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
