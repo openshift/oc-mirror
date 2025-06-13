@@ -53,6 +53,7 @@ type GlobalOptions struct {
 	SinceString            string        // Sets the date since which all content mirrored after is included in the archive
 	Since                  time.Time     // Sets the date since which all content mirrored after is included in the archive
 	DeleteGenerate         bool          // Used to generate the delete-images.yaml file , mandatory fist step in the delete workflow
+	DeleteSignatures       bool          // Used to delete the container image signatures, for multi arch images, it deletes only the manifest list signature
 	DeleteDestination      string        // Used primarily for delete - denotes the remote registry to delete from
 	ForceCacheDelete       bool          // Used to force delete the local cache
 	DeleteID               string        // This flag is used to append to the artifacts created by the delete functionality

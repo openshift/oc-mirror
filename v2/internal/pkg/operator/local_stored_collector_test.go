@@ -9,14 +9,16 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
+	"github.com/opencontainers/go-digest"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 
 	//"github.com/stretchr/testify/assert"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
@@ -769,7 +771,7 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageIndex {
 		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -785,7 +787,7 @@ func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, error) {
 	if o.FailImageManifest {
 		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
 	}
@@ -807,19 +809,23 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 	}, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
-func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+func (o MockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
+}
+
+func (o MockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }
 
 func (ex *LocalStorageCollector) withConfig(cfg v2alpha1.ImageSetConfiguration) *LocalStorageCollector {
