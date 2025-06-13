@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -218,7 +219,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 			}
 		}
 
-		gatherer := NewImageBlobGatherer(&opts)
+		gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 
 		blobs, err := gatherer.GatherBlobs(ctx, parentImage.destProtocol+u.Host+parentImage.dest)
 		if tc.expectedErrorType != nil {
@@ -255,7 +256,7 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 		Mode:                mirror.MirrorToDisk,
 	}
 
-	gatherer := NewImageBlobGatherer(&opts)
+	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err := gatherer.GatherBlobs(ctx, "error")
 	assert.Equal(t, "invalid source name error: Invalid image name \"error\", expected colon-separated transport:reference", err.Error())
 
@@ -288,7 +289,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 		Mode:                mirror.MirrorToDisk,
 	}
 
-	gatherer := NewImageBlobGatherer(&opts)
+	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err := gatherer.GatherBlobs(ctx, "docker://localhost/test:latest")
 	assert.Equal(t, "error when creating a new image source: pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused", err.Error())
 
@@ -328,7 +329,7 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gatherer := NewImageBlobGatherer(&opts)
+	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err = gatherer.GatherBlobs(ctx, "docker://"+u.Host+"/bad-test:latest")
 	assert.Contains(t, err.Error(), "name unknown: Unknown name")
 

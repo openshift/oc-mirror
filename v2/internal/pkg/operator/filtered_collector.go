@@ -173,7 +173,7 @@ func (o FilterCollector) isAlreadyFiltered(ctx context.Context, srcImage, filter
 		sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
-	catalogDigest, err := o.Manifest.GetDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
+	catalogDigest, err := o.Manifest.ImageDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 	if err != nil {
 		o.Log.Debug(errMsg, err.Error())
 		return false
@@ -305,7 +305,7 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 		return "", err
 	}
 
-	return o.Manifest.GetDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
+	return o.Manifest.ImageDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
 }
 
 func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring

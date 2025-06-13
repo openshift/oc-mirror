@@ -11,6 +11,11 @@ import (
 	"sort"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
+
+	"github.com/opencontainers/go-digest"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
@@ -20,8 +25,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 type DeleteImages struct {
@@ -31,12 +35,13 @@ type DeleteImages struct {
 	Blobs            archive.BlobsGatherer
 	Config           v2alpha1.ImageSetConfiguration
 	Manifest         manifest.ManifestInterface
+	SigHandler       signature.SignatureInterface
 	LocalStorageDisk string
 	LocalStorageFQDN string
 }
 
 // WriteDeleteMetaData
-func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) error {
+func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1.CopyImageSchema) error {
 	o.Log.Info(emoji.PageFacingUp + " Generating delete file...")
 	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
@@ -54,21 +59,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		o.Log.Error("%v ", err)
 	}
 
-	duplicates := []string{}
-	var items []v2alpha1.DeleteItem
-	for _, img := range images {
-		if slices.Contains(duplicates, img.Origin) {
-			o.Log.Debug("duplicate image found %s", img.Origin)
-		} else {
-			duplicates = append(duplicates, img.Origin)
-			item := v2alpha1.DeleteItem{
-				ImageName:      img.Origin,
-				ImageReference: img.Destination,
-				Type:           img.Type,
-			}
-			items = append(items, item)
-		}
-	}
+	items := o.processDeleteItems(ctx, images)
 
 	// sort the items
 	sort.SliceStable(items, func(i, j int) bool {
@@ -112,6 +103,33 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
 	return nil
+}
+
+// processDeleteItems processes the list of images and returns delete items
+func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.CopyImageSchema) []v2alpha1.DeleteItem {
+	duplicates := []string{}
+	items := make([]v2alpha1.DeleteItem, 0, len(images)*2)
+	for _, img := range images {
+		if slices.Contains(duplicates, img.Origin) {
+			o.Log.Debug("duplicate image found %s", img.Origin)
+			continue
+		}
+		duplicates = append(duplicates, img.Origin)
+		item := v2alpha1.DeleteItem{
+			ImageName:      img.Origin,
+			ImageReference: img.Destination,
+			Type:           img.Type,
+		}
+		items = append(items, item)
+
+		if img.Type.IsOperatorCatalog() || img.Type == v2alpha1.TypeCincinnatiGraph {
+			continue
+		}
+
+		sigs := o.sigDeleteItems(ctx, img)
+		items = append(items, sigs...)
+	}
+	return items
 }
 
 // DeleteRegistryImages - deletes both remote and local registries
@@ -224,4 +242,71 @@ func (o DeleteImages) ReadDeleteMetaData() (v2alpha1.DeleteImageList, error) {
 		return v2alpha1.DeleteImageList{}, fmt.Errorf("delete image list: %w", err)
 	}
 	return list, nil
+}
+
+func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImageSchema) []v2alpha1.DeleteItem {
+	items := []v2alpha1.DeleteItem{}
+
+	if !o.Opts.Global.DeleteSignatures {
+		return items
+	}
+
+	sigs, err := o.SigHandler.GetSignatureTag(ctx, img.Source)
+	if err != nil {
+		item := o.getSignatureTagWithoutCache(img)
+		if item != nil {
+			items = append(items, *item)
+		}
+
+		return items
+	}
+
+	for _, sig := range sigs {
+		item := o.sigDeleteItem(img, sig)
+		if item != nil {
+			items = append(items, *item)
+		}
+	}
+
+	return items
+}
+
+// GetSignatureTagWithoutCache tries to generate a signature tag when the image was not cached (mirror to mirror workflow).
+// it only returns the signature tag if the image was referenced by digest and it does not delete multi arch signatures
+func (o DeleteImages) getSignatureTagWithoutCache(img v2alpha1.CopyImageSchema) *v2alpha1.DeleteItem {
+	imgSpec, err := image.ParseRef(img.Origin)
+
+	if err == nil && imgSpec.Digest != "" {
+		digest := digest.NewDigestFromEncoded(digest.Algorithm(imgSpec.Algorithm), imgSpec.Digest)
+		sig, err := signature.SigstoreAttachmentTag(digest)
+		if err == nil {
+			return o.sigDeleteItem(img, sig)
+		}
+	}
+
+	return nil
+}
+
+func (o DeleteImages) sigDeleteItem(img v2alpha1.CopyImageSchema, sig string) *v2alpha1.DeleteItem {
+	if sig == "" {
+		return nil
+	}
+
+	imgOriginRef, err := image.ParseRef(img.Origin)
+	if err != nil {
+		return nil
+	}
+	imgDestRef, err := image.ParseRef(img.Destination)
+	if err != nil {
+		return nil
+	}
+
+	originSigRef := imgOriginRef.Name + ":" + sig
+	destSigRef := imgDestRef.Transport + imgDestRef.Name + ":" + sig
+
+	return &v2alpha1.DeleteItem{
+		ImageName:      originSigRef,
+		ImageReference: destSigRef,
+		Type:           img.Type,
+	}
 }

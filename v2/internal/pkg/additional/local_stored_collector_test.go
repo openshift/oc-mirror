@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
+	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
 )
 
 // setup mocks
@@ -273,7 +275,7 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
 		Manifests: []v2alpha1.OCIManifest{
@@ -286,7 +288,7 @@ func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{
 		SchemaVersion: 2,
 		Manifests: []v2alpha1.OCIManifest{
@@ -304,7 +306,7 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 	}, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -312,10 +314,14 @@ func (o MockManifest) ExtractLayers(filePath, name, label string) error {
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
-func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
+func (o MockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	return "123456", nil
+}
+
+func (o MockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }
