@@ -639,7 +639,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("output folder should contain 1 catalogsource yaml file")
 		}
 
-		expectedCSName := "cs-redhat-operator-index-v4-15"
+		expectedCSName := "redhat-operator-index-v4-15"
 		// check idmsFile has a name that is
 		// compliant with Kubernetes requested
 		// RFC-1035 + RFC1123
@@ -918,7 +918,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			t.Fatalf("output folder should contain 1 catalogsource yaml file")
 		}
 
-		expectedCSName := "cs-redhat-operator-index-7c4ef7434c97"
+		expectedCSName := "redhat-operator-index-7c4ef7434c97"
 		// check catalogsource has a name that is
 		// compliant with Kubernetes requested
 		// RFC-1035 + RFC1123
