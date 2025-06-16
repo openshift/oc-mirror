@@ -2,13 +2,16 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/containers/common/pkg/retry"
 	"github.com/containers/image/v5/copy"
+	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/pkg/cli"
 	"github.com/containers/image/v5/signature"
@@ -189,9 +192,14 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		co.ReportWriter = opts.Stdout
 	}
 
-	return retry.IfNecessary(ctx, func() error {
+	var retryOpts retry.Options
+	if opts.RetryOpts != nil {
+		retryOpts = *opts.RetryOpts
+	}
+	retryOpts.IsErrorRetryable = isErrorRetryable
 
-		//manifestBytes, err := copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
+	//nolint:wrapcheck // context will be added by the calling function
+	return retry.IfNecessary(ctx, func() error {
 		manifestBytes, err := o.mc.CopyImage(ctx, policyContext, destRef, srcRef, co)
 		if err != nil {
 			return err
@@ -206,7 +214,30 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 			}
 		}
 		return nil
-	}, opts.RetryOpts)
+	}, &retryOpts)
+}
+
+// Custom implementation to extend `containers/common/pkg/retry.retry`
+func isErrorRetryable(err error) bool {
+	var httpError docker.UnexpectedHTTPStatusError
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, context.DeadlineExceeded):
+		return true
+	case errors.Is(err, context.Canceled):
+		return false
+	case errors.As(err, &httpError):
+		// Retry on 502, 503, and 504 server errors, they appear to be quite common in the field
+		// We duplicate this here because older versions of oc-mirror cannot bump containers/common given Golang version restrictions
+		if httpError.StatusCode >= http.StatusBadGateway && httpError.StatusCode <= http.StatusGatewayTimeout {
+			return true
+		}
+		return false
+	default:
+		// Delegate the remaining checks to containers/common
+		return retry.IsErrorRetryable(err)
+	}
 }
 
 // check exists - checks if image exists
