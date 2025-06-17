@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -190,6 +191,13 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
 			log.Info(emoji.Gear + "  setting up the environment for you...")
+
+			// OCPBUGS-55374 (check current umask)
+			currentUmask := syscall.Umask(0)
+			// 18 represents 22 in octal
+			if currentUmask != 18 {
+				return fmt.Errorf("bad umask setting (should be set to 0022)")
+			}
 
 			// Validate and set common flags
 			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, fileProtocol) {
