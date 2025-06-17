@@ -11,11 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -27,6 +22,12 @@ import (
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 var (
@@ -447,6 +448,12 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 		}
 
 		for _, result := range results {
+			_, err := image.ParseRef(result)
+			if err != nil {
+				lsc.Log.Debug("invalid helm image: %s", result)
+				continue
+			}
+
 			lsc.Log.Debug("Found image %s", result)
 			img := v2alpha1.RelatedImage{
 				Image: result,
