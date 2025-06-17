@@ -797,13 +797,20 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if batchError != nil {
+		removeFilteredCatalogDir(collectorSchema.CatalogToFBCMap)
 		return batchError
 	}
 
 	// prepare tar.gz when mirror to disk
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	// next, generate the archive
-	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
+
+	err = o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
+	if err != nil {
+		removeFilteredCatalogDir(collectorSchema.CatalogToFBCMap)
+	}
+
+	return err
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
@@ -1243,4 +1250,10 @@ func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {
 	}
 
 	return regs
+}
+
+func removeFilteredCatalogDir(collectorSchema map[string]v2alpha1.CatalogFilterResult) {
+	for _, v := range collectorSchema {
+		os.RemoveAll(strings.TrimSuffix(v.FilteredConfigPath, "/catalog-config"))
+	}
 }
