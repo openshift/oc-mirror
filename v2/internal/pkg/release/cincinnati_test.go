@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/containers/image/v5/types"
+	digest "github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -222,15 +223,15 @@ func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v2alp
 	return []v2alpha1.CopyImageSchema{}, nil
 }
 
-func (o mockManifest) GetDigest(ctx context.Context, srcContext *types.SystemContext, img string) (string, error) {
+func (o mockManifest) ImageDigest(ctx context.Context, srcContext *types.SystemContext, img string) (string, error) {
 	return "123456546546546546546546546", nil
 }
 
-func (o mockManifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
 
-func (o mockManifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
 
@@ -238,7 +239,7 @@ func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSc
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
 
-func (o mockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
 
@@ -246,6 +247,10 @@ func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o mockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
+}
+
+func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
 }

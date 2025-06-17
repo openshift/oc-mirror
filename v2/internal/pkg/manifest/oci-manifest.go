@@ -3,7 +3,6 @@ package manifest
 import (
 	"archive/tar"
 	"compress/gzip"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,15 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
@@ -34,19 +29,19 @@ func New(log clog.PluggableLoggerInterface) *Manifest {
 	return &Manifest{Log: log}
 }
 
-// GetImageIndex - used to get the oci index.json
-func (o Manifest) GetImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+// GetOCIImageIndex - used to get the oci index.json
+func (o Manifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 	indexPath := filepath.Join(dir, index)
-	oci, err := o.GetImageManifest(indexPath)
+	oci, err := o.GetOCIImageManifest(indexPath)
 	if err != nil {
 		return nil, fmt.Errorf("image index %q: %w", indexPath, err)
 	}
 	return oci, nil
 }
 
-// GetImageManifest used to ge the manifest in the oci blobs/sha256
+// GetOCIImageManifest used to ge the manifest in the oci blobs/sha256
 // directory - found in index.json
-func (o Manifest) GetImageManifest(file string) (*v2alpha1.OCISchema, error) {
+func (o Manifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
 	oci, err := parser.ParseJsonFile[*v2alpha1.OCISchema](file)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)
@@ -63,8 +58,8 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 	return ocs, nil
 }
 
-// ExtractLayersOCI
-func (o Manifest) ExtractLayersOCI(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
+// ExtractOCILayers
+func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	_, err := os.Stat(filepath.Join(toPath, label))
 	if err == nil {
 		o.Log.Debug("extract directory exists (nop)")
@@ -163,7 +158,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
-func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
 	if err != nil {
 		return fmt.Errorf("read index.json: %w", err)
@@ -202,33 +197,4 @@ func (o Manifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISche
 	}
 
 	return nil
-}
-
-func (o Manifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	if err := mirror.ReexecIfNecessaryForImages(imgRef); err != nil {
-		return "", fmt.Errorf("reexec mirror: %w", err)
-	}
-
-	srcRef, err := alltransports.ParseImageName(imgRef)
-	if err != nil {
-		return "", fmt.Errorf("invalid source name %s: %w", imgRef, err)
-	}
-
-	img, err := srcRef.NewImageSource(ctx, sourceCtx)
-	if err != nil {
-		return "", fmt.Errorf("new image source: %w", err)
-	}
-	defer img.Close()
-
-	manifestBytes, _, err := img.GetManifest(ctx, nil)
-	if err != nil {
-		return "", fmt.Errorf("get manifest: %w", err)
-	}
-
-	digest, err := manifest.Digest(manifestBytes)
-	if err != nil {
-		return "", fmt.Errorf("get manifest digest: %w", err)
-	}
-
-	return digest.Encoded(), nil
 }

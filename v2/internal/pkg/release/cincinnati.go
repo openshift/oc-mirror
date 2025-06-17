@@ -135,7 +135,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		var copyImage v2alpha1.CopyImageSchema
 
 		if imgSpec.Digest == "" {
-			imgSpec.Digest, err = o.Manifest.GetDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
+			imgSpec.Digest, err = o.Manifest.ImageDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
 			if err != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("retrieving digest %w", err)
 			}

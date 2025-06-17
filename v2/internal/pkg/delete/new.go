@@ -7,6 +7,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 func New(log clog.PluggableLoggerInterface,
@@ -16,6 +17,7 @@ func New(log clog.PluggableLoggerInterface,
 	config v2alpha1.ImageSetConfiguration,
 	manifest manifest.ManifestInterface,
 	localStorageDisk string,
+	sigHandler signature.SignatureInterface,
 ) DeleteInterface {
 	return &DeleteImages{
 		Log:              log,
@@ -26,5 +28,6 @@ func New(log clog.PluggableLoggerInterface,
 		Manifest:         manifest,
 		LocalStorageDisk: localStorageDisk,
 		LocalStorageFQDN: opts.LocalStorageFQDN,
+		SigHandler:       sigHandler,
 	}
 }
