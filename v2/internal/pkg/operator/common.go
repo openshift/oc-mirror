@@ -164,22 +164,15 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			// applies only to catalogs
 			switch {
 			// OCPBUGS-52470
-			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly():
-				var op v2alpha1.Operator
-				for _, ope := range o.Config.Mirror.Operators {
-					if ope.Catalog == img.Image {
-						op = ope
-					}
-				}
-				if op.Catalog == "" {
-					return result, fmt.Errorf("could not identify filtered catalog tag for image %q: no catalog matched %q in the imageSetConfiguration", img.Image, img.Image)
-				}
-				dof, err := digestOfFilter(op)
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly() && img.RebuiltTag != "":
+				src = src + ":" + img.RebuiltTag
+
+				filteredImageDigest, err := FilteredCatalogDigest(o.Opts.Global.WorkingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
 				if err != nil {
-					return result, fmt.Errorf("could not identify filtered catalog tag for image %q: %w", img.Image, err)
+					dest = dest + ":" + imgSpec.Algorithm + "-" + img.RebuiltTag
+				} else {
+					dest = dest + ":" + imgSpec.Algorithm + "-" + string(filteredImageDigest)
 				}
-				src = src + ":" + dof
-				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -587,7 +580,12 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 	case spec.Tag == "" && spec.Transport == ociProtocol:
 		dest = dest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
-		dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
+		if img.RebuiltTag != "" {
+			dest = dest + ":" + spec.Algorithm + "-" + img.RebuiltTag
+		} else {
+			dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
+		}
+
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 		// use tag only for dest, but pull by digest
 		dest = dest + ":" + spec.Tag

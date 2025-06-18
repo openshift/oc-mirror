@@ -273,17 +273,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		rebuiltTag = tag
 	}
 
-	// OCPBUGS-52470
-	// check if the original operator was mirrored by digest
 	componentName := imgSpec.ComponentName() + "." + result.Digest
-	if imgSpec.IsImageByDigestOnly() && o.Opts.IsMirrorToDisk() {
-		tag, err := digestOfFilter(op)
-		if err != nil {
-			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("failed to get filter digest for operator mirrored by digest: %w", err)
-		}
-		componentName = imgSpec.ComponentName() + "." + tag
-	}
-
 	relatedImages[componentName] = []v2alpha1.RelatedImage{
 		{
 			Name:          catalogName,
@@ -441,4 +431,13 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	}
 
 	return nil
+}
+
+func FilteredCatalogDigest(workingDir, catalogName, originalDigest, iscFilterDigest string) (string, error) {
+	imageIndexDir := filepath.Join(workingDir, operatorCatalogsDir, catalogName, originalDigest)
+	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
+
+	filteredImageDigest, err := os.ReadFile(filepath.Join(filteredCatalogsDir, iscFilterDigest, "digest"))
+
+	return string(filteredImageDigest), err
 }
