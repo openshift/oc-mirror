@@ -250,7 +250,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	}
 
 	rebuiltTag := ""
-	if result.ToRebuild {
+	if !isFullCatalog(op) {
 		tag, err := digestOfFilter(op)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
