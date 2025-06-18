@@ -850,6 +850,8 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		return err
 	}
 
+	tagRebuiltCatalogByDigestOnly(&collectorSchema, o.Opts.LocalStorageFQDN, o.Opts.Global.WorkingDir)
+
 	// call the batch worker
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
@@ -1252,4 +1254,31 @@ func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {
 	}
 
 	return regs
+}
+
+func tagRebuiltCatalogByDigestOnly(collectorSchema *v2alpha1.CollectorSchema, localStorageFQDN, workingDir string) {
+	for k, img := range collectorSchema.AllImages {
+		if img.RebuiltTag == "" || !img.Type.IsOperatorCatalog() || strings.Contains(img.Destination, localStorageFQDN) {
+			continue
+		}
+
+		imgSpec, err := image.ParseRef(img.Origin)
+		if err != nil {
+			continue
+		}
+		if !imgSpec.IsImageByDigestOnly() {
+			continue
+		}
+		dest := strings.Split(img.Destination, imgSpec.Algorithm)
+		if len(dest) == 0 {
+			continue
+		}
+
+		filteredImageDigest, err := operator.FilteredCatalogDigest(workingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
+		if err != nil {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + img.RebuiltTag
+		} else {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + string(filteredImageDigest)
+		}
+	}
 }
