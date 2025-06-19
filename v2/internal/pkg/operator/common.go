@@ -166,7 +166,6 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			// OCPBUGS-52470
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly() && img.RebuiltTag != "":
 				src = src + ":" + img.RebuiltTag
-
 				filteredImageDigest, err := FilteredCatalogDigest(o.Opts.Global.WorkingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
 				if err != nil {
 					dest = dest + ":" + imgSpec.Algorithm + "-" + img.RebuiltTag
