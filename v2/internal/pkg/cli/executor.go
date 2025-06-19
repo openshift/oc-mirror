@@ -193,8 +193,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			// OCPBUGS-55374 (check current umask)
 			currentUmask := syscall.Umask(0)
 			syscall.Umask(currentUmask)
-			// 18 represents 22 in octal
-			if currentUmask != 18 {
+			if currentUmask != 0o022 {
 				log.Warn(emoji.Warning+"  Detected bad umask 00%o (oc-mirror requires a umask of 0022)", currentUmask)
 			}
 
