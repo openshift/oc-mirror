@@ -436,6 +436,33 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	return nil
 }
 
+func TagRebuiltCatalogByDigestOnly(collectorSchema *v2alpha1.CollectorSchema, localStorageFQDN, workingDir string) {
+	for k, img := range collectorSchema.AllImages {
+		if img.RebuiltTag == "" || !img.Type.IsOperatorCatalog() || strings.Contains(img.Destination, localStorageFQDN) {
+			continue
+		}
+
+		imgSpec, err := image.ParseRef(img.Origin)
+		if err != nil {
+			continue
+		}
+		if !imgSpec.IsImageByDigestOnly() {
+			continue
+		}
+		dest := strings.Split(img.Destination, imgSpec.Algorithm)
+		if len(dest) == 0 {
+			continue
+		}
+
+		filteredImageDigest, err := FilteredCatalogDigest(workingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
+		if err != nil {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + img.RebuiltTag
+		} else {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + string(filteredImageDigest)
+		}
+	}
+}
+
 func FilteredCatalogDigest(workingDir, catalogName, originalDigest, iscFilterDigest string) (string, error) {
 	imageIndexDir := filepath.Join(workingDir, operatorCatalogsDir, catalogName, originalDigest)
 	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
