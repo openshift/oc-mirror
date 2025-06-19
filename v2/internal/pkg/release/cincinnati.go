@@ -266,6 +266,11 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		}
 	}
 
+	// OCPBUGS-51157
+	if len(allImages) == 0 && (len(filterCopy.Release) > 0 || len(filterCopy.Channels) > 0) {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GetReleaseReferenceImages] no release images found")
+	}
+
 	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%w", err)
