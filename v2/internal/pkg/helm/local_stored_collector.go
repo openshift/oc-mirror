@@ -260,21 +260,22 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 	if lsc.Downloaders.indexDownloader == nil {
 		indexDownloader, err = helmrepo.NewChartRepository(&entry, getter.All(lsc.Helm.settings))
 		if err != nil {
-			return err
+			msg := strings.ReplaceAll(err.Error(), "for:", "")
+			return fmt.Errorf("setting index downloader for %s: %s", strings.TrimSpace(chartRepo.Name), msg)
 		}
 	} else {
 		indexDownloader = lsc.Downloaders.indexDownloader
 	}
 
 	if _, err := indexDownloader.DownloadIndexFile(); err != nil {
-		return fmt.Errorf("invalid chart repository %q: %v", chartRepo.URL, err)
+		return fmt.Errorf("invalid chart repository %q: %w", chartRepo.URL, err)
 	}
 
 	// Update temp file with chart entry
 	helmFile.Update(&entry)
 
 	if err := helmFile.WriteFile(lsc.Helm.settings.RepositoryConfig, 0644); err != nil {
-		return fmt.Errorf("error writing helm repo file: %v", err)
+		return fmt.Errorf("error writing helm repo file: %s %w", strings.TrimSpace(chartRepo.Name), err)
 	}
 
 	return nil
@@ -286,7 +287,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 	}
 	resp, err := wClient.Get(indexURL)
 	if err != nil {
-		return helmrepo.IndexFile{}, fmt.Errorf("request helm index: %w", err)
+		return helmrepo.IndexFile{}, fmt.Errorf("request helm index: %s %w", indexURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -296,7 +297,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 
 	indexFile, err := parser.ParseYamlReader[helmrepo.IndexFile](resp.Body)
 	if err != nil {
-		return helmrepo.IndexFile{}, err
+		return helmrepo.IndexFile{}, fmt.Errorf("failed to parse %q into index file: %w", indexURL, err)
 	}
 
 	namespace := getNamespaceFromURL(indexURL)
@@ -332,7 +333,7 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 		var err error
 		indexFile, err = parser.ParseYamlFile[helmrepo.IndexFile](indexFilePath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse %s: %w", indexFilePath, err)
 		}
 	}
 
@@ -353,12 +354,12 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 
 	var chart *helmchart.Chart
 	if chart, err = loader.Load(path); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load %s: %w", chart.Name(), err)
 	}
 
 	var templates string
 	if templates, err = getHelmTemplates(chart); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get template %s: %w", chart.Name(), err)
 	}
 
 	// Process each YAML document seperately
@@ -389,17 +390,17 @@ func getImagesPath(paths ...string) []string {
 // getHelmTemplates returns all chart templates
 func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 	out := new(bytes.Buffer)
-	valueOpts := make(map[string]interface{})
+	valueOpts := make(map[string]any)
 	caps := chartutil.DefaultCapabilities
 
 	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
 	if err != nil {
-		return "", fmt.Errorf("error rendering values: %v", err)
+		return "", fmt.Errorf("error rendering values: %w", err)
 	}
 
 	files, err := engine.Render(ch, valuesToRender)
 	if err != nil {
-		return "", fmt.Errorf("error rendering chart %s: %v", ch.Name(), err)
+		return "", fmt.Errorf("error rendering chart %s: %w", ch.Name(), err)
 	}
 
 	// Skip the NOTES.txt files
@@ -433,7 +434,7 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 
 // findImages will return images from parsed object
 func findImages(templateData []byte, paths ...string) (images []v2alpha1.RelatedImage, err error) {
-	var data interface{}
+	var data any
 	if err := yaml.Unmarshal(templateData, &data); err != nil {
 		return nil, err
 	}
@@ -444,7 +445,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 	for _, path := range paths {
 		results, err := parseJSONPath(data, j, path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 		}
 
 		for _, result := range results {
@@ -468,7 +469,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 }
 
 // parseJSONPath will parse data and filter for a provided jsonpath template
-func parseJSONPath(input interface{}, parser *jsonpath.JSONPath, template string) ([]string, error) {
+func parseJSONPath(input any, parser *jsonpath.JSONPath, template string) ([]string, error) {
 	buf := new(bytes.Buffer)
 	if err := parser.Parse(template); err != nil {
 		return nil, err
