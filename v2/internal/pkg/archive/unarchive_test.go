@@ -91,14 +91,8 @@ func TestUnArchiver_NoArchive(t *testing.T) {
 	defer os.RemoveAll(testFolder)
 	workingDir := t.TempDir()
 	cacheDir := t.TempDir()
-	o, err := NewArchiveExtractor(testFolder, workingDir, cacheDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = o.Unarchive()
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := NewArchiveExtractor(testFolder, workingDir, cacheDir)
+	assert.ErrorContains(t, err, "no tar archives matching")
 }
 
 func TestUnArchiver_WorkingDirError(t *testing.T) {
