@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,6 +25,9 @@ import (
 	"golang.org/x/term"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/containers/image/v5/docker"
+	"github.com/containers/image/v5/docker/reference"
+	imgconfig "github.com/containers/image/v5/pkg/docker/config"
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
@@ -238,6 +242,14 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			defer ex.logFile.Close()
 			cmd.SetOutput(ex.logFile)
 
+			// NOTE: this is not in the `ex.Validate` function because it breaks unit tests
+			if strings.Contains(args[0], dockerProtocol) {
+				registry := strings.TrimPrefix(args[0], dockerProtocol)
+				if err := ex.checkRegistryAccess(cmd.Context(), registry); err != nil {
+					return fmt.Errorf("checking registry %q access: %w", registry, err)
+				}
+			}
+
 			// prepare internal storage
 			if err := ex.setupLocalStorage(cmd.Context()); err != nil {
 				return err
@@ -385,6 +397,64 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	} else {
 		return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
 	}
+}
+
+func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry string) error {
+	o.Log.Debug("Checking registry access to %q...", registry)
+
+	sctx, err := o.Opts.DestImage.NewSystemContext()
+	if err != nil {
+		return fmt.Errorf("failed to get system context: %w", err)
+	}
+
+	key, reg, err := parseCredentialsKey(registry)
+	if err != nil {
+		return err
+	}
+
+	authConfig, err := imgconfig.GetCredentials(sctx, key)
+	if err != nil {
+		return fmt.Errorf("failed to find credentials: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if err := docker.CheckAuth(ctx, sctx, authConfig.Username, authConfig.Password, reg); err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
+
+	o.Log.Info("Verified we can authenticate against registry %q", registry)
+	return nil
+}
+
+// See containers/common/pkg/auth.parseCredentialsKey
+func parseCredentialsKey(arg string) (key string, registry string, err error) {
+	if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+		url, err := url.Parse(arg)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to parse: %w", err)
+		}
+		key = url.Host
+	} else {
+		key = arg
+	}
+	split := strings.Split(key, "/")
+	registry = split[0]
+	if registry == key {
+		return key, registry, nil
+	}
+	ref, err := reference.ParseNormalizedNamed(key)
+	if err != nil {
+		return "", "", fmt.Errorf("parse reference %q: %w", key, err)
+	}
+	if !reference.IsNameOnly(ref) {
+		return "", "", fmt.Errorf("reference %q contains tag or digest", ref.String())
+	}
+	refRegistry := reference.Domain(ref)
+	if refRegistry != registry {
+		return "", "", fmt.Errorf("key %q registry mismatch %q vs %q", key, registry, refRegistry)
+	}
+	return key, registry, nil
 }
 
 // Complete - do the final setup of modules
