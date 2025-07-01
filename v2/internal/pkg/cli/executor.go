@@ -186,10 +186,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		Long:          mirrorlongDesc,
 		Example:       mirrorExamples,
 		Args:          cobra.MinimumNArgs(1),
-		SilenceErrors: false,
+		SilenceErrors: true,
 		SilenceUsage:  false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-
 			// OCPBUGS-55374 (check current umask)
 			currentUmask := syscall.Umask(0)
 			syscall.Umask(currentUmask)
@@ -232,6 +231,10 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			if err := ex.Validate(args); err != nil {
 				return err
 			}
+
+			// NOTE: We don't want help output on errors from here onwards
+			cmd.SilenceUsage = true
+
 			if err := ex.Complete(args); err != nil {
 				return err
 			}
