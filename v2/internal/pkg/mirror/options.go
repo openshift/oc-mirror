@@ -272,8 +272,8 @@ func ImageSrcFlags(global *GlobalOptions, shared *SharedImageOptions, deprecated
 func RetryFlags() (pflag.FlagSet, *retry.Options) {
 	opts := retry.Options{}
 	fs := pflag.FlagSet{}
-	fs.IntVar(&opts.MaxRetry, "retry-times", 2, "the number of times to possibly retry")
-	fs.DurationVar(&opts.Delay, "retry-delay", time.Second, "delay between 2 retries")
+	fs.IntVar(&opts.MaxRetry, "retry-times", 5, "the number of times to possibly retry")
+	fs.DurationVar(&opts.Delay, "retry-delay", 0, "delay between 2 retries")
 	return fs, &opts
 }
 
