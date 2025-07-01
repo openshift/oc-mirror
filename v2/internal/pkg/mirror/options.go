@@ -273,7 +273,7 @@ func RetryFlags() (pflag.FlagSet, *retry.Options) {
 	opts := retry.Options{}
 	fs := pflag.FlagSet{}
 	fs.IntVar(&opts.MaxRetry, "retry-times", 5, "the number of times to possibly retry")
-	fs.DurationVar(&opts.Delay, "retry-delay", 0, "delay between 2 retries")
+	fs.DurationVar(&opts.Delay, "retry-delay", 0, "delay between 2 retries (default 0 uses exponential backoff, set value uses constant delay)")
 	return fs, &opts
 }
 
