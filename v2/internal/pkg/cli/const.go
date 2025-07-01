@@ -27,7 +27,7 @@ const (
 	helmDir                       string = "helm"
 	helmChartDir                  string = "charts"
 	helmIndexesDir                string = "indexes"
-	maxParallelLayerDownloads     uint   = 10
-	maxParallelImageDownloads     uint   = 8
+	maxParallelLayerDownloads     uint   = 5
+	maxParallelImageDownloads     uint   = 4
 	limitOverallParallelDownloads uint   = 200
 )
