@@ -161,8 +161,17 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			}
 
 			// add the tag for src and dest
-			switch {
 			// applies only to catalogs
+			switch {
+			// OCPBUGS-52470
+			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) == 0 && imgSpec.IsImageByDigestOnly() && img.RebuiltTag != "":
+				src = src + ":" + img.RebuiltTag
+				filteredImageDigest, err := FilteredCatalogDigest(o.Opts.Global.WorkingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
+				if err != nil {
+					dest = dest + ":" + imgSpec.Algorithm + "-" + img.RebuiltTag
+				} else {
+					dest = dest + ":" + imgSpec.Algorithm + "-" + string(filteredImageDigest)
+				}
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -226,7 +235,8 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
-			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
+			// OCPBUGS-31622 skipping empty related images
+			if img.Image == "" {
 				continue
 			}
 			imgSpec, err := image.ParseRef(img.Image)
@@ -256,8 +266,9 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 				dest = dest + "::" + latestTag
 			case imgSpec.IsImageByDigestOnly():
 				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
-			case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-				// use tag only for dest, but pull by digest
+			// OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
+			// use tag only for dest, but pull by digest
+			case imgSpec.IsImageByTagAndDigest():
 				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
 				src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
 				dest = dest + ":" + imgSpec.Tag
@@ -568,7 +579,12 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 	case spec.Tag == "" && spec.Transport == ociProtocol:
 		dest = dest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
-		dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
+		if img.RebuiltTag != "" {
+			dest = dest + ":" + spec.Algorithm + "-" + img.RebuiltTag
+		} else {
+			dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
+		}
+
 	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 		// use tag only for dest, but pull by digest
 		dest = dest + ":" + spec.Tag
