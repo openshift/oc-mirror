@@ -285,7 +285,6 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 			RebuiltTag:    rebuiltTag,
 		},
 	}
-
 	return result, nil
 }
 
@@ -323,7 +322,8 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	if err != nil {
 		// If there was an error reading the digest file, we assume the catalog has not been filtered
 		isAlreadyFiltered = false
-	} else { // digest read
+	} else {
+		// digest read
 		srcFilteredCatalog, err := o.cachedCatalog(op, filterDigest)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
@@ -380,6 +380,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	}
 
 	filteredDigestPath := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
+
 	if err := createFolders([]string{filteredDigestPath}); err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
@@ -433,4 +434,40 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	}
 
 	return nil
+}
+
+func TagRebuiltCatalogByDigestOnly(collectorSchema *v2alpha1.CollectorSchema, localStorageFQDN, workingDir string) {
+	for k, img := range collectorSchema.AllImages {
+		if img.RebuiltTag == "" || !img.Type.IsOperatorCatalog() || strings.Contains(img.Destination, localStorageFQDN) {
+			continue
+		}
+
+		imgSpec, err := image.ParseRef(img.Origin)
+		if err != nil {
+			continue
+		}
+		if !imgSpec.IsImageByDigestOnly() {
+			continue
+		}
+		dest := strings.Split(img.Destination, imgSpec.Algorithm)
+		if len(dest) == 0 {
+			continue
+		}
+
+		filteredImageDigest, err := FilteredCatalogDigest(workingDir, imgSpec.ComponentName(), imgSpec.Digest, img.RebuiltTag)
+		if err != nil {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + img.RebuiltTag
+		} else {
+			collectorSchema.AllImages[k].Destination = dest[0] + imgSpec.Algorithm + "-" + string(filteredImageDigest)
+		}
+	}
+}
+
+func FilteredCatalogDigest(workingDir, catalogName, originalDigest, iscFilterDigest string) (string, error) {
+	imageIndexDir := filepath.Join(workingDir, operatorCatalogsDir, catalogName, originalDigest)
+	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
+
+	filteredImageDigest, err := os.ReadFile(filepath.Join(filteredCatalogsDir, iscFilterDigest, "digest"))
+
+	return string(filteredImageDigest), err
 }
