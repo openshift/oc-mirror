@@ -185,7 +185,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		Long:          mirrorlongDesc,
 		Example:       mirrorExamples,
 		Args:          cobra.MinimumNArgs(1),
-		SilenceErrors: false,
+		SilenceErrors: true,
 		SilenceUsage:  false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
@@ -223,6 +223,10 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			if err := ex.Validate(args); err != nil {
 				return err
 			}
+
+			// NOTE: We don't want help output on errors from here onwards
+			cmd.SilenceUsage = true
+
 			if err := ex.Complete(args); err != nil {
 				return err
 			}
