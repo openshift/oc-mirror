@@ -227,7 +227,7 @@ func render(ch *helmchart.Chart) (string, error) {
 	}
 
 	if err := chartutil.ProcessDependencies(ch, valueOpts); err != nil {
-		return "", fmt.Errorf("error processing dependencies: %v", err)
+		return "", fmt.Errorf("error processing dependencies: %w", err)
 	}
 
 	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, relOps, caps)
