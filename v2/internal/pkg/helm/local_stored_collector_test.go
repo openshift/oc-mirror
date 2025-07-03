@@ -566,6 +566,103 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			expectedError: nil,
 		},
+		{
+			caseName:     "local helm chart - aliased sub-chart - MirrorToDisk: should pass",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "my-chart-with-subchart-alias", Path: filepath.Join(testChartsDataPath, "my-chart-with-subchart-alias-0.1.0.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://quay.io/rhdh-community/rhdh:next",
+					Destination: "docker://localhost:8888/rhdh-community/rhdh:next",
+					Origin:      "quay.io/rhdh-community/rhdh:next",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://nginx:1.16.0",
+					Destination: "docker://localhost:8888/nginx:1.16.0",
+					Origin:      "nginx:1.16.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/fedora/postgresql-15:latest",
+					Destination: "docker://localhost:8888/fedora/postgresql-15:latest",
+					Origin:      "quay.io/fedora/postgresql-15:latest",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:   "local helm chart - aliased sub-chart - MirrorToMirror: should pass",
+			mirrorMode: mirror.MirrorToMirror,
+			dest:       testDest,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "my-chart-with-subchart-alias", Path: filepath.Join(testChartsDataPath, "my-chart-with-subchart-alias-0.1.0.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://quay.io/rhdh-community/rhdh:next",
+					Destination: testDest + "/rhdh-community/rhdh:next",
+					Origin:      "quay.io/rhdh-community/rhdh:next",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://nginx:1.16.0",
+					Destination: testDest + "/nginx:1.16.0",
+					Origin:      "nginx:1.16.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/fedora/postgresql-15:latest",
+					Destination: testDest + "/fedora/postgresql-15:latest",
+					Origin:      "quay.io/fedora/postgresql-15:latest",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:     "local helm chart - aliased sub-chart - DiskToMirror: should pass",
+			mirrorMode:   mirror.DiskToMirror,
+			localStorage: testLocalStorageFQDN,
+			dest:         testDest,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "my-chart-with-subchart-alias", Path: filepath.Join(testChartsDataPath, "my-chart-with-subchart-alias-0.1.0.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/rhdh-community/rhdh:next",
+					Destination: testDest + "/rhdh-community/rhdh:next",
+					Origin:      "quay.io/rhdh-community/rhdh:next",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/nginx:1.16.0",
+					Destination: testDest + "/nginx:1.16.0",
+					Origin:      "nginx:1.16.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://" + testLocalStorageFQDN + "/fedora/postgresql-15:latest",
+					Destination: testDest + "/fedora/postgresql-15:latest",
+					Origin:      "quay.io/fedora/postgresql-15:latest",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
 	}
 
 	tempDir := t.TempDir()
