@@ -34,10 +34,11 @@ const (
 )
 
 type ChannelConcurrentBatch struct {
-	Log           clog.PluggableLoggerInterface
-	LogsDir       string
-	Mirror        mirror.MirrorInterface
-	MaxGoroutines uint
+	Log              clog.PluggableLoggerInterface
+	LogsDir          string
+	Mirror           mirror.MirrorInterface
+	MaxGoroutines    uint
+	SynchedTimeStamp string
 }
 
 type GoroutineResult struct {
@@ -207,7 +208,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			additionalImgCountDiff: collectorSchema.TotalAdditionalImages - copiedImages.TotalAdditionalImages,
 			helmCountDiff:          collectorSchema.TotalHelmImages - copiedImages.TotalHelmImages,
 		}
-		filename, err := saveErrors(o.Log, o.LogsDir, errArray)
+		filename, err := saveErrors(o.Log, o.LogsDir, o.SynchedTimeStamp, errArray)
 		if err != nil {
 			batchErr.source = fmt.Errorf(errMsgHeader+" - unable to log these errors in %s/%s: %w", workerPrefix, o.LogsDir, filename, err)
 		} else {

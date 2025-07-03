@@ -18,7 +18,7 @@ const (
 	operatorImageExtractDir       string = "hold-operator"
 	operatorCatalogsDir           string = "operator-catalogs"
 	signaturesDir                 string = "signatures"
-	registryLogFilename           string = "registry.log"
+	registryLogFilename           string = "registry-%s.log"
 	startMessage                  string = "starting local storage on localhost:%v"
 	dryRunOutDir                  string = "dry-run"
 	mappingFile                   string = "mapping.txt"

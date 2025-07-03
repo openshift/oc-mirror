@@ -239,7 +239,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	releaseSignatureClient := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
 	cn := release.NewCincinnati(o.Log, o.Manifest, &o.Config, *o.Opts, client, false, releaseSignatureClient)
 	o.Release = release.New(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest, cn, o.ImageBuilder)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages, o.SynchedTimeStamp)
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
