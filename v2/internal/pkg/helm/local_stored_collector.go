@@ -393,6 +393,10 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 	valueOpts := make(map[string]any)
 	caps := chartutil.DefaultCapabilities
 
+	if err := chartutil.ProcessDependencies(ch, valueOpts); err != nil {
+		return "", fmt.Errorf("error processing dependencies: %w", err)
+	}
+
 	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
 	if err != nil {
 		return "", fmt.Errorf("error rendering values: %w", err)
