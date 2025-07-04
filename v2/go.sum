@@ -368,6 +368,8 @@ github.com/opencontainers/selinux v1.12.0 h1:6n5JV4Cf+4y0KNXW48TLj5DwfXpvWlxXplU
 github.com/opencontainers/selinux v1.12.0/go.mod h1:BTPX+bjVbWGXw7ZZWUbdENt8w0htPSrlgOOysQaU62U=
 github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d h1:MVt1daCTh1h0FEQweeaEgDRW4wiNbqDX8NzfGKZIAJc=
 github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d/go.mod h1:OOh6Qopf21pSzqNVCB5gomomBXb8o5sGKZxG2KNpaXM=
+github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda h1:Yjnmq1n4zf1pTwao3EAgkG5o++6iOuxfxGVDwj2Kfrs=
+github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/operator-framework/api v0.27.0 h1:OrVaGKZJvbZo58HTv2guz7aURkhVKYhFqZ/6VpifiXI=
 github.com/operator-framework/api v0.27.0/go.mod h1:lg2Xx+S8NQWGYlEOvFwQvH46E5EK5IrAIL7HWfAhciM=
 github.com/operator-framework/operator-registry v1.47.0 h1:Imr7X/W6FmXczwpIOXfnX8d6Snr1dzwWxkMG+lLAfhg=
