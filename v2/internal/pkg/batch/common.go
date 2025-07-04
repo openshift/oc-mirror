@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"time"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -44,9 +43,8 @@ func (err *BatchError) ExitCode() int {
 	return exitCode
 }
 
-func saveErrors(logger clog.PluggableLoggerInterface, logsDir string, errArray []mirrorErrorSchema) (string, error) {
+func saveErrors(logger clog.PluggableLoggerInterface, logsDir, timestamp string, errArray []mirrorErrorSchema) (string, error) {
 	if len(errArray) > 0 {
-		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("mirroring_errors_%s.txt", timestamp)
 		file, err := os.Create(filepath.Join(logsDir, filename))
 		if err != nil {

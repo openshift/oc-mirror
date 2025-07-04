@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/distribution/distribution/v3/registry/api/errcode"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -88,11 +89,13 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		{Source: "docker://registry/name/namespace/sometestimage-i@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-i@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testi", Type: v2alpha1.TypeGeneric},
 	}
 
+	timestampStr := time.Now().Format("20060102_150405")
+
 	collectedImages := v2alpha1.CollectorSchema{AllImages: relatedImages, TotalReleaseImages: 4, TotalOperatorImages: 3, TotalAdditionalImages: 2}
 	t.Run("Testing m2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2mopts)
 		if err != nil {
@@ -104,7 +107,8 @@ func TestChannelConcurrentWorker(t *testing.T) {
 	t.Run("Testing m2d Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err != nil {
@@ -115,7 +119,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 	t.Run("Testing d2m Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err != nil {
@@ -127,7 +131,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 	t.Run("Testing delete Worker - no errors: should pass", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
 		if err != nil {
@@ -139,7 +143,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		if err == nil {
@@ -153,7 +157,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
@@ -167,7 +171,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
 		if err == nil {
@@ -195,7 +199,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
 		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1))
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1), timestampStr)
 
 		_, err := w.Worker(context.Background(), collectedImages, m2dopts)
 		assert.Error(t, err)
