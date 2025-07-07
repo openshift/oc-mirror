@@ -681,7 +681,7 @@ func (o *ExecutorSchema) isLocalStoragePortBound() bool {
 // the correct local storage directory
 func (o *ExecutorSchema) setupLocalStorageDir() error {
 	o.LocalStorageDisk = filepath.Join(o.Opts.Global.CacheDir, cacheRelativePath)
-	err := os.MkdirAll(o.LocalStorageDisk, 0755)
+	err := os.MkdirAll(o.LocalStorageDisk, 0766)
 	if err != nil {
 		o.Log.Error("unable to setup folder for oc-mirror local storage: %v ", err)
 		return err
@@ -693,7 +693,7 @@ func (o *ExecutorSchema) setupLocalStorageDir() error {
 // all the relevant working directory structures
 func (o *ExecutorSchema) setupWorkingDir() error {
 	// ensure working dir exists
-	err := o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir, 0755)
+	err := o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir, 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
@@ -701,7 +701,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create signatures directory
 	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for signatures %v ", err)
 		return err
@@ -709,7 +709,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create release-images directory
 	o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for release images %v ", err)
 		return err
@@ -717,7 +717,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create release cache dir
 	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for release cache %v ", err)
 		return err
@@ -725,14 +725,14 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create cincinnati graph dir
 	o.Log.Trace("creating cincinnati graph data directory %s ", path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir))
-	err = o.MakeDir.makeDirAll(path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0755)
+	err = o.MakeDir.makeDirAll(path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for cincinnati graph data directory %v ", err)
 		return err
 	}
 
 	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
-	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
 		return err
@@ -746,13 +746,13 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 			return err
 		}
 	}
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for cluster resources %v ", err)
 		return err
 	}
 
-	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmChartDir), 0755)
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmChartDir), 0744)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for helm directory %v ", err)
 		return err
@@ -990,13 +990,13 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 	os.RemoveAll(o.LogsDir)
 
 	// create logs directory
-	err := o.MakeDir.makeDirAll(o.LogsDir, 0755)
+	err := o.MakeDir.makeDirAll(o.LogsDir, 0744)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
-	l, err := os.OpenFile(filepath.Join(o.LogsDir, "oc-mirror.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	l, err := os.OpenFile(filepath.Join(o.LogsDir, "oc-mirror.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
 	if err != nil {
 		panic(err)
 	}
