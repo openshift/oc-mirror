@@ -834,6 +834,9 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 		return err
 	}
 
+	// OCPBUGS-52470
+	operator.TagRebuiltCatalogByDigestOnly(&collectorSchema, o.Opts.LocalStorageFQDN, o.Opts.Global.WorkingDir)
+
 	// call the batch worker
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
