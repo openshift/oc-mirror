@@ -432,7 +432,7 @@ func TestExecutorNewMirrorCommand(t *testing.T) {
 
 // TestExecutorValidate
 func TestExecutorValidate(t *testing.T) {
-	t.Run("Testing Executor : ParallelLayerImages = 20, validate should pass", func(t *testing.T) {
+	t.Run("Testing Executor : ParallelLayerImages = 5, validate should pass", func(t *testing.T) {
 		log := new(LogMock)
 
 		global := &mirror.GlobalOptions{
@@ -463,7 +463,8 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.LogLevel = "info"
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" // reset
-		opts.ParallelLayerImages = 20
+		opts.ParallelLayerImages = 5
+		opts.ParallelImages = 5
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
 		log.AssertNotCalled(t, "Warn", mock.Anything)
@@ -492,6 +493,8 @@ func TestExecutorValidate(t *testing.T) {
 		}
 		opts.Global.ConfigPath = "test"
 		opts.Global.LogLevel = "info"
+		opts.ParallelLayerImages = 5
+		opts.ParallelImages = 5
 
 		ex := &ExecutorSchema{
 			Log:     log,
@@ -504,7 +507,19 @@ func TestExecutorValidate(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 
+		// check ParallelImages
+		opts.ParallelImages = 11
+		err = ex.Validate([]string{"file://test"})
+		assert.Equal(t, "the flag parallel-images must be between the range 0 to 10", err.Error())
+
+		// check ParallelLayerImages
+		opts.ParallelImages = 5
+		opts.ParallelLayerImages = 11
+		err = ex.Validate([]string{"file://test"})
+		assert.Equal(t, "the flag parallel-layers must be between the range 0 to 10", err.Error())
+
 		// check for config path error
+		opts.ParallelLayerImages = 5
 		opts.Global.ConfigPath = ""
 		err = ex.Validate([]string{"file://test"})
 		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
