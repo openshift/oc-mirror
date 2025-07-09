@@ -187,7 +187,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		Example:       mirrorExamples,
 		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceUsage:  false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// OCPBUGS-55374 (check current umask)
 			currentUmask := syscall.Umask(0)
@@ -376,10 +376,10 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	}
 	// OCPBUGS-58467
 	if o.Opts.ParallelImages > 10 || o.Opts.ParallelImages < 1 {
-		return fmt.Errorf("the flag parallel-images must be between the range 0 to 10")
+		return fmt.Errorf("the flag parallel-images must be between the range 1 to 10")
 	}
 	if o.Opts.ParallelLayerImages > 10 || o.Opts.ParallelLayerImages < 1 {
-		return fmt.Errorf("the flag parallel-layers must be between the range 0 to 10")
+		return fmt.Errorf("the flag parallel-layers must be between the range 1 to 10")
 	}
 	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.WorkingDir != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed")

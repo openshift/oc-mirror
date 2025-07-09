@@ -507,19 +507,7 @@ func TestExecutorValidate(t *testing.T) {
 			t.Fatalf("should not fail")
 		}
 
-		// check ParallelImages
-		opts.ParallelImages = 11
-		err = ex.Validate([]string{"file://test"})
-		assert.Equal(t, "the flag parallel-images must be between the range 0 to 10", err.Error())
-
-		// check ParallelLayerImages
-		opts.ParallelImages = 5
-		opts.ParallelLayerImages = 11
-		err = ex.Validate([]string{"file://test"})
-		assert.Equal(t, "the flag parallel-layers must be between the range 0 to 10", err.Error())
-
 		// check for config path error
-		opts.ParallelLayerImages = 5
 		opts.Global.ConfigPath = ""
 		err = ex.Validate([]string{"file://test"})
 		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
@@ -578,6 +566,48 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = ""       // reset
 		opts.Global.WorkingDir = "" // reset
 		assert.Equal(t, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided", ex.Validate([]string{"docker://test"}).Error())
+	})
+
+	t.Run("Testing Executor : validate should fail", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := &mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+		opts.Global.ConfigPath = "test"
+		opts.Global.LogLevel = "info"
+
+		ex := &ExecutorSchema{
+			Log:     log,
+			Opts:    opts,
+			LogsDir: "/tmp/",
+		}
+
+		// check ParallelImages
+		opts.ParallelImages = 11
+		err := ex.Validate([]string{"file://test"})
+		assert.Error(t, err)
+
+		// check ParallelLayerImages
+		opts.ParallelImages = 5
+		opts.ParallelLayerImages = 11
+		err = ex.Validate([]string{"file://test"})
+		assert.Error(t, err)
 	})
 }
 
