@@ -70,7 +70,7 @@ func GetWorkingDirRegistrydConfigPath(workingDir string) string {
 }
 
 func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydConfigPath string) error {
-	if err := os.MkdirAll(filepath.Dir(customRegistrydConfigPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(customRegistrydConfigPath), 0766); err != nil {
 		return fmt.Errorf("error creating folder %s %w", filepath.Dir(customRegistrydConfigPath), err)
 	}
 
@@ -114,7 +114,7 @@ func fileName(registryURL string) string {
 }
 
 func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
-	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0755)
+	err := os.MkdirAll(filepath.Dir(registryFileAbsPath), 0766)
 	if err != nil {
 		return fmt.Errorf("error creating cache")
 	}

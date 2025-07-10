@@ -17,7 +17,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	os.RemoveAll(outDir)
 
 	// create logs directory
-	err := o.MakeDir.makeDirAll(outDir, 0755)
+	err := o.MakeDir.makeDirAll(outDir, 0766)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err

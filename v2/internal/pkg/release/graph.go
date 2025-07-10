@@ -31,7 +31,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 
 	// save graph data in a container layer modifying UID and GID to root.
 	archiveDestination := filepath.Join(o.Opts.Global.WorkingDir, graphArchive)
-	graphLayer, err := imagebuilder.LayerFromGzipByteArray(body, archiveDestination, buildGraphDataDir, 0644, 0, 0)
+	graphLayer, err := imagebuilder.LayerFromGzipByteArray(body, archiveDestination, buildGraphDataDir, 0766, 0, 0)
 	if err != nil {
 		return "", err
 	}

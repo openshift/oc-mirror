@@ -125,7 +125,8 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	if err != nil {
 		return fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
 	}
-	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0755)
+	// nolint:gosec // G306: no sensitive data
+	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0766)
 	if err != nil {
 		return err
 	}

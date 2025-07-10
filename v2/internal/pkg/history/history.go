@@ -31,7 +31,7 @@ func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerIn
 	}
 	historyDir := filepath.Join(workingDir, historyPath)
 
-	err := os.MkdirAll(historyDir, 0755)
+	err := os.MkdirAll(historyDir, 0766)
 	if err != nil {
 		return history{}, fmt.Errorf("error creating directories %w", err)
 	}

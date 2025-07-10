@@ -274,7 +274,7 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 	// Update temp file with chart entry
 	helmFile.Update(&entry)
 
-	if err := helmFile.WriteFile(lsc.Helm.settings.RepositoryConfig, 0644); err != nil {
+	if err := helmFile.WriteFile(lsc.Helm.settings.RepositoryConfig, 0766); err != nil {
 		return fmt.Errorf("error writing helm repo file: %s %w", strings.TrimSpace(chartRepo.Name), err)
 	}
 
@@ -304,13 +304,13 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 
 	indexDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmIndexesDir, namespace)
 
-	if err := os.MkdirAll(indexDir, 0755); err != nil {
+	if err := os.MkdirAll(indexDir, 0766); err != nil {
 		return indexFile, err
 	}
 
 	indexFilePath := filepath.Join(indexDir, "index.yaml")
 
-	if err := indexFile.WriteFile(indexFilePath, 0644); err != nil {
+	if err := indexFile.WriteFile(indexFilePath, 0666); err != nil {
 		return indexFile, fmt.Errorf("error writing helm index file: %s", err.Error())
 	}
 

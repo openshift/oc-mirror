@@ -174,7 +174,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 	// save IDMS struct to file
 	if _, err := os.Stat(msFilePath); errors.Is(err, os.ErrNotExist) {
 		log.Debug("%s does not exist, creating it", msFilePath)
-		err := os.MkdirAll(filepath.Dir(msFilePath), 0744)
+		err := os.MkdirAll(filepath.Dir(msFilePath), 0766)
 		if err != nil {
 			return err
 		}
@@ -473,7 +473,7 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 	// save ClusterCatalog struct to file
 	if _, err := os.Stat(ccFileName); errors.Is(err, os.ErrNotExist) {
 		o.Log.Debug("%s does not exist, creating it", ccFileName)
-		if err := os.MkdirAll(filepath.Dir(ccFileName), 0744); err != nil {
+		if err := os.MkdirAll(filepath.Dir(ccFileName), 0766); err != nil {
 			return err
 		}
 		o.Log.Debug("%s dir created", filepath.Dir(ccFileName))
@@ -645,7 +645,7 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 
 	if _, err := os.Stat(osusPath); errors.Is(err, os.ErrNotExist) {
 		o.Log.Debug("%s does not exist, creating it", osusPath)
-		err := os.MkdirAll(filepath.Dir(osusPath), 0744)
+		err := os.MkdirAll(filepath.Dir(osusPath), 0766)
 		if err != nil {
 			return err
 		}

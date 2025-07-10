@@ -51,11 +51,11 @@ func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArch
 // * working-dir to workingDir
 func (o MirrorUnArchiver) Unarchive() error {
 	// make sure workingDir exists
-	if err := os.MkdirAll(o.workingDir, 0755); err != nil {
+	if err := os.MkdirAll(o.workingDir, 0766); err != nil {
 		return fmt.Errorf("unable to create working dir %q: %w", o.workingDir, err)
 	}
 	// make sure cacheDir exists
-	if err := os.MkdirAll(o.cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(o.cacheDir, 0766); err != nil {
 		return fmt.Errorf("unable to create cache dir %q: %w", o.cacheDir, err)
 	}
 
@@ -171,13 +171,13 @@ func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Re
 	}
 	proxyReader := bar.ProxyReader(reader)
 	defer proxyReader.Close()
-	return writeFile(descriptor, proxyReader, header.FileInfo().Mode()|0755)
+	return writeFile(descriptor, proxyReader, header.FileInfo().Mode()|0766)
 }
 
 func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
 	// make sure all the parent directories exist
 	descriptorParent := filepath.Dir(filePath)
-	if err := os.MkdirAll(descriptorParent, 0755); err != nil {
+	if err := os.MkdirAll(descriptorParent, 0766); err != nil {
 		return fmt.Errorf("unable to create parent directory for %s: %w", filePath, err)
 	}
 

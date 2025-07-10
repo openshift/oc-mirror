@@ -120,7 +120,7 @@ func createFolders(paths []string) error {
 	var errs []error
 	for _, path := range paths {
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			err = os.MkdirAll(path, 0755)
+			err = os.MkdirAll(path, 0766)
 			if err != nil {
 				errs = append(errs, err)
 			}

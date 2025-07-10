@@ -54,7 +54,7 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 		discYamlFile = filepath.Join(o.Opts.Global.WorkingDir, strings.ReplaceAll(discYaml, ".", "-"+o.Opts.Global.DeleteID+"."))
 	}
 	// create the delete folder
-	err := os.MkdirAll(o.Opts.Global.WorkingDir+deleteDir, 0755)
+	err := os.MkdirAll(o.Opts.Global.WorkingDir+deleteDir, 0766)
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
@@ -75,7 +75,8 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
-	err = os.WriteFile(filename, ymlData, 0755)
+	// nolint:gosec // G306: no sensitive data
+	err = os.WriteFile(filename, ymlData, 0766)
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
@@ -98,7 +99,8 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
-	err = os.WriteFile(discYamlFile, discYamlData, 0755)
+	// nolint:gosec // G306: no sensitive data
+	err = os.WriteFile(discYamlFile, discYamlData, 0766)
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
