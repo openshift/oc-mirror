@@ -468,92 +468,13 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
 		log.AssertNotCalled(t, "Warn", mock.Anything)
-	})
-
-	t.Run("Testing Executor : validate should pass", func(t *testing.T) {
-		log := clog.New("trace")
-
-		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
-		}
-
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
-
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = "test"
-		opts.Global.LogLevel = "info"
-		opts.ParallelLayerImages = 5
-		opts.ParallelImages = 5
-
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			LogsDir: "/tmp/",
-		}
-
-		err := ex.Validate([]string{"file://test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
-		// check for config path error
-		opts.Global.ConfigPath = ""
-		err = ex.Validate([]string{"file://test"})
-		assert.Equal(t, "use the --config flag it is mandatory", err.Error())
-
-		// check when using file protocol --from should not be used
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = "test"
-		err = ex.Validate([]string{"file://test"})
-		assert.Equal(t, "when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed", err.Error())
-
-		// check when using --from protocol must be of type file://
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = "test"
-		err = ex.Validate([]string{"docker://test"})
-		assert.Equal(t, "when --from is used, it must have file:// prefix", err.Error())
-
-		// check destination protocol
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = ""
-		err = ex.Validate([]string{"test"})
-		assert.Equal(t, "destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes", err.Error())
 
 		// check that since is a valid date
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = ""
+		opts.Global.WorkingDir = ""
 		opts.Global.SinceString = "2024-01-01"
 		assert.NoError(t, ex.Validate([]string{"file://test"}))
-
-		// check error is returned when since is an invalid date
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = ""
-		opts.Global.SinceString = "224-44-01"
-		assert.Equal(t, "--since flag needs to be in format yyyy-MM-dd", ex.Validate([]string{"file://test"}).Error())
-
-		// should not be able to use --workspace in mirror-to-disk workflow
-		opts.Global.SinceString = "" // reset
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = ""
-		opts.Global.WorkingDir = "file://test"
-		assert.Equal(t, "when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed", ex.Validate([]string{"file://test"}).Error())
-
-		// should not be able to use --workspace and --from together at the same time
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = "file://abc"
-		opts.Global.WorkingDir = "file://test"
-		assert.Equal(t, "when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together", ex.Validate([]string{"docker://test"}).Error())
 
 		// should be able to run mirror-to-mirror with a specific workingDir (--workspace)
 		opts.Global.ConfigPath = "test"
@@ -561,11 +482,6 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.WorkingDir = "file://test"
 		assert.NoError(t, ex.Validate([]string{"docker://test"}))
 
-		// should not be able to run mirror-to-mirror  without specifying workspace
-		opts.Global.ConfigPath = "test"
-		opts.Global.From = ""       // reset
-		opts.Global.WorkingDir = "" // reset
-		assert.Equal(t, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided", ex.Validate([]string{"docker://test"}).Error())
 	})
 
 	t.Run("Testing Executor : validate should fail", func(t *testing.T) {
@@ -601,13 +517,77 @@ func TestExecutorValidate(t *testing.T) {
 		// check ParallelImages
 		opts.ParallelImages = 11
 		err := ex.Validate([]string{"file://test"})
-		assert.Error(t, err)
+		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
+
+		opts.ParallelImages = 0
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
 
 		// check ParallelLayerImages
 		opts.ParallelImages = 5
 		opts.ParallelLayerImages = 11
 		err = ex.Validate([]string{"file://test"})
-		assert.Error(t, err)
+		assert.EqualError(t, err, "the flag parallel-layers must be between the range 1 to 10")
+
+		opts.ParallelLayerImages = 0
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "the flag parallel-layers must be between the range 1 to 10")
+
+		opts.ParallelImages = 5
+		opts.ParallelLayerImages = 4
+
+		// check for config path error
+		opts.Global.ConfigPath = ""
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "use the --config flag it is mandatory")
+
+		// check when using file protocol --from should not be used
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "test"
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
+
+		// check when using --from protocol must be of type file://
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "test"
+		err = ex.Validate([]string{"docker://test"})
+		assert.EqualError(t, err, "when --from is used, it must have file:// prefix")
+
+		// check destination protocol
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		err = ex.Validate([]string{"test"})
+		assert.EqualError(t, err, "destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
+
+		// check error is returned when since is an invalid date
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		opts.Global.SinceString = "224-44-01"
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "--since flag needs to be in format yyyy-MM-dd")
+
+		// should not be able to use --workspace in mirror-to-disk workflow
+		opts.Global.SinceString = "" // reset
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""
+		opts.Global.WorkingDir = "file://test"
+		err = ex.Validate([]string{"file://test"})
+		assert.EqualError(t, err, "when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed")
+
+		// should not be able to use --workspace and --from together at the same time
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = "file://abc"
+		opts.Global.WorkingDir = "file://test"
+		err = ex.Validate([]string{"docker://test"})
+		assert.EqualError(t, err, "when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together")
+
+		// should not be able to run mirror-to-mirror  without specifying workspace
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = ""       // reset
+		opts.Global.WorkingDir = "" // reset
+		err = ex.Validate([]string{"docker://test"})
+		assert.EqualError(t, err, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
+
 	})
 }
 
