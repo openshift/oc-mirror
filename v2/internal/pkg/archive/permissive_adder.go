@@ -29,7 +29,7 @@ type permissiveAdder struct {
 func newPermissiveAdder(maxSize int64, destination string, logger clog.PluggableLoggerInterface) (*permissiveAdder, error) {
 	chunk := 1
 	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, chunk)
-	err := os.MkdirAll(destination, 0755)
+	err := os.MkdirAll(destination, 0766)
 	if err != nil {
 		return &permissiveAdder{}, err
 	}

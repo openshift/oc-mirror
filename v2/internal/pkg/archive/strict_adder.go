@@ -26,7 +26,7 @@ type strictAdder struct {
 func newStrictAdder(maxSize int64, destination string, logger clog.PluggableLoggerInterface) (*strictAdder, error) {
 	chunk := 1
 	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, chunk)
-	err := os.MkdirAll(destination, 0755)
+	err := os.MkdirAll(destination, 0766)
 	if err != nil {
 		return &strictAdder{}, err
 	}
