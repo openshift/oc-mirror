@@ -310,7 +310,7 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 
 	indexFilePath := filepath.Join(indexDir, "index.yaml")
 
-	if err := indexFile.WriteFile(indexFilePath, 0666); err != nil {
+	if err := indexFile.WriteFile(indexFilePath, 0644); err != nil {
 		return indexFile, fmt.Errorf("error writing helm index file: %s", err.Error())
 	}
 
