@@ -26,7 +26,7 @@ func (s *ErrInvalidSequence) Error() string {
 }
 
 func (s *ErrMirrorSequence) Error() string {
-	return fmt.Sprintf(s.msg)
+	return fmt.Sprintf("%s", s.msg)
 }
 
 func (o *MirrorOptions) checkSequence(incoming, current v1alpha2.Metadata, backendErr error) error {
