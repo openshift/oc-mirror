@@ -115,29 +115,30 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 )
 
 type ExecutorSchema struct {
-	Log                 clog.PluggableLoggerInterface
-	LogsDir             string
-	logFile             *os.File
-	registryLogFile     *os.File
-	Config              v2alpha1.ImageSetConfiguration
-	Opts                *mirror.CopyOptions
-	WorkingDir          string
-	Operator            operator.CollectorInterface
-	Release             release.CollectorInterface
-	AdditionalImages    additional.CollectorInterface
-	HelmCollector       helm.CollectorInterface
-	Mirror              mirror.MirrorInterface
-	Manifest            manifest.ManifestInterface
-	Batch               batch.BatchInterface
-	LocalStorageService registry.Registry
-	LocalStorageDisk    string
-	ClusterResources    clusterresources.GeneratorInterface
-	ImageBuilder        imagebuilder.ImageBuilderInterface
-	CatalogBuilder      imagebuilder.CatalogBuilderInterface
-	MirrorArchiver      archive.Archiver
-	MirrorUnArchiver    archive.UnArchiver
-	MakeDir             MakeDirInterface
-	Delete              delete.DeleteInterface
+	Log                  clog.PluggableLoggerInterface
+	LogsDir              string
+	logFile              *os.File
+	registryLogFile      *os.File
+	Config               v2alpha1.ImageSetConfiguration
+	Opts                 *mirror.CopyOptions
+	WorkingDir           string
+	Operator             operator.CollectorInterface
+	Release              release.CollectorInterface
+	AdditionalImages     additional.CollectorInterface
+	HelmCollector        helm.CollectorInterface
+	Mirror               mirror.MirrorInterface
+	Manifest             manifest.ManifestInterface
+	Batch                batch.BatchInterface
+	LocalStorageService  registry.Registry
+	LocalStorageDisk     string
+	ClusterResources     clusterresources.GeneratorInterface
+	ImageBuilder         imagebuilder.ImageBuilderInterface
+	CatalogBuilder       imagebuilder.CatalogBuilderInterface
+	MirrorArchiver       archive.Archiver
+	MirrorUnArchiver     archive.UnArchiver
+	MakeDir              MakeDirInterface
+	Delete               delete.DeleteInterface
+	MirrorStartTimeStamp string
 }
 
 type MakeDirInterface interface {
@@ -412,6 +413,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	}
 	o.Log.Debug("imagesetconfig : %v ", cfg)
 
+	// OCPBUGS-56398 add timestamp to logs
+	o.MirrorStartTimeStamp = time.Now().Format("20060102_150405")
+
 	// update all dependant modules
 	mc := mirror.NewMirrorCopy()
 	md := mirror.NewMirrorDelete()
@@ -498,7 +502,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages, o.MirrorStartTimeStamp)
 
 	if o.Opts.IsMirrorToDisk() {
 		if err := archive.RemovePastArchives(rootDir); err != nil {
@@ -620,7 +624,7 @@ func (o *ExecutorSchema) setupLocalStorage(ctx context.Context) error {
 		o.Log.Error("parsing config %v", err)
 	}
 	// prepare the logger
-	registryLogPath := filepath.Join(o.LogsDir, registryLogFilename)
+	registryLogPath := filepath.Join(o.LogsDir, fmt.Sprintf("registry-%s.log", o.MirrorStartTimeStamp))
 	o.registryLogFile, err = os.Create(registryLogPath)
 	if err != nil {
 		o.Log.Warn("Failed to create log file for local storage registry, using default stderr")
@@ -1004,7 +1008,7 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 		return err
 	}
 
-	l, err := os.OpenFile(filepath.Join(o.LogsDir, "oc-mirror.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	l, err := os.OpenFile(filepath.Join(o.LogsDir, fmt.Sprintf("oc-mirror-%s.log", o.MirrorStartTimeStamp)), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		panic(err)
 	}
