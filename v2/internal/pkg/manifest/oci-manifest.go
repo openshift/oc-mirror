@@ -129,12 +129,14 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 			switch header.Typeflag {
 			case tar.TypeDir:
 				if header.Name != "./" {
-					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
+					// nolint:gosec // G305: file traversal (zip slip vulnerability : tar created by oc-mirror)
+					if err := os.MkdirAll(filepath.Join(path, header.Name), 0766); err != nil {
 						return fmt.Errorf("untar: Mkdir() failed: %w", err)
 					}
 				}
 			case tar.TypeReg:
-				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
+				// nolint:gosec // G305: file traversal (zip slip vulnerability : tar created by oc-mirror)
+				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0766)
 				if err != nil {
 					return fmt.Errorf("untar: Create() failed: %w", err)
 				}
