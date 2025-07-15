@@ -23,7 +23,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.39.0 // indirect
+	golang.org/x/crypto v0.40.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.18.4
 	k8s.io/apimachinery v0.33.2
@@ -36,7 +36,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-require golang.org/x/sys v0.33.0 // indirect
+require golang.org/x/sys v0.34.0 // indirect
 
 require (
 	github.com/containerd/errdefs v0.3.0
@@ -48,7 +48,7 @@ require (
 	github.com/openshift/oc v4.2.0-alpha.0+incompatible
 	github.com/otiai10/copy v1.14.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.16.0
 	k8s.io/api v0.33.2
 	k8s.io/klog v1.0.0
 )
@@ -235,10 +235,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.33.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/term v0.33.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/genproto v0.0.0-20240823204242-4ba0660f739c // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
