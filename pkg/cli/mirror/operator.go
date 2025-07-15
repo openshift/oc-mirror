@@ -452,9 +452,9 @@ func (o *OperatorOptions) verifyDC(dic diff.DiffIncludeConfig, dc *declcfg.Decla
 			// Log the error and continue if --continue-on-error flag is set
 			msg := fmt.Sprintf("Operator %s was not found, please check name, minVersion, maxVersion, and channels in the config file.", pkg.Name)
 			if !o.MirrorOptions.ContinueOnError {
-				return fmt.Errorf(msg)
+				return errors.New(msg)
 			} else {
-				o.Logger.Errorf(msg)
+				o.Logger.Errorf("%s", msg)
 			}
 		}
 	}
