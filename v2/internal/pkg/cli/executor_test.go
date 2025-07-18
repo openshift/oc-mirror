@@ -568,73 +568,66 @@ func TestExecutorValidate(t *testing.T) {
 
 // TestExecutorComplete
 func TestExecutorComplete(t *testing.T) {
-	t.Run("Testing Executor : complete should pass", func(t *testing.T) {
-		log := clog.New("trace")
+	log := clog.New("trace")
 
-		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
-			CacheDir:     "/tmp/",
-		}
+	global := &mirror.GlobalOptions{
+		SecurePolicy: false,
+		CacheDir:     "/tmp/",
+	}
 
-		_, sharedOpts := mirror.SharedImageFlags()
-		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
-		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
-		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
-		_, retryOpts := mirror.RetryFlags()
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
 
-		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			Dev:                 false,
-		}
-		opts.Global.ConfigPath = common.TestFolder + "isc.yaml"
+	opts := &mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Dev:                 false,
+	}
+	opts.Global.ConfigPath = common.TestFolder + "isc.yaml"
 
-		ex := &ExecutorSchema{
-			Log:     log,
-			Opts:    opts,
-			MakeDir: MakeDir{},
-			LogsDir: "/tmp/",
-		}
+	ex := &ExecutorSchema{
+		Log:     log,
+		Opts:    opts,
+		MakeDir: MakeDir{},
+		LogsDir: "/tmp/",
+	}
 
-		// file protocol
-		err := ex.Complete([]string{"file:///tmp/test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
+	t.Run("Testing Executor : complete should fail", func(t *testing.T) {
 		// docker protocol - disk to mirror
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		ex.Opts.Global.From = "file://" + testFolder
-		err = ex.Complete([]string{"docker://tmp/test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		err := ex.Complete([]string{"docker://tmp/test"})
+		assert.ErrorContains(t, err, "no tar archives matching")
+	})
+
+	t.Run("Testing Executor : complete should pass", func(t *testing.T) {
+		// file protocol
+		err := ex.Complete([]string{"file:///tmp/test"})
+		assert.NoError(t, err, "should pass with file protocol")
+
+		testFolder := t.TempDir()
 
 		// docker protocol - mirror to mirror
 		ex.Opts.Global.From = ""
 		ex.Opts.Global.WorkingDir = "file://" + testFolder
 		err = ex.Complete([]string{"docker://tmp/test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should pass with docker protocol - m2m")
 		assert.Equal(t, filepath.Join(testFolder, workingDir), ex.Opts.Global.WorkingDir)
 
-		// diskToMirror - using since
+		// mirrorToDisk - using since
 		ex.Opts.Global.From = "file://" + testFolder
 		ex.Opts.Global.WorkingDir = ""
 		ex.Opts.Global.SinceString = "2024-01-01"
 		err = ex.Complete([]string{"file:///tmp/test"})
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should pass m2d with --since")
 		expectedSince, err := time.Parse(time.DateOnly, "2024-01-01")
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err, "should parse time")
 		assert.Equal(t, expectedSince, ex.Opts.Global.Since)
 
 		ex.Opts.Global.SinceString = "12345"
