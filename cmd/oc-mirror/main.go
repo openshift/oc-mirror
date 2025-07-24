@@ -18,15 +18,20 @@ import (
 	cliV1 "github.com/openshift/oc-mirror/pkg/cli/mirror"
 )
 
+const ocMirrorRelativePath string = ".oc-mirror"
+
 //go:embed data/*
 var mirrorV2 embed.FS
 
 func main() {
 	if slices.Contains(os.Args, "--v2") {
-		err := runOcMirrorV2(os.Args)
-		var exitErr *exec.ExitError
-		if err != nil && errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
+		if err := runOcMirrorV2(os.Args); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				os.Exit(exitErr.ExitCode())
+			}
+			fmt.Printf("Error: %s\n", err.Error())
+			os.Exit(1)
 		}
 	} else {
 		rootCmd := cliV1.NewMirrorCmd()
@@ -35,9 +40,19 @@ func main() {
 }
 
 func runOcMirrorV2(args []string) error {
-	tmpdir, err := os.MkdirTemp("", "oc-mirror-")
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
+		return fmt.Errorf("failed to get user homedir: %w", err)
+	}
+
+	ocMirrorPath := filepath.Join(homeDir, ocMirrorRelativePath)
+	if err := os.MkdirAll(ocMirrorPath, 0o700); err != nil {
+		return fmt.Errorf("failed to create oc-mirror dir: %w", err)
+	}
+
+	tmpdir, err := os.MkdirTemp(ocMirrorPath, "oc-mirror-v2-")
+	if err != nil {
+		return fmt.Errorf("failed to create tmp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
