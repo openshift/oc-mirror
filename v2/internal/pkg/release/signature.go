@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -190,7 +191,13 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] writing %w", ferr)
 			}
 		}
-		imgs = append(imgs, img)
+		// OCPBUGS-52562
+		// add a check to ensure there are no duplicates
+		// ideally it would be better to add this at the early stages of this process
+		// but due to the conversion of the 'Source' field in line 155 we have to do this after the fact
+		if !slices.Contains(imgs, img) {
+			imgs = append(imgs, img)
+		}
 	}
 	return imgs, nil
 }
