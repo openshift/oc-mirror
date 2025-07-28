@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -58,6 +59,16 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 	}
 	httpClient := &http.Client{Transport: tr}
 
+	signatureURL := defaultSignatureURL
+	if signatureURLOvr := os.Getenv("OCP_SIGNATURE_URL"); len(signatureURLOvr) != 0 {
+		if parsedURL, err := url.ParseRequestURI(signatureURLOvr); err != nil {
+			o.Log.Error("Invalid URL provided in OCP_SIGNATURE_URL: %s, falling back to default SignatureURL", signatureURLOvr)
+		} else {
+			o.Log.Debug("OCP_SIGNATURE_URL environment variable set: using %s as base URL for signature retrieval", signatureURLOvr)
+			signatureURL = parsedURL.String()
+		}
+	}
+
 	for _, img := range images {
 		var data []byte
 		imgSpec, err := image.ParseRef(img.Source)
@@ -96,8 +107,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		// we dont have the current digest in cache
 		// nolint: nestif
 		if len(data) == 0 {
-			// see above nolint comment
-			req, _ := http.NewRequestWithContext(ctx, "GET", SignatureURL+"sha256="+digest+"/signature-1", nil)
+			req, _ := http.NewRequestWithContext(ctx, "GET", signatureURL+"sha256="+digest+"/signature-1", nil)
 			req.Header.Set(ContentType, ApplicationJson)
 			resp, err := httpClient.Do(req)
 			if err != nil {
