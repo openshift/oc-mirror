@@ -23,10 +23,13 @@ var mirrorV2 embed.FS
 
 func main() {
 	if slices.Contains(os.Args, "--v2") {
-		err := runOcMirrorV2(os.Args)
-		var exitErr *exec.ExitError
-		if err != nil && errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
+		if err := runOcMirrorV2(os.Args); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				os.Exit(exitErr.ExitCode())
+			}
+			fmt.Printf("failed to run oc-mirror: %s\n", err.Error())
+			os.Exit(1)
 		}
 	} else {
 		rootCmd := cliV1.NewMirrorCmd()
