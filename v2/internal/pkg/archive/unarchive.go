@@ -62,11 +62,17 @@ func (o MirrorUnArchiver) Unarchive() error {
 	isTerminal := term.IsTerminal(int(os.Stdout.Fd()))
 	p := mpb.New(mpb.PopCompletedMode())
 	for i, chunkPath := range o.archiveFiles {
+		stat, err := os.Stat(chunkPath)
+		if err != nil {
+			return fmt.Errorf("failed to access %q: %w", chunkPath, err)
+		}
+		if stat.Size() == 0 {
+			return fmt.Errorf("empty archive file %q", chunkPath)
+		}
 		if !isTerminal {
 			// FIXME: replace this by a proper log call
 			fmt.Printf("Extracting chunk file (%d / %d): %s\n", i+1, len(o.archiveFiles), chunkPath)
 		}
-		stat, _ := os.Stat(chunkPath)
 		bar := p.AddBar(stat.Size(),
 			mpb.PrependDecorators(
 				decor.Name(chunkPath+" "),
@@ -74,6 +80,7 @@ func (o MirrorUnArchiver) Unarchive() error {
 			),
 			mpb.AppendDecorators(decor.Elapsed(decor.ET_STYLE_GO)),
 		)
+		bar.EnableTriggerComplete()
 
 		if err := o.unarchiveChunkTarFile(chunkPath, bar); err != nil {
 			bar.Abort(false)
