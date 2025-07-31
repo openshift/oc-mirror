@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 
 	"k8s.io/klog"
@@ -17,8 +18,6 @@ import (
 
 	cliV1 "github.com/openshift/oc-mirror/pkg/cli/mirror"
 )
-
-const ocMirrorRelativePath string = ".oc-mirror"
 
 //go:embed data/*
 var mirrorV2 embed.FS
@@ -30,7 +29,14 @@ func main() {
 			if errors.As(err, &exitErr) {
 				os.Exit(exitErr.ExitCode())
 			}
-			fmt.Printf("Error: %s\n", err.Error())
+			fmt.Printf("failed to run oc-mirror: %s\n", err.Error())
+			if strings.Contains(err.Error(), "permission denied") {
+				tmpdir, ok := os.LookupEnv("TMPDIR")
+				if !ok {
+					tmpdir = "/tmp"
+				}
+				fmt.Printf("The tmp dir %q might be mounted as `noexec`. Please set TMPDIR to a filesystem with exec permissions.\n", tmpdir)
+			}
 			os.Exit(1)
 		}
 	} else {
@@ -40,19 +46,9 @@ func main() {
 }
 
 func runOcMirrorV2(args []string) error {
-	homeDir, err := os.UserHomeDir()
+	tmpdir, err := os.MkdirTemp("", "oc-mirror-")
 	if err != nil {
-		return fmt.Errorf("failed to get user homedir: %w", err)
-	}
-
-	ocMirrorPath := filepath.Join(homeDir, ocMirrorRelativePath)
-	if err := os.MkdirAll(ocMirrorPath, 0o700); err != nil {
-		return fmt.Errorf("failed to create oc-mirror dir: %w", err)
-	}
-
-	tmpdir, err := os.MkdirTemp(ocMirrorPath, "oc-mirror-v2-")
-	if err != nil {
-		return fmt.Errorf("failed to create tmp dir: %w", err)
+		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
