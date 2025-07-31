@@ -1,14 +1,24 @@
 version: 2
 updates:
+  # Configuration for the oc-mirror v1 go mod
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "daily"
-    allow:
-      - dependency-type: all
-    # Disable version updates
+    # Disable version updates, only allow security updates
     open-pull-requests-limit: 0
     groups:
-      golang:
+      oc-mirror-v1:
         applies-to: security-updates
+        patterns: [ "*" ]
+
+  # Configuration for the oc-mirror v2 go module
+  - package-ecosystem: "gomod"
+    directory: "/v2"
+    schedule:
+      interval: "daily"
+    # Allow all updates (version and security)
+    open-pull-requests-limit: 10
+    groups:
+      oc-mirror-v2:
         patterns: [ "*" ]
