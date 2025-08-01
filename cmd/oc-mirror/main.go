@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 
 	"k8s.io/klog"
@@ -29,6 +30,13 @@ func main() {
 				os.Exit(exitErr.ExitCode())
 			}
 			fmt.Printf("failed to run oc-mirror: %s\n", err.Error())
+			if strings.Contains(err.Error(), "permission denied") {
+				tmpdir, ok := os.LookupEnv("TMPDIR")
+				if !ok {
+					tmpdir = "/tmp"
+				}
+				fmt.Printf("The tmp dir %q might be mounted as `noexec`. Please set TMPDIR to a filesystem with exec permissions.\n", tmpdir)
+			}
 			os.Exit(1)
 		}
 	} else {
