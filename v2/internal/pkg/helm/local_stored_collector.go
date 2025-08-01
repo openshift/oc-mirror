@@ -354,7 +354,7 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 
 	var chart *helmchart.Chart
 	if chart, err = loader.Load(path); err != nil {
-		return nil, fmt.Errorf("failed to load %s: %w", chart.Name(), err)
+		return nil, fmt.Errorf("failed to load %s: %w", path, err)
 	}
 
 	var templates string
