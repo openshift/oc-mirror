@@ -84,6 +84,7 @@ const (
 
 func NewMirrorCmd() *cobra.Command {
 	klog.Warning("\n\n⚠️  oc-mirror v1 is deprecated (starting in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2\n\n")
+	klog.Warning("\n\n⚠️  starting with OCP release 4.21, oc-mirror v2 is going to be the default version, please migrate to oc-mirror v2 or start using --v1 in order to continue using the oc-mirror deprecated version\n\n")
 
 	o := MirrorOptions{
 		operatorCatalogToFullArtifactPath: map[string]string{},
