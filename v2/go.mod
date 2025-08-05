@@ -6,8 +6,8 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/blang/semver/v4 v4.0.0
 	github.com/containers/common v0.64.0
-	github.com/containers/image/v5 v5.36.0
-	github.com/containers/storage v1.59.0
+	github.com/containers/image/v5 v5.36.1
+	github.com/containers/storage v1.59.1
 	github.com/distribution/distribution/v3 v3.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/go-jose/go-jose/v4 v4.1.0 // indirect; OCPBUGS-51217 - CVE-2025-27144
@@ -35,10 +35,10 @@ require (
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
 	k8s.io/kubectl v0.33.3
-	sigs.k8s.io/yaml v1.5.0
+	sigs.k8s.io/yaml v1.6.0
 )
 
-require github.com/docker/cli v28.3.2+incompatible
+require github.com/docker/cli v28.3.3+incompatible
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
