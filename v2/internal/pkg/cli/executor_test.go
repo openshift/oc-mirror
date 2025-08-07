@@ -945,6 +945,76 @@ func TestExcludeImages(t *testing.T) {
 	}
 }
 
+func TestExecutorCheckRegistryAccess(t *testing.T) {
+	const validRegistry = "localhost:5000"
+	testFolder := t.TempDir()
+	regCfg, err := setupRegForTest(testFolder)
+	assert.NoError(t, err, "failed to parse local registry config")
+	reg, err := registry.NewRegistry(context.Background(), regCfg)
+	assert.NoError(t, err, "failed to create local registry service")
+	global := &mirror.GlobalOptions{
+		SecurePolicy: false,
+		Force:        true,
+		WorkingDir:   filepath.Join(testFolder, "tests"),
+	}
+	fsShared, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	fsDest, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	opts := &mirror.CopyOptions{
+		Global:    global,
+		DestImage: destOpts,
+	}
+	ex := &ExecutorSchema{
+		Log:                 clog.New("debug"),
+		LocalStorageService: *reg,
+		Opts:                opts,
+	}
+
+	go ex.startLocalRegistry()
+	// Make sure registry has started up
+	time.Sleep(5 * time.Second)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		ex.stopLocalRegistry(ctx)
+	})
+
+	t.Run("checkRegistryAccess should fail when", func(t *testing.T) {
+		t.Run("cannot resolve registry hostname", func(t *testing.T) {
+			const invalidRegistry = "invalid-registry-url.io"
+			err := ex.checkRegistryAccess(context.TODO(), invalidRegistry)
+			assert.ErrorContains(t, err, "no such host")
+		})
+		t.Run("registry is not accessible", func(t *testing.T) {
+			const invalidRegistry = "localhost:9999"
+			err := ex.checkRegistryAccess(context.TODO(), invalidRegistry)
+			assert.ErrorContains(t, err, "connect: connection refused")
+		})
+		t.Run("http registry but tls-verify=true", func(t *testing.T) {
+			err := ex.checkRegistryAccess(context.TODO(), validRegistry)
+			assert.ErrorContains(t, err, "http: server gave HTTP response to HTTPS client")
+		})
+		t.Run("invalid creds", func(t *testing.T) {
+			err := fsShared.Set("authfile", "/tmp/invalid-creds.json")
+			assert.NoError(t, err, "should set flag")
+			t.Cleanup(func() { _ = fsShared.Set("authfile", "") })
+			err = ex.checkRegistryAccess(context.TODO(), "quay.io/redhat")
+			assert.ErrorContains(t, err, "unable to retrieve auth token: invalid username/password: unauthorized")
+		})
+	})
+
+	t.Run("checkRegistryAccess should succeed", func(t *testing.T) {
+		t.Run("against local http registry when tls-verify=false ", func(t *testing.T) {
+			err := fsDest.Set("dest-tls-verify", "false")
+			assert.NoError(t, err, "should set flag")
+			t.Cleanup(func() { _ = fsDest.Set("dest-tls-verify", "") })
+			err = ex.checkRegistryAccess(context.TODO(), validRegistry)
+			assert.NoError(t, err)
+		})
+		// TODO: add HTTPS and cert tests
+	})
+}
+
 // setup mocks
 
 type Mirror struct {
