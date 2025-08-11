@@ -210,7 +210,8 @@ func (o *ClusterResourcesGenerator) CatalogSourceGenerator(allRelatedImages []v2
 			}
 			// check if ImageSetConfig contains a CatalogSourceTemplate for this catalog, and use it
 			template := o.getCSTemplate(copyImage.Origin)
-			err := o.generateCatalogSource(copyImage.Destination, template)
+			overrideName := o.getCSOverrideName(copyImage.Origin)
+			err := o.generateCatalogSource(copyImage.Destination, overrideName, template)
 			if err != nil {
 				return err
 			}
@@ -254,7 +255,17 @@ func (o *ClusterResourcesGenerator) getCSTemplate(catalogRef string) string {
 	return ""
 }
 
-func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, catalogSourceTemplateFile string) error {
+func (o *ClusterResourcesGenerator) getCSOverrideName(catalogRef string) string {
+	for _, op := range o.Config.ImageSetConfigurationSpec.Mirror.Operators {
+		if strings.Contains(catalogRef, op.Catalog) {
+			return op.OverrideCatalogSourceName
+		}
+	}
+	return ""
+}
+
+// nolint: cyclop // complexity existed before this change
+func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef, overrideCatalogSourceName, catalogSourceTemplateFile string) error {
 	catalogSpec, err := image.ParseRef(catalogRef)
 	if err != nil {
 		return err
@@ -283,6 +294,9 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
 	catalogRepository := pathComponents[len(pathComponents)-1]
 	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
+	if overrideCatalogSourceName != "" {
+		catalogSourceName = overrideCatalogSourceName
+	}
 	// maybe needs some updating (i.e other unwanted characters !@# etc )
 	catalogSourceName = strings.Replace(catalogSourceName, ".", "-", -1)
 	errs := validation.IsDNS1035Label(catalogSourceName)
