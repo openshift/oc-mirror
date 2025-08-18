@@ -1030,6 +1030,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	}
 	// exclude blocked images
 	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
+	releaseImgs = removeDuplicatedImages(releaseImgs, o.Opts.Function)
 
 	collectorSchema.TotalReleaseImages = len(releaseImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
@@ -1044,6 +1045,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		oImgs := operatorImgs.AllImages
 		// exclude blocked images
 		oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
+		oImgs = removeDuplicatedImages(oImgs, o.Opts.Function)
 		collectorSchema.TotalOperatorImages = len(oImgs)
 		o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 		allRelatedImages = append(allRelatedImages, oImgs...)
@@ -1059,6 +1061,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	} else {
 		// exclude blocked images
 		aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
+		aImgs = removeDuplicatedImages(aImgs, o.Opts.Function)
 		collectorSchema.TotalAdditionalImages = len(aImgs)
 		o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 		allRelatedImages = append(allRelatedImages, aImgs...)
@@ -1071,19 +1074,11 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	} else {
 		// exclude blocked images
 		hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
+		hImgs = removeDuplicatedImages(hImgs, o.Opts.Function)
 		collectorSchema.TotalHelmImages = len(hImgs)
 		o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
 		allRelatedImages = append(allRelatedImages, hImgs...)
 	}
-
-	// OCPBUGS-43731 - remove duplicates
-	allRelatedImages = slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
-		if o.Opts.Function == string(mirror.DeleteMode) {
-			return a.Destination == b.Destination
-		} else {
-			return a.Source == b.Source && a.Destination == b.Destination && a.Origin == b.Origin
-		}
-	})
 
 	sort.Sort(customsort.ByTypePriority(allRelatedImages))
 
@@ -1250,4 +1245,15 @@ func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {
 	}
 
 	return regs
+}
+
+func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode string) []v2alpha1.CopyImageSchema {
+	// OCPBUGS-43731 - remove duplicates
+	return slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
+		if mode == string(mirror.DeleteMode) {
+			return a.Destination == b.Destination
+		} else {
+			return a.Source == b.Source && a.Destination == b.Destination && a.Origin == b.Origin
+		}
+	})
 }
