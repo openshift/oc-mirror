@@ -205,7 +205,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 
 	// ensure mirror and batch worker use delete logic
 	o.Opts.Function = string(mirror.DeleteMode)
-	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s / %s", o.Opts.Mode, o.Opts.Function)
+	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s", o.Opts.Function)
 
 	if o.Opts.Global.DeleteGenerate {
 		err = o.setupWorkingDir()
