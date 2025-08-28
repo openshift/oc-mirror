@@ -22,14 +22,6 @@ updates:
       oc-mirror-v2-version-updates:
         applies-to: version-updates
         patterns: [ "*" ]
-
-  # Configuration for the oc-mirror v2 go module (weekly security updates)
-  - package-ecosystem: "gomod"
-    directory: "/v2"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    groups:
       oc-mirror-v2-security-updates:
         applies-to: security-updates
-        patterns: [ "*" ]
+        patterns: [ "*" ] 
