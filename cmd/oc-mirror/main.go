@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 
 	"k8s.io/klog"
@@ -23,10 +24,20 @@ var mirrorV2 embed.FS
 
 func main() {
 	if slices.Contains(os.Args, "--v2") {
-		err := runOcMirrorV2(os.Args)
-		var exitErr *exec.ExitError
-		if err != nil && errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
+		if err := runOcMirrorV2(os.Args); err != nil {
+			var exitErr *exec.ExitError
+			if err != nil && errors.As(err, &exitErr) {
+				os.Exit(exitErr.ExitCode())
+			}
+			fmt.Printf("failed to run oc-mirror: %s\n", err.Error())
+			if strings.Contains(err.Error(), "permission denied") {
+				tmpdir, ok := os.LookupEnv("TMPDIR")
+				if !ok {
+					tmpdir = "/tmp"
+				}
+				fmt.Printf("The tmp dir %q might be mounted as `noexec`. Please set TMPDIR to a filesystem with exec permissions.\n", tmpdir)
+			}
+			os.Exit(1)
 		}
 	} else {
 		rootCmd := cliV1.NewMirrorCmd()
