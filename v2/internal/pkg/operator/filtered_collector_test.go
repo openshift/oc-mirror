@@ -705,7 +705,7 @@ func TestFilterCollectorM2M(t *testing.T) {
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://localhost:9999/redhat/community-operator-index:v4.18",
+					Source:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
 					Destination: "docker://localhost:5000/test/redhat/community-operator-index:v4.18",
 					Origin:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
 					Type:        v2alpha1.TypeOperatorCatalog,
