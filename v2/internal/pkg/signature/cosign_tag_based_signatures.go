@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
