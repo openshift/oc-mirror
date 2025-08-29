@@ -283,6 +283,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 			TargetTag:     targetTag,
 			TargetCatalog: op.TargetCatalog,
 			RebuiltTag:    rebuiltTag,
+			FullCatalog:   isFullCatalog(op),
 		},
 	}
 	return result, nil
