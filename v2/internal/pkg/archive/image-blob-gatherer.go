@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
