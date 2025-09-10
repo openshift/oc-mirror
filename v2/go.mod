@@ -17,7 +17,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
-	github.com/operator-framework/operator-registry v1.56.0
+	github.com/operator-framework/operator-registry v1.50.0
 	github.com/otiai10/copy v1.14.1
 	github.com/sherine-k/catalog-filter v0.0.4
 	github.com/sirupsen/logrus v1.9.3
@@ -164,7 +164,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.9.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/sigstore/fulcio v1.7.1 // indirect
+	github.com/sigstore/fulcio v1.6.6 // indirect
 	github.com/sigstore/protobuf-specs v0.4.3 // indirect
 	github.com/sigstore/sigstore v1.9.5 // indirect
 	github.com/smallstep/pkcs7 v0.2.1 // indirect
