@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"os"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -9,13 +8,19 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestPrepareDeleteForV1(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage
@@ -60,16 +65,15 @@ func TestPrepareDeleteForV1(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.generateV1DestTags = true
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			res, err := ex.prepareD2MCopyBatch(testCase.relatedImages)
-			if testCase.expectedError && err == nil {
-				t.Fatalf("should fail")
-			}
-			if !testCase.expectedError && err != nil {
-				t.Fatal("should not fail")
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			assert.ElementsMatch(t, testCase.expectedResult, res)
 		})
@@ -80,7 +84,12 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage
@@ -416,15 +425,14 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			res, err := ex.dispatchImagesForM2M(testCase.relatedImages)
-			if testCase.expectedError && err == nil {
-				t.Fatalf("should fail")
-			}
-			if !testCase.expectedError && err != nil {
-				t.Fatal("should not fail")
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			assert.ElementsMatch(t, testCase.expectedResult, res)
 		})

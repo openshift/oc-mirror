@@ -9,6 +9,8 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
+//go:generate go tool mockgen -source=./interface.go -destination=./mock/interface_generated.go -package=mock
+
 type ManifestInterface interface {
 	GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error)
 	GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error)
