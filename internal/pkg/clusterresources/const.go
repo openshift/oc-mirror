@@ -5,6 +5,7 @@ const (
 	updateServiceFilename          string = "updateService.yaml"
 	updateServiceResourceName      string = "update-service-oc-mirror"
 	updateServiceResourceKind      string = "UpdateService"
+	updateServiceDefaultNamespace  string = "openshift-update-service"
 	configMapApiVersion                   = "v1"
 	configMapKind                         = "ConfigMap"
 	configMapBinaryDataIndexFormat        = "sha256-%s-%d"
