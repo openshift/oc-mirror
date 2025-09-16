@@ -1,12 +1,8 @@
 reviewers:
-  - lmzuccarelli
-  - sherine-k
   - aguidirh
   - r4f4
 approvers:
-  - lmzuccarelli
-  - sherine-k
-  - jerpeter1
   - aguidirh
+  - r4f4
 component: oc
 subcomponent: oc-mirror
