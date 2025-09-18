@@ -467,9 +467,13 @@ func (d CatalogImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, err
 	}
-	var toCacheImage, fromRebuiltImage, toDestImage string
+	var toCacheImage, from, toDestImage string
+	// OCPBUGS-60999 - if full: true with zero packages, it gets the original catalog image otherwise get the rebuilt catalog image from cache
+	from = imgSpec.ReferenceWithTransport
+	if !img.FullCatalog {
+		from = rebuiltCtlgRef(imgSpec, img, d.cacheRegistry)
+	}
 	toCacheImage = saveCtlgToCacheRef(imgSpec, img, d.cacheRegistry)
-	fromRebuiltImage = rebuiltCtlgRef(imgSpec, img, d.cacheRegistry)
 	toDestImage = destCtlgRef(imgSpec, img, d.destinationRegistry)
 	cacheCopy := v2alpha1.CopyImageSchema{
 		Source:      imgSpec.ReferenceWithTransport,
@@ -479,7 +483,7 @@ func (d CatalogImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.
 		Type:        img.Type,
 	}
 	destCopy := v2alpha1.CopyImageSchema{
-		Source:      fromRebuiltImage,
+		Source:      from,
 		Destination: toDestImage,
 		Origin:      imgSpec.ReferenceWithTransport,
 		RebuiltTag:  img.RebuiltTag,
@@ -535,7 +539,6 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 	// applies only to catalogs
 	case img.RebuiltTag != "":
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.RebuiltTag
-	case len(img.TargetTag) > 0:
 	case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.TargetTag
 	case spec.Tag == "" && spec.Transport == ociProtocol:
