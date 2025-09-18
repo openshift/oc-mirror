@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	cimagetypesv5 "github.com/containers/image/v5/types"
 	"github.com/docker/cli/cli/config"
 	dockertypes "github.com/docker/cli/cli/config/types"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -29,9 +28,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/operator-framework/operator-registry/pkg/containertools"
+	cimagetypesv5 "go.podman.io/image/v5/types"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/operator-framework/operator-registry/pkg/containertools"
 )
 
 // ImageBuilder use an OCI workspace to add layers and change configuration to images.
