@@ -41,6 +41,7 @@ var (
 )
 
 func Version() (string, error) {
+	fmt.Printf("Padded: %s\nPrefix: %s\nLength: %d\n", releaseVersionPadded, releaseVersionPrefix, releaseVersionLength)
 	if strings.HasPrefix(releaseVersionPadded, releaseVersionPrefix) {
 		return fmt.Sprintf("unreleased-%s", commitFromGit), nil
 	}
