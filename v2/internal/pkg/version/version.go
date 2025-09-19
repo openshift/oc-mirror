@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/util/templates"
 	"sigs.k8s.io/yaml"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var (
@@ -28,7 +30,37 @@ var (
 	buildDate string
 	// state of git tree, either "clean" or "dirty"
 	gitTreeState string
+
+	// releaseVersionPadded may be replaced in the binary with Release
+	// Metadata: Version that overrides defaultVersion as a null-terminated
+	// string within the allowed character length. This allows a distributor to
+	// override the version without having to rebuild the source.
+	releaseVersionPadded = "\x00_RELEASE_VERSION_LOCATION_\x00XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00"
+	releaseVersionPrefix = "\x00_RELEASE_VERSION_LOCATION_\x00"
+	releaseVersionLength = len(releaseVersionPadded)
 )
+
+func Version() (string, error) {
+	fmt.Printf("Padded: %s\nPrefix: %s\nLength: %d\n", releaseVersionPadded, releaseVersionPrefix, releaseVersionLength)
+	if strings.HasPrefix(releaseVersionPadded, releaseVersionPrefix) {
+		return fmt.Sprintf("unreleased-%s", commitFromGit), nil
+	}
+	nullTerminator := strings.IndexByte(releaseVersionPadded, '\x00')
+	if nullTerminator == -1 {
+		// the binary has been altered, but we didn't find a null terminator within the release name constant which is an error
+		return commitFromGit, fmt.Errorf("release name location was replaced but without a null terminator before %d bytes", releaseVersionLength)
+	} else if nullTerminator > releaseVersionLength {
+		// the binary has been altered, but the null terminator is *longer* than the constant encoded in the library
+		return commitFromGit, fmt.Errorf("release name location contains no null-terminator and constant is corrupted")
+	}
+	releaseName := releaseVersionPadded[:nullTerminator]
+	if len(releaseName) == 0 {
+		// the binary has been altered, but the replaced release name is empty which is incorrect
+		// the oc binary will not be pinned to Release Metadata: Version
+		return commitFromGit, fmt.Errorf("release name was incorrectly replaced during extract")
+	}
+	return releaseName, nil
+}
 
 type Info struct {
 	Major        string `json:"major"`
@@ -48,8 +80,8 @@ type VersionOptions struct {
 	V2     bool
 }
 
-// Version is a struct for version information
-type Version struct {
+// VersionInfo is a struct for version information
+type VersionInfo struct {
 	ClientVersion *Info `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
 }
 
@@ -63,16 +95,12 @@ func NewVersionCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 			# Get oc-mirror version
 			oc-mirror version
 		`),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
+				return err
 			}
 
-			if err := o.Run(); err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
-			}
+			return o.Run()
 		},
 	}
 
@@ -98,7 +126,7 @@ func (o *VersionOptions) Validate() error {
 }
 
 func (o *VersionOptions) Run() error {
-	var versionInfo Version
+	var versionInfo VersionInfo
 
 	clientVersion := Get()
 	versionInfo.ClientVersion = &clientVersion
@@ -106,7 +134,7 @@ func (o *VersionOptions) Run() error {
 	switch o.Output {
 	case "":
 		if o.Short {
-			fmt.Fprintf(os.Stdout, "Client Version: %s\n", clientVersion.GitVersion)
+			fmt.Fprintf(os.Stdout, "Client Version: %s\n", clientVersion.Major)
 		} else {
 			fmt.Fprintf(os.Stderr, "WARNING: This version information is deprecated and will be replaced with the output from --short. Use --output=yaml|json to get the full version.\n")
 			fmt.Fprintf(os.Stdout, "Client Version: %#v\n", clientVersion)
@@ -131,9 +159,13 @@ func (o *VersionOptions) Run() error {
 }
 
 func Get() Info {
+	version, err := Version()
+	if err != nil {
+		panic(fmt.Errorf("could not assembler binary version: %w", err))
+	}
 	return Info{
-		Major:        majorFromGit,
-		Minor:        minorFromGit,
+		Major:        version,
+		Minor:        version,
 		GitCommit:    commitFromGit,
 		GitVersion:   versionFromGit,
 		GitTreeState: gitTreeState,
