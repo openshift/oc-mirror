@@ -186,7 +186,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           fmt.Sprintf("%s %s", filepath.Base(os.Args[0]), usage),
-		Version:       "v2.0.0",
 		Short:         "Mirror container images using a declarative configuration file as an input.",
 		Long:          mirrorlongDesc,
 		Example:       mirrorExamples,
