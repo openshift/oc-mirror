@@ -8,10 +8,11 @@ import (
 	"runtime"
 	"strings"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/util/templates"
 	"sigs.k8s.io/yaml"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var (
