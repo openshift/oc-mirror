@@ -19,18 +19,19 @@ import (
 
 type MirrorArchive struct {
 	Archiver
-	adder        archiveAdder
-	destination  string
-	iscPath      string
-	workingDir   string
-	cacheDir     string
-	history      history.History
-	blobGatherer BlobsGatherer
+	adder           archiveAdder
+	destination     string
+	iscPath         string
+	workingDir      string
+	cacheDir        string
+	history         history.History
+	blobGatherer    BlobsGatherer
+	maxSize         int64
+	strictArchiving bool
+	logger          clog.PluggableLoggerInterface
 }
 
-// NewMirrorArchive creates a new MirrorArchive instance with strictAdder:
-// any files that exceed the maxArchiveSize specified in the imageSetConfig will
-// cause the BuildArchive method to stop and return in error.
+// NewMirrorArchive creates a new MirrorArchive instance
 func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
 	// create the history interface
 	history, err := history.NewHistory(workingDir, opts.Global.Since, logg, history.OSFileCreator{})
@@ -45,53 +46,16 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 	}
 	maxSize *= segMultiplier
 
-	a, err := newStrictAdder(maxSize, destination, logg)
-	if err != nil {
-		return &MirrorArchive{}, err
-	}
 	ma := MirrorArchive{
-		destination:  destination,
-		history:      history,
-		blobGatherer: bg,
-		workingDir:   workingDir,
-		cacheDir:     cacheDir,
-		iscPath:      iscPath,
-		adder:        a,
-	}
-	return &ma, nil
-}
-
-// NewMirrorArchive creates a new MirrorArchive instance with permissiveAdder:
-// any files that exceed the maxArchiveSize specified in the imageSetConfig will
-// be added to standalone archives, and flagged in a warning at the end of the execution
-func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir, cacheDir string, maxSize int64, logg clog.PluggableLoggerInterface) (*MirrorArchive, error) {
-	// create the history interface
-	history, err := history.NewHistory(workingDir, opts.Global.Since, logg, history.OSFileCreator{})
-	if err != nil {
-		return &MirrorArchive{}, err
-	}
-
-	bg := NewImageBlobGatherer(opts, logg)
-
-	if maxSize == 0 {
-		maxSize = defaultSegSize
-	}
-	maxSize *= segMultiplier
-
-	a, err := newPermissiveAdder(maxSize, destination, logg)
-	if err != nil {
-		return &MirrorArchive{}, err
-	}
-
-	ma := MirrorArchive{
-		destination:  destination,
-		history:      history,
-		blobGatherer: bg,
-		workingDir:   workingDir,
-		cacheDir:     cacheDir,
-		iscPath:      iscPath,
-
-		adder: a,
+		destination:     destination,
+		history:         history,
+		blobGatherer:    bg,
+		workingDir:      workingDir,
+		cacheDir:        cacheDir,
+		iscPath:         iscPath,
+		maxSize:         maxSize,
+		strictArchiving: opts.Global.StrictArchiving,
+		logger:          logg,
 	}
 	return &ma, nil
 }
@@ -102,6 +66,10 @@ func NewPermissiveMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, 
 // * working-dir
 // * image set config
 func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
+	if err := o.createTarball(); err != nil {
+		return fmt.Errorf("unable to create the mirror archive: %w", err)
+	}
+
 	// 0 - make sure that any tarWriters or files opened by the adder are closed as we leave this method
 	defer o.adder.close()
 	// 1 - Add files and directories under the cache's docker/v2/repositories to the archive
@@ -137,6 +105,32 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2al
 	if err != nil {
 		return fmt.Errorf("unable to update history metadata: %w", err)
 	}
+
+	return nil
+}
+
+// createTarball creates a tarball, there are two possible implementations currently:
+// strictAdder: any files that exceed the maxArchiveSize specified in the imageSetConfig will
+// cause the BuildArchive method to stop and return in error.
+//
+// permissiveAdder:
+// any files that exceed the maxArchiveSize specified in the imageSetConfig will
+// be added to standalone archives, and flagged in a warning at the end of the execution
+func (o *MirrorArchive) createTarball() error {
+	var err error
+	var adder archiveAdder
+
+	if o.strictArchiving {
+		adder, err = newStrictAdder(o.maxSize, o.destination, o.logger)
+	} else {
+		adder, err = newPermissiveAdder(o.maxSize, o.destination, o.logger)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	o.adder = adder
 
 	return nil
 }
