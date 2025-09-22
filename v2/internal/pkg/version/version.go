@@ -7,10 +7,12 @@ import (
 	"os"
 	"runtime"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/kubectl/pkg/util/templates"
 	"sigs.k8s.io/yaml"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var (
@@ -30,18 +32,6 @@ var (
 	gitTreeState string
 )
 
-type Info struct {
-	Major        string `json:"major"`
-	Minor        string `json:"minor"`
-	GitVersion   string `json:"gitVersion"`
-	GitCommit    string `json:"gitCommit"`
-	GitTreeState string `json:"gitTreeState"`
-	BuildDate    string `json:"buildDate"`
-	GoVersion    string `json:"goVersion"`
-	Compiler     string `json:"compiler"`
-	Platform     string `json:"platform"`
-}
-
 type VersionOptions struct {
 	Output string
 	Short  bool
@@ -50,7 +40,7 @@ type VersionOptions struct {
 
 // Version is a struct for version information
 type Version struct {
-	ClientVersion *Info `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
+	ClientVersion *version.Info `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
 }
 
 func NewVersionCommand(log clog.PluggableLoggerInterface) *cobra.Command {
@@ -126,8 +116,8 @@ func (o *VersionOptions) Run() error {
 	return nil
 }
 
-func Get() Info {
-	return Info{
+func Get() version.Info {
+	return version.Info{
 		Major:        majorFromGit,
 		Minor:        minorFromGit,
 		GitCommit:    commitFromGit,
