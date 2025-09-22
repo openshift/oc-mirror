@@ -79,11 +79,15 @@ var (
 )
 
 const (
-	tagLatest string = "latest"
+	tagLatest    string = "latest"
+	BrightYellow string = "\033[93m"
+	DefaultColor string = "\033[0m"
 )
 
 func NewMirrorCmd() *cobra.Command {
-	klog.Warning("\n\n⚠️  oc-mirror v1 is deprecated (starting in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2\n\n")
+	klog.Warningln("⚠️  oc-mirror v1 is deprecated (started in 4.18 release) and will be removed in a future release - please migrate to oc-mirror --v2")
+	klog.Warningln(BrightYellow + "⚠️  starting with oc-mirror 4.21, the use of the flag --v1 or --v2 is mandatory, please use --v2 to use the supported oc-mirror version or --v1 to continue using the oc-mirror deprecated version" + DefaultColor)
+	klog.Warningln(BrightYellow + "⚠️  the sub-commands list, describe and init are only implemented in oc-mirror v1, so please use --v1 for these sub-commands until some replacement is provided\n" + DefaultColor)
 
 	o := MirrorOptions{
 		operatorCatalogToFullArtifactPath: map[string]string{},
