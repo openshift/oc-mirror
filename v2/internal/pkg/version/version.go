@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/version"
@@ -32,6 +33,37 @@ var (
 	gitTreeState string
 )
 
+var (
+	// releaseVersionPadded may be replaced in the binary with Release
+	// Metadata: Version that overrides releaseVersion as a null-terminated
+	// string within the allowed character length. This allows a distributor to
+	// override the version without having to rebuild the source.
+	releaseVersionPadded = "\x00_RELEASE_VERSION_LOCATION_\x00XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00"
+	releaseVersionPrefix = "\x00_RELEASE_VERSION_LOCATION_\x00"
+	releaseVersionLength = len(releaseVersionPadded)
+)
+
+func ExtractVersion() (version.Info, string, error) {
+	if strings.HasPrefix(releaseVersionPadded, releaseVersionPrefix) {
+		return Get(), "", nil
+	}
+	nullTerminator := strings.IndexByte(releaseVersionPadded, '\x00')
+	if nullTerminator == -1 {
+		// the binary has been altered, but we didn't find a null terminator within the release name constant which is an error
+		return version.Info{}, "", fmt.Errorf("release name location was replaced but without a null terminator before %d bytes", releaseVersionLength)
+	} else if nullTerminator > releaseVersionLength {
+		// the binary has been altered, but the null terminator is *longer* than the constant encoded in the library
+		return version.Info{}, "", fmt.Errorf("release name location contains no null-terminator and constant is corrupted")
+	}
+	releaseName := releaseVersionPadded[:nullTerminator]
+	if len(releaseName) == 0 {
+		// the binary has been altered, but the replaced release name is empty which is incorrect
+		// the oc-mirror binary will not be pinned to Release Metadata: Version
+		return version.Info{}, "", fmt.Errorf("release name was incorrectly replaced during extract")
+	}
+	return Get(), releaseName, nil
+}
+
 type VersionOptions struct {
 	Output string
 	Short  bool
@@ -40,7 +72,8 @@ type VersionOptions struct {
 
 // Version is a struct for version information
 type Version struct {
-	ClientVersion *version.Info `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
+	ClientVersion  *version.Info `json:"clientVersion,omitempty" yaml:"clientVersion,omitempty"`
+	ReleaseVersion string        `json:"releaseVersion,omitempty" yaml:"releaseVersion,omitempty"`
 }
 
 func NewVersionCommand(log clog.PluggableLoggerInterface) *cobra.Command {
@@ -86,7 +119,13 @@ func (o *VersionOptions) Validate() error {
 func (o *VersionOptions) Run() error {
 	var versionInfo Version
 
-	clientVersion := Get()
+	clientVersion, reportedVersion, err := ExtractVersion()
+	if err != nil {
+		return fmt.Errorf("could not determine binary version: %w", err)
+	}
+	if len(reportedVersion) != 0 {
+		versionInfo.ReleaseVersion = reportedVersion
+	}
 	versionInfo.ClientVersion = &clientVersion
 
 	switch o.Output {
@@ -96,6 +135,9 @@ func (o *VersionOptions) Run() error {
 		} else {
 			fmt.Fprintf(os.Stderr, "WARNING: This version information is deprecated and will be replaced with the output from --short. Use --output=yaml|json to get the full version.\n")
 			fmt.Fprintf(os.Stdout, "Client Version: %#v\n", clientVersion)
+		}
+		if len(versionInfo.ReleaseVersion) != 0 {
+			fmt.Fprintf(os.Stdout, "Client Release Version: %s\n", versionInfo.ReleaseVersion)
 		}
 	case "yaml":
 		marshalled, err := yaml.Marshal(&versionInfo)
