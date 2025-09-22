@@ -63,16 +63,12 @@ func NewVersionCommand(log clog.PluggableLoggerInterface) *cobra.Command {
 			# Get oc-mirror version
 			oc-mirror version
 		`),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
+				return err
 			}
 
-			if err := o.Run(); err != nil {
-				log.Error(" %v ", err)
-				os.Exit(1)
-			}
+			return o.Run()
 		},
 	}
 
