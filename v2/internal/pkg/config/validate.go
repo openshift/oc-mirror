@@ -68,39 +68,71 @@ func validateOperator(ctlg v2alpha1.Operator) []error {
 
 		if pkg.MaxVersion != "" {
 			if _, err := semver.NewVersion(pkg.MaxVersion); err != nil {
-				errs = append(errs, fmt.Errorf("catalog %q: operator %q: maxVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, pkg.MaxVersion))
+				errs = append(errs, fmt.Errorf(
+					"catalog %q: operator %q: maxVersion %q must respect semantic versioning notation",
+					ctlg.Catalog, pkg.Name, pkg.MaxVersion,
+				))
 			}
 		}
 		if pkg.MinVersion != "" {
 			if _, err := semver.NewVersion(pkg.MinVersion); err != nil {
-				errs = append(errs, fmt.Errorf("catalog %q: operator %q: minVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, pkg.MinVersion))
+				errs = append(errs, fmt.Errorf(
+					"catalog %q: operator %q: minVersion %q must respect semantic versioning notation",
+					ctlg.Catalog, pkg.Name, pkg.MinVersion,
+				))
 			}
 		}
-		if (pkg.MaxVersion != "" || pkg.MinVersion != "") && len(pkg.Channels) > 0 {
-			for _, chFilter := range pkg.Channels {
-				if chFilter.MaxVersion != "" || chFilter.MinVersion != "" {
-					errs = append(errs, fmt.Errorf("catalog %q: operator %q: mixing both filtering by minVersion/maxVersion and filtering by channel minVersion/maxVersion is not allowed", ctlg.Catalog, pkg.Name))
-				}
-			}
-		}
-		channels := sets.New[string]()
-		for _, chFilter := range pkg.Channels {
-			if channels.Has(chFilter.Name) {
-				errs = append(errs, fmt.Errorf("catalog %q: operator %q: duplicate channel entry %q", ctlg.Catalog, pkg.Name, chFilter.Name))
-			}
-			channels.Insert(chFilter.Name)
 
-			if chFilter.MaxVersion != "" {
-				if _, err := semver.NewVersion(chFilter.MaxVersion); err != nil {
-					errs = append(errs, fmt.Errorf("catalog %q: operator %q: channel %q: maxVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, chFilter.Name, chFilter.MaxVersion))
-				}
-			}
-			if chFilter.MinVersion != "" {
-				if _, err := semver.NewVersion(chFilter.MinVersion); err != nil {
-					errs = append(errs, fmt.Errorf("catalog %q: operator %q: channel %q: minVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, chFilter.Name, chFilter.MinVersion))
-				}
-			}
+		errs = append(errs, validatePackageChannels(ctlg.Catalog, &pkg)...)
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+	return nil
+}
+
+func validatePackageChannels(ctlgName string, pkg *v2alpha1.IncludePackage) []error {
+	errs := []error{}
+	channels := sets.New[string]()
+	for _, chFilter := range pkg.Channels {
+		if channels.Has(chFilter.Name) {
+			errs = append(errs, fmt.Errorf("catalog %q: operator %q: duplicate channel entry %q", ctlgName, pkg.Name, chFilter.Name))
 		}
+		channels.Insert(chFilter.Name)
+
+		errs = append(errs, validatePackageChannel(ctlgName, pkg, &chFilter)...)
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+	return nil
+}
+
+func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v2alpha1.IncludeChannel) []error {
+	errs := []error{}
+	if ch.MaxVersion != "" {
+		if _, err := semver.NewVersion(ch.MaxVersion); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"catalog %q: operator %q: channel %q: maxVersion %q must respect semantic versioning notation",
+				ctlgName, pkg.Name, ch.Name, ch.MaxVersion,
+			))
+		}
+	}
+	if ch.MinVersion != "" {
+		if _, err := semver.NewVersion(ch.MinVersion); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"catalog %q: operator %q: channel %q: minVersion %q must respect semantic versioning notation",
+				ctlgName, pkg.Name, ch.Name, ch.MinVersion,
+			))
+		}
+	}
+	if (ch.MinVersion != "" || ch.MaxVersion != "") && (pkg.MinVersion != "" || pkg.MaxVersion != "") {
+		errs = append(errs, fmt.Errorf(
+			"catalog %q: operator %q: mixing both filtering by minVersion/maxVersion and filtering by channel minVersion/maxVersion is not allowed",
+			ctlgName, pkg.Name,
+		))
 	}
 
 	if len(errs) > 0 {
