@@ -46,8 +46,8 @@ func validateOperatorOptions(cfg *v2alpha1.ImageSetConfiguration) []error {
 		}
 		catalogs.Insert(ctlgName)
 
-		if filterErrs := validateOperatorFiltering(ctlg); len(filterErrs) > 0 {
-			errs = append(errs, filterErrs...)
+		if opErrs := validateOperator(ctlg); len(opErrs) > 0 {
+			errs = append(errs, opErrs...)
 		}
 	}
 
@@ -57,9 +57,15 @@ func validateOperatorOptions(cfg *v2alpha1.ImageSetConfiguration) []error {
 	return nil
 }
 
-func validateOperatorFiltering(ctlg v2alpha1.Operator) []error {
+func validateOperator(ctlg v2alpha1.Operator) []error {
 	errs := []error{}
+	packages := sets.New[string]()
 	for _, pkg := range ctlg.Packages {
+		if packages.Has(pkg.Name) {
+			errs = append(errs, fmt.Errorf("catalog %q: duplicate package entry %q", ctlg.Catalog, pkg.Name))
+		}
+		packages.Insert(pkg.Name)
+
 		if pkg.MaxVersion != "" {
 			if _, err := semver.NewVersion(pkg.MaxVersion); err != nil {
 				errs = append(errs, fmt.Errorf("catalog %q: operator %q: maxVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, pkg.MaxVersion))
@@ -77,7 +83,13 @@ func validateOperatorFiltering(ctlg v2alpha1.Operator) []error {
 				}
 			}
 		}
+		channels := sets.New[string]()
 		for _, chFilter := range pkg.Channels {
+			if channels.Has(chFilter.Name) {
+				errs = append(errs, fmt.Errorf("catalog %q: operator %q: duplicate channel entry %q", ctlg.Catalog, pkg.Name, chFilter.Name))
+			}
+			channels.Insert(chFilter.Name)
+
 			if chFilter.MaxVersion != "" {
 				if _, err := semver.NewVersion(chFilter.MaxVersion); err != nil {
 					errs = append(errs, fmt.Errorf("catalog %q: operator %q: channel %q: maxVersion %q must respect semantic versioning notation", ctlg.Catalog, pkg.Name, chFilter.Name, chFilter.MaxVersion))

@@ -28,7 +28,7 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 	}
 
 	var configMap map[string]any
-	if err := yaml.Unmarshal(data, &configMap); err != nil {
+	if err := yaml.UnmarshalStrict(data, &configMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
