@@ -5,6 +5,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
@@ -27,29 +28,31 @@ func Validate(cfg *v2alpha1.ImageSetConfiguration) error {
 }
 
 func validateOperatorOptions(cfg *v2alpha1.ImageSetConfiguration) []error {
-	seen := map[string]bool{}
+	catalogs := sets.New[string]()
 	errs := []error{}
 	for _, ctlg := range cfg.Mirror.Operators {
 		ctlgName, err := ctlg.GetUniqueName()
 		if err != nil {
 			errs = append(errs, err)
 		}
-		if seen[ctlgName] {
+		if catalogs.Has(ctlgName) {
 			errs = append(errs, fmt.Errorf(
 				"catalog %q: duplicate found in configuration", ctlgName,
 			))
 		}
+		catalogs.Insert(ctlgName)
+
 		if filterErrs := validateOperatorFiltering(ctlg); len(filterErrs) > 0 {
 			errs = append(errs, filterErrs...)
 		}
-
-		seen[ctlgName] = true
 	}
+
 	if len(errs) > 0 {
 		return errs
 	}
 	return nil
 }
+
 func validateOperatorFiltering(ctlg v2alpha1.Operator) []error {
 	errs := []error{}
 	if len(ctlg.Packages) > 0 {
@@ -95,15 +98,16 @@ func validateOperatorFiltering(ctlg v2alpha1.Operator) []error {
 	}
 	return nil
 }
+
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {
-	seen := map[string]bool{}
+	channels := sets.New[string]()
 	for _, channel := range cfg.Mirror.Platform.Channels {
-		if seen[channel.Name] {
+		if channels.Has(channel.Name) {
 			return []error{fmt.Errorf(
 				"release channel %q: duplicate found in configuration", channel.Name,
 			)}
 		}
-		seen[channel.Name] = true
+		channels.Insert(channel.Name)
 	}
 	return nil
 }
@@ -120,31 +124,31 @@ func ValidateDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
 }
 
 func validateOperatorOptionsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
-	seen := map[string]bool{}
+	catalogs := sets.New[string]()
 	for _, ctlg := range cfg.Delete.Operators {
 		ctlgName, err := ctlg.GetUniqueName()
 		if err != nil {
 			return err
 		}
-		if seen[ctlgName] {
+		if catalogs.Has(ctlgName) {
 			return fmt.Errorf(
 				"catalog %q: duplicate found in configuration", ctlgName,
 			)
 		}
-		seen[ctlgName] = true
+		catalogs.Insert(ctlgName)
 	}
 	return nil
 }
 
 func validateReleaseChannelsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
-	seen := map[string]bool{}
+	channels := sets.New[string]()
 	for _, channel := range cfg.Delete.Platform.Channels {
-		if seen[channel.Name] {
+		if channels.Has(channel.Name) {
 			return fmt.Errorf(
 				"release channel %q: duplicate found in configuration", channel.Name,
 			)
 		}
-		seen[channel.Name] = true
+		channels.Insert(channel.Name)
 	}
 	return nil
 }
