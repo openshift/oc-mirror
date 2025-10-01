@@ -439,9 +439,10 @@ func assertContents(t *testing.T, archiveFile string, expectedTarContents []stri
 
 func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissive bool) (*MirrorArchive, error) {
 	global := &mirror.GlobalOptions{
-		SecurePolicy: false,
-		Force:        true,
-		WorkingDir:   "tests",
+		SecurePolicy:    false,
+		Force:           true,
+		WorkingDir:      "tests",
+		StrictArchiving: permissive,
 	}
 	_, sharedOpts := mirror.SharedImageFlags()
 	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
@@ -459,20 +460,14 @@ func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissi
 	}
 	cfg := common.TestFolder + "isc.yaml"
 	var ma *MirrorArchive
-	if permissive {
-		m, err := NewPermissiveMirrorArchive(&opts, testFolder, cfg, common.TestFolder+"working-dir-fake", common.TestFolder+"cache-fake", 0, clog.New("trace"))
-		if err != nil {
-			return &MirrorArchive{}, err
-		}
-		ma = m
-	} else {
-		m, err := NewMirrorArchive(&opts, testFolder, cfg, common.TestFolder+"working-dir-fake", common.TestFolder+"cache-fake", 0, clog.New("trace"))
-		if err != nil {
-			return &MirrorArchive{}, err
-		}
-		ma = m
+	ma, err := NewMirrorArchive(&opts, testFolder, cfg, common.TestFolder+"working-dir-fake", common.TestFolder+"cache-fake", 0, clog.New("trace"))
+	if err != nil {
+		return &MirrorArchive{}, err
 	}
-	ma, err := ma.WithFakes(maxArchiveSize)
+	if err := ma.createTarball(); err != nil {
+		return &MirrorArchive{}, err
+	}
+	ma, err = ma.WithFakes(maxArchiveSize)
 	return ma, err
 }
 
