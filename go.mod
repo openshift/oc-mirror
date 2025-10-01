@@ -266,7 +266,7 @@ replace github.com/apcera/gssapi => github.com/openshift/gssapi v0.0.0-201610102
 
 replace github.com/openshift/library-go => github.com/aguidirh/library-go v0.0.0-20240911111857-f8fdb642dea5
 
-replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.1
+replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.2
 
 replace github.com/distribution/distribution/v3 => github.com/aguidirh/distribution/v3 v3.0.0-beta.1.ocmirror1
 
