@@ -75,7 +75,7 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
-	err = os.WriteFile(filename, ymlData, 0755)
+	err = os.WriteFile(filename, ymlData, 0644)
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
@@ -98,7 +98,7 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
-	err = os.WriteFile(discYamlFile, discYamlData, 0755)
+	err = os.WriteFile(discYamlFile, discYamlData, 0644)
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
