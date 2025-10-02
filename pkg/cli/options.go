@@ -20,6 +20,7 @@ type RootOptions struct {
 
 	Dir      string // Assets directory
 	LogLevel int    // Number for the log level verbosity (valid 1-9, default is 0)
+	UseV1    bool   // Use oc-mirror v1
 
 	logfileCleanup func()
 }
@@ -28,6 +29,10 @@ func (o *RootOptions) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVarP(&o.Dir, "dir", "d", config.DefaultWorkspaceName, "Assets directory")
 	fs.IntVarP(&o.LogLevel, "verbose", "v", o.LogLevel, "Number for the log level verbosity (valid 1-9, default is 0)")
 	if err := fs.MarkHidden("dir"); err != nil {
+		klog.Fatal(err.Error())
+	}
+	fs.BoolVar(&o.UseV1, "v1", true, "use oc-mirror v1")
+	if err := fs.MarkHidden("v1"); err != nil {
 		klog.Fatal(err.Error())
 	}
 }
