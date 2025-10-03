@@ -125,7 +125,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	if err != nil {
 		return fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
 	}
-	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0644)
+	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0644) //nolint:gosec
 	if err != nil {
 		return err
 	}
