@@ -5,9 +5,9 @@ package mirror
 import (
 	"fmt"
 
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/storage/pkg/unshare"
 	"github.com/syndtr/gocapability/capability"
+	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/storage/pkg/unshare"
 )
 
 var neededCapabilities = []capability.Cap{

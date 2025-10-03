@@ -3,9 +3,8 @@ package mirror
 import (
 	"testing"
 
-	"github.com/containers/common/pkg/flag"
-	//"github.com/containers/image/v5/types"
 	"github.com/spf13/pflag"
+	"go.podman.io/common/pkg/flag"
 )
 
 func TestOptionsNewContext(t *testing.T) {

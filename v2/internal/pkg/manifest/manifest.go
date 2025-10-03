@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
 	digest "github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
