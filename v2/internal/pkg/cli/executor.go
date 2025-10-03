@@ -493,16 +493,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		if err := archive.RemovePastArchives(rootDir); err != nil {
 			return fmt.Errorf("unable to delete past archives from %s: %w", rootDir, err)
 		}
-		if o.Opts.Global.StrictArchiving {
-			o.MirrorArchiver, err = archive.NewMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
-			if err != nil {
-				return err
-			}
-		} else {
-			o.MirrorArchiver, err = archive.NewPermissiveMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
-			if err != nil {
-				return err
-			}
+		o.MirrorArchiver, err = archive.NewMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
+		if err != nil {
+			return err
 		}
 	} else if o.Opts.IsDiskToMirror() { // if added so that the unArchiver is not instanciated for the prepare workflow
 		o.MirrorUnArchiver, err = archive.NewArchiveExtractor(rootDir, o.Opts.Global.WorkingDir, o.LocalStorageDisk)
@@ -801,9 +794,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return batchError
 	}
 
-	// prepare tar.gz when mirror to disk
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-	// next, generate the archive
 	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 }
 
