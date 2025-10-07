@@ -446,6 +446,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return err
 	}
 
+	o.Log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
 	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
