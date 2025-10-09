@@ -296,7 +296,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "If set, generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB)")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
-	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", true, "Do not copy image signature")
+	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", false, "Do not copy image signature")
 	cmd.Flags().BoolVar(&opts.Global.IgnoreReleaseSignature, "ignore-release-signature", false, "Ignore release signature")
 	HideFlags(cmd)
 
@@ -1060,8 +1060,6 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 	o.Log.Level(o.Opts.Global.LogLevel)
 	// set up location of logs dir
 	o.LogsDir = filepath.Join(o.Opts.Global.WorkingDir, logsDir)
-	// clean up logs directory
-	os.RemoveAll(o.LogsDir)
 
 	// create logs directory
 	err := o.MakeDir.makeDirAll(o.LogsDir, 0755)
