@@ -1060,8 +1060,6 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 	o.Log.Level(o.Opts.Global.LogLevel)
 	// set up location of logs dir
 	o.LogsDir = filepath.Join(o.Opts.Global.WorkingDir, logsDir)
-	// clean up logs directory
-	os.RemoveAll(o.LogsDir)
 
 	// create logs directory
 	err := o.MakeDir.makeDirAll(o.LogsDir, 0755)
