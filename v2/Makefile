@@ -60,3 +60,6 @@ tidy:
 
 cover:
 	$(GO) tool cover -html=tests/results/cover.out -o tests/results/cover.html
+
+generate:
+	$(GO) generate ./internal/pkg/...
