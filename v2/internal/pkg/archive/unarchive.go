@@ -178,7 +178,7 @@ func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Re
 	}
 	proxyReader := bar.ProxyReader(reader)
 	defer proxyReader.Close()
-	return writeFile(descriptor, proxyReader, header.FileInfo().Mode()|0755)
+	return writeFile(descriptor, proxyReader, header.FileInfo().Mode())
 }
 
 func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
