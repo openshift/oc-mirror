@@ -9,15 +9,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containers/common/pkg/retry"
-	"github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/docker"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/pkg/cli"
-	"github.com/containers/image/v5/signature"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
 	"github.com/distribution/reference"
+	"go.podman.io/common/pkg/retry"
+	"go.podman.io/image/v5/copy"
+	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/pkg/cli"
+	"go.podman.io/image/v5/signature"
+	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )

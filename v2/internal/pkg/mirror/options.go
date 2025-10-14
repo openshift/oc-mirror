@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	commonFlag "github.com/containers/common/pkg/flag"
-	"github.com/containers/common/pkg/retry"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/signature"
-	"github.com/containers/image/v5/types"
 	"github.com/google/uuid"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	commonFlag "go.podman.io/common/pkg/flag"
+	"go.podman.io/common/pkg/retry"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/signature"
+	"go.podman.io/image/v5/types"
 )
 
 const defaultUserAgent string = "oc-mirror"
