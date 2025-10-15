@@ -44,6 +44,9 @@ func main() {
 			}
 			os.Exit(1)
 		}
+	// Do not complain about version flag in case of `oc-mirror version`
+	case slices.Contains(os.Args, "version"):
+		fallthrough
 	case useV1:
 		rootCmd := cliV1.NewMirrorCmd()
 		kcmdutil.CheckErr(rootCmd.Execute())
