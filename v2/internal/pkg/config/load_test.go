@@ -373,6 +373,23 @@ delete:
 			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
 			assert.EqualError(t, err, "delete: is not allowed in ImageSetConfiguration")
 		})
+		t.Run("with duplicated `mirror` stanzas", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirror:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+mirror:
+  operators:
+    - catalog: catalog:latest
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
+			assert.EqualError(t, err, "failed to unmarshal config: error converting YAML to JSON: yaml: unmarshal errors:\n  line 8: key \"mirror\" already set in map")
+		})
 	})
 }
 
@@ -417,6 +434,23 @@ mirror:
 			assert.NoError(t, err, "failed to write invalid-isc file")
 			_, err = ReadConfig(iscFile, v2alpha1.DeleteImageSetConfigurationKind)
 			assert.EqualError(t, err, "mirror: is not allowed in DeleteImageSetConfiguration")
+		})
+		t.Run("with duplicated `delete` stanzas", func(t *testing.T) {
+			isc := `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+delete:
+  additionalImages:
+    - name: mirror.delete/mirror/delete:mirror
+delete:
+  operators:
+    - catalog: catalog:latest
+`
+			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
+			err := os.WriteFile(iscFile, []byte(isc), 0o600)
+			assert.NoError(t, err, "failed to write invalid-isc file")
+			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
+			assert.EqualError(t, err, "failed to unmarshal config: error converting YAML to JSON: yaml: unmarshal errors:\n  line 8: key \"delete\" already set in map")
 		})
 	})
 }

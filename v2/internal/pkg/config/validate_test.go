@@ -9,7 +9,6 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-
 	type spec struct {
 		name     string
 		config   *v2alpha1.ImageSetConfiguration
@@ -274,6 +273,80 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: release channel \"channel\": duplicate found in configuration",
+		},
+		{
+			name: "Invalid/DuplicateOperatorPackages",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name:           "package1",
+											DefaultChannel: "stable",
+										},
+										{
+											Name:           "package1",
+											DefaultChannel: "fast",
+										},
+										{
+											Name: "package2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: `invalid configuration: catalog "test-catalog1:latest": duplicate package entry "package1"`,
+		},
+		{
+			name: "Invalid/DuplicateOperatorPackageChannels",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name:           "package1",
+											DefaultChannel: "stable",
+											Channels: []v2alpha1.IncludeChannel{
+												{
+													Name: "channel1",
+													IncludeBundle: v2alpha1.IncludeBundle{
+														MinVersion: "1.1.1",
+													},
+												},
+												{
+													Name: "channel1",
+													IncludeBundle: v2alpha1.IncludeBundle{
+														MaxVersion: "2.2.2",
+													},
+												},
+												{
+													Name: "channel2",
+													IncludeBundle: v2alpha1.IncludeBundle{
+														MinVersion: "1.1.1",
+														MaxVersion: "2.2.2",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: `invalid configuration: catalog "test-catalog1:latest": operator "package1": duplicate channel entry "channel1"`,
 		},
 	}
 

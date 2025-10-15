@@ -28,7 +28,7 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 	}
 
 	var configMap map[string]any
-	if err := yaml.Unmarshal(data, &configMap); err != nil {
+	if err := yaml.UnmarshalStrict(data, &configMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
@@ -87,14 +87,14 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 // v2alpha1.DeleteImageSetConfiguration instance
 func LoadConfig[T any](data []byte, kind string) (c T, err error) {
 	if data, err = yaml.YAMLToJSON(data); err != nil {
-		return c, fmt.Errorf("yaml to json %s: %v", kind, err)
+		return c, fmt.Errorf("yaml to json %s: %w", kind, err)
 	}
 
 	var res T
 	dec := json.NewDecoder(bytes.NewBuffer(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&res); err != nil {
-		return c, fmt.Errorf("decode %s: %v", kind, err)
+		return c, fmt.Errorf("decode %s: %w", kind, err)
 	}
 	return res, nil
 }
@@ -104,13 +104,13 @@ func LoadConfigDelete(data []byte) (c v2alpha1.DeleteImageSetConfiguration, err 
 	gvk := v2alpha1.GroupVersion.WithKind(v2alpha1.DeleteImageSetConfigurationKind)
 
 	if data, err = yaml.YAMLToJSON(data); err != nil {
-		return c, fmt.Errorf("yaml to json %s: %v", gvk, err)
+		return c, fmt.Errorf("yaml to json %s: %w", gvk, err)
 	}
 
 	dec := json.NewDecoder(bytes.NewBuffer(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
-		return c, fmt.Errorf("decode %s: %v", gvk, err)
+		return c, fmt.Errorf("decode %s: %w", gvk, err)
 	}
 
 	c.SetGroupVersionKind(gvk)
