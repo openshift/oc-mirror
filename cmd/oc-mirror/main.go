@@ -23,7 +23,12 @@ import (
 var mirrorV2 embed.FS
 
 func main() {
-	if slices.Contains(os.Args, "--v2") {
+	useV1 := slices.Contains(os.Args, "--v1")
+	useV2 := slices.Contains(os.Args, "--v2")
+	switch {
+	case useV1 && useV2:
+		klog.Fatal("the flags --v1 and --v2 are mutually exclusive")
+	case useV2:
 		if err := runOcMirrorV2(os.Args); err != nil {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
@@ -39,9 +44,17 @@ func main() {
 			}
 			os.Exit(1)
 		}
-	} else {
+	// Do not complain about version flag in case of `oc-mirror version`
+	case slices.Contains(os.Args, "version"):
+		fallthrough
+	case useV1:
 		rootCmd := cliV1.NewMirrorCmd()
 		kcmdutil.CheckErr(rootCmd.Execute())
+	default:
+		if slices.Contains(os.Args, "list") || slices.Contains(os.Args, "describe") || slices.Contains(os.Args, "init") {
+			klog.Error("⚠️  the sub-commands `list`, `describe` and `init` are only implemented in oc-mirror v1, so please use --v1 for these sub-commands until some replacement is provided")
+		}
+		klog.Fatal("⚠️  the use of the flag --v1 or --v2 is mandatory, please use --v2 for the supported oc-mirror version or --v1 to continue using the deprecated version")
 	}
 }
 

@@ -4,7 +4,7 @@
 # needed to run against a local test registry and provide informative
 # debug data in case of test errors.
 function run_cmd() {
-  local test_flags="--verbose=4 --dest-use-http --skip-cleanup --oci-insecure-signature-policy"
+  local test_flags="--verbose=4 --dest-use-http --skip-cleanup --oci-insecure-signature-policy --v1"
 
   echo "$CMD" "$@" $test_flags
   echo
