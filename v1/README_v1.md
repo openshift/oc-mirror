@@ -67,37 +67,37 @@ If a user does not desire content removal from a mirror registry, they can eithe
 
 - List updates since the last `oc-mirror` run
   ```sh
-  ./bin/oc-mirror list updates imageset-config.yaml
+  ./bin/oc-mirror --v1 list updates imageset-config.yaml
   ```
 #### Releases
 1. List all available release payloads for a version of OpenShift (defaults to stable)
    ```sh
-   ./bin/oc-mirror list releases --version=4.9
+   ./bin/oc-mirror --v1 list releases --version=4.9
    ```
 2. List all available channels to query for a version of OpenShift
    ```sh
-   ./bin/oc-mirror list releases --channels --version=4.9
+   ./bin/oc-mirror --v1 list releases --channels --version=4.9
    ```
 3. List all available release payloads for a version of OpenShift in a specified channel
    ```sh
-   ./bin/oc-mirror list releases --channel=fast-4.9
+   ./bin/oc-mirror --v1 list releases --channel=fast-4.9
    ```
 #### Operators
 1. List all available catalogs for a version of OpenShift
    ```sh
-   ./bin/oc-mirror list operators --catalogs --version=4.9
+   ./bin/oc-mirror --v1 list operators --catalogs --version=4.9
    ```
 2. List all available packages in a catalog
    ```sh
-   ./bin/oc-mirror list operators --catalog=catalog-name
+   ./bin/oc-mirror --v1 list operators --catalog=catalog-name
    ````
 3. List all available channels in a package
     ```sh
-    ./bin/oc-mirror list operators --catalog=catalog-name --package=package-name
+    ./bin/oc-mirror --v1 list operators --catalog=catalog-name --package=package-name
     ```
 4. List all available versions in a channel
       ```sh
-    ./bin/oc-mirror list operators --catalog=catalog-name --package=package-name --channel=channel-name
+    ./bin/oc-mirror --v1 list operators --catalog=catalog-name --package=package-name --channel=channel-name
     ```
 ### Mirroring
 
@@ -108,22 +108,22 @@ If a user does not desire content removal from a mirror registry, they can eithe
 #### Fully Disconnected
 - Create then publish to your mirror registry:
     ```sh
-    ./bin/oc-mirror --config imageset-config.yaml file://archives
-    ./bin/oc-mirror --from /path/to/archives docker://reg.mirror.com
+    ./bin/oc-mirror --v1 --config imageset-config.yaml file://archives
+    ./bin/oc-mirror --v1 --from /path/to/archives docker://reg.mirror.com
     ```
 #### Partially Disconnected
 - Publish mirror to mirror
      ```sh
-    ./bin/oc-mirror --config imageset-config.yaml docker://localhost:5000
+    ./bin/oc-mirror --v1 --config imageset-config.yaml docker://localhost:5000
     ```
 ## Additional Features
 - Get information on your imageset using `describe`
     ```sh
-    ./bin/oc-mirror describe /path/to/archives
+    ./bin/oc-mirror --v1 describe /path/to/archives
     ```
 - List updates since last run for releases and operators
   ```sh
-  ./bin/oc-mirror list updates imageset-config.yaml
+  ./bin/oc-mirror --v1 list updates imageset-config.yaml
   ```
 For configuration and options, see the [expanded overview](./docs/overview.md) and [usage](./docs/usage.md) docs.
 
@@ -146,10 +146,10 @@ See the [config spec][config-spec] for an in-depth description of fields.
 
 ```sh
 make
-./bin/oc-mirror -h
+./bin/oc-mirror --v1 -h
 ```
 
-**Note:** Using `oc-mirror init` with local builds may result in unexpected release channel names.
+**Note:** Using `oc-mirror --v1 init` with local builds may result in unexpected release channel names.
 
 ### Test
 
