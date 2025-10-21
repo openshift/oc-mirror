@@ -35,11 +35,11 @@ ifeq ($(CGO_ENABLED), 0)
 endif
 
 GO_BUILD_FLAGS = -tags "json1 $(BTRFS_BUILD_TAG) $(LIBDM_BUILD_TAG) $(LIBSUBID_BUILD_TAG)"
-GO_BUILD_BINDIR := ./build
+GO_BUILD_BINDIR := ./bin
 all: clean tidy build test
 
 verify:
-	golangci-lint run -c .golangci.yaml 
+	golangci-lint run -c .golangci.yaml
 
 vet:
 	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./...
