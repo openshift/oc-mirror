@@ -38,7 +38,10 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require github.com/docker/cli v28.3.3+incompatible
+require (
+	github.com/docker/cli v28.3.3+incompatible
+	k8s.io/klog v1.0.0
+)
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
