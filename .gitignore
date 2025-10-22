@@ -1,6 +1,7 @@
 # Build artifacts.
 /bin/
-/cmd/oc-mirror/data/oc-mirror-v2
+/v1/bin/
+/cmd/oc-mirror/data/oc-mirror-v1
 
 # Test artifacts.
 coverage.out
@@ -11,19 +12,19 @@ sha256sum.txt
 **/test-output
 **/.metadata.json
 oc-mirror-workspace/
-v2/working-dir/
-v2/tests/hold-test-untar
-v2/tests/results
-v2/build/
-v2/cmd/mirror/logs/
-v2/cmd/mirror/working-dir/
-v2/launch.json
-v2/logs/
-v2/pkg/release/release.log
-v2/.scannerwork/
-v2/imagebuilder/test/
-v2/pkg/cli/registry.log
-v2/tests/graph-staging/cincinnati-graph-data.tar
+working-dir/
+tests/hold-test-untar
+tests/results
+build/
+cmd/mirror/logs/
+cmd/mirror/working-dir/
+launch.json
+logs/
+pkg/release/release.log
+.scannerwork/
+imagebuilder/test/
+pkg/cli/registry.log
+tests/graph-staging/cincinnati-graph-data.tar
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 isc*.yaml

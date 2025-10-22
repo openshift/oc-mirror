@@ -41,7 +41,6 @@ func TestGetCustomPaths(t *testing.T) {
 			t.Errorf("in %s, expect to get %d, got %d", tt.name, tt.want, len(paths))
 		}
 	}
-
 }
 
 func TestSearch(t *testing.T) {
@@ -79,7 +78,6 @@ func TestSearch(t *testing.T) {
 }
 
 func TestParseJSON(t *testing.T) {
-
 	types := map[string]interface{}{
 		"images": "test",
 	}
@@ -148,7 +146,6 @@ func TestRender(t *testing.T) {
 }
 
 func TestFindImages(t *testing.T) {
-
 	for _, tt := range []struct {
 		name    string
 		path    string
@@ -165,7 +162,7 @@ func TestFindImages(t *testing.T) {
 		},
 		{
 			name: "chart with aliased subchart",
-			path: "../../../v2/tests/helm-data/charts/my-chart-with-subchart-alias-0.1.0.tgz",
+			path: "../../../../tests/helm-data/charts/my-chart-with-subchart-alias-0.1.0.tgz",
 			want: []v1alpha2.Image{
 				{Name: "quay.io/rhdh-community/rhdh:next"},
 				{Name: "nginx:1.16.0"},
