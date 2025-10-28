@@ -1,3 +1,4 @@
+//nolint:wrapcheck // we do not care about wrapping errors in tests
 package testutils
 
 import (
@@ -95,7 +96,7 @@ func LocalMirrorFromFiles(source string, destination string) error {
 				return err
 			}
 		case m.IsDir():
-			return os.Mkdir(filepath.Join(destination, relPath), 0750)
+			return os.Mkdir(filepath.Join(destination, relPath), 0o750)
 		default:
 			newSource := filepath.Join(source, relPath)
 			cleanSource := filepath.Clean(newSource)
@@ -105,7 +106,7 @@ func LocalMirrorFromFiles(source string, destination string) error {
 			}
 			newDest := filepath.Join(destination, relPath)
 			cleanDest := filepath.Clean(newDest)
-			return os.WriteFile(cleanDest, data, 0600)
+			return os.WriteFile(cleanDest, data, 0o600)
 		}
 		return nil
 	})
@@ -129,36 +130,36 @@ func buildAndPushFakeImage(content map[string][]byte, imgRef string, dir string)
 	if err := crane.Push(i, tag.String()); err != nil {
 		return "", err
 	}
-	if dir != "" {
-		lp, err := layout.Write(dir, empty.Index)
-		if err != nil {
-			return "", err
-		}
-		if err := lp.AppendImage(i); err != nil {
-			return "", err
-		}
-		idx, err := lp.ImageIndex()
-		if err != nil {
-			return "", err
-		}
-		if err := remote.WriteIndex(tag, idx); err != nil {
-			return "", err
-		}
-		digest, err = idx.Digest()
-		if err != nil {
-			return "", err
-		}
-	} else {
+	if dir == "" {
 		digest, err = i.Digest()
 		if err != nil {
 			return "", err
 		}
+		return digest.String(), nil
+	}
+	lp, err := layout.Write(dir, empty.Index)
+	if err != nil {
+		return "", err
+	}
+	if err := lp.AppendImage(i); err != nil {
+		return "", err
+	}
+	idx, err := lp.ImageIndex()
+	if err != nil {
+		return "", err
+	}
+	if err := remote.WriteIndex(tag, idx); err != nil {
+		return "", err
+	}
+	digest, err = idx.Digest()
+	if err != nil {
+		return "", err
 	}
 
 	return digest.String(), nil
 }
 
-// WriteTestImage will use go-containerregistry to push a test image to
+// GenerateFakeImage will use go-containerregistry to push a test image to
 // an httptest.Server and will write the image to an OCI layout if dir is not "".
 func GenerateFakeImage(content, imgRef string, tempFolder string) (string, error) {
 	imgSpec, err := image.ParseRef(imgRef)
@@ -173,7 +174,7 @@ func GenerateFakeImage(content, imgRef string, tempFolder string) (string, error
 	}
 
 	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
-	err = os.MkdirAll(indexFolder, 0755)
+	err = os.MkdirAll(indexFolder, 0o755)
 	if err != nil {
 		return "", err
 	}
@@ -191,12 +192,10 @@ func ByteArrayFromTemplate(templatePath string, tokens []string) ([]byte, error)
 		return []byte{}, err
 	}
 	err = tmpl.Execute(buf, tokens)
-
 	if err != nil {
 		return []byte{}, err
 	}
 	return buf.Bytes(), nil
-
 }
 
 func ImgRefsFromTemplate(filePath, templatePath string, token releaseContents) error {
@@ -210,18 +209,17 @@ func ImgRefsFromTemplate(filePath, templatePath string, token releaseContents) e
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filePath, buf.Bytes(), 0644)
-
+	return os.WriteFile(filePath, buf.Bytes(), 0o600)
 }
-func FileFromTemplate(filePath, templatePath string, tokens []string) error {
 
+func FileFromTemplate(filePath, templatePath string, tokens []string) error {
 	bytes, err := ByteArrayFromTemplate(templatePath, tokens)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("registries.conf contents: %v", string(bytes))
-	return os.WriteFile(filePath, bytes, 0644)
+	return os.WriteFile(filePath, bytes, 0o600)
 }
 
 func ImageExists(imgRef string) (bool, error) {
@@ -294,7 +292,7 @@ func GenerateFakeRelease(imageRefs releaseContents, releaseImgRef, tempFolder st
 	}
 
 	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
-	err = os.MkdirAll(indexFolder, 0755)
+	err = os.MkdirAll(indexFolder, 0o755)
 	if err != nil {
 		return "", err
 	}
@@ -320,7 +318,6 @@ type CincinnatiMock struct {
 }
 
 func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
