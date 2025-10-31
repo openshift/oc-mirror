@@ -70,54 +70,54 @@ between the last `oc mirror` run and provided configuration to show what new ver
 #### Releases
 1. List all available release payloads for a version of OpenShift in the stable channel (the default channel)
    ```sh
-   oc-mirror list releases --version=4.9
+   oc-mirror --v1 list releases --version=4.9
    ```
 2. List all available release channels to query for a version of OpenShift
    ```sh
-   oc-mirror list releases --channels --version=4.9
+   oc-mirror --v1 list releases --channels --version=4.9
    ```
 3. List all available release payloads for a version of OpenShift in a specific channel
    ```sh
-   oc-mirror list releases --channel=fast-4.9
+   oc-mirror --v1 list releases --channel=fast-4.9
    ```
 #### Operators
 1. List all available Operator catalogs for a version of OpenShift
    ```sh
-   oc-mirror list operators --catalogs --version=4.9
+   oc-mirror --v1 list operators --catalogs --version=4.9
    ```
 2. List all available Operator packages in a catalog
    ```sh
-   oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
+   oc-mirror --v1 list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9
    ````
 3. List all available Operator channels in a package
     ```sh
-    oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali
+    oc-mirror --v1 list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali
     ```
 4. List all available Operator versions in a channel
       ```sh
-    oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali --channel=stable
+    oc-mirror --v1 list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.9 --package=kiali --channel=stable
     ```
 ### Mirroring
 #### Fully Disconnected
 - Create then publish to your mirror registry:
     ```sh
-    oc-mirror --config imageset-config.yaml file://archives
-    oc-mirror --from /path/to/archives docker://reg.mirror.com
+    oc-mirror --v1 --config imageset-config.yaml file://archives
+    oc-mirror --v1 --from /path/to/archives docker://reg.mirror.com
     ```
 #### Partially Disconnected
 - Publish mirror to mirror
      ```sh
-    oc-mirror --config imageset-config.yaml docker://localhost:5000
+    oc-mirror --v1 --config imageset-config.yaml docker://localhost:5000
     ```
 
 #### Fully disconnected Enclaves
 
-See [Enclave Support](../v2/docs/enclave_support.md)
+See [Enclave Support](../docs/enclave_support.md)
 
 ### Additional Features
 - Get information on your imageset using `describe`
     ```sh
-    oc-mirror describe /path/to/archives
+    oc-mirror --v1 describe /path/to/archives
     ```
 
 ## Mirroring Process
@@ -129,23 +129,23 @@ During the create phase, a declarative configuration is referenced to download c
 ### Running `oc-mirror` For First Time
 To create a new full imageset, use the following command with the target directory being a new, empty location and the configuration file authored referencing the config spec for the version of oc-mirror:
 
-`oc-mirror --config imageset-config.yaml file://archives`
+`oc-mirror --v1 --config imageset-config.yaml file://archives`
 
 
 > **WARNING**: Depending on the configuration file used, this process may download multiple hundreds of gigabytes of data. This may take quite a while. Use the optional `-v` command line flag for more verbose output to track command execution.
 
 **Note:** After `oc-mirror` has finished, an imageset named mirror_seq1_000000.tar will have been created and available in your specified directory. Use this file with `oc-mirror` to mirror the imageset to a disconnected registry:
 
-`oc-mirror --from archives docker://localhost:5000`
+`oc-mirror --v1 --from archives docker://localhost:5000`
 
 - With a defined top-level namespace:  
-`oc-mirror --from archives docker://localhost:5000/mynamespace`
+`oc-mirror --v1 --from archives docker://localhost:5000/mynamespace`
 
 ### Running `oc-mirror` For Differential Updates
 
 Once a full imageset has been created and published, differential imagesets that contain only updated images as per the configuration file can be generated with the same command as above:
 
-`oc-mirror --config imageset-config.yaml file://archives`
+`oc-mirror --v1 --config imageset-config.yaml file://archives`
 
 ## Notes about flag usage
 

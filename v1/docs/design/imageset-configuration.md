@@ -39,7 +39,7 @@ Filtering can be done by :
 * Package name and one or more channels: head bundle for the selected channel of that package
 * Package name, channel(s), and minVersion/maxVersion for each channel: within the selected channel of that package, all versions between minVersion and maxVersion (not relying of shortest path from upgrade graph): Head of channel is not included, even if multiple channels are included in the filtering
 * Package name and minVersion and/or maxVersion: all bundles in the default channel, between minVersion and maxVersion for that package. 
-For more examples, please check [the examples](../examples/imageset-config-filter-catalog.yaml)
+For more examples, please check [the examples](../v1/examples/imageset-config-filter-catalog.yaml)
 
 ## Additional Images
 

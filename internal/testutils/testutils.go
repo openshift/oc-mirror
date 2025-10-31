@@ -1,6 +1,8 @@
+//nolint:wrapcheck // we do not care about wrapping errors in tests
 package testutils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,30 +14,27 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
+	"text/template"
 
 	"github.com/distribution/distribution/v3/manifest"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+)
+
+const (
+	GraphMediaType = "application/json"
 )
 
 // WriteTestImage will use go-containerregistry to push a test image to
 // an httptest.Server and will write the image to an OCI layout if dir is not "".
 func WriteTestImage(testServer *httptest.Server, dir string) (string, error) {
-	return WriteTestImageWithURL(testServer.URL, dir)
-}
-
-// WriteTestImageWithURL is similar to WriteTestImage, but is useful when testing
-// with external registries rather than a httptest.Server
-func WriteTestImageWithURL(URL string, dir string) (string, error) {
-	u, err := url.Parse(URL)
+	u, err := url.Parse(testServer.URL)
 	if err != nil {
 		return "", err
 	}
@@ -43,132 +42,8 @@ func WriteTestImageWithURL(URL string, dir string) (string, error) {
 		"/testfile": []byte("test contents contents"),
 	}
 	targetRef := fmt.Sprintf("%s/bar:foo", u.Host)
-	tag, err := name.NewTag(targetRef)
+	_, err = buildAndPushFakeImage(c, targetRef, dir)
 	if err != nil {
-		return "", err
-	}
-	i, _ := crane.Image(c)
-
-	if dir != "" {
-		// create a new layout.Path and append the image to it
-		lp, err := layout.Write(dir, empty.Index)
-		if err != nil {
-			return "", err
-		}
-		// write the image into the layout path
-		if err := lp.AppendImage(i); err != nil {
-			return "", err
-		}
-		// reload the path as an index and "push" it to remote
-		idx, err := lp.ImageIndex()
-		if err != nil {
-			return "", err
-		}
-		if err := remote.WriteIndex(tag, idx); err != nil {
-			return "", err
-		}
-	} else {
-		// push image to remote
-		if err := crane.Push(i, tag.String()); err != nil {
-			return "", err
-		}
-	}
-	return targetRef, nil
-}
-
-// WriteMultiarchTestImageWithURL will use go-containerregistry to push a multi arch test image to
-// an httptest.Server and will write the image to an OCI layout if dir is not "".
-func WriteMultiArchTestImage(testServer *httptest.Server, dir string) (string, error) {
-	return WriteMultiArchTestImageWithURL(testServer.URL, dir)
-}
-
-// WriteMultiArchTestImageWithURL is similar to WriteMultiArchTestImage, but is useful when testing
-// with external registries rather than a httptest.Server
-func WriteMultiArchTestImageWithURL(URL string, dir string) (string, error) {
-	u, err := url.Parse(URL)
-	if err != nil {
-		return "", err
-	}
-	targetRef := fmt.Sprintf("%s/bar:foo", u.Host)
-	tag, err := name.NewTag(targetRef)
-	if err != nil {
-		return "", err
-	}
-	makeLayer := func() v1.Layer {
-		layer, _ := random.Layer(100, types.DockerLayer)
-		if err != nil {
-			// this is a hack, but it should not happen
-			panic(err)
-		}
-		return layer
-	}
-	img1, err := mutate.ConfigFile(empty.Image, &v1.ConfigFile{OS: "linux", Architecture: "amd64"})
-	if err != nil {
-		return "", err
-	}
-	img1, err = mutate.Append(img1, mutate.Addendum{
-		Layer: makeLayer(),
-		History: v1.History{
-			Author:    "random.Image",
-			Comment:   fmt.Sprintf("this is a random history %d of %d", 1, 1),
-			CreatedBy: "random",
-			Created:   v1.Time{Time: time.Now()},
-		},
-		// MediaType: types.DockerManifestSchema2,
-	})
-	img2, err := mutate.ConfigFile(empty.Image, &v1.ConfigFile{OS: "linux", Architecture: "ppc64le"})
-	if err != nil {
-		return "", err
-	}
-	img2, err = mutate.Append(img2, mutate.Addendum{
-		Layer: makeLayer(),
-		History: v1.History{
-			Author:    "random.Image",
-			Comment:   fmt.Sprintf("this is a random history %d of %d", 1, 1),
-			CreatedBy: "random",
-			Created:   v1.Time{Time: time.Now()},
-		},
-		// MediaType: types.DockerManifestSchema2,
-	})
-	ii := mutate.AppendManifests(empty.Index,
-		mutate.IndexAddendum{
-			Add: img1,
-			Descriptor: v1.Descriptor{
-				Platform: &v1.Platform{
-					OS:           "linux",
-					Architecture: "amd64",
-				},
-			},
-		},
-		mutate.IndexAddendum{
-			Add: img2,
-			Descriptor: v1.Descriptor{
-				Platform: &v1.Platform{
-					OS:           "linux",
-					Architecture: "ppc64le",
-				},
-			},
-		},
-	)
-	// update the MediaType for this index
-	ii = mutate.IndexMediaType(ii, types.DockerManifestList)
-	if dir != "" {
-		// "wrap" the newly created index in a new index (i.e. create manifest list indirection)
-		// NOTE: manifest list indirection is only useful for OCI layouts... this is
-		// not supported when pushing to a remote registry
-		oci_ii := mutate.AppendManifests(empty.Index, mutate.IndexAddendum{
-			Add: ii,
-			Descriptor: v1.Descriptor{
-				MediaType: types.DockerManifestList,
-			},
-		})
-		_, err := layout.Write(dir, oci_ii)
-		if err != nil {
-			return "", err
-		}
-	}
-	// now "push" to remote
-	if err := remote.WriteIndex(tag, ii); err != nil {
 		return "", err
 	}
 	return targetRef, nil
@@ -221,7 +96,7 @@ func LocalMirrorFromFiles(source string, destination string) error {
 				return err
 			}
 		case m.IsDir():
-			return os.Mkdir(filepath.Join(destination, relPath), 0750)
+			return os.Mkdir(filepath.Join(destination, relPath), 0o750)
 		default:
 			newSource := filepath.Join(source, relPath)
 			cleanSource := filepath.Clean(newSource)
@@ -231,9 +106,252 @@ func LocalMirrorFromFiles(source string, destination string) error {
 			}
 			newDest := filepath.Join(destination, relPath)
 			cleanDest := filepath.Clean(newDest)
-			return os.WriteFile(cleanDest, data, 0600)
+			return os.WriteFile(cleanDest, data, 0o600)
 		}
 		return nil
 	})
 	return err
+}
+
+func CreateRegistry() *httptest.Server {
+	// Set up a fake registry.
+	s := httptest.NewServer(registry.New())
+
+	return s
+}
+
+func buildAndPushFakeImage(content map[string][]byte, imgRef string, dir string) (string, error) {
+	var digest v1.Hash
+	tag, err := name.NewTag(imgRef)
+	if err != nil {
+		return "", err
+	}
+	i, _ := crane.Image(content)
+	if err := crane.Push(i, tag.String()); err != nil {
+		return "", err
+	}
+	if dir == "" {
+		digest, err = i.Digest()
+		if err != nil {
+			return "", err
+		}
+		return digest.String(), nil
+	}
+	lp, err := layout.Write(dir, empty.Index)
+	if err != nil {
+		return "", err
+	}
+	if err := lp.AppendImage(i); err != nil {
+		return "", err
+	}
+	idx, err := lp.ImageIndex()
+	if err != nil {
+		return "", err
+	}
+	if err := remote.WriteIndex(tag, idx); err != nil {
+		return "", err
+	}
+	digest, err = idx.Digest()
+	if err != nil {
+		return "", err
+	}
+
+	return digest.String(), nil
+}
+
+// GenerateFakeImage will use go-containerregistry to push a test image to
+// an httptest.Server and will write the image to an OCI layout if dir is not "".
+func GenerateFakeImage(content, imgRef string, tempFolder string) (string, error) {
+	imgSpec, err := image.ParseRef(imgRef)
+	if err != nil {
+		return "", err
+	}
+	sanitizedTagOrDigest := imgSpec.Tag
+	if imgSpec.Tag == "" {
+		sanitizedTagOrDigest = imgSpec.Digest
+	} else {
+		sanitizedTagOrDigest = strings.ReplaceAll(sanitizedTagOrDigest, ".", "-")
+	}
+
+	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
+	err = os.MkdirAll(indexFolder, 0o755)
+	if err != nil {
+		return "", err
+	}
+	c := map[string][]byte{
+		"/testfile": []byte("test contents " + content),
+	}
+	return buildAndPushFakeImage(c, imgRef, indexFolder)
+}
+
+func ByteArrayFromTemplate(templatePath string, tokens []string) ([]byte, error) {
+	exBytes := []byte{}
+	buf := bytes.NewBuffer(exBytes)
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return []byte{}, err
+	}
+	err = tmpl.Execute(buf, tokens)
+	if err != nil {
+		return []byte{}, err
+	}
+	return buf.Bytes(), nil
+}
+
+func ImgRefsFromTemplate(filePath, templatePath string, token releaseContents) error {
+	exBytes := []byte{}
+	buf := bytes.NewBuffer(exBytes)
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return err
+	}
+	err = tmpl.Execute(buf, token)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, buf.Bytes(), 0o600)
+}
+
+func FileFromTemplate(filePath, templatePath string, tokens []string) error {
+	bytes, err := ByteArrayFromTemplate(templatePath, tokens)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("registries.conf contents: %v", string(bytes))
+	return os.WriteFile(filePath, bytes, 0o600)
+}
+
+func ImageExists(imgRef string) (bool, error) {
+	desc, err := crane.Head(imgRef)
+	if err != nil {
+		return false, err
+	}
+	if desc != nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+type releaseContents struct {
+	Ref1 string
+	Ref2 string
+	Ref3 string
+}
+
+func GenerateReleaseAndComponents(toRegistry, tempFolder string, templatePath string) (string, []string, error) {
+	contents := releaseContents{}
+	relatedImages := []string{}
+	// generating a fake release with 3 components
+	component1 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component1"
+	digest1, err := GenerateFakeImage("component1", component1, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref1 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest1
+	relatedImages = append(relatedImages, contents.Ref1)
+
+	component2 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component2"
+	digest2, err := GenerateFakeImage("component2", component2, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref2 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest2
+	relatedImages = append(relatedImages, contents.Ref2)
+
+	component3 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component3"
+	digest3, err := GenerateFakeImage("component3", component3, tempFolder)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	contents.Ref3 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest3
+	relatedImages = append(relatedImages, contents.Ref3)
+
+	digest, err := GenerateFakeRelease(contents, toRegistry+"/openshift-release-dev/ocp-release:4.15.0-x86_64", tempFolder, templatePath)
+	if err != nil {
+		return "", relatedImages, err
+	}
+	relatedImages = append(relatedImages, toRegistry+"/openshift-release-dev/ocp-release@"+digest)
+	return digest, relatedImages, nil
+}
+
+func GenerateFakeRelease(imageRefs releaseContents, releaseImgRef, tempFolder string, templateFile string) (string, error) {
+	err := ImgRefsFromTemplate(tempFolder+"/image-references", templateFile, imageRefs)
+	if err != nil {
+		return "", err
+	}
+	imgSpec, err := image.ParseRef(releaseImgRef)
+	if err != nil {
+		return "", err
+	}
+	sanitizedTagOrDigest := imgSpec.Tag
+	if imgSpec.Tag == "" {
+		sanitizedTagOrDigest = imgSpec.Digest
+	} else {
+		sanitizedTagOrDigest = strings.ReplaceAll(sanitizedTagOrDigest, ".", "-")
+	}
+
+	indexFolder := filepath.Join(tempFolder, imgSpec.PathComponent, sanitizedTagOrDigest)
+	err = os.MkdirAll(indexFolder, 0o755)
+	if err != nil {
+		return "", err
+	}
+
+	imageRefsBytes, err := os.ReadFile(tempFolder + "/image-references")
+	if err != nil {
+		return "", err
+	}
+	releaseMetaBytes, err := os.ReadFile("../../e2e/templates/release_templates/release-metadata")
+	if err != nil {
+		return "", err
+	}
+	c := map[string][]byte{
+		"/release-manifests/image-references": imageRefsBytes,
+		"/release-manifests/release-metadata": releaseMetaBytes,
+	}
+	return buildAndPushFakeImage(c, releaseImgRef, indexFolder)
+}
+
+type CincinnatiMock struct {
+	Templates map[string]string
+	Tokens    []string
+}
+
+func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	mtype := r.Header.Get("Accept")
+	if mtype != GraphMediaType {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
+
+	keys, ok := r.URL.Query()["channel"]
+	if !ok {
+		// t.Fail()
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	ch := keys[len(keys)-1]
+
+	responseTemplate, ok := c.Templates[ch]
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	responseBytes, err := ByteArrayFromTemplate(responseTemplate, c.Tokens)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(responseBytes)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
