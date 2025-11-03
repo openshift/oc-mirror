@@ -2,7 +2,6 @@ package operator
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,11 +17,8 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
 )
-
-type MockMirror struct {
-	Fail bool
-}
 
 type MockHandler struct {
 	Log clog.PluggableLoggerInterface
@@ -300,6 +296,14 @@ func TestFilterCollectorM2D(t *testing.T) {
 
 	manifestMock := setupManifestMock(mockCtrl)
 
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+	mirrorMock.
+		EXPECT().
+		Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
 	testDir, err := filepath.Abs(common.TestFolder)
 	assert.NoError(t, err, "should get tests/ absolute path")
 
@@ -461,7 +465,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex = ex.withConfig(testCase.config)
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
@@ -475,7 +479,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 
 	// this test should cover over 80% M2D
 	t.Run("Testing OperatorImageCollector - Mirror to disk: should pass", func(t *testing.T) {
-		ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 		// ensure coverage in new.go
 		_ = NewWithFilter(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifestMock)
 	})
@@ -502,6 +506,14 @@ func TestFilterCollectorD2M(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+	mirrorMock.
+		EXPECT().
+		Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 
 	os.RemoveAll(common.TestFolder + "hold-operator/")
 	os.RemoveAll(common.TestFolder + "operator-images")
@@ -594,7 +606,7 @@ func TestFilterCollectorD2M(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_DiskToMirror(tempDir, log, manifestMock)
+			ex := setupFilterCollector_DiskToMirror(tempDir, log, manifestMock, mirrorMock)
 			ex = ex.withConfig(testCase.config)
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
@@ -628,6 +640,14 @@ func TestFilterCollectorM2M(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+	mirrorMock.
+		EXPECT().
+		Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
 
 	os.RemoveAll(common.TestFolder + "hold-operator/")
 	os.RemoveAll(common.TestFolder + "operator-images")
@@ -778,7 +798,7 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			ex = ex.withConfig(testCase.config)
@@ -793,7 +813,7 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 }
 
-func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *FilterCollector {
+func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface) *FilterCollector {
 	handler := &MockHandler{Log: log}
 	globalD2M := &mirror.GlobalOptions{
 		SecurePolicy: false,
@@ -822,7 +842,7 @@ func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerI
 	ex := &FilterCollector{
 		OperatorCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
+			Mirror:           mirrorIface,
 			Config:           nominalConfigD2M,
 			Manifest:         manifest,
 			Opts:             d2mOpts,
@@ -834,7 +854,7 @@ func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerI
 	return ex
 }
 
-func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *FilterCollector {
+func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface) *FilterCollector {
 	handler := &MockHandler{Log: log}
 
 	globalM2D := &mirror.GlobalOptions{
@@ -863,7 +883,7 @@ func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerI
 	ex := &FilterCollector{
 		OperatorCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
+			Mirror:           mirrorIface,
 			Config:           nominalConfigM2D,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -877,17 +897,6 @@ func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerI
 func (ex *FilterCollector) withConfig(cfg v2alpha1.ImageSetConfiguration) *FilterCollector {
 	ex.Config = cfg
 	return ex
-}
-
-func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
-	if o.Fail {
-		return fmt.Errorf("forced mirror run fail")
-	}
-	return nil
-}
-
-func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
-	return true, nil
 }
 
 func (o MockHandler) getCatalog(filePath string) (OperatorCatalog, error) {

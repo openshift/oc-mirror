@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/distribution/distribution/v3/registry/api/errcode"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
 )
 
 type BatchSchema struct {
@@ -91,93 +93,126 @@ func TestChannelConcurrentWorker(t *testing.T) {
 
 	timestampStr := time.Now().Format("20060102_150405")
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	noFailMirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+	noFailMirrorMock.
+		EXPECT().
+		Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
 	collectedImages := v2alpha1.CollectorSchema{AllImages: relatedImages, TotalReleaseImages: 4, TotalOperatorImages: 3, TotalAdditionalImages: 2}
+
 	t.Run("Testing m2m Worker - no errors: should pass", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
+		w := New(ChannelConcurrentWorker, log, tempDir, noFailMirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2mopts)
-		if err != nil {
-			t.Fatal("should pass")
-		}
+		assert.NoError(t, err)
 		assert.ElementsMatch(t, relatedImages, copiedImages.AllImages)
 	})
 
 	t.Run("Testing m2d Worker - no errors: should pass", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
+		w := New(ChannelConcurrentWorker, log, tempDir, noFailMirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
-		if err != nil {
-			t.Fatal("should pass")
-		}
+		assert.NoError(t, err)
 		assert.ElementsMatch(t, relatedImages, copiedImages.AllImages)
 	})
+
 	t.Run("Testing d2m Worker - no errors: should pass", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
+		w := New(ChannelConcurrentWorker, log, tempDir, noFailMirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
-		if err != nil {
-			t.Fatal("should pass")
-		}
+		assert.NoError(t, err)
 		assert.ElementsMatch(t, relatedImages, copiedImages.AllImages)
 	})
 
 	t.Run("Testing delete Worker - no errors: should pass", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
+		w := New(ChannelConcurrentWorker, log, tempDir, noFailMirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
-		if err != nil {
-			t.Fatal("should pass")
-		}
+		assert.NoError(t, err)
 		assert.ElementsMatch(t, relatedImages, copiedImages.AllImages)
 	})
+
 	t.Run("Testing m2d Worker - single error on operator: should return safe error", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
 		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, m2dopts)
-		if err == nil {
-			t.Fatal("should return safe error")
-		}
-
+		assert.Error(t, err, "should return safe error")
 		assert.Equal(t, len(relatedImages)-1, len(copiedImages.AllImages))
 	})
+
 	t.Run("Testing d2m Worker - 1 err release / 2 errors: should return unsafe error", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
 		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
-		if err == nil {
-			t.Fatal("should return unsafe error")
-		}
-
+		assert.Error(t, err, "should return unsafe error")
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
 	})
+
 	t.Run("Testing d2m Worker - 2 errors: should return safe error", func(t *testing.T) {
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"})
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-h@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeManifestUnknown, Message: "Manifest Unknown"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
 		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(8), timestampStr)
 
 		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
-		if err == nil {
-			t.Fatal("should return safe error")
-		}
-
+		assert.Error(t, err, "should return safe error")
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
 	})
 
@@ -196,9 +231,20 @@ func TestChannelConcurrentWorker(t *testing.T) {
 
 		collectedImages := v2alpha1.CollectorSchema{AllImages: relatedImages, TotalOperatorImages: 2, CopyImageSchemaMap: *copyImageSchemaMap}
 
-		mirrorMock := new(MirrorMock)
-		mirrorMock.On("Run", mock.Anything, "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
-		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Eq("docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"}).
+			AnyTimes()
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
 		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1), timestampStr)
 
 		_, err := w.Worker(context.Background(), collectedImages, m2dopts)
@@ -462,28 +508,14 @@ func TestShouldSkipImage(t *testing.T) {
 			}
 
 			skip, err := shouldSkipImageOld(testCase.img, testCase.mode, testCase.errArray)
-			if testCase.expectedError && err == nil {
-				t.Error("expected to fail with error, but no error was returned")
-			}
-			if !testCase.expectedError && err != nil {
-				t.Errorf("unexpected failure : %v", err)
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			assert.Equal(t, testCase.expectToSkip, skip)
 		})
 	}
-}
-
-type MirrorMock struct {
-	mock.Mock
-}
-
-func (o *MirrorMock) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
-	args := o.Called(ctx, src, dest, mode, opts)
-	return args.Error(0)
-}
-
-func (o *MirrorMock) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
-	return true, nil
 }
 
 // later, we can consider making this func smarter:

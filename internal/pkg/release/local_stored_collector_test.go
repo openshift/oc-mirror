@@ -20,11 +20,8 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
 )
-
-type MockMirror struct {
-	Fail bool
-}
 
 type MockCincinnati struct {
 	Config v2alpha1.ImageSetConfiguration
@@ -106,7 +103,15 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(validReleaseSchema, nil).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock)
+		mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
+		mirrorMock.
+			EXPECT().
+			Run(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		assert.NoError(t, err)
@@ -293,7 +298,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("forced error image index")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
 		log.Debug("completed test related images %v ", res)
@@ -314,7 +319,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("force fail error")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -342,7 +347,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(errors.New("forced extract oci fail")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -578,7 +583,7 @@ func TestHandleGraphImage(t *testing.T) {
 			}
 			ex := &LocalStorageCollector{
 				Log:              log,
-				Mirror:           &MockMirror{Fail: false},
+				Mirror:           nil,
 				Opts:             copyOpts,
 				Manifest:         manifestMock,
 				LocalStorageFQDN: "localhost:9999",
@@ -650,7 +655,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 
 	ex := &LocalStorageCollector{
 		Log:              log,
-		Mirror:           &MockMirror{Fail: false},
+		Mirror:           nil,
 		Config:           cfgd2m,
 		Manifest:         manifest,
 		Opts:             d2mOpts,
@@ -662,7 +667,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *LocalStorageCollector {
+func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface) *LocalStorageCollector {
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
@@ -769,7 +774,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
 	ex := &LocalStorageCollector{
 		Log:              log,
-		Mirror:           &MockMirror{Fail: false},
+		Mirror:           mirrorIface,
 		Config:           cfgm2d,
 		Manifest:         manifest,
 		Opts:             m2dOpts,
@@ -779,17 +784,6 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		LogsDir:          "/tmp/",
 	}
 	return ex
-}
-
-func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
-	if o.Fail {
-		return fmt.Errorf("forced mirror run fail")
-	}
-	return nil
-}
-
-func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
-	return true, nil
 }
 
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {

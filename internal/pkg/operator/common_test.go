@@ -14,6 +14,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
@@ -26,6 +27,8 @@ func TestPrepareDeleteForV1(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
 
 	type testCase struct {
 		caseName       string
@@ -71,7 +74,7 @@ func TestPrepareDeleteForV1(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.generateV1DestTags = true
 			ex.Opts.Destination = "docker://localhost:5000/test"
@@ -95,6 +98,8 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
 
 	type testCase struct {
 		caseName       string
@@ -431,7 +436,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			res, err := ex.dispatchImagesForM2M(testCase.relatedImages)

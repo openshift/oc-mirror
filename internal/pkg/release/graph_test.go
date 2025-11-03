@@ -15,6 +15,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
 )
 
 type mockImageBuilder struct {
@@ -135,11 +136,13 @@ func TestCreateGraphImage(t *testing.T) {
 
 	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
 
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
 	// this test should cover over 80% M2D
 	t.Run("Testing CreateGraphImage - Mirror to disk: should pass", func(t *testing.T) {
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
+			Mirror:           mirrorMock,
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
@@ -149,7 +152,7 @@ func TestCreateGraphImage(t *testing.T) {
 		}
 
 		// just to ensure we cover new.go
-		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, manifestMock, cincinnati, &mockImageBuilder{})
+		_ = New(log, "nada", cfgm2d, m2dOpts, mirrorMock, manifestMock, cincinnati, &mockImageBuilder{})
 
 		_, err := ex.CreateGraphImage(ctx, graphURL)
 		assert.NoError(t, err)
@@ -158,7 +161,7 @@ func TestCreateGraphImage(t *testing.T) {
 	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
+			Mirror:           mirrorMock,
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
@@ -174,7 +177,7 @@ func TestCreateGraphImage(t *testing.T) {
 	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
 		ex := &LocalStorageCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
+			Mirror:           mirrorMock,
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
