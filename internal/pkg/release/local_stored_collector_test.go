@@ -9,12 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
+	imagebuildermock "github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder/mock"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
@@ -115,7 +118,23 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock, cincinnatiMock)
+		imgBuilderMock := imagebuildermock.NewMockImageBuilderInterface(mockCtrl)
+
+		imgBuilderMock.
+			EXPECT().
+			BuildAndPush(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("sha256:12345", nil).
+			AnyTimes()
+
+		imgBuilderMock.
+			EXPECT().
+			SaveImageLayoutToDir(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, string, string) (layout.Path, error) {
+				return layout.FromPath(common.TestFolder + "test-untar")
+			}).
+			AnyTimes()
+
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock, cincinnatiMock, imgBuilderMock)
 
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		assert.NoError(t, err)
@@ -309,7 +328,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("forced error image index")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock, nil)
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
 		log.Debug("completed test related images %v ", res)
@@ -330,7 +349,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("force fail error")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock, nil)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -358,7 +377,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(errors.New("forced extract oci fail")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock, nil)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -540,6 +559,22 @@ func TestHandleGraphImage(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
+	imgBuilderMock := imagebuildermock.NewMockImageBuilderInterface(mockCtrl)
+
+	imgBuilderMock.
+		EXPECT().
+		BuildAndPush(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return("sha256:12345", nil).
+		AnyTimes()
+
+	imgBuilderMock.
+		EXPECT().
+		SaveImageLayoutToDir(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, string, string) (layout.Path, error) {
+			return layout.FromPath(common.TestFolder + "test-untar")
+		}).
+		AnyTimes()
+
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			tempDir := t.TempDir()
@@ -610,7 +645,7 @@ func TestHandleGraphImage(t *testing.T) {
 				Opts:             copyOpts,
 				Manifest:         manifestMock,
 				LocalStorageFQDN: "localhost:9999",
-				ImageBuilder:     &mockImageBuilder{},
+				ImageBuilder:     imgBuilderMock,
 				LogsDir:          "/tmp/",
 			}
 			graphImage, err := ex.handleGraphImage(context.Background())
@@ -688,7 +723,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface, cincinnatiIface CincinnatiInterface) *LocalStorageCollector {
+func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface, cincinnatiIface CincinnatiInterface, imgBuilderIface imagebuilder.ImageBuilderInterface) *LocalStorageCollector {
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
@@ -800,7 +835,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		Opts:             m2dOpts,
 		Cincinnati:       cincinnatiIface,
 		LocalStorageFQDN: "localhost:9999",
-		ImageBuilder:     &mockImageBuilder{},
+		ImageBuilder:     imgBuilderIface,
 		LogsDir:          "/tmp/",
 	}
 	return ex
