@@ -16,6 +16,7 @@ import (
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
+	releasemock "github.com/openshift/oc-mirror/v2/internal/pkg/release/mock"
 )
 
 type mockImageBuilder struct {
@@ -127,8 +128,6 @@ func TestCreateGraphImage(t *testing.T) {
 		},
 	}
 
-	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
-
 	ctx := context.Background()
 
 	mockCtrl := gomock.NewController(t)
@@ -138,6 +137,8 @@ func TestCreateGraphImage(t *testing.T) {
 
 	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
 
+	cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
 	// this test should cover over 80% M2D
 	t.Run("Testing CreateGraphImage - Mirror to disk: should pass", func(t *testing.T) {
 		ex := &LocalStorageCollector{
@@ -146,13 +147,13 @@ func TestCreateGraphImage(t *testing.T) {
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
+			Cincinnati:       cincinnatiMock,
 			LocalStorageFQDN: "localhost:9999",
 			ImageBuilder:     &mockImageBuilder{},
 		}
 
 		// just to ensure we cover new.go
-		_ = New(log, "nada", cfgm2d, m2dOpts, mirrorMock, manifestMock, cincinnati, &mockImageBuilder{})
+		_ = New(log, "nada", cfgm2d, m2dOpts, mirrorMock, manifestMock, cincinnatiMock, &mockImageBuilder{})
 
 		_, err := ex.CreateGraphImage(ctx, graphURL)
 		assert.NoError(t, err)
@@ -165,7 +166,7 @@ func TestCreateGraphImage(t *testing.T) {
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
+			Cincinnati:       cincinnatiMock,
 			LocalStorageFQDN: "localhost:9999",
 			ImageBuilder:     &mockImageBuilder{},
 		}
@@ -181,7 +182,7 @@ func TestCreateGraphImage(t *testing.T) {
 			Config:           cfgm2d,
 			Manifest:         manifestMock,
 			Opts:             m2dOpts,
-			Cincinnati:       cincinnati,
+			Cincinnati:       cincinnatiMock,
 			LocalStorageFQDN: "localhost:9999",
 			ImageBuilder:     &mockImageBuilder{Fail: true},
 		}

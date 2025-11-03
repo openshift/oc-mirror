@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -21,14 +20,8 @@ import (
 	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
+	releasemock "github.com/openshift/oc-mirror/v2/internal/pkg/release/mock"
 )
-
-type MockCincinnati struct {
-	Config v2alpha1.ImageSetConfiguration
-	Opts   mirror.CopyOptions
-	Client Client
-	Fail   bool
-}
 
 func TestReleaseLocalStoredCollector(t *testing.T) {
 	log := clog.New("trace")
@@ -72,7 +65,18 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			{Name: "agent-installer-orchestrator", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4949b93b3fd0f6b22197402ba22c2775eba408b53d30ac2e3ab2dda409314f5e"},
 			{Name: "apiserver-network-proxy", Type: v2alpha1.TypeOCPReleaseContent, Image: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2a0dd75b1b327a0c5b17145fc71beb2bf805e6cc3b8fc3f672ce06772caddf21"},
 		}
+		validReleaseReferenceImages = []v2alpha1.CopyImageSchema{
+			{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"},
+		}
 	)
+
+	cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+
+	cincinnatiMock.
+		EXPECT().
+		GetReleaseReferenceImages(gomock.Any()).
+		Return(validReleaseReferenceImages, nil).
+		AnyTimes()
 
 	// this test should cover over 80% M2D
 	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
@@ -111,7 +115,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock, cincinnatiMock)
 
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		assert.NoError(t, err)
@@ -190,7 +194,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(validImageDigest, nil).
 			AnyTimes()
 
-		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock)
+		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock, cincinnatiMock)
 		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		assert.NoError(t, err)
@@ -271,12 +275,19 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(validImageDigest, nil).
 			AnyTimes()
 
-		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock)
+		sigMock := releasemock.NewMockSignatureInterface(mockCtrl)
+
+		sigMock.
+			EXPECT().
+			GenerateReleaseSignatures(gomock.Any(), gomock.Any()).
+			DoAndReturn(generateReleaseSignatures).
+			AnyTimes()
+
+		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock, nil)
 
 		client := &ocpClient{}
 		client.SetQueryParams(ex.Config.Mirror.Platform.Architectures[0], ex.Config.Mirror.Platform.Channels[0].Name, "")
-		sig := MockCincinnati{}
-		cn := NewCincinnati(ex.Log, nil, &ex.Config, ex.Opts, client, false, sig)
+		cn := NewCincinnati(ex.Log, nil, &ex.Config, ex.Opts, client, false, sigMock)
 
 		ex.Cincinnati = cn
 
@@ -298,7 +309,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("forced error image index")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
 		log.Debug("completed test related images %v ", res)
@@ -319,7 +330,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(nil, errors.New("force fail error")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -347,7 +358,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 			Return(errors.New("forced extract oci fail")).
 			AnyTimes()
 
-		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil)
+		ex := setupCollector_MirrorToDisk(tempDir, log, manifestMock, nil, cincinnatiMock)
 
 		res, err := ex.ReleaseImageCollector(context.Background())
 		assert.Error(t, err)
@@ -365,7 +376,8 @@ func TestGraphImage(t *testing.T) {
 
 	t.Run("Testing GraphImage : should fail", func(t *testing.T) {
 		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
-		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock)
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
+		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock, cincinnatiMock)
 
 		res, err := ex.GraphImage()
 		assert.NoError(t, err)
@@ -381,14 +393,25 @@ func TestReleaseImage(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
+	validReleaseReferenceImages := []v2alpha1.CopyImageSchema{
+		{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"},
+	}
+
 	t.Run("Testing ReleaseImage : should pass", func(t *testing.T) {
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
 
 		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+		cincinnatiMock := releasemock.NewMockCincinnatiInterface(mockCtrl)
 
-		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock)
+		cincinnatiMock.
+			EXPECT().
+			GetReleaseReferenceImages(gomock.Any()).
+			Return(validReleaseReferenceImages, nil).
+			AnyTimes()
+
+		ex := setupCollector_DiskToMirror(tempDir, log, manifestMock, cincinnatiMock)
 		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		assert.NoError(t, err)
@@ -605,7 +628,7 @@ func TestHandleGraphImage(t *testing.T) {
 	}
 }
 
-func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *LocalStorageCollector {
+func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, cincinnatiIface CincinnatiInterface) *LocalStorageCollector {
 	globalD2M := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir + "/working-dir",
@@ -648,10 +671,8 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		},
 	}
 
-	cincinnati := &MockCincinnati{}
 	client := &ocpClient{}
 	client.SetQueryParams(cfgd2m.Mirror.Platform.Architectures[0], cfgd2m.Mirror.Platform.Channels[0].Name, "")
-	cincinnati.Client = client
 
 	ex := &LocalStorageCollector{
 		Log:              log,
@@ -659,7 +680,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 		Config:           cfgd2m,
 		Manifest:         manifest,
 		Opts:             d2mOpts,
-		Cincinnati:       cincinnati,
+		Cincinnati:       cincinnatiIface,
 		LocalStorageFQDN: "localhost:9999",
 		LogsDir:          "/tmp/",
 	}
@@ -667,7 +688,7 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface) *LocalStorageCollector {
+func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface, mirrorIface mirror.MirrorInterface, cincinnatiIface CincinnatiInterface) *LocalStorageCollector {
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
@@ -771,14 +792,13 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 		},
 	}
 
-	cincinnati := &MockCincinnati{Config: cfgm2d, Opts: m2dOpts}
 	ex := &LocalStorageCollector{
 		Log:              log,
 		Mirror:           mirrorIface,
 		Config:           cfgm2d,
 		Manifest:         manifest,
 		Opts:             m2dOpts,
-		Cincinnati:       cincinnati,
+		Cincinnati:       cincinnatiIface,
 		LocalStorageFQDN: "localhost:9999",
 		ImageBuilder:     &mockImageBuilder{},
 		LogsDir:          "/tmp/",
@@ -786,24 +806,7 @@ func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterfa
 	return ex
 }
 
-func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
-	var res []v2alpha1.CopyImageSchema
-	res = append(res, v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"})
-	return res, nil
-}
-
-func (o MockCincinnati) NewOCPClient(uuid uuid.UUID) (Client, error) {
-	if o.Fail {
-		return o.Client, fmt.Errorf("forced cincinnati client error")
-	}
-	return o.Client, nil
-}
-
-func (o MockCincinnati) NewOKDClient(uuid uuid.UUID) (Client, error) {
-	return o.Client, nil
-}
-
-func (o MockCincinnati) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
+func generateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	imagesByTag := make([]v2alpha1.CopyImageSchema, len(images))
 	minor := 9
 	for i, img := range images {
