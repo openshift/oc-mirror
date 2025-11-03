@@ -6,13 +6,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
-	"go.podman.io/image/v5/types"
+	"go.uber.org/mock/gomock"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	mirror "github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -71,7 +71,12 @@ func TestAllDeleteImages(t *testing.T) {
 		},
 	}
 
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, manifestMock, "/tmp", &mockSignatureHandler{})
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		opts.Global.WorkingDir = common.TestFolder
@@ -99,7 +104,7 @@ func TestAllDeleteImages(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 		opts.Global.WorkingDir = common.TestFolder
 		opts.Global.ForceCacheDelete = true
-		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, manifestMock, "/tmp", &mockSignatureHandler{})
 		imgs, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
@@ -143,8 +148,13 @@ func TestWriteMetaData(t *testing.T) {
 		LocalStorageFQDN:    "localhost:8888",
 	}
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
 	cfg := v2alpha1.ImageSetConfiguration{}
-	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, manifestMock, "/tmp", &mockSignatureHandler{})
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		cpImages := []v2alpha1.CopyImageSchema{
@@ -162,7 +172,6 @@ func TestWriteMetaData(t *testing.T) {
 }
 
 func TestSigDeleteItems(t *testing.T) {
-
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
 
@@ -333,8 +342,6 @@ type mockBlobs struct {
 	Fail bool
 }
 
-type mockManifest struct{}
-
 func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
 	copiedImages := v2alpha1.CollectorSchema{
 		AllImages:             []v2alpha1.CopyImageSchema{},
@@ -354,36 +361,4 @@ func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]s
 		return nil, fmt.Errorf("forced error")
 	}
 	return res, nil
-}
-
-func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-
-func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-
-func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return &v2alpha1.OperatorConfigSchema{}, nil
-}
-
-func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	return []v2alpha1.RelatedImage{}, nil
-}
-
-func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o mockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "", nil
-}
-
-func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
-	return nil, "", nil
 }

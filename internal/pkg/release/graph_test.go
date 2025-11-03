@@ -7,9 +7,13 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -18,7 +22,6 @@ type mockImageBuilder struct {
 }
 
 func TestCreateGraphImage(t *testing.T) {
-
 	log := clog.New("trace")
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
@@ -127,14 +130,18 @@ func TestCreateGraphImage(t *testing.T) {
 
 	ctx := context.Background()
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
 	// this test should cover over 80% M2D
 	t.Run("Testing CreateGraphImage - Mirror to disk: should pass", func(t *testing.T) {
-		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
 			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
-			Manifest:         manifest,
+			Manifest:         manifestMock,
 			Opts:             m2dOpts,
 			Cincinnati:       cincinnati,
 			LocalStorageFQDN: "localhost:9999",
@@ -142,22 +149,18 @@ func TestCreateGraphImage(t *testing.T) {
 		}
 
 		// just to ensure we cover new.go
-		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, &MockManifest{}, cincinnati, &mockImageBuilder{})
+		_ = New(log, "nada", cfgm2d, m2dOpts, &MockMirror{}, manifestMock, cincinnati, &mockImageBuilder{})
 
 		_, err := ex.CreateGraphImage(ctx, graphURL)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
-
+		assert.NoError(t, err)
 	})
 
 	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
-		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
 			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
-			Manifest:         manifest,
+			Manifest:         manifestMock,
 			Opts:             m2dOpts,
 			Cincinnati:       cincinnati,
 			LocalStorageFQDN: "localhost:9999",
@@ -165,19 +168,15 @@ func TestCreateGraphImage(t *testing.T) {
 		}
 
 		_, err := ex.CreateGraphImage(ctx, "nada")
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-
+		assert.Error(t, err)
 	})
 
 	t.Run("Testing CreateGraphImage - Mirror to disk: should fail", func(t *testing.T) {
-		manifest := &MockManifest{Log: log}
 		ex := &LocalStorageCollector{
 			Log:              log,
 			Mirror:           &MockMirror{Fail: false},
 			Config:           cfgm2d,
-			Manifest:         manifest,
+			Manifest:         manifestMock,
 			Opts:             m2dOpts,
 			Cincinnati:       cincinnati,
 			LocalStorageFQDN: "localhost:9999",
@@ -185,12 +184,8 @@ func TestCreateGraphImage(t *testing.T) {
 		}
 
 		_, err := ex.CreateGraphImage(ctx, graphURL)
-		if err == nil {
-			t.Fatalf("should fail")
-		}
-
+		assert.Error(t, err)
 	})
-
 }
 
 func (o mockImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) (string, error) {

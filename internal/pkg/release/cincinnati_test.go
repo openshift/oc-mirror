@@ -8,11 +8,11 @@ import (
 	"os"
 	"testing"
 
-	digest "github.com/opencontainers/go-digest"
-	"go.podman.io/image/v5/types"
+	"go.uber.org/mock/gomock"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -21,12 +21,13 @@ type mockSignature struct {
 }
 
 func TestGetReleaseReferenceImages(t *testing.T) {
-
 	log := clog.New("trace")
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
 	tmpDir := t.TempDir()
-	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
-	defer os.RemoveAll(tmpDir)
+	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0o755)
 
 	global := &mirror.GlobalOptions{SecurePolicy: false}
 	global.WorkingDir = tmpDir
@@ -106,7 +107,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	}
 
 	t.Run("TestGetReleaseReferenceImages should pass", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -130,7 +130,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (no channels)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -156,7 +155,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should fail", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -182,7 +180,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (platform.release & kubevirt)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -199,9 +196,15 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 		}
 		c.url = endpoint
 
-		mm := NewManifest()
+		manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
 
-		sch := NewCincinnati(log, mm, &cfgReleaseKubeVirt, opts, c, true, signature)
+		manifestMock.
+			EXPECT().
+			ImageDigest(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("123456546546546546546546546", nil).
+			AnyTimes()
+
+		sch := NewCincinnati(log, manifestMock, &cfgReleaseKubeVirt, opts, c, true, signature)
 		res, _ := sch.GetReleaseReferenceImages(context.Background())
 
 		log.Debug("result from cincinnati %v", res)
@@ -209,48 +212,9 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should return a related images")
 		}
 	})
-
-}
-
-type mockManifest struct{}
-
-func NewManifest() mockManifest {
-	return mockManifest{}
 }
 
 func (o mockSignature) GenerateReleaseSignatures(ctx context.Context, rd []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	o.Log.Info("signature verification (mock)")
 	return []v2alpha1.CopyImageSchema{}, nil
-}
-
-func (o mockManifest) ImageDigest(ctx context.Context, srcContext *types.SystemContext, img string) (string, error) {
-	return "123456546546546546546546546", nil
-}
-
-func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-
-func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
-}
-
-func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return &v2alpha1.OperatorConfigSchema{}, nil
-}
-
-func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	return []v2alpha1.RelatedImage{}, nil
-}
-
-func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
-	return nil, "", nil
 }

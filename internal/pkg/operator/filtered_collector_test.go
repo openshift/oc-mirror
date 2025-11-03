@@ -2,36 +2,26 @@ package operator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
-	"github.com/opencontainers/go-digest"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
-	"go.podman.io/image/v5/types"
+	"go.uber.org/mock/gomock"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 type MockMirror struct {
 	Fail bool
-}
-
-type MockManifest struct {
-	Log               clog.PluggableLoggerInterface
-	FailImageIndex    bool
-	FailImageManifest bool
-	FailExtract       bool
 }
 
 type MockHandler struct {
@@ -73,20 +63,6 @@ var (
 						Catalog:       "oci://" + common.TestFolder + "simple-test-bundle",
 						TargetTag:     "v4.14",
 						TargetCatalog: "test-catalog",
-					},
-				},
-			},
-		},
-	}
-	// nolint: unused
-	nominalConfigD2MWithTargetCatalogTag = v2alpha1.ImageSetConfiguration{
-		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
-			Mirror: v2alpha1.Mirror{
-				Operators: []v2alpha1.Operator{
-					{
-						Catalog:       "redhat-operator-index:v4.14",
-						TargetCatalog: "test-namespace/test-catalog",
-						TargetTag:     "v2.0",
 					},
 				},
 			},
@@ -318,7 +294,11 @@ func TestFilterCollectorM2D(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	manifest := &MockManifest{Log: log}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
 
 	testDir, err := filepath.Abs(common.TestFolder)
 	assert.NoError(t, err, "should get tests/ absolute path")
@@ -481,7 +461,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifest)
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
 			ex = ex.withConfig(testCase.config)
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
@@ -495,9 +475,9 @@ func TestFilterCollectorM2D(t *testing.T) {
 
 	// this test should cover over 80% M2D
 	t.Run("Testing OperatorImageCollector - Mirror to disk: should pass", func(t *testing.T) {
-		ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifest)
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
 		// ensure coverage in new.go
-		_ = NewWithFilter(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifest)
+		_ = NewWithFilter(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifestMock)
 	})
 }
 
@@ -517,6 +497,12 @@ func TestFilterCollectorD2M(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
 	os.RemoveAll(common.TestFolder + "hold-operator/")
 	os.RemoveAll(common.TestFolder + "operator-images")
 	os.RemoveAll(common.TestFolder + "tmp/")
@@ -608,7 +594,7 @@ func TestFilterCollectorD2M(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_DiskToMirror(tempDir, log)
+			ex := setupFilterCollector_DiskToMirror(tempDir, log, manifestMock)
 			ex = ex.withConfig(testCase.config)
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
@@ -637,6 +623,12 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
 	os.RemoveAll(common.TestFolder + "hold-operator/")
 	os.RemoveAll(common.TestFolder + "operator-images")
 	os.RemoveAll(common.TestFolder + "tmp/")
@@ -786,7 +778,7 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			ex = ex.withConfig(testCase.config)
@@ -801,8 +793,7 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 }
 
-func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface) *FilterCollector {
-	manifest := &MockManifest{Log: log}
+func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *FilterCollector {
 	handler := &MockHandler{Log: log}
 	globalD2M := &mirror.GlobalOptions{
 		SecurePolicy: false,
@@ -843,7 +834,7 @@ func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerI
 	return ex
 }
 
-func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *FilterCollector {
+func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest manifest.ManifestInterface) *FilterCollector {
 	handler := &MockHandler{Log: log}
 
 	globalM2D := &mirror.GlobalOptions{
@@ -897,129 +888,6 @@ func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode,
 
 func (o MockMirror) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
 	return true, nil
-}
-
-func (o MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return parser.ParseJsonFile[*v2alpha1.OperatorConfigSchema](path.Join(common.TestFolder, "operator-config.json"))
-}
-
-func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	relatedImages := []v2alpha1.RelatedImage{
-		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testC", Image: "sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testD", Image: "sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-	}
-	return relatedImages, nil
-}
-
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageIndex {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
-	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-	}, nil
-}
-
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageManifest {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
-	}
-
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-			Size:      567,
-		},
-	}, nil
-}
-
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	if o.FailExtract {
-		return fmt.Errorf("forced extract oci fail")
-	}
-	return nil
-}
-
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
-}
-
-func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return errors.New("not implemented")
-}
-
-func (o MockManifest) ExtractOCILayers(from, to, label string, oci *v2alpha1.OCISchema) error {
-	if o.FailExtract {
-		return errors.New("forced extract to fail")
-	}
-	return nil
-}
-
-func (o MockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageIndex {
-		return nil, errors.New("forced error image index")
-	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-	}, nil
-}
-
-func (o MockManifest) GetOCIImageManifest(dir string) (*v2alpha1.OCISchema, error) {
-	if o.FailImageManifest {
-		return nil, errors.New("forced error image manifest")
-	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-			Size:      567,
-		},
-	}, nil
-}
-
-func (o MockManifest) ImageDigest(ctx context.Context, srcCtx *types.SystemContext, ref string) (string, error) {
-	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
-}
-
-func (o MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemContext, ref string, digest *digest.Digest) ([]byte, string, error) {
-	return nil, "", errors.New("not implemented")
 }
 
 func (o MockHandler) getCatalog(filePath string) (OperatorCatalog, error) {
