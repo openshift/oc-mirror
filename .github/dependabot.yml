@@ -2,7 +2,7 @@ version: 2
 updates:
   # Configuration for the oc-mirror v1 go mod (weekly security-updates)
   - package-ecosystem: "gomod"
-    directory: "/"
+    directory: "/v1"
     schedule:
       interval: "weekly"
     # Disable version updates, only allow security updates
@@ -14,7 +14,7 @@ updates:
 
   # Configuration for the oc-mirror v2 go module (monthly version updates)
   - package-ecosystem: "gomod"
-    directory: "/v2"
+    directory: "/"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
