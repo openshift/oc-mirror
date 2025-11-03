@@ -99,7 +99,7 @@ func TestGetUpdates(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 
 			current, requested, updates, err := GetUpdates(context.Background(), cs, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
@@ -164,7 +164,7 @@ func TestGetMinorMax(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 			version, err := GetChannelMinOrMax(context.Background(), cs, channelName, test.min)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -231,7 +231,7 @@ func TestGetVersions(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch, GraphDataDir: tempDir}}
 			versions, err := GetVersions(context.Background(), cs, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestGetUpdatesInRange(t *testing.T) {
 			require.NoError(t, err)
 			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: tempDir}}
 			versions, err := GetUpdatesInRange(context.TODO(), cs, channelName, test.releaseRange)
 			if test.err == "" {
 				require.NoError(t, err)
