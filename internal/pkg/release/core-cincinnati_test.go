@@ -7,26 +7,20 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/release/mock"
 )
 
-var _ Client = &mockClient{}
-
-type mockClient struct {
-	url  *url.URL
-	Fail bool
-}
-
 func TestGetUpdates(t *testing.T) {
-
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	arch := "test-arch"
 	channelName := "stable-4.0"
@@ -97,9 +91,10 @@ func TestGetUpdates(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
-			c := &mockClient{url: endpoint}
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			clientMock := newMockClient(endpoint, mockCtrl)
+
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: arch}}
 
 			current, requested, updates, err := GetUpdates(context.Background(), cs, channelName, semver.MustParse(test.version), semver.MustParse(test.reqVer))
 			if test.err == "" {
@@ -130,8 +125,8 @@ func TestGetMinorMax(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
 
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	tests := []struct {
 		name string
@@ -162,9 +157,9 @@ func TestGetMinorMax(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
-			c := &mockClient{url: endpoint}
+			clientMock := newMockClient(endpoint, mockCtrl)
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: arch}}
 			version, err := GetChannelMinOrMax(context.Background(), cs, channelName, test.min)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -190,9 +185,8 @@ func TestGetMinorMax(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
-
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	tests := []struct {
 		name          string
@@ -229,9 +223,9 @@ func TestGetVersions(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
-			c := &mockClient{url: endpoint}
+			clientMock := newMockClient(endpoint, mockCtrl)
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: test.arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: test.arch}}
 			versions, err := GetVersions(context.Background(), cs, test.channel)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -257,8 +251,8 @@ func TestGetVersions(t *testing.T) {
 }
 
 func TestGetUpdatesInRange(t *testing.T) {
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	arch := "test-arch"
 	channelName := "stable-4.0"
@@ -294,9 +288,9 @@ func TestGetUpdatesInRange(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
-			c := &mockClient{url: endpoint}
+			clientMock := newMockClient(endpoint, mockCtrl)
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: c, CincinnatiParams: CincinnatiParams{Arch: arch}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: arch}}
 			versions, err := GetUpdatesInRange(context.TODO(), cs, channelName, test.releaseRange)
 			if test.err == "" {
 				require.NoError(t, err)
@@ -322,8 +316,8 @@ func TestGetUpdatesInRange(t *testing.T) {
 }
 
 func TestCalculateUpgrades(t *testing.T) {
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	arch := "test-arch"
 
@@ -428,8 +422,9 @@ func TestCalculateUpgrades(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
+			clientMock := newMockClient(endpoint, mockCtrl)
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
 			cur, req, updates, err := CalculateUpgrades(context.Background(), cs, test.sourceChannel, test.targetChannel, test.curr, test.req)
 
 			if test.err == "" {
@@ -445,8 +440,8 @@ func TestCalculateUpgrades(t *testing.T) {
 }
 
 func TestHandleBlockedEdges(t *testing.T) {
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
 	arch := "test-arch"
 
@@ -499,8 +494,9 @@ func TestHandleBlockedEdges(t *testing.T) {
 
 			endpoint, err := url.Parse(ts.URL)
 			require.NoError(t, err)
+			clientMock := newMockClient(endpoint, mockCtrl)
 
-			cs := CincinnatiSchema{Log: clog.New("trace"), Client: &mockClient{url: endpoint}, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
+			cs := CincinnatiSchema{Log: clog.New("trace"), Client: clientMock, CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()}}
 			isBlocked, err := handleBlockedEdges(context.Background(), cs, test.targetChannel, test.last)
 
 			if test.err == "" {
@@ -513,32 +509,42 @@ func TestHandleBlockedEdges(t *testing.T) {
 	}
 }
 
-func (c mockClient) GetID() uuid.UUID {
-	return uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
-}
+func newMockClient(url *url.URL, mockCtrl *gomock.Controller) *mock.MockClient {
+	clientMock := mock.NewMockClient(mockCtrl)
 
-func (c mockClient) SetQueryParams(arch, channel, version string) {
-	queryParams := c.url.Query()
-	queryParams.Add("id", c.GetID().String())
-	params := map[string]string{
-		"arch":    arch,
-		"channel": channel,
-		"version": version,
-	}
-	for key, value := range params {
-		if value != "" {
-			queryParams.Add(key, value)
-		}
-	}
-	c.url.RawQuery = queryParams.Encode()
-}
+	clientMock.
+		EXPECT().
+		SetQueryParams(gomock.Any(), gomock.Any(), gomock.Any()).
+		Do(func(arch, channel, version string) {
+			queryParams := url.Query()
+			queryParams.Add("id", uuid.MustParse("01234567-0123-0123-0123-0123456789ab").String())
+			params := map[string]string{
+				"arch":    arch,
+				"channel": channel,
+				"version": version,
+			}
+			for key, value := range params {
+				if value != "" {
+					queryParams.Add(key, value)
+				}
+			}
+			url.RawQuery = queryParams.Encode()
+		}).
+		AnyTimes()
 
-func (c mockClient) GetURL() *url.URL {
-	return c.url
-}
+	clientMock.
+		EXPECT().
+		GetTransport().
+		Return(&http.Transport{}).
+		AnyTimes()
 
-func (c mockClient) GetTransport() *http.Transport {
-	return &http.Transport{}
+	clientMock.
+		EXPECT().
+		GetURL().
+		Return(url).
+		AnyTimes()
+
+	return clientMock
 }
 
 func TestNodeUnmarshalJSON(t *testing.T) {
@@ -612,7 +618,6 @@ func TestNodeUnmarshalJSON(t *testing.T) {
 }
 
 func TestGetSemVerFromChannel(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		sourceChannel string
@@ -650,7 +655,6 @@ func TestGetSemVerFromChannel(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func getSemVers(stringVers []string) (vers []semver.Version) {
@@ -666,7 +670,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 		select {
 		case requestQuery <- r.URL.RawQuery:
 		default:
-			//t.Fatalf("received multiple requests at upstream URL")
+			// t.Fatalf("received multiple requests at upstream URL")
 		}
 
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
