@@ -24,6 +24,8 @@ import (
 
 type Mode string
 
+//go:generate go tool mockgen -source=./mirror.go -destination=./mock/mirror_generated.go -package=mock
+
 // MirrorInterface  used to mirror images with container/images (skopeo)
 type MirrorInterface interface {
 	Run(ctx context.Context, src, dest string, mode Mode, opts *CopyOptions) (retErr error)
@@ -45,8 +47,10 @@ type Mirror struct {
 	Mode string
 }
 
-type MirrorCopy struct{}
-type MirrorDelete struct{}
+type (
+	MirrorCopy   struct{}
+	MirrorDelete struct{}
+)
 
 // New returns new Mirror instance
 func New(mc MirrorCopyInterface, md MirrorDeleteInterface) MirrorInterface {
@@ -218,7 +222,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 			if err != nil {
 				return err
 			}
-			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0644); err != nil {
+			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0o644); err != nil { //nolint:gosec // digest file does not contain sensitive info
 				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
 			}
 		}
@@ -251,7 +255,6 @@ func isErrorRetryable(err error) bool {
 
 // check exists - checks if image exists
 func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asCopySrc bool) (bool, error) {
-
 	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
 		return false, err
 	}
@@ -295,7 +298,6 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 
 // delete - delete images
 func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) error {
-
 	if err := ReexecIfNecessaryForImages([]string{image}...); err != nil {
 		return err
 	}

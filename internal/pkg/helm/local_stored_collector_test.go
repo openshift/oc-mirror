@@ -13,9 +13,11 @@ import (
 
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	helmmock "github.com/openshift/oc-mirror/v2/internal/pkg/helm/mock"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -37,12 +39,6 @@ var (
 		},
 	}
 )
-
-type MockIndexDownloader struct{}
-
-type MockChartDownloader struct{}
-
-type MockHttpClient struct{}
 
 type testCase struct {
 	caseName           string
@@ -666,9 +662,50 @@ func TestHelmImageCollector(t *testing.T) {
 	}
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 	workingDir, err := prepareFolder(tempDir)
 	assert.NoError(t, err)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	indexDownloaderMock := helmmock.NewMockindexDownloader(mockCtrl)
+
+	indexDownloaderMock.
+		EXPECT().
+		DownloadIndexFile().
+		Return("", nil).
+		AnyTimes()
+
+	chartDownloaderMock := helmmock.NewMockchartDownloader(mockCtrl)
+
+	chartDownloaderMock.
+		EXPECT().
+		DownloadTo(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ref, version, dest string) (string, any, error) {
+			tgzFileName := copyChart(ref, version)
+			return filepath.Join(tempChartDir, tgzFileName), "", nil
+		}).
+		AnyTimes()
+
+	httpClientMock := helmmock.NewMockwebClient(mockCtrl)
+
+	httpClientMock.
+		EXPECT().
+		Get(gomock.Any()).
+		DoAndReturn(func(url string) (*http.Response, error) {
+			ns := getNamespaceFromURL(url)
+			response := http.Response{StatusCode: http.StatusOK}
+
+			data, err := os.ReadFile(filepath.Join(testIndexesDataPath, ns, helmIndexFile))
+			if err != nil {
+				//nolint:wrapcheck
+				return &http.Response{StatusCode: http.StatusInternalServerError}, err
+			}
+
+			response.Body = io.NopCloser(bytes.NewReader(data))
+			return &response, nil
+		}).
+		AnyTimes()
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
@@ -685,11 +722,7 @@ func TestHelmImageCollector(t *testing.T) {
 
 			ctx := context.Background()
 
-			mockIndexDownloader := MockIndexDownloader{}
-			mockChartDownloader := MockChartDownloader{}
-			mockHttpClient := MockHttpClient{}
-
-			helmCollector := New(log, cfg, opts, mockIndexDownloader, mockChartDownloader, mockHttpClient)
+			helmCollector := New(log, cfg, opts, indexDownloaderMock, chartDownloaderMock, httpClientMock)
 			if testCase.generateV1DestTags {
 				helmCollector = WithV1Tags(helmCollector)
 			}
@@ -707,7 +740,6 @@ func TestHelmImageCollector(t *testing.T) {
 				assert.NotEmpty(t, imgs)
 				assert.ElementsMatch(t, testCase.expectedResult, imgs)
 			}
-
 		})
 	}
 }
@@ -747,44 +779,18 @@ func copyIndex(namespace string) {
 	copy.Copy(filepath.Join(testIndexesDataPath, namespace, helmIndexFile), filepath.Join(tempIndexesDir, namespace, helmIndexFile))
 }
 
-func (m MockIndexDownloader) DownloadIndexFile() (string, error) {
-	return "", nil
-}
-
-func (m MockChartDownloader) DownloadTo(ref, version, dest string) (string, any, error) {
-	tgzFileName := copyChart(ref, version)
-
-	return filepath.Join(tempChartDir, tgzFileName), "", nil
-}
-
-func (m MockHttpClient) Get(url string) (resp *http.Response, err error) {
-	ns := getNamespaceFromURL(url)
-
-	response := http.Response{StatusCode: http.StatusOK}
-
-	data, err := os.ReadFile(filepath.Join(testIndexesDataPath, ns, helmIndexFile))
-	if err != nil {
-		return &http.Response{StatusCode: http.StatusInternalServerError}, err
-	}
-
-	response.Body = io.NopCloser(bytes.NewReader(data))
-
-	return &response, nil
-}
-
 func prepareFolder(tempDir string) (string, error) {
-
 	workingDir := filepath.Join(tempDir, "/working-dir")
 
-	err := os.MkdirAll(filepath.Join(workingDir, helmDir, helmChartDir), 0755)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Join(workingDir, helmDir, helmChartDir), 0o755); err != nil {
+		//nolint:wrapcheck
 		return "", err
 	}
 
 	tempChartDir = filepath.Join(workingDir, helmDir, helmChartDir)
 
-	err = os.MkdirAll(filepath.Join(workingDir, helmDir, helmIndexesDir), 0755)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Join(workingDir, helmDir, helmIndexesDir), 0o755); err != nil {
+		//nolint:wrapcheck
 		return "", err
 	}
 

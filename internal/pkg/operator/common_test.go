@@ -1,21 +1,35 @@
 package operator
 
 import (
-	"os"
+	"errors"
+	"fmt"
+	"path"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
+	mirrormock "github.com/openshift/oc-mirror/v2/internal/pkg/mirror/mock"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
 func TestPrepareDeleteForV1(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage
@@ -60,16 +74,15 @@ func TestPrepareDeleteForV1(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.generateV1DestTags = true
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			res, err := ex.prepareD2MCopyBatch(testCase.relatedImages)
-			if testCase.expectedError && err == nil {
-				t.Fatalf("should fail")
-			}
-			if !testCase.expectedError && err != nil {
-				t.Fatal("should not fail")
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			assert.ElementsMatch(t, testCase.expectedResult, res)
 		})
@@ -80,7 +93,14 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := setupManifestMock(mockCtrl)
+
+	mirrorMock := mirrormock.NewMockMirrorInterface(mockCtrl)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage
@@ -416,15 +436,14 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifestMock, mirrorMock)
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			res, err := ex.dispatchImagesForM2M(testCase.relatedImages)
-			if testCase.expectedError && err == nil {
-				t.Fatalf("should fail")
-			}
-			if !testCase.expectedError && err != nil {
-				t.Fatal("should not fail")
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 			assert.ElementsMatch(t, testCase.expectedResult, res)
 		})
@@ -482,4 +501,81 @@ func TestOperatorCollector(t *testing.T) {
 			assert.Empty(t, ref)
 		})
 	})
+}
+
+func setupManifestMock(mockCtrl *gomock.Controller) *manifestmock.MockManifestInterface {
+	const (
+		validImageDigest = "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		size             = 567
+	)
+	var (
+		digestValue        = fmt.Sprintf("sha256:%s", validImageDigest)
+		validOCIImageIndex = &v2alpha1.OCISchema{
+			SchemaVersion: 2,
+			Manifests: []v2alpha1.OCIManifest{
+				{
+					MediaType: "application/vnd.oci.image.manifest.v1+json",
+					Digest:    digestValue,
+					Size:      size,
+				},
+			},
+		}
+		validImageManifest = &v2alpha1.OCISchema{
+			SchemaVersion: 2,
+			Manifests: []v2alpha1.OCIManifest{
+				{
+					MediaType: "application/vnd.oci.image.manifest.v1+json",
+					Digest:    digestValue,
+					Size:      size,
+				},
+			},
+			Config: v2alpha1.OCIManifest{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    digestValue,
+				Size:      size,
+			},
+		}
+	)
+
+	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+	manifestMock.
+		EXPECT().
+		ImageDigest(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(validImageDigest, nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		GetOCIImageIndex(gomock.Any()).
+		Return(validOCIImageIndex, nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		GetOCIImageManifest(gomock.Any()).
+		Return(validImageManifest, nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		GetOperatorConfig(gomock.Any()).
+		DoAndReturn(func(any) (*v2alpha1.OperatorConfigSchema, error) {
+			return parser.ParseJsonFile[*v2alpha1.OperatorConfigSchema](path.Join(common.TestFolder, "operator-config.json"))
+		}).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		ExtractOCILayers(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		ConvertOCIIndexToSingleManifest(gomock.Any(), gomock.Any()).
+		Return(errors.New("not implemented")).
+		MaxTimes(0)
+
+	return manifestMock
 }

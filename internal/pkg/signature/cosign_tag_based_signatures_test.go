@@ -2,49 +2,19 @@ package signature
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/manifest"
-	"go.podman.io/image/v5/types"
+	"go.uber.org/mock/gomock"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	manifestmock "github.com/openshift/oc-mirror/v2/internal/pkg/manifest/mock"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
-
-type mockManifest struct{}
-
-func (m *mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return nil, nil
-}
-
-func (m *mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return nil, nil
-}
-
-func (m *mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (m *mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	return nil
-}
-
-func (m *mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
-	return nil, nil
-}
-
-func (m *mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
-	return nil, nil
-}
-
-func (m *mockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
-	return "", nil
-}
 
 var multiArchManifest = `{
             "schemaVersion": 2,
@@ -88,17 +58,6 @@ var multiArchManifest = `{
                 }
             ]
         }`
-
-func (m *mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
-	switch imgRef {
-	case "docker://registry.example.com/test/single:latest":
-		return []byte("single-arch-manifest"), manifest.DockerV2Schema2MediaType, nil
-	case "docker://registry.example.com/test/multi:latest":
-		return []byte(multiArchManifest), manifest.DockerV2ListMediaType, nil
-	default:
-		return nil, "", fmt.Errorf("unknown reference")
-	}
-}
 
 func TestSigstoreAttachmentTag(t *testing.T) {
 	tests := []struct {
@@ -153,10 +112,33 @@ func TestGetSignatureTag(t *testing.T) {
 		SrcImage: srcOpts,
 	}
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manifestMock := manifestmock.NewMockManifestInterface(mockCtrl)
+
+	manifestMock.
+		EXPECT().
+		ImageManifest(gomock.Any(), gomock.Any(), gomock.Eq("docker://registry.example.com/test/single:latest"), gomock.Any()).
+		Return([]byte("single-arch-manifest"), manifest.DockerV2Schema1MediaType, nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		ImageManifest(gomock.Any(), gomock.Any(), gomock.Eq("docker://registry.example.com/test/multi:latest"), gomock.Any()).
+		Return([]byte(multiArchManifest), manifest.DockerV2ListMediaType, nil).
+		AnyTimes()
+
+	manifestMock.
+		EXPECT().
+		ImageManifest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, "", errors.New("unknown reference")).
+		AnyTimes()
+
 	handler := &SignatureHandler{
 		opts:             opts,
 		log:              log,
-		ocmirrormanifest: &mockManifest{},
+		ocmirrormanifest: manifestMock,
 	}
 
 	tests := []struct {
