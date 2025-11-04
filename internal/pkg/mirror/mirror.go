@@ -222,7 +222,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 			if err != nil {
 				return err
 			}
-			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0o644); err != nil {
+			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0o644); err != nil { //nolint:gosec // digest file does not contain sensitive info
 				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
 			}
 		}
