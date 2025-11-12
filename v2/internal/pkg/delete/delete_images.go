@@ -83,7 +83,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
-	err = os.WriteFile(filename, ymlData, 0755)
+	err = os.WriteFile(filename, ymlData, 0644) //nolint:gosec
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}
@@ -106,7 +106,7 @@ func (o DeleteImages) WriteDeleteMetaData(images []v2alpha1.CopyImageSchema) err
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
-	err = os.WriteFile(discYamlFile, discYamlData, 0755)
+	err = os.WriteFile(discYamlFile, discYamlData, 0644) //nolint:gosec
 	if err != nil {
 		o.Log.Error(deleteImagesErrMsg, err)
 	}

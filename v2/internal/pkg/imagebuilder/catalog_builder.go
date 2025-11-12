@@ -15,11 +15,12 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/otiai10/copy"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/otiai10/copy"
 )
 
 const (
@@ -124,7 +125,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	if err != nil {
 		return fmt.Errorf("error building catalog %s : %v", catalogCopyRef.Origin, err)
 	}
-	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0755)
+	err = os.WriteFile(filepath.Join(filteredDir, "digest"), []byte(digest), 0644) //nolint:gosec
 	if err != nil {
 		return err
 	}
