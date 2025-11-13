@@ -156,6 +156,7 @@ func writeMirrorSet[T confv1.ImageDigestMirrorSet | confv1.ImageTagMirrorSet](mi
 			return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
 		}
 		delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+		delete(unstructuredObj.Object, "status")
 
 		msBytes, err := yaml.Marshal(unstructuredObj.Object)
 		if err != nil {
