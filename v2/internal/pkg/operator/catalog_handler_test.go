@@ -10,11 +10,12 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/operator-framework/operator-registry/alpha/declcfg"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestFilterRelatedImagesFromCatalog(t *testing.T) {
@@ -1144,7 +1145,7 @@ func TestFilterCatalog(t *testing.T) {
 			},
 
 			expectedBundles: []string{},
-			expectedError:   errors.New("package \"3scale-operator\" channel \"threescale-mas\" has version range \">=77.77.77 <=77.77.77\" that results in an empty channel"),
+			expectedError:   errors.New("error finding specific bundle: specific version 77.77.77 not found in bundles"),
 			expectedWarning: ""},
 	}
 
