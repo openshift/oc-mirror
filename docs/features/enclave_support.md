@@ -31,7 +31,7 @@ The Enclave Support feature (`--v2`) mirrors OCP releases, Operator catalogs, ad
 
 
 ## Reference Architecture Diagram for Enclave Support
-![Architecture](../assets/architecture.png)
+![Architecture](../../assets/architecture.png)
 
 ## How to mirror to an enclave? 
 
@@ -39,7 +39,7 @@ The following diagram will be used to illustrate the workflow for mirroring to e
 
 
 ### Overall diagram
-![enclave support flow](../assets/enclave_support_flow.jpg)
+![enclave support flow](../../assets/enclave_support_flow.jpg)
 
 
 ### Phase 1 - Mirroring to the airgap env(on-premise registry)
