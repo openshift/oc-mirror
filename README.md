@@ -86,7 +86,7 @@ Three workflows are available with this command: `m2d`, `d2m` and `m2m`.
 ### Creating the Image Set Configuration
 The Image Set Configuration is the input file for the oc-mirror command (using the flag `-c` or `--config`).
 
-Here is an example of the Image Set Configuration for reference. More examples can be found [here](v2/docs/image-set-examples/).
+Here is an example of the Image Set Configuration for reference. More examples can be found [here](docs/image-set-examples/).
 
 ```
 kind: ImageSetConfiguration
@@ -180,7 +180,7 @@ There is also a `delete` sub command to delete images specified in the Delete Im
 - Phase 1: using a delete image set configuration as an input, oc-mirror discovers all images that needed to be deleted. These images are included in a delete-images file to be consumed as input in the second phase.
 - Phase 2: using the file generated in first phase, oc-mirror will delete all container image manifests specified on this file on the destination specified in the command line. It is up to the container registry to run the garbage collector to clean up all the blobs which are not referenced by a manifest. Deleting only manifests is safer since blobs shared between more than one image are not going to be deleted.
 
-For more details about the delete feature can be found [here](v2/docs/features/delete-functionality.md).
+For more details about the delete feature can be found [here](docs/features/delete-functionality.md).
 
 ### Creating the Delete Image Set Configuration
 
@@ -260,7 +260,7 @@ make v2cover
 This section will give an overview about oc-mirror v2 architecture and how to generate docs from oc-mirror source code.
 
 ### Architecture
-![Alt text](v2/assets/architecture.png)
+![Alt text](assets/architecture.png)
 
 ### Code Source Documentation Only for oc-mirror v2 developers
 
