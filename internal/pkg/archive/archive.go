@@ -144,9 +144,15 @@ func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2a
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %w", img.Destination, err)
 		}
 
-		if err := handleSignatureErrors(img, err); err != nil {
+		// Handle signature errors - only return error if it's a fatal signature error
+		if sigHandleErr := handleSignatureErrors(img, err); sigHandleErr != nil {
 			var archiveErr *ArchiveError
-			if errors.As(err, &archiveErr) && archiveErr.ReleaseErr != nil {
+			if errors.As(sigHandleErr, &archiveErr) && archiveErr.ReleaseErr != nil {
+				// For release images, signature errors should not be fatal
+				// Log the error but continue processing
+				o.logger.Warn("signature error for release image %s: %v", img.Destination, archiveErr.ReleaseErr)
+			} else if errors.As(sigHandleErr, &archiveErr) {
+				// For other image types, return the error
 				return nil, archiveErr
 			}
 		}
