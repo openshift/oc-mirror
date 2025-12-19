@@ -45,6 +45,7 @@ tags
 
 # Local imageset-config.yaml
 imageset-config.yaml
+./isc/*
 
 # Local integration test files
 __pycache__
