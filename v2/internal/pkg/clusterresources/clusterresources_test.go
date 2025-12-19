@@ -292,6 +292,69 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 	}
 }
 
+// verifyNoStatusField checks that a YAML file (if it exists) does not contain a 'status' field.
+func verifyNoStatusField(t *testing.T, filePath string) {
+	t.Helper()
+	if _, err := os.Stat(filePath); err != nil {
+		return
+	}
+
+	content, err := os.ReadFile(filePath)
+	assert.NoError(t, err)
+
+	var yamlData map[string]any
+	err = yaml.Unmarshal(content, &yamlData)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, yamlData, "status")
+}
+
+func TestIDMS_ITMS_NoStatusField(t *testing.T) {
+	log := clog.New("trace")
+
+	type testCase struct {
+		caseName string
+		imgList  []v2alpha1.CopyImageSchema
+	}
+	testCases := []testCase{
+		{
+			caseName: "Testing ITMS file does not contain status field - release use case",
+			imgList:  imageListRelease,
+		},
+		{
+			caseName: "Testing IDMS and ITMS files do not contain status field - mixed images",
+			imgList:  imageListMixed,
+		},
+		{
+			caseName: "Testing IDMS file does not contain status field - digests only",
+			imgList:  imageListDigestsOnly,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			workingDir := tmpDir + "/working-dir"
+
+			cr := &ClusterResourcesGenerator{
+				Log:              log,
+				WorkingDir:       workingDir,
+				LocalStorageFQDN: "localhost:55000",
+			}
+
+			err := cr.IDMS_ITMSGenerator(testCase.imgList, false)
+			assert.NoError(t, err)
+
+			// Check IDMS and ITMS files
+			idmsPath := filepath.Join(workingDir, clusterResourcesDir, "idms-oc-mirror.yaml")
+			itmsPath := filepath.Join(workingDir, clusterResourcesDir, "itms-oc-mirror.yaml")
+
+			verifyNoStatusField(t, idmsPath)
+			verifyNoStatusField(t, itmsPath)
+		})
+	}
+}
+
 func TestGenerateIDMS(t *testing.T) {
 	log := clog.New("trace")
 
