@@ -51,7 +51,9 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
-		var src, dest, tmpSrc, tmpDest, origin string
+		var src, dest, tmpSrc, tmpDest string
+
+		origin := img.Name
 
 		imgSpec, err := image.ParseRef(img.Name)
 		if err != nil {
@@ -59,58 +61,79 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 			o.Log.Warn("%v : SKIPPING", err)
 			continue
 		}
-		if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 
+		if img.TargetRepo != "" && !v2alpha1.IsValidPathComponent(img.TargetRepo) {
+			o.Log.Warn("invalid targetRepo %s for image %s : SKIPPING", img.TargetRepo, img.Name)
+			continue
+		}
+
+		targetRepo := imgSpec.PathComponent
+		if img.TargetRepo != "" {
+			targetRepo = img.TargetRepo
+		}
+
+		targetTag := imgSpec.Tag
+		if img.TargetTag != "" {
+			targetTag = img.TargetTag
+		}
+
+		if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
 			tmpSrc = imgSpec.ReferenceWithTransport
-			origin = img.Name
 			if imgSpec.Transport == dockerProtocol {
 				if imgSpec.IsImageByDigestOnly() {
-					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
+					if img.TargetTag != "" {
+						tmpDest = strings.Join([]string{o.destinationRegistry(), targetRepo}, "/") + ":" + targetTag
+					} else {
+						tmpDest = strings.Join([]string{o.destinationRegistry(), targetRepo}, "/") + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
+					}
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 					// use tag only for both src and dest
 					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
 					tmpSrc = strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
-					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpDest = strings.Join([]string{o.destinationRegistry(), targetRepo}, "/") + ":" + targetTag
 				} else {
-					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpDest = strings.Join([]string{o.destinationRegistry(), targetRepo}, "/") + ":" + targetTag
 				}
 			} else { // oci image
 				// Although fetching the digest of the oci image (using o.Manifest.GetDigest) might work in mirrorToDisk and mirrorToMirror
 				// it will not work during diskToMirror as the oci image might not be on the disk any longer
-				tmpDest = strings.Join([]string{o.destinationRegistry(), strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
+				if img.TargetTag != "" {
+					tmpDest = strings.Join([]string{o.destinationRegistry(), strings.TrimPrefix(targetRepo, "/")}, "/") + ":" + targetTag
+				} else {
+					tmpDest = strings.Join([]string{o.destinationRegistry(), strings.TrimPrefix(targetRepo, "/")}, "/") + ":latest"
+				}
 			}
 
 		} else if o.Opts.IsDiskToMirror() {
-			origin = img.Name
-			imgSpec, err := image.ParseRef(img.Name)
-			if err != nil {
-				o.Log.Error(errMsg, err.Error())
-				return nil, err
-			}
-
 			if imgSpec.Transport == dockerProtocol {
-
 				if imgSpec.IsImageByDigestOnly() {
-					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
-					if o.generateV1DestTags {
-						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":latest"}, "/")
-
+					if img.TargetTag != "" {
+						tmpSrc = strings.Join([]string{o.LocalStorageFQDN, targetRepo + ":" + targetTag}, "/")
+						tmpDest = strings.Join([]string{o.Opts.Destination, targetRepo + ":" + targetTag}, "/")
+					} else if o.generateV1DestTags {
+						tmpSrc = strings.Join([]string{o.LocalStorageFQDN, targetRepo + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
+						tmpDest = strings.Join([]string{o.Opts.Destination, targetRepo + ":latest"}, "/")
 					} else {
-						tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
+						tmpSrc = strings.Join([]string{o.LocalStorageFQDN, targetRepo + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
+						tmpDest = strings.Join([]string{o.Opts.Destination, targetRepo + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")
 					}
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
 					// use tag only for both src and dest
 					o.Log.Warn(collectorPrefix+"%s has both tag and digest : using tag only", imgSpec.Reference)
-					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, targetRepo}, "/") + ":" + targetTag
+					tmpDest = strings.Join([]string{o.Opts.Destination, targetRepo}, "/") + ":" + targetTag
 				} else {
-					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
-					tmpDest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/") + ":" + imgSpec.Tag
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, targetRepo}, "/") + ":" + targetTag
+					tmpDest = strings.Join([]string{o.Opts.Destination, targetRepo}, "/") + ":" + targetTag
 				}
-
 			} else {
-				tmpSrc = strings.Join([]string{o.LocalStorageFQDN, strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
-				tmpDest = strings.Join([]string{o.Opts.Destination, strings.TrimPrefix(imgSpec.PathComponent, "/")}, "/") + ":latest"
+				if img.TargetTag != "" {
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, strings.TrimPrefix(targetRepo, "/")}, "/") + ":" + targetTag
+					tmpDest = strings.Join([]string{o.Opts.Destination, strings.TrimPrefix(targetRepo, "/")}, "/") + ":" + targetTag
+				} else {
+					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, strings.TrimPrefix(targetRepo, "/")}, "/") + ":latest"
+					tmpDest = strings.Join([]string{o.Opts.Destination, strings.TrimPrefix(targetRepo, "/")}, "/") + ":latest"
+				}
 			}
 
 		}
