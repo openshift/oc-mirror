@@ -15,6 +15,7 @@ oc-mirror-workspace/
 working-dir/
 tests/hold-test-untar
 tests/results
+tests/results-integration
 build/
 cmd/mirror/logs/
 cmd/mirror/working-dir/
