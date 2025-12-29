@@ -48,14 +48,14 @@ type DeleteImageSetConfigurationSpec struct {
 // Mirror defines the configuration for content types within the imageset.
 type Mirror struct {
 	// Platform defines the configuration for OpenShift and OKD platform types.
-	Platform Platform `json:"platform,omitempty"`
+	Platform Platform `json:"platform,omitempty,omitzero"`
 	// Operators defines the configuration for Operator content types.
 	Operators []Operator `json:"operators,omitempty"`
 	// AdditionalImages defines the configuration for a list
 	// of individual image content types.
 	AdditionalImages []Image `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
-	Helm Helm `json:"helm,omitempty"`
+	Helm Helm `json:"helm,omitempty,omitzero"`
 	// BlockedImages define a list of images that will be blocked
 	// from the mirroring process if they exist in other content
 	// types in the configuration.
@@ -68,14 +68,14 @@ type Mirror struct {
 // Delete defines the configuration for content types within the imageset.
 type Delete struct {
 	// Platform defines the configuration for OpenShift and OKD platform types.
-	Platform Platform `json:"platform,omitempty"`
+	Platform Platform `json:"platform,omitempty,omitzero"`
 	// Operators defines the configuration for Operator content types.
 	Operators []Operator `json:"operators,omitempty"`
 	// AdditionalImages defines the configuration for a list
 	// of individual image content types.
 	AdditionalImages []Image `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
-	Helm Helm `json:"helm,omitempty"`
+	Helm Helm `json:"helm,omitempty,omitzero"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
 	Samples []SampleImages `json:"samples,omitempty"`

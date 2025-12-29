@@ -241,6 +241,12 @@ The `delete` sub-command has its own set of flags:
 ### Other Features
 * [Enclave support](v2/docs/features/enclave_support.md)
 
+#### Catalog Pinning
+
+When running mirror-to-disk or mirror-to-mirror workflows, oc-mirror automatically generates pinned configuration files where operator catalogs are referenced by SHA256 digests instead of tags. This ensures reproducible mirroring operations since digest references always point to the exact same image content, while tag-based references can change over time.
+
+Two files are generated in the working directory: `isc_pinned_{timestamp}.yaml` contains a pinned ImageSetConfiguration with catalogs referenced by digest, and `disc_pinned_{timestamp}.yaml` contains a corresponding DeleteImageSetConfiguration. The pinned ISC can be used for reproducible mirrors of the exact same content, while the pinned DISC can be used later with the delete sub-command to remove precisely what was mirrored.
+
 ## Testing
 It is possible to run in this module unit tests.
 
