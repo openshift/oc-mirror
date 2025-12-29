@@ -888,6 +888,21 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return batchError
 	}
 
+	// Generate pinned ISC and DISC with catalog digests
+	o.Log.Info("Generating pinned configurations...")
+	iscPath, discPath, err := config.PinAndWriteConfigs(
+		o.Config,
+		collectorSchema.CatalogToFBCMap,
+		o.Opts.Global.WorkingDir,
+		o.Log,
+	)
+	if err != nil {
+		o.Log.Warn("Failed to generate pinned configs: %v", err)
+	} else {
+		o.Log.Info("Pinned ISC written to: %s", iscPath)
+		o.Log.Info("Pinned DISC written to: %s", discPath)
+	}
+
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 }
@@ -933,6 +948,21 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	// call the batch worker
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
+
+	// Generate pinned ISC and DISC in working directory
+	o.Log.Info("Generating pinned configurations...")
+	iscPath, discPath, err := config.PinAndWriteConfigs(
+		o.Config,
+		collectorSchema.CatalogToFBCMap,
+		o.Opts.Global.WorkingDir,
+		o.Log,
+	)
+	if err != nil {
+		o.Log.Warn("Failed to generate pinned configs: %v", err)
+	} else {
+		o.Log.Info("Pinned ISC written to: %s", iscPath)
+		o.Log.Info("Pinned DISC written to: %s", discPath)
+	}
 
 	// create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
@@ -1068,7 +1098,7 @@ func (o *ExecutorSchema) setupLogsLevelAndDir() error {
 		return err
 	}
 
-	l, err := os.OpenFile(filepath.Join(o.LogsDir, fmt.Sprintf("oc-mirror-%s.log", o.MirrorStartTimeStamp)), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	l, err := os.OpenFile(filepath.Join(o.LogsDir, fmt.Sprintf("oc-mirror-%s.log", o.MirrorStartTimeStamp)), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o666)
 	if err != nil {
 		panic(err)
 	}
