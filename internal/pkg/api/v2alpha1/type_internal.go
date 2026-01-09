@@ -197,6 +197,10 @@ type RelatedImage struct {
 	OriginFromOperatorCatalogOnDisk bool
 	// Used to identify if it is a full catalog (full: true && zero packages)
 	FullCatalog bool
+	// CatalogDigest holds the digest of the catalog image (without algorithm prefix)
+	// Used during mirror-to-disk to also store the catalog with a digest-based tag
+	// so that disk-to-mirror can find it when using a pinned ISC
+	CatalogDigest string `json:"-"`
 }
 
 type CollectorSchema struct {

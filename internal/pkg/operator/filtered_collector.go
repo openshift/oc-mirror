@@ -129,11 +129,23 @@ func createFolders(paths []string) error {
 	return errors.Join(errs...)
 }
 
-func digestOfFilter(catalog v2alpha1.Operator) (string, error) {
+func digestOfFilter(catalog v2alpha1.Operator, catalogDigest string) (string, error) {
 	c := catalog
 	c.TargetCatalog = ""
 	c.TargetTag = ""
 	c.TargetCatalogSourceTemplate = ""
+	// CLID-513: Normalize catalog reference to ensure consistent rebuiltTag
+	// whether catalog is specified by tag or digest in the ISC.
+	// Use catalog name + digest to ensure:
+	// - Same catalog with same filter → same rebuiltTag (v4.18 and @sha256:ABC produce same hash)
+	// - Different catalog versions with same filter → different rebuiltTag (v4.18 and v4.19 produce different hashes)
+	if c.Catalog != "" && catalogDigest != "" {
+		imgSpec, err := image.ParseRef(c.Catalog)
+		if err == nil {
+			// Normalize to: name@sha256:digest
+			c.Catalog = imgSpec.Name + "@sha256:" + catalogDigest
+		}
+	}
 	pkgs, err := json.Marshal(c)
 	if err != nil {
 		return "", err
@@ -251,7 +263,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 
 	rebuiltTag := ""
 	if !isFullCatalog(op) {
-		tag, err := digestOfFilter(op)
+		tag, err := digestOfFilter(op, catalogDigest)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
 		}
@@ -268,6 +280,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 			TargetCatalog: op.TargetCatalog,
 			RebuiltTag:    rebuiltTag,
 			FullCatalog:   isFullCatalog(op),
+			CatalogDigest: result.Digest,
 		},
 	}
 	return result, nil
@@ -297,7 +310,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
 	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
 
-	filterDigest, err := digestOfFilter(op)
+	filterDigest, err := digestOfFilter(op, catalogDigest)
 	if err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}

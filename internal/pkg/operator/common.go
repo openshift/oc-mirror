@@ -282,6 +282,18 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: cacheDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
 
 				}
+				// CLID-513: For catalogs, also store with digest-based tag so disk-to-mirror can find it when using pinned ISC
+				// Only do this if the original catalog was specified by tag (not already by digest)
+				if img.Type == v2alpha1.TypeOperatorCatalog && len(img.CatalogDigest) > 0 && !imgSpec.IsImageByDigestOnly() {
+					// Create digest-based tag: sha256-{digest}
+					digestTag := "sha256-" + img.CatalogDigest
+					// Build destination with digest tag (replace existing tag)
+					destParts := strings.Split(dest, ":")
+					if len(destParts) >= 2 {
+						digestDest := strings.Join(destParts[:len(destParts)-1], ":") + ":" + digestTag
+						result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: digestDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
+					}
+				}
 				alreadyIncluded[img.Image] = struct{}{}
 			}
 
