@@ -43,12 +43,10 @@ verify:
 
 vet:
 	$(GO) vet $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) ./...
-	make -C v1 vet
 
 test-unit:
 	mkdir -p tests/results
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -short -coverprofile=tests/results/cover.out -race -count=1 ./internal/pkg/...
-	make -C v1 test-unit
 
 test-integration:
 	mkdir -p tests/results-integration
@@ -56,19 +54,15 @@ test-integration:
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./internal/pkg/... -run TestIntegrationRelease
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./internal/pkg/... -run TestIntegrationAdditionalM2M
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./internal/pkg/... -run TestIntegrationReleaseM2M
-	make -C v1 test-integration
 
 tidy:
 	$(GO) mod tidy
-	make -C v1 tidy
 
 sanity: tidy format vet
-	make -C v1 sanity
 	git diff --exit-code
 .PHONY: sanity
 
 format: verify-gofmt
-	make -C v1 verify-gofmt
 
 cover:
 	$(GO) tool cover -html=tests/results/cover.out -o tests/results/cover.html
