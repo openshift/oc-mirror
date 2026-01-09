@@ -625,6 +625,7 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        updateServiceResourceName,
 			Annotations: generateOcMirrorAnnotations(),
+			Namespace:   updateServiceDefaultNamespace,
 		},
 		Spec: updateservicev1.UpdateServiceSpec{
 			Replicas:       2,
