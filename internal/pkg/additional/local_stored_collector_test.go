@@ -250,6 +250,332 @@ func TestAdditionalImageCollector(t *testing.T) {
 	})
 }
 
+func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
+	log := clog.New("trace")
+
+	global := &mirror.GlobalOptions{SecurePolicy: false}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	localstorageFQDN := "test.registry.com"
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         "oci://test",
+		Dev:                 false,
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    localstorageFQDN,
+	}
+
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				AdditionalImages: []v2alpha1.Image{},
+			},
+		},
+	}
+
+	mockmirror := MockMirror{}
+	manifest := MockManifest{Log: log}
+	ctx := context.Background()
+
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk with TargetRepo", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "registry.redhat.io/ubi8/ubi:latest",
+				TargetRepo: "custom-namespace/custom-image",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://test.registry.com/custom-namespace/custom-image:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk with TargetTag", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:      "registry.redhat.io/ubi8/ubi:latest",
+				TargetTag: "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://test.registry.com/ubi8/ubi:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk with both TargetRepo and TargetTag", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "registry.redhat.io/ubi8/ubi:latest",
+				TargetRepo: "custom-namespace/custom-image",
+				TargetTag:  "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://test.registry.com/custom-namespace/custom-image:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk with TargetTag for digest-only image", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				TargetTag: "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://test.registry.com/testns/test:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk with TargetRepo and TargetTag for OCI image", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "oci:///folder-a/folder-b/testns/test",
+				TargetRepo: "custom/oci-image",
+				TargetTag:  "v2.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "oci:///folder-a/folder-b/testns/test",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Destination: "docker://test.registry.com/custom/oci-image:v2.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : invalid TargetRepo should skip image with warning", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "registry.redhat.io/ubi8/ubi:latest",
+				TargetRepo: "invalid:tag",
+			},
+			{
+				Name: "registry.redhat.io/ubi9/ubi:latest",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		// Should only return the second image since first has invalid TargetRepo
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://registry.redhat.io/ubi9/ubi:latest",
+				Origin:      "registry.redhat.io/ubi9/ubi:latest",
+				Destination: "docker://test.registry.com/ubi9/ubi:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	// update opts for diskToMirror
+	opts.Mode = mirror.DiskToMirror
+	opts.Destination = "docker://mirror.acme.com"
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with TargetRepo", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "registry.redhat.io/ubi8/ubi:latest",
+				TargetRepo: "custom-namespace/custom-image",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/custom-namespace/custom-image:latest",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://mirror.acme.com/custom-namespace/custom-image:latest",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with TargetTag", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:      "registry.redhat.io/ubi8/ubi:latest",
+				TargetTag: "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/ubi8/ubi:v1.0",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://mirror.acme.com/ubi8/ubi:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with TargetRepo and TargetTag", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "registry.redhat.io/ubi8/ubi:latest",
+				TargetRepo: "custom-namespace/custom-image",
+				TargetTag:  "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/custom-namespace/custom-image:v1.0",
+				Origin:      "registry.redhat.io/ubi8/ubi:latest",
+				Destination: "docker://mirror.acme.com/custom-namespace/custom-image:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with TargetTag for digest-only image", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				TargetTag: "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/testns/test:v1.0",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://mirror.acme.com/testns/test:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with TargetRepo and TargetTag for OCI image", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:       "oci:///folder-a/folder-b/testns/test",
+				TargetRepo: "custom/oci-image",
+				TargetTag:  "v2.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/custom/oci-image:v2.0",
+				Origin:      "oci:///folder-a/folder-b/testns/test",
+				Destination: "docker://mirror.acme.com/custom/oci-image:v2.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+
+	t.Run("Testing AdditionalImagesCollector : diskToMirror with generateV1Tags and TargetTag should use TargetTag", func(t *testing.T) {
+		cfg.Mirror.AdditionalImages = []v2alpha1.Image{
+			{
+				Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				TargetTag: "v1.0",
+			},
+		}
+		ex := New(log, cfg, opts, mockmirror, manifest)
+		ex = WithV1Tags(ex)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://test.registry.com/testns/test:v1.0",
+				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: "docker://mirror.acme.com/testns/test:v1.0",
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+
+		res, err := ex.AdditionalImagesCollector(ctx)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+	})
+}
+
 func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
 	return nil
 }
