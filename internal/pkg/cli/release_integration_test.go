@@ -169,7 +169,7 @@ func (suite *TestEnvironmentRelease) runMirror2Disk(t *testing.T) {
 	err := os.MkdirAll(resultFolder, 0755)
 	assert.NoError(t, err, "should not fail creating a temp folder for results")
 
-	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "56001", "--src-tls-verify=false", "--dest-tls-verify=false", "file://" + resultFolder})
+	ocmirror.SetArgs([]string{"-c", suite.tempFolder + "/isc.yaml", "--v2", "-p", "56001", "--src-tls-verify=false", "--dest-tls-verify=false", "--remove-signatures", "file://" + resultFolder})
 	err = ocmirror.Execute()
 	assert.NoError(t, err, "should not fail executing oc-mirror")
 

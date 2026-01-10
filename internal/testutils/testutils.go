@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 
@@ -23,6 +24,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
@@ -127,6 +129,17 @@ func buildAndPushFakeImage(content map[string][]byte, imgRef string, dir string)
 		return "", err
 	}
 	i, _ := crane.Image(content)
+	// Set the platform to match the local GOARCH
+	cfg, err := i.ConfigFile()
+	if err != nil {
+		return "", err
+	}
+	cfg.OS = runtime.GOOS
+	cfg.Architecture = runtime.GOARCH
+	i, err = mutate.ConfigFile(i, cfg)
+	if err != nil {
+		return "", err
+	}
 	if err := crane.Push(i, tag.String()); err != nil {
 		return "", err
 	}
