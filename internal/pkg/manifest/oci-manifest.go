@@ -17,6 +17,7 @@ import (
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
@@ -103,54 +104,47 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 	return allImages, nil
 }
 
-// UntarLayers simple function that untars the image layers
+// untar untars the image layers from a compressed stream
 func untar(gzipStream io.Reader, path string, cfgDirName string) error {
-	// Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
-	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("untar: gzipStream - %w", err)
 	}
 
+	// Remove any separators in cfgDirName as received from the label
+	cfgDirName = strings.Trim(cfgDirName, "/")
 	tarReader := tar.NewReader(uncompressedStream)
 	for {
 		header, err := tarReader.Next()
-
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
-
 		if err != nil {
-			return fmt.Errorf("untar: Next() failed: %s", err.Error())
+			return fmt.Errorf("untar: Next() failed: %w", err)
 		}
 
-		if strings.Contains(header.Name, cfgDirName) {
-			switch header.Typeflag {
-			case tar.TypeDir:
-				if header.Name != "./" {
-					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
-						return fmt.Errorf("untar: Mkdir() failed: %w", err)
-					}
-				}
-			case tar.TypeReg:
-				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				outFile, err := os.Create(filepath.Join(path, header.Name))
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					outFile.Close()
-					return fmt.Errorf("untar: Copy() failed: %w", err)
-				}
-				outFile.Close()
+		if !strings.Contains(header.Name, cfgDirName) {
+			continue
+		}
 
-			default:
-				// just ignore errors as we are only interested in the FB configs layer
+		filePath, err := common.SanitizeArchivePath(path, header.Name)
+		if err != nil {
+			return err
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if header.Name != "./" {
+				if err := os.MkdirAll(filePath, 0o755); err != nil {
+					return fmt.Errorf("untar: Mkdir() failed: %w", err)
+				}
 			}
+		case tar.TypeReg:
+			if err := common.WriteFile(filePath, tarReader, 0o755); err != nil {
+				return err
+			}
+		default:
+			// just ignore errors as we are only interested in the FB configs layer
 		}
 	}
 	return nil
