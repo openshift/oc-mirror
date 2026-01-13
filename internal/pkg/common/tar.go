@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,9 +43,15 @@ func WriteFile(filePath string, reader io.Reader, perm os.FileMode) error {
 	}
 	defer f.Close()
 
-	// copy  contents
-	if _, err := io.Copy(f, reader); err != nil {
-		return fmt.Errorf("error copying file %s: %w", filePath, err)
+	// copy contents in chunks to avoid gosec:G110 decompression bomb
+	// https://stackoverflow.com/questions/67327323/g110-potential-dos-vulnerability-via-decompression-bomb-gosec
+	for {
+		if _, err := io.CopyN(f, reader, 1024); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return fmt.Errorf("error copying file %s: %w", filePath, err)
+		}
 	}
 
 	return nil
