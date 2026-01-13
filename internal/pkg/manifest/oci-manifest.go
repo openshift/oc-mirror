@@ -79,7 +79,7 @@ func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1
 		if err != nil {
 			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
 		}
-		if err := untar(f, toPath, label); err != nil {
+		if err := untargz(f, toPath, label); err != nil {
 			return fmt.Errorf("untar %q: %w", digestString, err)
 		}
 	}
@@ -104,16 +104,21 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 	return allImages, nil
 }
 
-// untar untars the image layers from a compressed stream
-func untar(gzipStream io.Reader, path string, cfgDirName string) error {
+// untargz untars the image layers from a compressed stream
+func untargz(gzipStream io.Reader, path string, cfgDirName string) error {
 	uncompressedStream, err := gzip.NewReader(gzipStream)
 	if err != nil {
 		return fmt.Errorf("untar: gzipStream - %w", err)
 	}
+	return Untar(uncompressedStream, path, cfgDirName)
+}
 
-	// Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.Trim(cfgDirName, "/")
-	tarReader := tar.NewReader(uncompressedStream)
+// Untar unarchives a stream and filters out paths matching `filterPath`.
+func Untar(stream io.Reader, path string, filterPath string) error { //nolint:cyclop // FIXME: refactor later or change cyclomatic complexity value
+	// Remove any separators in filterPath as received from the label
+	filterPath = strings.Trim(filterPath, "/")
+
+	tarReader := tar.NewReader(stream)
 	for {
 		header, err := tarReader.Next()
 		if errors.Is(err, io.EOF) {
@@ -123,7 +128,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 			return fmt.Errorf("untar: Next() failed: %w", err)
 		}
 
-		if !strings.Contains(header.Name, cfgDirName) {
+		if !strings.Contains(header.Name, filterPath) {
 			continue
 		}
 
@@ -140,7 +145,7 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 				}
 			}
 		case tar.TypeReg:
-			if err := common.WriteFile(filePath, tarReader, 0o755); err != nil {
+			if err := common.WriteFile(filePath, tarReader, 0o666); err != nil {
 				return err
 			}
 		default:
