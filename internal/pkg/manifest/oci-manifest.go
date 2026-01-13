@@ -153,7 +153,8 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
 func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	filePath := filepath.Join(dir, index)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("read index.json: %w", err)
 	}
@@ -163,8 +164,7 @@ func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCIS
 	o.Log.Debug("Digest:", digest)
 	o.Log.Debug("Size:", size)
 
-	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", digest))
-	if err != nil {
+	if err = copy.Copy(filePath, filepath.Join(dir, "blobs", "sha256", digest)); err != nil {
 		return fmt.Errorf("copy index.json to destination: %w", err)
 	}
 
@@ -185,8 +185,8 @@ func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCIS
 	}
 
 	// Write the JSON string to a file
-	err = os.WriteFile(filepath.Join(dir, "index.json"), idxData, 0644) // nolint:gosec // G306: no sensitive data
-	if err != nil {
+	// nolint:gosec // G306: no sensitive data
+	if err := os.WriteFile(filePath, idxData, 0o644); err != nil {
 		return fmt.Errorf("write single manifest index.json: %w", err)
 	}
 
