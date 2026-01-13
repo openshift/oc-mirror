@@ -2,13 +2,17 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/opencontainers/go-digest"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -18,7 +22,10 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-const latestTag string = "latest"
+const (
+	latestTag           string = "latest"
+	catalogConfigsLabel string = "operators.operatorframework.io.index.configs.v1"
+)
 
 type OperatorCollector struct {
 	Log                clog.PluggableLoggerInterface
@@ -346,79 +353,82 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	}
 
 	// It's in oci format so we can go directly to the index.json file
-	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
+	ociIndex, err := layout.ImageIndexFromPath(catalogImageDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to load oci image index: %w", err)
+	}
+
+	// All archful images should have the same catalog configuration, so we arbitrarily pick the first one we find.
+	archfulImg, err := o.getCatalogConfigImage(ociIndex)
 	if err != nil {
 		return "", err
 	}
 
-	if len(oci.Manifests) > 1 && imgSpec.Transport == ociProtocol {
-		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
-			return "", err
-		}
-
-		var err error
-		oci, err = o.Manifest.GetOCIImageIndex(catalogImageDir)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	if len(oci.Manifests) == 0 {
-		return "", fmt.Errorf("no manifests found for %s", catalog)
-	}
-
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	cfg, err := archfulImg.ConfigFile()
 	if err != nil {
-		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
+		return "", fmt.Errorf("failed to get oci image config: %w", err)
 	}
-
-	manifest := validDigest.Encoded()
-	o.Log.Debug(collectorPrefix+"manifest %s", manifest)
-	manifestDir := filepath.Join(catalogImageDir, blobsDir, manifest)
-	oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
-	if err != nil {
-		return "", err
+	label, ok := cfg.Config.Labels[catalogConfigsLabel]
+	if !ok {
+		return "", fmt.Errorf("operator configs label %q not found", catalogConfigsLabel)
 	}
-
-	// we need to check if oci returns multi manifests (from manifest list)
-	// also oci.Config will be nil
-	// we are only interested in the first manifest as all architectures
-	// "configs" will be exactly the same
-	if len(oci.Manifests) > 0 && oci.Config.Size == 0 {
-		subDigest, err := digest.Parse(oci.Manifests[0].Digest)
-		if err != nil {
-			return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
-		}
-		manifestDir := filepath.Join(catalogImageDir, blobsDir, subDigest.Encoded())
-		oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
-		if err != nil {
-			return "", fmt.Errorf("manifest %s: %w", catalog, err)
-		}
-	}
-
-	// read the config digest to get the detailed manifest
-	// looking for the label to search for a specific folder
-	configDigest, err := digest.Parse(oci.Config.Digest)
-	if err != nil {
-		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
-	}
-	catalogDir := filepath.Join(catalogImageDir, blobsDir, configDigest.Encoded())
-	ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
-	if err != nil {
-		return "", err
-	}
-
-	label := ocs.Config.Labels.OperatorsOperatorframeworkIoIndexConfigsV1
 	o.Log.Debug(collectorPrefix+"label %q", label)
 
-	// untar all the blobs for the operator
-	// if the layer with "label" (from previous step) is found to a specific folder
-	fromDir := filepath.Join(catalogImageDir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, configsDir, label, oci); err != nil {
-		return "", err
+	toPath := filepath.Join(configsDir, label)
+	o.Log.Debug("extracting OCI layers to %q", toPath)
+	if _, err := os.Stat(toPath); err == nil {
+		o.Log.Debug("extract directory exists (noop)")
+		return toPath, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("extract directory: %w", err)
 	}
 
-	return filepath.Join(configsDir, label), nil
+	// We must use mutate.Extract here because it properly handles the whiteout
+	// configuration introduced during catalog filtering. Otherwise we could be
+	// extracting a layer with the unfiltered catalog configs that's supposed
+	// to be hidden.
+	imgReader := mutate.Extract(archfulImg)
+	defer imgReader.Close()
+
+	if err := manifest.Untar(imgReader, configsDir, label); err != nil {
+		return "", fmt.Errorf("could not untar catalog layers: %w", err)
+	}
+
+	return toPath, nil
+}
+
+// getCatalogConfigImage recurses through OCI image indexes to find an archful catalog image.
+func (o OperatorCollector) getCatalogConfigImage(index v1.ImageIndex) (v1.Image, error) { // nolint:ireturn // this is the type from the go-containerregistry lib.
+	indexManifest, err := index.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index image manifest: %w", err)
+	}
+	if len(indexManifest.Manifests) == 0 {
+		return nil, fmt.Errorf("no manifests found for index image")
+	}
+	for _, desc := range indexManifest.Manifests {
+		switch {
+		case desc.MediaType.IsIndex():
+			ociIndex, err := index.ImageIndex(desc.Digest)
+			if err != nil {
+				o.Log.Debug("failed to get image index %q: %v", desc.Digest.String(), err)
+				continue
+			}
+			return o.getCatalogConfigImage(ociIndex)
+		case desc.MediaType.IsImage():
+			img, err := index.Image(desc.Digest)
+			if err != nil {
+				o.Log.Debug("failed to get image %s: %v", desc.Digest.String(), err)
+				continue
+			}
+			o.Log.Debug("found catalog image %q", desc.Digest.String())
+			return img, nil
+		default:
+			o.Log.Debug("unhandled image media type %v", desc.MediaType)
+		}
+	}
+	// We don't expect to reach this point unless things have gone very wrong
+	return nil, fmt.Errorf("catalog config image not found")
 }
 
 type OtherImageDispatcher struct {
