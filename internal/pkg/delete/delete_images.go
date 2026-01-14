@@ -149,7 +149,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		// It does not hurt to check each entry :)
 		// This will avoid the error "Image may not exist or is not stored with a v2 Schema in a v2 registry"
 		// Reverts OCPBUGS-44448
-		imgSpecName, err := image.ParseRef(img.ImageName)
+		_, err := image.ParseRef(img.ImageName)
 		if err != nil {
 			allErrs = append(allErrs, fmt.Errorf("parse image name %q: %w", img.ImageName, err))
 			continue
@@ -166,16 +166,11 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			allErrs = append(allErrs, fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination))
 			continue
 		}
-		assembleName := name[1] + "/" + imgSpecName.PathComponent
-		// check image type for release or release content
-		switch img.Type {
-		case v2alpha1.TypeOCPReleaseContent:
-			assembleName = name[1] + "/openshift/release"
-		case v2alpha1.TypeOCPRelease:
-			assembleName = name[1] + "/openshift/release-images"
-		}
-		// check the assembled name against the reference name
-		if assembleName != imgSpecRef.Name {
+		deleteDestBase := name[1]
+		// Verify that the ImageReference is under the DeleteDestination tree.
+		// This check ensures images are being deleted from the correct registry.
+		// The ImageReference already contains the correct path with targetRepo/targetTag applied.
+		if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") && imgSpecRef.Name != deleteDestBase {
 			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (please verify full name)", o.Opts.Global.DeleteDestination))
 			continue
 		}
