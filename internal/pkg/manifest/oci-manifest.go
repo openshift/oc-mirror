@@ -2,7 +2,6 @@ package manifest
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
@@ -58,33 +57,6 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 	return ocs, nil
 }
 
-// ExtractOCILayers
-func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	_, err := os.Stat(filepath.Join(toPath, label))
-	if err == nil {
-		o.Log.Debug("extract directory exists (nop)")
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("extract directory: %w", err)
-	}
-	for _, blob := range oci.Layers {
-		validDigest, err := digest.Parse(blob.Digest)
-		if err != nil {
-			return fmt.Errorf("digest %q: format is not correct: %w", blob.Digest, err)
-		}
-		digestString := validDigest.Encoded()
-		f, err := os.Open(filepath.Join(fromPath, digestString))
-		if err != nil {
-			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
-		}
-		if err := untar(f, toPath, label); err != nil {
-			return fmt.Errorf("untar %q: %w", digestString, err)
-		}
-	}
-	return nil
-}
-
 // GetReleaseSchema
 func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
 	release, err := parser.ParseJsonFile[v2alpha1.ReleaseSchema](filePath)
@@ -103,54 +75,43 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 	return allImages, nil
 }
 
-// UntarLayers simple function that untars the image layers
-func untar(gzipStream io.Reader, path string, cfgDirName string) error {
-	// Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
-	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
-	uncompressedStream, err := gzip.NewReader(gzipStream)
-	if err != nil {
-		return fmt.Errorf("untar: gzipStream - %w", err)
-	}
+// Untar unarchives a stream and filters out paths matching `filterPath`.
+func Untar(stream io.Reader, path string, filterPath string) error { //nolint:cyclop // FIXME: refactor later or change cyclomatic complexity value
+	// Remove any separators in filterPath as received from the label
+	filterPath = strings.Trim(filterPath, "/")
 
-	tarReader := tar.NewReader(uncompressedStream)
+	tarReader := tar.NewReader(stream)
 	for {
 		header, err := tarReader.Next()
-
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
-
 		if err != nil {
-			return fmt.Errorf("untar: Next() failed: %s", err.Error())
+			return fmt.Errorf("untar: Next() failed: %w", err)
 		}
 
-		if strings.Contains(header.Name, cfgDirName) {
-			switch header.Typeflag {
-			case tar.TypeDir:
-				if header.Name != "./" {
-					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
-						return fmt.Errorf("untar: Mkdir() failed: %w", err)
-					}
-				}
-			case tar.TypeReg:
-				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				outFile, err := os.Create(filepath.Join(path, header.Name))
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					outFile.Close()
-					return fmt.Errorf("untar: Copy() failed: %w", err)
-				}
-				outFile.Close()
+		if !strings.Contains(header.Name, filterPath) {
+			continue
+		}
 
-			default:
-				// just ignore errors as we are only interested in the FB configs layer
+		filePath, err := common.SanitizeArchivePath(path, header.Name)
+		if err != nil {
+			return err
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if header.Name != "./" {
+				if err := os.MkdirAll(filePath, 0o755); err != nil {
+					return fmt.Errorf("untar: Mkdir() failed: %w", err)
+				}
 			}
+		case tar.TypeReg:
+			if err := common.WriteFile(filePath, tarReader, 0o666); err != nil {
+				return err
+			}
+		default:
+			// just ignore errors as we are only interested in the FB configs layer
 		}
 	}
 	return nil
@@ -159,7 +120,8 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
 func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
-	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	filePath := filepath.Join(dir, index)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("read index.json: %w", err)
 	}
@@ -169,8 +131,7 @@ func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCIS
 	o.Log.Debug("Digest:", digest)
 	o.Log.Debug("Size:", size)
 
-	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", digest))
-	if err != nil {
+	if err = copy.Copy(filePath, filepath.Join(dir, "blobs", "sha256", digest)); err != nil {
 		return fmt.Errorf("copy index.json to destination: %w", err)
 	}
 
@@ -191,8 +152,8 @@ func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCIS
 	}
 
 	// Write the JSON string to a file
-	err = os.WriteFile(filepath.Join(dir, "index.json"), idxData, 0644) // nolint:gosec // G306: no sensitive data
-	if err != nil {
+	// nolint:gosec // G306: no sensitive data
+	if err := os.WriteFile(filePath, idxData, 0o644); err != nil {
 		return fmt.Errorf("write single manifest index.json: %w", err)
 	}
 

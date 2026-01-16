@@ -66,7 +66,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 		return fmt.Errorf("error initializing a container image for catalog %s from %s: %v", catalogCopyRef.Origin, originCatalogLayoutDir, err)
 	}
 
-	configLayerToAdd, err := LayerFromPathWithUidGid("/configs", configPath, 0, 0)
+	configLayerToAdd, err := LayerFromPathWithUidGid("configs", configPath, 0, 0)
 	if err != nil {
 		return fmt.Errorf("error creating add layer: %v", err)
 	}
@@ -74,9 +74,9 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 
 	// Since we are defining the FBC as index.json,
 	// remove anything that may currently exist
-	deletedConfigLayer, err := deleteLayer("/.wh.configs")
+	deletedConfigLayer, err := deleteLayer(".wh.configs")
 	if err != nil {
-		return fmt.Errorf("error preparing to delete old /configs from catalog %s : %v", catalogCopyRef.Origin, err)
+		return fmt.Errorf("error preparing to delete old configs/ from catalog %s : %w", catalogCopyRef.Origin, err)
 	}
 	layersToDelete = append(layersToDelete, deletedConfigLayer)
 

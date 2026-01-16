@@ -13,6 +13,8 @@ import (
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 	"golang.org/x/term"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 )
 
 type MirrorUnArchiver struct {
@@ -51,11 +53,11 @@ func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArch
 // * working-dir to workingDir
 func (o MirrorUnArchiver) Unarchive() error {
 	// make sure workingDir exists
-	if err := os.MkdirAll(o.workingDir, 0755); err != nil {
+	if err := os.MkdirAll(o.workingDir, 0o755); err != nil {
 		return fmt.Errorf("unable to create working dir %q: %w", o.workingDir, err)
 	}
 	// make sure cacheDir exists
-	if err := os.MkdirAll(o.cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(o.cacheDir, 0o755); err != nil {
 		return fmt.Errorf("unable to create cache dir %q: %w", o.cacheDir, err)
 	}
 
@@ -152,52 +154,12 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string, bar *mpb.Bar) 
 	return nil
 }
 
-// see https://github.com/securego/gosec/issues/324#issuecomment-935927967
-func sanitizeArchivePath(dir, filePath string) (string, error) {
-	v := filepath.Join(dir, filePath)
-	// OCPBUGS-57387: use absolute paths otherwise the `.` needs special
-	// treatment because of the way Golang handles it after `Clean`
-	absV, err := filepath.Abs(v)
-	if err != nil {
-		return "", fmt.Errorf("get absolute path for %q: %w", v, err)
-	}
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("get absolute path for %q: %w", dir, err)
-	}
-	if strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
-		return v, nil
-	}
-	return "", fmt.Errorf("content filepath is tainted: %s", v)
-}
-
 func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Reader, bar *mpb.Bar) error {
-	descriptor, err := sanitizeArchivePath(parentDir, header.Name)
+	descriptor, err := common.SanitizeArchivePath(parentDir, header.Name)
 	if err != nil {
 		return err
 	}
 	proxyReader := bar.ProxyReader(reader)
 	defer proxyReader.Close()
-	return writeFile(descriptor, proxyReader, header.FileInfo().Mode())
-}
-
-func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
-	// make sure all the parent directories exist
-	descriptorParent := filepath.Dir(filePath)
-	if err := os.MkdirAll(descriptorParent, 0755); err != nil {
-		return fmt.Errorf("unable to create parent directory for %s: %w", filePath, err)
-	}
-
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, perm)
-	if err != nil {
-		return fmt.Errorf("unable to create file %s: %w", filePath, err)
-	}
-	defer f.Close()
-
-	// copy  contents
-	if _, err := io.Copy(f, reader); err != nil {
-		return fmt.Errorf("error copying file %s: %w", filePath, err)
-	}
-
-	return nil
+	return common.WriteFile(descriptor, proxyReader, header.FileInfo().Mode())
 }
