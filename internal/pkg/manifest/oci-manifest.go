@@ -2,7 +2,6 @@ package manifest
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -59,33 +57,6 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 	return ocs, nil
 }
 
-// ExtractOCILayers
-func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
-	_, err := os.Stat(filepath.Join(toPath, label))
-	if err == nil {
-		o.Log.Debug("extract directory exists (nop)")
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("extract directory: %w", err)
-	}
-	for _, blob := range oci.Layers {
-		validDigest, err := digest.Parse(blob.Digest)
-		if err != nil {
-			return fmt.Errorf("digest %q: format is not correct: %w", blob.Digest, err)
-		}
-		digestString := validDigest.Encoded()
-		f, err := os.Open(filepath.Join(fromPath, digestString))
-		if err != nil {
-			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
-		}
-		if err := untargz(f, toPath, label); err != nil {
-			return fmt.Errorf("untar %q: %w", digestString, err)
-		}
-	}
-	return nil
-}
-
 // GetReleaseSchema
 func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
 	release, err := parser.ParseJsonFile[v2alpha1.ReleaseSchema](filePath)
@@ -102,15 +73,6 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 		})
 	}
 	return allImages, nil
-}
-
-// untargz untars the image layers from a compressed stream
-func untargz(gzipStream io.Reader, path string, cfgDirName string) error {
-	uncompressedStream, err := gzip.NewReader(gzipStream)
-	if err != nil {
-		return fmt.Errorf("untar: gzipStream - %w", err)
-	}
-	return Untar(uncompressedStream, path, cfgDirName)
 }
 
 // Untar unarchives a stream and filters out paths matching `filterPath`.
