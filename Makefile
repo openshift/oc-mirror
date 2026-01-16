@@ -26,6 +26,9 @@ GO_MOD_FLAGS = -mod=readonly
 GO_BUILD_PACKAGES := ./cmd/oc-mirror
 GO_PACKAGE = github.com/openshift/oc-mirror/v2
 
+# Due to the complexity of managing C cross-compiler toolchains, cross-building with CGO_ENABLED on the non-native architecture is not supported.
+CGO_ENABLED ?= 0
+
 LIBDM_BUILD_TAG = $(shell ./hack/libdm_tag.sh)
 LIBSUBID_BUILD_TAG = $(shell ./hack/libsubid_tag.sh)
 BTRFS_BUILD_TAG = $(shell ./hack/btrfs_tag.sh) $(shell ./hack/btrfs_installed_tag.sh)
@@ -75,25 +78,25 @@ clean:
 
 build:
 	make -C v1 build
-	@cp v1/bin/oc-mirror ./cmd/oc-mirror/data/oc-mirror-v1
+	@cp v1/$(GO_BUILD_BINDIR)/oc-mirror ./cmd/oc-mirror/data/oc-mirror-v1
 	mkdir -p $(GO_BUILD_BINDIR)
 	go build $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) $(GO_LD_FLAGS) -o $(GO_BUILD_BINDIR) ./...
 .PHONY: build
 
 cross-build-linux-amd64:
-	+@GOOS=linux GOARCH=amd64 $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
+	+@CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-amd64
 .PHONY: cross-build-linux-amd64
 
 cross-build-linux-ppc64le:
-	+@GOOS=linux GOARCH=ppc64le $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-ppc64le
+	+@CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=ppc64le $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-ppc64le
 .PHONY: cross-build-linux-ppc64le
 
 cross-build-linux-s390x:
-	+@GOOS=linux GOARCH=s390x $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-s390x
+	+@CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=s390x $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-s390x
 .PHONY: cross-build-linux-s390x
 
 cross-build-linux-arm64:
-	+@GOOS=linux GOARCH=arm64 $(MAKE) "$(GO_BUILD_FLAGS)" --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-arm64
+	+@CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=arm64 $(MAKE) --no-print-directory build GO_BUILD_BINDIR=$(GO_BUILD_BINDIR)/linux-arm64
 .PHONY: cross-build-linux-arm64
 
 cross-build: cross-build-linux-amd64 cross-build-linux-ppc64le cross-build-linux-s390x cross-build-linux-arm64
