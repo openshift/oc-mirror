@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -148,39 +150,20 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
 	dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
-	if err := o.ensureReleaseInOCIFormat(ctx, release, dir); err != nil {
-		return []v2alpha1.RelatedImage{}, err
-	}
-
-	oci, err := o.Manifest.GetOCIImageIndex(dir)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, err
-	}
-
-	// read the link to the manifest
-	if len(oci.Manifests) == 0 {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf("image index not found")
-	}
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf("invalid digest for image index %s: %w", oci.Manifests[0].Digest, err)
-	}
-
-	manifest := validDigest.Encoded()
-	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
-
-	manifestDir := filepath.Join(dir, blobsDir, manifest)
-	mfst, err := o.Manifest.GetOCIImageManifest(manifestDir)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, err
-	}
-	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
-
 	fromDir := filepath.Join(dir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
-		return []v2alpha1.RelatedImage{}, err
+	if _, err := os.Stat(fromDir); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return []v2alpha1.RelatedImage{}, fmt.Errorf("extract release directory %q: %w", fromDir, err)
+		}
+		// The release image has not been previously extracted, so extract it.
+		if err := o.ensureReleaseInOCIFormat(ctx, release, dir); err != nil {
+			return []v2alpha1.RelatedImage{}, err
+		}
+		if err := o.extractReleaseOCIImage(dir, cacheDir); err != nil {
+			return []v2alpha1.RelatedImage{}, err
+		}
 	}
-	o.Log.Debug("extracted layer %s ", cacheDir)
+	o.Log.Debug("reading extract release image from %q", cacheDir)
 
 	// overkill but its used for consistency
 	releaseDir := filepath.Join(cacheDir, releaseImageExtractFullPath)
@@ -207,7 +190,7 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 		return nil
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create oci dir: %w", err)
 	}
 
@@ -223,6 +206,35 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 		return fmt.Errorf("copy release index image: %w", err)
 	}
 	o.Log.Debug(collectorPrefix+"copied release index image %s ", release.Source)
+
+	return nil
+}
+
+func (o *LocalStorageCollector) extractReleaseOCIImage(fromPath string, toPath string) error {
+	ociIndex, err := layout.ImageIndexFromPath(fromPath)
+	if err != nil {
+		return fmt.Errorf("failed to load release oci image from %q: %w", fromPath, err)
+	}
+
+	indexManifest, err := ociIndex.IndexManifest()
+	if err != nil {
+		return fmt.Errorf("failed to get release oci index manifest: %w", err)
+	}
+	if len(indexManifest.Manifests) == 0 {
+		return fmt.Errorf("no manifests found for release image")
+	}
+	o.Log.Debug(collectorPrefix+"image manifest digest %s", indexManifest.Manifests[0].Digest.String())
+
+	img, err := ociIndex.Image(indexManifest.Manifests[0].Digest)
+	if err != nil {
+		return fmt.Errorf("failed to get release image %q: %w", indexManifest.Manifests[0].Digest.String(), err)
+	}
+
+	imgStream := mutate.Extract(img)
+	if err := manifest.Untar(imgStream, toPath, releaseManifests); err != nil {
+		return fmt.Errorf("failed to extract release oci layers: %w", err)
+	}
+	o.Log.Debug("extracted release image layers to %q", toPath)
 
 	return nil
 }
