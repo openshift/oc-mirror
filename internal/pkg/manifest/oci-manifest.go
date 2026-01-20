@@ -2,8 +2,6 @@ package manifest
 
 import (
 	"archive/tar"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +13,9 @@ import (
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -32,21 +33,20 @@ func New(log clog.PluggableLoggerInterface) *Manifest {
 }
 
 // GetOCIImageIndex - used to get the oci index.json
-func (o Manifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	indexPath := filepath.Join(dir, index)
-	oci, err := o.GetOCIImageManifest(indexPath)
+func (o Manifest) GetOCIImageIndex(indexPath string) (*specv1.Index, error) {
+	oci, err := parser.ParseJsonFile[*specv1.Index](indexPath)
 	if err != nil {
-		return nil, fmt.Errorf("image index %q: %w", indexPath, err)
+		return nil, fmt.Errorf("oci image index %q: %w", indexPath, err)
 	}
 	return oci, nil
 }
 
 // GetOCIImageManifest used to ge the manifest in the oci blobs/sha256
 // directory - found in index.json
-func (o Manifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	oci, err := parser.ParseJsonFile[*v2alpha1.OCISchema](file)
+func (o Manifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	oci, err := parser.ParseJsonFile[*specv1.Manifest](file)
 	if err != nil {
-		return nil, fmt.Errorf("manifest: %w", err)
+		return nil, fmt.Errorf("oci manifest: %w", err)
 	}
 	return oci, nil
 }
@@ -167,40 +167,39 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
 // this is necessary because containers/image does not support multi manifest indexes on the top level folder
-func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
 	if err != nil {
 		return fmt.Errorf("read index.json: %w", err)
 	}
-	hash := sha256.Sum256(data)
-	digest := hex.EncodeToString(hash[:])
+	dgest := digest.FromBytes(data)
 	size := len(data)
-	o.Log.Debug("Digest:", digest)
+	o.Log.Debug("Digest:", dgest.String())
 	o.Log.Debug("Size:", size)
 
-	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", digest))
+	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", dgest.Encoded()))
 	if err != nil {
 		return fmt.Errorf("copy index.json to destination: %w", err)
 	}
 
-	idx := v2alpha1.OCISchema{
-		SchemaVersion: oci.SchemaVersion,
-		Manifests: []v2alpha1.OCIManifest{
+	idx := specv1.Index{
+		Versioned: specs.Versioned{SchemaVersion: oci.SchemaVersion},
+		Manifests: []specv1.Descriptor{
 			{
 				MediaType: oci.MediaType,
-				Digest:    fmt.Sprintf("sha256:%s", digest),
-				Size:      size,
+				Digest:    dgest,
+				Size:      int64(size),
 			},
 		},
 	}
 
 	idxData, err := json.Marshal(idx)
 	if err != nil {
-		return fmt.Errorf("encode manifest OCISchema: %w", err)
+		return fmt.Errorf("encode manifest: %w", err)
 	}
 
 	// Write the JSON string to a file
-	err = os.WriteFile(filepath.Join(dir, "index.json"), idxData, 0644) // nolint:gosec // G306: no sensitive data
+	err = os.WriteFile(filepath.Join(dir, "index.json"), idxData, 0o644) // nolint:gosec // G306: no sensitive data
 	if err != nil {
 		return fmt.Errorf("write single manifest index.json: %w", err)
 	}
