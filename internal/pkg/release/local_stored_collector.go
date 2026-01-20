@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
 	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -152,7 +151,7 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
 
-	oci, err := o.Manifest.GetOCIImageIndex(dir)
+	oci, err := o.Manifest.GetOCIImageIndex(filepath.Join(dir, "index.json"))
 	if err != nil {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
@@ -161,12 +160,8 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	if len(oci.Manifests) == 0 {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, "image index not found ")
 	}
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
-	}
 
-	manifest := validDigest.Encoded()
+	manifest := oci.Manifests[0].Digest.Encoded()
 	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
 
 	manifestDir := filepath.Join(dir, blobsDir, manifest)
@@ -174,7 +169,7 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	if err != nil {
 		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
 	}
-	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
+	o.Log.Debug(collectorPrefix+"config digest %s ", mfst.Config.Digest.String())
 
 	fromDir := filepath.Join(dir, blobsDir)
 	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
@@ -207,7 +202,7 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 		return nil
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create oci dir: %w", err)
 	}
 
