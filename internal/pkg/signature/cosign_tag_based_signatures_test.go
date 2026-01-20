@@ -8,6 +8,7 @@ import (
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
@@ -19,11 +20,11 @@ import (
 
 type mockManifest struct{}
 
-func (m *mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+func (m *mockManifest) GetOCIImageIndex(dir string) (*specv1.Index, error) {
 	return nil, nil
 }
 
-func (m *mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
+func (m *mockManifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
 	return nil, nil
 }
 
@@ -35,7 +36,7 @@ func (m *mockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) err
 	return nil
 }
 
-func (m *mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (m *mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 

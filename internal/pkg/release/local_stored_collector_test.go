@@ -12,6 +12,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/google/uuid"
 	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -116,13 +118,12 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
-
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
+		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
@@ -191,7 +192,6 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector with real GetReleaseReferenceImages - Disk to mirror : should pass", func(t *testing.T) {
-
 		os.RemoveAll(common.TestFolder + "hold-release/")
 		os.RemoveAll(common.TestFolder + "release-images")
 		os.RemoveAll(common.TestFolder + "tmp/")
@@ -252,7 +252,6 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		}
 		log.Debug("completed test related images %v ", res)
 	})
-
 }
 
 func TestGraphImage(t *testing.T) {
@@ -269,7 +268,6 @@ func TestGraphImage(t *testing.T) {
 		}
 		assert.Equal(t, ex.Opts.Destination+"/"+graphImageName+":latest", res)
 	})
-
 }
 
 func TestReleaseImage(t *testing.T) {
@@ -283,7 +281,7 @@ func TestReleaseImage(t *testing.T) {
 		os.RemoveAll(common.TestFolder + "tmp/")
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
+		// copy tests/hold-test-fake to working-dir
 		err := copy.Copy(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
 		if err != nil {
 			t.Fatalf("should not fail")
@@ -549,7 +547,6 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 }
 
 func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *LocalStorageCollector {
-
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,
@@ -693,39 +690,40 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetOCIImageIndex(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageIndex(name string) (*specv1.Index, error) {
 	if o.FailImageIndex {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
+		return nil, fmt.Errorf("forced error image index")
 	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Index{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Manifests: []specv1.Descriptor{
 			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				MediaType: specv1.MediaTypeImageManifest,
+				Digest:    d,
 				Size:      567,
 			},
 		},
 	}, nil
 }
 
-func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageManifest(name string) (*specv1.Manifest, error) {
 	if o.FailImageManifest {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
+		return nil, fmt.Errorf("forced error image index")
 	}
 
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Manifest{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Config: specv1.Descriptor{
+			MediaType: specv1.MediaTypeImageManifest,
+			Digest:    d,
 			Size:      567,
 		},
 	}, nil
@@ -748,7 +746,7 @@ func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) erro
 	return nil
 }
 
-func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 
@@ -796,12 +794,12 @@ type ManifestMock struct {
 	mock.Mock
 }
 
-func (o *ManifestMock) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o *ManifestMock) GetOCIImageIndex(dir string) (*specv1.Index, error) {
+	return nil, nil
 }
 
-func (o *ManifestMock) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o *ManifestMock) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	return nil, nil
 }
 
 func (o *ManifestMock) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
@@ -820,7 +818,7 @@ func (o *ManifestMock) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImag
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o *ManifestMock) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o *ManifestMock) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 

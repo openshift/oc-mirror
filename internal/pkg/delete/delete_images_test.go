@@ -8,6 +8,7 @@ import (
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
 
@@ -163,7 +164,6 @@ func TestWriteMetaData(t *testing.T) {
 }
 
 func TestSigDeleteItems(t *testing.T) {
-
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
 
@@ -357,12 +357,12 @@ func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]s
 	return res, nil
 }
 
-func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageIndex(dir string) (*specv1.Index, error) {
+	return nil, nil
 }
 
-func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	return nil, nil
 }
 
 func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
@@ -377,7 +377,7 @@ func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 

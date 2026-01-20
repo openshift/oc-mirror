@@ -12,6 +12,8 @@ import (
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/otiai10/copy"
@@ -915,39 +917,39 @@ func (o MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return relatedImages, nil
 }
 
-func (o MockManifest) GetImageIndex(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetImageIndex(name string) (*specv1.Index, error) {
 	if o.FailImageIndex {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
+		return nil, fmt.Errorf("forced error image index")
 	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Index{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Manifests: []specv1.Descriptor{
 			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				MediaType: specv1.MediaTypeImageManifest,
+				Digest:    d,
 				Size:      567,
 			},
 		},
 	}, nil
 }
 
-func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetImageManifest(name string) (*specv1.Manifest, error) {
 	if o.FailImageManifest {
-		return &v2alpha1.OCISchema{}, fmt.Errorf("forced error image index")
+		return nil, fmt.Errorf("forced error image index")
 	}
-
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Manifest{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Config: specv1.Descriptor{
+			MediaType: specv1.MediaTypeImageManifest,
+			Digest:    d,
 			Size:      567,
 		},
 	}, nil
@@ -968,7 +970,7 @@ func (o MockManifest) ExtractLayersOCI(_ gcrv1.Image, toPath, label string) erro
 	return nil
 }
 
-func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 
@@ -976,7 +978,7 @@ func (o MockManifest) GetDigest(ctx context.Context, sourceCtx *types.SystemCont
 	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
 }
 
-func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return errors.New("not implemented")
 }
 
@@ -987,38 +989,39 @@ func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, to, label string) error {
 	return nil
 }
 
-func (o MockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageIndex(dir string) (*specv1.Index, error) {
 	if o.FailImageIndex {
 		return nil, errors.New("forced error image index")
 	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Index{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Manifests: []specv1.Descriptor{
 			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+				MediaType: specv1.MediaTypeImageManifest,
+				Digest:    d,
 				Size:      567,
 			},
 		},
 	}, nil
 }
 
-func (o MockManifest) GetOCIImageManifest(dir string) (*v2alpha1.OCISchema, error) {
+func (o MockManifest) GetOCIImageManifest(dir string) (*specv1.Manifest, error) {
 	if o.FailImageManifest {
 		return nil, errors.New("forced error image manifest")
 	}
-	return &v2alpha1.OCISchema{
-		SchemaVersion: 2,
-		Manifests: []v2alpha1.OCIManifest{
-			{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-		},
-		Config: v2alpha1.OCIManifest{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
+	d, err := digest.Parse("sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse digest: %w", err)
+	}
+	return &specv1.Manifest{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		Config: specv1.Descriptor{
+			MediaType: specv1.MediaTypeImageManifest,
+			Digest:    d,
 			Size:      567,
 		},
 	}, nil
