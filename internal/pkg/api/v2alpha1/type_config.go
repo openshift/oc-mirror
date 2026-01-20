@@ -187,29 +187,35 @@ type Operator struct {
 // be tracked in the metadata and built. This depends on what fields
 // are set between Catalog, TargetName, and TargetTag.
 func (o Operator) GetUniqueName() (string, error) {
-	ctlgSpec, err := image.ParseRef(o.Catalog)
+	return getUniqueNameWithTarget(o.Catalog, o.TargetCatalog, o.TargetTag)
+}
+
+// getUniqueNameWithTarget is a shared helper function for computing unique names
+// with optional targetPath and targetTag overrides. Used by both Operator and Image.
+func getUniqueNameWithTarget(sourceName, targetPath, targetTag string) (string, error) {
+	imgSpec, err := image.ParseRef(sourceName)
 	if err != nil {
 		return "", err
 	}
-	if o.TargetCatalog == "" && o.TargetTag == "" {
-		return ctlgSpec.Reference, nil
+	if targetPath == "" && targetTag == "" {
+		return imgSpec.Reference, nil
 	}
 
-	if o.TargetTag != "" {
-		ctlgSpec.Reference = strings.Replace(ctlgSpec.Reference, ctlgSpec.Tag, o.TargetTag, 1)
-		ctlgSpec.ReferenceWithTransport = strings.Replace(ctlgSpec.ReferenceWithTransport, ctlgSpec.Tag, o.TargetTag, 1)
-		ctlgSpec.Tag = o.TargetTag
+	if targetTag != "" {
+		imgSpec.Reference = strings.Replace(imgSpec.Reference, imgSpec.Tag, targetTag, 1)
+		imgSpec.ReferenceWithTransport = strings.Replace(imgSpec.ReferenceWithTransport, imgSpec.Tag, targetTag, 1)
+		imgSpec.Tag = targetTag
 	}
-	if o.TargetCatalog != "" {
-		if IsValidPathComponent(o.TargetCatalog) {
-			ctlgSpec.Reference = strings.Replace(ctlgSpec.Reference, ctlgSpec.PathComponent, o.TargetCatalog, 1)
-			ctlgSpec.ReferenceWithTransport = strings.Replace(ctlgSpec.ReferenceWithTransport, ctlgSpec.PathComponent, o.TargetCatalog, 1)
-			ctlgSpec.PathComponent = o.TargetCatalog
+	if targetPath != "" {
+		if IsValidPathComponent(targetPath) {
+			imgSpec.Reference = strings.Replace(imgSpec.Reference, imgSpec.PathComponent, targetPath, 1)
+			imgSpec.ReferenceWithTransport = strings.Replace(imgSpec.ReferenceWithTransport, imgSpec.PathComponent, targetPath, 1)
+			imgSpec.PathComponent = targetPath
 		} else {
-			return "", fmt.Errorf("targetCatalog: %s - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go", o.TargetCatalog)
+			return "", fmt.Errorf("invalid target path component %q: should not contain a tag or digest. Expected format is 1 or more path components separated by /, where each path component is a set of alpha-numeric and regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go", targetPath)
 		}
 	}
-	return ctlgSpec.Reference, nil
+	return imgSpec.Reference, nil
 }
 
 func IsValidPathComponent(targetCatalog string) bool {
@@ -269,6 +275,30 @@ type Image struct {
 	// Name of the image. This should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Name string `json:"name"`
+	// TargetRepo replaces the repository path and allows for specifying the exact URL of the target
+	// image, including any path-components (organization, namespace) of the target image's location
+	// on the disconnected registry.
+	// This answers some customers requests regarding restrictions on where images can be placed.
+	// The targetRepo field consists of an optional namespace followed by the target image name,
+	// described in extended Backus–Naur form below:
+	//     target-repo    = [namespace '/'] target-name
+	//     target-name    = path-component
+	//     namespace      = path-component ['/' path-component]*
+	//     path-component = alpha-numeric [separator alpha-numeric]*
+	//     alpha-numeric  = /[a-z0-9]+/
+	//     separator      = /[_.]|__|[-]*/
+	TargetRepo string `json:"targetRepo,omitempty"`
+	// TargetTag is the tag the image will be mirrored with. If unset,
+	// the image will be mirrored with the provided tag in the Name
+	// field or a tag calculated from the partial digest.
+	TargetTag string `json:"targetTag,omitempty"`
+}
+
+// GetUniqueName determines the image name that will
+// be used for mirroring. This depends on what fields
+// are set between Name, TargetRepo, and TargetTag.
+func (i Image) GetUniqueName() (string, error) {
+	return getUniqueNameWithTarget(i.Name, i.TargetRepo, i.TargetTag)
 }
 
 // SampleImages define the configuration
