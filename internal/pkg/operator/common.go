@@ -364,11 +364,6 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 		return "", fmt.Errorf("failed to get catalog oci image: %w", err)
 	}
 
-	imgDigest, err := img.Digest()
-	if err != nil {
-		return "", fmt.Errorf("invalid catalog oci image digest: %w", err)
-	}
-
 	imgConfig, err := img.ConfigFile()
 	if err != nil {
 		return "", fmt.Errorf("failed to get catalog oci image config: %w", err)
@@ -377,16 +372,9 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	label := imgConfig.Config.Labels[operatorsConfigsV1Label]
 	o.Log.Debug(collectorPrefix+"label %q", label)
 
-	imgManifestPath := filepath.Join(catalogImageDir, blobsDir, imgDigest.Hex)
-	oci, err = o.Manifest.GetOCIImageManifest(imgManifestPath)
-	if err != nil {
-		return "", err
-	}
-
 	// untar all the blobs for the operator
 	// if the layer with "label" (from previous step) is found to a specific folder
-	fromDir := filepath.Join(catalogImageDir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, configsDir, label, oci); err != nil {
+	if err := o.Manifest.ExtractOCILayers(img, configsDir, label); err != nil {
 		return "", err
 	}
 

@@ -961,7 +961,7 @@ func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //
 	}, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractLayersOCI(_ gcrv1.Image, toPath, label string) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
@@ -980,7 +980,7 @@ func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.
 	return errors.New("not implemented")
 }
 
-func (o MockManifest) ExtractOCILayers(from, to, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, to, label string) error {
 	if o.FailExtract {
 		return errors.New("forced extract to fail")
 	}
