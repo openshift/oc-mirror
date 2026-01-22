@@ -2,7 +2,6 @@ package manifest
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +14,7 @@ import (
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
-	digest "github.com/opencontainers/go-digest"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -124,7 +123,7 @@ func getImageFromIndex(idx gcrv1.ImageIndex, maxDepth uint8) (gcrv1.Image, error
 }
 
 // ExtractOCILayers
-func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o Manifest) ExtractOCILayers(img gcrv1.Image, toPath, label string) error {
 	_, err := os.Stat(filepath.Join(toPath, label))
 	if err == nil {
 		o.Log.Debug("extract directory exists (nop)")
@@ -135,31 +134,17 @@ func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1
 	}
 	// Remove any separators in label
 	label = strings.Trim(label, "/")
-	for _, blob := range oci.Layers {
-		validDigest, err := digest.Parse(blob.Digest)
-		if err != nil {
-			return fmt.Errorf("digest %q: format is not correct: %w", blob.Digest, err)
-		}
-		digestString := validDigest.Encoded()
-		f, err := os.Open(filepath.Join(fromPath, digestString))
-		if err != nil {
-			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
-		}
-		if err := untargz(f, toPath, label); err != nil {
-			return fmt.Errorf("untar %q: %w", digestString, err)
-		}
-	}
-	return nil
-}
 
-func untargz(f *os.File, destDir string, label string) error {
-	uncompressedStream, err := gzip.NewReader(f)
-	if err != nil {
-		return fmt.Errorf("untar: gzipStream - %w", err)
-	}
-	return tarutils.UntarWithFilter(uncompressedStream, destDir, func(header *tar.Header) bool {
+	stream := mutate.Extract(img)
+	defer stream.Close()
+
+	if err := tarutils.UntarWithFilter(stream, toPath, func(header *tar.Header) bool {
 		return strings.Contains(header.Name, label)
-	})
+	}); err != nil {
+		return fmt.Errorf("untar OCI image: %w", err)
+	}
+
+	return nil
 }
 
 // GetReleaseSchema

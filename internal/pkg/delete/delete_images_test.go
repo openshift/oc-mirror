@@ -369,7 +369,7 @@ func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSc
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
 
-func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 
