@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/opencontainers/go-digest"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
@@ -947,6 +949,14 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 			Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
 			Size:      567,
+		},
+	}, nil
+}
+
+func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return &fake.FakeImage{
+		ConfigFileStub: func() (*gcrv1.ConfigFile, error) {
+			return &gcrv1.ConfigFile{}, nil
 		},
 	}, nil
 }
