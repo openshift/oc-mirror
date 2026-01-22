@@ -184,11 +184,11 @@ func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Re
 func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
 	// make sure all the parent directories exist
 	descriptorParent := filepath.Dir(filePath)
-	if err := os.MkdirAll(descriptorParent, 0755); err != nil {
+	if err := os.MkdirAll(descriptorParent, 0o755); err != nil {
 		return fmt.Errorf("unable to create parent directory for %s: %w", filePath, err)
 	}
 
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, perm)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 	if err != nil {
 		return fmt.Errorf("unable to create file %s: %w", filePath, err)
 	}
