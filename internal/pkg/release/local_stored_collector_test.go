@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/google/uuid"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/otiai10/copy"
@@ -729,6 +731,13 @@ func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, err
 	}, nil
 }
 
+func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // interface is expected in this case
+	if o.FailImageIndex {
+		return nil, fmt.Errorf("forced error image index")
+	}
+	return &fake.FakeImage{}, nil
+}
+
 func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
@@ -787,21 +796,31 @@ type ManifestMock struct {
 func (o *ManifestMock) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
+
 func (o *ManifestMock) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
 	return &v2alpha1.OCISchema{}, nil
 }
+
+func (o *ManifestMock) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return nil, nil
+}
+
 func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
+
 func (o *ManifestMock) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
+
 func (o *ManifestMock) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
 	return []v2alpha1.RelatedImage{}, nil
 }
+
 func (o *ManifestMock) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
 	return nil
 }
+
 func (o *ManifestMock) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	args := o.Called(ctx, sourceCtx, imgRef)
 	return args.String(0), args.Error(1)

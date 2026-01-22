@@ -10,8 +10,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/otiai10/copy"
 
@@ -56,6 +59,68 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 		return nil, fmt.Errorf("operator config: %w", err)
 	}
 	return ocs, nil
+}
+
+// GetOCIImageFromIndex recurses through an index image to find an OCI image.
+func (o Manifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // interface type is required by go-containerregistry
+	ociIdx, err := layout.ImageIndexFromPath(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read oci index image: %w", err)
+	}
+
+	// This is for now an arbitrary limit. The max we've seen so far is 3 (for catalogs):
+	// oci on disk index -> catalog manifest list index -> archful image
+	const maxRecurseDepth = 5
+	return getImageFromIndex(ociIdx, maxRecurseDepth)
+}
+
+func getImageFromIndex(idx gcrv1.ImageIndex, maxDepth uint8) (gcrv1.Image, error) { //nolint:ireturn // interface type is required by go-containerregistry
+	errNoImgFound := fmt.Errorf("no image found in oci index")
+
+	// We have reached max recursion depth, give up.
+	if maxDepth == 0 {
+		return nil, errNoImgFound
+	}
+
+	idxDigest, err := idx.Digest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oci index digest: %w", err)
+	}
+
+	idxManifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read oci index %q manifest: %w", idxDigest.String(), err)
+	}
+
+	if len(idxManifest.Manifests) == 0 {
+		return nil, fmt.Errorf("no manifests found for oci index %q", idxDigest.String())
+	}
+
+	// If we find any image in the Index's manifests, return it right away.
+	if imgPos := slices.IndexFunc(idxManifest.Manifests, func(d gcrv1.Descriptor) bool {
+		return d.MediaType.IsImage()
+	}); imgPos != -1 {
+		dgest := idxManifest.Manifests[imgPos].Digest
+		img, err := idx.Image(dgest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get image %q from oci index %q: %w", dgest.String(), idxDigest.String(), err)
+		}
+		return img, nil
+	}
+
+	// Keep looking for an image in the first of the OCI indexes contained in the current index.
+	if idxPos := slices.IndexFunc(idxManifest.Manifests, func(d gcrv1.Descriptor) bool {
+		return d.MediaType.IsIndex()
+	}); idxPos != -1 {
+		desc := idxManifest.Manifests[idxPos]
+		childIdx, err := idx.ImageIndex(desc.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get image index %q from index %q: %w", desc.Digest.String(), idxDigest.String(), err)
+		}
+		return getImageFromIndex(childIdx, maxDepth-1)
+	}
+
+	return nil, errNoImgFound
 }
 
 // ExtractOCILayers
