@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
 	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -152,29 +151,22 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 		return []v2alpha1.RelatedImage{}, err
 	}
 
-	oci, err := o.Manifest.GetOCIImageIndex(dir)
+	img, err := o.Manifest.GetOCIImageFromIndex(dir)
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, err
+		return nil, fmt.Errorf("failed to find release image in index: %w", err)
 	}
 
-	// read the link to the manifest
-	if len(oci.Manifests) == 0 {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf("image index not found")
-	}
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	dgest, err := img.Digest()
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf("invalid digest for image index %s: %w", oci.Manifests[0].Digest, err)
+		return nil, fmt.Errorf("failed to get release image digest: %w", err)
 	}
+	o.Log.Debug(collectorPrefix+"image manifest digest %s", dgest.String())
 
-	manifest := validDigest.Encoded()
-	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
-
-	manifestDir := filepath.Join(dir, blobsDir, manifest)
+	manifestDir := filepath.Join(dir, blobsDir, dgest.Hex)
 	mfst, err := o.Manifest.GetOCIImageManifest(manifestDir)
 	if err != nil {
 		return []v2alpha1.RelatedImage{}, err
 	}
-	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
 
 	fromDir := filepath.Join(dir, blobsDir)
 	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
