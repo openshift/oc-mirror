@@ -162,15 +162,8 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	}
 	o.Log.Debug(collectorPrefix+"image manifest digest %s", dgest.String())
 
-	manifestDir := filepath.Join(dir, blobsDir, dgest.Hex)
-	mfst, err := o.Manifest.GetOCIImageManifest(manifestDir)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, err
-	}
-
-	fromDir := filepath.Join(dir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
-		return []v2alpha1.RelatedImage{}, err
+	if err := o.Manifest.ExtractOCILayers(img, cacheDir, releaseManifests); err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf("extract release image %q manifests: %w", dgest.String(), err)
 	}
 	o.Log.Debug("extracted layer %s ", cacheDir)
 

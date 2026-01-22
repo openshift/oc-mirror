@@ -735,10 +735,13 @@ func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //
 	if o.FailImageIndex {
 		return nil, fmt.Errorf("forced error image index")
 	}
+	if o.FailImageManifest {
+		return nil, fmt.Errorf("forced error image manifest")
+	}
 	return &fake.FakeImage{}, nil
 }
 
-func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
@@ -809,7 +812,7 @@ func (o *ManifestMock) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigS
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
 
-func (o *ManifestMock) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o *ManifestMock) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 

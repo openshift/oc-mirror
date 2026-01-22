@@ -31,7 +31,7 @@ func (m *mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { /
 	return nil, nil
 }
 
-func (m *mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (m *mockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 
