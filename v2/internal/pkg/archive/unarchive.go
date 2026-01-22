@@ -178,10 +178,10 @@ func createFileWithProgress(parentDir string, header *tar.Header, reader *tar.Re
 	}
 	proxyReader := bar.ProxyReader(reader)
 	defer proxyReader.Close()
-	return writeFile(descriptor, proxyReader, header.FileInfo().Mode())
+	return writeFile(descriptor, proxyReader, header.FileInfo().Mode(), header.Size)
 }
 
-func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
+func writeFile(filePath string, reader io.Reader, perm os.FileMode, size int64) error {
 	// make sure all the parent directories exist
 	descriptorParent := filepath.Dir(filePath)
 	if err := os.MkdirAll(descriptorParent, 0o755); err != nil {
@@ -194,9 +194,18 @@ func writeFile(filePath string, reader io.Reader, perm os.FileMode) error {
 	}
 	defer f.Close()
 
-	// copy  contents
-	if _, err := io.Copy(f, reader); err != nil {
-		return fmt.Errorf("error copying file %s: %w", filePath, err)
+	// copy contents in chunks to avoid gosec:G110 decompression bomb.
+	// https://stackoverflow.com/questions/67327323/g110-potential-dos-vulnerability-via-decompression-bomb-gosec
+	const maxChunkSize = 2048
+	for size > 0 {
+		n, err := io.CopyN(f, reader, maxChunkSize)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return fmt.Errorf("error copying file %s: %w", filePath, err)
+		}
+		size -= n
 	}
 
 	return nil
