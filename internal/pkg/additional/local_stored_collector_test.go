@@ -187,7 +187,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	opts.Mode = mirror.MirrorToDisk
 	ex = New(log, cfg, opts, mockmirror, manifest)
 
-	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should collect valid images and return parse errors", func(t *testing.T) {
 		expected := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
@@ -209,14 +209,12 @@ func TestAdditionalImageCollector(t *testing.T) {
 			},
 		}
 		res, err := ex.AdditionalImagesCollector(ctx)
-		if err != nil {
-			log.Error(" %v ", err)
-			t.Fatalf("should not fail")
-		}
+		// Should return error for images that failed to parse
+		assert.Error(t, err)
 		assert.ElementsMatch(t, expected, res)
 	})
 
-	t.Run("Testing AdditionalImagesCollector : diskToMirror should skip failing image with warning", func(t *testing.T) {
+	t.Run("Testing AdditionalImagesCollector : diskToMirror should collect valid images and return parse errors", func(t *testing.T) {
 		// should error diskToMirror
 		cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
 		opts.Mode = mirror.DiskToMirror
@@ -242,10 +240,8 @@ func TestAdditionalImageCollector(t *testing.T) {
 			},
 		}
 		res, err := ex.AdditionalImagesCollector(ctx)
-		if err != nil {
-			log.Error(" %v ", err)
-			t.Fatalf("should not fail")
-		}
+		// Should return error for images that failed to parse
+		assert.Error(t, err)
 		assert.ElementsMatch(t, expected, res)
 	})
 }
@@ -258,6 +254,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 		additionalImages []v2alpha1.Image
 		useV1Tags        bool
 		expected         []v2alpha1.CopyImageSchema
+		expectError      bool
 	}
 
 	cases := []spec{
@@ -359,7 +356,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid TargetRepo should skip image with warning",
+			name:        "invalid TargetRepo should skip image with warning and return error",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
 			additionalImages: []v2alpha1.Image{
@@ -379,6 +376,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 					Type:        v2alpha1.TypeGeneric,
 				},
 			},
+			expectError: true,
 		},
 		{
 			name:        "diskToMirror with TargetRepo",
@@ -540,7 +538,11 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			}
 
 			res, err := ex.AdditionalImagesCollector(ctx)
-			assert.NoError(t, err)
+			if c.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.ElementsMatch(t, c.expected, res)
 		})
 	}
