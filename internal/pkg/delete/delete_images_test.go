@@ -323,6 +323,158 @@ func TestSigDeleteItem(t *testing.T) {
 	}
 }
 
+// TestDeleteImagesWithTargetRepoAndTag tests deletion of images that use targetRepo and targetTag
+func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
+	log := clog.New("trace")
+
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy:      false,
+		Quiet:             false,
+		WorkingDir:        tempDir,
+		DeleteDestination: "docker://localhost:5000/myregistry",
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         "docker://myregistry",
+		Dev:                 false,
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:8888",
+	}
+
+	cfg := v2alpha1.ImageSetConfiguration{}
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, cfg, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+
+	writeMetadataTests := []struct {
+		name             string
+		cpImages         []v2alpha1.CopyImageSchema
+		expectedImageRef string
+		expectedOrigin   string
+	}{
+		{
+			name: "with targetRepo",
+			cpImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://localhost:5000/myregistry/custom-namespace/custom-image:latest",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+			expectedImageRef: "docker://localhost:5000/myregistry/custom-namespace/custom-image:latest",
+			expectedOrigin:   "registry.redhat.io/ubi8/ubi:latest",
+		},
+		{
+			name: "with targetTag",
+			cpImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://localhost:5000/myregistry/ubi8/ubi:v1.0",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+			expectedImageRef: "docker://localhost:5000/myregistry/ubi8/ubi:v1.0",
+			expectedOrigin:   "registry.redhat.io/ubi8/ubi:latest",
+		},
+		{
+			name: "with both targetRepo and targetTag",
+			cpImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://localhost:5000/myregistry/custom-namespace/custom-image:v2.0",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+			expectedImageRef: "docker://localhost:5000/myregistry/custom-namespace/custom-image:v2.0",
+			expectedOrigin:   "registry.redhat.io/ubi8/ubi:latest",
+		},
+		{
+			name: "with targetTag for digest-only image",
+			cpImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://localhost:5000/myregistry/testns/test:v1.0",
+					Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+			expectedImageRef: "docker://localhost:5000/myregistry/testns/test:v1.0",
+			expectedOrigin:   "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+		},
+	}
+
+	for _, tt := range writeMetadataTests {
+		t.Run("WriteDeleteMetaData "+tt.name, func(t *testing.T) {
+			err := di.WriteDeleteMetaData(context.Background(), tt.cpImages)
+			assert.NoError(t, err)
+
+			data, err := di.ReadDeleteMetaData()
+			assert.NoError(t, err)
+			assert.Equal(t, 1, len(data.Items))
+			assert.Equal(t, tt.expectedImageRef, data.Items[0].ImageReference)
+			assert.Equal(t, tt.expectedOrigin, data.Items[0].ImageName)
+		})
+	}
+
+	deleteRegistryTests := []struct {
+		name      string
+		imageName string
+		imageRef  string
+	}{
+		{
+			name:      "with targetRepo",
+			imageName: "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:  "docker://localhost:5000/myregistry/custom-namespace/custom-image:latest",
+		},
+		{
+			name:      "with targetTag",
+			imageName: "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:  "docker://localhost:5000/myregistry/ubi8/ubi:v1.0",
+		},
+		{
+			name:      "with both targetRepo and targetTag",
+			imageName: "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:  "docker://localhost:5000/myregistry/custom-namespace/custom-image:v2.0",
+		},
+		{
+			name:      "with targetTag for digest-only image",
+			imageName: "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+			imageRef:  "docker://localhost:5000/myregistry/testns/test:v1.0",
+		},
+	}
+
+	for _, tt := range deleteRegistryTests {
+		t.Run("DeleteRegistryImages "+tt.name, func(t *testing.T) {
+			deleteImageList := v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      tt.imageName,
+						ImageReference: tt.imageRef,
+						Type:           v2alpha1.TypeGeneric,
+					},
+				},
+			}
+			err := di.DeleteRegistryImages(deleteImageList)
+			assert.NoError(t, err)
+		})
+	}
+}
+
 // mockBatch
 type mockBatch struct {
 	Fail bool
