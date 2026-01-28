@@ -2,21 +2,23 @@ package manifest
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	tarutils "github.com/openshift/oc-mirror/v2/internal/pkg/archive/utils"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
@@ -58,8 +60,70 @@ func (o Manifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema
 	return ocs, nil
 }
 
+// GetOCIImageFromIndex recurses through an index image to find an OCI image.
+func (o Manifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // interface type is required by go-containerregistry
+	ociIdx, err := layout.ImageIndexFromPath(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read oci index image: %w", err)
+	}
+
+	// This is for now an arbitrary limit. The max we've seen so far is 3 (for catalogs):
+	// oci on disk index -> catalog manifest list index -> archful image
+	const maxRecurseDepth = 5
+	return getImageFromIndex(ociIdx, maxRecurseDepth)
+}
+
+func getImageFromIndex(idx gcrv1.ImageIndex, maxDepth uint8) (gcrv1.Image, error) { //nolint:ireturn // interface type is required by go-containerregistry
+	errNoImgFound := fmt.Errorf("no image found in oci index")
+
+	// We have reached max recursion depth, give up.
+	if maxDepth == 0 {
+		return nil, errNoImgFound
+	}
+
+	idxDigest, err := idx.Digest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oci index digest: %w", err)
+	}
+
+	idxManifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read oci index %q manifest: %w", idxDigest.String(), err)
+	}
+
+	if len(idxManifest.Manifests) == 0 {
+		return nil, fmt.Errorf("no manifests found for oci index %q", idxDigest.String())
+	}
+
+	// If we find any image in the Index's manifests, return it right away.
+	if imgPos := slices.IndexFunc(idxManifest.Manifests, func(d gcrv1.Descriptor) bool {
+		return d.MediaType.IsImage()
+	}); imgPos != -1 {
+		dgest := idxManifest.Manifests[imgPos].Digest
+		img, err := idx.Image(dgest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get image %q from oci index %q: %w", dgest.String(), idxDigest.String(), err)
+		}
+		return img, nil
+	}
+
+	// Keep looking for an image in the first of the OCI indexes contained in the current index.
+	if idxPos := slices.IndexFunc(idxManifest.Manifests, func(d gcrv1.Descriptor) bool {
+		return d.MediaType.IsIndex()
+	}); idxPos != -1 {
+		desc := idxManifest.Manifests[idxPos]
+		childIdx, err := idx.ImageIndex(desc.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get image index %q from index %q: %w", desc.Digest.String(), idxDigest.String(), err)
+		}
+		return getImageFromIndex(childIdx, maxDepth-1)
+	}
+
+	return nil, errNoImgFound
+}
+
 // ExtractOCILayers
-func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o Manifest) ExtractOCILayers(img gcrv1.Image, toPath, label string) error {
 	_, err := os.Stat(filepath.Join(toPath, label))
 	if err == nil {
 		o.Log.Debug("extract directory exists (nop)")
@@ -68,20 +132,18 @@ func (o Manifest) ExtractOCILayers(fromPath, toPath, label string, oci *v2alpha1
 	if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("extract directory: %w", err)
 	}
-	for _, blob := range oci.Layers {
-		validDigest, err := digest.Parse(blob.Digest)
-		if err != nil {
-			return fmt.Errorf("digest %q: format is not correct: %w", blob.Digest, err)
-		}
-		digestString := validDigest.Encoded()
-		f, err := os.Open(filepath.Join(fromPath, digestString))
-		if err != nil {
-			return fmt.Errorf("digest %q: open origin layer: %w", digestString, err)
-		}
-		if err := untar(f, toPath, label); err != nil {
-			return fmt.Errorf("untar %q: %w", digestString, err)
-		}
+	// Remove any separators in label
+	label = strings.Trim(label, "/")
+
+	stream := mutate.Extract(img)
+	defer stream.Close()
+
+	if err := tarutils.UntarWithFilter(stream, toPath, func(header *tar.Header) bool {
+		return strings.Contains(header.Name, label)
+	}); err != nil {
+		return fmt.Errorf("untar OCI image: %w", err)
 	}
+
 	return nil
 }
 
@@ -101,59 +163,6 @@ func (o Manifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, er
 		})
 	}
 	return allImages, nil
-}
-
-// UntarLayers simple function that untars the image layers
-func untar(gzipStream io.Reader, path string, cfgDirName string) error {
-	// Remove any separators in cfgDirName as received from the label
-	cfgDirName = strings.TrimSuffix(cfgDirName, "/")
-	cfgDirName = strings.TrimPrefix(cfgDirName, "/")
-	uncompressedStream, err := gzip.NewReader(gzipStream)
-	if err != nil {
-		return fmt.Errorf("untar: gzipStream - %w", err)
-	}
-
-	tarReader := tar.NewReader(uncompressedStream)
-	for {
-		header, err := tarReader.Next()
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return fmt.Errorf("untar: Next() failed: %s", err.Error())
-		}
-
-		if strings.Contains(header.Name, cfgDirName) {
-			switch header.Typeflag {
-			case tar.TypeDir:
-				if header.Name != "./" {
-					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
-						return fmt.Errorf("untar: Mkdir() failed: %w", err)
-					}
-				}
-			case tar.TypeReg:
-				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				outFile, err := os.Create(filepath.Join(path, header.Name))
-				if err != nil {
-					return fmt.Errorf("untar: Create() failed: %w", err)
-				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					outFile.Close()
-					return fmt.Errorf("untar: Copy() failed: %w", err)
-				}
-				outFile.Close()
-
-			default:
-				// just ignore errors as we are only interested in the FB configs layer
-			}
-		}
-	}
-	return nil
 }
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory

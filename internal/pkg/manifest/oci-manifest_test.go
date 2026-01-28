@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/otiai10/copy"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -149,46 +151,26 @@ func TestExtractOCILayers(t *testing.T) {
 	log := clog.New("debug")
 	manifest := &Manifest{Log: log}
 	t.Run("Testing ExtractOCILayers : should pass", func(t *testing.T) {
-		oci := &v2alpha1.OCISchema{
-			SchemaVersion: 2,
-			Manifests: []v2alpha1.OCIManifest{
-				{
-					MediaType: "application/vnd.oci.image.manifest.v1+json",
-					Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-					Size:      567,
-				},
-			},
-			Config: v2alpha1.OCIManifest{
-				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-				Size:      567,
-			},
-			Layers: []v2alpha1.OCIManifest{
-				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e",
-					Size:      1438,
-				},
-				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d",
-					Size:      955593,
-				},
-			},
-		}
 		t.Run("when destination directory exists - no op", func(t *testing.T) {
 			// this should do a nop (directory exists)
-			srcDir := filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256")
 			destDir := filepath.Join(common.TestFolder, "test-untar", "release-manifests")
 			assert.DirExists(t, destDir, "directory should exist as precondition")
-			err := manifest.ExtractOCILayers(srcDir, filepath.Join(common.TestFolder, "test-untar"), "release-manifests", oci)
+			err := manifest.ExtractOCILayers(&fake.FakeImage{}, filepath.Join(common.TestFolder, "test-untar"), "release-manifests")
 			assert.NoError(t, err, "should not fail: no op")
 			assert.DirExists(t, destDir, "directory should still exist")
 		})
 		t.Run("when destination directory doesn't exist", func(t *testing.T) {
 			destDir := t.TempDir()
 
-			err := manifest.ExtractOCILayers(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
+			releaseManifestsLayerPath := filepath.Join(
+				common.TestFolder,
+				"test-untar", "blobs", "sha256",
+				"5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d",
+			)
+			img, err := crane.Append(empty.Image, releaseManifestsLayerPath)
+			assert.NoError(t, err)
+
+			err = manifest.ExtractOCILayers(img, destDir, "release-manifests")
 			assert.NoError(t, err)
 
 			manifestsDir := filepath.Join(destDir, "release-manifests")
@@ -210,86 +192,9 @@ func TestExtractOCILayers(t *testing.T) {
 			err := os.Mkdir(destDir, 0o600)
 			assert.NoError(t, err)
 
-			oci := &v2alpha1.OCISchema{}
-			err = manifest.ExtractOCILayers(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
+			err = manifest.ExtractOCILayers(&fake.FakeImage{}, destDir, "release-manifests")
 			assert.Error(t, err)
 			assert.Regexp(t, "extract directory: .*", err)
-		})
-		t.Run("when OCI layer digests are malformed", func(t *testing.T) {
-			oci := &v2alpha1.OCISchema{
-				SchemaVersion: 2,
-				Manifests: []v2alpha1.OCIManifest{
-					{
-						MediaType: "application/vnd.oci.image.manifest.v1+json",
-						Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-						Size:      567,
-					},
-				},
-				Config: v2alpha1.OCIManifest{
-					MediaType: "application/vnd.oci.image.manifest.v1+json",
-					Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-					Size:      567,
-				},
-				Layers: []v2alpha1.OCIManifest{
-					{
-						MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-						Digest:    "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e",
-						Size:      1438,
-					},
-					{
-						MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-
-						Digest: "foobaz",
-						Size:   955593,
-					},
-				},
-			}
-			destDir := t.TempDir()
-			err := manifest.ExtractOCILayers(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), destDir, "release-manifests", oci)
-			assert.EqualError(t, err, "digest \"foobaz\": format is not correct: invalid checksum digest format")
-		})
-		t.Run("when OCI layer is missing", func(t *testing.T) {
-			oci := &v2alpha1.OCISchema{
-				SchemaVersion: 2,
-				Manifests: []v2alpha1.OCIManifest{
-					{
-						MediaType: "application/vnd.oci.image.manifest.v1+json",
-						Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-						Size:      567,
-					},
-				},
-				Config: v2alpha1.OCIManifest{
-					MediaType: "application/vnd.oci.image.manifest.v1+json",
-					Digest:    "sha256:3ef0b0141abd1548f60c4f3b23ecfc415142b0e842215f38e98610a3b2e52419",
-					Size:      567,
-				},
-				Layers: []v2alpha1.OCIManifest{
-					{
-						MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-						Digest:    "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e",
-						Size:      1438,
-					},
-					{
-						MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-						Digest:    "sha256:5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d",
-						Size:      955593,
-					},
-				},
-			}
-
-			// Copy layers...
-			srcDir := filepath.Join(t.TempDir(), "test-untar", "blobs", "sha256")
-			err := copy.Copy(filepath.Join(common.TestFolder, "test-untar", "blobs", "sha256"), srcDir)
-			assert.NoError(t, err, "should copy blobs")
-
-			// ... but remove one of them
-			err = os.Remove(filepath.Join(srcDir, "5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d"))
-			assert.NoError(t, err, "should remove blob layer")
-
-			destDir := t.TempDir()
-			err = manifest.ExtractOCILayers(srcDir, destDir, "release-manifests", oci)
-			assert.Error(t, err)
-			assert.Regexp(t, "digest \"5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d\": open origin layer: open .*: no such file or directory", err)
 		})
 	})
 }

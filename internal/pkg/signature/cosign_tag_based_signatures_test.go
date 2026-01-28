@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/manifest"
@@ -26,7 +27,11 @@ func (m *mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, er
 	return nil, nil
 }
 
-func (m *mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (m *mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return nil, nil
+}
+
+func (m *mockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 

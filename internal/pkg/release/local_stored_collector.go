@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
 	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -110,7 +109,7 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 		allRelatedImages, err := o.collectReleaseImages(ctx, value)
 		if err != nil {
 			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
-			return []v2alpha1.CopyImageSchema{}, err
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s%w", collectorPrefix, err)
 		}
 
 		// add the release image itself
@@ -149,36 +148,22 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
 	if err := o.ensureReleaseInOCIFormat(ctx, release, dir); err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+		return []v2alpha1.RelatedImage{}, err
 	}
 
-	oci, err := o.Manifest.GetOCIImageIndex(dir)
+	img, err := o.Manifest.GetOCIImageFromIndex(dir)
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+		return nil, fmt.Errorf("failed to find release image in index: %w", err)
 	}
 
-	// read the link to the manifest
-	if len(oci.Manifests) == 0 {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, "image index not found ")
-	}
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	dgest, err := img.Digest()
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(collectorPrefix+"invalid digest for image index %s: %s", oci.Manifests[0].Digest, err.Error())
+		return nil, fmt.Errorf("failed to get release image digest: %w", err)
 	}
+	o.Log.Debug(collectorPrefix+"image manifest digest %s", dgest.String())
 
-	manifest := validDigest.Encoded()
-	o.Log.Debug(collectorPrefix+"image manifest digest %s", manifest)
-
-	manifestDir := filepath.Join(dir, blobsDir, manifest)
-	mfst, err := o.Manifest.GetOCIImageManifest(manifestDir)
-	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
-	}
-	o.Log.Debug(collectorPrefix+"config digest %s ", oci.Config.Digest)
-
-	fromDir := filepath.Join(dir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, cacheDir, releaseManifests, mfst); err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+	if err := o.Manifest.ExtractOCILayers(img, cacheDir, releaseManifests); err != nil {
+		return []v2alpha1.RelatedImage{}, fmt.Errorf("extract release image %q manifests: %w", dgest.String(), err)
 	}
 	o.Log.Debug("extracted layer %s ", cacheDir)
 
@@ -186,13 +171,13 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	releaseDir := filepath.Join(cacheDir, releaseImageExtractFullPath)
 	allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+		return []v2alpha1.RelatedImage{}, err
 	}
 
 	if o.Config.Mirror.Platform.KubeVirtContainer {
 		ki, err := o.getKubeVirtImage(cacheDir)
 		if err != nil {
-			return []v2alpha1.RelatedImage{}, fmt.Errorf(errMsg, err.Error())
+			return []v2alpha1.RelatedImage{}, err
 		}
 		allRelatedImages = append(allRelatedImages, ki)
 	}
