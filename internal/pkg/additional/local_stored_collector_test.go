@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
@@ -306,7 +307,11 @@ func (o MockManifest) GetOCIImageManifest(name string) (*v2alpha1.OCISchema, err
 	}, nil
 }
 
-func (o MockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // interface is expected here
+	return nil, nil
+}
+
+func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 
