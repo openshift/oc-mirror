@@ -90,12 +90,16 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 		return "", fmt.Errorf("unable to determine cached reference for catalog: %w", err)
 	}
 
+	// If the catalog is specified by digest, return it directly.
+	// No need to query the cache - the digest is already known from the ISC.
+	if srcImgSpec.IsImageByDigestOnly() {
+		return srcImgSpec.Digest, nil
+	}
+
 	var tag string
 	switch {
 	case len(catalog.TargetTag) > 0: // applies only to catalogs
 		tag = catalog.TargetTag
-	case srcImgSpec.Tag == "" && srcImgSpec.Digest != "":
-		tag = fmt.Sprintf("%s-%s", srcImgSpec.Algorithm, srcImgSpec.Digest)
 	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
 		tag = latestTag
 	default:
