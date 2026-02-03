@@ -141,6 +141,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 							options := opts
 							if img.Type.IsOperatorCatalog() && img.RebuiltTag != "" {
 								options.RemoveSignatures = true
+								options.PreserveDigests = false
 							}
 
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
