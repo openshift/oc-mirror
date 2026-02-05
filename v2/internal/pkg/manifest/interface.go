@@ -3,8 +3,9 @@ package manifest
 import (
 	"context"
 
-	"github.com/containers/image/v5/types"
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
@@ -12,7 +13,8 @@ import (
 type ManifestInterface interface {
 	GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error)
 	GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error)
-	ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error
+	GetOCIImageFromIndex(dir string) (gcrv1.Image, error)
+	ExtractOCILayers(img gcrv1.Image, toPath, label string) error
 	ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error
 	GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error)
 	GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error)

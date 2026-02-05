@@ -8,8 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/containers/image/v5/types"
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -235,11 +236,15 @@ func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, err
 	return &v2alpha1.OCISchema{}, nil
 }
 
+func (o mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return nil, nil
+}
+
 func (o mockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
 	return &v2alpha1.OperatorConfigSchema{}, nil
 }
 
-func (o mockManifest) ExtractOCILayers(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ExtractOCILayers(_ gcrv1.Image, toPath, label string) error {
 	return nil
 }
 

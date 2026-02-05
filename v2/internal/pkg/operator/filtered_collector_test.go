@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/containers/image/v5/types"
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/opencontainers/go-digest"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
@@ -951,7 +953,15 @@ func (o MockManifest) GetImageManifest(name string) (*v2alpha1.OCISchema, error)
 	}, nil
 }
 
-func (o MockManifest) ExtractLayersOCI(filePath, toPath, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return &fake.FakeImage{
+		ConfigFileStub: func() (*gcrv1.ConfigFile, error) {
+			return &gcrv1.ConfigFile{}, nil
+		},
+	}, nil
+}
+
+func (o MockManifest) ExtractLayersOCI(_ gcrv1.Image, toPath, label string) error {
 	if o.FailExtract {
 		return fmt.Errorf("forced extract oci fail")
 	}
@@ -970,7 +980,7 @@ func (o MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.
 	return errors.New("not implemented")
 }
 
-func (o MockManifest) ExtractOCILayers(from, to, label string, oci *v2alpha1.OCISchema) error {
+func (o MockManifest) ExtractOCILayers(_ gcrv1.Image, to, label string) error {
 	if o.FailExtract {
 		return errors.New("forced extract to fail")
 	}

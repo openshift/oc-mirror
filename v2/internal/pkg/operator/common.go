@@ -8,8 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/types"
-	"github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -18,7 +17,10 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-const latestTag string = "latest"
+const (
+	latestTag               string = "latest"
+	operatorsConfigsV1Label string = "operators.operatorframework.io.index.configs.v1"
+)
 
 type OperatorCollector struct {
 	Log                clog.PluggableLoggerInterface
@@ -355,66 +357,24 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
 			return "", err
 		}
-
-		var err error
-		oci, err = o.Manifest.GetOCIImageIndex(catalogImageDir)
-		if err != nil {
-			return "", err
-		}
 	}
 
-	if len(oci.Manifests) == 0 {
-		return "", fmt.Errorf("no manifests found for %s", catalog)
-	}
-
-	validDigest, err := digest.Parse(oci.Manifests[0].Digest)
+	img, err := o.Manifest.GetOCIImageFromIndex(catalogImageDir)
 	if err != nil {
-		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
+		return "", fmt.Errorf("failed to get catalog oci image: %w", err)
 	}
 
-	manifest := validDigest.Encoded()
-	o.Log.Debug(collectorPrefix+"manifest %s", manifest)
-	manifestDir := filepath.Join(catalogImageDir, blobsDir, manifest)
-	oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
+	imgConfig, err := img.ConfigFile()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get catalog oci image config: %w", err)
 	}
 
-	// we need to check if oci returns multi manifests (from manifest list)
-	// also oci.Config will be nil
-	// we are only interested in the first manifest as all architectures
-	// "configs" will be exactly the same
-	if len(oci.Manifests) > 0 && oci.Config.Size == 0 {
-		subDigest, err := digest.Parse(oci.Manifests[0].Digest)
-		if err != nil {
-			return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
-		}
-		manifestDir := filepath.Join(catalogImageDir, blobsDir, subDigest.Encoded())
-		oci, err = o.Manifest.GetOCIImageManifest(manifestDir)
-		if err != nil {
-			return "", fmt.Errorf("manifest %s: %w", catalog, err)
-		}
-	}
-
-	// read the config digest to get the detailed manifest
-	// looking for the label to search for a specific folder
-	configDigest, err := digest.Parse(oci.Config.Digest)
-	if err != nil {
-		return "", fmt.Errorf("the digests seem to be incorrect for %s: %w", catalog, err)
-	}
-	catalogDir := filepath.Join(catalogImageDir, blobsDir, configDigest.Encoded())
-	ocs, err := o.Manifest.GetOperatorConfig(catalogDir)
-	if err != nil {
-		return "", err
-	}
-
-	label := ocs.Config.Labels.OperatorsOperatorframeworkIoIndexConfigsV1
+	label := imgConfig.Config.Labels[operatorsConfigsV1Label]
 	o.Log.Debug(collectorPrefix+"label %q", label)
 
 	// untar all the blobs for the operator
 	// if the layer with "label" (from previous step) is found to a specific folder
-	fromDir := filepath.Join(catalogImageDir, blobsDir)
-	if err := o.Manifest.ExtractOCILayers(fromDir, configsDir, label, oci); err != nil {
+	if err := o.Manifest.ExtractOCILayers(img, configsDir, label); err != nil {
 		return "", err
 	}
 

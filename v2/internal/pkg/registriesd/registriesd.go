@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/storage/pkg/fileutils"
 	"github.com/otiai10/copy"
+	"go.podman.io/storage/pkg/fileutils"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
