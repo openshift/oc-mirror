@@ -1373,44 +1373,52 @@ func TestUpdateServiceGenerator(t *testing.T) {
 	tmpDir := t.TempDir()
 	workingDir := tmpDir + "/working-dir"
 
-	releaseImage := "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"
-	graphImage := "localhost:5000/openshift/graph-image:latest"
+	const (
+		release    = "quay.io/openshift-release-dev/ocp-release"
+		graphImage = "localhost:5000/openshift/graph-image:latest"
+	)
+	releaseImage := fmt.Sprintf("%s:4.13.10-x86_64", release)
 
-	t.Run("Testing IDMSGenerator - Disk to Mirror : should pass", func(t *testing.T) {
+	t.Run("Testing UpdateServiceGenerator - Disk to Mirror : should pass", func(t *testing.T) {
 		cr := &ClusterResourcesGenerator{
 			Log:        log,
 			WorkingDir: workingDir,
 		}
 		err := cr.UpdateServiceGenerator(graphImage, releaseImage)
-		if err != nil {
-			t.Fatalf("should not fail")
-		}
+		assert.NoError(t, err)
 
 		_, err = os.Stat(filepath.Join(workingDir, clusterResourcesDir))
-		if err != nil {
-			t.Fatalf("output folder should exist")
-		}
+		assert.NoError(t, err, "output folder should exist")
 
 		resourceFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
-		if err != nil {
-			t.Fatalf("ls output folder should not fail")
-		}
+		assert.NoError(t, err, "ls output folder should not fail")
 
-		if len(resourceFiles) != 1 {
-			t.Fatalf("output folder should contain 1 updateservice.yaml file")
-		}
-
+		assert.Len(t, resourceFiles, 1, "output folder should contain 1 updateservice.yaml file")
 		assert.Equal(t, updateServiceFilename, resourceFiles[0].Name())
+
+		expectedOSUS := updateservicev1.UpdateService{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: updateservicev1.GroupVersion.String(),
+				Kind:       updateServiceResourceKind,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        updateServiceResourceName,
+				Annotations: generateOcMirrorAnnotations(),
+				Namespace:   updateServiceDefaultNamespace,
+			},
+			Spec: updateservicev1.UpdateServiceSpec{
+				Replicas:       2,
+				Releases:       release,
+				GraphDataImage: graphImage,
+			},
+		}
 
 		// Read the contents of resourceFiles[0]
 		filePath := filepath.Join(workingDir, clusterResourcesDir, resourceFiles[0].Name())
 		actualOSUS, err := parser.ParseYamlFile[updateservicev1.UpdateService](filePath)
-		if err != nil {
-			t.Fatalf("failed to unmarshall file: %v", err)
-		}
+		assert.NoErrorf(t, err, "failed to unmarshall UpdateService file %s", filePath)
 
-		assert.Equal(t, graphImage, actualOSUS.Spec.GraphDataImage)
-		assert.Equal(t, "quay.io/openshift-release-dev/ocp-release", actualOSUS.Spec.Releases)
+		assert.Equal(t, expectedOSUS, actualOSUS)
 	})
 }
 
