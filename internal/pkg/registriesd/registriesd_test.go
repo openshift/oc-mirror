@@ -27,13 +27,13 @@ func TestPrepareRegistrydCustomDir(t *testing.T) {
 	cfg, err := parser.ParseYamlFile[registryConfiguration](expectedCacheRegistryFile)
 	assert.NoError(t, err)
 	assert.Contains(t, cfg.Docker, "localhost:55000")
-	assert.True(t, cfg.Docker["localhost:55000"].UseSigstoreAttachments)
+	assert.Equal(t, boolPtr(true), cfg.Docker["localhost:55000"].UseSigstoreAttachments)
 
 	assert.FileExists(t, expectedDestRegistryFile)
 	cfg, err = parser.ParseYamlFile[registryConfiguration](expectedDestRegistryFile)
 	assert.NoError(t, err)
 	assert.Contains(t, cfg.Docker, "mymirror.com")
-	assert.True(t, cfg.Docker["mymirror.com"].UseSigstoreAttachments)
+	assert.Equal(t, boolPtr(true), cfg.Docker["mymirror.com"].UseSigstoreAttachments)
 }
 
 func TestGetCustomRegistrydConfigPath(t *testing.T) {
