@@ -360,21 +360,21 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/certified-operators:v4.7",
 					Origin:      "docker://certified-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "442c7ba64d56a85eea155325aa0c6537",
+					RebuiltTag:  "70eb0b2116707316c6130de415ceeb69",
 				},
 				{
 					Source:      "docker://community-operators:v4.7",
 					Destination: "docker://localhost:9999/community-operators:v4.7",
 					Origin:      "docker://community-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "4dab2467f35b4d9c9ba7c2a7823de8bd",
+					RebuiltTag:  "ac8e314872a499f2c6edb0616489c628",
 				},
 				{
 					Source:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Destination: "docker://localhost:9999/simple-test-bundle:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
+					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
 				},
 			},
 		},
@@ -406,7 +406,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/simple-test-bundle:v4.14",
 					Origin:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
+					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
 				},
 			},
 		},
@@ -444,7 +444,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/test-catalog:v4.14",
 					Origin:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
+					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
 				},
 			},
 		},
@@ -476,7 +476,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/test-namespace/test-catalog:v2.0",
 					Origin:      "docker://certified-operators:v4.7",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "442c7ba64d56a85eea155325aa0c6537",
+					RebuiltTag:  "70eb0b2116707316c6130de415ceeb69",
 				},
 			},
 		},
@@ -555,18 +555,18 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/simple-test-bundle:9fadc6c70adb4b2571f66f674a876279",
+					Source:      "docker://localhost:9999/simple-test-bundle:eaf28fd0a9f205e44fb52a8b0bd8e678",
 					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
+					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
 				},
 				{
-					Source:      "docker://localhost:9999/redhat/redhat-operator-index:6566d78129230a2e107cb5aafcb7787b",
+					Source:      "docker://localhost:9999/redhat/redhat-operator-index:94563f14d54e0ea1d600fa8c002c204b",
 					Destination: "docker://localhost:5000/test/redhat/redhat-operator-index:v4.14",
 					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.14",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "6566d78129230a2e107cb5aafcb7787b",
+					RebuiltTag:  "94563f14d54e0ea1d600fa8c002c204b",
 				},
 			},
 		},
@@ -599,11 +599,11 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/test-catalog:9fadc6c70adb4b2571f66f674a876279",
+					Source:      "docker://localhost:9999/test-catalog:eaf28fd0a9f205e44fb52a8b0bd8e678",
 					Destination: "docker://localhost:5000/test/test-catalog:v4.14",
 					Origin:      "oci://" + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "9fadc6c70adb4b2571f66f674a876279",
+					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
 				},
 			},
 		},
@@ -717,71 +717,71 @@ func TestFilterCollectorM2M(t *testing.T) {
 					Destination: "docker://localhost:9999/redhat/redhat-filtered-index:v4.17",
 					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "08a5610c0e6f72fd34b1c76d30788c66",
+					RebuiltTag:  "b6db5253b0a8b995840d4d6b5a8aefca",
 				},
 				{
 					Source:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
 					Destination: "docker://localhost:9999/redhat/certified-operators-pinned:v4.17.0-20241114",
 					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "65af60f894902a1758a30ae262c0e39e",
+					RebuiltTag:  "37e8b17cf0089fb1de93893cfb41dbfb",
 				},
 				{
 					Source:      "oci://" + filepath.Join(testDir, "catalog-on-disk1"),
 					Destination: "docker://localhost:9999/catalog-on-disk1:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "fc2e113a1d6f0dbe89bd2bc5c83886e3",
+					RebuiltTag:  "bff06b6d6cc99438ad7a080e38025b52",
 				},
 				{
 					Source:      "oci://" + filepath.Join(testDir, "catalog-on-disk2"),
 					Destination: "docker://localhost:9999/coffee-shop-index:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "421035ded2cb0e83f50ee6445b1466a5",
+					RebuiltTag:  "04a29cd46d562afadfa317467451756e",
 				},
 				{
 					Source:      "oci://" + filepath.Join(testDir, "catalog-on-disk3"),
 					Destination: "docker://localhost:9999/tea-shop-index:v3.14",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "d81a7ad49cabfc8aa050edaf56f25a3f",
+					RebuiltTag:  "4b3bae8f9360ced2d4a4473d5481cc9f",
 				},
 
 				{
-					Source:      "docker://localhost:9999/redhat/redhat-filtered-index:08a5610c0e6f72fd34b1c76d30788c66",
+					Source:      "docker://localhost:9999/redhat/redhat-filtered-index:b6db5253b0a8b995840d4d6b5a8aefca",
 					Destination: "docker://localhost:5000/test/redhat/redhat-filtered-index:v4.17",
 					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "08a5610c0e6f72fd34b1c76d30788c66",
+					RebuiltTag:  "b6db5253b0a8b995840d4d6b5a8aefca",
 				},
 				{
-					Source:      "docker://localhost:9999/redhat/certified-operators-pinned:65af60f894902a1758a30ae262c0e39e",
+					Source:      "docker://localhost:9999/redhat/certified-operators-pinned:37e8b17cf0089fb1de93893cfb41dbfb",
 					Destination: "docker://localhost:5000/test/redhat/certified-operators-pinned:v4.17.0-20241114",
 					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "65af60f894902a1758a30ae262c0e39e",
+					RebuiltTag:  "37e8b17cf0089fb1de93893cfb41dbfb",
 				},
 				{
-					Source:      "docker://localhost:9999/catalog-on-disk1:fc2e113a1d6f0dbe89bd2bc5c83886e3",
+					Source:      "docker://localhost:9999/catalog-on-disk1:bff06b6d6cc99438ad7a080e38025b52",
 					Destination: "docker://localhost:5000/test/catalog-on-disk1:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "fc2e113a1d6f0dbe89bd2bc5c83886e3",
+					RebuiltTag:  "bff06b6d6cc99438ad7a080e38025b52",
 				},
 				{
-					Source:      "docker://localhost:9999/coffee-shop-index:421035ded2cb0e83f50ee6445b1466a5",
+					Source:      "docker://localhost:9999/coffee-shop-index:04a29cd46d562afadfa317467451756e",
 					Destination: "docker://localhost:5000/test/coffee-shop-index:latest",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "421035ded2cb0e83f50ee6445b1466a5",
+					RebuiltTag:  "04a29cd46d562afadfa317467451756e",
 				},
 				{
-					Source:      "docker://localhost:9999/tea-shop-index:d81a7ad49cabfc8aa050edaf56f25a3f",
+					Source:      "docker://localhost:9999/tea-shop-index:4b3bae8f9360ced2d4a4473d5481cc9f",
 					Destination: "docker://localhost:5000/test/tea-shop-index:v3.14",
 					Origin:      "oci://" + filepath.Join(testDir, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "d81a7ad49cabfc8aa050edaf56f25a3f",
+					RebuiltTag:  "4b3bae8f9360ced2d4a4473d5481cc9f",
 				},
 			},
 		},
@@ -1081,4 +1081,102 @@ func (o MockHandler) getDeclarativeConfig(filePath string) (*declcfg.Declarative
 			},
 		},
 	}, nil
+}
+
+func TestFindFilterDigest(t *testing.T) {
+	t.Run("returns normalized digest when it exists", func(t *testing.T) {
+		tempDir := t.TempDir()
+		op := v2alpha1.Operator{
+			Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "op1"}},
+			},
+		}
+		catalogDigest := "abc123"
+
+		normalizedDigest, err := digestOfFilter(op, catalogDigest)
+		assert.NoError(t, err)
+
+		// Create the normalized digest folder
+		normalizedDir := filepath.Join(tempDir, normalizedDigest)
+		err = os.MkdirAll(normalizedDir, 0755)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(normalizedDir, "digest"), []byte("somefilteredimagedigest"), 0644) // #nosec G306
+		assert.NoError(t, err)
+
+		result, err := findFilterDigest(op, catalogDigest, tempDir)
+		assert.NoError(t, err)
+		assert.Equal(t, normalizedDigest, result)
+	})
+
+	t.Run("returns legacy digest when only legacy folder exists", func(t *testing.T) {
+		tempDir := t.TempDir()
+		op := v2alpha1.Operator{
+			Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "op1"}},
+			},
+		}
+		catalogDigest := "abc123"
+
+		normalizedDigest, err := digestOfFilter(op, catalogDigest)
+		assert.NoError(t, err)
+		legacyDigest, err := digestOfFilter(op, "")
+		assert.NoError(t, err)
+		assert.NotEqual(t, normalizedDigest, legacyDigest, "digests should differ for this test")
+
+		// Create the legacy digest folder (not the normalized one)
+		legacyDir := filepath.Join(tempDir, legacyDigest)
+		err = os.MkdirAll(legacyDir, 0755)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(legacyDir, "digest"), []byte("somefilteredimagedigest"), 0644) // #nosec G306
+		assert.NoError(t, err)
+
+		result, err := findFilterDigest(op, catalogDigest, tempDir)
+		assert.NoError(t, err)
+		assert.Equal(t, legacyDigest, result, "should return the legacy digest for backwards compatibility")
+
+		_, err = os.Stat(legacyDir)
+		assert.NoError(t, err, "legacy folder should still exist")
+	})
+
+	t.Run("returns normalized digest when neither exists", func(t *testing.T) {
+		tempDir := t.TempDir()
+		op := v2alpha1.Operator{
+			Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "op1"}},
+			},
+		}
+		catalogDigest := "abc123"
+
+		normalizedDigest, err := digestOfFilter(op, catalogDigest)
+		assert.NoError(t, err)
+
+		result, err := findFilterDigest(op, catalogDigest, tempDir)
+		assert.NoError(t, err)
+		assert.Equal(t, normalizedDigest, result)
+	})
+
+	t.Run("returns same digest when legacy equals normalized", func(t *testing.T) {
+		tempDir := t.TempDir()
+		// When catalogDigest is empty, legacy and normalized should be the same
+		op := v2alpha1.Operator{
+			Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "op1"}},
+			},
+		}
+		catalogDigest := "" // empty catalog digest means no normalization
+
+		normalizedDigest, err := digestOfFilter(op, catalogDigest)
+		assert.NoError(t, err)
+		legacyDigest, err := digestOfFilter(op, "")
+		assert.NoError(t, err)
+		assert.Equal(t, normalizedDigest, legacyDigest, "should be equal when catalogDigest is empty")
+
+		result, err := findFilterDigest(op, catalogDigest, tempDir)
+		assert.NoError(t, err)
+		assert.Equal(t, normalizedDigest, result)
+	})
 }
