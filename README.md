@@ -152,7 +152,7 @@ mirror:
       --policy string                  Path to a trust policy file
   -p, --port uint16                    HTTP port used by oc-mirror's local storage instance (default 55000)
       --registries.d DIR               use registry configuration files in DIR (e.g. for container signature storage)
-      --remove-signatures              Do not copy image signature (default true)
+      --remove-signatures              Do not copy image signature (default false)
       --retry-delay duration           delay between 2 retries (default 1s)
       --retry-times int                the number of times to possibly retry (default 2)
       --rootless-storage-path string   Override the default container rootless storage path (usually in etc/containers/storage.conf)
