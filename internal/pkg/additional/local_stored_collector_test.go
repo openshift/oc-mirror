@@ -251,6 +251,302 @@ func TestAdditionalImageCollector(t *testing.T) {
 	})
 }
 
+func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
+	type spec struct {
+		name             string
+		mode             string
+		destination      string
+		additionalImages []v2alpha1.Image
+		useV1Tags        bool
+		expected         []v2alpha1.CopyImageSchema
+	}
+
+	cases := []spec{
+		{
+			name:        "mirrorToDisk with TargetRepo",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "custom-namespace/custom-image",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://test.registry.com/custom-namespace/custom-image:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "mirrorToDisk with TargetTag",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:      "registry.redhat.io/ubi8/ubi:latest",
+					TargetTag: "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://test.registry.com/ubi8/ubi:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "mirrorToDisk with both TargetRepo and TargetTag",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "custom-namespace/custom-image",
+					TargetTag:  "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://test.registry.com/custom-namespace/custom-image:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "mirrorToDisk with TargetTag for digest-only image",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					TargetTag: "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://test.registry.com/testns/test:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "mirrorToDisk with TargetRepo and TargetTag for OCI image",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "oci:///folder-a/folder-b/testns/test",
+					TargetRepo: "custom/oci-image",
+					TargetTag:  "v2.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "oci:///folder-a/folder-b/testns/test",
+					Origin:      "oci:///folder-a/folder-b/testns/test",
+					Destination: "docker://test.registry.com/custom/oci-image:v2.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "invalid TargetRepo should skip image with warning",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "invalid:tag",
+				},
+				{
+					Name: "registry.redhat.io/ubi9/ubi:latest",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi9/ubi:latest",
+					Origin:      "registry.redhat.io/ubi9/ubi:latest",
+					Destination: "docker://test.registry.com/ubi9/ubi:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with TargetRepo",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "custom-namespace/custom-image",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/custom-namespace/custom-image:latest",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://mirror.acme.com/custom-namespace/custom-image:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with TargetTag",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:      "registry.redhat.io/ubi8/ubi:latest",
+					TargetTag: "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/ubi8/ubi:v1.0",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://mirror.acme.com/ubi8/ubi:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with TargetRepo and TargetTag",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "custom-namespace/custom-image",
+					TargetTag:  "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/custom-namespace/custom-image:v1.0",
+					Origin:      "registry.redhat.io/ubi8/ubi:latest",
+					Destination: "docker://mirror.acme.com/custom-namespace/custom-image:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with TargetTag for digest-only image",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					TargetTag: "v1.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/testns/test:v1.0",
+					Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://mirror.acme.com/testns/test:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with TargetRepo and TargetTag for OCI image",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:       "oci:///folder-a/folder-b/testns/test",
+					TargetRepo: "custom/oci-image",
+					TargetTag:  "v2.0",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/custom/oci-image:v2.0",
+					Origin:      "oci:///folder-a/folder-b/testns/test",
+					Destination: "docker://mirror.acme.com/custom/oci-image:v2.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+		{
+			name:        "diskToMirror with generateV1Tags and TargetTag should use TargetTag",
+			mode:        mirror.DiskToMirror,
+			destination: "docker://mirror.acme.com",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					TargetTag: "v1.0",
+				},
+			},
+			useV1Tags: true,
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://test.registry.com/testns/test:v1.0",
+					Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+					Destination: "docker://mirror.acme.com/testns/test:v1.0",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+		},
+	}
+
+	log := clog.New("trace")
+	global := &mirror.GlobalOptions{SecurePolicy: false}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+	localstorageFQDN := "test.registry.com"
+
+	mockmirror := MockMirror{}
+	manifest := MockManifest{Log: log}
+	ctx := context.Background()
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			opts := mirror.CopyOptions{
+				Global:              global,
+				DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+				SrcImage:            srcOpts,
+				DestImage:           destOpts,
+				RetryOpts:           retryOpts,
+				Destination:         c.destination,
+				Dev:                 false,
+				Mode:                c.mode,
+				LocalStorageFQDN:    localstorageFQDN,
+			}
+
+			cfg := v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						AdditionalImages: c.additionalImages,
+					},
+				},
+			}
+
+			ex := New(log, cfg, opts, mockmirror, manifest)
+			if c.useV1Tags {
+				ex = WithV1Tags(ex)
+			}
+
+			res, err := ex.AdditionalImagesCollector(ctx)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, c.expected, res)
+		})
+	}
+}
+
 func (o MockMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
 	return nil
 }

@@ -145,7 +145,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			expError: "invalid configuration: targetCatalog: test:v1.3 - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
+			expError: "invalid configuration: invalid target path component \"test:v1.3\": should not contain a tag or digest. Expected format is 1 or more path components separated by /, where each path component is a set of alpha-numeric and regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
 		},
 		{
 			name: "Invalid/CatalogWithTargetCatalogContainsDigest",
@@ -161,7 +161,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			expError: "invalid configuration: targetCatalog: a/b/test@sha256:45df874 - value is not valid. It should not contain a tag or a digest. It is expected to be composed of 1 or more path components separated by /, where each path component is a set of alpha-numeric and  regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
+			expError: "invalid configuration: invalid target path component \"a/b/test@sha256:45df874\": should not contain a tag or digest. Expected format is 1 or more path components separated by /, where each path component is a set of alpha-numeric and regexp (?:[._]|__|[-]*). For more, see https://github.com/containers/image/blob/main/docker/reference/regexp.go",
 		},
 		{
 			name: "Invalid/CatalogFilteringIncorrectChannelVersions",
