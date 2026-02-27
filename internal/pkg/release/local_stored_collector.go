@@ -192,7 +192,7 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 		return nil
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create oci dir: %w", err)
 	}
 

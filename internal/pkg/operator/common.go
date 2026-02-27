@@ -352,13 +352,13 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	}
 
 	// It's in oci format so we can go directly to the index.json file
-	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
+	ociIndex, err := o.Manifest.GetOCIImageIndex(filepath.Join(catalogImageDir, "index.json"))
 	if err != nil {
 		return "", err
 	}
 
-	if len(oci.Manifests) > 1 && imgSpec.Transport == ociProtocol {
-		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
+	if len(ociIndex.Manifests) > 1 && imgSpec.Transport == ociProtocol {
+		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, ociIndex); err != nil {
 			return "", err
 		}
 	}

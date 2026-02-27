@@ -78,21 +78,6 @@ type Status struct {
 	DockerImageRepository string `json:"dockerImageRepository"`
 }
 
-// OCISchema
-type OCISchema struct {
-	SchemaVersion int           `json:"schemaVersion"`
-	MediaType     string        `json:"mediaType,omitempty"`
-	Manifests     []OCIManifest `json:"manifests"`
-	Config        OCIManifest   `json:"config,omitempty"`
-	Layers        []OCIManifest `json:"layers,omitempty"`
-}
-
-type OCIManifest struct {
-	MediaType string `json:"mediaType,omitempty"`
-	Digest    string `json:"digest,omitempty"`
-	Size      int    `json:"size,omitempty"`
-}
-
 // OperatorConfigSchema
 type OperatorConfigSchema struct {
 	Created      time.Time         `json:"created"`
@@ -192,8 +177,8 @@ type RelatedImage struct {
 	// if set should be used when mirroring
 	TargetCatalog string `json:"targetCatalog"`
 	RebuiltTag    string `json:"rebuiltTag"`
-	//Used to identify if a related image is from an operator catalog on disk (oci:// on ImageSetConfiguration)
-	//TODO remove me when the migration from oc-mirror v1 to v2 ends
+	// Used to identify if a related image is from an operator catalog on disk (oci:// on ImageSetConfiguration)
+	// TODO remove me when the migration from oc-mirror v1 to v2 ends
 	OriginFromOperatorCatalogOnDisk bool
 	// Used to identify if it is a full catalog (full: true && zero packages)
 	FullCatalog bool

@@ -8,6 +8,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
+	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -15,49 +18,56 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
+func mustParseDigest(t *testing.T, s string) digest.Digest {
+	t.Helper()
+	d, err := digest.Parse(s)
+	assert.NoError(t, err)
+	return d
+}
+
 func TestGetAllManifests(t *testing.T) {
 	log := clog.New("debug")
 	manifest := &Manifest{Log: log}
 
 	// The failure cases are just json parsing errors
 	t.Run("Testing GetImageManifest : should pass", func(t *testing.T) {
-		expectedOCI := &v2alpha1.OCISchema{
-			SchemaVersion: 2,
-			MediaType:     "application/vnd.oci.image.manifest.v1+json",
-			Config: v2alpha1.OCIManifest{
-				MediaType: "application/vnd.oci.image.config.v1+json",
-				Digest:    "sha256:18249fc55c217d5ecc543fb7cae29cdcbc8a7d94691e8a684f336abf75d01e64",
+		expectedOCI := &specv1.Manifest{
+			Versioned: specs.Versioned{SchemaVersion: 2},
+			MediaType: specv1.MediaTypeImageManifest,
+			Config: specv1.Descriptor{
+				MediaType: specv1.MediaTypeImageConfig,
+				Digest:    mustParseDigest(t, "sha256:18249fc55c217d5ecc543fb7cae29cdcbc8a7d94691e8a684f336abf75d01e64"),
 				Size:      1672,
 			},
-			Layers: []v2alpha1.OCIManifest{
+			Layers: []specv1.Descriptor{
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:97da74cc6d8fa5d1634eb1760fd1da5c6048619c264c23e62d75f3bf6b8ef5c4",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:97da74cc6d8fa5d1634eb1760fd1da5c6048619c264c23e62d75f3bf6b8ef5c4"),
 					Size:      79524639,
 				},
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e"),
 					Size:      1438,
 				},
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:f0f4937bc70fa7bf9afc1eb58400dbc646c9fd0c9f95cfdbfcdedd55f6fa0bcd",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:f0f4937bc70fa7bf9afc1eb58400dbc646c9fd0c9f95cfdbfcdedd55f6fa0bcd"),
 					Size:      26654429,
 				},
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:833de2b0ccff7a77c31b4d2e3f96077b638aada72bfde75b5eddd5903dc11bb7",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:833de2b0ccff7a77c31b4d2e3f96077b638aada72bfde75b5eddd5903dc11bb7"),
 					Size:      12374694,
 				},
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:911c7f3bfc1ca79614a05b77ad8b28e87f71026d41a34c8ea14b4f0a3657d0eb",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:911c7f3bfc1ca79614a05b77ad8b28e87f71026d41a34c8ea14b4f0a3657d0eb"),
 					Size:      25467095,
 				},
 				{
-					MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-					Digest:    "sha256:5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d",
+					MediaType: specv1.MediaTypeImageLayerGzip,
+					Digest:    mustParseDigest(t, "sha256:5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d"),
 					Size:      955593,
 				},
 			},
@@ -69,17 +79,17 @@ func TestGetAllManifests(t *testing.T) {
 
 	// The failing cases are already covered by GetImageManifest tests
 	t.Run("Testing GetImageIndex : should pass", func(t *testing.T) {
-		expectedOCI := &v2alpha1.OCISchema{
-			SchemaVersion: 2,
-			Manifests: []v2alpha1.OCIManifest{
+		expectedOCI := &specv1.Index{
+			Versioned: specs.Versioned{SchemaVersion: 2},
+			Manifests: []specv1.Descriptor{
 				{
-					MediaType: "application/vnd.oci.image.manifest.v1+json",
-					Digest:    "sha256:3ad31ff3302d352771aba8d1262e2d87cd4f796eac7195401c4d9c9af64e1627",
+					MediaType: specv1.MediaTypeImageManifest,
+					Digest:    mustParseDigest(t, "sha256:3ad31ff3302d352771aba8d1262e2d87cd4f796eac7195401c4d9c9af64e1627"),
 					Size:      1196,
 				},
 			},
 		}
-		res, err := manifest.GetOCIImageIndex(common.TestFolder)
+		res, err := manifest.GetOCIImageIndex(filepath.Join(common.TestFolder, "index.json"))
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOCI, res)
 	})
