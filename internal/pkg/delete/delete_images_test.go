@@ -11,8 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	mirror "github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -30,8 +31,8 @@ func TestAllDeleteImages(t *testing.T) {
 	global := &mirror.GlobalOptions{
 		SecurePolicy:      false,
 		Quiet:             false,
-		WorkingDir:        common.TestFolder,
-		DeleteDestination: "docker://localhost:5000/myregistry",
+		WorkingDir:        consts.TestFolder,
+		DeleteDestination: consts.DockerProtocol + "localhost:5000/myregistry",
 	}
 
 	_, sharedOpts := mirror.SharedImageFlags()
@@ -46,7 +47,7 @@ func TestAllDeleteImages(t *testing.T) {
 		SrcImage:            srcOpts,
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
-		Destination:         "docker://myregistry",
+		Destination:         consts.DockerProtocol + "myregistry",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
 		LocalStorageFQDN:    "localhost:8888",
@@ -75,16 +76,16 @@ func TestAllDeleteImages(t *testing.T) {
 	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp", &mockSignatureHandler{})
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
-		opts.Global.WorkingDir = common.TestFolder
+		opts.Global.WorkingDir = consts.TestFolder
 		data, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
 		}
-		assert.Equal(t, "docker://localhost:5000/myregistry/openshift/release:4.15.12-x86_64-agent-installer-api-server", data.Items[0].ImageReference)
+		assert.Equal(t, consts.DockerProtocol+"localhost:5000/myregistry/openshift/release:4.15.12-x86_64-agent-installer-api-server", data.Items[0].ImageReference)
 	})
 
 	t.Run("Testing DeleteRegistryImages : should pass", func(t *testing.T) {
-		opts.Global.WorkingDir = common.TestFolder
+		opts.Global.WorkingDir = consts.TestFolder
 		imgs, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
@@ -98,7 +99,7 @@ func TestAllDeleteImages(t *testing.T) {
 	t.Run("Testing DeleteCacheBlobs : should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
 		defer os.RemoveAll(testFolder)
-		opts.Global.WorkingDir = common.TestFolder
+		opts.Global.WorkingDir = consts.TestFolder
 		opts.Global.ForceCacheDelete = true
 		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
 		imgs, err := di.ReadDeleteMetaData()
@@ -150,8 +151,8 @@ func TestWriteMetaData(t *testing.T) {
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		cpImages := []v2alpha1.CopyImageSchema{
 			{
-				Source:      "docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2",
-				Destination: "docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2",
+				Source:      consts.DockerProtocol + "localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2",
+				Destination: consts.DockerProtocol + "localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2",
 				Origin:      "test",
 			},
 		}
@@ -215,7 +216,7 @@ func TestSigDeleteItems(t *testing.T) {
 			expected: []v2alpha1.DeleteItem{
 				{
 					ImageName:      "registry.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
-					ImageReference: "docker://mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+					ImageReference: consts.DockerProtocol + "mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
 					Type:           v2alpha1.TypeGeneric,
 				},
 			},
@@ -249,7 +250,7 @@ func TestGetSignatureTagWithoutCache(t *testing.T) {
 			},
 			expected: &v2alpha1.DeleteItem{
 				ImageName:      "registry.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
-				ImageReference: "docker://mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
+				ImageReference: consts.DockerProtocol + "mirror.example.com/ns/img:sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig",
 				Type:           v2alpha1.TypeGeneric,
 			},
 		},
@@ -299,7 +300,7 @@ func TestSigDeleteItem(t *testing.T) {
 			sig: "sha256-abc123.sig",
 			expected: &v2alpha1.DeleteItem{
 				ImageName:      "registry.example.com/ns/img:sha256-abc123.sig",
-				ImageReference: "docker://mirror.example.com/ns/img:sha256-abc123.sig",
+				ImageReference: consts.DockerProtocol + "mirror.example.com/ns/img:sha256-abc123.sig",
 				Type:           v2alpha1.TypeGeneric,
 			},
 		},

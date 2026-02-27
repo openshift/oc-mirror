@@ -13,16 +13,18 @@ import (
 
 	"github.com/otiai10/copy"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 // TestExecutorMirroring - test both mirrorToDisk
@@ -34,7 +36,7 @@ func TestExecutorMirroring(t *testing.T) {
 
 	workDir := filepath.Join(testFolder, "tests")
 	// copy tests/hold-test-fake to working-dir
-	err := copy.Copy(common.TestFolder+"working-dir-fake", workDir)
+	err := copy.Copy(consts.TestFolder+"working-dir-fake", workDir)
 	if err != nil {
 		t.Fatalf("should not fail to copy: %v", err)
 	}
@@ -114,7 +116,7 @@ func TestExecutorMirroring(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"file://" + testFolder})
+		err := ex.Run(res, []string{consts.FileProtocol + testFolder})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -149,7 +151,7 @@ func TestExecutorMirroring(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.MirrorToDisk
-		err := ex.Run(res, []string{"file://" + testFolder})
+		err := ex.Run(res, []string{consts.FileProtocol + testFolder})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -186,7 +188,7 @@ func TestExecutorMirroring(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.DiskToMirror
-		err := ex.Run(res, []string{"docker://test/test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test/test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -222,7 +224,7 @@ func TestExecutorMirroring(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.DiskToMirror
-		err := ex.Run(res, []string{"docker://test/test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test/test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -257,7 +259,7 @@ func TestExecutorMirroring(t *testing.T) {
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
 		ex.Opts.Mode = mirror.DiskToMirror
-		err := ex.Run(res, []string{"docker://test/test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test/test"})
 		if err == nil {
 			t.Fatalf("should fail")
 		}
@@ -271,7 +273,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 
 	workDir := filepath.Join(testFolder, "tests")
 	// copy tests/hold-test-fake to working-dir
-	err := copy.Copy(common.TestFolder+"working-dir-fake", workDir)
+	err := copy.Copy(consts.TestFolder+"working-dir-fake", workDir)
 	if err != nil {
 		t.Fatalf("should not fail to copy: %v", err)
 	}
@@ -306,7 +308,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 		Mode:                mirror.MirrorToMirror,
-		Destination:         "docker://test",
+		Destination:         consts.DockerProtocol + "test",
 		LocalStorageFQDN:    regCfg.HTTP.Addr,
 	}
 
@@ -352,7 +354,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 		res := &cobra.Command{}
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
-		err := ex.Run(res, []string{"docker://test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -383,7 +385,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 		res := &cobra.Command{}
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
-		err := ex.Run(res, []string{"docker://test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test"})
 		if err != nil {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
@@ -415,7 +417,7 @@ func TestRunMirrorToMirror(t *testing.T) {
 		res := &cobra.Command{}
 		res.SetContext(context.Background())
 		res.SilenceUsage = true
-		err := ex.Run(res, []string{"docker://test"})
+		err := ex.Run(res, []string{consts.DockerProtocol + "test"})
 		assert.Error(t, err)
 		opts.IsDryRun = false
 	})
@@ -465,8 +467,8 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = "" // reset
 		opts.ParallelLayerImages = 5
 		opts.ParallelImages = 5
-		opts.Global.WorkingDir = "file://test"
-		assert.NoError(t, ex.Validate([]string{"docker://test"}))
+		opts.Global.WorkingDir = consts.FileProtocol + "test"
+		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "test"}))
 		log.AssertNotCalled(t, "Warn", mock.Anything)
 
 		// check that since is a valid date
@@ -474,13 +476,13 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = ""
 		opts.Global.WorkingDir = ""
 		opts.Global.SinceString = "2024-01-01"
-		assert.NoError(t, ex.Validate([]string{"file://test"}))
+		assert.NoError(t, ex.Validate([]string{consts.FileProtocol + "test"}))
 
 		// should be able to run mirror-to-mirror with a specific workingDir (--workspace)
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "" // reset
-		opts.Global.WorkingDir = "file://test"
-		assert.NoError(t, ex.Validate([]string{"docker://test"}))
+		opts.Global.WorkingDir = consts.FileProtocol + "test"
+		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "test"}))
 
 	})
 
@@ -516,21 +518,21 @@ func TestExecutorValidate(t *testing.T) {
 
 		// check ParallelImages
 		opts.ParallelImages = 11
-		err := ex.Validate([]string{"file://test"})
+		err := ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
 
 		opts.ParallelImages = 0
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
 
 		// check ParallelLayerImages
 		opts.ParallelImages = 5
 		opts.ParallelLayerImages = 11
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "the flag parallel-layers must be between the range 1 to 10")
 
 		opts.ParallelLayerImages = 0
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "the flag parallel-layers must be between the range 1 to 10")
 
 		opts.ParallelImages = 5
@@ -538,19 +540,19 @@ func TestExecutorValidate(t *testing.T) {
 
 		// check for config path error
 		opts.Global.ConfigPath = ""
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "use the --config flag it is mandatory")
 
 		// check when using file protocol --from should not be used
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "test"
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
 
 		// check when using --from protocol must be of type file://
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = "test"
-		err = ex.Validate([]string{"docker://test"})
+		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when --from is used, it must have file:// prefix")
 
 		// check destination protocol
@@ -563,29 +565,29 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = ""
 		opts.Global.SinceString = "224-44-01"
-		err = ex.Validate([]string{"file://test"})
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "--since flag needs to be in format yyyy-MM-dd")
 
 		// should not be able to use --workspace in mirror-to-disk workflow
 		opts.Global.SinceString = "" // reset
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = ""
-		opts.Global.WorkingDir = "file://test"
-		err = ex.Validate([]string{"file://test"})
+		opts.Global.WorkingDir = consts.FileProtocol + "test"
+		err = ex.Validate([]string{consts.FileProtocol + "test"})
 		assert.EqualError(t, err, "when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed")
 
 		// should not be able to use --workspace and --from together at the same time
 		opts.Global.ConfigPath = "test"
-		opts.Global.From = "file://abc"
-		opts.Global.WorkingDir = "file://test"
-		err = ex.Validate([]string{"docker://test"})
+		opts.Global.From = consts.FileProtocol + "abc"
+		opts.Global.WorkingDir = consts.FileProtocol + "test"
+		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together")
 
 		// should not be able to run mirror-to-mirror  without specifying workspace
 		opts.Global.ConfigPath = "test"
 		opts.Global.From = ""       // reset
 		opts.Global.WorkingDir = "" // reset
-		err = ex.Validate([]string{"docker://test"})
+		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
 
 	})
@@ -614,7 +616,7 @@ func TestExecutorComplete(t *testing.T) {
 		RetryOpts:           retryOpts,
 		Dev:                 false,
 	}
-	opts.Global.ConfigPath = common.TestFolder + "isc.yaml"
+	opts.Global.ConfigPath = consts.TestFolder + "isc.yaml"
 
 	ex := &ExecutorSchema{
 		Log:     log,
@@ -626,8 +628,8 @@ func TestExecutorComplete(t *testing.T) {
 	t.Run("Testing Executor : complete should fail", func(t *testing.T) {
 		// docker protocol - disk to mirror
 		testFolder := t.TempDir()
-		ex.Opts.Global.From = "file://" + testFolder
-		err := ex.Complete([]string{"docker://tmp/test"})
+		ex.Opts.Global.From = consts.FileProtocol + testFolder
+		err := ex.Complete([]string{consts.DockerProtocol + "tmp/test"})
 		assert.ErrorContains(t, err, "no tar archives matching")
 	})
 
@@ -640,13 +642,13 @@ func TestExecutorComplete(t *testing.T) {
 
 		// docker protocol - mirror to mirror
 		ex.Opts.Global.From = ""
-		ex.Opts.Global.WorkingDir = "file://" + testFolder
-		err = ex.Complete([]string{"docker://tmp/test"})
+		ex.Opts.Global.WorkingDir = consts.FileProtocol + testFolder
+		err = ex.Complete([]string{consts.DockerProtocol + "tmp/test"})
 		assert.NoError(t, err, "should pass with docker protocol - m2m")
 		assert.Equal(t, filepath.Join(testFolder, workingDir), ex.Opts.Global.WorkingDir)
 
 		// mirrorToDisk - using since
-		ex.Opts.Global.From = "file://" + testFolder
+		ex.Opts.Global.From = consts.FileProtocol + testFolder
 		ex.Opts.Global.WorkingDir = ""
 		ex.Opts.Global.SinceString = "2024-01-01"
 		err = ex.Complete([]string{"file:///tmp/test"})
@@ -692,7 +694,7 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 		ex := &ExecutorSchema{
 			Log:              log,
 			Opts:             opts,
-			LocalStorageDisk: common.TestFolder + "cache-fake",
+			LocalStorageDisk: consts.TestFolder + "cache-fake",
 			MakeDir:          MockMakeDir{},
 			LogsDir:          "/tmp/",
 		}
@@ -812,7 +814,7 @@ func TestExecutorCollectAll(t *testing.T) {
 		}
 
 		// read the ImageSetConfiguration
-		cfg, _ := config.ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.ImageSetConfigurationKind)
+		cfg, _ := config.ReadConfig(consts.TestFolder+"isc.yaml", v2alpha1.ImageSetConfigurationKind)
 		failCollector := &Collector{Log: log, Config: cfg.(v2alpha1.ImageSetConfiguration), Opts: *opts, Fail: true}
 		collector := &Collector{Log: log, Config: cfg.(v2alpha1.ImageSetConfiguration), Opts: *opts, Fail: false}
 
@@ -885,10 +887,10 @@ func TestExecutorCollectAll(t *testing.T) {
 
 func TestExcludeImages(t *testing.T) {
 	allCollectedImages := []v2alpha1.CopyImageSchema{
-		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testa"},
-		{Source: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testb"},
-		{Source: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testc"},
-		{Source: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testd"},
+		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: consts.DockerProtocol + "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testa"},
+		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: consts.DockerProtocol + "registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testb"},
+		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: consts.DockerProtocol + "registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testc"},
+		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-d@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testd"},
 		{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:teste"},
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Origin: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:testf"},
 	}

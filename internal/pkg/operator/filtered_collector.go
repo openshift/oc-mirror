@@ -17,6 +17,8 @@ import (
 	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -78,10 +80,10 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		// CLID-513: For OCI paths with digest, use a consistent key format (without digest)
 		// This matches how catalogImage is constructed in collectOperator
 		mapKey := imgSpec.ReferenceWithTransport
-		if imgSpec.Transport == ociProtocol && imgSpec.IsImageByDigestOnly() {
+		if imgSpec.Transport == consts.OciProtocol && imgSpec.IsImageByDigestOnly() {
 			sourceOCIDir, absErr := filepath.Abs(imgSpec.Name)
 			if absErr == nil {
-				mapKey = ociProtocol + sourceOCIDir
+				mapKey = consts.OciProtocol + sourceOCIDir
 			}
 		}
 		collectorSchema.CatalogToFBCMap[mapKey] = result
@@ -267,14 +269,14 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 
 	// OCPBUGS-45059
 	// TODO: remove me when the migration from oc-mirror v1 to v2 ends
-	if imgSpec.Transport == ociProtocol && o.isDeleteOfV1CatalogFromDisk() {
+	if imgSpec.Transport == consts.OciProtocol && o.isDeleteOfV1CatalogFromDisk() {
 		addOriginFromOperatorCatalogOnDisk(&ri)
 	}
 
 	maps.Copy(relatedImages, ri)
 
 	targetTag := op.TargetTag
-	if len(targetTag) == 0 && imgSpec.Transport == ociProtocol {
+	if len(targetTag) == 0 && imgSpec.Transport == consts.OciProtocol {
 		// for this case only, img.ParseRef(in its current state)
 		// will not be able to determine the digest.
 		// this leaves the oci imgSpec with no tag nor digest as it
@@ -289,13 +291,13 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	}
 
 	catalogImage := op.Catalog
-	if imgSpec.Transport == ociProtocol {
+	if imgSpec.Transport == consts.OciProtocol {
 		// ensure correct oci format and directory lookup
 		sourceOCIDir, err := filepath.Abs(imgSpec.Name)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("failed to get OCI image path: %w", err)
 		}
-		catalogImage = ociProtocol + sourceOCIDir
+		catalogImage = consts.OciProtocol + sourceOCIDir
 	}
 
 	rebuiltTag := ""
@@ -441,14 +443,14 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	o.Log.Debug("Ensuring catalog is in OCI format")
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
 
-	if imgSpec.Transport != ociProtocol {
+	if imgSpec.Transport != consts.OciProtocol {
 		opts := o.Opts
 		opts.Stdout = io.Discard
 		opts.RemoveSignatures = true
 		opts.Global.SecurePolicy = false
 
-		src := dockerProtocol + catalog
-		dest := ociProtocolTrimmed + catalogImageDir
+		src := consts.DockerProtocol + catalog
+		dest := consts.OciProtocolTrimmed + catalogImageDir
 
 		// Prepare folders
 		if err := createFolders([]string{catalogImageDir}); err != nil {

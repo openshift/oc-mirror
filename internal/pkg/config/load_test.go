@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -332,14 +333,14 @@ mirror:
 
 func TestReadConfig(t *testing.T) {
 	t.Run("Testing ReadConfig : should pass ", func(t *testing.T) {
-		res, err := ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.ImageSetConfigurationKind)
+		res, err := ReadConfig(consts.TestFolder+"isc.yaml", v2alpha1.ImageSetConfigurationKind)
 		assert.NoError(t, err, "should not fail")
 		conv := res.(v2alpha1.ImageSetConfiguration)
 		require.Equal(t, []string{"amd64"}, conv.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
 	})
 	t.Run("ReadConfig : should fail", func(t *testing.T) {
 		t.Run("with unmatched config kinds", func(t *testing.T) {
-			_, err := ReadConfig(common.TestFolder+"delete-isc.yaml", v2alpha1.ImageSetConfigurationKind)
+			_, err := ReadConfig(consts.TestFolder+"delete-isc.yaml", v2alpha1.ImageSetConfigurationKind)
 			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.DeleteImageSetConfigurationKind, v2alpha1.ImageSetConfigurationKind))
 		})
 		t.Run("with missing `mirror` stanza", func(t *testing.T) {
@@ -395,14 +396,14 @@ mirror:
 
 func TestReadConfigDelete(t *testing.T) {
 	t.Run("Testing ReadConfigDelete : should pass ", func(t *testing.T) {
-		res, err := ReadConfig(common.TestFolder+"delete-isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
+		res, err := ReadConfig(consts.TestFolder+"delete-isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
 		assert.NoError(t, err, "should not fail")
 		conv := res.(v2alpha1.DeleteImageSetConfiguration)
 		require.Equal(t, []string{"amd64"}, conv.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
 	})
 	t.Run("ReadConfig : should fail", func(t *testing.T) {
 		t.Run("with unmatched config kinds", func(t *testing.T) {
-			_, err := ReadConfig(common.TestFolder+"isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
+			_, err := ReadConfig(consts.TestFolder+"isc.yaml", v2alpha1.DeleteImageSetConfigurationKind)
 			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.ImageSetConfigurationKind, v2alpha1.DeleteImageSetConfigurationKind), "parsed unmatched config kinds")
 		})
 		t.Run("with missing `delete` stanza", func(t *testing.T) {

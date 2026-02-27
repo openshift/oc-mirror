@@ -6,5 +6,4 @@ const (
 	MirrorToMirror      = "mirrorToMirror"
 	CopyMode       Mode = "copy"
 	DeleteMode     Mode = "delete"
-	CheckMode      Mode = "check"
 )

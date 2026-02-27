@@ -16,6 +16,8 @@ import (
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
 	"github.com/google/uuid"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
@@ -125,7 +127,7 @@ func (o DeleteSchema) ValidateDelete(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("the destination registry is missing in the command arguments")
 	}
-	if len(args[0]) > 1 && !strings.Contains(args[0], dockerProtocol) {
+	if len(args[0]) > 1 && !strings.Contains(args[0], consts.DockerProtocol) {
 		return fmt.Errorf("the destination registry argument must have a docker:// protocol prefix")
 	}
 
@@ -143,7 +145,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	if args[0] == "" {
 		return fmt.Errorf("the destination registry was not found in the command line arguments")
 	}
-	if !strings.HasPrefix(args[0], dockerProtocol) {
+	if !strings.HasPrefix(args[0], consts.DockerProtocol) {
 		return fmt.Errorf("the destination registry must be prefixed by docker://")
 	}
 	o.Opts.Destination = args[0]
@@ -189,8 +191,8 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	// logic to check mode and  WorkingDir
 	// always good to check - but this should have been detected in validate
 	if o.Opts.Global.DeleteGenerate {
-		if strings.Contains(o.Opts.Global.WorkingDir, fileProtocol) {
-			wd := strings.Split(o.Opts.Global.WorkingDir, fileProtocol)
+		if strings.Contains(o.Opts.Global.WorkingDir, consts.FileProtocol) {
+			wd := strings.Split(o.Opts.Global.WorkingDir, consts.FileProtocol)
 			o.Opts.Global.WorkingDir = filepath.Join(wd[1], workingDir)
 		} else {
 			return fmt.Errorf("--workspace flag must have a file:// protocol prefix")

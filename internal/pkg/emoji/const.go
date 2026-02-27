@@ -13,8 +13,6 @@ const (
 	RepeatSingleButton          string = "\U0001F502"           //🔂
 	Eyes                        string = "\U0001F440"           //👀
 	RightArrow                  string = "\U000027A1\U0000FE0F" // ➡️
-	CheckMarkButton             string = "\U00002705"           //✅
-	CrossMark                   string = "\U0000274C"           // ❌
 	SpinnerCheckMark            string = "\x1b[1;92m ✓ \x1b[0m" //✓
 	SpinnerCrossMark            string = "\x1b[1;91m ✗ \x1b[0m" //✗
 	Gear                        string = "\u2699\uFE0F"         // ⚙️

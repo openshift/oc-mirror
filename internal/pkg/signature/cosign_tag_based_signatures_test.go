@@ -12,6 +12,8 @@ import (
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -96,9 +98,9 @@ var multiArchManifest = `{
 
 func (m *mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	switch imgRef {
-	case "docker://registry.example.com/test/single:latest":
+	case consts.DockerProtocol + "registry.example.com/test/single:latest":
 		return []byte("single-arch-manifest"), manifest.DockerV2Schema2MediaType, nil
-	case "docker://registry.example.com/test/multi:latest":
+	case consts.DockerProtocol + "registry.example.com/test/multi:latest":
 		return []byte(multiArchManifest), manifest.DockerV2ListMediaType, nil
 	default:
 		return nil, "", fmt.Errorf("unknown reference")
@@ -172,13 +174,13 @@ func TestGetSignatureTag(t *testing.T) {
 	}{
 		{
 			name:        "Single arch image",
-			imgRef:      "docker://registry.example.com/test/single:latest",
+			imgRef:      consts.DockerProtocol + "registry.example.com/test/single:latest",
 			expected:    []string{"sha256-3db1c382fbc0a0314a302f110b52bc12bf9d0d9b71fa7652ee849f0eff6781dc.sig"},
 			expectError: false,
 		},
 		{
 			name:        "Multi arch image",
-			imgRef:      "docker://registry.example.com/test/multi:latest",
+			imgRef:      consts.DockerProtocol + "registry.example.com/test/multi:latest",
 			expected:    []string{"sha256-c575d3422277328f5dde74a0ba463e1186108093329bdbc051f34856974575ea.sig", "sha256-e033aa62f84267cf44de611acac2e76bfa4d2f0b6b2b61f1c4fecbefefde7159.sig", "sha256-02f29c270f30416a266571383098d7b98a49488723087fd917128045bcd1ca75.sig", "sha256-b15a2f174d803fd5fd7db0b3969c75cee0fe9131e0d8478f8c70ac01a4534869.sig", "sha256-832f20ad3d7e687c581b0a7d483174901d8bf22bb96c981b3f9da452817a754e.sig"},
 			expectError: false,
 		},

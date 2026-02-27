@@ -5,6 +5,7 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 

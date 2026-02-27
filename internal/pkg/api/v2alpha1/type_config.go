@@ -5,8 +5,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
 // ImageSetConfiguration object kind.
@@ -225,7 +227,7 @@ func (o Operator) IsHeadsOnly() bool {
 }
 
 func (o Operator) IsFBCOCI() bool {
-	return strings.HasPrefix(o.Catalog, "oci:")
+	return strings.HasPrefix(o.Catalog, consts.OciProtocolTrimmed)
 }
 
 // Helm defines the configuration for Helm chart download

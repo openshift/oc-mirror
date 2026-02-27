@@ -10,6 +10,8 @@ import (
 
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 )
 
@@ -58,12 +60,12 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 	if err != nil {
 		return "", err
 	}
-	return dockerProtocol + graphImageRef, nil
+	return consts.DockerProtocol + graphImageRef, nil
 }
 
 func (o *LocalStorageCollector) graphImageInWorkingDir(ctx context.Context) (string, error) {
 	layoutDir := filepath.Join(o.Opts.Global.WorkingDir, graphPreparationDir)
-	graphImageRef := ociProtocol + layoutDir
+	graphImageRef := consts.OciProtocol + layoutDir
 
 	exists, err := o.imageExists(ctx, graphImageRef)
 	if err != nil {

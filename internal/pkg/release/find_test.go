@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
 func TestFindLatestRelease(t *testing.T) {

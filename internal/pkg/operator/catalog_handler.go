@@ -10,12 +10,14 @@ import (
 	"strings"
 
 	"github.com/blang/semver/v4"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	filter "github.com/sherine-k/catalog-filter/pkg/filter/mirror-config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var internalLog clog.PluggableLoggerInterface
@@ -451,7 +453,7 @@ func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSc
 	var relatedImages []v2alpha1.RelatedImage
 
 	for _, ri := range bundle.RelatedImages {
-		if strings.Contains(ri.Image, "oci://") {
+		if strings.Contains(ri.Image, consts.OciProtocol) {
 			msg := fmt.Sprintf("invalid image: %s 'oci' is not supported in operator catalogs", ri.Image)
 			return relatedImages, errors.New(msg)
 		}

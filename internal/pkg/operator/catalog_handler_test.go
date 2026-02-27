@@ -13,8 +13,10 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
@@ -516,7 +518,7 @@ func TestFilterRelatedImagesFromCatalog(t *testing.T) {
 	log := clog.New("debug")
 	handler := &catalogHandler{Log: log}
 
-	operatorCatalog, err := handler.getCatalog(filepath.Join(common.TestFolder, "configs"))
+	operatorCatalog, err := handler.getCatalog(filepath.Join(consts.TestFolder, "configs"))
 	assert.NoError(t, err)
 
 	for _, testCase := range testCases {
@@ -616,7 +618,7 @@ func TestTypesOnRelatedImages(t *testing.T) {
 
 	handler := &catalogHandler{Log: log}
 
-	operatorCatalog, err := handler.getCatalog(filepath.Join(common.TestFolder, "configs"))
+	operatorCatalog, err := handler.getCatalog(filepath.Join(consts.TestFolder, "configs"))
 	assert.NoError(t, err)
 
 	for _, testCase := range testCases {
@@ -1160,7 +1162,7 @@ func TestFilterCatalog(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			dc, err := handler.getDeclarativeConfig(filepath.Join(common.TestFolder, "configs"))
+			dc, err := handler.getDeclarativeConfig(filepath.Join(consts.TestFolder, "configs"))
 			assert.NoError(t, err)
 			res, err := filterCatalog(context.TODO(), *dc, testCase.cfg)
 			if testCase.expectedError != nil && (err == nil || err.Error() != testCase.expectedError.Error()) {

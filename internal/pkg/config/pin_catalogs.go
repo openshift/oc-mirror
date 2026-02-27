@@ -9,6 +9,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -128,7 +130,7 @@ func pinSingleCatalogDigest(
 	pinnedRef := image.WithDigest(imgSpec.Name, filterResult.Digest)
 
 	// Add transport prefix if non-docker (docker:// is default and can be omitted)
-	if imgSpec.Transport != "" && imgSpec.Transport != "docker://" {
+	if imgSpec.Transport != "" && imgSpec.Transport != consts.DockerProtocol {
 		pinnedRef = imgSpec.Transport + pinnedRef
 	}
 

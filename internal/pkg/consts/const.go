@@ -1,9 +1,12 @@
 package consts
 
 const (
-	FileProtocol   string = "file://"
-	DockerProtocol string = "docker://"
-	OciProtocol    string = "oci://"
-	DirProtocol    string = "dir://"
-	Oci            string = "oci:"
+	// Protocol constants
+	FileProtocol       string = "file://"
+	DirProtocol        string = "dir://"
+	DockerProtocol     string = "docker://"
+	OciProtocol        string = "oci://"
+	OciProtocolTrimmed string = "oci:"
+
+	TestFolder string = "../../../tests/"
 )
