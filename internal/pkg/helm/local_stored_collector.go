@@ -23,6 +23,8 @@ import (
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -505,12 +507,12 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, tag)
+			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, tag)
 		} else if imgSpec.IsImageByTagAndDigest() {
 			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, imgSpec.Domain, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
-			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
+			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
 		} else {
-			dest = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
+			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
 		}
 
 		lsc.Log.Debug("source %s", src)
@@ -536,7 +538,7 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			if len(tag) > 128 {
 				tag = tag[:127]
 			}
-			src = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, tag)
+			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, tag)
 			if generateV1TagsFromDigests {
 				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, "latest")
 			} else {
@@ -546,7 +548,7 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
 			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
 		} else {
-			src = fmt.Sprintf("%s%s/%s:%s", dockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Tag)
+			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Tag)
 			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
 		}
 		if src == "" || dest == "" {
@@ -564,7 +566,7 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 func destinationRegistry() string {
 	if lsc.destReg == "" {
 		if lsc.Opts.IsDiskToMirror() || lsc.Opts.IsMirrorToMirror() {
-			lsc.destReg = strings.TrimPrefix(lsc.Opts.Destination, dockerProtocol)
+			lsc.destReg = strings.TrimPrefix(lsc.Opts.Destination, consts.DockerProtocol)
 		} else {
 			lsc.destReg = lsc.Opts.LocalStorageFQDN
 		}

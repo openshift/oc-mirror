@@ -14,7 +14,7 @@ import (
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
 
 func TestMirrorCopy(t *testing.T) {
@@ -51,7 +51,7 @@ func TestMirrorCopy(t *testing.T) {
 	m := New(mm, md)
 
 	t.Run("Testing Mirror : copy should pass", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/test", "oci:test", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/test", "oci:test", "copy", &opts)
 		if err != nil {
 			t.Fatal("should pass")
 		}
@@ -63,19 +63,19 @@ func TestMirrorCopy(t *testing.T) {
 	})
 
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "broken", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "broken", "copy", &opts)
 		assert.Equal(t, "invalid destination name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
 
 	opts.MultiArch = "other"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
 	})
 
 	opts.All = true
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "cannot use --all and --multi-arch flags together", err.Error())
 	})
 
@@ -84,7 +84,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.EncryptionKeys = []string{"test"}
 	opts.DecryptionKeys = []string{"test"}
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "--encryption-key and --decryption-key cannot be specified together", err.Error())
 	})
 
@@ -96,7 +96,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.SignByFingerprint = "test"
 	opts.SignBySigstorePrivateKey = "test"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
-		err := m.Run(context.Background(), "docker://localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
+		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
 		assert.Equal(t, "only one of --sign-by and sign-by-sigstore-private-key can be used with sign-passphrase-file", err.Error())
 	})
 }
@@ -138,13 +138,13 @@ func TestMirrorCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	imageAbsolutePath, err := filepath.Abs(common.TestFolder + "albo-bundle-image")
+	imageAbsolutePath, err := filepath.Abs(consts.TestFolder + "albo-bundle-image")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	src := "dir://" + imageAbsolutePath
-	dest := "docker://" + u.Host + "/albo-test:latest"
+	src := consts.DirProtocol + imageAbsolutePath
+	dest := consts.DockerProtocol + u.Host + "/albo-test:latest"
 	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts)
 	if err != nil {
 		t.Fatal(err)
@@ -198,13 +198,13 @@ func TestMirrorDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	imageAbsolutePath, err := filepath.Abs(common.TestFolder + "albo-bundle-image")
+	imageAbsolutePath, err := filepath.Abs(consts.TestFolder + "albo-bundle-image")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	src := "dir://" + imageAbsolutePath
-	dest := "docker://" + u.Host + "/albo-test:latest"
+	src := consts.DirProtocol + imageAbsolutePath
+	dest := consts.DockerProtocol + u.Host + "/albo-test:latest"
 	err = New(NewMirrorCopy(), NewMirrorDelete()).Run(context.Background(), src, dest, "copy", &opts)
 	if err != nil {
 		t.Fatal(err)

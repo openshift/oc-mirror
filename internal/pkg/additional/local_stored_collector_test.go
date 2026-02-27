@@ -10,6 +10,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -40,7 +41,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 		SrcImage:            srcOpts,
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
-		Destination:         "oci://test",
+		Destination:         consts.OciProtocol + "test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
 		LocalStorageFQDN:    localstorageFQDN,
@@ -71,27 +72,27 @@ func TestAdditionalImageCollector(t *testing.T) {
 	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should pass", func(t *testing.T) {
 		expected := []v2alpha1.CopyImageSchema{
 			{
-				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest",
-				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Source:      "docker://registry.redhat.io/ubi8/ubi@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      consts.DockerProtocol + "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Destination: "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: consts.DockerProtocol + "test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
 				Source:      "oci:///folder-a/folder-b/testns/test",
 				Origin:      "oci:///folder-a/folder-b/testns/test",
-				Destination: "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/folder-a/folder-b/testns/test:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 		}
@@ -106,33 +107,33 @@ func TestAdditionalImageCollector(t *testing.T) {
 	// update opts
 	// this test covers diskToMirror
 	opts.Mode = mirror.DiskToMirror
-	opts.Destination = "docker://mirror.acme.com"
+	opts.Destination = consts.DockerProtocol + "mirror.acme.com"
 	ex = New(log, cfg, opts, mockmirror, manifest)
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror should pass", func(t *testing.T) {
 		expected := []v2alpha1.CopyImageSchema{
 			{
-				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest",
-				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: consts.DockerProtocol + "mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      consts.DockerProtocol + "test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/folder-a/folder-b/testns/test:latest",
 				Origin:      "oci:///folder-a/folder-b/testns/test",
-				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/folder-a/folder-b/testns/test:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 		}
@@ -151,27 +152,27 @@ func TestAdditionalImageCollector(t *testing.T) {
 		ex = WithV1Tags(ex)
 		expected := []v2alpha1.CopyImageSchema{
 			{
-				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest",
-				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/testns/test:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/testns/test:latest",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      consts.DockerProtocol + "test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/folder-a/folder-b/testns/test:latest",
 				Origin:      "oci:///folder-a/folder-b/testns/test",
-				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/folder-a/folder-b/testns/test:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 		}
@@ -191,21 +192,21 @@ func TestAdditionalImageCollector(t *testing.T) {
 	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
 		expected := []v2alpha1.CopyImageSchema{
 			{
-				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest",
-				Destination: "docker://test.registry.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Source:      "docker://sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      consts.DockerProtocol + "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Destination: "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: consts.DockerProtocol + "test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
 				Source:      "oci:///folder-a/folder-b/testns/test",
 				Origin:      "oci:///folder-a/folder-b/testns/test",
-				Destination: "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/folder-a/folder-b/testns/test:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 		}
@@ -224,21 +225,21 @@ func TestAdditionalImageCollector(t *testing.T) {
 		ex = New(log, cfg, opts, mockmirror, manifest)
 		expected := []v2alpha1.CopyImageSchema{
 			{
-				Destination: "docker://mirror.acme.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest",
-				Source:      "docker://test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Destination: consts.DockerProtocol + "mirror.acme.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Origin:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-				Source:      "docker://test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+				Source:      consts.DockerProtocol + "test.registry.com/testns/test:sha256-f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
-				Destination: "docker://mirror.acme.com/folder-a/folder-b/testns/test:latest",
+				Destination: consts.DockerProtocol + "mirror.acme.com/folder-a/folder-b/testns/test:latest",
 				Origin:      "oci:///folder-a/folder-b/testns/test",
-				Source:      "docker://test.registry.com/folder-a/folder-b/testns/test:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/folder-a/folder-b/testns/test:latest",
 				Type:        v2alpha1.TypeGeneric,
 			},
 		}

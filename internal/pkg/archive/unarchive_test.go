@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
 
 func TestUnArchiver_UnArchive(t *testing.T) {
@@ -124,7 +124,7 @@ func TestUnArchiver_CacheDirError(t *testing.T) {
 
 func prepareFakeTarWorkingDir(tarFile *os.File) error {
 	tarWriter := tar.NewWriter(tarFile)
-	workingDirFake := common.TestFolder + "working-dir-fake"
+	workingDirFake := consts.TestFolder + "working-dir-fake"
 
 	err := filepath.Walk(workingDirFake, func(path string, info os.FileInfo, incomingError error) error {
 		if incomingError != nil {
@@ -177,7 +177,7 @@ func prepareFakeTarWorkingDir(tarFile *os.File) error {
 }
 
 func prepareFakeTarCacheDir(tarFile *os.File) error {
-	cacheDirFake := common.TestFolder + "cache-fake"
+	cacheDirFake := consts.TestFolder + "cache-fake"
 	tarWriter := tar.NewWriter(tarFile)
 	err := filepath.Walk(cacheDirFake, func(path string, info os.FileInfo, incomingError error) error {
 		if incomingError != nil {

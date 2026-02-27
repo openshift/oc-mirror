@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -22,9 +24,9 @@ const (
 
 	// Catalog references
 	redhatIndexTag          = "registry.redhat.io/redhat/redhat-operator-index:v4.12"
-	redhatIndexTagDocker    = "docker://registry.redhat.io/redhat/redhat-operator-index:v4.12"
+	redhatIndexTagDocker    = consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.12"
 	certifiedIndexTag       = "registry.redhat.io/redhat/certified-operator-index:v4.12"
-	certifiedIndexTagDocker = "docker://registry.redhat.io/redhat/certified-operator-index:v4.12"
+	certifiedIndexTagDocker = consts.DockerProtocol + "registry.redhat.io/redhat/certified-operator-index:v4.12"
 	communityIndexBase      = "registry.redhat.io/redhat/community-operator-index"
 	redhatIndexBase         = "registry.redhat.io/redhat/redhat-operator-index"
 
@@ -484,7 +486,7 @@ func TestPinSingleCatalog_AlreadyPinned(t *testing.T) {
 	alreadyPinnedCatalog := image.WithDigest(redhatIndexBase, testDigest1)
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		"docker://" + alreadyPinnedCatalog: {
+		consts.DockerProtocol + alreadyPinnedCatalog: {
 			Digest: "newdigest123",
 		},
 	}
@@ -544,14 +546,14 @@ func TestPinSingleCatalog_OCITransport(t *testing.T) {
 
 	pinnedRef, err := pinSingleCatalogDigest(ociCatalog, catalogMap, logger)
 	require.NoError(t, err)
-	assert.Equal(t, "oci://"+image.WithDigest("/path/to/catalog", "ocidigests123"), pinnedRef,
+	assert.Equal(t, consts.OciProtocol+image.WithDigest("/path/to/catalog", "ocidigests123"), pinnedRef,
 		"Should preserve OCI transport prefix")
 }
 
 func TestPinSingleCatalog_DockerTransport(t *testing.T) {
 	logger := clog.New("trace")
 
-	dockerCatalog := "docker://registry.redhat.io/redhat/redhat-operator-index:v4.12"
+	dockerCatalog := consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.12"
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		dockerCatalog: {
@@ -579,7 +581,7 @@ func TestPinSingleCatalog_NoTransport(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef,
 		"Should not add transport prefix when none specified")
-	assert.NotContains(t, pinnedRef, "docker://",
+	assert.NotContains(t, pinnedRef, consts.DockerProtocol,
 		"Should not include docker:// prefix in pinned reference")
 }
 

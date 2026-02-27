@@ -10,8 +10,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/fake"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
@@ -62,7 +63,7 @@ func TestGetAllManifests(t *testing.T) {
 				},
 			},
 		}
-		res, err := manifest.GetOCIImageManifest(filepath.Join(common.TestFolder, "image-manifest.json"))
+		res, err := manifest.GetOCIImageManifest(filepath.Join(consts.TestFolder, "image-manifest.json"))
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOCI, res)
 	})
@@ -79,7 +80,7 @@ func TestGetAllManifests(t *testing.T) {
 				},
 			},
 		}
-		res, err := manifest.GetOCIImageIndex(common.TestFolder)
+		res, err := manifest.GetOCIImageIndex(consts.TestFolder)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedOCI, res)
 	})
@@ -122,7 +123,7 @@ func TestGetAllManifests(t *testing.T) {
 				},
 			},
 		}
-		res, err := manifest.GetOperatorConfig(filepath.Join(common.TestFolder, "operator-config.json"))
+		res, err := manifest.GetOperatorConfig(filepath.Join(consts.TestFolder, "operator-config.json"))
 		assert.NoError(t, err)
 		// We don't care about some fields from the Schema (e.g. History), so
 		// we cannot just compare the objects. Instead, we compare just the relevant fields
@@ -141,7 +142,7 @@ func TestGetAllManifests(t *testing.T) {
 				Type:  2,
 			},
 		}
-		res, err := manifest.GetReleaseSchema(filepath.Join(common.TestFolder, "release-schema.json"))
+		res, err := manifest.GetReleaseSchema(filepath.Join(consts.TestFolder, "release-schema.json"))
 		assert.NoError(t, err)
 		assert.Equal(t, expectedRI, res)
 	})
@@ -153,9 +154,9 @@ func TestExtractOCILayers(t *testing.T) {
 	t.Run("Testing ExtractOCILayers : should pass", func(t *testing.T) {
 		t.Run("when destination directory exists - no op", func(t *testing.T) {
 			// this should do a nop (directory exists)
-			destDir := filepath.Join(common.TestFolder, "test-untar", "release-manifests")
+			destDir := filepath.Join(consts.TestFolder, "test-untar", "release-manifests")
 			assert.DirExists(t, destDir, "directory should exist as precondition")
-			err := manifest.ExtractOCILayers(&fake.FakeImage{}, filepath.Join(common.TestFolder, "test-untar"), "release-manifests")
+			err := manifest.ExtractOCILayers(&fake.FakeImage{}, filepath.Join(consts.TestFolder, "test-untar"), "release-manifests")
 			assert.NoError(t, err, "should not fail: no op")
 			assert.DirExists(t, destDir, "directory should still exist")
 		})
@@ -163,7 +164,7 @@ func TestExtractOCILayers(t *testing.T) {
 			destDir := t.TempDir()
 
 			releaseManifestsLayerPath := filepath.Join(
-				common.TestFolder,
+				consts.TestFolder,
 				"test-untar", "blobs", "sha256",
 				"5b2ca04f694b70c8b41f1c2a40b7e95643181a1d037b115149ecc243324c513d",
 			)

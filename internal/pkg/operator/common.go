@@ -10,6 +10,8 @@ import (
 
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -46,7 +48,7 @@ func WithV1Tags(o CollectorInterface) CollectorInterface {
 func (o OperatorCollector) destinationRegistry() string {
 	if o.destReg == "" {
 		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
-			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, consts.DockerProtocol)
 		} else {
 			o.destReg = o.LocalStorageFQDN
 		}
@@ -68,11 +70,11 @@ func (o OperatorCollector) cachedCatalog(catalog v2alpha1.Operator, filteredTag 
 	var src string
 	switch {
 	case len(catalog.TargetCatalog) > 0:
-		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, catalog.TargetCatalog)
-	case srcImgSpec.Transport == ociProtocol:
-		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, path.Base(srcImgSpec.Reference))
+		src = fmt.Sprintf("%s%s/%s", consts.DockerProtocol, o.LocalStorageFQDN, catalog.TargetCatalog)
+	case srcImgSpec.Transport == consts.OciProtocol:
+		src = fmt.Sprintf("%s%s/%s", consts.DockerProtocol, o.LocalStorageFQDN, path.Base(srcImgSpec.Reference))
 	default:
-		src = fmt.Sprintf("%s%s/%s", dockerProtocol, o.LocalStorageFQDN, srcImgSpec.PathComponent)
+		src = fmt.Sprintf("%s%s/%s", consts.DockerProtocol, o.LocalStorageFQDN, srcImgSpec.PathComponent)
 	}
 
 	if len(filteredTag) > 0 {
@@ -100,7 +102,7 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	switch {
 	case len(catalog.TargetTag) > 0: // applies only to catalogs
 		tag = catalog.TargetTag
-	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == ociProtocol:
+	case srcImgSpec.Tag == "" && srcImgSpec.Digest == "" && srcImgSpec.Transport == consts.OciProtocol:
 		tag = latestTag
 	default:
 		tag = srcImgSpec.Tag
@@ -150,13 +152,13 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			switch {
 			// applies only to catalogs
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0:
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
+				src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.TargetCatalog}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, img.TargetCatalog}, "/")
-			case imgSpec.Transport == ociProtocol:
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
+			case imgSpec.Transport == consts.OciProtocol:
+				src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, img.Name}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, img.Name}, "/")
 			default:
-				src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/")
+				src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent}, "/")
 				dest = strings.Join([]string{o.Opts.Destination, imgSpec.PathComponent}, "/")
 			}
 
@@ -250,11 +252,11 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			switch {
 			// applies only to catalogs
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetCatalog) > 0:
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
-			case img.Type == v2alpha1.TypeOperatorCatalog && imgSpec.Transport == ociProtocol:
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
+				dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), img.TargetCatalog}, "/")
+			case img.Type == v2alpha1.TypeOperatorCatalog && imgSpec.Transport == consts.OciProtocol:
+				dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), img.Name}, "/")
 			default:
-				dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
+				dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/")
 			}
 
 			// add the tag for src and dest
@@ -262,7 +264,7 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			// applies only to catalogs
 			case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 				dest = dest + ":" + img.TargetTag
-			case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
+			case imgSpec.Tag == "" && imgSpec.Transport == consts.OciProtocol:
 				dest = dest + "::" + latestTag
 			case imgSpec.IsImageByDigestOnly():
 				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
@@ -310,7 +312,7 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 			case v2alpha1.TypeOperatorCatalog:
 				dispatcher := CatalogImageDispatcher{
 					log:                 o.Log,
-					cacheRegistry:       dockerProtocol + o.LocalStorageFQDN,
+					cacheRegistry:       consts.DockerProtocol + o.LocalStorageFQDN,
 					destinationRegistry: o.Opts.Destination,
 				}
 				copies, err = dispatcher.dispatch(img)
@@ -322,7 +324,7 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 			default:
 				dispatcher := OtherImageDispatcher{
 					log:                 o.Log,
-					cacheRegistry:       dockerProtocol + o.LocalStorageFQDN,
+					cacheRegistry:       consts.DockerProtocol + o.LocalStorageFQDN,
 					destinationRegistry: o.Opts.Destination,
 				}
 				copies, err = dispatcher.dispatch(img)
@@ -357,7 +359,7 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 		return "", err
 	}
 
-	if len(oci.Manifests) > 1 && imgSpec.Transport == ociProtocol {
+	if len(oci.Manifests) > 1 && imgSpec.Transport == consts.OciProtocol {
 		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
 			return "", err
 		}
@@ -403,7 +405,7 @@ func (d OtherImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.Co
 	src = imgSpec.ReferenceWithTransport
 	dest = strings.Join([]string{d.destinationRegistry, imgSpec.PathComponent}, "/")
 	switch {
-	case imgSpec.Tag == "" && imgSpec.Transport == ociProtocol:
+	case imgSpec.Tag == "" && imgSpec.Transport == consts.OciProtocol:
 		dest = dest + ":" + latestTag
 	case imgSpec.IsImageByDigestOnly():
 		dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
@@ -463,7 +465,7 @@ func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRe
 	switch {
 	case len(img.TargetCatalog) > 0:
 		saveCtlgDest = strings.Join([]string{cacheRegistry, img.TargetCatalog}, "/")
-	case spec.Transport == ociProtocol:
+	case spec.Transport == consts.OciProtocol:
 		saveCtlgDest = strings.Join([]string{cacheRegistry, img.Name}, "/")
 	default:
 		saveCtlgDest = strings.Join([]string{cacheRegistry, spec.PathComponent}, "/")
@@ -473,7 +475,7 @@ func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRe
 	switch {
 	case len(img.TargetTag) > 0:
 		saveCtlgDest = saveCtlgDest + ":" + img.TargetTag
-	case spec.Tag == "" && spec.Transport == ociProtocol:
+	case spec.Tag == "" && spec.Transport == consts.OciProtocol:
 		saveCtlgDest = saveCtlgDest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		saveCtlgDest = saveCtlgDest + ":" + spec.Algorithm + "-" + spec.Digest
@@ -492,7 +494,7 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 	// applies only to catalogs
 	case len(img.TargetCatalog) > 0:
 		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, img.TargetCatalog}, "/")
-	case spec.Transport == ociProtocol:
+	case spec.Transport == consts.OciProtocol:
 		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, img.Name}, "/")
 	default:
 		rebuiltCtlgSrc = strings.Join([]string{cacheRegistry, spec.PathComponent}, "/")
@@ -505,7 +507,7 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.RebuiltTag
 	case img.Type == v2alpha1.TypeOperatorCatalog && len(img.TargetTag) > 0:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + img.TargetTag
-	case spec.Tag == "" && spec.Transport == ociProtocol:
+	case spec.Tag == "" && spec.Transport == consts.OciProtocol:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Algorithm + "-" + spec.Digest
@@ -525,7 +527,7 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 	// applies only to catalogs
 	case len(img.TargetCatalog) > 0:
 		dest = strings.Join([]string{destinationRegistry, img.TargetCatalog}, "/")
-	case spec.Transport == ociProtocol:
+	case spec.Transport == consts.OciProtocol:
 		dest = strings.Join([]string{destinationRegistry, img.Name}, "/")
 	default:
 		dest = strings.Join([]string{destinationRegistry, spec.PathComponent}, "/")
@@ -537,7 +539,7 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 
 	case len(img.TargetTag) > 0:
 		dest = dest + ":" + img.TargetTag
-	case spec.Tag == "" && spec.Transport == ociProtocol:
+	case spec.Tag == "" && spec.Transport == consts.OciProtocol:
 		dest = dest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
 		if img.RebuiltTag != "" {

@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 func TestStrictAdder_NextChunk(t *testing.T) {
@@ -44,7 +45,7 @@ func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 		defer os.RemoveAll(testFolder)
 
 		//adding a file of 119K
-		err = ma.addFile(common.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references", "file1")
+		err = ma.addFile(consts.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references", "file1")
 		if err == nil {
 			t.Fatal("should fail but passed instead")
 		}
@@ -63,14 +64,14 @@ func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 		// first archive
 		firstArchive := ma.archiveFile.Name()
 		//adding a first file of size 5KB
-		err = ma.addFile(common.TestFolder+"archive-test-data/0000_03_config-operator_01_proxy.crd.yaml", "file1")
+		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_config-operator_01_proxy.crd.yaml", "file1")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
 		// assert this is still in first chunk
 		assert.Equal(t, 1, ma.currentChunkId)
 		//adding a second file of size 2.3KB
-		err = ma.addFile(common.TestFolder+"archive-test-data/0000_03_securityinternal-openshift_02_rangeallocation.crd.yaml", "file2")
+		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_securityinternal-openshift_02_rangeallocation.crd.yaml", "file2")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
@@ -78,7 +79,7 @@ func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 		assert.Equal(t, 1, ma.currentChunkId)
 
 		//adding a third file 4.9KB
-		err = ma.addFile(common.TestFolder+"archive-test-data/0000_03_marketplace-operator_01_operatorhub.crd.yaml", "file3")
+		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_marketplace-operator_01_operatorhub.crd.yaml", "file3")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
@@ -105,14 +106,14 @@ func TestStrictAdder_AddFolder_BiggerThanMax(t *testing.T) {
 		{
 			caseName:               "File bigger than max: should fail",
 			archiveSizeBytes:       int64(10 * 1024),
-			foldersToAdd:           []string{common.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
+			foldersToAdd:           []string{consts.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
 			expectedNumberOfChunks: 1,
 			expectedError:          "maxArchiveSize 0G is too small compared to sizes of files that need to be included in the archive.\nimage-references: 0G\n Aborting archive generation",
 		},
 		{
 			caseName:               "nominal case: should pass",
 			archiveSizeBytes:       int64(200 * 1024),
-			foldersToAdd:           []string{common.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests", common.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
+			foldersToAdd:           []string{consts.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests", consts.TestFolder + "working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests"},
 			expectedNumberOfChunks: 2,
 			expectedError:          "",
 		},

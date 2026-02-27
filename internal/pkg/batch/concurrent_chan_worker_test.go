@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -39,9 +41,9 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 		{
 			name: "Rebuilt catalog should have PreserveDigests=false",
 			catalogImage: v2alpha1.CopyImageSchema{
-				Source:      "docker://localhost:55000/redhat/redhat-operator-index@sha256:rebuilthash",
-				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
-				Destination: "docker://nexus:8082/redhat/redhat-operator-index:v4.17",
+				Source:      consts.DockerProtocol + "localhost:55000/redhat/redhat-operator-index@sha256:rebuilthash",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+				Destination: consts.DockerProtocol + "nexus:8082/redhat/redhat-operator-index:v4.17",
 				Type:        v2alpha1.TypeOperatorCatalog,
 				RebuiltTag:  "sha256-rebuilthash.tag", // This indicates a rebuilt catalog
 			},
@@ -52,9 +54,9 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 		{
 			name: "Non-rebuilt catalog should have PreserveDigests=true (default)",
 			catalogImage: v2alpha1.CopyImageSchema{
-				Source:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
-				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
-				Destination: "docker://nexus:8082/redhat/redhat-operator-index:v4.17",
+				Source:      consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+				Destination: consts.DockerProtocol + "nexus:8082/redhat/redhat-operator-index:v4.17",
 				Type:        v2alpha1.TypeOperatorCatalog,
 				RebuiltTag:  "", // Empty RebuiltTag means it's not rebuilt
 			},
@@ -65,9 +67,9 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 		{
 			name: "Operator bundle should always have PreserveDigests=true",
 			catalogImage: v2alpha1.CopyImageSchema{
-				Source:      "docker://registry.redhat.io/rhbk/keycloak-operator-bundle@sha256:somehash",
-				Origin:      "docker://registry.redhat.io/rhbk/keycloak-operator-bundle@sha256:somehash",
-				Destination: "docker://nexus:8082/rhbk/keycloak-operator-bundle@sha256:somehash",
+				Source:      consts.DockerProtocol + "registry.redhat.io/rhbk/keycloak-operator-bundle@sha256:somehash",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/rhbk/keycloak-operator-bundle@sha256:somehash",
+				Destination: consts.DockerProtocol + "nexus:8082/rhbk/keycloak-operator-bundle@sha256:somehash",
 				Type:        v2alpha1.TypeOperatorBundle,
 				RebuiltTag:  "",
 			},
@@ -78,9 +80,9 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 		{
 			name: "Operator related image should always have PreserveDigests=true",
 			catalogImage: v2alpha1.CopyImageSchema{
-				Source:      "docker://registry.redhat.io/rhbk/keycloak@sha256:imagehash",
-				Origin:      "docker://registry.redhat.io/rhbk/keycloak@sha256:imagehash",
-				Destination: "docker://nexus:8082/rhbk/keycloak@sha256:imagehash",
+				Source:      consts.DockerProtocol + "registry.redhat.io/rhbk/keycloak@sha256:imagehash",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/rhbk/keycloak@sha256:imagehash",
+				Destination: consts.DockerProtocol + "nexus:8082/rhbk/keycloak@sha256:imagehash",
 				Type:        v2alpha1.TypeOperatorRelatedImage,
 				RebuiltTag:  "",
 			},
@@ -108,7 +110,7 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				SrcImage:            srcOpts,
 				DestImage:           destOpts,
 				RetryOpts:           retryOpts,
-				Destination:         "docker://nexus:8082",
+				Destination:         consts.DockerProtocol + "nexus:8082",
 				Dev:                 false,
 				Mode:                mirror.MirrorToMirror,
 				Function:            "copy",

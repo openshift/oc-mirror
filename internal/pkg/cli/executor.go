@@ -205,7 +205,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			log.Info(emoji.Gear + "  setting up the environment for you...")
 
 			// Validate and set common flags
-			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, fileProtocol) {
+			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, consts.FileProtocol) {
 				return fmt.Errorf("when --workspace is used, it must have file:// prefix")
 			}
 			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
@@ -247,8 +247,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			cmd.SetOutput(ex.logFile)
 
 			// NOTE: this is not in the `ex.Validate` function because it breaks unit tests
-			if strings.Contains(args[0], dockerProtocol) {
-				registry := strings.TrimPrefix(args[0], dockerProtocol)
+			if strings.Contains(args[0], consts.DockerProtocol) {
+				registry := strings.TrimPrefix(args[0], consts.DockerProtocol)
 				if err := ex.checkRegistryAccess(cmd.Context(), registry); err != nil {
 					return fmt.Errorf("checking registry %q access: %w", registry, err)
 				}
@@ -360,16 +360,16 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if len(o.Opts.Global.ConfigPath) == 0 {
 		return fmt.Errorf("use the --config flag it is mandatory")
 	}
-	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From != "" {
+	if strings.Contains(dest[0], consts.FileProtocol) && o.Opts.Global.From != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --from argument is not needed")
 	}
 	// OCPBUGS-42862
-	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.From == "" {
+	if strings.Contains(dest[0], consts.FileProtocol) && o.Opts.Global.From == "" {
 		if keyWord := checkKeyWord(keyWords, dest[0]); len(keyWord) > 0 {
 			return fmt.Errorf("the destination contains an internal oc-mirror keyword '%s'", keyWord)
 		}
 	}
-	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, fileProtocol) {
+	if len(o.Opts.Global.From) > 0 && !strings.Contains(o.Opts.Global.From, consts.FileProtocol) {
 		return fmt.Errorf("when --from is used, it must have file:// prefix")
 	}
 	if len(o.Opts.Global.From) > 0 && o.Opts.Global.SinceString != "" {
@@ -394,16 +394,16 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	if o.Opts.ParallelLayerImages > 10 || o.Opts.ParallelLayerImages < 1 {
 		return fmt.Errorf("the flag parallel-layers must be between the range 1 to 10")
 	}
-	if strings.Contains(dest[0], fileProtocol) && o.Opts.Global.WorkingDir != "" {
+	if strings.Contains(dest[0], consts.FileProtocol) && o.Opts.Global.WorkingDir != "" {
 		return fmt.Errorf("when destination is file://, mirrorToDisk workflow is assumed, and the --workspace argument is not needed")
 	}
-	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.WorkingDir != "" && o.Opts.Global.From != "" {
+	if strings.Contains(dest[0], consts.DockerProtocol) && o.Opts.Global.WorkingDir != "" && o.Opts.Global.From != "" {
 		return fmt.Errorf("when destination is docker://, --from (assumes disk to mirror workflow) and --workspace (assumes mirror to mirror workflow) cannot be used together")
 	}
-	if strings.Contains(dest[0], dockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
+	if strings.Contains(dest[0], consts.DockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
 		return fmt.Errorf("when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
 	}
-	if strings.Contains(dest[0], fileProtocol) || strings.Contains(dest[0], dockerProtocol) {
+	if strings.Contains(dest[0], consts.FileProtocol) || strings.Contains(dest[0], consts.DockerProtocol) {
 		return nil
 	} else {
 		return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
@@ -495,33 +495,34 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	// logic to check mode
 	var rootDir string
-	if strings.Contains(args[0], fileProtocol) {
+	switch {
+	case strings.Contains(args[0], consts.FileProtocol):
 		o.Opts.Mode = mirror.MirrorToDisk
-		rootDir = strings.TrimPrefix(args[0], fileProtocol)
+		rootDir = strings.TrimPrefix(args[0], consts.FileProtocol)
 		o.Log.Debug("destination %s ", rootDir)
 		// destination is the local cache, which is HTTP
 		// nolint: errcheck
 		o.Opts.DestImage.TlsVerify = false
-	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From != "" {
-		rootDir = strings.TrimPrefix(o.Opts.Global.From, fileProtocol)
+	case strings.Contains(args[0], consts.DockerProtocol) && o.Opts.Global.From != "":
+		rootDir = strings.TrimPrefix(o.Opts.Global.From, consts.FileProtocol)
 		o.Opts.Mode = mirror.DiskToMirror
 		// source is the local cache, which is HTTP
 		// nolint: errcheck
 		o.Opts.SrcImage.TlsVerify = false
-	} else if strings.Contains(args[0], dockerProtocol) && o.Opts.Global.From == "" {
+	case strings.Contains(args[0], consts.DockerProtocol) && o.Opts.Global.From == "":
 		o.Opts.Mode = mirror.MirrorToMirror
 		if o.Opts.Global.WorkingDir == "" { // this should have been caught by Validate function. Nevertheless...
 			return fmt.Errorf("mirror to mirror workflow detected. --workspace is mandatory to provide in the command arguments")
 		}
-		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, fileProtocol)
-	} else {
+		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, consts.FileProtocol)
+	default:
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
 	o.Opts.Destination = args[0]
 	if o.Opts.Global.WorkingDir == "" { // this can already be set by using flag --workspace in mirror to mirror workflow
 		o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
 	} else {
-		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, fileProtocol)
+		o.Opts.Global.WorkingDir = strings.TrimPrefix(o.Opts.Global.WorkingDir, consts.FileProtocol)
 		if filepath.Base(o.Opts.Global.WorkingDir) != workingDir {
 			o.Opts.Global.WorkingDir = filepath.Join(o.Opts.Global.WorkingDir, workingDir)
 		}

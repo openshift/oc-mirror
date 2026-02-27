@@ -7,8 +7,10 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -37,7 +39,7 @@ func TestCreateGraphImage(t *testing.T) {
 		SrcImage:            srcOptsM2D,
 		DestImage:           destOptsM2D,
 		RetryOpts:           retryOpts,
-		Destination:         "file://test",
+		Destination:         consts.FileProtocol + "test",
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
 		LocalStorageFQDN:    "localhost:9999",
@@ -204,7 +206,11 @@ func (o mockImageBuilder) SaveImageLayoutToDir(ctx context.Context, imgRef strin
 	if o.Fail {
 		return layout.Path(""), fmt.Errorf("forced error")
 	}
-	return layout.FromPath(common.TestFolder + "test-untar")
+	p, err := layout.FromPath(consts.TestFolder + "test-untar")
+	if err != nil {
+		return layout.Path(""), fmt.Errorf("getting layout from path: %w", err)
+	}
+	return p, nil
 }
 
 func (o mockImageBuilder) ProcessImageIndex(ctx context.Context, idx v1.ImageIndex, v2format *bool, cmd []string, targetRef string, layers ...v1.Layer) (v1.ImageIndex, error) {

@@ -10,7 +10,9 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -19,8 +21,8 @@ const (
 	graphDataDir       = "/var/lib/cincinnati-graph-data"
 	graphDataMountPath = "/var/lib/cincinnati/graph-data"
 	graphArchive       = "cincinnati-graph-data.tar"
-	graphStaging       = common.TestFolder + "graph-staging/"
-	graphPreparation   = common.TestFolder + "graph-preparation/"
+	graphStaging       = consts.TestFolder + "graph-staging/"
+	graphPreparation   = consts.TestFolder + "graph-preparation/"
 )
 
 func TestImageBuilder(t *testing.T) {
@@ -50,7 +52,7 @@ func TestImageBuilder(t *testing.T) {
 		SrcImage:            srcOpts,
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
-		Destination:         "docker://localhost:5000/test",
+		Destination:         consts.DockerProtocol + "localhost:5000/test",
 		Dev:                 false,
 		Mode:                mirror.DiskToMirror,
 		All:                 true,
@@ -84,13 +86,13 @@ func TestImageBuilder(t *testing.T) {
 		ctx := context.Background()
 
 		// expect errors from LayerFromGzipByteArray
-		archiveDestination := common.TestFolder + "graph-staging/" + graphArchive
+		archiveDestination := consts.TestFolder + "graph-staging/" + graphArchive
 		_, err = LayerFromGzipByteArray([]byte{}, archiveDestination, graphDataDir, 0644, 0, 0)
 		if err == nil {
 			t.Fatalf("should fail")
 		}
 
-		body, err := os.ReadFile(common.TestFolder + "graph-assets/graph-data.tar.gz")
+		body, err := os.ReadFile(consts.TestFolder + "graph-assets/graph-data.tar.gz")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +104,7 @@ func TestImageBuilder(t *testing.T) {
 			t.Fatalf("should fail")
 		}
 
-		archiveDestination = common.TestFolder + "graph-staging/" + graphArchive
+		archiveDestination = consts.TestFolder + "graph-staging/" + graphArchive
 		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -121,13 +123,13 @@ func TestImageBuilder(t *testing.T) {
 		defer os.Remove(archiveDestination)
 		defer os.RemoveAll(graphPreparation)
 
-		imageAbsolutePath, err := filepath.Abs(common.TestFolder + "simple-test-bundle")
+		imageAbsolutePath, err := filepath.Abs(consts.TestFolder + "simple-test-bundle")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		src := "oci://" + imageAbsolutePath
-		dest := "docker://" + u.Host + "/simple-test-bundle:latest"
+		src := consts.OciProtocol + imageAbsolutePath
+		dest := consts.DockerProtocol + u.Host + "/simple-test-bundle:latest"
 
 		err = mirror.New(mirror.NewMirrorCopy(), mirror.NewMirrorDelete()).Run(ctx, src, dest, "copy", &opts)
 		if err != nil {
@@ -172,7 +174,7 @@ func TestProcessImageIndex(t *testing.T) {
 			SrcImage:            srcOpts,
 			DestImage:           destOpts,
 			RetryOpts:           retryOpts,
-			Destination:         "docker://localhost:5000/test",
+			Destination:         consts.DockerProtocol + "localhost:5000/test",
 			Dev:                 false,
 			Mode:                mirror.DiskToMirror,
 		}
@@ -180,12 +182,12 @@ func TestProcessImageIndex(t *testing.T) {
 		ex := NewBuilder(log, opts)
 		ctx := context.Background()
 
-		body, err := os.ReadFile(common.TestFolder + "graph-assets/graph-data.tar.gz")
+		body, err := os.ReadFile(consts.TestFolder + "graph-assets/graph-data.tar.gz")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		archiveDestination := common.TestFolder + "graph-staging/" + graphArchive
+		archiveDestination := consts.TestFolder + "graph-staging/" + graphArchive
 		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -194,7 +196,7 @@ func TestProcessImageIndex(t *testing.T) {
 		v2format := false
 
 		// cover the mediatype as list
-		idx, err := layout.ImageIndexFromPath(common.TestFolder + "test-process-image-list/")
+		idx, err := layout.ImageIndexFromPath(consts.TestFolder + "test-process-image-list/")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +207,7 @@ func TestProcessImageIndex(t *testing.T) {
 		}
 
 		// cover the mediatype as oci - normal
-		idx, err = layout.ImageIndexFromPath(common.TestFolder + "test-process-image/")
+		idx, err = layout.ImageIndexFromPath(consts.TestFolder + "test-process-image/")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +218,7 @@ func TestProcessImageIndex(t *testing.T) {
 		}
 
 		// cover the mediatype as oci - normal
-		idx, err = layout.ImageIndexFromPath(common.TestFolder + "test-process-image-bad-platform/")
+		idx, err = layout.ImageIndexFromPath(consts.TestFolder + "test-process-image-bad-platform/")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -227,7 +229,7 @@ func TestProcessImageIndex(t *testing.T) {
 		}
 
 		// cover the mediatype as unsupported
-		idx, err = layout.ImageIndexFromPath(common.TestFolder + "test-process-image-unsupported/")
+		idx, err = layout.ImageIndexFromPath(consts.TestFolder + "test-process-image-unsupported/")
 		if err != nil {
 			t.Fatal(err)
 		}

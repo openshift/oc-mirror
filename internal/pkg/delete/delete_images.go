@@ -14,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -160,7 +162,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			continue
 		}
 		// remove dockerProtocol
-		name := strings.Split(o.Opts.Global.DeleteDestination, dockerProtocol)
+		name := strings.Split(o.Opts.Global.DeleteDestination, consts.DockerProtocol)
 		// this should not occur - but just incase
 		if len(name) < 2 {
 			allErrs = append(allErrs, fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination))
@@ -190,7 +192,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		if o.Opts.Global.ForceCacheDelete {
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
-				Destination: strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, dockerProtocol+o.LocalStorageFQDN),
+				Destination: strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN),
 				Type:        img.Type,
 			}
 			o.Log.Debug("deleting images local cache %v", cis.Destination)

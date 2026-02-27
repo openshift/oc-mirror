@@ -12,8 +12,9 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/google/uuid"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/stretchr/testify/require"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var _ Client = &mockClient{}

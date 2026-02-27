@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -34,7 +35,7 @@ func WithV1Tags(o CollectorInterface) CollectorInterface {
 func (o LocalStorageCollector) destinationRegistry() string {
 	if o.destReg == "" {
 		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
-			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, consts.DockerProtocol)
 		} else {
 			o.destReg = o.LocalStorageFQDN
 		}
@@ -63,7 +64,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 			tmpSrc = imgSpec.ReferenceWithTransport
 			origin = img.Name
-			if imgSpec.Transport == dockerProtocol {
+			if imgSpec.Transport == consts.DockerProtocol {
 				if imgSpec.IsImageByDigestOnly() {
 					tmpDest = strings.Join([]string{o.destinationRegistry(), imgSpec.PathComponent}, "/") + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
 				} else if imgSpec.IsImageByTagAndDigest() { // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
@@ -88,7 +89,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 				return nil, err
 			}
 
-			if imgSpec.Transport == dockerProtocol {
+			if imgSpec.Transport == consts.DockerProtocol {
 
 				if imgSpec.IsImageByDigestOnly() {
 					tmpSrc = strings.Join([]string{o.LocalStorageFQDN, imgSpec.PathComponent + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest}, "/")

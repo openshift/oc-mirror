@@ -11,6 +11,8 @@ import (
 
 	"github.com/vbauerster/mpb/v8"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
@@ -40,7 +42,7 @@ type LocalStorageCollector struct {
 func (o LocalStorageCollector) destinationRegistry() string {
 	if o.destReg == "" {
 		if o.Opts.Mode == mirror.DiskToMirror || o.Opts.Mode == mirror.MirrorToMirror {
-			o.destReg = strings.TrimPrefix(o.Opts.Destination, dockerProtocol)
+			o.destReg = strings.TrimPrefix(o.Opts.Destination, consts.DockerProtocol)
 		} else {
 			o.destReg = o.LocalStorageFQDN
 		}
@@ -199,8 +201,8 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 	optsCopy := o.Opts
 	optsCopy.Stdout = io.Discard
 
-	src := dockerProtocol + release.Source
-	dest := ociProtocolTrimmed + dir
+	src := consts.DockerProtocol + release.Source
+	dest := consts.OciProtocolTrimmed + dir
 
 	optsCopy.RemoveSignatures = true
 
@@ -300,7 +302,7 @@ func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1
 		// Supposing that the mirror to disk saved the image with the latest tag
 		// If this supposition is false, then we need to implement a mechanism to save
 		// the digest of the graph image and use it here
-		Image: dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+		Image: consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
 		Type:  v2alpha1.TypeCincinnatiGraph,
 	}
 	// OCPBUGS-38037: Check the graph image is in the cache before adding it
@@ -349,7 +351,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
-		dest = dockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
+		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
@@ -372,7 +374,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
-		src = dockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
+		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
 		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
 
 		if src == "" || dest == "" {
@@ -399,8 +401,8 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 		imageIndexDir := strings.Replace(hld[len(hld)-1], ":", "/", -1)
 		dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
-		src := dockerProtocol + value.Source
-		dest := ociProtocolTrimmed + dir
+		src := consts.DockerProtocol + value.Source
+		dest := consts.OciProtocolTrimmed + dir
 		r := v2alpha1.CopyImageSchema{
 			Source:      src,
 			Destination: dest,
@@ -411,8 +413,8 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 	releaseFolders := []string{}
 	releaseImages := []v2alpha1.RelatedImage{}
 	for _, copy := range releaseImageCopies {
-		releasePath := strings.TrimPrefix(copy.Destination, ociProtocol)
-		releasePath = strings.TrimPrefix(releasePath, ociProtocolTrimmed)
+		releasePath := strings.TrimPrefix(copy.Destination, consts.OciProtocol)
+		releasePath = strings.TrimPrefix(releasePath, consts.OciProtocolTrimmed)
 		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
 		releaseFolders = append(releaseFolders, releaseHoldPath)
 		releaseImages = append(releaseImages, v2alpha1.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v2alpha1.TypeOCPRelease})
@@ -529,10 +531,10 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		// OCPBUGS-38037: this indicates that the official cincinnati API is not reacheable
 		// and that graph image cannot be rebuilt on top the complete graph in tar.gz format
 
-		graphImgRef := dockerProtocol + filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
+		graphImgRef := consts.DockerProtocol + filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
 
 		// 1. check if graph image is already in cache
-		cachedImageRef := dockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+		cachedImageRef := consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
 		alreadyInCache, err := o.imageExists(ctx, cachedImageRef)
 		if err != nil {
 			o.Log.Warn("graph image not found in cache: %v", err)

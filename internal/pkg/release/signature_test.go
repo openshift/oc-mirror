@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
+	"github.com/stretchr/testify/assert"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestReleaseSignature(t *testing.T) {
@@ -36,7 +38,7 @@ func TestReleaseSignature(t *testing.T) {
 		SrcImage:            srcOpts,
 		DestImage:           destOpts,
 		RetryOpts:           retryOpts,
-		Destination:         "docker://localhost:5000/test",
+		Destination:         consts.DockerProtocol + "localhost:5000/test",
 		Dev:                 false,
 		Mode:                mirror.DiskToMirror,
 	}
@@ -100,7 +102,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom PGP key - should pass", func(t *testing.T) {
-		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"custom-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", consts.TestFolder+"custom-ocp-sig-key.asc")
 		tmpDir := t.TempDir()
 		workingDir := tmpDir + "/" + "working-dir"
 		os.MkdirAll(workingDir+SignatureDir, 0755)
@@ -124,7 +126,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
-		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"buggy-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", consts.TestFolder+"buggy-ocp-sig-key.asc")
 
 		ex := NewSignatureClient(log, cfg, opts)
 
@@ -142,7 +144,7 @@ func TestReleaseSignature(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
-		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"inexisting-ocp-sig-key.asc")
+		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", consts.TestFolder+"inexisting-ocp-sig-key.asc")
 
 		tmpDir := t.TempDir()
 		workingDir := tmpDir + "/" + "working-dir"

@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -202,7 +201,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 	for _, tc := range testCases {
 		var parentImage image
 		for _, image := range tc.images {
-			imgSrc, err := filepath.Abs(common.TestFolder + image.src)
+			imgSrc, err := filepath.Abs(consts.TestFolder + image.src)
 			assert.NoError(t, err)
 
 			src := image.srcProtocol + imgSrc
@@ -290,7 +289,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, "docker://localhost/test:latest")
+	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest")
 	assert.Equal(t, "error when creating a new image source: pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused", err.Error())
 
 }
@@ -330,7 +329,7 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err = gatherer.GatherBlobs(ctx, "docker://"+u.Host+"/bad-test:latest")
+	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest")
 	assert.Contains(t, err.Error(), "name unknown: Unknown name")
 
 }

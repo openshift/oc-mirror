@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -75,9 +75,9 @@ func TestArchive_BuildArchive(t *testing.T) {
 
 		images := []v2alpha1.CopyImageSchema{
 			{
-				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-				Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "localhost:5000/cfe969/ubi8/ubi:latest",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			},
 		}
 		err = ma.BuildArchive(context.Background(), images)
@@ -100,9 +100,9 @@ func TestArchive_BuildArchive(t *testing.T) {
 
 		images := []v2alpha1.CopyImageSchema{
 			{
-				Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-				Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-				Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "localhost:5000/cfe969/ubi8/ubi:latest",
+				Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			},
 		}
 		err = ma.BuildArchive(context.Background(), images)
@@ -127,14 +127,14 @@ func TestArchive_CacheDirError(t *testing.T) {
 
 	images := []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			Destination: consts.DockerProtocol + "localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 		},
 	}
 	// force error for addAllFolder
 	ma.cacheDir = "none"
-	ma.workingDir = common.TestFolder + "working-dir-fake"
+	ma.workingDir = consts.TestFolder + "working-dir-fake"
 
 	err = ma.BuildArchive(context.Background(), images)
 	if err == nil {
@@ -154,13 +154,13 @@ func TestArchive_WorkingDirError(t *testing.T) {
 
 	images := []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			Destination: consts.DockerProtocol + "localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 		},
 	}
 	// force error for addAllFolder
-	ma.cacheDir = common.TestFolder + "cache-fake"
+	ma.cacheDir = consts.TestFolder + "cache-fake"
 	ma.workingDir = "none"
 
 	err = ma.BuildArchive(context.Background(), images)
@@ -181,9 +181,9 @@ func TestArchive_FileError(t *testing.T) {
 
 	images := []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://registry.redhat.io/ubi8/ubi:latest",
-			Destination: "docker://localhost:5000/cfe969/ubi8/ubi:latest",
-			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			Destination: consts.DockerProtocol + "localhost:5000/cfe969/ubi8/ubi:latest",
+			Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 		},
 	}
 	// force error for addFile
@@ -458,9 +458,9 @@ func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissi
 		Dev:                 false,
 		Mode:                mirror.MirrorToDisk,
 	}
-	cfg := common.TestFolder + "isc.yaml"
+	cfg := consts.TestFolder + "isc.yaml"
 	var ma *MirrorArchive
-	ma, err := NewMirrorArchive(&opts, testFolder, cfg, common.TestFolder+"working-dir-fake", common.TestFolder+"cache-fake", 0, clog.New("trace"))
+	ma, err := NewMirrorArchive(&opts, testFolder, cfg, consts.TestFolder+"working-dir-fake", consts.TestFolder+"cache-fake", 0, clog.New("trace"))
 	if err != nil {
 		return &MirrorArchive{}, err
 	}

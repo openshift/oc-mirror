@@ -17,6 +17,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/otiai10/copy"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -33,7 +35,6 @@ const (
 	operatorCatalogFilteredImageDir = "filtered-catalog-image"
 	operatorCatalogImageDir         = "catalog-image"
 	operatorCatalogConfigDir        = "catalog-config"
-	dockerProtocol                  = "docker://"
 )
 
 type GCRCatalogBuilder struct {
@@ -111,7 +112,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	case mirror.MirrorToDisk:
 		srcCache = destRef.SetTag(filepath.Base(filteredDir)).Reference
 	case mirror.MirrorToMirror:
-		srcCache = strings.Replace(catalogCopyRef.Destination, c.CopyOpts.Destination, dockerProtocol+c.CopyOpts.LocalStorageFQDN, 1)
+		srcCache = strings.Replace(catalogCopyRef.Destination, c.CopyOpts.Destination, consts.DockerProtocol+c.CopyOpts.LocalStorageFQDN, 1)
 		destRef, err := image.ParseRef(srcCache)
 		if err != nil {
 			return err

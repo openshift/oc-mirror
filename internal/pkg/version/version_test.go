@@ -3,8 +3,9 @@ package version
 import (
 	"testing"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/stretchr/testify/require"
+
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 func TestNewVersionCommand(t *testing.T) {

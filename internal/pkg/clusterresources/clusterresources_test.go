@@ -13,12 +13,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
 	ofv1alpha1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	updateservicev1 "github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources/updateservice/v1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/common"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
@@ -26,115 +28,115 @@ import (
 var (
 	imageListRelease = []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-api-server",
-			Destination: "docker://myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-api-server",
-			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Source:      consts.DockerProtocol + "localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-api-server",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-api-server",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
 			Type:        v2alpha1.TypeOCPReleaseContent,
 		},
 		{
-			Source:      "docker://localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
-			Destination: "docker://myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
-			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c1bc9a7f035bd40bafdbc915339027d671b8b491e219a352402748ea948dc3f2",
+			Source:      consts.DockerProtocol + "localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/release:4.14.38-x86_64-agent-installer-csr-approver",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c1bc9a7f035bd40bafdbc915339027d671b8b491e219a352402748ea948dc3f2",
 			Type:        v2alpha1.TypeOCPReleaseContent,
 		},
 		{
-			Source:      "docker://localhost:55000/openshift/release-images:4.14.38-x86_64",
-			Destination: "docker://myregistry/mynamespace/openshift/release-images:4.14.38-x86_64",
-			Origin:      "docker://quay.io/openshift-release-dev/ocp-release:4.14.38-x86_64",
+			Source:      consts.DockerProtocol + "localhost:55000/openshift/release-images:4.14.38-x86_64",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/release-images:4.14.38-x86_64",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-release:4.14.38-x86_64",
 			Type:        v2alpha1.TypeOCPRelease,
 		},
 		{
-			Source:      "docker://localhost:55000/openshift/graph-image:latest",
-			Destination: "docker://myregistry/mynamespace/openshift/graph-image:latest",
-			Origin:      "docker://localhost:55000/openshift/graph-image:latest",
+			Source:      consts.DockerProtocol + "localhost:55000/openshift/graph-image:latest",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/graph-image:latest",
+			Origin:      consts.DockerProtocol + "localhost:55000/openshift/graph-image:latest",
 			Type:        v2alpha1.TypeCincinnatiGraph,
 		},
 	}
 
 	imageListMixed = []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
-			Destination: "docker://myregistry/mynamespace/kubebuilder/kube-rbac-proxy:v0.5.0",
-			Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Source:      consts.DockerProtocol + "localhost:5000/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/kubebuilder/kube-rbac-proxy:v0.5.0",
+			Origin:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0",
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 		{
-			Source:      "docker://localhost:5000/cockroachdb/cockroach-helm-operator:6.0.0",
-			Destination: "docker://myregistry/mynamespace/cockroachdb/cockroach-helm-operator:6.0.0",
-			Origin:      "docker://quay.io/cockroachdb/cockroach-helm-operator:6.0.0",
+			Source:      consts.DockerProtocol + "localhost:5000/cockroachdb/cockroach-helm-operator:6.0.0",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/cockroachdb/cockroach-helm-operator:6.0.0",
+			Origin:      consts.DockerProtocol + "quay.io/cockroachdb/cockroach-helm-operator:6.0.0",
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 		{
-			Source:      "docker://localhost:5000/helmoperators/cockroachdb:v5.0.3",
-			Destination: "docker://myregistry/mynamespace/helmoperators/cockroachdb:v5.0.3",
-			Origin:      "docker://quay.io/helmoperators/cockroachdb:v5.0.3",
+			Source:      consts.DockerProtocol + "localhost:5000/helmoperators/cockroachdb:v5.0.3",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/helmoperators/cockroachdb:v5.0.3",
+			Origin:      consts.DockerProtocol + "quay.io/helmoperators/cockroachdb:v5.0.3",
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 		{
-			Source:      "docker://localhost:5000/helmoperators/cockroachdb:v5.0.4",
-			Destination: "docker://myregistry/mynamespace/helmoperators/cockroachdb:v5.0.4",
-			Origin:      "docker://quay.io/helmoperators/cockroachdb:v5.0.4",
+			Source:      consts.DockerProtocol + "localhost:5000/helmoperators/cockroachdb:v5.0.4",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/helmoperators/cockroachdb:v5.0.4",
+			Origin:      consts.DockerProtocol + "quay.io/helmoperators/cockroachdb:v5.0.4",
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
-			Destination: "docker://myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
-			Origin:      "docker://quay.io/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-community-operators/cockroachdb@sha256:a5d4f4467250074216eb1ba1c36e06a3ab797d81c431427fc2aca97ecaf4e9d8",
 			Type:        v2alpha1.TypeOperatorBundle,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
-			Destination: "docker://myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
-			Origin:      "docker://quay.io/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-community-operators/cockroachdb@sha256:d3016b1507515fc7712f9c47fd9082baf9ccb070aaab58ed0ef6e5abdedde8ba",
 			Type:        v2alpha1.TypeOperatorBundle,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
-			Destination: "docker://myregistry/mynamespace/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
-			Origin:      "docker://quay.io/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Origin:      consts.DockerProtocol + "quay.io/openshift/openshift-community-operators@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
 			Type:        v2alpha1.TypeOperatorCatalog,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
-			Destination: "docker://myregistry/mynamespace/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/redhat-operator-index@sha256:f42337e7b85a46d83c94694638e2312e10ca16a03542399a65ba783c94a32b63",
 			Origin:      "oci:///tmp/app1",
 			Type:        v2alpha1.TypeOperatorCatalog,
 		},
 		{
-			Source:      "docker://localhost:55000/ubi8-minimal:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
-			Destination: "docker://myregistry/mynamespace/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
-			Origin:      "docker://registry.redhat.io/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Source:      consts.DockerProtocol + "localhost:55000/ubi8-minimal:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
+			Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8-minimal@sha256:b93deceb59a58588d5b16429fc47f98920f84740a1f2ed6454e33275f0701b59",
 			Type:        v2alpha1.TypeOperatorRelatedImage,
 		},
 		{
-			Source:      "docker://localhost:5000/ubi8/ubi:latest",
-			Destination: "docker://myregistry/mynamespace/ubi8/ubi:latest",
-			Origin:      "docker://registry.redhat.io/ubi8/ubi:latest",
+			Source:      consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/ubi8/ubi:latest",
+			Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			Type:        v2alpha1.TypeGeneric,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift/graph-image:latest",
-			Destination: "docker://myregistry/mynamespace/openshift/graph-image:latest",
-			Origin:      "docker://localhost:5000/openshift/graph-image:latest",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift/graph-image:latest",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift/graph-image:latest",
+			Origin:      consts.DockerProtocol + "localhost:5000/openshift/graph-image:latest",
 			Type:        v2alpha1.TypeCincinnatiGraph,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
-			Destination: "docker://myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
-			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:6d76ffca7a233213325907bae611e835b49c5b933095be1328351f4f5fc67615",
 			Type:        v2alpha1.TypeOCPRelease,
 		},
 		{
-			Source:      "docker://localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
-			Destination: "docker://myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
-			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4c181f5cbea53472acd9695232f77a0933a73f7f40f543cbd48dff00e6f03090",
 			Type:        v2alpha1.TypeOCPReleaseContent,
 		},
 	}
 
 	imageListDigestsOnly = []v2alpha1.CopyImageSchema{
 		{
-			Source:      "docker://localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			Source:      consts.DockerProtocol + "localhost:5000/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
 			Destination: "docker://myregistry/mynamespace/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
 			Origin:      "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
 			Type:        v2alpha1.TypeOCPReleaseContent,
@@ -751,7 +753,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: common.TestFolder + "catalog-source_template.yaml",
+								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template.yaml",
 							},
 						},
 					},
@@ -829,7 +831,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: common.TestFolder + "catalog-source_template_KO.yaml",
+								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template_KO.yaml",
 							},
 						},
 					},
@@ -862,7 +864,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: common.TestFolder + "catalog-source_template_KO2.yaml",
+								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template_KO2.yaml",
 							},
 						},
 					},

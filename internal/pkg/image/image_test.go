@@ -4,12 +4,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
 
 func TestImage_IsImageByDigest(t *testing.T) {
 	imgRefs := []string{
-		"docker://localhost:5000/ubi8/ubi:latest",
-		"docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+		consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
+		consts.DockerProtocol + "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 	}
 	expectedisByDigest := []bool{
 		false,
@@ -39,11 +41,11 @@ func TestImage_TestParseRef(t *testing.T) {
 	testCases := []testCase{
 		{
 			caseName: "valid docker reference with tag",
-			imgRef:   "docker://registry.redhat.io/ubi8/ubi:latest",
+			imgRef:   consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "registry.redhat.io/ubi8/ubi:latest",
-				ReferenceWithTransport: "docker://registry.redhat.io/ubi8/ubi:latest",
+				ReferenceWithTransport: consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 				Name:                   "registry.redhat.io/ubi8/ubi",
 				Domain:                 "registry.redhat.io",
 				PathComponent:          "ubi8/ubi",
@@ -54,11 +56,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid docker reference with tag and digest",
-			imgRef:   "docker://registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+			imgRef:   consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				ReferenceWithTransport: "docker://registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+				ReferenceWithTransport: consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Name:                   "registry.redhat.io/ubi8/ubi",
 				Domain:                 "registry.redhat.io",
 				PathComponent:          "ubi8/ubi",
@@ -70,11 +72,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid docker reference with digest",
-			imgRef:   "docker://registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			imgRef:   consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-				ReferenceWithTransport: "docker://registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+				ReferenceWithTransport: consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 				Name:                   "registry.redhat.io/ubi8/ubi",
 				Domain:                 "registry.redhat.io",
 				PathComponent:          "ubi8/ubi",
@@ -86,11 +88,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid docker reference on local registry with tag",
-			imgRef:   "docker://localhost:5000/ubi8/ubi:latest",
+			imgRef:   consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "localhost:5000/ubi8/ubi:latest",
-				ReferenceWithTransport: "docker://localhost:5000/ubi8/ubi:latest",
+				ReferenceWithTransport: consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
 				Name:                   "localhost:5000/ubi8/ubi",
 				Domain:                 "localhost:5000",
 				PathComponent:          "ubi8/ubi",
@@ -101,11 +103,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid docker reference on local registry with tag and digest",
-			imgRef:   "docker://localhost:5000/ubi8/ubi:abcd@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			imgRef:   consts.DockerProtocol + "localhost:5000/ubi8/ubi:abcd@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "localhost:5000/ubi8/ubi:abcd@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-				ReferenceWithTransport: "docker://localhost:5000/ubi8/ubi:abcd@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+				ReferenceWithTransport: consts.DockerProtocol + "localhost:5000/ubi8/ubi:abcd@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 				Name:                   "localhost:5000/ubi8/ubi",
 				Domain:                 "localhost:5000",
 				PathComponent:          "ubi8/ubi",
@@ -117,11 +119,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid docker reference on local registry with digest",
-			imgRef:   "docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			imgRef:   consts.DockerProtocol + "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-				ReferenceWithTransport: "docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+				ReferenceWithTransport: consts.DockerProtocol + "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 				Name:                   "localhost:5000/ubi8/ubi",
 				Domain:                 "localhost:5000",
 				PathComponent:          "ubi8/ubi",
@@ -135,9 +137,9 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName: "valid docker reference on local registry with tag no transport",
 			imgRef:   "localhost:5000/ubi8/ubi:latest",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "localhost:5000/ubi8/ubi:latest",
-				ReferenceWithTransport: "docker://localhost:5000/ubi8/ubi:latest",
+				ReferenceWithTransport: consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
 				Name:                   "localhost:5000/ubi8/ubi",
 				Domain:                 "localhost:5000",
 				PathComponent:          "ubi8/ubi",
@@ -150,9 +152,9 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName: "valid docker reference on local registry with digest no transport",
 			imgRef:   "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-				ReferenceWithTransport: "docker://localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+				ReferenceWithTransport: consts.DockerProtocol + "localhost:5000/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 				Name:                   "localhost:5000/ubi8/ubi",
 				Domain:                 "localhost:5000",
 				PathComponent:          "ubi8/ubi",
@@ -166,9 +168,9 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName: "valid docker reference with tag no transport",
 			imgRef:   "registry.redhat.io/ubi8/ubi:latest",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "registry.redhat.io/ubi8/ubi:latest",
-				ReferenceWithTransport: "docker://registry.redhat.io/ubi8/ubi:latest",
+				ReferenceWithTransport: consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 				Name:                   "registry.redhat.io/ubi8/ubi",
 				Domain:                 "registry.redhat.io",
 				PathComponent:          "ubi8/ubi",
@@ -181,9 +183,9 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName: "valid docker reference with digest no transport",
 			imgRef:   "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			expectedImgSpec: ImageSpec{
-				Transport:              "docker://",
+				Transport:              consts.DockerProtocol,
 				Reference:              "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
-				ReferenceWithTransport: "docker://registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+				ReferenceWithTransport: consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 				Name:                   "registry.redhat.io/ubi8/ubi",
 				Domain:                 "registry.redhat.io",
 				PathComponent:          "ubi8/ubi",
@@ -197,7 +199,7 @@ func TestImage_TestParseRef(t *testing.T) {
 			caseName: "valid oci reference full path",
 			imgRef:   "oci:///tmp/ubi8/ubi",
 			expectedImgSpec: ImageSpec{
-				Transport:              "oci://",
+				Transport:              consts.OciProtocol,
 				Reference:              "/tmp/ubi8/ubi",
 				ReferenceWithTransport: "oci:///tmp/ubi8/ubi",
 				Name:                   "/tmp/ubi8/ubi",
@@ -210,11 +212,11 @@ func TestImage_TestParseRef(t *testing.T) {
 		},
 		{
 			caseName: "valid oci reference relative path",
-			imgRef:   "oci://ubi8/ubi",
+			imgRef:   consts.OciProtocol + "ubi8/ubi",
 			expectedImgSpec: ImageSpec{
-				Transport:              "oci://",
+				Transport:              consts.OciProtocol,
 				Reference:              "ubi8/ubi",
-				ReferenceWithTransport: "oci://ubi8/ubi",
+				ReferenceWithTransport: consts.OciProtocol + "ubi8/ubi",
 				Name:                   "ubi8/ubi",
 				Domain:                 "",
 				PathComponent:          "ubi8/ubi",
@@ -226,7 +228,7 @@ func TestImage_TestParseRef(t *testing.T) {
 		{
 			caseName:        "valid docker reference implicit domain succeeds",
 			imgRef:          "abcde:latest",
-			expectedImgSpec: ImageSpec{Transport: "docker://", Reference: "abcde:latest", ReferenceWithTransport: "docker://abcde:latest", Name: "abcde", Domain: "", PathComponent: "abcde", Tag: "latest", Digest: ""},
+			expectedImgSpec: ImageSpec{Transport: consts.DockerProtocol, Reference: "abcde:latest", ReferenceWithTransport: consts.DockerProtocol + "abcde:latest", Name: "abcde", Domain: "", PathComponent: "abcde", Tag: "latest", Digest: ""},
 			expectedError:   "",
 		},
 		{
