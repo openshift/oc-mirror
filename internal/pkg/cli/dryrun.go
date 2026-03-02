@@ -3,11 +3,18 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	imgmanifest "go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/transports/alltransports"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
 func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
@@ -33,8 +40,29 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	nbMissingImgs := 0
 	var buff bytes.Buffer
 	var missingImgsBuff bytes.Buffer
+
 	for _, img := range allImages {
 		buff.WriteString(img.Source + "=" + img.Destination + "\n")
+
+		// Collect sub-digest source=destination pairs
+		type subDigestEntry struct{ source, dest string }
+		var subDigestEntries []subDigestEntry
+
+		// Try to get manifest list sub-digests from source
+		manifestDigests, err := o.getManifestListDigests(ctx, img.Source)
+		if err != nil {
+			o.Log.Warn("unable to get manifest list info for %s: %v", img.Source, err)
+		} else if len(manifestDigests) > 0 {
+			// This is a manifest list, write each sub-digest with digest-pinned destination
+			sourceBase, _, _ := strings.Cut(img.Source, "@")
+			for _, digest := range manifestDigests {
+				subSource := sourceBase + "@" + digest
+				subDest := subDigestDestination(img.Destination, digest)
+				buff.WriteString(subSource + "=" + subDest + "\n")
+				subDigestEntries = append(subDigestEntries, subDigestEntry{source: subSource, dest: subDest})
+			}
+		}
+
 		if o.Opts.IsMirrorToDisk() {
 			exists, err := o.Mirror.Check(ctx, img.Destination, o.Opts, false)
 			if err != nil {
@@ -43,6 +71,10 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 			if err != nil || !exists {
 				missingImgsBuff.WriteString(img.Source + "=" + img.Destination + "\n")
 				nbMissingImgs++
+				// Also include sub-digest entries in missing list
+				for _, sub := range subDigestEntries {
+					missingImgsBuff.WriteString(sub.source + "=" + sub.dest + "\n")
+				}
 			}
 		}
 	}
@@ -72,4 +104,66 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	}
 	o.Log.Info(emoji.PageFacingUp+" list of all images for mirroring in : %s", mappingTxtFilePath)
 	return nil
+}
+
+// subDigestDestination returns a digest-pinned destination for a sub-digest entry.
+// For docker:// destinations, it strips the tag and appends the sub-digest to avoid
+// destination overwrites when multiple architectures map to the same tag.
+// For non-docker destinations (oci:, dir:, etc.), the destination is returned as-is.
+func subDigestDestination(dest string, digest string) string {
+	if !strings.HasPrefix(dest, consts.DockerProtocol) {
+		return dest
+	}
+	destSpec, err := image.ParseRef(dest)
+	if err != nil {
+		return dest
+	}
+	return destSpec.Transport + destSpec.Name + "@" + digest
+}
+
+// getManifestListDigests inspects the source image to check if it's a manifest list
+// and returns the sub-manifest digests. Works with any transport supported by
+// containers/image (docker://, oci:, etc.) via alltransports.ParseImageName.
+// Returns a slice of digest strings (e.g., ["sha256:abc...", "sha256:def..."]) or nil if not a manifest list.
+func (o *ExecutorSchema) getManifestListDigests(ctx context.Context, source string) ([]string, error) {
+	srcRef, err := alltransports.ParseImageName(source)
+	if err != nil {
+		// Retry with docker:// prefix for sources without transport (e.g., Cincinnati sources)
+		srcRef, err = alltransports.ParseImageName(consts.DockerProtocol + source)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing image name %s: %w", source, err)
+		}
+	}
+
+	sysCtx, err := o.Opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return nil, fmt.Errorf("error creating system context: %w", err)
+	}
+
+	imgSrc, err := srcRef.NewImageSource(ctx, sysCtx)
+	if err != nil {
+		return nil, fmt.Errorf("error creating image source for %s: %w", source, err)
+	}
+	defer imgSrc.Close()
+
+	manifestBytes, manifestType, err := imgSrc.GetManifest(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error getting manifest for %s: %w", source, err)
+	}
+
+	if !imgmanifest.MIMETypeIsMultiImage(manifestType) {
+		return nil, nil
+	}
+
+	list, err := imgmanifest.ListFromBlob(manifestBytes, manifestType)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing manifest list for %s: %w", source, err)
+	}
+
+	instances := list.Instances()
+	digests := make([]string, 0, len(instances))
+	for _, instance := range instances {
+		digests = append(digests, instance.String())
+	}
+	return digests, nil
 }
