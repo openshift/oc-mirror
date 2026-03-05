@@ -129,14 +129,14 @@ func createRegistryConfigFile(registryFileAbsPath, registryHost string) error {
 		registryConfigStruct = registryConfiguration{
 			Docker: map[string]registryNamespace{
 				registryHost: {
-					UseSigstoreAttachments: true,
+					UseSigstoreAttachments: boolPtr(true),
 				},
 			},
 			DefaultDocker: nil,
 		}
 	} else {
 		registryConfigStruct = registryConfiguration{
-			DefaultDocker: &registryNamespace{UseSigstoreAttachments: true},
+			DefaultDocker: &registryNamespace{UseSigstoreAttachments: boolPtr(true)},
 		}
 	}
 
