@@ -12,7 +12,6 @@ import (
 	"runtime/pprof"
 	"slices"
 	"strings"
-	"syscall"
 
 	"k8s.io/klog"
 
@@ -83,15 +82,11 @@ func runOcMirrorV1(args []string) error {
 	v1File.Close()
 
 	cmd := exec.Cmd{
-		Path: path,
-		SysProcAttr: &syscall.SysProcAttr{
-			// Kill children if parent is dead
-			Pdeathsig: syscall.SIGKILL,
-			Setpgid:   true,
-		},
-		Args:   args,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+		Path:        path,
+		SysProcAttr: sysProcAttr(),
+		Args:        args,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
 	}
 
 	err = cmd.Run()
