@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -49,12 +48,16 @@ func PrepareRegistrydCustomDir(workingDir, registriesDirPath string, registryHos
 }
 
 func GetDefaultRegistrydConfigPath() (string, error) {
-	usr, err := user.Current()
-	if err != nil {
-		return "", fmt.Errorf("unable to determine the current user : %w", err)
+	// Use os.UserHomeDir() instead of user.Current() to support containerized
+	// environments with arbitrary UIDs that don't exist in /etc/passwd.
+	// os.UserHomeDir() reads $HOME env var first, avoiding passwd lookups.
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		return registriesDirPathWithHomeDir(homeDir), nil
 	}
 
-	return registriesDirPathWithHomeDir(usr.HomeDir), nil
+	// Fall back to system default if home directory cannot be determined.
+	return systemRegistriesDirPath, nil
 }
 
 func registriesDirPathWithHomeDir(homeDir string) string {
