@@ -320,11 +320,11 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 		t.Run(aTestCase.caseName, func(t *testing.T) {
 			outRef, err := WithMaxNestedPaths(aTestCase.imgRef, aTestCase.maxNestedPaths)
 			if aTestCase.expectedError != "" && err == nil {
-				t.Errorf("ParseRef() expected to fail for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
+				t.Errorf("WithMaxNestedPaths() expected to fail for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
 			}
 			if err != nil {
 				if aTestCase.expectedError != err.Error() {
-					t.Errorf("ParseRef() returned unexpected error for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
+					t.Errorf("WithMaxNestedPaths() returned unexpected error for %q: got %v, want %v", aTestCase.imgRef, err, aTestCase.expectedError)
 				}
 			} else {
 				require.Equal(t, aTestCase.expectedOutRef, outRef)
