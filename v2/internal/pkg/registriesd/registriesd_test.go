@@ -1,6 +1,7 @@
 package registriesd
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -43,4 +44,23 @@ func TestGetCustomRegistrydConfigPath(t *testing.T) {
 
 	expectedRegistriesD := filepath.Join(testFolder, "containers/registries.d")
 	assert.Equal(t, expectedRegistriesD, registriesDirPath)
+}
+
+func TestGetDefaultRegistrydConfigPath(t *testing.T) {
+	testHome := t.TempDir()
+	t.Setenv("HOME", testHome)
+
+	// When user registries.d doesn't exist, should return system path
+	path, err := GetDefaultRegistrydConfigPath()
+	assert.NoError(t, err)
+	assert.Equal(t, systemRegistriesDirPath, path)
+
+	// When user registries.d exists, should return user path
+	expectedUserPath := filepath.Join(testHome, ".config/containers/registries.d")
+	err = os.MkdirAll(expectedUserPath, 0755)
+	assert.NoError(t, err)
+
+	path, err = GetDefaultRegistrydConfigPath()
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUserPath, path)
 }
