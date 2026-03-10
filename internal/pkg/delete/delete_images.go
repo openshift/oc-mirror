@@ -112,11 +112,11 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 	duplicates := []string{}
 	items := make([]v2alpha1.DeleteItem, 0, len(images)*2)
 	for _, img := range images {
-		if slices.Contains(duplicates, img.Origin) {
-			o.Log.Debug("duplicate image found %s", img.Origin)
+		if slices.Contains(duplicates, img.Destination) {
+			o.Log.Debug("duplicate image found %s", img.Destination)
 			continue
 		}
-		duplicates = append(duplicates, img.Origin)
+		duplicates = append(duplicates, img.Destination)
 		item := v2alpha1.DeleteItem{
 			ImageName:      img.Origin,
 			ImageReference: img.Destination,
@@ -151,7 +151,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		// It does not hurt to check each entry :)
 		// This will avoid the error "Image may not exist or is not stored with a v2 Schema in a v2 registry"
 		// Reverts OCPBUGS-44448
-		imgSpecName, err := image.ParseRef(img.ImageName)
+		_, err := image.ParseRef(img.ImageName)
 		if err != nil {
 			allErrs = append(allErrs, fmt.Errorf("parse image name %q: %w", img.ImageName, err))
 			continue
@@ -168,18 +168,29 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			allErrs = append(allErrs, fmt.Errorf("delete destination is not well formed (%s) - missing dockerProtocol?", o.Opts.Global.DeleteDestination))
 			continue
 		}
-		assembleName := name[1] + "/" + imgSpecName.PathComponent
-		// check image type for release or release content
+		deleteDestBase := name[1]
+		// Release content is always mirrored to standardized paths and Platform type does not support targetRepo/tag.
+		// For these types, we use strict equality checking with the expected paths.
+		// For other types that support targetRepo/targetTag, we only verify the image is under the correct
+		// registry tree for flexibility needed with targetRepo/targetTag.
 		switch img.Type {
 		case v2alpha1.TypeOCPReleaseContent:
-			assembleName = name[1] + "/openshift/release"
+			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
+			if imgSpecRef.Name != expectedPath {
+				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
+				continue
+			}
 		case v2alpha1.TypeOCPRelease:
-			assembleName = name[1] + "/openshift/release-images"
-		}
-		// check the assembled name against the reference name
-		if assembleName != imgSpecRef.Name {
-			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (please verify full name)", o.Opts.Global.DeleteDestination))
-			continue
+			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
+			if imgSpecRef.Name != expectedPath {
+				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
+				continue
+			}
+		default:
+			if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
+				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
+				continue
+			}
 		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,

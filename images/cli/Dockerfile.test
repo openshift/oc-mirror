@@ -1,6 +1,6 @@
 FROM quay.io/oc-mirror/integration-tests-artifacts:v0.0.1 AS embed
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.22 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 # Statically link the binary so we can run it in any container base image
@@ -16,7 +16,6 @@ COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /bin/oc
 
 LABEL io.k8s.display-name="oc-mirror-integration-tests" \
     io.k8s.description="Integration tests for oc-mirror plugin." \
-    io.openshift.tags="cli,mirror" \
-    maintainer="luzuccar@redhat.com"
+    io.openshift.tags="cli,mirror"
 ENV HOME /root
 ENTRYPOINT ["./uid_entrypoint.sh"]
