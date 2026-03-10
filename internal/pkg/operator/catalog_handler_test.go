@@ -35,7 +35,7 @@ func TestRelatedImagesFromCatalog(t *testing.T) {
 		},
 	}
 
-	handler := &catalogHandler{Log: clog.New("debug")}
+	handler := &CatalogHandler{Log: clog.New("debug")}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
@@ -563,11 +563,11 @@ func TestFilterCatalog(t *testing.T) {
 	}()
 
 	log := clog.New("debug")
-	handler := &catalogHandler{Log: log}
+	handler := &CatalogHandler{Log: log}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
-			dc, err := handler.getDeclarativeConfig(filepath.Join(consts.TestFolder, "configs"))
+			dc, err := handler.GetDeclarativeConfig(t.Context(), filepath.Join(consts.TestFolder, "configs"))
 			assert.NoError(t, err)
 			res, err := filterCatalog(context.TODO(), *dc, testCase.cfg)
 			if testCase.expectedError != nil {

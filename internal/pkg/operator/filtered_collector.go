@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/otiai10/copy"
 	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/types"
 
@@ -363,7 +362,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 
 	if isAlreadyFiltered {
 		filterConfigDir := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
-		filteredDC, err := o.ctlgHandler.getDeclarativeConfig(filterConfigDir)
+		filteredDC, err := o.ctlgHandler.GetDeclarativeConfig(ctx, filterConfigDir)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, fmt.Errorf("retrieve filtered catalog config from %s: %w", filterConfigDir, err)
 		}
@@ -377,17 +376,17 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	}
 	o.Log.Debug("Catalog has not been filtered previously")
 
-	if err := o.ensureCatalogInOCIFormat(ctx, imgSpec, op.Catalog, imageIndexDir); err != nil {
+	if err := o.ctlgHandler.EnsureCatalogInOCIFormat(ctx, imgSpec, op.Catalog, imageIndexDir, o.Opts); err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
 	// It's now in oci format so we can go directly to the index.json file
-	dcPath, err := o.extractOCIConfigLayers(op.Catalog, imgSpec, imageIndexDir)
+	dcPath, err := o.ctlgHandler.ExtractOCIConfigLayers(imgSpec, imageIndexDir)
 	if err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
-	originalDC, err := o.ctlgHandler.getDeclarativeConfig(dcPath)
+	originalDC, err := o.ctlgHandler.GetDeclarativeConfig(ctx, dcPath)
 	if err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
@@ -425,45 +424,6 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		DeclConfig:         filteredDC,
 		Digest:             catalogDigest,
 	}, nil
-}
-
-func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec image.ImageSpec, catalog, imageIndexDir string) error {
-	o.Log.Debug("Ensuring catalog is in OCI format")
-	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
-
-	if imgSpec.Transport != consts.OciProtocol {
-		opts := o.Opts
-		opts.Stdout = io.Discard
-		opts.RemoveSignatures = true
-		opts.Global.SecurePolicy = false
-
-		src := consts.DockerProtocol + catalog
-		dest := consts.OciProtocolTrimmed + catalogImageDir
-
-		// Prepare folders
-		if err := folder.CreateFolders(catalogImageDir); err != nil {
-			return err
-		}
-		return o.Mirror.Run(ctx, src, dest, mirror.CopyMode, &opts)
-	}
-
-	o.Log.Debug("Catalog %q already in OCI format", catalog)
-	if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); err != nil {
-		// If we cannot determine whether the catalog exists in OCI format at
-		// the working-dir destination, either because of `stat` failures or
-		// because it's the first time we are doing this
-		//
-		// delete the existing directory and untarred cache contents
-		if err := folder.RemoveFolders(catalogImageDir, filepath.Join(imageIndexDir, operatorCatalogConfigDir)); err != nil {
-			return fmt.Errorf("failed to delete old content: %w", err)
-		}
-		// copy all contents to the working dir
-		if err := copy.Copy(imgSpec.PathComponent, catalogImageDir); err != nil {
-			return fmt.Errorf("copy OCI contents to working-dir: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func TagRebuiltCatalogByDigestOnly(collectorSchema *v2alpha1.CollectorSchema, localStorageFQDN, workingDir string) {
