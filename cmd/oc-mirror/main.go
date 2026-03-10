@@ -49,8 +49,8 @@ func main() {
 			os.Exit(exitCode)
 		}
 	default:
-		if slices.Contains(os.Args, "list") || slices.Contains(os.Args, "describe") || slices.Contains(os.Args, "init") {
-			klog.Error("⚠️  the sub-commands `list`, `describe` and `init` are only implemented in oc-mirror v1, so please use --v1 for these sub-commands until some replacement is provided")
+		if slices.Contains(os.Args, "describe") || slices.Contains(os.Args, "init") {
+			klog.Error("⚠️  the sub-commands `describe` and `init` are only implemented in oc-mirror v1, so please use --v1 for these sub-commands until some replacement is provided")
 		}
 		klog.Fatal("⚠️  the use of the flag --v1 or --v2 is mandatory, please use --v2 for the supported oc-mirror version or --v1 to continue using the deprecated version")
 	}
