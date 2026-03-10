@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry"
@@ -13,6 +14,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -20,7 +22,6 @@ import (
 // TestExecutorValidateDelete
 func TestExecutorValidateDelete(t *testing.T) {
 	t.Run("Testing Delete Executor : validate delete should pass", func(t *testing.T) {
-
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
@@ -51,9 +52,9 @@ func TestExecutorValidateDelete(t *testing.T) {
 			},
 		}
 
-		defer os.RemoveAll("../../pkg/cli/test")
-		defer os.RemoveAll("../../pkg/cli/tmp")
-		defer os.RemoveAll("../../pkg/cli/working-dir")
+		defer func() {
+			_ = folder.RemoveFolders("../../pkg/cli/test", "../../pkg/cli/tmp", "../../pkg/cli/working-dir")
+		}()
 
 		ex.Opts.Global.WorkingDir = consts.FileProtocol + "test"
 		opts.Global.ConfigPath = consts.TestFolder + "isc.yaml"
@@ -97,7 +98,6 @@ func TestExecutorValidateDelete(t *testing.T) {
 		opts.Global.DeleteYaml = "../../nothing"
 		err = ex.ValidateDelete([]string{consts.DockerProtocol + "test"})
 		assert.Equal(t, "file not found ../../nothing", err.Error())
-
 	})
 }
 
@@ -139,9 +139,9 @@ func TestExecutorCompleteDelete(t *testing.T) {
 			},
 		}
 
-		defer os.RemoveAll("../../pkg/cli/test")
-		defer os.RemoveAll("../../pkg/cli/tmp")
-		defer os.RemoveAll("../../pkg/cli/working-dir")
+		defer func() {
+			_ = folder.RemoveFolders("../../pkg/cli/test", "../../pkg/cli/tmp", "../../pkg/cli/working-dir")
+		}()
 
 		err := ex.CompleteDelete([]string{consts.DockerProtocol + "myregistry:5000"})
 		if err != nil {
@@ -154,7 +154,6 @@ func TestExecutorCompleteDelete(t *testing.T) {
 		if err == nil {
 			t.Fatalf("should fail")
 		}
-
 	})
 }
 
@@ -186,7 +185,6 @@ func TestExecutorRunDelete(t *testing.T) {
 		opts.Global.From = ""
 
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		// storage cache for test
 		regCfg, err := setupRegForTest(testFolder)
@@ -219,8 +217,11 @@ func TestExecutorRunDelete(t *testing.T) {
 		collector := &Collector{Log: log, Config: isc, Opts: opts, Fail: false}
 		mockMirror := Mirror{}
 		mockBatch := Batch{}
-		_ = os.MkdirAll(testFolder+"/docker/registry/v2/repositories", 0755)
-		_ = os.MkdirAll(consts.TestFolder+"cache-fake-temp", 0755)
+		err = folder.CreateFolders(
+			filepath.Join(testFolder, "docker", "registry", "v2", "repositories"),
+			filepath.Join(consts.TestFolder, "cache-fake-temp"),
+		)
+		assert.NoError(t, err)
 		defer os.RemoveAll(consts.TestFolder + "cache-fake-temp")
 		opts.LocalStorageFQDN = regCfg.HTTP.Addr
 
@@ -285,7 +286,6 @@ func TestExecutorRunDelete(t *testing.T) {
 		}
 
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		// storage cache for test
 		regCfg, err := setupRegForTest(testFolder)
@@ -318,9 +318,12 @@ func TestExecutorRunDelete(t *testing.T) {
 		collector := &Collector{Log: log, Config: isc, Opts: opts, Fail: false}
 		mockMirror := Mirror{}
 		mockBatch := Batch{}
-		_ = os.MkdirAll(testFolder+"/docker/registry/v2/repositories", 0755)
-		_ = os.MkdirAll(consts.TestFolder+"cache-fake-temp", 0755)
-		defer os.RemoveAll(consts.TestFolder + "cache-fake-temp")
+		err = folder.CreateFolders(
+			filepath.Join(testFolder, "docker", "registry", "v2", "repositories"),
+			filepath.Join(consts.TestFolder, "cache-fake-temp"),
+		)
+		assert.NoError(t, err)
+		defer os.RemoveAll(filepath.Join(consts.TestFolder, "cache-fake-temp"))
 		opts.LocalStorageFQDN = regCfg.HTTP.Addr
 
 		ex := &DeleteSchema{

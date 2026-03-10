@@ -11,6 +11,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -349,7 +350,7 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	configsDir := filepath.Join(imageIndexDir, operatorCatalogConfigDir)
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
 
-	if err := createFolders([]string{configsDir, catalogImageDir}); err != nil {
+	if err := folder.CreateFolders(configsDir, catalogImageDir); err != nil {
 		return "", err
 	}
 

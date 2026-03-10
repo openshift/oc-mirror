@@ -3,7 +3,6 @@ package release
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 
@@ -45,9 +45,7 @@ type MockCincinnati struct {
 
 func TestReleaseLocalStoredCollector(t *testing.T) {
 	log := clog.New("trace")
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	// this test should cover over 80% M2D
 	t.Run("Testing ReleaseImageCollector - Mirror to disk: should pass", func(t *testing.T) {
@@ -118,14 +116,19 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector - Disk to mirror : should pass", func(t *testing.T) {
-
-		os.RemoveAll(consts.TestFolder + "hold-release/")
-		os.RemoveAll(consts.TestFolder + "release-images")
-		os.RemoveAll(consts.TestFolder + "tmp/")
+		err := folder.RemoveFolders(
+			filepath.Join(consts.TestFolder, "hold-release"),
+			filepath.Join(consts.TestFolder, "release-images"),
+			filepath.Join(consts.TestFolder, "tmp"),
+		)
+		assert.NoError(t, err)
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy(consts.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"))
+		// copy tests/hold-test-fake to working-dir
+		err = copy.Copy(
+			filepath.Join(consts.TestFolder, "working-dir-fake", "hold-release", "ocp-release", "4.14.1-x86_64"),
+			filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.10-x86_64"),
+		)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -193,10 +196,12 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 	})
 
 	t.Run("Testing ReleaseImageCollector with real GetReleaseReferenceImages - Disk to mirror : should pass", func(t *testing.T) {
-
-		os.RemoveAll(consts.TestFolder + "hold-release/")
-		os.RemoveAll(consts.TestFolder + "release-images")
-		os.RemoveAll(consts.TestFolder + "tmp/")
+		err := folder.RemoveFolders(
+			filepath.Join(consts.TestFolder, "hold-release"),
+			filepath.Join(consts.TestFolder, "release-images"),
+			filepath.Join(consts.TestFolder, "tmp"),
+		)
+		assert.NoError(t, err)
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
 
@@ -254,14 +259,12 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		}
 		log.Debug("completed test related images %v ", res)
 	})
-
 }
 
 func TestGraphImage(t *testing.T) {
 	log := clog.New("trace")
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
 	t.Run("Testing GraphImage : should fail", func(t *testing.T) {
 		ex := setupCollector_DiskToMirror(tempDir, log)
 
@@ -271,22 +274,26 @@ func TestGraphImage(t *testing.T) {
 		}
 		assert.Equal(t, ex.Opts.Destination+"/"+graphImageName+":latest", res)
 	})
-
 }
 
 func TestReleaseImage(t *testing.T) {
 	log := clog.New("trace")
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
 	t.Run("Testing ReleaseImage : should pass", func(t *testing.T) {
-		os.RemoveAll(consts.TestFolder + "hold-release/")
-		os.RemoveAll(consts.TestFolder + "release-images")
-		os.RemoveAll(consts.TestFolder + "tmp/")
+		err := folder.RemoveFolders(
+			filepath.Join(consts.TestFolder, "hold-release"),
+			filepath.Join(consts.TestFolder, "release-images"),
+			filepath.Join(consts.TestFolder, "tmp"),
+		)
+		assert.NoError(t, err)
 
 		ex := setupCollector_DiskToMirror(tempDir, log)
-		//copy tests/hold-test-fake to working-dir
-		err := copy.Copy(consts.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64", filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release/4.13.9-x86_64"))
+		// copy tests/hold-test-fake to working-dir
+		err = copy.Copy(
+			filepath.Join(consts.TestFolder, "working-dir-fake", "hold-release", "ocp-release", "4.14.1-x86_64"),
+			filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release", "4.13.9-x86_64"),
+		)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -551,7 +558,6 @@ func setupCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerInterfa
 }
 
 func setupCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerInterface, manifest *MockManifest) *LocalStorageCollector {
-
 	globalM2D := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		WorkingDir:   tempDir,

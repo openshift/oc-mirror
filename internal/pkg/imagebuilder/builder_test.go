@@ -10,8 +10,10 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -26,7 +28,6 @@ const (
 )
 
 func TestImageBuilder(t *testing.T) {
-
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
@@ -59,7 +60,6 @@ func TestImageBuilder(t *testing.T) {
 	}
 
 	t.Run("Testing NewImageBuilder : should pass", func(t *testing.T) {
-
 		_ = NewBuilder(log, opts)
 		_ = srcFlags.Set("src-tls-verify", "true")
 		_ = destFlags.Set("dest-tls-verify", "true")
@@ -67,11 +67,9 @@ func TestImageBuilder(t *testing.T) {
 
 		e := ErrInvalidReference{image: "broken"}
 		log.Error("testing error %v", e.Error())
-
 	})
 
 	t.Run("Testing NewImageBuilder All : should pass", func(t *testing.T) {
-
 		// Set up a fake registry.
 		s := httptest.NewServer(registry.New())
 		defer s.Close()
@@ -87,7 +85,7 @@ func TestImageBuilder(t *testing.T) {
 
 		// expect errors from LayerFromGzipByteArray
 		archiveDestination := consts.TestFolder + "graph-staging/" + graphArchive
-		_, err = LayerFromGzipByteArray([]byte{}, archiveDestination, graphDataDir, 0644, 0, 0)
+		_, err = LayerFromGzipByteArray([]byte{}, archiveDestination, graphDataDir, 0o644, 0, 0)
 		if err == nil {
 			t.Fatalf("should fail")
 		}
@@ -99,13 +97,13 @@ func TestImageBuilder(t *testing.T) {
 
 		// expect errors from LayerFromGzipByteArray
 		archiveDestination = "/no-dir/" + graphArchive
-		_, err = LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
+		_, err = LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0o644, 0, 0)
 		if err == nil {
 			t.Fatalf("should fail")
 		}
 
 		archiveDestination = consts.TestFolder + "graph-staging/" + graphArchive
-		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
+		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0o644, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,11 +115,14 @@ func TestImageBuilder(t *testing.T) {
 		}
 
 		// setup graphPreparation
-		_ = os.Mkdir(graphPreparation, 0755)
+		_ = os.Mkdir(graphPreparation, 0o755)
 		// ensure directories are cleaned up after test
-		defer os.RemoveAll(opts.Global.WorkingDir)
-		defer os.Remove(archiveDestination)
-		defer os.RemoveAll(graphPreparation)
+		defer func() {
+			err := folder.RemoveFolders(opts.Global.WorkingDir, graphPreparation)
+			assert.NoError(t, err)
+			err = os.Remove(archiveDestination)
+			assert.NoError(t, err)
+		}()
 
 		imageAbsolutePath, err := filepath.Abs(consts.TestFolder + "simple-test-bundle")
 		if err != nil {
@@ -146,13 +147,11 @@ func TestImageBuilder(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
 	})
 }
 
 func TestProcessImageIndex(t *testing.T) {
 	t.Run("Testing ProcessImageIndex: should pass", func(t *testing.T) {
-
 		log := clog.New("debug")
 
 		global := &mirror.GlobalOptions{
@@ -188,7 +187,7 @@ func TestProcessImageIndex(t *testing.T) {
 		}
 
 		archiveDestination := consts.TestFolder + "graph-staging/" + graphArchive
-		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0644, 0, 0)
+		graphLayer, err := LayerFromGzipByteArray(body, archiveDestination, graphDataDir, 0o644, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,6 +240,5 @@ func TestProcessImageIndex(t *testing.T) {
 
 		defer os.RemoveAll(opts.Global.WorkingDir)
 		defer os.Remove(archiveDestination)
-
 	})
 }
