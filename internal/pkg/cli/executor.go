@@ -211,6 +211,9 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
 				return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
 			}
+			// override log level
+			ex.Log.Level(ex.Opts.Global.LogLevel)
+
 			if os.Getenv(cacheEnvVar) != "" && opts.Global.CacheDir != "" {
 				return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
 			}
@@ -408,7 +411,6 @@ func (o ExecutorSchema) Validate(dest []string) error {
 	} else {
 		return fmt.Errorf("destination must have either file:// (mirror to disk) or docker:// (diskToMirror) protocol prefixes")
 	}
-
 }
 
 func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry string) error {
@@ -758,7 +760,7 @@ func (o *ExecutorSchema) isLocalStoragePortBound() bool {
 // the correct local storage directory
 func (o *ExecutorSchema) setupLocalStorageDir() error {
 	o.LocalStorageDisk = filepath.Join(o.Opts.Global.CacheDir, cacheRelativePath)
-	err := os.MkdirAll(o.LocalStorageDisk, 0755)
+	err := os.MkdirAll(o.LocalStorageDisk, 0o755)
 	if err != nil {
 		o.Log.Error("unable to setup folder for oc-mirror local storage: %v ", err)
 		return err
@@ -770,7 +772,7 @@ func (o *ExecutorSchema) setupLocalStorageDir() error {
 // all the relevant working directory structures
 func (o *ExecutorSchema) setupWorkingDir() error {
 	// ensure working dir exists
-	err := o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir, 0755)
+	err := o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir, 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir %v ", err)
 		return err
@@ -778,7 +780,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create signatures directory
 	o.Log.Trace("creating signatures directory %s ", o.Opts.Global.WorkingDir+"/"+signaturesDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+signaturesDir, 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for signatures %v ", err)
 		return err
@@ -786,7 +788,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create release-images directory
 	o.Log.Trace("creating release images directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageDir, 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for release images %v ", err)
 		return err
@@ -794,7 +796,7 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create release cache dir
 	o.Log.Trace("creating release cache directory %s ", o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir)
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+releaseImageExtractDir, 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for release cache %v ", err)
 		return err
@@ -802,14 +804,14 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 
 	// create cincinnati graph dir
 	o.Log.Trace("creating cincinnati graph data directory %s ", path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir))
-	err = o.MakeDir.makeDirAll(path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0755)
+	err = o.MakeDir.makeDirAll(path.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for cincinnati graph data directory %v ", err)
 		return err
 	}
 
 	o.Log.Trace("creating operator cache directory %s ", filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir))
-	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0755)
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir), 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for operator cache %v ", err)
 		return err
@@ -823,19 +825,19 @@ func (o *ExecutorSchema) setupWorkingDir() error {
 			return err
 		}
 	}
-	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0755)
+	err = o.MakeDir.makeDirAll(o.Opts.Global.WorkingDir+"/"+clusterResourcesDir, 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for cluster resources %v ", err)
 		return err
 	}
 
-	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmChartDir), 0755)
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmChartDir), 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for helm directory %v ", err)
 		return err
 	}
 
-	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmIndexesDir), 0755)
+	err = o.MakeDir.makeDirAll(filepath.Join(o.Opts.Global.WorkingDir, helmDir, helmIndexesDir), 0o755)
 	if err != nil {
 		o.Log.Error(" setupWorkingDir for helm directory %v ", err)
 		return err
@@ -1061,19 +1063,17 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 // setupLogsLevelAndDir - private utility to setup log
 // level and relevant directory
 func (o *ExecutorSchema) setupLogsLevelAndDir() error {
-	// override log level
-	o.Log.Level(o.Opts.Global.LogLevel)
 	// set up location of logs dir
 	o.LogsDir = filepath.Join(o.Opts.Global.WorkingDir, logsDir)
 
 	// create logs directory
-	err := o.MakeDir.makeDirAll(o.LogsDir, 0755)
+	err := o.MakeDir.makeDirAll(o.LogsDir, 0o755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
-	l, err := os.OpenFile(filepath.Join(o.LogsDir, fmt.Sprintf("oc-mirror-%s.log", o.MirrorStartTimeStamp)), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	l, err := os.OpenFile(filepath.Join(o.LogsDir, fmt.Sprintf("oc-mirror-%s.log", o.MirrorStartTimeStamp)), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o666)
 	if err != nil {
 		panic(err)
 	}
