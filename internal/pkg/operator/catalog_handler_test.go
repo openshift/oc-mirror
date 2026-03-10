@@ -494,7 +494,7 @@ func TestFilterCatalog(t *testing.T) {
 				},
 			},
 			expectedBundles: []string{},
-			expectedError:   errors.New("package \"3scale-operator\" at index [0] is invalid: package specifies a VersionRange, while channel \"threescale-2.11\" at index [0] equally specifies one: package.VersionRange and channel.VersionRange are exclusive"),
+			expectedError:   errors.New("failed to validate catalog filter: package \"3scale-operator\" at index [0] is invalid: package specifies a VersionRange, while channel \"threescale-2.11\" at index [0] equally specifies one: package.VersionRange and channel.VersionRange are exclusive"),
 		},
 		{
 			caseName: "packages with full:true and min OR max version under packages - Error: filtering using full:true and min or max version is not allowed - should pass",
@@ -513,7 +513,7 @@ func TestFilterCatalog(t *testing.T) {
 				Full: true,
 			},
 			expectedBundles: []string{},
-			expectedError:   errors.New("Full: true cannot be mixed with versionRange"),
+			expectedError:   errors.New("failed to filter catalog: Full: true cannot be mixed with versionRange"),
 		},
 		{
 			caseName: "package not found - logs warning - should pass",
@@ -552,7 +552,7 @@ func TestFilterCatalog(t *testing.T) {
 			},
 
 			expectedBundles: []string{},
-			expectedError:   errors.New("error finding specific bundle: specific version 77.77.77 not found in bundles"),
+			expectedError:   errors.New("failed to filter catalog: error finding specific bundle: specific version 77.77.77 not found in bundles"),
 		},
 	}
 
