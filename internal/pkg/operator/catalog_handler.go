@@ -38,7 +38,43 @@ func (o CatalogHandler) GetDeclarativeConfig(ctx context.Context, filePath strin
 }
 
 func saveDeclarativeConfig(fbc declcfg.DeclarativeConfig, path string) error {
-	return declcfg.WriteFS(fbc, path, declcfg.WriteJSON, ".json")
+	if err := declcfg.WriteFS(fbc, path, declcfg.WriteJSON, ".json"); err != nil {
+		return fmt.Errorf("failed to save catalog config: %w", err)
+	}
+	return nil
+}
+
+func filterPackage(op v2alpha1.IncludePackage) filter.Package {
+	p := filter.Package{
+		Name:           op.Name,
+		DefaultChannel: op.DefaultChannel,
+	}
+	if op.MinVersion != "" {
+		p.VersionRange = ">=" + op.MinVersion
+	}
+	if op.MaxVersion != "" {
+		p.VersionRange += " <=" + op.MaxVersion
+	}
+
+	if len(op.Channels) == 0 {
+		return p
+	}
+
+	p.Channels = make([]filter.Channel, 0, len(op.Channels))
+	for _, ch := range op.Channels {
+		filterChan := filter.Channel{
+			Name: ch.Name,
+		}
+		if ch.MinVersion != "" {
+			filterChan.VersionRange = ">=" + ch.MinVersion
+		}
+		if ch.MaxVersion != "" {
+			filterChan.VersionRange += " <=" + ch.MaxVersion
+		}
+		p.Channels = append(p.Channels, filterChan)
+	}
+
+	return p
 }
 
 func filterFromImageSetConfig(iscCatalogFilter v2alpha1.Operator) (filter.FilterConfiguration, error) {
@@ -47,44 +83,17 @@ func filterFromImageSetConfig(iscCatalogFilter v2alpha1.Operator) (filter.Filter
 			Kind:       "FilterConfiguration",
 			APIVersion: "olm.operatorframework.io/filter/mirror/v1alpha1",
 		},
-		Packages: []filter.Package{},
 	}
 
-	if len(iscCatalogFilter.Packages) == 0 {
-		return catFilter, catFilter.Validate()
-	}
-
+	catFilter.Packages = make([]filter.Package, 0, len(iscCatalogFilter.Packages))
 	for _, op := range iscCatalogFilter.Packages {
-		p := filter.Package{
-			Name:           op.Name,
-			DefaultChannel: op.DefaultChannel,
-		}
-		if op.MinVersion != "" {
-			p.VersionRange = ">=" + op.MinVersion
-		}
-		if op.MaxVersion != "" {
-			p.VersionRange += " <=" + op.MaxVersion
-		}
-		if len(op.Channels) > 0 {
-			p.Channels = []filter.Channel{}
-			for _, ch := range op.Channels {
-				filterChan := filter.Channel{
-					Name: ch.Name,
-				}
-
-				if ch.MinVersion != "" {
-					filterChan.VersionRange = ">=" + ch.MinVersion
-				}
-				if ch.MaxVersion != "" {
-					filterChan.VersionRange += " <=" + ch.MaxVersion
-				}
-				p.Channels = append(p.Channels, filterChan)
-			}
-		}
-		catFilter.Packages = append(catFilter.Packages, p)
+		catFilter.Packages = append(catFilter.Packages, filterPackage(op))
 	}
 
-	return catFilter, catFilter.Validate()
+	if err := catFilter.Validate(); err != nil {
+		return catFilter, fmt.Errorf("failed to validate catalog filter: %w", err)
+	}
+	return catFilter, nil
 }
 
 func filterCatalog(ctx context.Context, operatorCatalog declcfg.DeclarativeConfig, iscCatalogFilter v2alpha1.Operator) (*declcfg.DeclarativeConfig, error) {
@@ -93,7 +102,11 @@ func filterCatalog(ctx context.Context, operatorCatalog declcfg.DeclarativeConfi
 		return nil, err
 	}
 	ctlgFilter := filter.NewMirrorFilter(config, []filter.FilterOption{filter.InFull(iscCatalogFilter.Full)}...)
-	return ctlgFilter.FilterCatalog(ctx, &operatorCatalog)
+	dc, err := ctlgFilter.FilterCatalog(ctx, &operatorCatalog)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter catalog: %w", err)
+	}
+	return dc, nil
 }
 
 func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
