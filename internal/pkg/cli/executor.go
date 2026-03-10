@@ -41,6 +41,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/batch"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cli/list"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -267,6 +268,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	}
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.AddCommand(NewDeleteCommand(log, opts))
+	cmd.AddCommand(list.NewListCommand(log, opts))
+
 	// common flags
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
 	cmd.MarkPersistentFlagFilename("config", "yaml")
