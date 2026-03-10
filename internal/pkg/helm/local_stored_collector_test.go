@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
-
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -668,7 +668,6 @@ func TestHelmImageCollector(t *testing.T) {
 	}
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 	workingDir, err := prepareFolder(tempDir)
 	assert.NoError(t, err)
 
@@ -709,7 +708,6 @@ func TestHelmImageCollector(t *testing.T) {
 				assert.NotEmpty(t, imgs)
 				assert.ElementsMatch(t, testCase.expectedResult, imgs)
 			}
-
 		})
 	}
 }
@@ -775,22 +773,13 @@ func (m MockHttpClient) Get(url string) (resp *http.Response, err error) {
 }
 
 func prepareFolder(tempDir string) (string, error) {
-
-	workingDir := filepath.Join(tempDir, "/working-dir")
-
-	err := os.MkdirAll(filepath.Join(workingDir, helmDir, helmChartDir), 0755)
-	if err != nil {
-		return "", err
-	}
-
+	workingDir := filepath.Join(tempDir, "working-dir")
 	tempChartDir = filepath.Join(workingDir, helmDir, helmChartDir)
+	tempIndexesDir = filepath.Join(workingDir, helmDir, helmIndexesDir)
 
-	err = os.MkdirAll(filepath.Join(workingDir, helmDir, helmIndexesDir), 0755)
-	if err != nil {
+	if err := folder.CreateFolders(tempChartDir, tempIndexesDir); err != nil {
 		return "", err
 	}
-
-	tempIndexesDir = filepath.Join(workingDir, helmDir, helmIndexesDir)
 
 	return workingDir, nil
 }

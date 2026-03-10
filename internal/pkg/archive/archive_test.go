@@ -19,8 +19,10 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-type mockBlobGatherer struct{}
-type mockHistory struct{}
+type (
+	mockBlobGatherer struct{}
+	mockHistory      struct{}
+)
 
 var expectedTarContents = []string{
 	// is in history // "docker/registry/v2/blobs/sha256/2e/2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644/data",
@@ -66,12 +68,10 @@ func TestArchive_BuildArchive(t *testing.T) {
 	t.Run("use strict adder: pass", func(t *testing.T) {
 		// Create a temporary test folder
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll(testFolder)
 
 		images := []v2alpha1.CopyImageSchema{
 			{
@@ -91,12 +91,10 @@ func TestArchive_BuildArchive(t *testing.T) {
 	t.Run("use permissive adder: pass", func(t *testing.T) {
 		// Create a temporary test folder
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, true)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.RemoveAll(testFolder)
 
 		images := []v2alpha1.CopyImageSchema{
 			{
@@ -118,12 +116,10 @@ func TestArchive_BuildArchive(t *testing.T) {
 func TestArchive_CacheDirError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(testFolder)
 
 	images := []v2alpha1.CopyImageSchema{
 		{
@@ -145,12 +141,10 @@ func TestArchive_CacheDirError(t *testing.T) {
 func TestArchive_WorkingDirError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(testFolder)
 
 	images := []v2alpha1.CopyImageSchema{
 		{
@@ -172,12 +166,10 @@ func TestArchive_WorkingDirError(t *testing.T) {
 func TestArchive_FileError(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(testFolder)
 
 	images := []v2alpha1.CopyImageSchema{
 		{
@@ -198,12 +190,10 @@ func TestArchive_FileError(t *testing.T) {
 func TestArchive_AddBlobsDiff(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(testFolder)
 
 	collectedBlobs := map[string]struct{}{
 		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
@@ -240,7 +230,6 @@ func TestArchive_AddBlobsDiff(t *testing.T) {
 	actualAddedBlobs, err := ma.addBlobsDiff(collectedBlobs, historyBlobs, make(map[string]struct{}))
 	assert.NoError(t, err, "call addBlobsDiff should not return an error")
 	assert.Equal(t, expectedAddedBlobs, actualAddedBlobs)
-
 }
 
 func TestArchive_RemovePastMirrors(t *testing.T) {
@@ -251,10 +240,7 @@ func TestArchive_RemovePastMirrors(t *testing.T) {
 	}
 
 	testFolder1 := t.TempDir()
-	defer os.RemoveAll(testFolder1)
-
 	testFolder2 := t.TempDir()
-	defer os.RemoveAll(testFolder2)
 
 	file, err := os.Create(filepath.Join(testFolder2, "mirror_000001.tar"))
 	if err != nil {
@@ -432,7 +418,6 @@ func assertContents(t *testing.T, archiveFile string, expectedTarContents []stri
 		}
 	}
 	return assert.ElementsMatch(t, expectedTarContents, actualTarContents)
-
 }
 
 // //////     Mocks       ////////
@@ -497,7 +482,6 @@ func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (map
 
 func (m mockHistory) Read() (map[string]struct{}, error) {
 	historyMap := map[string]struct{}{
-
 		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644": {},
 		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18": {},
 		"sha256:4c0f6aace7053de3b9c1476b33c9a763e45a099c8c7ae9117773c9a8e5b8506b": {},

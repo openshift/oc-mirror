@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
@@ -519,9 +520,12 @@ func TestFilterCollectorD2M(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	os.RemoveAll(consts.TestFolder + "hold-operator/")
-	os.RemoveAll(consts.TestFolder + "operator-images")
-	os.RemoveAll(consts.TestFolder + "tmp/")
+	err = folder.RemoveFolders(
+		filepath.Join(consts.TestFolder, "hold-operator"),
+		filepath.Join(consts.TestFolder, "operator-images"),
+		filepath.Join(consts.TestFolder, "tmp"),
+	)
+	assert.NoError(t, err)
 
 	// copy tests/hold-test-fake to working-dir
 	err = copy.Copy(
@@ -639,9 +643,12 @@ func TestFilterCollectorM2M(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	os.RemoveAll(consts.TestFolder + "hold-operator/")
-	os.RemoveAll(consts.TestFolder + "operator-images")
-	os.RemoveAll(consts.TestFolder + "tmp/")
+	err = folder.RemoveFolders(
+		filepath.Join(consts.TestFolder, "hold-operator"),
+		filepath.Join(consts.TestFolder, "operator-images"),
+		filepath.Join(consts.TestFolder, "tmp"),
+	)
+	assert.NoError(t, err)
 
 	// copy tests/hold-test-fake to working-dir
 	err = copy.Copy(
@@ -650,15 +657,19 @@ func TestFilterCollectorM2M(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	err = createFolders([]string{
+	err = folder.CreateFolders(
 		filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 		filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 		filepath.Join(consts.TestFolder, "catalog-on-disk3"),
+	)
+	t.Cleanup(func() {
+		err := folder.RemoveFolders(
+			filepath.Join(consts.TestFolder, "catalog-on-disk1"),
+			filepath.Join(consts.TestFolder, "catalog-on-disk2"),
+			filepath.Join(consts.TestFolder, "catalog-on-disk3"),
+		)
+		assert.NoError(t, err)
 	})
-	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk1"))
-	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk2"))
-	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk3"))
-
 	assert.NoError(t, err, "should create catalog dir")
 
 	// copy tests/hold-test-fake to working-dir

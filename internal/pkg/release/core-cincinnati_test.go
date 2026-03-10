@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/blang/semver/v4"
@@ -25,9 +24,7 @@ type mockClient struct {
 }
 
 func TestGetUpdates(t *testing.T) {
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	arch := "test-arch"
 	channelName := "stable-4.0"
@@ -132,7 +129,6 @@ func TestGetMinorMax(t *testing.T) {
 	channelName := "stable-4.0"
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
 		name string
@@ -191,9 +187,7 @@ func TestGetMinorMax(t *testing.T) {
 }
 
 func TestGetVersions(t *testing.T) {
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
 		name          string
@@ -259,7 +253,6 @@ func TestGetVersions(t *testing.T) {
 
 func TestGetUpdatesInRange(t *testing.T) {
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	arch := "test-arch"
 	channelName := "stable-4.0"
@@ -323,9 +316,6 @@ func TestGetUpdatesInRange(t *testing.T) {
 }
 
 func TestCalculateUpgrades(t *testing.T) {
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
-
 	arch := "test-arch"
 
 	tests := []struct {
@@ -446,9 +436,6 @@ func TestCalculateUpgrades(t *testing.T) {
 }
 
 func TestHandleBlockedEdges(t *testing.T) {
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
-
 	arch := "test-arch"
 
 	tests := []struct {
@@ -613,7 +600,6 @@ func TestNodeUnmarshalJSON(t *testing.T) {
 }
 
 func TestGetSemVerFromChannel(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		sourceChannel string
@@ -651,7 +637,6 @@ func TestGetSemVerFromChannel(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func getSemVers(stringVers []string) (vers []semver.Version) {

@@ -14,6 +14,7 @@ import (
 	"github.com/otiai10/copy"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
@@ -31,7 +32,6 @@ import (
 // and diskToMirror, using mocks
 func TestExecutorMirroring(t *testing.T) {
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	defer os.Remove("../../pkg/cli/registry.log")
 
 	workDir := filepath.Join(testFolder, "tests")
@@ -268,7 +268,6 @@ func TestExecutorMirroring(t *testing.T) {
 
 func TestRunMirrorToMirror(t *testing.T) {
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	defer os.Remove("../../pkg/cli/registry.log")
 
 	workDir := filepath.Join(testFolder, "tests")
@@ -483,7 +482,6 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = "" // reset
 		opts.Global.WorkingDir = consts.FileProtocol + "test"
 		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "test"}))
-
 	})
 
 	t.Run("Testing Executor : validate should fail", func(t *testing.T) {
@@ -589,7 +587,6 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.WorkingDir = "" // reset
 		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
-
 	})
 }
 
@@ -660,9 +657,8 @@ func TestExecutorComplete(t *testing.T) {
 		ex.Opts.Global.SinceString = "12345"
 		assert.Error(t, ex.Complete([]string{"file:///tmp/test"}))
 
-		defer os.RemoveAll("../../pkg/cli/test")
-		defer os.RemoveAll("../../pkg/cli/tmp")
-		defer os.RemoveAll("../../pkg/cli/working-dir")
+		err = folder.RemoveFolders("../../pkg/cli/test", "../../pkg/cli/tmp", "../../pkg/cli/working-dir")
+		assert.NoError(t, err)
 	})
 }
 
@@ -710,7 +706,6 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 // TestExecutorSetupWorkingDir
 func TestExecutorSetupWorkingDir(t *testing.T) {
 	workingDir := t.TempDir()
-	defer os.RemoveAll(workingDir)
 	t.Run("Testing Executor : setup working dir should pass", func(t *testing.T) {
 		log := clog.New("trace")
 

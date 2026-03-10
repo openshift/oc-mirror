@@ -18,6 +18,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -125,19 +126,6 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 
 func isFullCatalog(catalog v2alpha1.Operator) bool {
 	return len(catalog.IncludeConfig.Packages) == 0 && catalog.Full
-}
-
-func createFolders(paths []string) error {
-	var errs []error
-	for _, path := range paths {
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			err = os.MkdirAll(path, 0755)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	return errors.Join(errs...)
 }
 
 // digestOfFilter computes a hash of the operator filter configuration.
@@ -422,7 +410,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 
 	filteredDigestPath := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
 
-	if err := createFolders([]string{filteredDigestPath}); err != nil {
+	if err := folder.CreateFolders(filteredDigestPath); err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
@@ -453,7 +441,7 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 		dest := consts.OciProtocolTrimmed + catalogImageDir
 
 		// Prepare folders
-		if err := createFolders([]string{catalogImageDir}); err != nil {
+		if err := folder.CreateFolders(catalogImageDir); err != nil {
 			return err
 		}
 		return o.Mirror.Run(ctx, src, dest, mirror.CopyMode, &opts)
@@ -466,8 +454,9 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 		// because it's the first time we are doing this
 		//
 		// delete the existing directory and untarred cache contents
-		os.RemoveAll(catalogImageDir)
-		os.RemoveAll(filepath.Join(imageIndexDir, operatorCatalogConfigDir))
+		if err := folder.RemoveFolders(catalogImageDir, filepath.Join(imageIndexDir, operatorCatalogConfigDir)); err != nil {
+			return fmt.Errorf("failed to delete old content: %w", err)
+		}
 		// copy all contents to the working dir
 		if err := copy.Copy(imgSpec.PathComponent, catalogImageDir); err != nil {
 			return fmt.Errorf("copy OCI contents to working-dir: %w", err)

@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
@@ -238,9 +239,8 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			workingDir := tmpDir + "/working-dir"
+			workingDir := filepath.Join(tmpDir, "working-dir")
 
-			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
 				Log:              log,
 				WorkingDir:       workingDir,
@@ -466,9 +466,8 @@ func TestGenerateIDMS(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			workingDir := tmpDir + "/working-dir"
+			workingDir := filepath.Join(tmpDir, "working-dir")
 
-			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
 				Log:              log,
 				WorkingDir:       workingDir,
@@ -591,9 +590,8 @@ func TestGenerateITMS(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			workingDir := tmpDir + "/working-dir"
+			workingDir := filepath.Join(tmpDir, "working-dir")
 
-			defer os.RemoveAll(tmpDir)
 			cr := &ClusterResourcesGenerator{
 				Log:              log,
 				WorkingDir:       workingDir,
@@ -629,9 +627,8 @@ func TestCatalogSourceGenerator(t *testing.T) {
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	workingDir := tmpDir + "/working-dir"
+	workingDir := filepath.Join(tmpDir, "working-dir")
 
-	defer os.RemoveAll(tmpDir)
 	imageList := []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://localhost:5000/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
@@ -934,9 +931,8 @@ func TestCatalogSourceGenerator(t *testing.T) {
 	})
 	t.Run("Testing GenerateCatalogSource with catalog using a digest as tag : should pass", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		workingDir := tmpDir + "/working-dir"
+		workingDir := filepath.Join(tmpDir, "working-dir")
 
-		defer os.RemoveAll(tmpDir)
 		listCatalogDigestAsTag := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "docker://localhost:5000/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
@@ -1017,9 +1013,8 @@ func TestClusterCatalogGenerator(t *testing.T) {
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	workingDir := tmpDir + "/working-dir"
+	workingDir := filepath.Join(tmpDir, "working-dir")
 
-	defer os.RemoveAll(tmpDir)
 	imageList := []v2alpha1.CopyImageSchema{
 		{
 			Source:      "docker://localhost:5000/quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
@@ -1135,9 +1130,8 @@ func TestClusterCatalogGenerator(t *testing.T) {
 
 	t.Run("Testing GenerateClusterCatalog with catalog using a digest as tag : should pass", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		workingDir := tmpDir + "/working-dir"
+		workingDir := filepath.Join(tmpDir, "working-dir")
 
-		defer os.RemoveAll(tmpDir)
 		listCatalogDigestAsTag := []v2alpha1.CopyImageSchema{
 			{
 				Source:      "docker://localhost:5000/redhat/redhat-operator-index:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
@@ -1420,14 +1414,11 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 	t.Run("Testing configmap both yaml&json should pass", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		workingDir := filepath.Join(tmpDir, "working-dir")
-		err := os.MkdirAll(workingDir+"/"+clusterResourcesDir, 0755)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = os.MkdirAll(workingDir+"/"+signatureDir, 0755)
-		if err != nil {
-			t.Fatal(err)
-		}
+		err := folder.CreateFolders(
+			filepath.Join(workingDir, clusterResourcesDir),
+			filepath.Join(workingDir, signatureDir),
+		)
+		assert.NoError(t, err)
 		defer os.RemoveAll(workingDir)
 		files := []string{
 			"4.16.0-x86_64-sha256-37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
