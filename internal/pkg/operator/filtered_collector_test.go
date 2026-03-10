@@ -18,10 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
-
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
@@ -652,31 +650,35 @@ func TestFilterCollectorM2M(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	err = os.MkdirAll(consts.TestFolder+"/catalog-on-disk1", 0o755)
+	err = createFolders([]string{
+		filepath.Join(consts.TestFolder, "catalog-on-disk1"),
+		filepath.Join(consts.TestFolder, "catalog-on-disk2"),
+		filepath.Join(consts.TestFolder, "catalog-on-disk3"),
+	})
+	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk1"))
+	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk2"))
+	defer os.RemoveAll(filepath.Join(consts.TestFolder, "catalog-on-disk3"))
+
 	assert.NoError(t, err, "should create catalog dir")
-	err = os.MkdirAll(consts.TestFolder+"/catalog-on-disk2", 0o755)
-	assert.NoError(t, err, "should create catalog dir")
-	err = os.MkdirAll(consts.TestFolder+"/catalog-on-disk3", 0o755)
-	assert.NoError(t, err, "should create catalog dir")
+
 	// copy tests/hold-test-fake to working-dir
 	err = copy.Copy(
 		filepath.Join(consts.TestFolder, "oci-image"),
 		filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 	)
 	assert.NoError(t, err)
-	defer os.RemoveAll(consts.TestFolder + "/catalog-on-disk1")
+
 	err = copy.Copy(
 		filepath.Join(consts.TestFolder, "oci-image"),
 		filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 	)
 	assert.NoError(t, err)
-	defer os.RemoveAll(consts.TestFolder + "/catalog-on-disk2")
+
 	err = copy.Copy(
 		filepath.Join(consts.TestFolder, "oci-image"),
 		filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 	)
 	assert.NoError(t, err)
-	defer os.RemoveAll(consts.TestFolder + "/catalog-on-disk3")
 
 	testCases := []testCase{
 		{
@@ -1034,22 +1036,7 @@ func (o MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemCon
 	return nil, "", errors.New("not implemented")
 }
 
-func (o MockHandler) getCatalog(filePath string) (OperatorCatalog, error) {
-	return OperatorCatalog{}, nil
-}
-
 func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
-	relatedImages := make(map[string][]v2alpha1.RelatedImage)
-	relatedImages["abc"] = []v2alpha1.RelatedImage{
-		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "testB", Image: "sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
-		{Name: "kube-rbac-proxy", Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522"}, // OCPBUGS-37867
-		{Name: "", Image: ""}, // OCPBUGS-31622
-	}
-	return relatedImages, nil
-}
-
-func (o MockHandler) filterRelatedImagesFromCatalog(operatorCatalog OperatorCatalog, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	relatedImages["abc"] = []v2alpha1.RelatedImage{
 		{Name: "testA", Image: "sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -1101,9 +1088,9 @@ func TestFindFilterDigest(t *testing.T) {
 
 		// Create the normalized digest folder
 		normalizedDir := filepath.Join(tempDir, normalizedDigest)
-		err = os.MkdirAll(normalizedDir, 0755)
+		err = os.MkdirAll(normalizedDir, 0o755)
 		assert.NoError(t, err)
-		err = os.WriteFile(filepath.Join(normalizedDir, "digest"), []byte("somefilteredimagedigest"), 0644) // #nosec G306
+		err = os.WriteFile(filepath.Join(normalizedDir, "digest"), []byte("somefilteredimagedigest"), 0o644) // #nosec G306
 		assert.NoError(t, err)
 
 		result, err := findFilterDigest(op, catalogDigest, tempDir)
@@ -1129,9 +1116,9 @@ func TestFindFilterDigest(t *testing.T) {
 
 		// Create the legacy digest folder (not the normalized one)
 		legacyDir := filepath.Join(tempDir, legacyDigest)
-		err = os.MkdirAll(legacyDir, 0755)
+		err = os.MkdirAll(legacyDir, 0o755)
 		assert.NoError(t, err)
-		err = os.WriteFile(filepath.Join(legacyDir, "digest"), []byte("somefilteredimagedigest"), 0644) // #nosec G306
+		err = os.WriteFile(filepath.Join(legacyDir, "digest"), []byte("somefilteredimagedigest"), 0o644) // #nosec G306
 		assert.NoError(t, err)
 
 		result, err := findFilterDigest(op, catalogDigest, tempDir)
