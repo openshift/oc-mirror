@@ -4,25 +4,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/otiai10/copy"
 	filter "github.com/sherine-k/catalog-filter/pkg/filter/mirror-config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-type catalogHandler struct {
-	Log clog.PluggableLoggerInterface
+type CatalogHandler struct {
+	Log      clog.PluggableLoggerInterface
+	Manifest manifest.ManifestInterface
+	Mirror   mirror.MirrorInterface
 }
 
-func (o catalogHandler) getDeclarativeConfig(filePath string) (*declcfg.DeclarativeConfig, error) {
-	return declcfg.LoadFS(context.Background(), os.DirFS(filePath))
+func (o CatalogHandler) GetDeclarativeConfig(ctx context.Context, filePath string) (*declcfg.DeclarativeConfig, error) {
+	dc, err := declcfg.LoadFS(ctx, os.DirFS(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load catalog config: %w", err)
+	}
+	return dc, nil
 }
 
 func saveDeclarativeConfig(fbc declcfg.DeclarativeConfig, path string) error {
@@ -84,7 +96,7 @@ func filterCatalog(ctx context.Context, operatorCatalog declcfg.DeclarativeConfi
 	return ctlgFilter.FilterCatalog(ctx, &operatorCatalog)
 }
 
-func (o catalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	var errs []error
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	for _, bundle := range dc.Bundles {
@@ -146,4 +158,92 @@ func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSc
 	}
 
 	return relatedImages, nil
+}
+
+func (o CatalogHandler) EnsureCatalogInOCIFormat(ctx context.Context, imgSpec image.ImageSpec, catalog, imageIndexDir string, opts mirror.CopyOptions) error {
+	o.Log.Debug("Ensuring catalog %q is in OCI format", catalog)
+	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
+
+	if imgSpec.Transport != consts.OciProtocol {
+		// modify a copy, no the pointed value
+		var gOpts mirror.GlobalOptions
+		if opts.Global != nil {
+			gOpts = *opts.Global
+		}
+		localOpts := opts
+		localOpts.Global = &gOpts
+		localOpts.Stdout = io.Discard
+		localOpts.RemoveSignatures = true
+		localOpts.Global.SecurePolicy = false
+
+		src := consts.DockerProtocol + catalog
+		dest := consts.OciProtocolTrimmed + catalogImageDir
+
+		// Prepare folders
+		if err := folder.CreateFolders(catalogImageDir); err != nil {
+			return err
+		}
+		return o.Mirror.Run(ctx, src, dest, mirror.CopyMode, &localOpts)
+	}
+
+	o.Log.Debug("Catalog %q already in OCI format", catalog)
+	if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); err != nil {
+		// If we cannot determine whether the catalog exists in OCI format at
+		// the working-dir destination, either because of `stat` failures or
+		// because it's the first time we are doing this
+		//
+		// delete the existing directory and untarred cache contents
+		if err := folder.RemoveFolders(catalogImageDir, filepath.Join(imageIndexDir, operatorCatalogConfigDir)); err != nil {
+			return fmt.Errorf("failed to delete old content: %w", err)
+		}
+		// copy all contents to the working dir
+		if err := copy.Copy(imgSpec.PathComponent, catalogImageDir); err != nil {
+			return fmt.Errorf("copy OCI contents to working-dir: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (o CatalogHandler) ExtractOCIConfigLayers(imgSpec image.ImageSpec, imageIndexDir string) (string, error) { //nolint:cyclop // TODO: this needs further refactoring
+	o.Log.Debug("Extracting OCI catalog layers")
+	configsDir := filepath.Join(imageIndexDir, operatorCatalogConfigDir)
+	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
+
+	if err := folder.CreateFolders(configsDir, catalogImageDir); err != nil {
+		return "", err
+	}
+
+	// It's in oci format so we can go directly to the index.json file
+	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
+	if err != nil {
+		return "", err
+	}
+
+	if len(oci.Manifests) > 1 && imgSpec.Transport == consts.OciProtocol {
+		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
+			return "", err
+		}
+	}
+
+	img, err := o.Manifest.GetOCIImageFromIndex(catalogImageDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to get catalog oci image: %w", err)
+	}
+
+	imgConfig, err := img.ConfigFile()
+	if err != nil {
+		return "", fmt.Errorf("failed to get catalog oci image config: %w", err)
+	}
+
+	label := imgConfig.Config.Labels[operatorsConfigsV1Label]
+	o.Log.Debug(collectorPrefix+"label %q", label)
+
+	// untar all the blobs for the operator
+	// if the layer with "label" (from previous step) is found to a specific folder
+	if err := o.Manifest.ExtractOCILayers(img, configsDir, label); err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configsDir, label), nil
 }

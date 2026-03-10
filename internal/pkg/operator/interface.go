@@ -6,6 +6,8 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 type CollectorInterface interface {
@@ -13,8 +15,10 @@ type CollectorInterface interface {
 }
 
 type catalogHandlerInterface interface {
-	getDeclarativeConfig(filePath string) (*declcfg.DeclarativeConfig, error)
+	GetDeclarativeConfig(ctx context.Context, filePath string) (*declcfg.DeclarativeConfig, error)
 	getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
+	EnsureCatalogInOCIFormat(ctx context.Context, imgSpec image.ImageSpec, catalog, imageIndexDir string, opts mirror.CopyOptions) error
+	ExtractOCIConfigLayers(imgSpec image.ImageSpec, imageIndexDir string) (string, error)
 }
 
 type imageDispatcher interface {

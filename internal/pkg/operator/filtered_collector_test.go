@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
@@ -500,7 +501,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 	t.Run("Testing OperatorImageCollector - Mirror to disk: should pass", func(t *testing.T) {
 		ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifest)
 		// ensure coverage in new.go
-		_ = NewWithFilter(log, "working-dir", ex.Config, ex.Opts, ex.Mirror, manifest)
+		_ = NewWithFilter(log, "working-dir", ex.Config, ex.Opts, &MockMirror{Fail: false}, manifest)
 	})
 }
 
@@ -848,7 +849,6 @@ func setupFilterCollector_DiskToMirror(tempDir string, log clog.PluggableLoggerI
 	ex := &FilterCollector{
 		OperatorCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
 			Config:           nominalConfigD2M,
 			Manifest:         manifest,
 			Opts:             d2mOpts,
@@ -889,7 +889,6 @@ func setupFilterCollector_MirrorToDisk(tempDir string, log clog.PluggableLoggerI
 	ex := &FilterCollector{
 		OperatorCollector{
 			Log:              log,
-			Mirror:           &MockMirror{Fail: false},
 			Config:           nominalConfigM2D,
 			Manifest:         manifest,
 			Opts:             m2dOpts,
@@ -1058,7 +1057,7 @@ func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, 
 	return relatedImages, nil
 }
 
-func (o MockHandler) getDeclarativeConfig(filePath string) (*declcfg.DeclarativeConfig, error) {
+func (o MockHandler) GetDeclarativeConfig(_ context.Context, filePath string) (*declcfg.DeclarativeConfig, error) {
 	return &declcfg.DeclarativeConfig{
 		Packages: []declcfg.Package{
 			{Name: "op1", DefaultChannel: "ch1"},
@@ -1081,6 +1080,14 @@ func (o MockHandler) getDeclarativeConfig(filePath string) (*declcfg.Declarative
 			},
 		},
 	}, nil
+}
+
+func (o MockHandler) EnsureCatalogInOCIFormat(_ context.Context, _ image.ImageSpec, _, _ string, _ mirror.CopyOptions) error {
+	return nil
+}
+
+func (o MockHandler) ExtractOCIConfigLayers(_ image.ImageSpec, _ string) (string, error) {
+	return "", nil
 }
 
 func TestFindFilterDigest(t *testing.T) {
