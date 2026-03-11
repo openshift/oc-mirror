@@ -178,9 +178,16 @@ func (o CatalogHandler) EnsureCatalogInOCIFormat(ctx context.Context, imgSpec im
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
 
 	if imgSpec.Transport != consts.OciProtocol {
-		opts.Stdout = io.Discard
-		opts.RemoveSignatures = true
-		opts.Global.SecurePolicy = false
+		// modify a copy, no the pointed value
+		var gOpts mirror.GlobalOptions
+		if opts.Global != nil {
+			gOpts = *opts.Global
+		}
+		localOpts := opts
+		localOpts.Global = &gOpts
+		localOpts.Stdout = io.Discard
+		localOpts.RemoveSignatures = true
+		localOpts.Global.SecurePolicy = false
 
 		src := consts.DockerProtocol + catalog
 		dest := consts.OciProtocolTrimmed + catalogImageDir
@@ -189,7 +196,7 @@ func (o CatalogHandler) EnsureCatalogInOCIFormat(ctx context.Context, imgSpec im
 		if err := folder.CreateFolders(catalogImageDir); err != nil {
 			return err
 		}
-		return o.Mirror.Run(ctx, src, dest, mirror.CopyMode, &opts)
+		return o.Mirror.Run(ctx, src, dest, mirror.CopyMode, &localOpts)
 	}
 
 	o.Log.Debug("Catalog %q already in OCI format", catalog)
