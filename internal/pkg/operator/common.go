@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"hash/fnv"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"go.podman.io/image/v5/types"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
-
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -27,7 +25,6 @@ const (
 type OperatorCollector struct {
 	Log                clog.PluggableLoggerInterface
 	LogsDir            string
-	Mirror             mirror.MirrorInterface
 	Manifest           manifest.ManifestInterface
 	Config             v2alpha1.ImageSetConfiguration
 	Opts               mirror.CopyOptions
@@ -342,49 +339,6 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 		}
 	}
 	return result, nil
-}
-
-func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.ImageSpec, imageIndexDir string) (string, error) { //nolint:cyclop // TODO: this needs further refactoring
-	o.Log.Debug("Extracting OCI catalog layers")
-	configsDir := filepath.Join(imageIndexDir, operatorCatalogConfigDir)
-	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
-
-	if err := createFolders([]string{configsDir, catalogImageDir}); err != nil {
-		return "", err
-	}
-
-	// It's in oci format so we can go directly to the index.json file
-	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
-	if err != nil {
-		return "", err
-	}
-
-	if len(oci.Manifests) > 1 && imgSpec.Transport == consts.OciProtocol {
-		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
-			return "", err
-		}
-	}
-
-	img, err := o.Manifest.GetOCIImageFromIndex(catalogImageDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to get catalog oci image: %w", err)
-	}
-
-	imgConfig, err := img.ConfigFile()
-	if err != nil {
-		return "", fmt.Errorf("failed to get catalog oci image config: %w", err)
-	}
-
-	label := imgConfig.Config.Labels[operatorsConfigsV1Label]
-	o.Log.Debug(collectorPrefix+"label %q", label)
-
-	// untar all the blobs for the operator
-	// if the layer with "label" (from previous step) is found to a specific folder
-	if err := o.Manifest.ExtractOCILayers(img, configsDir, label); err != nil {
-		return "", err
-	}
-
-	return filepath.Join(configsDir, label), nil
 }
 
 type OtherImageDispatcher struct {

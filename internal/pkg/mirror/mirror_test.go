@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,10 +17,8 @@ import (
 )
 
 func TestMirrorCopy(t *testing.T) {
-
 	testFolder := t.TempDir()
 	testFile := testFolder + "/testDigest.txt"
-	defer os.RemoveAll(testFolder)
 
 	global := &GlobalOptions{SecurePolicy: false}
 
@@ -102,7 +99,6 @@ func TestMirrorCopy(t *testing.T) {
 }
 
 func TestMirrorCheck(t *testing.T) {
-
 	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
@@ -165,7 +161,6 @@ func TestMirrorCheck(t *testing.T) {
 
 // TestMirrorDelete
 func TestMirrorDelete(t *testing.T) {
-
 	global := &GlobalOptions{SecurePolicy: false}
 
 	_, sharedOpts := SharedImageFlags()
@@ -243,8 +238,10 @@ func TestMirrorParseMultiArch(t *testing.T) {
 	assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
 }
 
-type mockMirrorCopy struct{}
-type mockMirrorDelete struct{}
+type (
+	mockMirrorCopy   struct{}
+	mockMirrorDelete struct{}
+)
 
 func (o *mockMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyContext, destRef, srcRef types.ImageReference, opts *copy.Options) ([]byte, error) {
 	return []byte("test"), nil

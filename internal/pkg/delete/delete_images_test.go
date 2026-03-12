@@ -3,7 +3,6 @@ package delete
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
@@ -97,8 +96,6 @@ func TestAllDeleteImages(t *testing.T) {
 	})
 
 	t.Run("Testing DeleteCacheBlobs : should pass", func(t *testing.T) {
-		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		opts.Global.WorkingDir = consts.TestFolder
 		opts.Global.ForceCacheDelete = true
 		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
@@ -119,7 +116,6 @@ func TestWriteMetaData(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
@@ -164,9 +160,7 @@ func TestWriteMetaData(t *testing.T) {
 }
 
 func TestSigDeleteItems(t *testing.T) {
-
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,

@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"os"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -17,7 +16,7 @@ func TestPrepareDeleteForV1(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage
@@ -82,7 +81,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
+
 	type testCase struct {
 		caseName       string
 		relatedImages  map[string][]v2alpha1.RelatedImage

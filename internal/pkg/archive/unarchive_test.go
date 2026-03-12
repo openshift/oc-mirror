@@ -16,7 +16,6 @@ import (
 func TestUnArchiver_UnArchive(t *testing.T) {
 	t.Run("unarchive with 2 archive: should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		// Create a new tar archive file : for working-dir
 		archive1FileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
@@ -50,7 +49,6 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 
 	t.Run("unarchive with 1 archive: should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		// Create a new tar archive file
 		archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
@@ -73,7 +71,6 @@ func TestUnArchiver_UnArchive(t *testing.T) {
 
 func TestUnArchiver_NoArchive(t *testing.T) {
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	workingDir := t.TempDir()
 	cacheDir := t.TempDir()
 	_, err := NewArchiveExtractor(testFolder, workingDir, cacheDir)
@@ -82,7 +79,6 @@ func TestUnArchiver_NoArchive(t *testing.T) {
 
 func TestUnArchiver_WorkingDirError(t *testing.T) {
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 
 	// Create a new tar archive file
 	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
@@ -103,7 +99,6 @@ func TestUnArchiver_WorkingDirError(t *testing.T) {
 
 func TestUnArchiver_CacheDirError(t *testing.T) {
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 
 	// Create a new tar archive file
 	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)

@@ -5,14 +5,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
+	"path/filepath"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -22,12 +24,11 @@ type mockSignature struct {
 }
 
 func TestGetReleaseReferenceImages(t *testing.T) {
-
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
-	defer os.RemoveAll(tmpDir)
+	err := folder.CreateFolders(filepath.Join(tmpDir, "hold-release", "cincinnati-graph-data"))
+	assert.NoError(t, err)
 
 	global := &mirror.GlobalOptions{SecurePolicy: false}
 	global.WorkingDir = tmpDir
@@ -107,7 +108,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	}
 
 	t.Run("TestGetReleaseReferenceImages should pass", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -131,7 +131,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (no channels)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -157,7 +156,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should fail", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -183,7 +181,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (platform.release & kubevirt)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -210,7 +207,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should return a related images")
 		}
 	})
-
 }
 
 type mockManifest struct{}

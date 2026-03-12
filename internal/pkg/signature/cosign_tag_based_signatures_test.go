@@ -3,7 +3,6 @@ package signature
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
@@ -143,7 +142,6 @@ func TestSigstoreAttachmentTag(t *testing.T) {
 
 func TestGetSignatureTag(t *testing.T) {
 	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
 
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
