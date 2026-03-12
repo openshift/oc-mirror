@@ -1143,14 +1143,13 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
 		additionalImgErr = err
-	} else {
-		// exclude blocked images
-		aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
-		aImgs = removeDuplicatedImages(aImgs, o.Opts.Function)
-		collectorSchema.TotalAdditionalImages = len(aImgs)
-		o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
-		allRelatedImages = append(allRelatedImages, aImgs...)
 	}
+	// exclude blocked images
+	aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
+	aImgs = removeDuplicatedImages(aImgs, o.Opts.Function)
+	collectorSchema.TotalAdditionalImages = len(aImgs)
+	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
+	allRelatedImages = append(allRelatedImages, aImgs...)
 
 	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
