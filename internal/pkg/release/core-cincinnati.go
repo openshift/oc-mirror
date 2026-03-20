@@ -2,37 +2,21 @@ package release
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/blang/semver/v4"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-const (
-	// GraphMediaType is the media-type specified in the HTTP Accept header
-	// of requests sent to the Cincinnati-v1 Graph API.
-	GraphMediaType = "application/json"
-
-	// Timeout when calling upstream Cincinnati stack.
-	getUpdatesTimeout = time.Minute * 60
-	// UpdateURL is the Cincinnati endpoint for the OpenShift platform.
-	UpdateURL = "https://api.openshift.com/api/upgrades_info/v1/graph"
-	// OkdUpdateURL is the Cincinnati endpoint for the OKD platform.
-	OkdUpdateURL = "https://origin-release.ci.openshift.org/graph"
-
-	ChannelInfo = "channel %q: %v"
-)
+const ChannelInfo = "channel %q: %v"
 
 // Error is returned when are unable to get updates.
 type Error struct {
@@ -46,25 +30,6 @@ type Error struct {
 	cause error
 }
 
-// Update is a single node from the update graph.
-type Update node
-
-type graph struct {
-	Nodes []node
-	Edges []edge
-}
-
-type node struct {
-	Version  semver.Version    `json:"version"`
-	Image    string            `json:"payload"`
-	Metadata map[string]string `json:"metadata,omitempty"`
-}
-
-type edge struct {
-	Origin      int
-	Destination int
-}
-
 // Error serializes the error as a string, to satisfy the error interface.
 func (o Error) Error() string {
 	return fmt.Sprintf("%s: %s", o.Reason, o.Message)
@@ -74,50 +39,30 @@ func (o Error) Error() string {
 // upstream Cincinnati stack given the current version, architecture, and channel.
 // The shortest path is calculated between the current and requested version from the graph edge
 // data.
-func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, version semver.Version, reqVer semver.Version) (Update, Update, []Update, error) {
-	var current Update
-	var requested Update
-	// Prepare parametrized cincinnati query.
-	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, version.String())
-
-	graph, err := getGraphData(ctx, cs)
+func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, version semver.Version, reqVer semver.Version) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, error) { //nolint:cyclop // FIXME: needs further refactoring.
+	graph, err := getGraphData(ctx, cs, channel, version.String())
 	if err != nil {
-		return Update{}, Update{}, nil, &Error{
+		return cincinnati.Update{}, cincinnati.Update{}, nil, &Error{
 			Reason:  "APIRequestError",
 			Message: fmt.Sprintf("version %s in channel %s: %v", version.String(), channel, err),
 			cause:   err,
 		}
 	}
 
+	var current cincinnati.Update
+	var requested cincinnati.Update
+
 	// Find the current version within the graph.
-	var currentIdx int
-	found := false
-	for i, node := range graph.Nodes {
-		if version.EQ(node.Version) {
-			currentIdx = i
-			current = Update(graph.Nodes[i])
-			found = true
-			break
-		}
-	}
-	if !found {
+	current, currentIdx, err := graph.GetNodeByVersion(version)
+	if errors.Is(err, cincinnati.ErrVersionNotFound) {
 		return current, requested, nil, &Error{
 			Reason:  "VersionNotFound",
 			Message: fmt.Sprintf("current version %s not found in the %q channel", version, channel),
 		}
 	}
 
-	var destinationIdx int
-	found = false
-	for i, node := range graph.Nodes {
-		if reqVer.EQ(node.Version) {
-			destinationIdx = i
-			requested = Update(graph.Nodes[i])
-			found = true
-			break
-		}
-	}
-	if !found {
+	requested, destinationIdx, err := graph.GetNodeByVersion(reqVer)
+	if errors.Is(err, cincinnati.ErrVersionNotFound) {
 		return current, requested, nil, &Error{
 			Reason:  "VersionNotFound",
 			Message: fmt.Sprintf("requested version %s not found in the %q channel", reqVer, channel),
@@ -126,7 +71,7 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 
 	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
 	for _, edge := range graph.Edges {
-		edgesByOrigin[edge.Origin] = append(edgesByOrigin[edge.Origin], edge.Destination)
+		edgesByOrigin[edge[0]] = append(edgesByOrigin[edge[0]], edge[1])
 	}
 
 	// Sort destination by semver to ensure deterministic result
@@ -180,9 +125,9 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 
 	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx)
 
-	var updates []Update
+	var updates []cincinnati.Update
 	for _, i := range nextIdxs {
-		updates = append(updates, Update(graph.Nodes[i]))
+		updates = append(updates, cincinnati.Update(graph.Nodes[i]))
 	}
 
 	return current, requested, updates, nil
@@ -190,7 +135,7 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
 // upstream Cincinnati stack given the current and target version and channel.
-func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (Update, Update, []Update, error) {
+func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, error) { //nolint:cyclop // FIXME: needs further refactoring.
 	if sourceChannel == targetChannel {
 		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
 	}
@@ -199,12 +144,12 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 	// channel prefixes
 	source, target, _, err := getSemverFromChannels(sourceChannel, targetChannel)
 	if err != nil {
-		return Update{}, Update{}, nil, err
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
 	}
 	if source.EQ(target) {
 		isBlocked, err := handleBlockedEdges(ctx, cs, targetChannel, startVer)
 		if err != nil {
-			return Update{}, Update{}, nil, err
+			return cincinnati.Update{}, cincinnati.Update{}, nil, err
 		}
 
 		// If blocked path is found, just return the requested version and any accumulated
@@ -221,20 +166,20 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 	// edge is hit.
 	latest, err := GetChannelMinOrMax(ctx, cs, sourceChannel, false)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
+		return cincinnati.Update{}, cincinnati.Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
 	}
 	current, _, upgrades, err := GetUpdates(ctx, cs, sourceChannel, startVer, latest)
 	if err != nil {
-		return Update{}, Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
+		return cincinnati.Update{}, cincinnati.Update{}, nil, fmt.Errorf(ChannelInfo, sourceChannel, err)
 	}
 
 	requested, newUpgrades, err := calculate(ctx, cs, sourceChannel, targetChannel, latest, reqVer)
 	if err != nil {
-		return Update{}, Update{}, nil, err
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
 	}
 	upgrades = append(upgrades, newUpgrades...)
 
-	var finalUpgrades []Update
+	var finalUpgrades []cincinnati.Update
 	seen := make(map[string]struct{}, len(upgrades))
 	for _, upgrade := range upgrades {
 		if _, ok := seen[upgrade.Image]; !ok {
@@ -248,7 +193,7 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 
 // calculate will calculate Cincinnati upgrades between channels by finding the latest versions in the source channels
 // and incrementing the minor version until the target channel is reached.
-func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested Update, upgrades []Update, err error) {
+func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested cincinnati.Update, upgrades []cincinnati.Update, err error) {
 	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
 	if err != nil {
 		return requested, upgrades, err
@@ -347,10 +292,7 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 // GetChannelMinOrMax fetches the minimum or maximum version from the specified
 // upstream Cincinnati stack given architecture and channel.
 func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string, min bool) (semver.Version, error) {
-	// Prepare parametrized cincinnati query.
-	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
-
-	graph, err := getGraphData(ctx, cs)
+	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return semver.Version{}, &Error{
 			Reason:  "APIRequestError",
@@ -373,16 +315,8 @@ func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string
 		}
 	}
 
-	var Vers []semver.Version
-	for _, node := range graph.Nodes {
-		if versionMatcher == nil || versionMatcher.MatchString(node.Version.String()) {
-			Vers = append(Vers, node.Version)
-		}
-	}
-
-	semver.Sort(Vers)
-
-	if len(Vers) == 0 {
+	vers := graph.GetVersions(versionMatcher)
+	if len(vers) == 0 {
 		return semver.Version{}, &Error{
 			Reason:  "NoVersionsFound",
 			Message: fmt.Sprintf("no cluster versions found for %q in the %q channel", cs.CincinnatiParams.Arch, channel),
@@ -390,19 +324,16 @@ func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string
 	}
 
 	if min {
-		return Vers[0], nil
+		return vers[0], nil
 	}
 
-	return Vers[len(Vers)-1], nil
+	return vers[len(vers)-1], nil
 }
 
 // GetVersions will return all update payloads from the specified
 // upstream Cincinnati stack given architecture and channel.
 func GetVersions(ctx context.Context, cs CincinnatiSchema, channel string) ([]semver.Version, error) {
-	// Prepare parametrized cincinnati query.
-	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
-
-	graph, err := getGraphData(ctx, cs)
+	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return nil, &Error{
 			Reason:  "APIRequestError",
@@ -410,30 +341,21 @@ func GetVersions(ctx context.Context, cs CincinnatiSchema, channel string) ([]se
 			cause:   err,
 		}
 	}
-	// Find the all versions within the graph.
-	var Vers []semver.Version
-	for _, node := range graph.Nodes {
-		Vers = append(Vers, node.Version)
-	}
 
-	if len(Vers) == 0 {
+	vers := graph.GetVersions(nil)
+	if len(vers) == 0 {
 		return nil, &Error{
 			Reason:  "NoVersionsFound",
 			Message: fmt.Sprintf("no cluster versions found in the %q channel", channel),
 		}
 	}
 
-	semver.Sort(Vers)
-
-	return Vers, nil
+	return vers, nil
 }
 
 // GetUpdatesInRange will return all update payload within a semver range for a specified channel and architecture.
-func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string, updateRange semver.Range) ([]Update, error) {
-	// Prepare parametrized cincinnati query.
-	cs.Client.SetQueryParams(cs.CincinnatiParams.Arch, channel, "")
-
-	graph, err := getGraphData(ctx, cs)
+func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string, updateRange semver.Range) ([]cincinnati.Update, error) {
+	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return nil, &Error{
 			Reason:  "APIRequestError",
@@ -443,132 +365,78 @@ func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string,
 	}
 
 	// Find the all updates within the range
-	var updates []Update
+	var updates []cincinnati.Update
 	for _, node := range graph.Nodes {
 		if updateRange(node.Version) {
-			updates = append(updates, Update(node))
+			updates = append(updates, cincinnati.Update(node))
 		}
 	}
 	return updates, nil
 }
 
 // getGraphData fetches the update graph from the upstream Cincinnati stack given the current version and channel
-func getGraphData(ctx context.Context, cs CincinnatiSchema) (graph graph, err error) {
+func getGraphData(ctx context.Context, cs CincinnatiSchema, channel string, version string) (graph cincinnati.Graph, err error) {
+	arch := cs.CincinnatiParams.Arch
 	if cs.Opts.Mode == mirror.DiskToMirror {
-		graphDataFiles, err := os.ReadDir(cs.CincinnatiParams.GraphDataDir)
-		if err != nil {
-			return graph, &Error{Reason: "ReadDirFailed", Message: err.Error(), cause: err}
-		}
-
-		if len(graphDataFiles) == 0 {
-			return graph, &Error{Reason: "NoGraphData", Message: "No graph data found on disk"}
-		}
-
-		uri := cs.Client.GetURL()
-		queryValues := uri.Query()
-		arch := queryValues.Get("arch")
-		channel := queryValues.Get("channel")
-		filename := fmt.Sprintf("%s-%s.json", arch, channel)
-		filepath := path.Join(cs.CincinnatiParams.GraphDataDir, filename)
-
-		fileData, err := os.ReadFile(filepath)
-		if err != nil {
-			return graph, &Error{Reason: "ReadFileFailed", Message: err.Error(), cause: err}
-		}
-
-		if err = json.Unmarshal(fileData, &graph); err != nil {
-			errMsg := fmt.Sprintf("could not parse graph data %s: %v", filepath, err)
-			return graph, &Error{Reason: "GraphDataInvalid", Message: errMsg, cause: err}
-		}
-
-		return graph, nil
+		return loadGraphDataFromDisk(cs.CincinnatiParams.GraphDataDir, arch, channel)
 	}
 
-	transport := cs.Client.GetTransport()
-	uri := cs.Client.GetURL()
+	opts := []cincinnati.Option{
+		cincinnati.WithChannel(channel),
+		cincinnati.WithID(cs.Client.GetID()),
+		cincinnati.WithURL(cs.Client.GetURL().String()),
+		cincinnati.WithTransport(cs.Client.GetTransport()),
+	}
+	if len(arch) > 0 {
+		opts = append(opts, cincinnati.WithArch(arch))
+	}
+	if len(version) > 0 {
+		opts = append(opts, cincinnati.WithVersion(version))
+	}
+
 	// Download the update graph.
-	req, err := http.NewRequest("GET", uri.String(), nil)
+	data, err := cincinnati.DownloadGraphData(ctx, cs.Log, opts...)
 	if err != nil {
-		return graph, &Error{Reason: "InvalidRequest", Message: err.Error(), cause: err}
-	}
-	req.Header.Add("Accept", GraphMediaType)
-	if transport != nil && transport.TLSClientConfig != nil {
-		if cs.Client.GetTransport().TLSClientConfig.ClientCAs == nil {
-			cs.Log.Debug("Using a root CA pool with 0 root CA subjects to request updates from %s", uri)
-		}
-		//else {
-		//klog.V(5).Infof("Using a root CA pool with %n root CA subjects to request updates from %s", len(transport.TLSClientConfig.RootCAs.Subjects()), uri)
-		//}
+		return graph, &Error{Reason: "GetGraphDataFailed", Message: err.Error(), cause: err}
 	}
 
-	if transport != nil && transport.Proxy != nil {
-		proxy, err := transport.Proxy(req)
-		if err == nil && proxy != nil {
-			cs.Log.Debug("Using proxy %s to request updates from %s", proxy.Host, uri)
-		}
-	}
-
-	client := http.Client{}
-	if transport != nil {
-		client.Transport = transport
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, getUpdatesTimeout)
-	defer cancel()
-	resp, err := client.Do(req.WithContext(timeoutCtx))
+	graph, err = cincinnati.LoadGraphData(data)
 	if err != nil {
-		return graph, &Error{Reason: "RemoteFailed", Message: err.Error(), cause: err}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return graph, &Error{Reason: "ResponseFailed", Message: fmt.Sprintf("unexpected HTTP status: %s", resp.Status)}
-	}
-
-	// Parse the graph.
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return graph, &Error{Reason: "ResponseFailed", Message: err.Error(), cause: err}
-	}
-
-	if err = json.Unmarshal(body, &graph); err != nil {
 		return graph, &Error{Reason: "ResponseInvalid", Message: err.Error(), cause: err}
 	}
 
-	if err := writeGraphDataToFile(body, *uri, cs.CincinnatiParams.GraphDataDir); err != nil {
+	if err := writeGraphDataToFile(data, arch, channel, cs.CincinnatiParams.GraphDataDir); err != nil {
 		return graph, err
 	}
 
 	return graph, nil
 }
 
-func writeGraphDataToFile(body []byte, uri url.URL, graphDataDir string) error {
-	queryValues := uri.Query()
-	arch := queryValues.Get("arch")
-	channel := queryValues.Get("channel")
+func loadGraphDataFromDisk(graphDataDir, arch, channel string) (cincinnati.Graph, error) {
+	var graph cincinnati.Graph
 	filename := fmt.Sprintf("%s-%s.json", arch, channel)
-	err := os.WriteFile(path.Join(graphDataDir, filename), body, 0644)
-	if err != nil {
-		return &Error{Reason: "FileWriteFailed", Message: err.Error(), cause: err}
+	filepath := path.Join(graphDataDir, filename)
+	if _, err := os.Stat(filepath); err != nil {
+		return graph, &Error{Reason: "NoGraphData", Message: "No graph data found on disk"}
 	}
 
-	return nil
+	fileData, err := os.ReadFile(filepath)
+	if err != nil {
+		return graph, &Error{Reason: "ReadFileFailed", Message: err.Error(), cause: err}
+	}
+
+	if graph, err = cincinnati.LoadGraphData(fileData); err != nil {
+		return graph, &Error{Reason: "GraphDataInvalid", Message: fmt.Sprintf("graph data %s: %v", filepath, err), cause: err}
+	}
+
+	return graph, nil
 }
 
-// UnmarshalJSON unmarshals an edge in the update graph. The edge's JSON
-// representation is a two-element array of indices, but Go's representation is
-// a struct with two elements so this custom unmarshal method is required.
-func (o *edge) UnmarshalJSON(data []byte) error {
-	var fields []int
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
+func writeGraphDataToFile(body []byte, arch, channel, graphDataDir string) error {
+	filename := fmt.Sprintf("%s-%s.json", arch, channel)
+	if err := os.WriteFile(path.Join(graphDataDir, filename), body, 0o644); err != nil { //nolint:gosec // no sensitive info
+		return &Error{Reason: "FileWriteFailed", Message: err.Error(), cause: err}
 	}
-
-	if len(fields) != 2 {
-		return fmt.Errorf("expected 2 fields, found %d", len(fields))
-	}
-
-	o.Origin = fields[0]
-	o.Destination = fields[1]
 
 	return nil
 }
