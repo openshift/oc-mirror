@@ -15,6 +15,7 @@ func NewListCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOptions)
 	}
 
 	cmd.AddCommand(NewListOperatorsCommand(log, opts))
+	cmd.AddCommand(NewListReleasesCommand(log, opts))
 
 	return cmd
 }
