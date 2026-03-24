@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: JobSetOperator.v1.operator.openshift.io
+  generateName: openshift-jobset-operator-
+  namespace: openshift-jobset-operator
+spec:
+  targetNamespaces:
+  - openshift-jobset-operator
+  upgradeStrategy: Default

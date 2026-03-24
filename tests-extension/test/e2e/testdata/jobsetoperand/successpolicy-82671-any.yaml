@@ -1,0 +1,53 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: success-policy-any
+spec:
+# We want to declare our JobSet successful if workers finish.
+# If workers finish we should clean up the remaining replicatedJobs.
+  successPolicy:
+    operator: Any
+    targetReplicatedJobs:
+    - workers
+  replicatedJobs:
+  - name: leader
+    replicas: 1
+    template:
+      spec:
+        # Set backoff limit to 0 so job will immediately fail if any pod fails.
+        backoffLimit: 0 
+        completions: 1
+        parallelism: 1
+        template:
+          spec:
+            containers:
+            - name: leader
+              image: quay.io/openshifttest/hello-openshift:1.2.0
+              command:
+              - bash
+              - -xc
+              - |
+                sleep 100
+  - name: workers
+    replicas: 1
+    template:
+      spec:
+        completions: 5
+        parallelism: 5
+        successPolicy:
+          rules:
+            - succeededIndexes: 0,2-3
+              succeededCount: 1
+        template:
+          spec:
+            containers:
+            - name: worker
+              image: quay.io/openshifttest/hello-openshift:1.2.0
+              command:
+              - bash
+              - -xc
+              - |
+                if [[ "$JOB_COMPLETION_INDEX" == "0" ]]; then
+                    sleep 1; exit 0
+                else sleep 2; exit 1
+                fi

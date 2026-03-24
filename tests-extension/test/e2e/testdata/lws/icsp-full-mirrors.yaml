@@ -1,0 +1,33 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: icsp-template
+objects:
+- apiVersion: operator.openshift.io/v1alpha1
+  kind: ImageContentSourcePolicy
+  metadata:
+    name: "${NAME}"
+  spec:
+    repositoryDigestMirrors:
+    - mirrors:
+      - "${MIRRORS_1}" 
+      source: "${SOURCE_1}" 
+    - mirrors:
+      - "${MIRRORS_2}" 
+      source: "${SOURCE_2}"
+    - mirrors:
+      - "${MIRRORS_3}" 
+      source: "${SOURCE_3}"
+    - mirrors:
+      - "${MIRRORS_4}" 
+      source: "${SOURCE_4}"    
+parameters:
+- name: NAME
+- name: MIRRORS_1
+- name: SOURCE_1
+- name: MIRRORS_2
+- name: SOURCE_2
+- name: MIRRORS_3
+- name: SOURCE_3
+- name: MIRRORS_4
+- name: SOURCE_4

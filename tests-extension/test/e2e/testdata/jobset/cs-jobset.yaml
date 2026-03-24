@@ -1,0 +1,27 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: jobset-catalogsource-template
+objects:
+  - apiVersion: operators.coreos.com/v1alpha1
+    kind: CatalogSource
+    metadata:
+      name: "${NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      grpcPodConfig:
+        extractContent:
+          cacheDir: /tmp/cache
+          catalogDir: /configs
+        memoryTarget: 30Mi
+      publisher: "${PUBLISHER}"
+      sourceType: grpc
+      updateStrategy:
+        registryPoll:
+          interval: 15m
+      image: ${IMAGEINDEX}
+parameters:
+  - name: NAME
+  - name: NAMESPACE
+  - name: IMAGEINDEX
+  - name: PUBLISHER

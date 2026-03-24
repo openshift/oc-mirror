@@ -1,0 +1,44 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: jobset-inorder-82678
+spec:
+  startupPolicy:
+    startupPolicyOrder: InOrder
+  replicatedJobs:
+  - name: driver
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        backoffLimit: 0
+        template:
+          spec:
+            containers:
+            - name: sleep
+              image: quay.io/openshifttest/hello-openshift:1.2.0
+              command: 
+                - sleep
+              args:
+                - 600s
+              readinessProbe:
+                exec:
+                  command:
+                  - echo
+                  - "ready"
+                initialDelaySeconds: 120
+  - name: workers
+    template:
+      spec:
+        parallelism: 4
+        completions: 4
+        backoffLimit: 0
+        template:
+          spec:
+            containers:
+            - name: sleep
+              image: quay.io/openshifttest/hello-openshift:1.2.0
+              command: 
+                - sleep
+              args:
+                - 200s

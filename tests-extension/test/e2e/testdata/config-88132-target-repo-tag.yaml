@@ -1,0 +1,13 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: docker://registry.redhat.io/ubi9/ubi-minimal:latest
+      targetRepo: ubi-repo
+      targetTag: ubi-v9
+    - name: registry.access.redhat.com/ubi8/nginx-120:latest
+      targetRepo: nginx-repo
+      targetTag: stable-v1
+    - name: docker://quay.io/fedora/fedora:latest
+      targetRepo: fedora-repo
+      targetTag: fedora-test

@@ -1,0 +1,12 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.19
+      packages:
+      - name: rhbk-operator
+        defaultChannel: stable-v26.4
+        channels:
+        - name: 'stable-v26.4'
+          maxVersion: '26.4.6-opr.1'
+          minVersion: '26.4.6-opr.1'

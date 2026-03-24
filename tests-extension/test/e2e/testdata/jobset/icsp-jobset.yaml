@@ -1,0 +1,15 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: ImageContentSourcePolicy
+metadata:
+  name: brew-jobset
+spec:
+  repositoryDigestMirrors:
+    - mirrors:
+        - registry.stage.redhat.io/job-set/jobset-operator-bundle
+      source: registry.redhat.io/job-set/jobset-operator-bundle
+    - mirrors:
+        - registry.stage.redhat.io/job-set/jobset-rhel9
+      source: registry.redhat.io/job-set/jobset-rhel9
+    - mirrors:
+        - registry.stage.redhat.io/job-set/jobset-rhel9-operator
+      source: registry.redhat.io/job-set/jobset-rhel9-operator
