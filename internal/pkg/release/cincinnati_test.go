@@ -10,6 +10,7 @@ import (
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -22,11 +23,10 @@ type mockSignature struct {
 }
 
 func TestGetReleaseReferenceImages(t *testing.T) {
-
 	log := clog.New("trace")
 
 	tmpDir := t.TempDir()
-	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0755)
+	_ = os.MkdirAll(tmpDir+"/"+"hold-release/cincinnati-graph-data/", 0o755)
 	defer os.RemoveAll(tmpDir)
 
 	global := &mirror.GlobalOptions{SecurePolicy: false}
@@ -107,7 +107,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	}
 
 	t.Run("TestGetReleaseReferenceImages should pass", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -131,7 +130,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (no channels)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -157,7 +155,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should fail", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -183,7 +180,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 	})
 
 	t.Run("TestGetReleaseReferenceImages should pass (platform.release & kubevirt)", func(t *testing.T) {
-
 		c := &mockClient{}
 		signature := &mockSignature{Log: log}
 		requestQuery := make(chan string, 1)
@@ -210,7 +206,6 @@ func TestGetReleaseReferenceImages(t *testing.T) {
 			t.Fatalf("should return a related images")
 		}
 	})
-
 }
 
 type mockManifest struct{}
@@ -228,12 +223,12 @@ func (o mockManifest) ImageDigest(ctx context.Context, srcContext *types.SystemC
 	return "123456546546546546546546546", nil
 }
 
-func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageIndex(dir string) (*specv1.Index, error) {
+	return nil, nil
 }
 
-func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	return nil, nil
 }
 
 func (o mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
@@ -252,7 +247,7 @@ func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 

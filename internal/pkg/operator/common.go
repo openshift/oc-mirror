@@ -10,9 +10,8 @@ import (
 
 	"go.podman.io/image/v5/types"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
-
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -354,13 +353,13 @@ func (o OperatorCollector) extractOCIConfigLayers(catalog string, imgSpec image.
 	}
 
 	// It's in oci format so we can go directly to the index.json file
-	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
+	ociIndex, err := o.Manifest.GetOCIImageIndex(filepath.Join(catalogImageDir, "index.json"))
 	if err != nil {
 		return "", err
 	}
 
-	if len(oci.Manifests) > 1 && imgSpec.Transport == consts.OciProtocol {
-		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, oci); err != nil {
+	if len(ociIndex.Manifests) > 1 && imgSpec.Transport == consts.OciProtocol {
+		if err := o.Manifest.ConvertOCIIndexToSingleManifest(catalogImageDir, ociIndex); err != nil {
 			return "", err
 		}
 	}
