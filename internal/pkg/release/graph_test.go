@@ -95,7 +95,7 @@ func TestCreateGraphImage(t *testing.T) {
 						Catalog: "community-operators:v4.7",
 					},
 				},
-				AdditionalImages: []v2alpha1.Image{
+				AdditionalImages: []v2alpha1.AdditionalImage{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
 				},
 				Helm: v2alpha1.Helm{
@@ -112,14 +112,14 @@ func TestCreateGraphImage(t *testing.T) {
 						{Name: "podinfo", Path: "/test/podinfo-5.0.0.tar.gz"},
 					},
 				},
-				BlockedImages: []v2alpha1.Image{
+				BlockedImages: []v2alpha1.BlockedImage{
 					{Name: "alpine"},
 					{Name: "redis"},
 				},
-				Samples: []v2alpha1.SampleImages{
-					{Image: v2alpha1.Image{Name: "ruby"}},
-					{Image: v2alpha1.Image{Name: "python"}},
-					{Image: v2alpha1.Image{Name: "nginx"}},
+				Samples: []v2alpha1.SampleImage{
+					{Name: "ruby"},
+					{Name: "python"},
+					{Name: "nginx"},
 				},
 			},
 		},

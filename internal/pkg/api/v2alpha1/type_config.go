@@ -55,16 +55,16 @@ type Mirror struct {
 	Operators []Operator `json:"operators,omitempty"`
 	// AdditionalImages defines the configuration for a list
 	// of individual image content types.
-	AdditionalImages []Image `json:"additionalImages,omitempty"`
+	AdditionalImages []AdditionalImage `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
 	Helm Helm `json:"helm,omitempty,omitzero"`
 	// BlockedImages define a list of images that will be blocked
 	// from the mirroring process if they exist in other content
 	// types in the configuration.
-	BlockedImages []Image `json:"blockedImages,omitempty"`
+	BlockedImages []BlockedImage `json:"blockedImages,omitempty"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
-	Samples []SampleImages `json:"samples,omitempty"`
+	Samples []SampleImage `json:"samples,omitempty"`
 }
 
 // Delete defines the configuration for content types within the imageset.
@@ -75,12 +75,12 @@ type Delete struct {
 	Operators []Operator `json:"operators,omitempty"`
 	// AdditionalImages defines the configuration for a list
 	// of individual image content types.
-	AdditionalImages []Image `json:"additionalImages,omitempty"`
+	AdditionalImages []AdditionalImage `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
 	Helm Helm `json:"helm,omitempty,omitzero"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
-	Samples []SampleImages `json:"samples,omitempty"`
+	Samples []SampleImage `json:"samples,omitempty"`
 }
 
 // Platform defines the configuration for OpenShift and OKD platform types.
@@ -193,7 +193,7 @@ func (o Operator) GetUniqueName() (string, error) {
 }
 
 // getUniqueNameWithTarget is a shared helper function for computing unique names
-// with optional targetPath and targetTag overrides. Used by both Operator and Image.
+// with optional targetPath and targetTag overrides. Used by both Operator and AdditionalImage.
 func getUniqueNameWithTarget(sourceName, targetPath, targetTag string) (string, error) {
 	imgSpec, err := image.ParseRef(sourceName)
 	if err != nil {
@@ -268,8 +268,9 @@ type Chart struct {
 	ImagePaths []string `json:"imagePaths,omitempty"`
 }
 
-// Image contains image pull information.
-type Image struct {
+// AdditionalImage contains image pull information for additional images,
+// including optional target overrides for the mirrored destination.
+type AdditionalImage struct {
 	// Name of the image. This should be an exact image pin (registry/namespace/name@sha256:<hash>)
 	// but is not required to be.
 	Name string `json:"name"`
@@ -295,13 +296,20 @@ type Image struct {
 // GetUniqueName determines the image name that will
 // be used for mirroring. This depends on what fields
 // are set between Name, TargetRepo, and TargetTag.
-func (i Image) GetUniqueName() (string, error) {
+func (i AdditionalImage) GetUniqueName() (string, error) {
 	return getUniqueNameWithTarget(i.Name, i.TargetRepo, i.TargetTag)
 }
 
-// SampleImages define the configuration
-// for Sameple content types.
+// BlockedImage contains image information used for excluding images
+// from the mirroring process. The Name field is used as a regex pattern
+// to match against image references.
+type BlockedImage struct {
+	Name string `json:"name"`
+}
+
+// SampleImage defines the configuration
+// for Sample content types.
 // Not implemented.
-type SampleImages struct {
-	Image `json:",inline"`
+type SampleImage struct {
+	Name string `json:"name"`
 }
