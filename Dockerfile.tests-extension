@@ -9,7 +9,7 @@ RUN cd tests-extension && \
     GOTOOLCHAIN=auto go mod vendor && \
     GOPATH=$(go env GOPATH) && \
     GOFLAGS= go install github.com/go-bindata/go-bindata/v3/go-bindata@latest && \
-    $GOPATH/bin/go-bindata -nocompress -nometadata \
+    $GOPATH/bin/go-bindata -nocompress \
         -pkg testdata -o test/e2e/testdata/bindata.go -prefix "testdata" test/e2e/testdata/... && \
     gofmt -s -w test/e2e/testdata/bindata.go && \
     GOTOOLCHAIN=auto go build -mod=vendor -o bin/oc-mirror-tests-ext ./cmd && \

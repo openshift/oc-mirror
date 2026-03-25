@@ -53,11 +53,15 @@ func main() {
 		return false
 	})
 
-	// Initialize test framework before all tests
+	// Initialize test framework before all tests.
+	// util.WithCleanup sets testsStarted=true, which is required by util.requiresTestStart()
+	// inside the BeforeEach registered by compat_otp.NewCLI (via SetupProject).
 	componentSpecs.AddBeforeAll(func() {
-		if err := compat_otp.InitTest(false); err != nil {
-			panic(err)
-		}
+		util.WithCleanup(func() {
+			if err := compat_otp.InitTest(false); err != nil {
+				panic(err)
+			}
+		})
 	})
 
 	// Process all specs

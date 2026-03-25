@@ -10,7 +10,7 @@ $(GO_BINDATA):
 update-bindata: $(GO_BINDATA)
 	@echo "Generating bindata..."
 	@mkdir -p $(TESTDATA_PATH)
-	$(GO_BINDATA) -nocompress -nometadata \
+	$(GO_BINDATA) -nocompress \
 		-pkg testdata -o $(TESTDATA_PATH)/bindata.go -prefix "testdata" $(TESTDATA_PATH)/...
 	@gofmt -s -w $(TESTDATA_PATH)/bindata.go
 	@echo "Bindata generated successfully"
