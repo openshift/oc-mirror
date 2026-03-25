@@ -330,6 +330,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 		return fmt.Errorf("error while sanitizing the catalogSource object prior to marshalling: %v", err)
 	}
 	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+	delete(unstructuredObj.Object, "status")
 
 	bytes, err := yaml.Marshal(unstructuredObj.Object)
 	if err != nil {
@@ -465,6 +466,7 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 		return fmt.Errorf("error while sanitizing the clusterCatalog object prior to marshalling: %v", err)
 	}
 	delete(unstructuredObj.Object["metadata"].(map[string]interface{}), "creationTimestamp")
+	delete(unstructuredObj.Object, "status")
 
 	bytes, err := yaml.Marshal(unstructuredObj.Object)
 	if err != nil {
@@ -641,6 +643,7 @@ func (o *ClusterResourcesGenerator) UpdateServiceGenerator(graphImageRef, releas
 	}
 	// creationTimestamp is a struct, omitempty does not apply
 	osusBytes = bytes.ReplaceAll(osusBytes, []byte("  creationTimestamp: null\n"), []byte(""))
+	osusBytes = bytes.ReplaceAll(osusBytes, []byte("status: {}\n"), []byte(""))
 
 	// save UpdateService struct to file
 	osusPath := filepath.Join(o.WorkingDir, clusterResourcesDir, updateServiceFilename)

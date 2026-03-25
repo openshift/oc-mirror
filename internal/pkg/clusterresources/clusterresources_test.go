@@ -301,9 +301,9 @@ func verifyNoStatusField(t *testing.T, filePath string) {
 	}
 
 	yamlData, err := parser.ParseYamlFile[map[string]any](filePath)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "failed to parse YAML file %s", filePath)
 
-	assert.NotContains(t, yamlData, "status")
+	assert.NotContains(t, yamlData, "status", "YAML file %s should not contain a 'status' field", filePath)
 }
 
 func TestIDMS_ITMS_NoStatusField(t *testing.T) {
@@ -740,6 +740,8 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		assert.Equal(t, len(expectedCS.ObjectMeta.Annotations), len(actualCS.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
 		assert.Equal(t, expectedCS.ObjectMeta.Annotations["createdBy"], actualCS.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
 		assert.Equal(t, expectedCS.ObjectMeta.Annotations["oc-mirror_version"], actualCS.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
+
+		verifyNoStatusField(t, filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
 	})
 
 	t.Run("Testing GenerateCatalogSource with template: should pass", func(t *testing.T) {
@@ -1131,6 +1133,8 @@ func TestClusterCatalogGenerator(t *testing.T) {
 		assert.Equal(t, len(expectedCC.ObjectMeta.Annotations), len(actualCC.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
 		assert.Equal(t, expectedCC.ObjectMeta.Annotations["createdBy"], actualCC.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
 		assert.Equal(t, expectedCC.ObjectMeta.Annotations["oc-mirror_version"], actualCC.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
+
+		verifyNoStatusField(t, filepath.Join(workingDir, clusterResourcesDir, ccFiles[0].Name()))
 	})
 
 	t.Run("Testing GenerateClusterCatalog with catalog using a digest as tag : should pass", func(t *testing.T) {
@@ -1413,6 +1417,8 @@ func TestUpdateServiceGenerator(t *testing.T) {
 
 		assert.Equal(t, graphImage, actualOSUS.Spec.GraphDataImage)
 		assert.Equal(t, "quay.io/openshift-release-dev/ocp-release", actualOSUS.Spec.Releases)
+
+		verifyNoStatusField(t, filePath)
 	})
 }
 
