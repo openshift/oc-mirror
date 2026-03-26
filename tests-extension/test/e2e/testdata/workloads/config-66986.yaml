@@ -1,8 +1,0 @@
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v1alpha2
-archiveSize: 1
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/certified-operator-index:v4.19
-    packages:
-      - name: nginx-ingress-operator
