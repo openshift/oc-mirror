@@ -2804,3 +2804,87 @@ func waitForPodContainerWithLabelReady(oc *exutil.CLI, ns, label string) error {
 		return true, nil
 	})
 }
+
+type operatorgroup struct {
+	name      string
+	namespace string
+	template  string
+}
+
+type customsub struct {
+	name        string
+	namespace   string
+	channelName string
+	opsrcName   string
+	sourceName  string
+	startingCSV string
+	template    string
+}
+
+func (og *operatorgroup) createOperatorGroup(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("og %s is not created successfully", og.name))
+}
+
+func (og *operatorgroup) deleteOperatorGroup(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", og.name, "-n", og.namespace).Execute()
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("og %s is not deleted successfully", og.name))
+}
+
+func (sub *customsub) createCustomSub(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "NAME="+sub.name, "NAMESPACE="+sub.namespace,
+			"CHANNELNAME="+sub.channelName, "OPSRCNAME="+sub.opsrcName, "SOURCENAME="+sub.sourceName, "CSVNAME="+sub.startingCSV)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s is not created successfully", sub.name))
+}
+
+func (sub *customsub) deleteCustomSubscription(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", sub.name, "-n", sub.namespace).Execute()
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s is not deleted successfully", sub.name))
+}
+
+func waitForAvailableRsRunning(oc *exutil.CLI, rsKind string, rsName string, namespace string, expected string) bool {
+	err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(rsKind, rsName, "-n", namespace, "-o=jsonpath={.status.availableReplicas}").Output()
+		if err != nil {
+			e2e.Logf("object is still inprogress, error: %s. Trying again", err)
+			return false, nil
+		}
+		if matched, _ := regexp.MatchString(expected, output); matched {
+			e2e.Logf("object is up:\n%s", output)
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return false
+	}
+	return true
+}

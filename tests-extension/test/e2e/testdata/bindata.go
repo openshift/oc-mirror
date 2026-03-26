@@ -65,12 +65,14 @@
 // testdata/workloads/config-88132-target-repo-tag.yaml
 // testdata/workloads/config-88132-target-repo.yaml
 // testdata/workloads/config-88132-target-tag.yaml
+// testdata/workloads/customsub.yaml
 // testdata/workloads/delete-config-72708.yaml
 // testdata/workloads/delete-config-72972.yaml
 // testdata/workloads/delete-config-77061.yaml
 // testdata/workloads/delete-config-79217.yaml
 // testdata/workloads/delete-config-79452.yaml
 // testdata/workloads/ibmcustomsub.yaml
+// testdata/workloads/operatorgroup.yaml
 // testdata/workloads/sa-79215.yaml
 package testdata
 
@@ -137,7 +139,7 @@ func bindataGo() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "bindata.go", size: 0, mode: os.FileMode(420), modTime: time.Unix(1774515377, 0)}
+	info := bindataFileInfo{name: "bindata.go", size: 4096, mode: os.FileMode(420), modTime: time.Unix(1774517550, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -1987,6 +1989,48 @@ func workloadsConfig88132TargetTagYaml() (*asset, error) {
 	return a, nil
 }
 
+var _workloadsCustomsubYaml = []byte(`apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: subscription-template
+objects:
+- kind: Subscription
+  apiVersion: operators.coreos.com/v1alpha1
+  kind: Subscription
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    channel: "${CHANNELNAME}"
+    installPlanApproval: Automatic
+    name: "${NAME}"
+    source: "${OPSRCNAME}"
+    sourceNamespace: "${SOURCENAME}"
+    startingCSV: "${CSVNAME}"
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: CHANNELNAME
+- name: OPSRCNAME
+- name: SOURCENAME
+- name: CSVNAME
+`)
+
+func workloadsCustomsubYamlBytes() ([]byte, error) {
+	return _workloadsCustomsubYaml, nil
+}
+
+func workloadsCustomsubYaml() (*asset, error) {
+	bytes, err := workloadsCustomsubYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "workloads/customsub.yaml", size: 552, mode: os.FileMode(420), modTime: time.Unix(1774517523, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _workloadsDeleteConfig72708Yaml = []byte(`kind: DeleteImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 delete:
@@ -2170,6 +2214,40 @@ func workloadsIbmcustomsubYaml() (*asset, error) {
 	return a, nil
 }
 
+var _workloadsOperatorgroupYaml = []byte(`apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: operatorgroup-template
+objects:
+- kind: OperatorGroup
+  apiVersion: operators.coreos.com/v1
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    targetNamespaces:
+    - "${NAMESPACE}"
+
+parameters:
+- name: NAME
+- name: NAMESPACE
+`)
+
+func workloadsOperatorgroupYamlBytes() ([]byte, error) {
+	return _workloadsOperatorgroupYaml, nil
+}
+
+func workloadsOperatorgroupYaml() (*asset, error) {
+	bytes, err := workloadsOperatorgroupYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "workloads/operatorgroup.yaml", size: 319, mode: os.FileMode(420), modTime: time.Unix(1774517523, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _workloadsSa79215Yaml = []byte(`apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -2333,12 +2411,14 @@ var _bindata = map[string]func() (*asset, error){
 	"workloads/config-88132-target-repo-tag.yaml":    workloadsConfig88132TargetRepoTagYaml,
 	"workloads/config-88132-target-repo.yaml":        workloadsConfig88132TargetRepoYaml,
 	"workloads/config-88132-target-tag.yaml":         workloadsConfig88132TargetTagYaml,
+	"workloads/customsub.yaml":                       workloadsCustomsubYaml,
 	"workloads/delete-config-72708.yaml":             workloadsDeleteConfig72708Yaml,
 	"workloads/delete-config-72972.yaml":             workloadsDeleteConfig72972Yaml,
 	"workloads/delete-config-77061.yaml":             workloadsDeleteConfig77061Yaml,
 	"workloads/delete-config-79217.yaml":             workloadsDeleteConfig79217Yaml,
 	"workloads/delete-config-79452.yaml":             workloadsDeleteConfig79452Yaml,
 	"workloads/ibmcustomsub.yaml":                    workloadsIbmcustomsubYaml,
+	"workloads/operatorgroup.yaml":                   workloadsOperatorgroupYaml,
 	"workloads/sa-79215.yaml":                        workloadsSa79215Yaml,
 }
 
@@ -2456,12 +2536,14 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"config-88132-target-repo-tag.yaml": {workloadsConfig88132TargetRepoTagYaml, map[string]*bintree{}},
 		"config-88132-target-repo.yaml":     {workloadsConfig88132TargetRepoYaml, map[string]*bintree{}},
 		"config-88132-target-tag.yaml":      {workloadsConfig88132TargetTagYaml, map[string]*bintree{}},
+		"customsub.yaml":                    {workloadsCustomsubYaml, map[string]*bintree{}},
 		"delete-config-72708.yaml":          {workloadsDeleteConfig72708Yaml, map[string]*bintree{}},
 		"delete-config-72972.yaml":          {workloadsDeleteConfig72972Yaml, map[string]*bintree{}},
 		"delete-config-77061.yaml":          {workloadsDeleteConfig77061Yaml, map[string]*bintree{}},
 		"delete-config-79217.yaml":          {workloadsDeleteConfig79217Yaml, map[string]*bintree{}},
 		"delete-config-79452.yaml":          {workloadsDeleteConfig79452Yaml, map[string]*bintree{}},
 		"ibmcustomsub.yaml":                 {workloadsIbmcustomsubYaml, map[string]*bintree{}},
+		"operatorgroup.yaml":                {workloadsOperatorgroupYaml, map[string]*bintree{}},
 		"sa-79215.yaml":                     {workloadsSa79215Yaml, map[string]*bintree{}},
 	}},
 }}
