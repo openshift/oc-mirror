@@ -5,8 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 )
 
 var (
@@ -52,50 +50,4 @@ func FixturePath(elem ...string) string {
 	}
 
 	return targetPath
-}
-
-func CleanupFixtures() error {
-	if fixtureDir != "" {
-		return os.RemoveAll(fixtureDir)
-	}
-	return nil
-}
-
-func GetFixtureData(elem ...string) ([]byte, error) {
-	relativePath := filepath.Join(elem...)
-	cleanPath := relativePath
-	if len(cleanPath) > 0 && cleanPath[0] == '/' {
-		cleanPath = cleanPath[1:]
-	}
-	return Asset(cleanPath)
-}
-
-func MustGetFixtureData(elem ...string) []byte {
-	data, err := GetFixtureData(elem...)
-	if err != nil {
-		panic(fmt.Sprintf("failed to get fixture data: %v", err))
-	}
-	return data
-}
-
-func FixtureExists(elem ...string) bool {
-	relativePath := filepath.Join(elem...)
-	cleanPath := relativePath
-	if len(cleanPath) > 0 && cleanPath[0] == '/' {
-		cleanPath = cleanPath[1:]
-	}
-	_, err := Asset(cleanPath)
-	return err == nil
-}
-
-func ListFixtures() []string {
-	names := AssetNames()
-	fixtures := make([]string, 0, len(names))
-	for _, name := range names {
-		if strings.HasPrefix(name, "testdata/") {
-			fixtures = append(fixtures, strings.TrimPrefix(name, "testdata/"))
-		}
-	}
-	sort.Strings(fixtures)
-	return fixtures
 }
