@@ -65,7 +65,7 @@ func TestAllDeleteImages(t *testing.T) {
 						},
 					},
 				},
-				AdditionalImages: []v2alpha1.Image{
+				AdditionalImages: []v2alpha1.AdditionalImage{
 					{Name: "test.registry.io/test-image@sha256:c4b775cbe8eec55de2c163919c6008599e2aebe789ed93ada9a307e800e3f1e2"},
 				},
 			},

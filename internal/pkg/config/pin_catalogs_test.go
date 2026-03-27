@@ -410,7 +410,7 @@ func TestCreateDISCFromISC_AllSections(t *testing.T) {
 						Catalog: image.WithDigest(redhatIndexBase, testDigestShort4),
 					},
 				},
-				AdditionalImages: []v2alpha1.Image{
+				AdditionalImages: []v2alpha1.AdditionalImage{
 					{
 						Name: "quay.io/example/image:latest",
 					},
