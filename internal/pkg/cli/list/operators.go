@@ -193,6 +193,12 @@ func listBundles(w io.Writer, channel *model.Channel) error {
 }
 
 func listChannels(w io.Writer, pkg *model.Package) error {
+	if pkg.DefaultChannel != nil {
+		fmt.Fprintln(w, "NAME\tDISPLAY NAME\tDEFAULT CHANNEL")
+		fmt.Fprintf(w, "%s\t%s\t%s\n", pkg.Name, getDisplayName(pkg), pkg.DefaultChannel.Name)
+		fmt.Fprintln(w, "")
+	}
+
 	fmt.Fprintln(w, "PACKAGE\tCHANNEL\tHEAD")
 	for _, name := range slices.Sorted(maps.Keys(pkg.Channels)) {
 		ch := pkg.Channels[name]
