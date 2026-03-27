@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
@@ -40,12 +41,10 @@ type okdClient struct {
 
 // NewOCPClient creates a new OCP Cincinnati client with the given client identifier.
 func NewOCPClient(id uuid.UUID, log clog.PluggableLoggerInterface) (Client, error) {
-	var updateGraphURL string
+	updateGraphURL := cincinnati.OcpUpdateURL
 	if updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE"); len(updateURLOverride) != 0 {
 		log.Info("Using the UPDATE_URL_OVERRIDE environment variable")
 		updateGraphURL = updateURLOverride
-	} else {
-		updateGraphURL = UpdateURL
 	}
 	upstream, err := url.Parse(updateGraphURL)
 	if err != nil {
@@ -95,7 +94,7 @@ func (o *ocpClient) SetQueryParams(arch, channel, version string) {
 
 // NewOKDClient creates a new OKD Cincinnati client with the given client identifier.
 func NewOKDClient(id uuid.UUID) (Client, error) {
-	upstream, err := url.Parse(OkdUpdateURL)
+	upstream, err := url.Parse(cincinnati.OkdUpdateURL)
 	if err != nil {
 		return &okdClient{}, err
 	}
