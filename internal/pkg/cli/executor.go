@@ -231,6 +231,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				// ensure cache dir exists
 				opts.Global.CacheDir = homeDir
 			}
+
+			log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
 			return nil
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
@@ -539,7 +541,6 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return err
 	}
 
-	o.Log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
 	o.Log.Info(emoji.TwistedRighwardsArrows+" workflow mode: %s ", o.Opts.Mode)
 
 	if o.Opts.Global.SinceString != "" {
