@@ -7,6 +7,7 @@ import (
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -189,7 +190,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	opts.Mode = mirror.MirrorToDisk
 	ex = New(log, cfg, opts, mockmirror, manifest)
 
-	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should not fail (skipped)", func(t *testing.T) {
+	t.Run("Testing AdditionalImagesCollector : mirrorToDisk should collect valid images and return parse errors", func(t *testing.T) {
 		expected := []v2alpha1.CopyImageSchema{
 			{
 				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
@@ -211,14 +212,12 @@ func TestAdditionalImageCollector(t *testing.T) {
 			},
 		}
 		res, err := ex.AdditionalImagesCollector(ctx)
-		if err != nil {
-			log.Error(" %v ", err)
-			t.Fatalf("should not fail")
-		}
+		// Should return error for images that failed to parse
+		require.Error(t, err)
 		assert.ElementsMatch(t, expected, res)
 	})
 
-	t.Run("Testing AdditionalImagesCollector : diskToMirror should skip failing image with warning", func(t *testing.T) {
+	t.Run("Testing AdditionalImagesCollector : diskToMirror should collect valid images and return parse errors", func(t *testing.T) {
 		// should error diskToMirror
 		cfg.Mirror.AdditionalImages[1].Name = "sometest.registry.com/testns/test@shaf30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
 		opts.Mode = mirror.DiskToMirror
@@ -244,10 +243,8 @@ func TestAdditionalImageCollector(t *testing.T) {
 			},
 		}
 		res, err := ex.AdditionalImagesCollector(ctx)
-		if err != nil {
-			log.Error(" %v ", err)
-			t.Fatalf("should not fail")
-		}
+		// Should return error for images that failed to parse
+		require.Error(t, err)
 		assert.ElementsMatch(t, expected, res)
 	})
 }
@@ -260,6 +257,8 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 		additionalImages []v2alpha1.Image
 		useV1Tags        bool
 		expected         []v2alpha1.CopyImageSchema
+		expectError      bool
+		errContains      []string
 	}
 
 	cases := []spec{
@@ -361,7 +360,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid TargetRepo should skip image with warning",
+			name:        "invalid TargetRepo should skip image with warning and return error",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
 			additionalImages: []v2alpha1.Image{
@@ -380,6 +379,38 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 					Destination: "docker://test.registry.com/ubi9/ubi:latest",
 					Type:        v2alpha1.TypeGeneric,
 				},
+			},
+			expectError: true,
+			errContains: []string{"invalid targetRepo"},
+		},
+		{
+			name:        "multiple invalid images should return joined errors",
+			mode:        mirror.MirrorToDisk,
+			destination: "oci://test",
+			additionalImages: []v2alpha1.Image{
+				{
+					Name: "sometest.registry.com/testns/test@shainvaliddigest1",
+				},
+				{
+					Name: "registry.redhat.io/ubi9/ubi:latest",
+				},
+				{
+					Name:       "registry.redhat.io/ubi8/ubi:latest",
+					TargetRepo: "invalid:tag",
+				},
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.redhat.io/ubi9/ubi:latest",
+					Origin:      "registry.redhat.io/ubi9/ubi:latest",
+					Destination: "docker://test.registry.com/ubi9/ubi:latest",
+					Type:        v2alpha1.TypeGeneric,
+				},
+			},
+			expectError: true,
+			errContains: []string{
+				"shainvaliddigest1",
+				"invalid targetRepo",
 			},
 		},
 		{
@@ -542,7 +573,14 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			}
 
 			res, err := ex.AdditionalImagesCollector(ctx)
-			assert.NoError(t, err)
+			if c.expectError {
+				require.Error(t, err)
+				for _, substr := range c.errContains {
+					assert.Contains(t, err.Error(), substr)
+				}
+			} else {
+				require.NoError(t, err)
+			}
 			assert.ElementsMatch(t, c.expected, res)
 		})
 	}
