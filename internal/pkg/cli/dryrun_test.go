@@ -18,7 +18,7 @@ import (
 
 // TestExecutorRunPrepare
 func TestDryRun(t *testing.T) {
-	var imgs = []v2alpha1.CopyImageSchema{
+	imgs := []v2alpha1.CopyImageSchema{
 		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-b@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: consts.DockerProtocol + "registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -43,7 +43,6 @@ func TestDryRun(t *testing.T) {
 
 	t.Run("Testing Executor : dryrun M2D should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		global.WorkingDir = testFolder
 
@@ -110,12 +109,10 @@ func TestDryRun(t *testing.T) {
 		for _, img := range imgs {
 			assert.Contains(t, mapping, img.Source+"="+img.Destination)
 		}
-
 	})
 
 	t.Run("Testing Executor : dryrun M2D - errors finding images in cache - should generate missing.txt", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 
 		global.WorkingDir = testFolder
 

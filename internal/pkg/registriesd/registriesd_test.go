@@ -57,7 +57,7 @@ func TestGetDefaultRegistrydConfigPath(t *testing.T) {
 
 	// When user registries.d exists, should return user path
 	expectedUserPath := filepath.Join(testHome, ".config/containers/registries.d")
-	err = os.MkdirAll(expectedUserPath, 0755)
+	err = os.MkdirAll(expectedUserPath, 0o755)
 	assert.NoError(t, err)
 
 	path, err = GetDefaultRegistrydConfigPath()

@@ -3,13 +3,14 @@ package release
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -18,8 +19,8 @@ func TestReleaseSignature(t *testing.T) {
 	log := clog.New("trace")
 
 	tempDir := t.TempDir()
-	_ = os.MkdirAll(tempDir+"/"+SignatureDir, 0755)
-	defer os.RemoveAll(tempDir)
+	err := folder.CreateFolders(filepath.Join(tempDir, SignatureDir))
+	assert.NoError(t, err)
 
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
@@ -98,14 +99,14 @@ func TestReleaseSignature(t *testing.T) {
 		if err == nil {
 			t.Fatal("should fail")
 		}
-
 	})
 
 	t.Run("Testing ReleaseSignature with custom PGP key - should pass", func(t *testing.T) {
 		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", consts.TestFolder+"custom-ocp-sig-key.asc")
 		tmpDir := t.TempDir()
-		workingDir := tmpDir + "/" + "working-dir"
-		os.MkdirAll(workingDir+SignatureDir, 0755)
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		err := folder.CreateFolders(filepath.Join(workingDir, SignatureDir))
+		assert.NoError(t, err)
 		defer os.RemoveAll(workingDir)
 		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
@@ -122,7 +123,6 @@ func TestReleaseSignature(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
-
 	})
 
 	t.Run("Testing ReleaseSignature with custom but buggy PGP key - should fail", func(t *testing.T) {
@@ -140,15 +140,15 @@ func TestReleaseSignature(t *testing.T) {
 		_, err := ex.GenerateReleaseSignatures(context.Background(), imgs)
 
 		assert.Error(t, err)
-
 	})
 
 	t.Run("Testing ReleaseSignature with custom but inexisting PGP key - should pass", func(t *testing.T) {
 		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", consts.TestFolder+"inexisting-ocp-sig-key.asc")
 
 		tmpDir := t.TempDir()
-		workingDir := tmpDir + "/" + "working-dir"
-		os.MkdirAll(workingDir+SignatureDir, 0755)
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		err := folder.CreateFolders(filepath.Join(workingDir, SignatureDir))
+		assert.NoError(t, err)
 		defer os.RemoveAll(workingDir)
 		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
@@ -165,7 +165,5 @@ func TestReleaseSignature(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Contains(t, res[0].Source, "quay.io/openshift-release-dev/ocp-release:4.11.46-aarch64")
-
 	})
-
 }

@@ -14,5 +14,19 @@ func NewWithFilter(log clog.PluggableLoggerInterface,
 	mirror mirror.MirrorInterface,
 	manifest manifest.ManifestInterface,
 ) CollectorInterface {
-	return &FilterCollector{OperatorCollector{Log: log, LogsDir: logsDir, Config: config, Opts: opts, Mirror: mirror, Manifest: manifest, LocalStorageFQDN: opts.LocalStorageFQDN, ctlgHandler: catalogHandler{Log: log}}}
+	return &FilterCollector{
+		OperatorCollector{
+			Log:              log,
+			LogsDir:          logsDir,
+			Config:           config,
+			Opts:             opts,
+			Manifest:         manifest,
+			LocalStorageFQDN: opts.LocalStorageFQDN,
+			ctlgHandler: CatalogHandler{
+				Log:      log,
+				Mirror:   mirror,
+				Manifest: manifest,
+			},
+		},
+	}
 }

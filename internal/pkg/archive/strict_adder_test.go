@@ -2,7 +2,6 @@ package archive
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -15,13 +14,11 @@ import (
 func TestStrictAdder_NextChunk(t *testing.T) {
 	// Create a temporary test folder
 	testFolder := t.TempDir()
-	defer os.RemoveAll(testFolder)
 	ma, err := newStrictAdder(defaultSegSize*segMultiplier, testFolder, clog.New("trace"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ma.close()
-	defer os.RemoveAll(testFolder)
 
 	err = ma.nextChunk()
 	if err != nil {
@@ -35,16 +32,14 @@ func TestStrictAdder_NextChunk(t *testing.T) {
 func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 	t.Run("adding file exceeding maxSize: should fail", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		// use a maxArchiveSize of 10K
 		ma, err := newStrictAdder(int64(10*1024), testFolder, clog.New("trace"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer ma.close()
-		defer os.RemoveAll(testFolder)
 
-		//adding a file of 119K
+		// adding a file of 119K
 		err = ma.addFile(consts.TestFolder+"working-dir-fake/hold-release/ocp-release/4.14.1-x86_64/release-manifests/image-references", "file1")
 		if err == nil {
 			t.Fatal("should fail but passed instead")
@@ -52,25 +47,23 @@ func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 	})
 	t.Run("adding files: should pass", func(t *testing.T) {
 		testFolder := t.TempDir()
-		defer os.RemoveAll(testFolder)
 		// use a maxArchiveSize of 10K
 		ma, err := newStrictAdder(int64(10*1024), testFolder, clog.New("trace"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer ma.close()
-		defer os.RemoveAll(testFolder)
 
 		// first archive
 		firstArchive := ma.archiveFile.Name()
-		//adding a first file of size 5KB
+		// adding a first file of size 5KB
 		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_config-operator_01_proxy.crd.yaml", "file1")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
 		}
 		// assert this is still in first chunk
 		assert.Equal(t, 1, ma.currentChunkId)
-		//adding a second file of size 2.3KB
+		// adding a second file of size 2.3KB
 		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_securityinternal-openshift_02_rangeallocation.crd.yaml", "file2")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
@@ -78,7 +71,7 @@ func TestStrictAdder_AddFile_BiggerThanMax(t *testing.T) {
 		// assert this is still in first chunk
 		assert.Equal(t, 1, ma.currentChunkId)
 
-		//adding a third file 4.9KB
+		// adding a third file 4.9KB
 		err = ma.addFile(consts.TestFolder+"archive-test-data/0000_03_marketplace-operator_01_operatorhub.crd.yaml", "file3")
 		if err != nil {
 			t.Fatalf("should not fail : %v", err)
@@ -121,14 +114,12 @@ func TestStrictAdder_AddFolder_BiggerThanMax(t *testing.T) {
 	for _, aTestCase := range testCases {
 		t.Run(aTestCase.caseName, func(t *testing.T) {
 			testFolder := t.TempDir()
-			defer os.RemoveAll(testFolder)
 			// use a maxArchiveSize of 10K
 			ma, err := newStrictAdder(aTestCase.archiveSizeBytes, testFolder, clog.New("trace"))
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer ma.close()
-			defer os.RemoveAll(testFolder)
 
 			errs := make([]error, len(aTestCase.foldersToAdd))
 			for i, folder := range aTestCase.foldersToAdd {
