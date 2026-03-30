@@ -1187,6 +1187,16 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 	// CLID-230 rebuild-catalogs
 	oImgs := operatorImgs.AllImages
 	if o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror() {
+		needsRebuild := false
+		for _, result := range operatorImgs.CatalogToFBCMap {
+			if result.ToRebuild {
+				needsRebuild = true
+				break
+			}
+		}
+		if !needsRebuild {
+			return nil
+		}
 		o.Log.Info(emoji.RepeatSingleButton + " rebuilding catalogs")
 
 		for _, copyImage := range oImgs {
