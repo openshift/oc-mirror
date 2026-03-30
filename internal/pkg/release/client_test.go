@@ -7,12 +7,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 func TestOCPClient(t *testing.T) {
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
-	updateAPI, err := url.Parse(UpdateURL)
+	updateAPI, err := url.Parse(cincinnati.OcpUpdateURL)
 	require.NoError(t, err)
 	client, err := NewOCPClient(id, clog.New("trace"))
 	require.NoError(t, err)
@@ -30,7 +31,7 @@ func TestOCPClient(t *testing.T) {
 
 func TestOKDClient(t *testing.T) {
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
-	updateAPI, err := url.Parse(OkdUpdateURL)
+	updateAPI, err := url.Parse(cincinnati.OkdUpdateURL)
 	require.NoError(t, err)
 	client, err := NewOKDClient(id)
 	require.NoError(t, err)
@@ -48,12 +49,12 @@ func TestOKDClient(t *testing.T) {
 func TestOCPClientWithOveride(t *testing.T) {
 	t.Setenv("UPDATE_URL_OVERRIDE", "http://localhost.localdomain")
 	id := uuid.MustParse("01234567-0123-0123-0123-0123456789ab")
-	//updateAPI, err := url.Parse(UpdateURL)
-	//require.NoError(t, err)
+	// updateAPI, err := url.Parse(UpdateURL)
+	// require.NoError(t, err)
 	client, err := NewOCPClient(id, clog.New("trace"))
 	require.NoError(t, err)
 	expID := id
-	//expURL := *updateAPI
+	// expURL := *updateAPI
 	actualURL := client.GetURL()
 	require.Equal(t, expID, client.GetID())
 	require.Equal(t, "http://localhost.localdomain", actualURL.String())

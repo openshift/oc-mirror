@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -23,8 +24,7 @@ const (
 	ApplicationJson     string = "application/json"
 )
 
-var (
-	defaultPK = `-----BEGIN PGP PUBLIC KEY BLOCK-----
+var defaultPK = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 Comment: Use "gpg --dearmor" for unpacking
 
 mQINBErgSTsBEACh2A4b0O9t+vzC9VrVtL1AKvUWi9OPCjkvR7Xd8DtJxeeMZ5eF
@@ -77,7 +77,6 @@ JRhScNA6Flg3CAc8WFyH4Y+ZhUTBAu4el7HaYpdE9bY0lR0wJsXFIm6+52+LXxYt
 QhyZAjgzMT6GUvoWrdNeNMCXo4pk+xUNQgVjSFuHGLkfxg40oh8S5R4=
 =GmdY
 -----END PGP PUBLIC KEY BLOCK-----`
-)
 
 type CincinnatiSchema struct {
 	Log              clog.PluggableLoggerInterface
@@ -328,7 +327,7 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 		if err != nil {
 			return allImages, fmt.Errorf("getting update in range %w", err)
 		}
-		newDownloads = gatherUpdates(cs.Log, Update{}, Update{}, versions)
+		newDownloads = gatherUpdates(cs.Log, cincinnati.Update{}, cincinnati.Update{}, versions)
 	}
 	allImages = append(allImages, newDownloads...)
 
@@ -366,7 +365,7 @@ func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels
 }
 
 // gatherUpdates
-func gatherUpdates(log clog.PluggableLoggerInterface, current, newest Update, updates []Update) []v2alpha1.CopyImageSchema {
+func gatherUpdates(log clog.PluggableLoggerInterface, current, newest cincinnati.Update, updates []cincinnati.Update) []v2alpha1.CopyImageSchema {
 	allImages := []v2alpha1.CopyImageSchema{}
 	uniqueImages := make(map[v2alpha1.CopyImageSchema]bool)
 

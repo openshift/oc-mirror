@@ -2,8 +2,6 @@ package release
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
@@ -34,18 +33,18 @@ func TestGetUpdates(t *testing.T) {
 		reqVer  string
 
 		expectedQuery string
-		current       Update
-		requested     Update
-		available     []Update
+		current       cincinnati.Update
+		requested     cincinnati.Update
+		available     []cincinnati.Update
 		err           string
 	}{{
 		name:          "Valid/DirectUpdate",
 		version:       "4.0.0-4",
 		reqVer:        "4.0.0-5",
 		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
-		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
-		requested:     Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		available: []Update{
+		current:       cincinnati.Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
+		requested:     cincinnati.Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+		available: []cincinnati.Update{
 			{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 		},
@@ -54,9 +53,9 @@ func TestGetUpdates(t *testing.T) {
 		version:       "4.0.0-4",
 		reqVer:        "4.0.0-8",
 		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
-		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
-		requested:     Update{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
-		available: []Update{
+		current:       cincinnati.Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
+		requested:     cincinnati.Update{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
+		available: []cincinnati.Update{
 			{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
@@ -66,8 +65,8 @@ func TestGetUpdates(t *testing.T) {
 		name:          "Valid/NoUpdates",
 		version:       "4.0.0-4",
 		reqVer:        "4.0.0-0.okd-0",
-		current:       Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
-		requested:     Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
+		current:       cincinnati.Update{Version: semver.MustParse("4.0.0-4"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-4"},
+		requested:     cincinnati.Update{Version: semver.MustParse("4.0.0-0.okd-0"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-0.okd-0"},
 		expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab&version=4.0.0-4",
 		available:     nil,
 	}, {
@@ -259,14 +258,14 @@ func TestGetUpdatesInRange(t *testing.T) {
 	tests := []struct {
 		name          string
 		expectedQuery string
-		versions      []Update
+		versions      []cincinnati.Update
 		releaseRange  semver.Range
 		err           string
 	}{
 		{
 			name:          "Valid/OneChannel",
 			expectedQuery: "arch=test-arch&channel=stable-4.0&id=01234567-0123-0123-0123-0123456789ab",
-			versions: []Update{
+			versions: []cincinnati.Update{
 				{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 				{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
 				{Version: semver.MustParse("4.0.0-7"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-7"},
@@ -324,9 +323,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel   string
 		curr            semver.Version
 		req             semver.Version
-		currentUpdate   Update
-		requestedUpdate Update
-		neededUpdates   []Update
+		currentUpdate   cincinnati.Update
+		requestedUpdate cincinnati.Update
+		neededUpdates   []cincinnati.Update
 		err             string
 	}{{
 		name:            "Success/OneChannel",
@@ -334,9 +333,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel:   "stable-4.1",
 		curr:            semver.MustParse("4.0.0-5"),
 		req:             semver.MustParse("4.1.0-6"),
-		currentUpdate:   Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		requestedUpdate: Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
-		neededUpdates: []Update{
+		currentUpdate:   cincinnati.Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+		requestedUpdate: cincinnati.Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		neededUpdates: []cincinnati.Update{
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
 			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
@@ -348,9 +347,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel:   "stable-4.2",
 		curr:            semver.MustParse("4.0.0-5"),
 		req:             semver.MustParse("4.2.0-3"),
-		currentUpdate:   Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
-		requestedUpdate: Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
-		neededUpdates: []Update{
+		currentUpdate:   cincinnati.Update{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
+		requestedUpdate: cincinnati.Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+		neededUpdates: []cincinnati.Update{
 			{Version: semver.MustParse("4.0.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-5"},
 			{Version: semver.MustParse("4.0.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-6"},
 			{Version: semver.MustParse("4.0.0-8"), Image: "quay.io/openshift-release-dev/ocp-release:4.0.0-8"},
@@ -363,9 +362,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel:   "fast-4.3",
 		curr:            semver.MustParse("4.3.0"),
 		req:             semver.MustParse("4.3.1"),
-		currentUpdate:   Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		requestedUpdate: Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
-		neededUpdates: []Update{
+		currentUpdate:   cincinnati.Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		requestedUpdate: cincinnati.Update{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
+		neededUpdates: []cincinnati.Update{
 			{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
 			{Version: semver.MustParse("4.3.1"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.1"},
 		},
@@ -375,9 +374,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel:   "stable-4.2",
 		curr:            semver.MustParse("4.1.0-6"),
 		req:             semver.MustParse("4.2.0-2"),
-		currentUpdate:   Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
-		requestedUpdate: Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
-		neededUpdates: []Update{
+		currentUpdate:   cincinnati.Update{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
+		requestedUpdate: cincinnati.Update{Version: semver.MustParse("4.2.0-2"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-2"},
+		neededUpdates: []cincinnati.Update{
 			{Version: semver.MustParse("4.1.0-6"), Image: "quay.io/openshift-release-dev/ocp-release:4.1.0-6"},
 		},
 	}, {
@@ -386,9 +385,9 @@ func TestCalculateUpgrades(t *testing.T) {
 		targetChannel:   "stable-4.3",
 		curr:            semver.MustParse("4.2.0-3"),
 		req:             semver.MustParse("4.3.0"),
-		currentUpdate:   Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
-		requestedUpdate: Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
-		neededUpdates: []Update{
+		currentUpdate:   cincinnati.Update{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
+		requestedUpdate: cincinnati.Update{Version: semver.MustParse("4.3.0"), Image: "quay.io/openshift-release-dev/ocp-release:4.3.0"},
+		neededUpdates: []cincinnati.Update{
 			{Version: semver.MustParse("4.2.0-3"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-3"},
 			{Version: semver.MustParse("4.2.0-5"), Image: "quay.io/openshift-release-dev/ocp-release:4.2.0-5"},
 		},
@@ -529,76 +528,6 @@ func (c mockClient) GetTransport() *http.Transport {
 	return &http.Transport{}
 }
 
-func TestNodeUnmarshalJSON(t *testing.T) {
-	tests := []struct {
-		raw []byte
-
-		exp node
-		err string
-	}{{
-		raw: []byte(`{
-			"version": "4.0.0-5",
-			"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-5",
-			"metadata": {}
-		  }`),
-
-		exp: node{
-			Version:  semver.MustParse("4.0.0-5"),
-			Image:    "quay.io/openshift-release-dev/ocp-release:4.0.0-5",
-			Metadata: map[string]string{},
-		},
-	}, {
-		raw: []byte(`{
-			"version": "4.0.0-0.1",
-			"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.1",
-			"metadata": {
-			  "description": "This is the beta1 image based on the 4.0.0-0.nightly-2019-01-15-010905 build"
-			}
-		  }`),
-		exp: node{
-			Version: semver.MustParse("4.0.0-0.1"),
-			Image:   "quay.io/openshift-release-dev/ocp-release:4.0.0-0.1",
-			Metadata: map[string]string{
-				"description": "This is the beta1 image based on the 4.0.0-0.nightly-2019-01-15-010905 build",
-			},
-		},
-	}, {
-		raw: []byte(`{
-			"version": "v4.0.0-0.1",
-			"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.1",
-			"metadata": {
-			  "description": "This is the beta1 image based on the 4.0.0-0.nightly-2019-01-15-010905 build"
-			}
-		  }`),
-		err: `Invalid character(s) found in major number "v4"`,
-	}, {
-		raw: []byte(`{
-			"version": "4-0-0+0.1",
-			"payload": "quay.io/openshift-release-dev/ocp-release:4.0.0-0.1",
-			"metadata": {
-			  "description": "This is the beta1 image based on the 4.0.0-0.nightly-2019-01-15-010905 build"
-			}
-		  }
-	  `),
-
-		err: "No Major.Minor.Patch elements found",
-	}}
-
-	for idx, test := range tests {
-		t.Run(fmt.Sprintf("#%d", idx), func(t *testing.T) {
-			var n node
-			err := json.Unmarshal(test.raw, &n)
-			if test.err == "" {
-				require.NoError(t, err)
-				require.Equal(t, test.exp, n)
-
-			} else {
-				require.EqualError(t, err, test.err)
-			}
-		})
-	}
-}
-
 func TestGetSemVerFromChannel(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -652,7 +581,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 		select {
 		case requestQuery <- r.URL.RawQuery:
 		default:
-			//t.Fatalf("received multiple requests at upstream URL")
+			// t.Fatalf("received multiple requests at upstream URL")
 		}
 
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -661,7 +590,7 @@ func getHandlerMulti(t *testing.T, requestQuery chan<- string) http.HandlerFunc 
 		}
 
 		mtype := r.Header.Get("Accept")
-		if mtype != GraphMediaType {
+		if mtype != "application/json" {
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			return
 		}
