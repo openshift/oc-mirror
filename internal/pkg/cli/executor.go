@@ -1098,7 +1098,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	)
 
 	o.Log.Info(emoji.SleuthOrSpy + "  going to discover the necessary images...")
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
+	if len(o.Config.Mirror.Platform.Channels) > 0 || o.Config.Mirror.Platform.Release != "" || o.Config.Mirror.Platform.Graph {
+		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
+	}
 	// collect releases
 	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
@@ -1116,7 +1118,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
 	allRelatedImages = append(allRelatedImages, releaseImgs...)
 
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting operator images...")
+	if len(o.Config.Mirror.Operators) > 0 {
+		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting operator images...")
+	}
 	// collect operators
 	operatorImgs, err := o.Operator.OperatorImageCollector(ctx)
 	if err != nil {
@@ -1133,7 +1137,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
 	}
 
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
+	if len(o.Config.Mirror.AdditionalImages) > 0 {
+		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
+	}
 	// collect additionalImages
 	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
@@ -1147,7 +1153,9 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		allRelatedImages = append(allRelatedImages, aImgs...)
 	}
 
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
+	if len(o.Config.Mirror.Helm.Repositories) > 0 || len(o.Config.Mirror.Helm.Local) > 0 {
+		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
+	}
 	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
 		helmErr = err
