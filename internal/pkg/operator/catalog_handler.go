@@ -228,7 +228,7 @@ func (o CatalogHandler) ExtractOCIConfigLayers(imgSpec image.ImageSpec, imageInd
 	}
 
 	// It's in oci format so we can go directly to the index.json file
-	oci, err := o.Manifest.GetOCIImageIndex(catalogImageDir)
+	oci, err := o.Manifest.GetOCIImageIndex(filepath.Join(catalogImageDir, "index.json"))
 	if err != nil {
 		return "", err
 	}

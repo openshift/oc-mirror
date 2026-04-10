@@ -10,6 +10,7 @@ import (
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
 
@@ -224,12 +225,12 @@ func (o mockManifest) ImageDigest(ctx context.Context, srcContext *types.SystemC
 	return "123456546546546546546546546", nil
 }
 
-func (o mockManifest) GetOCIImageIndex(dir string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageIndex(dir string) (*specv1.Index, error) {
+	return nil, nil
 }
 
-func (o mockManifest) GetOCIImageManifest(file string) (*v2alpha1.OCISchema, error) {
-	return &v2alpha1.OCISchema{}, nil
+func (o mockManifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	return nil, nil
 }
 
 func (o mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
@@ -248,7 +249,7 @@ func (o mockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage
 	return []v2alpha1.RelatedImage{}, nil
 }
 
-func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *v2alpha1.OCISchema) error {
+func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
 	return nil
 }
 
