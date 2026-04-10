@@ -2,6 +2,7 @@ package additional
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -49,6 +50,7 @@ func (o LocalStorageCollector) destinationRegistry() string {
 func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 
 	var allImages []v2alpha1.CopyImageSchema
+	var allErrs []error
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
@@ -60,11 +62,13 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 		if err != nil {
 			// OCPBUGS-33081 - skip if parse error (i.e semver and other)
 			o.Log.Warn("%v : SKIPPING", err)
+			allErrs = append(allErrs, fmt.Errorf("parse image %q: %w", img.Name, err))
 			continue
 		}
 
 		if img.TargetRepo != "" && !v2alpha1.IsValidPathComponent(img.TargetRepo) {
 			o.Log.Warn("invalid targetRepo %s for image %s : SKIPPING", img.TargetRepo, img.Name)
+			allErrs = append(allErrs, fmt.Errorf("invalid targetRepo %s for image %s", img.TargetRepo, img.Name))
 			continue
 		}
 
@@ -84,21 +88,26 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 		case o.Opts.IsDiskToMirror(), o.Opts.IsDelete():
 			tmpSrc, tmpDest = o.buildDiskToMirrorPaths(img, imgSpec, targetRepo, targetTag)
 		}
+
 		if tmpSrc == "" || tmpDest == "" {
 			o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
-			return allImages, fmt.Errorf("unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
+			allErrs = append(allErrs, fmt.Errorf("unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name))
+			continue
 		}
+
 		srcSpec, err := image.ParseRef(tmpSrc) // makes sure this ref is valid, and adds transport if needed
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return nil, err
+			allErrs = append(allErrs, fmt.Errorf("parse source %q: %w", tmpSrc, err))
+			continue
 		}
 		src = srcSpec.ReferenceWithTransport
 
 		destSpec, err := image.ParseRef(tmpDest) // makes sure this ref is valid, and adds transport if needed
 		if err != nil {
 			o.Log.Error(errMsg, err.Error())
-			return nil, err
+			allErrs = append(allErrs, fmt.Errorf("parse destination %q: %w", tmpDest, err))
+			continue
 		}
 		dest = destSpec.ReferenceWithTransport
 
@@ -107,7 +116,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 
 		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: origin, Type: v2alpha1.TypeGeneric})
 	}
-	return allImages, nil
+	return allImages, errors.Join(allErrs...)
 }
 
 // buildMirrorToDiskPaths constructs source and destination paths for mirror-to-disk and mirror-to-mirror operations
