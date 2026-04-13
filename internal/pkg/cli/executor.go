@@ -1283,7 +1283,7 @@ func withMaxNestedPaths(in []v2alpha1.CopyImageSchema, maxNestedPaths int) ([]v2
 	return out, nil
 }
 
-func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image) []v2alpha1.CopyImageSchema {
+func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.BlockedImage) []v2alpha1.CopyImageSchema {
 	if excluded == nil {
 		return images
 	}
@@ -1291,7 +1291,7 @@ func excludeImages(images []v2alpha1.CopyImageSchema, excluded []v2alpha1.Image)
 		if image.Origin == "" {
 			return false
 		}
-		isInSlice := slices.ContainsFunc(excluded, func(excludedImage v2alpha1.Image) bool {
+		isInSlice := slices.ContainsFunc(excluded, func(excludedImage v2alpha1.BlockedImage) bool {
 			imgOrigin := image.Origin
 			imgDest := image.Destination
 			if strings.Contains(imgOrigin, "://") {

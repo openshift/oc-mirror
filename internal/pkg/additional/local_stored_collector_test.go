@@ -58,7 +58,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 	cfg := v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 			Mirror: v2alpha1.Mirror{
-				AdditionalImages: []v2alpha1.Image{
+				AdditionalImages: []v2alpha1.AdditionalImage{
 					{Name: "registry.redhat.io/ubi8/ubi:latest"},
 					{Name: "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"},
 					{Name: "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"},
@@ -259,7 +259,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 		name             string
 		mode             string
 		destination      string
-		additionalImages []v2alpha1.Image
+		additionalImages []v2alpha1.AdditionalImage
 		useV1Tags        bool
 		expected         []v2alpha1.CopyImageSchema
 		expectError      bool
@@ -271,7 +271,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "mirrorToDisk with TargetRepo",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "registry.redhat.io/ubi8/ubi:latest",
 					TargetRepo: "custom-namespace/custom-image",
@@ -290,7 +290,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "mirrorToDisk with TargetTag",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:      "registry.redhat.io/ubi8/ubi:latest",
 					TargetTag: "v1.0",
@@ -309,7 +309,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "mirrorToDisk with both TargetRepo and TargetTag",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "registry.redhat.io/ubi8/ubi:latest",
 					TargetRepo: "custom-namespace/custom-image",
@@ -329,7 +329,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "mirrorToDisk with TargetTag for digest-only image",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					TargetTag: "v1.0",
@@ -348,7 +348,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "mirrorToDisk with TargetRepo and TargetTag for OCI image",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "oci:///folder-a/folder-b/testns/test",
 					TargetRepo: "custom/oci-image",
@@ -368,7 +368,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "invalid TargetRepo should skip image with warning and return error",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "registry.redhat.io/ubi8/ubi:latest",
 					TargetRepo: "invalid:tag",
@@ -392,7 +392,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "multiple invalid images should return joined errors",
 			mode:        mirror.MirrorToDisk,
 			destination: "oci://test",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name: "sometest.registry.com/testns/test@shainvaliddigest1",
 				},
@@ -422,7 +422,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with TargetRepo",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "registry.redhat.io/ubi8/ubi:latest",
 					TargetRepo: "custom-namespace/custom-image",
@@ -441,7 +441,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with TargetTag",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:      "registry.redhat.io/ubi8/ubi:latest",
 					TargetTag: "v1.0",
@@ -460,7 +460,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with TargetRepo and TargetTag",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "registry.redhat.io/ubi8/ubi:latest",
 					TargetRepo: "custom-namespace/custom-image",
@@ -480,7 +480,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with TargetTag for digest-only image",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					TargetTag: "v1.0",
@@ -499,7 +499,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with TargetRepo and TargetTag for OCI image",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:       "oci:///folder-a/folder-b/testns/test",
 					TargetRepo: "custom/oci-image",
@@ -519,7 +519,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			name:        "diskToMirror with generateV1Tags and TargetTag should use TargetTag",
 			mode:        mirror.DiskToMirror,
 			destination: "docker://mirror.acme.com",
-			additionalImages: []v2alpha1.Image{
+			additionalImages: []v2alpha1.AdditionalImage{
 				{
 					Name:      "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					TargetTag: "v1.0",

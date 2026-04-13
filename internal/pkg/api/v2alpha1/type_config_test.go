@@ -262,10 +262,10 @@ func TestOperatorGetUniqueName(t *testing.T) {
 	}
 }
 
-func TestImageGetUniqueName(t *testing.T) {
+func TestAdditionalImageGetUniqueName(t *testing.T) {
 	type spec struct {
 		name     string
-		image    Image
+		image    AdditionalImage
 		expected string
 		expError string
 	}
@@ -273,14 +273,14 @@ func TestImageGetUniqueName(t *testing.T) {
 	cases := []spec{
 		{
 			name: "Valid/ImageNameOnly",
-			image: Image{
+			image: AdditionalImage{
 				Name: "registry.io/namespace/image:v1.0",
 			},
 			expected: "registry.io/namespace/image:v1.0",
 		},
 		{
 			name: "Valid/WithTargetRepo",
-			image: Image{
+			image: AdditionalImage{
 				Name:       "registry.io/namespace/image:v1.0",
 				TargetRepo: "custom-namespace/custom-image",
 			},
@@ -288,7 +288,7 @@ func TestImageGetUniqueName(t *testing.T) {
 		},
 		{
 			name: "Valid/WithTargetTag",
-			image: Image{
+			image: AdditionalImage{
 				Name:      "registry.io/namespace/image:v1.0",
 				TargetTag: "v2.0",
 			},
@@ -296,7 +296,7 @@ func TestImageGetUniqueName(t *testing.T) {
 		},
 		{
 			name: "Valid/WithBothTargetRepoAndTag",
-			image: Image{
+			image: AdditionalImage{
 				Name:       "registry.io/namespace/image:v1.0",
 				TargetRepo: "custom-namespace/custom-image",
 				TargetTag:  "v2.0",
@@ -305,7 +305,7 @@ func TestImageGetUniqueName(t *testing.T) {
 		},
 		{
 			name: "Invalid/InvalidTargetRepo",
-			image: Image{
+			image: AdditionalImage{
 				Name:       "registry.io/namespace/image:v1.0",
 				TargetRepo: "invalid:tag",
 			},

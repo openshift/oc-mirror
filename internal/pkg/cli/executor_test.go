@@ -892,7 +892,7 @@ func TestExcludeImages(t *testing.T) {
 	type testCase struct {
 		caseName        string
 		collectedImages []v2alpha1.CopyImageSchema
-		blockedImages   []v2alpha1.Image
+		blockedImages   []v2alpha1.BlockedImage
 		expectedImages  []v2alpha1.CopyImageSchema
 	}
 
@@ -900,13 +900,13 @@ func TestExcludeImages(t *testing.T) {
 		{
 			caseName:        "empty blocked images should pass",
 			collectedImages: allCollectedImages,
-			blockedImages:   []v2alpha1.Image{},
+			blockedImages:   []v2alpha1.BlockedImage{},
 			expectedImages:  allCollectedImages,
 		},
 		{
 			caseName:        "non matching blocked images should pass",
 			collectedImages: allCollectedImages,
-			blockedImages: []v2alpha1.Image{
+			blockedImages: []v2alpha1.BlockedImage{
 				{
 					Name: "registry/name/namespace/sometestimage-z@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				},
@@ -916,7 +916,7 @@ func TestExcludeImages(t *testing.T) {
 		{
 			caseName:        "matching blocked images should pass",
 			collectedImages: allCollectedImages,
-			blockedImages: []v2alpha1.Image{
+			blockedImages: []v2alpha1.BlockedImage{
 				{
 					Name: "registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 				},

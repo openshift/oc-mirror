@@ -120,7 +120,7 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 }
 
 // buildMirrorToDiskPaths constructs source and destination paths for mirror-to-disk and mirror-to-mirror operations
-func (o LocalStorageCollector) buildMirrorToDiskPaths(img v2alpha1.Image, imgSpec image.ImageSpec, targetRepo, targetTag string) (string, string) {
+func (o LocalStorageCollector) buildMirrorToDiskPaths(img v2alpha1.AdditionalImage, imgSpec image.ImageSpec, targetRepo, targetTag string) (string, string) {
 	tmpSrc := imgSpec.ReferenceWithTransport
 	var tmpDest string
 
@@ -154,7 +154,7 @@ func (o LocalStorageCollector) buildMirrorToDiskPaths(img v2alpha1.Image, imgSpe
 }
 
 // buildDiskToMirrorPaths constructs source and destination paths for disk-to-mirror operations
-func (o LocalStorageCollector) buildDiskToMirrorPaths(img v2alpha1.Image, imgSpec image.ImageSpec, targetRepo, targetTag string) (string, string) {
+func (o LocalStorageCollector) buildDiskToMirrorPaths(img v2alpha1.AdditionalImage, imgSpec image.ImageSpec, targetRepo, targetTag string) (string, string) {
 	// Docker protocol
 	var tmpSrc, tmpDest string
 
