@@ -195,6 +195,24 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
+
+			// Validate and set log level for all subcommands
+			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
+				return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
+			}
+			// override log level
+			ex.Log.Level(ex.Opts.Global.LogLevel)
+
+			log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
+
+			// Skip environment setup for subcommands that don't need it
+			if cmd.Name() == "version" || (cmd.Parent() != nil && cmd.Parent().Name() == "list") {
+				return nil
+			}
+
+			log.Info(emoji.Gear + "  setting up the environment for you...")
+
 			// OCPBUGS-55374 (check current umask)
 			currentUmask := syscall.Umask(0)
 			syscall.Umask(currentUmask)
@@ -202,18 +220,10 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				log.Warn(emoji.Warning+"  Detected bad umask 00%o (oc-mirror requires a umask of 0022)", currentUmask)
 			}
 
-			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
-			log.Info(emoji.Gear + "  setting up the environment for you...")
-
 			// Validate and set common flags
 			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, consts.FileProtocol) {
 				return fmt.Errorf("when --workspace is used, it must have file:// prefix")
 			}
-			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
-				return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
-			}
-			// override log level
-			ex.Log.Level(ex.Opts.Global.LogLevel)
 
 			if os.Getenv(cacheEnvVar) != "" && opts.Global.CacheDir != "" {
 				return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
@@ -232,7 +242,6 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 				opts.Global.CacheDir = homeDir
 			}
 
-			log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
 			return nil
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
