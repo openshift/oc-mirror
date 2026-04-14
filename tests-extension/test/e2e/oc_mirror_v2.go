@@ -1,10 +1,10 @@
 package workloads
 
 import (
-	"github.com/openshift/oc-mirror-tests-extension/test/e2e/testdata"
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/openshift/oc-mirror-tests-extension/test/e2e/testdata"
 	"os"
 	"os/exec"
 	"path/filepath"

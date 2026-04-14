@@ -88,16 +88,16 @@ func main() {
 func registerSuites(ext *e.Extension) {
 	suites := []e.Suite{
 		{
-			Name:    "oc-mirror/conformance/parallel",
-			Parents: []string{"openshift/conformance/parallel"},
+			Name:        "oc-mirror/conformance/parallel",
+			Parents:     []string{"openshift/conformance/parallel"},
 			Description: "Parallel conformance tests (Level0, non-serial, non-disruptive)",
 			Qualifiers: []string{
 				`name.contains("[Level0]") && !(name.contains("[Serial]") || name.contains("[Disruptive]"))`,
 			},
 		},
 		{
-			Name:    "oc-mirror/conformance/serial",
-			Parents: []string{"openshift/conformance/serial"},
+			Name:        "oc-mirror/conformance/serial",
+			Parents:     []string{"openshift/conformance/serial"},
 			Description: "Serial conformance tests (must run sequentially)",
 			Qualifiers: []string{
 				`name.contains("[Level0]") && name.contains("[Serial]") && !name.contains("[Disruptive]")`,
