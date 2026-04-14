@@ -4204,4 +4204,295 @@ mirror:
 
 		e2e.Logf("PASS")
 	})
+
+	g.It("Author:ngavali-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-87962-Verify operator images are pinned by digest [Serial]", g.SpecTimeout(30*time.Minute), func(ctx g.SpecContext) {
+		dirname := "/tmp/case87962"
+		os.RemoveAll(dirname)
+		defer os.RemoveAll(dirname)
+		defer os.RemoveAll(".oc-mirror.log")
+		defer func() {
+			if homeDir, err := os.UserHomeDir(); err == nil {
+				os.RemoveAll(filepath.Join(homeDir, ".oc-mirror"))
+			}
+		}()
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		cleanupMirrorArtifacts := func(paths ...string) {
+			for _, p := range paths {
+				os.RemoveAll(p)
+			}
+			os.RemoveAll(".oc-mirror.log")
+		}
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		authFile := filepath.Join(dirname, ".dockerconfigjson")
+		o.Expect(authFile).To(o.BeAnExistingFile())
+
+		ocmirrorBaseDir := testdata.FixturePath("workloads")
+		operatorsISC := filepath.Join(ocmirrorBaseDir, "config-87962-operators.yaml")
+		multiCatalogISC := filepath.Join(ocmirrorBaseDir, "config-87962-multi-catalog.yaml")
+
+		type mirrorConfig struct {
+			iscPath          string
+			destination      string
+			workspace        string
+			cacheDir         string
+			removeSignatures bool
+			workflowType     string
+		}
+
+		buildMirrorArgs := func(cfg mirrorConfig, mirrorAuthFile string, destTLSVerify bool) []string {
+			args := []string{"-c", cfg.iscPath, cfg.destination}
+			if cfg.workspace != "" {
+				args = append(args, "--workspace", cfg.workspace)
+			}
+			if cfg.cacheDir != "" {
+				args = append(args, "--cache-dir="+cfg.cacheDir)
+			}
+			args = append(args, "--v2", "--authfile", mirrorAuthFile)
+			if !destTLSVerify {
+				args = append(args, "--dest-tls-verify=false")
+			}
+			if cfg.removeSignatures {
+				args = append(args, "--remove-signatures")
+			}
+			return args
+		}
+
+		executeMirrorWithRetry := func(mirrorCtx context.Context, mirrorAuthFile string,
+			cfg mirrorConfig, destTLSVerify bool) (string, error) {
+			var mirrorOutput string
+			var mirrorErr error
+			waitErr := wait.PollUntilContextTimeout(mirrorCtx, 20*time.Second, 10*time.Minute, true,
+				func(pollCtx context.Context) (bool, error) {
+					args := buildMirrorArgs(cfg, mirrorAuthFile, destTLSVerify)
+					mirrorOutput, mirrorErr = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args(args...).Output()
+					if mirrorErr != nil {
+						e2e.Logf("%s failed: %v, retrying...", cfg.workflowType, mirrorErr)
+						return false, nil
+					}
+					return true, nil
+				})
+			return mirrorOutput, waitErr
+		}
+
+		validateMirrorOutput := func(mirrorOutput, expectedWorkflow string) {
+			o.Expect(mirrorOutput).NotTo(o.ContainSubstring("[ERROR]"))
+			o.Expect(mirrorOutput).To(o.ContainSubstring("workflow mode: " + expectedWorkflow))
+			o.Expect(mirrorOutput).To(o.ContainSubstring("operator images mirrored successfully"))
+			o.Expect(mirrorOutput).To(o.ContainSubstring("Generating pinned configurations"))
+			o.Expect(mirrorOutput).To(o.ContainSubstring("Pinned ISC written to"))
+			o.Expect(mirrorOutput).To(o.ContainSubstring("Pinned DISC written to"))
+		}
+
+		validateClusterResources := func(workingDir string, csPrefixes, ccPrefixes []string) {
+			clusterResourcesDir := filepath.Join(workingDir, "cluster-resources")
+			idmsPath := filepath.Join(clusterResourcesDir, "idms-oc-mirror.yaml")
+			o.Expect(idmsPath).To(o.BeAnExistingFile())
+			idmsContent, readErr := os.ReadFile(idmsPath)
+			o.Expect(readErr).NotTo(o.HaveOccurred())
+			o.Expect(string(idmsContent)).To(o.ContainSubstring("ImageDigestMirrorSet"))
+			o.Expect(string(idmsContent)).To(o.ContainSubstring("imageDigestMirrors"), "IDMS should contain mirror entries")
+
+			itmsPath := filepath.Join(clusterResourcesDir, "itms-oc-mirror.yaml")
+			o.Expect(itmsPath).NotTo(o.BeAnExistingFile(), "ITMS should not be generated when all images are digest-based")
+
+			entries, readErr := os.ReadDir(clusterResourcesDir)
+			o.Expect(readErr).NotTo(o.HaveOccurred())
+			for _, prefix := range csPrefixes {
+				found := false
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), prefix) {
+						found = true
+						break
+					}
+				}
+				o.Expect(found).To(o.BeTrue(), "CatalogSource with prefix "+prefix+" not found in cluster-resources")
+			}
+			for _, prefix := range ccPrefixes {
+				found := false
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), prefix) {
+						found = true
+						break
+					}
+				}
+				o.Expect(found).To(o.BeTrue(), "ClusterCatalog with prefix "+prefix+" not found in cluster-resources")
+			}
+		}
+
+		findPinnedConfigs := func(workingDir string) (string, string, error) {
+			entries, err := os.ReadDir(workingDir)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to read directory %s: %w", workingDir, err)
+			}
+			var iscPath, discPath string
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), "isc_pinned_") && strings.HasSuffix(entry.Name(), ".yaml") {
+					iscPath = filepath.Join(workingDir, entry.Name())
+				}
+				if strings.HasPrefix(entry.Name(), "disc_pinned_") && strings.HasSuffix(entry.Name(), ".yaml") {
+					discPath = filepath.Join(workingDir, entry.Name())
+				}
+			}
+			if iscPath == "" {
+				return "", "", fmt.Errorf("pinned ISC not found in %s", workingDir)
+			}
+			if discPath == "" {
+				return "", "", fmt.Errorf("pinned DISC not found in %s", workingDir)
+			}
+			if _, err := os.Stat(iscPath); err != nil {
+				return "", "", fmt.Errorf("pinned ISC file not accessible %s: %w", iscPath, err)
+			}
+			if _, err := os.Stat(discPath); err != nil {
+				return "", "", fmt.Errorf("pinned DISC file not accessible %s: %w", discPath, err)
+			}
+			return iscPath, discPath, nil
+		}
+
+		validatePinnedDigests := func(filePath, label, expectedKind string) string {
+			content, readErr := os.ReadFile(filePath)
+			o.Expect(readErr).NotTo(o.HaveOccurred())
+			contentStr := string(content)
+			e2e.Logf("%s content:\n%s", label, contentStr)
+			o.Expect(contentStr).To(o.ContainSubstring("kind: "+expectedKind), label+" should have kind: "+expectedKind)
+			o.Expect(contentStr).To(o.ContainSubstring("@sha256:"), label+" should contain digest references")
+			o.Expect(contentStr).NotTo(o.MatchRegexp(`catalog:\s+\S+:v[0-9]+`), label+" should not contain tag-based catalog references")
+			return contentStr
+		}
+
+		compat_otp.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", serInfo.serviceName)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "15G", "/var/lib/registry")
+
+		// === Part 1: m2d with operators ISC ===
+		compat_otp.By("Step 1a: mirror2disk with operators ISC")
+		m2dDiskPath := filepath.Join(dirname, "m2d-test")
+		output, waitErr := executeMirrorWithRetry(ctx, authFile, mirrorConfig{
+			iscPath:      operatorsISC,
+			destination:  "file://" + m2dDiskPath,
+			cacheDir:     dirname + "/cache-m2d",
+			workflowType: "m2d",
+		}, true)
+		compat_otp.AssertWaitPollNoErr(waitErr, "m2d with operators ISC timed out")
+		e2e.Logf("m2d output:\n%s", output)
+		validateMirrorOutput(output, "mirrorToDisk")
+
+		archivePath := filepath.Join(m2dDiskPath, "mirror_000001.tar")
+		archiveInfo, err := os.Stat(archivePath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(archiveInfo.Size()).To(o.BeNumerically(">", int64(0)))
+		e2e.Logf("m2d archive created: %s (size: %d bytes)", archivePath, archiveInfo.Size())
+
+		compat_otp.By("Step 1b: Validate m2d pinned ISC/DISC contain digests")
+		m2dWorkingDir := filepath.Join(m2dDiskPath, "working-dir")
+		m2dPinnedISCPath, m2dPinnedDISCPath, err := findPinnedConfigs(m2dWorkingDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found m2d pinned ISC: %s, DISC: %s", m2dPinnedISCPath, m2dPinnedDISCPath)
+		m2dPinnedISCContent := validatePinnedDigests(m2dPinnedISCPath, "m2d pinned ISC", "ImageSetConfiguration")
+		m2dPinnedDISCContent := validatePinnedDigests(m2dPinnedDISCPath, "m2d pinned DISC", "DeleteImageSetConfiguration")
+		o.Expect(m2dPinnedISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(m2dPinnedISCContent).To(o.ContainSubstring("file-integrity-operator"))
+		o.Expect(m2dPinnedDISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(m2dPinnedDISCContent).To(o.ContainSubstring("file-integrity-operator"))
+		e2e.Logf("m2d pinned config validation PASS")
+
+		e2e.Logf("Cleaning up m2d data, cache and logs...")
+		cleanupMirrorArtifacts(m2dDiskPath, filepath.Join(dirname, "cache-m2d"))
+
+		// === Part 2: m2m with operators ISC ===
+		compat_otp.By("Step 2a: mirror2mirror with operators ISC")
+		m2mWorkspace := filepath.Join(dirname, "m2m-operators")
+		m2mRegistryPrefix := "/87962m2m"
+		output, waitErr = executeMirrorWithRetry(ctx, authFile, mirrorConfig{
+			iscPath:      operatorsISC,
+			destination:  "docker://" + serInfo.serviceName + m2mRegistryPrefix,
+			workspace:    "file://" + m2mWorkspace,
+			workflowType: "m2m with operators ISC",
+		}, false)
+		compat_otp.AssertWaitPollNoErr(waitErr, "m2m with operators ISC timed out")
+		e2e.Logf("m2m operators output:\n%s", output)
+		validateMirrorOutput(output, "mirrorToMirror")
+
+		compat_otp.By("Step 2b: Validate m2m pinned ISC/DISC contain digests")
+		m2mWorkingDir := filepath.Join(m2mWorkspace, "working-dir")
+		m2mPinnedISCPath, m2mPinnedDISCPath, err := findPinnedConfigs(m2mWorkingDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found m2m pinned ISC: %s, DISC: %s", m2mPinnedISCPath, m2mPinnedDISCPath)
+		m2mPinnedISCContent := validatePinnedDigests(m2mPinnedISCPath, "m2m pinned ISC", "ImageSetConfiguration")
+		m2mPinnedDISCContent := validatePinnedDigests(m2mPinnedDISCPath, "m2m pinned DISC", "DeleteImageSetConfiguration")
+		o.Expect(m2mPinnedISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(m2mPinnedISCContent).To(o.ContainSubstring("file-integrity-operator"))
+		o.Expect(m2mPinnedDISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(m2mPinnedDISCContent).To(o.ContainSubstring("file-integrity-operator"))
+
+		compat_otp.By("Step 2c: Validate m2m cluster-resources")
+		validateClusterResources(m2mWorkingDir, []string{"cs-"}, []string{"cc-"})
+
+		compat_otp.By("Step 2d: Validate registry contains mirrored catalog")
+		m2mCatalogTagsURL := fmt.Sprintf("https://%s/v2/87962m2m/redhat/redhat-operator-index/tags/list", serInfo.serviceName)
+		validateTargetcatalogAndTag(m2mCatalogTagsURL, "v4.20")
+		e2e.Logf("m2m operators pinned config + cluster-resources + registry validation PASS")
+
+		e2e.Logf("Cleaning up m2m operators data, cache and logs...")
+		cleanupMirrorArtifacts(m2mWorkspace)
+
+		// === Part 3: m2m with multi-catalog ISC + --remove-signatures ===
+		compat_otp.By("Step 3a: mirror2mirror with multi-catalog ISC + --remove-signatures")
+		multiCatWorkspace := filepath.Join(dirname, "m2m-multi-catalog")
+		multiCatRegistryPrefix := "/87962multicat"
+		output, waitErr = executeMirrorWithRetry(ctx, authFile, mirrorConfig{
+			iscPath:          multiCatalogISC,
+			destination:      "docker://" + serInfo.serviceName + multiCatRegistryPrefix,
+			workspace:        "file://" + multiCatWorkspace,
+			removeSignatures: true,
+			workflowType:     "m2m with multi-catalog ISC",
+		}, false)
+		compat_otp.AssertWaitPollNoErr(waitErr, "m2m with multi-catalog ISC timed out")
+		e2e.Logf("m2m multi-catalog output:\n%s", output)
+		validateMirrorOutput(output, "mirrorToMirror")
+
+		compat_otp.By("Step 3b: Validate multi-catalog pinned configs contain digests for both catalogs")
+		multiCatWorkingDir := filepath.Join(multiCatWorkspace, "working-dir")
+		multiCatPinnedISCPath, multiCatPinnedDISCPath, err := findPinnedConfigs(multiCatWorkingDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Found multi-catalog pinned ISC: %s, DISC: %s", multiCatPinnedISCPath, multiCatPinnedDISCPath)
+		multiCatPinnedISCContent := validatePinnedDigests(multiCatPinnedISCPath, "multi-catalog pinned ISC", "ImageSetConfiguration")
+		multiCatPinnedDISCContent := validatePinnedDigests(multiCatPinnedDISCPath, "multi-catalog pinned DISC", "DeleteImageSetConfiguration")
+
+		o.Expect(multiCatPinnedISCContent).To(o.ContainSubstring("redhat-operator-index@sha256:"))
+		o.Expect(multiCatPinnedISCContent).To(o.ContainSubstring("certified-operator-index@sha256:"))
+		o.Expect(multiCatPinnedISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(multiCatPinnedISCContent).To(o.ContainSubstring("netscaler-operator"))
+
+		o.Expect(multiCatPinnedDISCContent).To(o.ContainSubstring("redhat-operator-index@sha256:"))
+		o.Expect(multiCatPinnedDISCContent).To(o.ContainSubstring("certified-operator-index@sha256:"))
+		o.Expect(multiCatPinnedDISCContent).To(o.ContainSubstring("aws-load-balancer-operator"))
+		o.Expect(multiCatPinnedDISCContent).To(o.ContainSubstring("netscaler-operator"))
+
+		compat_otp.By("Step 3c: Validate multi-catalog cluster-resources")
+		validateClusterResources(multiCatWorkingDir,
+			[]string{"cs-redhat-operator-index", "cs-certified-operator-index"},
+			[]string{"cc-redhat-operator-index", "cc-certified-operator-index"})
+
+		compat_otp.By("Step 3d: Validate registry contains mirrored catalogs")
+		redhatCatalogURL := fmt.Sprintf("https://%s/v2/87962multicat/redhat/redhat-operator-index/tags/list", serInfo.serviceName)
+		validateTargetcatalogAndTag(redhatCatalogURL, "v4.20")
+		certifiedCatalogURL := fmt.Sprintf("https://%s/v2/87962multicat/redhat/certified-operator-index/tags/list", serInfo.serviceName)
+		validateTargetcatalogAndTag(certifiedCatalogURL, "v4.20")
+		e2e.Logf("m2m multi-catalog pinned config validation PASS")
+
+		e2e.Logf("Cleaning up m2m multi-catalog data, cache and logs...")
+		cleanupMirrorArtifacts(multiCatWorkspace)
+
+		e2e.Logf("OCP-87962 PASS")
+	})
 })
