@@ -12,7 +12,7 @@ RUN cd tests-extension && \
     $GOPATH/bin/go-bindata -nocompress \
         -pkg testdata -o test/e2e/testdata/bindata.go -prefix "testdata" test/e2e/testdata/... && \
     gofmt -s -w test/e2e/testdata/bindata.go && \
-    GOTOOLCHAIN=auto go build -mod=vendor -o bin/oc-mirror-tests-ext ./cmd && \
+    CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOTOOLCHAIN=auto go build -mod=vendor -o bin/oc-mirror-tests-ext ./cmd && \
     cd bin && \
     tar -czvf oc-mirror-test-extension.tar.gz oc-mirror-tests-ext && \
     rm -f oc-mirror-tests-ext

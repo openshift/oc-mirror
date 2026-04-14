@@ -9,7 +9,7 @@ build: vendor
 	@echo "Building extension binary..."
 	@cd test/e2e && $(MAKE) -f bindata.mk update-bindata
 	@mkdir -p bin
-	GOTOOLCHAIN=auto go build -mod=vendor -o $(BINARY) ./cmd
+	CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOTOOLCHAIN=auto go build -mod=vendor -o $(BINARY) ./cmd
 	@echo "Binary built: $(BINARY)"
 
 .PHONY: clean
