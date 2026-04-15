@@ -14,17 +14,16 @@ RUN cd tests-extension && \
         -pkg testdata -o testdata/bindata.go -prefix "testdata" testdata/... && \
     cd ../.. && \
     gofmt -s -w test/e2e/testdata/bindata.go && \
-    CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOTOOLCHAIN=auto go build -mod=vendor -o bin/oc-mirror-tests-ext ./cmd && \
-    cd bin && \
-    tar -czvf oc-mirror-test-extension.tar.gz oc-mirror-tests-ext && \
-    rm -f oc-mirror-tests-ext
+    CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOGC=20 GOTOOLCHAIN=auto go build -mod=vendor -p 1 -o bin/oc-mirror-tests-ext ./cmd && \
+    gzip -c bin/oc-mirror-tests-ext > bin/oc-mirror-tests-ext.gz && \
+    rm -f bin/oc-mirror-tests-ext
 
 # Final image containing the test extension binary
 FROM registry.ci.openshift.org/ocp/4.17:base-rhel9
 
 # Copy the compressed test extension binary
 COPY --from=test-extension-builder \
-    /go/src/github.com/openshift/oc-mirror/tests-extension/bin/oc-mirror-test-extension.tar.gz \
+    /go/src/github.com/openshift/oc-mirror/tests-extension/bin/oc-mirror-tests-ext.gz \
     /usr/bin/
 
 LABEL io.openshift.release.operator=true \
