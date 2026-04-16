@@ -876,7 +876,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	//TODO REMOVE ME, THIS IS ONLY FOR TEST PURPOSES.
+	// TODO REMOVE ME, THIS IS ONLY FOR TEST PURPOSES.
 	// fmt.Println("PAUSED - Update catalog, press Enter...")
 	// fmt.Scanln()
 
