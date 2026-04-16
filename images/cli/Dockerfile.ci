@@ -9,10 +9,27 @@ WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
 
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS test-extension-builder
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN cd tests-extension && \
+    GOTOOLCHAIN=auto go mod vendor && \
+    GOPATH=$(go env GOPATH) && \
+    GOFLAGS= go install github.com/go-bindata/go-bindata/v3/go-bindata@latest && \
+    cd test/e2e && \
+    $GOPATH/bin/go-bindata -nocompress \
+        -pkg testdata -o testdata/bindata.go -prefix "testdata" testdata/... && \
+    cd ../.. && \
+    gofmt -s -w test/e2e/testdata/bindata.go && \
+    CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOGC=20 GOTOOLCHAIN=auto go build -mod=vendor -p 1 -o bin/oc-mirror-tests-ext ./cmd && \
+    gzip -c bin/oc-mirror-tests-ext > bin/oc-mirror-tests-ext.gz && \
+    rm -f bin/oc-mirror-tests-ext
+
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder_rhel8 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel8
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel9
+COPY --from=test-extension-builder /go/src/github.com/openshift/oc-mirror/tests-extension/bin/oc-mirror-tests-ext.gz /usr/bin/oc-mirror-tests-ext.gz
 
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \

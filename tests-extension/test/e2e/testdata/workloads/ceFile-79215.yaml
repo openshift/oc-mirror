@@ -1,0 +1,17 @@
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: "extension-79215"
+spec:
+  namespace: "ns-79215"
+  serviceAccount:
+    name: "test-79215"
+  source:
+    sourceType: "Catalog"
+    catalog:
+      selector:
+        matchLabels:
+          olm.operatorframework.io/metadata.name: cc-redhat-operator-index-v4-19
+      packageName: "volsync-product"
+      version: "v0.14.0"
+      upgradeConstraintPolicy: "CatalogProvided"

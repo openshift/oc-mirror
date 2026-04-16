@@ -1,6 +1,8 @@
 # Build artifacts.
 /bin/
 /v1/bin/
+/tests-extension/bin/
+/tests-extension/vendor/
 /cmd/oc-mirror/data/oc-mirror-v1
 
 # Test artifacts.

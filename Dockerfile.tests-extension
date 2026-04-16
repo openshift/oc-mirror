@@ -1,0 +1,31 @@
+# Test extension builder stage (builds the OTE test extension binary)
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.22 AS test-extension-builder
+RUN mkdir -p /go/src/github.com/openshift/oc-mirror
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+
+# Vendor dependencies, generate bindata and build the extension binary
+RUN cd tests-extension && \
+    GOTOOLCHAIN=auto go mod vendor && \
+    GOPATH=$(go env GOPATH) && \
+    GOFLAGS= go install github.com/go-bindata/go-bindata/v3/go-bindata@latest && \
+    cd test/e2e && \
+    $GOPATH/bin/go-bindata -nocompress \
+        -pkg testdata -o testdata/bindata.go -prefix "testdata" testdata/... && \
+    cd ../.. && \
+    gofmt -s -w test/e2e/testdata/bindata.go && \
+    CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOGC=20 GOTOOLCHAIN=auto go build -mod=vendor -p 1 -o bin/oc-mirror-tests-ext ./cmd && \
+    gzip -c bin/oc-mirror-tests-ext > bin/oc-mirror-tests-ext.gz && \
+    rm -f bin/oc-mirror-tests-ext
+
+# Final image containing the test extension binary
+FROM registry.ci.openshift.org/ocp/4.17:base-rhel9
+
+# Copy the compressed test extension binary
+COPY --from=test-extension-builder \
+    /go/src/github.com/openshift/oc-mirror/tests-extension/bin/oc-mirror-tests-ext.gz \
+    /usr/bin/
+
+LABEL io.openshift.release.operator=true \
+      com.redhat.component="oc-mirror-tests-extension" \
+      description="OTE test extension for oc-mirror"
