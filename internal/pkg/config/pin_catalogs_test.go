@@ -607,3 +607,78 @@ func TestPinSingleCatalog_MultipleCatalogs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2), pinnedRef2)
 }
+
+// TestPinSingleCatalog_M2DMapKeyFormat tests OCPBUGS-81712 fix where
+// in M2D/M2M modes the CatalogToFBCMap key uses digest format but
+// we need to look up by the original tag reference from the ISC.
+func TestPinSingleCatalog_M2DMapKeyFormat(t *testing.T) {
+	logger := clog.New("trace")
+
+	// In M2D/M2M, the map key is digest-based (from filtered_collector.go:92)
+	// but OperatorFilter.Catalog contains the original tag reference
+	digestBasedKey := consts.DockerProtocol + image.WithDigest(redhatIndexBase, testDigestShort1)
+
+	catalogMap := map[string]v2alpha1.CatalogFilterResult{
+		digestBasedKey: {
+			OperatorFilter: v2alpha1.Operator{
+				Catalog: redhatIndexTag, // Original tag reference
+			},
+			Digest: testDigestShort1,
+		},
+	}
+
+	// Try to pin using the original tag reference (from ISC)
+	pinnedRef, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	require.NoError(t, err)
+	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef,
+		"Should find catalog via OperatorFilter.Catalog match even when map key uses digest")
+}
+
+// TestPinCatalogDigests_M2DMapKeyFormat tests the full flow with digest-based map keys
+func TestPinCatalogDigests_M2DMapKeyFormat(t *testing.T) {
+	logger := clog.New("trace")
+
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Operators: []v2alpha1.Operator{
+					{
+						Catalog: redhatIndexTag,
+					},
+					{
+						Catalog: certifiedIndexTag,
+					},
+				},
+			},
+		},
+	}
+
+	// Simulate M2D/M2M where map keys use digest format
+	catalogMap := map[string]v2alpha1.CatalogFilterResult{
+		consts.DockerProtocol + image.WithDigest(redhatIndexBase, testDigestShort1): {
+			OperatorFilter: v2alpha1.Operator{
+				Catalog: redhatIndexTag,
+			},
+			Digest: testDigestShort1,
+		},
+		consts.DockerProtocol + image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2): {
+			OperatorFilter: v2alpha1.Operator{
+				Catalog: certifiedIndexTag,
+			},
+			Digest: testDigestShort2,
+		},
+	}
+
+	pinnedCfg, err := pinCatalogDigests(cfg, catalogMap, logger)
+	require.NoError(t, err)
+
+	// Both catalogs should be pinned correctly
+	assert.Equal(t,
+		image.WithDigest(redhatIndexBase, testDigestShort1),
+		pinnedCfg.Mirror.Operators[0].Catalog,
+	)
+	assert.Equal(t,
+		image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2),
+		pinnedCfg.Mirror.Operators[1].Catalog,
+	)
+}
