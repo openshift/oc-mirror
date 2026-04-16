@@ -876,6 +876,10 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	//TODO REMOVE ME, THIS IS ONLY FOR TEST PURPOSES.
+	// fmt.Println("PAUSED - Update catalog, press Enter...")
+	// fmt.Scanln()
+
 	// call the batch worker
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
