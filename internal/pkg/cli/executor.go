@@ -329,7 +329,7 @@ func (o *ExecutorSchema) setupEnvironment() error {
 	}
 
 	// Validate and set common flags
-	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, consts.FileProtocol) {
+	if len(o.Opts.Global.WorkingDir) > 0 && !strings.HasPrefix(o.Opts.Global.WorkingDir, consts.FileProtocol) {
 		return errWrongWorkingDirProtocol
 	}
 
