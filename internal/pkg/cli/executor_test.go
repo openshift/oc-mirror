@@ -703,6 +703,116 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 	})
 }
 
+func TestExecutorEnvironmentSetup(t *testing.T) {
+	const logLevel string = "debug"
+
+	// Save and later restore the cache env value.
+	oldValue, isEnvSet := os.LookupEnv(cacheEnvVar)
+	t.Cleanup(func() {
+		if !isEnvSet {
+			err := os.Unsetenv(cacheEnvVar)
+			assert.NoError(t, err)
+		} else {
+			err := os.Setenv(cacheEnvVar, oldValue)
+			assert.NoError(t, err)
+		}
+	})
+	// This allows us to assume that the cache env var is unset in the following test cases.
+	err := os.Unsetenv(cacheEnvVar)
+	assert.NoError(t, err)
+
+	t.Run("should fail when working dir does not start with file:// protocol", func(t *testing.T) {
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			WorkingDir:   workingDir,
+			LogLevel:     logLevel,
+		}
+
+		ex := &ExecutorSchema{
+			Log:     clog.New("trace"),
+			Opts:    &mirror.CopyOptions{Global: global},
+			MakeDir: MockMakeDir{},
+		}
+		err := ex.setupEnvironment()
+		assert.ErrorIs(t, err, errWrongWorkingDirProtocol)
+	})
+
+	t.Run("should fail when both env var and command line arg are set", func(t *testing.T) {
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			WorkingDir:   fmt.Sprintf("file://%s", workingDir),
+			CacheDir:     workingDir,
+			LogLevel:     logLevel,
+		}
+
+		ex := &ExecutorSchema{
+			Log:     clog.New("trace"),
+			Opts:    &mirror.CopyOptions{Global: global},
+			MakeDir: MockMakeDir{},
+		}
+		err := os.Setenv(cacheEnvVar, "working-dir")
+		assert.NoError(t, err, "should set cache env var")
+		t.Cleanup(func() { os.Unsetenv(cacheEnvVar) })
+		err = ex.setupEnvironment()
+		assert.ErrorIs(t, err, errConflictingCacheValues)
+	})
+
+	t.Run("should fail when log level is not valid", func(t *testing.T) {
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			WorkingDir:   fmt.Sprintf("file://%s", workingDir),
+			LogLevel:     "quiet",
+		}
+
+		ex := &ExecutorSchema{
+			Log:     clog.New("trace"),
+			Opts:    &mirror.CopyOptions{Global: global},
+			MakeDir: MockMakeDir{},
+		}
+		err := ex.setupEnvironment()
+		assert.ErrorIs(t, err, errInvalidLogLevel)
+	})
+
+	t.Run("should set default cache dir value", func(t *testing.T) {
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			WorkingDir:   fmt.Sprintf("file://%s", workingDir),
+			LogLevel:     logLevel,
+		}
+
+		ex := &ExecutorSchema{
+			Log:     clog.New("trace"),
+			Opts:    &mirror.CopyOptions{Global: global},
+			MakeDir: MockMakeDir{},
+		}
+		err := ex.setupEnvironment()
+		assert.NoError(t, err)
+		assert.Equal(t, ex.Log.GetLevel(), logLevel)
+		assert.NotEmpty(t, ex.Opts.Global.CacheDir, "default cache should be set")
+	})
+
+	t.Run("should use cache dir from env var when set", func(t *testing.T) {
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			WorkingDir:   fmt.Sprintf("file://%s", workingDir),
+			LogLevel:     "debug",
+		}
+
+		ex := &ExecutorSchema{
+			Log:     clog.New("trace"),
+			Opts:    &mirror.CopyOptions{Global: global},
+			MakeDir: MockMakeDir{},
+		}
+		err := os.Setenv(cacheEnvVar, "working-dir")
+		assert.NoError(t, err, "should set cache env var")
+		t.Cleanup(func() { os.Unsetenv(cacheEnvVar) })
+		err = ex.setupEnvironment()
+		assert.NoError(t, err)
+		assert.Equal(t, ex.Log.GetLevel(), "debug")
+		assert.Equal(t, ex.Opts.Global.CacheDir, "working-dir")
+	})
+}
+
 // TestExecutorSetupWorkingDir
 func TestExecutorSetupWorkingDir(t *testing.T) {
 	workingDir := t.TempDir()

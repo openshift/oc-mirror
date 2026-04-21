@@ -119,6 +119,12 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 `
 )
 
+var (
+	errWrongWorkingDirProtocol error = fmt.Errorf("when --workspace is used, it must have file:// prefix")
+	errConflictingCacheValues        = fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
+	errInvalidLogLevel               = fmt.Errorf("invalid log-level, it should be one of (info,debug,trace,error)")
+)
+
 type ExecutorSchema struct {
 	Log                  clog.PluggableLoggerInterface
 	LogsDir              string
@@ -195,45 +201,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// OCPBUGS-55374 (check current umask)
-			currentUmask := syscall.Umask(0)
-			syscall.Umask(currentUmask)
-			if currentUmask != 0o022 {
-				log.Warn(emoji.Warning+"  Detected bad umask 00%o (oc-mirror requires a umask of 0022)", currentUmask)
-			}
-
-			log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
-			log.Info(emoji.Gear + "  setting up the environment for you...")
-
-			// Validate and set common flags
-			if len(opts.Global.WorkingDir) > 0 && !strings.Contains(opts.Global.WorkingDir, consts.FileProtocol) {
-				return fmt.Errorf("when --workspace is used, it must have file:// prefix")
-			}
-			if !slices.Contains([]string{"info", "debug", "trace", "error"}, opts.Global.LogLevel) {
-				return fmt.Errorf("log-level has an invalid value %s , it should be one of (info,debug,trace, error)", opts.Global.LogLevel)
-			}
-			// override log level
-			ex.Log.Level(ex.Opts.Global.LogLevel)
-
-			if os.Getenv(cacheEnvVar) != "" && opts.Global.CacheDir != "" {
-				return fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
-			}
-
-			if opts.Global.CacheDir == "" {
-				// Default to the env var to keep previous behavior
-				opts.Global.CacheDir = os.Getenv(cacheEnvVar)
-			}
-			if opts.Global.CacheDir == "" {
-				homeDir, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("failed to setup default cache directory: %w", err)
-				}
-				// ensure cache dir exists
-				opts.Global.CacheDir = homeDir
-			}
-
-			log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
-			return nil
+			return ex.setupEnvironment()
 		},
 		PreRun: func(cmd *cobra.Command, args []string) {
 			opts.Function = string(mirror.CopyMode)
@@ -347,6 +315,49 @@ func HideFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().MarkHidden("cpu-prof")
 	cmd.PersistentFlags().MarkHidden("mem-prof")
 	cmd.PersistentFlags().MarkHidden("ignore-release-signature")
+}
+
+func (o *ExecutorSchema) setupEnvironment() error {
+	o.Log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
+	o.Log.Info(emoji.Gear + "  setting up the environment for you...")
+
+	// OCPBUGS-55374 (check current umask)
+	currentUmask := syscall.Umask(0)
+	syscall.Umask(currentUmask)
+	if currentUmask != 0o022 {
+		o.Log.Warn(emoji.Warning+"  Detected bad umask 00%o (oc-mirror requires a umask of 0022)", currentUmask)
+	}
+
+	// Validate and set common flags
+	if len(o.Opts.Global.WorkingDir) > 0 && !strings.Contains(o.Opts.Global.WorkingDir, consts.FileProtocol) {
+		return errWrongWorkingDirProtocol
+	}
+
+	if !slices.Contains([]string{"info", "debug", "trace", "error"}, o.Opts.Global.LogLevel) {
+		return fmt.Errorf("%q: %w", o.Opts.Global.LogLevel, errInvalidLogLevel)
+	}
+	// override log level
+	o.Log.Level(o.Opts.Global.LogLevel)
+
+	if os.Getenv(cacheEnvVar) != "" && o.Opts.Global.CacheDir != "" {
+		return errConflictingCacheValues
+	}
+
+	if o.Opts.Global.CacheDir == "" {
+		// Default to the env var to keep previous behavior
+		o.Opts.Global.CacheDir = os.Getenv(cacheEnvVar)
+	}
+	if o.Opts.Global.CacheDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to setup default cache directory: %w", err)
+		}
+		// ensure cache dir exists
+		o.Opts.Global.CacheDir = homeDir
+	}
+
+	o.Log.Info(emoji.Gear+"  environment version: %s", version.Get().GitVersion)
+	return nil
 }
 
 // Validate - cobra validation
