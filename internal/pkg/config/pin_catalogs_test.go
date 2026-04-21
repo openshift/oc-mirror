@@ -71,7 +71,7 @@ func TestPinCatalogDigests_CopyBehavior(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -130,10 +130,10 @@ func TestPinCatalogDigests_MultipleOperators(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort2,
+			OriginDigest: testDigestShort2,
 		},
 		certifiedIndexTagDocker: {
-			Digest: testDigestShort3,
+			OriginDigest: testDigestShort3,
 		},
 	}
 
@@ -234,7 +234,7 @@ func TestPinAndWriteConfigs(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -471,7 +471,7 @@ func TestPinSingleCatalog_Success(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -487,7 +487,7 @@ func TestPinSingleCatalog_AlreadyPinned(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		consts.DockerProtocol + alreadyPinnedCatalog: {
-			Digest: "newdigest123",
+			OriginDigest: "newdigest123",
 		},
 	}
 
@@ -512,7 +512,7 @@ func TestPinSingleCatalog_EmptyDigest(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: "", // Empty digest
+			OriginDigest: "", // Empty digest
 		},
 	}
 
@@ -540,7 +540,7 @@ func TestPinSingleCatalog_OCITransport(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		ociCatalog: {
-			Digest: "ocidigests123",
+			OriginDigest: "ocidigests123",
 		},
 	}
 
@@ -557,7 +557,7 @@ func TestPinSingleCatalog_DockerTransport(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		dockerCatalog: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -573,7 +573,7 @@ func TestPinSingleCatalog_NoTransport(t *testing.T) {
 	// Catalog without explicit transport (docker:// is implied)
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -590,10 +590,10 @@ func TestPinSingleCatalog_MultipleCatalogs(t *testing.T) {
 
 	catalogMap := map[string]v2alpha1.CatalogFilterResult{
 		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 		certifiedIndexTagDocker: {
-			Digest: testDigestShort2,
+			OriginDigest: testDigestShort2,
 		},
 	}
 
@@ -623,7 +623,7 @@ func TestPinSingleCatalog_M2DMapKeyFormat(t *testing.T) {
 			OperatorFilter: v2alpha1.Operator{
 				Catalog: redhatIndexTag, // Original tag reference
 			},
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 	}
 
@@ -659,13 +659,13 @@ func TestPinCatalogDigests_M2DMapKeyFormat(t *testing.T) {
 			OperatorFilter: v2alpha1.Operator{
 				Catalog: redhatIndexTag,
 			},
-			Digest: testDigestShort1,
+			OriginDigest: testDigestShort1,
 		},
 		consts.DockerProtocol + image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2): {
 			OperatorFilter: v2alpha1.Operator{
 				Catalog: certifiedIndexTag,
 			},
-			Digest: testDigestShort2,
+			OriginDigest: testDigestShort2,
 		},
 	}
 

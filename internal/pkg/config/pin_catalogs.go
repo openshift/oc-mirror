@@ -144,13 +144,13 @@ func pinSingleCatalogDigest(
 	}
 
 	// Check for empty digest
-	if filterResult.Digest == "" {
+	if filterResult.OriginDigest == "" {
 		log.Warn("Empty digest for catalog %s, skipping pin", catalog)
 		return "", nil
 	}
 
 	// Build pinned reference: {registry}/{path}@sha256:{digest}
-	pinnedRef := image.WithDigest(imgSpec.Name, filterResult.Digest)
+	pinnedRef := image.WithDigest(imgSpec.Name, filterResult.OriginDigest)
 
 	// Add transport prefix if non-docker (docker:// is default and can be omitted)
 	if imgSpec.Transport != "" && imgSpec.Transport != consts.DockerProtocol {

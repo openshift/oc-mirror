@@ -321,7 +321,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		rebuiltTag = tag
 	}
 
-	componentName := imgSpec.ComponentName() + "." + result.Digest
+	componentName := imgSpec.ComponentName() + "." + result.OriginDigest
 	relatedImages[componentName] = []v2alpha1.RelatedImage{
 		{
 			Name:          catalogName,
@@ -393,7 +393,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: filterConfigDir,
 			ToRebuild:          false,
 			DeclConfig:         filteredDC,
-			Digest:             string(filteredImageDigest),
+			OriginDigest:       catalogDigest,
 		}, nil
 	}
 	o.Log.Debug("Catalog has not been filtered previously")
@@ -420,7 +420,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: "", // this value is not relevant: no rebuilding
 			ToRebuild:          false,
 			DeclConfig:         originalDC,
-			Digest:             catalogDigest,
+			OriginDigest:       catalogDigest,
 		}, nil
 	}
 
@@ -444,7 +444,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		FilteredConfigPath: filteredDigestPath,
 		ToRebuild:          true,
 		DeclConfig:         filteredDC,
-		Digest:             catalogDigest,
+		OriginDigest:       catalogDigest,
 	}, nil
 }
 
