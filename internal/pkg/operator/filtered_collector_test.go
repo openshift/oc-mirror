@@ -1030,8 +1030,9 @@ func (o MockManifest) ImageDigest(ctx context.Context, srcCtx *types.SystemConte
 	return "f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", nil
 }
 
-func (o MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemContext, ref string, digest *digest.Digest) ([]byte, string, error) {
-	return nil, "", errors.New("not implemented")
+func (o MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemContext, ref string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	manifestBytes := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000","size":0},"layers":[]}`)
+	return manifestBytes, "application/vnd.oci.image.manifest.v1+json", nil
 }
 
 func (o MockHandler) getCatalog(filePath string) (OperatorCatalog, error) {

@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	imgmanifest "go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -29,6 +31,11 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		o.Log.Error(" %v ", err)
 		return err
 	}
+
+	// Concurrently inspect all images to identify manifest lists.
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " inspecting images for manifest lists...")
+	manifestListDigests := o.inspectManifestLists(ctx, allImages)
+
 	// creating file for storing list of cached images
 	mappingTxtFilePath := filepath.Join(outDir, mappingFile)
 	mappingTxtFile, err := os.Create(mappingTxtFilePath)
@@ -48,11 +55,9 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		type subDigestEntry struct{ source, dest string }
 		var subDigestEntries []subDigestEntry
 
-		// Try to get manifest list sub-digests from source
-		manifestDigests, err := o.getManifestListDigests(ctx, img.Source)
-		if err != nil {
-			o.Log.Warn("unable to get manifest list info for %s: %v", img.Source, err)
-		} else if len(manifestDigests) > 0 {
+		// Look up manifest list sub-digests identified during inspection.
+		manifestDigests := manifestListDigests[img.Source]
+		if len(manifestDigests) > 0 {
 			// This is a manifest list, write each sub-digest with digest-pinned destination
 			sourceBase, _, _ := strings.Cut(img.Source, "@")
 			for _, digest := range manifestDigests {
@@ -121,6 +126,53 @@ func subDigestDestination(dest string, digest string) string {
 	return destSpec.Transport + destSpec.Name + "@" + digest
 }
 
+// inspectManifestLists concurrently inspects all images to identify manifest lists
+// and returns a map of source references to their sub-manifest digests.
+// Concurrency is bounded via a semaphore to avoid overwhelming registries.
+func (o *ExecutorSchema) inspectManifestLists(ctx context.Context, images []v2alpha1.CopyImageSchema) map[string][]string {
+	manifestListDigests := make(map[string][]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	parallelism := o.Opts.ParallelImages
+	if parallelism == 0 {
+		parallelism = maxParallelImageDownloads
+	}
+	semaphore := make(chan struct{}, parallelism)
+
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, img := range images {
+		select {
+		case <-cancelCtx.Done():
+			break
+		default:
+		}
+
+		semaphore <- struct{}{}
+
+		wg.Add(1)
+		go func(source string) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+
+			digests, err := o.getManifestListDigests(cancelCtx, source)
+			if err != nil {
+				o.Log.Warn("unable to inspect manifest for %s: %v", source, err)
+				return
+			}
+			if len(digests) > 0 {
+				mu.Lock()
+				manifestListDigests[source] = digests
+				mu.Unlock()
+			}
+		}(img.Source)
+	}
+	wg.Wait()
+	return manifestListDigests
+}
+
 // getManifestListDigests inspects the source image to check if it's a manifest list
 // and returns the sub-manifest digests. Works with any transport supported by
 // containers/image (docker://, oci:, etc.) via alltransports.ParseImageName.
@@ -138,6 +190,10 @@ func (o *ExecutorSchema) getManifestListDigests(ctx context.Context, source stri
 	sysCtx, err := o.Opts.SrcImage.NewSystemContext()
 	if err != nil {
 		return nil, fmt.Errorf("error creating system context: %w", err)
+	}
+	// The local cache registry is HTTP-only; ensure we skip TLS verification for it.
+	if o.Opts.LocalStorageFQDN != "" && strings.Contains(source, o.Opts.LocalStorageFQDN) {
+		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 
 	imgSrc, err := srcRef.NewImageSource(ctx, sysCtx)

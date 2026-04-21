@@ -384,6 +384,90 @@ func TestDryRunWithManifestList(t *testing.T) {
 	})
 }
 
+// TestDryRunUnreachableImagesWarnButDontFail verifies that DryRun handles
+// unreachable images gracefully: manifest inspection warns but doesn't fail,
+// and base entries are still written to mapping.txt.
+func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
+	log := clog.New("trace")
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy: false,
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	testFolder := t.TempDir()
+	global.WorkingDir = testFolder
+
+	// These images point to a non-existent registry — manifest inspection will fail
+	var imgs = []v2alpha1.CopyImageSchema{
+		{Source: consts.DockerProtocol + "fake-registry.invalid/namespace/image1@sha256:aaa1111111111111111111111111111111111111111111111111111111111111", Destination: "oci:test1", Type: v2alpha1.TypeGeneric},
+		{Source: consts.DockerProtocol + "fake-registry.invalid/namespace/image2@sha256:bbb2222222222222222222222222222222222222222222222222222222222222", Destination: "oci:test2", Type: v2alpha1.TypeGeneric},
+	}
+
+	regCfg, err := setupRegForTest(testFolder)
+	if err != nil {
+		t.Fatalf("storage cache error: %v", err)
+	}
+	reg, err := registry.NewRegistry(context.Background(), regCfg)
+	if err != nil {
+		t.Fatalf("storage cache error: %v", err)
+	}
+
+	opts := &mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		IsDryRun:            true,
+		Mode:                mirror.DiskToMirror,
+		Dev:                 false,
+		LocalStorageFQDN:    regCfg.HTTP.Addr,
+		ParallelImages:      4,
+	}
+
+	cfg := v2alpha1.ImageSetConfiguration{}
+	collector := &Collector{Log: log, Config: cfg, Opts: *opts, Fail: false}
+	mockMirror := Mirror{}
+
+	ex := &ExecutorSchema{
+		Log:                 log,
+		Opts:                opts,
+		Operator:            collector,
+		Release:             collector,
+		AdditionalImages:    collector,
+		Mirror:              mockMirror,
+		LocalStorageService: *reg,
+		LogsDir:             testFolder,
+		MakeDir:             MakeDir{},
+	}
+
+	// Should not fail even though manifest inspection will warn for unreachable images
+	err = ex.DryRun(context.TODO(), imgs)
+	if err != nil {
+		t.Fatalf("should not fail: %v", err)
+	}
+
+	mappingPath := filepath.Join(testFolder, dryRunOutDir, mappingFile)
+	assert.FileExists(t, mappingPath)
+
+	mappingBytes, err := os.ReadFile(mappingPath)
+	if err != nil {
+		t.Fatalf("failed to read mapping file: %v", err)
+	}
+	mapping := string(mappingBytes)
+
+	// Base entries should still be written despite inspection failures
+	for _, img := range imgs {
+		assert.Contains(t, mapping, img.Source+"="+img.Destination)
+	}
+}
+
 func TestSubDigestDestination(t *testing.T) {
 	tests := []struct {
 		name     string
