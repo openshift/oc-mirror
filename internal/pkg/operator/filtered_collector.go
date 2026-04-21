@@ -87,10 +87,16 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			}
 		}
 		if imgSpec.Transport != consts.OciProtocol && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
-			// OCPBUGS-81712: When we pin catalogs to digest in collectOperator, the mapKey must match
-			// the digest reference that will be used as Origin in the CopyImageSchema.
-			// Origin uses ReferenceWithTransport, so we need to include the protocol.
-			mapKey = consts.DockerProtocol + image.WithDigest(imgSpec.Name, result.Digest)
+			// OCPBUGS-81712: Use the source catalog digest to construct the map key.
+			// This ensures the key matches Origin (set in collectOperator) for successful lookup during rebuild.
+			catalogDigest, err := o.getCatalogDigest(ctx, op)
+			if err != nil {
+				spinner.Abort(true)
+				spinner.Wait()
+				allErrs = append(allErrs, fmt.Errorf("get catalog digest %q: %w", op.Catalog, err))
+				continue
+			}
+			mapKey = consts.DockerProtocol + image.WithDigest(imgSpec.Name, catalogDigest)
 		}
 		collectorSchema.CatalogToFBCMap[mapKey] = result
 
