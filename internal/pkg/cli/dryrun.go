@@ -19,7 +19,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
-func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
+func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema, preCollectedManifestLists map[string][]string) error {
 	// set up location of logs dir
 	outDir := filepath.Join(o.Opts.Global.WorkingDir, dryRunOutDir)
 	// clean up logs directory
@@ -32,9 +32,26 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		return err
 	}
 
-	// Concurrently inspect all images to identify manifest lists.
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " inspecting images for manifest lists...")
-	manifestListDigests := o.inspectManifestLists(ctx, allImages)
+	// Inspect only images not already classified during collection.
+	var remaining []v2alpha1.CopyImageSchema
+	for _, img := range allImages {
+		if _, found := preCollectedManifestLists[img.Origin]; !found {
+			remaining = append(remaining, img)
+		}
+	}
+
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass+" inspecting %d remaining images for manifest lists (%d already detected during collection)...",
+		len(remaining), len(allImages)-len(remaining))
+	runtimeDigests := o.inspectManifestLists(ctx, remaining)
+
+	// Merge pre-collected and runtime manifest list results.
+	manifestListDigests := make(map[string][]string, len(preCollectedManifestLists)+len(runtimeDigests))
+	for k, v := range preCollectedManifestLists {
+		manifestListDigests[k] = v
+	}
+	for k, v := range runtimeDigests {
+		manifestListDigests[k] = v
+	}
 
 	// creating file for storing list of cached images
 	mappingTxtFilePath := filepath.Join(outDir, mappingFile)
@@ -55,8 +72,12 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		type subDigestEntry struct{ source, dest string }
 		var subDigestEntries []subDigestEntry
 
-		// Look up manifest list sub-digests identified during inspection.
-		manifestDigests := manifestListDigests[img.Source]
+		// Look up manifest list sub-digests: check both by Origin (pre-collected
+		// during operator collection) and by Source (detected at runtime).
+		manifestDigests := manifestListDigests[img.Origin]
+		if len(manifestDigests) == 0 {
+			manifestDigests = manifestListDigests[img.Source]
+		}
 		if len(manifestDigests) > 0 {
 			// This is a manifest list, write each sub-digest with digest-pinned destination
 			sourceBase, _, _ := strings.Cut(img.Source, "@")

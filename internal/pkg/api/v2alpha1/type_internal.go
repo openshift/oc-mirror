@@ -210,8 +210,9 @@ type CollectorSchema struct {
 }
 
 type CopyImageSchemaMap struct {
-	OperatorsByImage map[string]map[string]struct{} // key is the origin image name and value is an array of operators' name
-	BundlesByImage   map[string]map[string]string   // key is the image name and value is the bundle name
+	OperatorsByImage    map[string]map[string]struct{} // key is the origin image name and value is an array of operators' name
+	BundlesByImage      map[string]map[string]string   // key is the image name and value is the bundle name
+	ManifestListDigests map[string][]string            // key is the origin image ref, value is the sub-manifest digests (only for manifest lists)
 }
 
 // CopyImageSchema

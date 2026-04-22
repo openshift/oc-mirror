@@ -97,7 +97,7 @@ func TestDryRun(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), imgs)
+		err = ex.DryRun(context.TODO(), imgs, nil)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -170,7 +170,7 @@ func TestDryRun(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), imgs)
+		err = ex.DryRun(context.TODO(), imgs, nil)
 		if err != nil {
 			t.Fatalf("should not fail")
 		}
@@ -359,7 +359,7 @@ func TestDryRunWithManifestList(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), imgs)
+		err = ex.DryRun(context.TODO(), imgs, nil)
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
@@ -448,7 +448,7 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 	}
 
 	// Should not fail even though manifest inspection will warn for unreachable images
-	err = ex.DryRun(context.TODO(), imgs)
+	err = ex.DryRun(context.TODO(), imgs, nil)
 	if err != nil {
 		t.Fatalf("should not fail: %v", err)
 	}
