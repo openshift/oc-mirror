@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -26,13 +27,64 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	mappingTxtFilePath := filepath.Join(outDir, mappingFile)
 	mappingTxtFile, err := os.Create(mappingTxtFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create mapping file: %w", err)
 	}
 	defer mappingTxtFile.Close()
-	imagesAvailable := map[string]bool{}
-	nbMissingImgs := 0
 	var buff bytes.Buffer
 	var missingImgsBuff bytes.Buffer
+	nbMissingImgs, nbAvailableImgs := o.processImages(ctx, allImages, &buff, &missingImgsBuff)
+
+	_, err = mappingTxtFile.Write(buff.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to write mapping file: %w", err)
+	}
+	if err := o.writeMissingImagesFile(outDir, &missingImgsBuff, nbMissingImgs, len(allImages)); err != nil {
+		return err
+	}
+
+	if nbAvailableImgs > 0 {
+		o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", nbAvailableImgs)
+	}
+	o.Log.Info(emoji.PageFacingUp+" list of all images for mirroring in : %s", mappingTxtFilePath)
+
+	// Generate cluster resources in dry-run mode (skip for mirror-to-disk since target registry is unknown)
+	if !o.Opts.IsMirrorToDisk() {
+		if err := o.generateClusterResources(ctx, allImages); err != nil {
+			// In dry-run mode, log cluster resource generation errors as warnings instead of failing
+			o.Log.Warn("Cluster resources generation failed (dry-run mode): %v", err)
+		}
+	}
+
+	return nil
+}
+
+// writeMissingImagesFile creates the missing.txt file if there are missing images
+func (o *ExecutorSchema) writeMissingImagesFile(outDir string, missingImgsBuff *bytes.Buffer, nbMissingImgs, totalImgs int) error {
+	if nbMissingImgs == 0 {
+		return nil
+	}
+
+	missingImgsFilePath := filepath.Join(outDir, missingImgsFile)
+	missingImgsTxtFile, err := os.Create(missingImgsFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create missing images file: %w", err)
+	}
+	defer missingImgsTxtFile.Close()
+
+	_, err = missingImgsTxtFile.Write(missingImgsBuff.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to write missing images file: %w", err)
+	}
+
+	o.Log.Warn(emoji.Warning+"  %d/%d images necessary for mirroring are not available in the cache.", nbMissingImgs, totalImgs)
+	o.Log.Warn("List of missing images in : %s.\nplease re-run the mirror to disk process", missingImgsFilePath)
+	return nil
+}
+
+// processImages processes all images and returns the count of missing and available images
+func (o *ExecutorSchema) processImages(ctx context.Context, allImages []v2alpha1.CopyImageSchema, buff, missingImgsBuff *bytes.Buffer) (int, int) {
+	nbMissingImgs := 0
+	nbAvailableImgs := 0
 	for _, img := range allImages {
 		buff.WriteString(img.Source + "=" + img.Destination + "\n")
 		if o.Opts.IsMirrorToDisk() {
@@ -43,33 +95,10 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 			if err != nil || !exists {
 				missingImgsBuff.WriteString(img.Source + "=" + img.Destination + "\n")
 				nbMissingImgs++
+			} else {
+				nbAvailableImgs++
 			}
 		}
 	}
-
-	_, err = mappingTxtFile.Write(buff.Bytes())
-	if err != nil {
-		return err
-	}
-	if nbMissingImgs > 0 {
-		// creating file for storing list of cached images
-		missingImgsFilePath := filepath.Join(outDir, missingImgsFile)
-		missingImgsTxtFile, err := os.Create(missingImgsFilePath)
-		if err != nil {
-			return err
-		}
-		defer missingImgsTxtFile.Close()
-		_, err = missingImgsTxtFile.Write(missingImgsBuff.Bytes())
-		if err != nil {
-			return err
-		}
-		o.Log.Warn(emoji.Warning+"  %d/%d images necessary for mirroring are not available in the cache.", nbMissingImgs, len(allImages))
-		o.Log.Warn("List of missing images in : %s.\nplease re-run the mirror to disk process", missingImgsFilePath)
-	}
-
-	if len(imagesAvailable) > 0 {
-		o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", len(imagesAvailable))
-	}
-	o.Log.Info(emoji.PageFacingUp+" list of all images for mirroring in : %s", mappingTxtFilePath)
-	return nil
+	return nbMissingImgs, nbAvailableImgs
 }
