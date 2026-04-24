@@ -819,6 +819,83 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
 	})
 
+	t.Run("Testing GenerateCatalogSource with template and digest-based Origin (OCPBUGS-81712): should pass", func(t *testing.T) {
+		// This test verifies that getCSTemplate works when Origin is digest-based
+		// (as happens in M2D/M2M after OCPBUGS-81712) but op.Catalog is tag-based
+		imageListDigestOrigin := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index:v4.15",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
+								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template.yaml",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageListDigestOrigin)
+		if err != nil {
+			t.Fatalf("should not fail: %v", err)
+		}
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		if err != nil {
+			t.Fatalf("ls output folder should not fail")
+		}
+
+		if len(csFiles) != 1 {
+			t.Fatalf("output folder should contain 1 catalogSource yaml file")
+		}
+
+		actualCS, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, csFiles[0].Name()))
+		if err != nil {
+			t.Fatalf("failed to unmarshal catalogsource: %v", err)
+		}
+
+		// Template should have been used, so we should see the custom update strategy
+		expectedCS := ofv1alpha1.CatalogSource{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: ofv1alpha1.GroupName + "/" + ofv1alpha1.GroupVersion,
+				Kind:       "CatalogSource",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
+				Namespace:   "openshift-marketplace",
+				Annotations: generateOcMirrorAnnotations(),
+			},
+			Spec: ofv1alpha1.CatalogSourceSpec{
+				SourceType: "grpc",
+				Image:      "myregistry/mynamespace/redhat/redhat-operator-index:v4.15",
+				UpdateStrategy: &ofv1alpha1.UpdateStrategy{
+					RegistryPoll: &ofv1alpha1.RegistryPoll{
+						RawInterval: "30m0s",
+						Interval: &metav1.Duration{
+							Duration: time.Minute * 30,
+						},
+						ParsingError: "",
+					},
+				},
+			},
+		}
+
+		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect (template should be applied even with digest-based Origin)")
+	})
+
 	templateFailCases := []ClusterResourcesGenerator{
 		{
 			Log:              log,
