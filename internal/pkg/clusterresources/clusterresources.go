@@ -248,8 +248,25 @@ func (o *ClusterResourcesGenerator) ClusterCatalogGenerator(allRelatedImages []v
 }
 
 func (o *ClusterResourcesGenerator) getCSTemplate(catalogRef string) string {
+	// Parse the catalog reference to extract the repository name (without tag/digest)
+	catalogRefSpec, err := image.ParseRef(catalogRef)
+	if err != nil {
+		o.Log.Debug("Failed to parse catalog reference %s: %v", catalogRef, err)
+		return ""
+	}
+
 	for _, op := range o.Config.ImageSetConfigurationSpec.Mirror.Operators {
-		if strings.Contains(catalogRef, op.Catalog) {
+		// Parse the operator catalog from ISC
+		opCatalogSpec, err := image.ParseRef(op.Catalog)
+		if err != nil {
+			o.Log.Debug("Failed to parse operator catalog %s: %v", op.Catalog, err)
+			continue
+		}
+
+		// Compare repository names (without tag/digest)
+		// OCPBUGS-81712: catalogRef may be digest-based while op.Catalog is tag-based,
+		// so we compare the repository names instead of doing string matching
+		if catalogRefSpec.Name == opCatalogSpec.Name {
 			return op.TargetCatalogSourceTemplate
 		}
 	}

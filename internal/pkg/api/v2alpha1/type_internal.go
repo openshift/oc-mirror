@@ -247,5 +247,5 @@ type CatalogFilterResult struct {
 	FilteredConfigPath string
 	ToRebuild          bool
 	DeclConfig         *declcfg.DeclarativeConfig
-	Digest             string
+	OriginDigest       string
 }

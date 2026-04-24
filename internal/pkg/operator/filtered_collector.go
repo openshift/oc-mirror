@@ -86,6 +86,12 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 				mapKey = consts.OciProtocol + sourceOCIDir
 			}
 		}
+		if imgSpec.Transport != consts.OciProtocol && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+			// OCPBUGS-81712: Use the source catalog digest to construct the map key.
+			// This ensures the key matches Origin (set in collectOperator) for successful lookup during rebuild.
+
+			mapKey = consts.DockerProtocol + image.WithDigest(imgSpec.Name, result.OriginDigest)
+		}
 		collectorSchema.CatalogToFBCMap[mapKey] = result
 
 		spinner.Increment()
@@ -286,6 +292,16 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		}
 		catalogImage = consts.OciProtocol + sourceOCIDir
 	}
+	if imgSpec.Transport != consts.OciProtocol && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+		// OCPBUGS-81712: Pin the catalog to the resolved digest to prevent race conditions
+		// where the tag might resolve to a different digest between collection and mirroring.
+		// This ensures the catalog mirrored matches the digest used for working directory structure.
+		catalogImage = image.WithDigest(imgSpec.Name, catalogDigest)
+		// Preserve the original tag for the destination if user didn't provide targetTag
+		if len(targetTag) == 0 && len(imgSpec.Tag) > 0 {
+			targetTag = imgSpec.Tag
+		}
+	}
 
 	rebuiltTag := ""
 	if !isFullCatalog(op) {
@@ -299,7 +315,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		rebuiltTag = tag
 	}
 
-	componentName := imgSpec.ComponentName() + "." + result.Digest
+	componentName := imgSpec.ComponentName() + "." + result.OriginDigest
 	relatedImages[componentName] = []v2alpha1.RelatedImage{
 		{
 			Name:          catalogName,
@@ -371,7 +387,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: filterConfigDir,
 			ToRebuild:          false,
 			DeclConfig:         filteredDC,
-			Digest:             string(filteredImageDigest),
+			OriginDigest:       catalogDigest,
 		}, nil
 	}
 	o.Log.Debug("Catalog has not been filtered previously")
@@ -398,7 +414,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: "", // this value is not relevant: no rebuilding
 			ToRebuild:          false,
 			DeclConfig:         originalDC,
-			Digest:             catalogDigest,
+			OriginDigest:       catalogDigest,
 		}, nil
 	}
 
@@ -422,7 +438,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		FilteredConfigPath: filteredDigestPath,
 		ToRebuild:          true,
 		DeclConfig:         filteredDC,
-		Digest:             catalogDigest,
+		OriginDigest:       catalogDigest,
 	}, nil
 }
 

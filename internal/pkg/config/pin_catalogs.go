@@ -83,6 +83,23 @@ func pinCatalogDigests(
 	return pinnedCfg, nil
 }
 
+// findCatalogByOriginalRef searches CatalogToFBCMap for an entry whose OperatorFilter.Catalog
+// matches the given catalog reference. This is needed in M2D/M2M modes where the map key
+// uses digest format but we need to look up by the original tag reference from the ISC.
+func findCatalogByOriginalRef(
+	catalog string,
+	catalogToFBCMap map[string]v2alpha1.CatalogFilterResult,
+	log clog.PluggableLoggerInterface,
+) (v2alpha1.CatalogFilterResult, bool) {
+	for _, result := range catalogToFBCMap {
+		if result.OperatorFilter.Catalog == catalog {
+			log.Debug("Found catalog %s via OperatorFilter.Catalog match", catalog)
+			return result, true
+		}
+	}
+	return v2alpha1.CatalogFilterResult{}, false
+}
+
 // pinSingleCatalogDigest pins a single catalog reference to its SHA256 digest.
 //
 // Returns:
@@ -113,21 +130,27 @@ func pinSingleCatalogDigest(
 	}
 
 	// Look up digest in map
+	// OCPBUGS-81712: Try direct lookup first (tag-based key for D2M, or old behavior)
 	filterResult, ok := catalogToFBCMap[imgSpec.ReferenceWithTransport]
 	if !ok {
-		// Log warning but continue (non-fatal)
-		log.Warn("Catalog %s not found in CatalogToFBCMap, skipping pin", catalog)
-		return "", nil
+		// OCPBUGS-81712: In M2D/M2M, the map key uses digest format.
+		// Fall back to searching by matching the original catalog reference.
+		filterResult, ok = findCatalogByOriginalRef(catalog, catalogToFBCMap, log)
+		if !ok {
+			// Log warning but continue (non-fatal)
+			log.Warn("Catalog %s not found in CatalogToFBCMap, skipping pin", catalog)
+			return "", nil
+		}
 	}
 
 	// Check for empty digest
-	if filterResult.Digest == "" {
+	if filterResult.OriginDigest == "" {
 		log.Warn("Empty digest for catalog %s, skipping pin", catalog)
 		return "", nil
 	}
 
 	// Build pinned reference: {registry}/{path}@sha256:{digest}
-	pinnedRef := image.WithDigest(imgSpec.Name, filterResult.Digest)
+	pinnedRef := image.WithDigest(imgSpec.Name, filterResult.OriginDigest)
 
 	// Add transport prefix if non-docker (docker:// is default and can be omitted)
 	if imgSpec.Transport != "" && imgSpec.Transport != consts.DockerProtocol {
