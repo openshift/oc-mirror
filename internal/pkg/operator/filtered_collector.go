@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/vbauerster/mpb/v8"
+	imgmanifest "go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -41,8 +42,9 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		CatalogToFBCMap: make(map[string]v2alpha1.CatalogFilterResult),
 	}
 	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{
-		OperatorsByImage: make(map[string]map[string]struct{}),
-		BundlesByImage:   make(map[string]map[string]string),
+		OperatorsByImage:    make(map[string]map[string]struct{}),
+		BundlesByImage:      make(map[string]map[string]string),
+		ManifestListDigests: make(map[string][]string),
 	}
 
 	// We are going to try to collect all operators before returning.
@@ -237,7 +239,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
-	catalogDigest, err := o.getCatalogDigest(ctx, op)
+	catalogDigest, err := o.getCatalogDigest(ctx, op, copyImageSchemaMap)
 	if err != nil {
 		// OCPBUGS-36548 (manifest unknown)
 		return v2alpha1.CatalogFilterResult{}, err
@@ -314,7 +316,10 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	return result, nil
 }
 
-func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Operator) (string, error) {
+// getCatalogDigest returns the catalog image's digest and, when dry-run is
+// active, also detects manifest lists and stores their sub-digests in
+// copyImageSchemaMap so the dry-run phase can skip re-inspecting them.
+func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (string, error) {
 	// OCPBUGS-36214: For diskToMirror (and delete), access to the source registry is not guaranteed
 	if o.Opts.IsDiskToMirror() || o.Opts.IsDeleteMode() {
 		return o.catalogDigest(ctx, op)
@@ -325,8 +330,10 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 		return "", err
 	}
 
-	// If the catalog is specified by digest, return it directly.
-	if imgSpec.IsImageByDigestOnly() {
+	// If the catalog is specified by digest and this is not a dry run,
+	// return it directly. During dry run we still need to fetch the manifest
+	// to detect manifest lists and pre-collect their sub-digests.
+	if imgSpec.IsImageByDigestOnly() && !o.Opts.IsDryRun {
 		return imgSpec.Digest, nil
 	}
 
@@ -335,7 +342,34 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 		return "", err
 	}
 
-	return o.Manifest.ImageDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
+	if err := mirror.ReexecIfNecessaryForImages(imgSpec.ReferenceWithTransport); err != nil {
+		return "", err
+	}
+
+	manifestBytes, manifestType, err := o.Manifest.ImageManifest(ctx, srcCtx, imgSpec.ReferenceWithTransport, nil)
+	if err != nil {
+		return "", err
+	}
+
+	d, err := imgmanifest.Digest(manifestBytes)
+	if err != nil {
+		return "", err
+	}
+	catalogDigest := d.Encoded()
+
+	if o.Opts.IsDryRun && imgmanifest.MIMETypeIsMultiImage(manifestType) {
+		list, err := imgmanifest.ListFromBlob(manifestBytes, manifestType)
+		if err == nil {
+			instances := list.Instances()
+			digests := make([]string, 0, len(instances))
+			for _, inst := range instances {
+				digests = append(digests, inst.String())
+			}
+			copyImageSchemaMap.ManifestListDigests[imgSpec.ReferenceWithTransport] = digests
+		}
+	}
+
+	return catalogDigest, nil
 }
 
 func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring
