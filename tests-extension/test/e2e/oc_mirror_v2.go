@@ -101,7 +101,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Critical-73359-Validate mirror2mirror for operator for v2 [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Critical-73359-Validate mirror2mirror for operator for v2 [Serial] [Level0]", func() {
 		compat_otp.By("Set registry config")
 		dirname := "/tmp/case73359"
 		defer os.RemoveAll(dirname)
@@ -447,7 +447,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		validateTargetcatalogAndTag(rhOperatorUri, "v4.15")
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72938-should give clear information for invalid operator filter setting [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72938-should give clear information for invalid operator filter setting [Serial] [Level0]", func() {
 		dirname := "/tmp/case72938"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -1019,7 +1019,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73783-Do not generate IDMS or ITMS if nothing has been mirrored [Serial]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73783-Do not generate IDMS or ITMS if nothing has been mirrored [Serial] [Level0]", func() {
 		dirname := "/tmp/case73783"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
