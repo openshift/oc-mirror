@@ -319,7 +319,6 @@ func HideFlags(cmd *cobra.Command) {
 
 func (o *ExecutorSchema) setupEnvironment() error {
 	o.Log.Info(emoji.WavingHandSign + " Hello, welcome to oc-mirror")
-	o.Log.Info(emoji.Gear + "  setting up the environment for you...")
 
 	// OCPBUGS-55374 (check current umask)
 	currentUmask := syscall.Umask(0)
