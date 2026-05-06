@@ -4,7 +4,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-This is the `oc-mirror` repository - an OpenShift client tool for mirroring container registry content for disconnected cluster installs.
+This is the `oc-mirror` repository — an OpenShift client tool for mirroring container registry content for disconnected cluster installs.
 oc-mirror reads an `ImageSetConfiguration` YAML file and mirrors container images from source registries to:
 - a target mirror registry (direct mirroring)
 - a local cache on disk, then generates a tarball for later mirroring (air-gapped scenarios)
@@ -15,50 +15,133 @@ oc-mirror reads an `ImageSetConfiguration` YAML file and mirrors container image
 1. **diskToMirror (d2m)** : copy images from tarball to target registry
 
 ### Version structure
-- **v2** (Current) : code lives in the root directory - **THIS IS WHAT YOU SHOULD WORK ON**
-- **v1** (Deprecated) : code lives under the v1/ folder - **DO NOT MODIFY v1 CODE**
+- **v2** (Current) : code lives in the root directory — **THIS IS WHAT YOU SHOULD WORK ON**
+- **v1** (Deprecated) : code lives under the `v1/` folder — **DO NOT MODIFY v1 CODE**
 
-## Key Architecture components
+## Project structure
 
-The `oc-mirror` project relies heavily on the [container-libs](https://github.com/containers/container-libs) library for low-level container image operations.
+```
+oc-mirror/
+├── cmd/oc-mirror/          # CLI entrypoint and embedded data
+├── pkg/
+│   ├── cli/mirror/         # top-level mirror orchestration (m2m, m2d, d2m)
+│   └── metadata/storage/   # metadata/history persistence
+├── internal/
+│   ├── pkg/
+│   │   ├── api/v2alpha1/   # ImageSetConfiguration types and schemas
+│   │   ├── release/        # OpenShift release payload collector
+│   │   ├── operator/       # Operator catalog collector (+ filtering)
+│   │   ├── helm/           # Helm chart collector
+│   │   ├── additional/     # Generic additional image collector
+│   │   ├── batch/          # Concurrent image copy worker
+│   │   ├── archive/        # Tarball creation/extraction
+│   │   ├── mirror/         # Low-level copy interfaces
+│   │   ├── image/          # Image reference parsing
+│   │   ├── clusterresources/ # IDMS/ITMS/CatalogSource generation
+│   │   ├── cincinnati/     # Cincinnati/update graph client
+│   │   ├── signature/      # Image signature handling
+│   │   ├── delete/         # Image deletion logic
+│   │   ├── history/        # Mirror run history tracking
+│   │   ├── cli/            # Internal CLI executor
+│   │   ├── config/         # Registry auth and config
+│   │   └── ...             # log, emoji, spinners, consts, etc.
+│   ├── e2e/                # E2E test infrastructure and templates
+│   └── testutils/          # Shared test helpers
+├── tests/                  # Test fixtures (OCI images, configs, caches)
+├── test/e2e/               # E2E test data
+├── docs/                   # Documentation (see below)
+├── hack/                   # Build and CI scripts
+├── images/cli/             # Container image build (Dockerfile support)
+└── v1/                     # Deprecated v1 code — DO NOT MODIFY
+```
 
-For each container image type, `oc-mirror` defines a `Collector` interface responsible for discovering all the related images:
+### Documentation tree
+
+```
+docs/
+├── dev-investigations/
+│   ├── OCPSTRAT-1515.md                              # strategy investigation
+│   ├── operator-filtering-investigation.md            # operator filtering design
+│   └── progress-bar-and-concurrencty-investigation.md # progress/concurrency design
+├── features/
+│   ├── delete-functionality.md       # image deletion feature spec
+│   ├── enclave_support.md            # enclave/air-gap support
+│   └── signature-verification.md     # signature verification design
+├── image-set-examples/
+│   └── image-set-config.yaml         # example ImageSetConfiguration
+└── okd-mirror.md                     # OKD-specific mirroring notes
+```
+
+## Key architecture components
+
+The project uses [go.podman.io/image/v5](https://github.com/containers/image) for low-level container image transport and copy operations.
+
+For each image type, `oc-mirror` defines a `CollectorInterface` responsible for discovering all related images to mirror:
 
 | Collector | Location | Purpose |
 |-----------|----------|---------|
-| Release | `internal/pkg/release` | Openshift release payloads |
-| Operator | `internal/pkg/operator`| RedHat operator catalogs |
+| Release | `internal/pkg/release` | OpenShift release payloads |
+| Operator | `internal/pkg/operator`| Red Hat operator catalogs |
 | Helm | `internal/pkg/helm`| Helm charts |
-| Additional | `internal/pkg/additional` | generic container images |
+| Additional | `internal/pkg/additional` | Generic container images |
 
-The image copying itself happens concurrently in batches via `internal/pkg/batch` for optimal performance.
+Each collector returns `[]v2alpha1.CopyImageSchema` — a list of source/destination image pairs. The image copying itself happens concurrently in batches via `internal/pkg/batch`.
 
-The `ImageSetConfiguration` is defined in `internal/pkg/api/v2alpha1/`. See `docs/image-set-examples/imaget-set-config.yaml` for examples.
+The `ImageSetConfiguration` types are defined in `internal/pkg/api/v2alpha1/`. See `docs/image-set-examples/image-set-config.yaml` for an example.
 
 ## Common development commands
 
 ### Building
 
 ```bash
-make clean # clean up build artifacts
-make build # compiles the oc-mirror binary
+make build       # build v1 + v2 binary into ./bin/
+make clean       # remove build artifacts
+make cross-build # cross-compile for amd64, arm64, ppc64le, s390x
 ```
 
-**Important**: always use `make build`, not `go build` directly - the Makefile sets required build tags.
+**Important**: always use `make build`, not `go build` directly — the Makefile sets required build tags (`json1`, btrfs/libdm exclusions, etc.) and embeds the v1 binary.
+
+Individual cross-build targets are also available: `cross-build-linux-amd64`, `cross-build-linux-arm64`, `cross-build-linux-ppc64le`, `cross-build-linux-s390x`.
 
 ### Testing
 
 ```bash
-make test-unit        # run unit tests
-make test-integration # run integration tests
+make test-unit        # unit tests (./internal/pkg/... -short)
+make test-integration # integration tests (runs specific Integration* test funcs)
+make cover            # generate HTML coverage report from unit test results
 ```
 
-### Validation and Verification
+Unit tests write coverage to `tests/results/cover.out`. Integration tests write to `tests/results-integration/`.
+
+To run a single test or package directly, you **must** pass the build tags:
 
 ```bash
-make verify # run golangci-lint
-make sanity # runs: tidy, format, and vet checks
+go test -tags "json1 exclude_graphdriver_devicemapper exclude_graphdriver_btrfs containers_image_openpgp" \
+  -short -race -count=1 ./internal/pkg/image/...
+
+go test -tags "json1 exclude_graphdriver_devicemapper exclude_graphdriver_btrfs containers_image_openpgp" \
+  -short -race -count=1 -run TestSpecificName ./internal/pkg/release/...
 ```
+
+### Validation and verification
+
+```bash
+make verify  # run golangci-lint
+make vet     # run go vet
+make format  # check gofmt compliance
+make tidy    # run go mod tidy
+make sanity  # runs tidy + format + vet, then fails if working tree is dirty
+make all     # clean + tidy + build + test (full pipeline)
+```
+
+Run `make sanity` before committing — it will fail if there are uncommitted formatting or module changes.
+
+## Testing patterns
+
+- **Unit vs integration**: `make test-unit` runs with `-short`. Integration tests check `testing.Short()` and skip themselves, so they only run via `make test-integration`.
+- **Mocking**: tests use `github.com/stretchr/testify/mock`. Mock structs are defined alongside the tests that use them (see `internal/pkg/cli/executor_test.go` for examples).
+- **Test fixtures**: stored in `tests/` and referenced via the constant `consts.TestFolder` (`"../../../tests/"`). Fixtures include fake OCI images, caches, configs, and archive data.
+- **Assertions**: the project uses `github.com/stretchr/testify/assert` and `require`.
 
 ## Contributing
 
