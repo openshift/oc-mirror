@@ -58,6 +58,9 @@ test-integration:
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-additional.out -race -count=1 ./internal/pkg/... -run TestIntegrationAdditionalM2M
 	$(GO) test $(GO_MOD_FLAGS) $(GO_BUILD_FLAGS) -coverprofile=tests/results-integration/cover-release.out -race -count=1 ./internal/pkg/... -run TestIntegrationReleaseM2M
 
+test-integration-cli: build
+	cd tests/integration && $(GO) test -v -count=1 -timeout 30m ./...
+
 tidy:
 	$(GO) mod tidy
 

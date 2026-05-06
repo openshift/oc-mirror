@@ -1,0 +1,31 @@
+{
+    "version": 1,
+    "nodes":[
+        {
+            "version":"4.20.0",
+            "payload":"quay.io/oc-mirror/release@sha256:foobar",
+            "metadata": {
+                "io.openshift.upgrades.graph.release.channels":"stable-4.20,eus-4.20"
+            }
+        },
+        {
+            "version":"4.20.1",
+            "payload":"quay.io/oc-mirror/release@sha256:foobaz",
+            "metadata": {
+                "io.openshift.upgrades.graph.release.channels":"stable-4.20"
+            }
+        },
+        {
+            "version":"4.20.2",
+            "payload":"quay.io/oc-mirror/release@sha256:foobez",
+            "metadata": {
+                "io.openshift.upgrades.graph.release.channels":"candidate-4.20,fast-4.20"
+            }
+        }
+    ],
+    "edges":[
+        [0, 1],
+        [1, 2]
+    ],
+    "conditionalEdges":[]
+}
