@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"os"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -19,6 +20,7 @@ var _ = Describe("Clear error message from invalid --from", func() {
 
 	AfterEach(func() {
 		cleanupWorkDir(workDir)
+		os.RemoveAll("invalid-dir")
 	})
 
 	iscHappyPath := filepath.Join("happy_path", "isc-happy-path.yaml")
