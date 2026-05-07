@@ -1,23 +1,22 @@
-FROM quay.io/oc-mirror/integration-tests-artifacts:v0.0.2 AS embed
-
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
-# Statically link the binary so we can run it in any container base image
 RUN CGO_ENABLED=0 make build
+RUN cd tests/integration && CGO_ENABLED=0 go test -mod=mod -c -o /tmp/integration.test .
 
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 WORKDIR /artifacts
-RUN mkdir -p /artifacts/{scripts,isc,workingdir} && chmod -R 777 /artifacts
+RUN mkdir -p /artifacts && chmod -R 777 /artifacts
 RUN mkdir -p /root/{.docker,.cache} /root/.oc-mirror/.cache && chmod -R 777 /root
-COPY --from=embed artifacts/ /artifacts
-COPY --from=embed /usr/bin/registry /usr/bin/registry
-COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /bin/oc-mirror
+COPY --from=builder /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror
+COPY --from=builder /tmp/integration.test /artifacts/integration.test
+COPY --from=builder /go/src/github.com/openshift/oc-mirror/tests/integration/testdata/ /artifacts/
+COPY tests/integration/uid_entrypoint.sh /artifacts/uid_entrypoint.sh
 
 LABEL io.k8s.display-name="oc-mirror-integration-tests" \
     io.k8s.description="Integration tests for oc-mirror plugin." \
     io.openshift.tags="cli,mirror"
-ENV HOME /root
-ENV ARTIFACTS_DIR /artifacts
-ENV OC_MIRROR_BINARY /bin/oc-mirror
+ENV HOME=/root
+ENV ARTIFACTS_DIR=/artifacts
+ENV OC_MIRROR_BINARY=/usr/bin/oc-mirror
 ENTRYPOINT ["./uid_entrypoint.sh"]

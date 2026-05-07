@@ -1,0 +1,7 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  helm:
+    local:
+      - name: nonexistent-chart
+        path: /nonexistent/path/to/chart

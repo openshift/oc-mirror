@@ -17,4 +17,4 @@ digest:
 	podman inspect quay.io/oc-mirror/release/test-image:v0.0.1 | jq '.[].Digest'
 
 push:
-	podman push quay.io/oc-mirror/release/test-image:v0.0.1 --authfile=/home/lzuccarelli/.docker/lmz-quay.json 
+	podman push quay.io/oc-mirror/release/test-image:v0.0.1 --authfile=$(AUTHFILE)

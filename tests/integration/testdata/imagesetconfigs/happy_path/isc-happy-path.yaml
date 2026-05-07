@@ -1,0 +1,23 @@
+# ImageSetConfig to test basic functionality of oc-mirror
+# It uses a dummy release and operator catalog, and a light helm chart and additional image
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    graph: false 
+    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+  helm:
+    repositories:
+    - name: podinfo
+      url: https://stefanprodan.github.io/podinfo
+      charts:
+      - name: podinfo
+        version: 5.0.0
+  additionalImages:
+  - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    packages:
+    - name: foo
+    - name: bar
+    - name: baz

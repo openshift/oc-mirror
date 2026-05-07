@@ -1,0 +1,12 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+storageConfig:
+  local:
+    path: /tmp/oc-mirror-all-fail
+mirror:
+  platform:
+    channels:
+      - name: stable-4.20
+        minVersion: 4.20.0
+        maxVersion: 4.20.0
+        type: ocp

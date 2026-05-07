@@ -1,0 +1,13 @@
+# ImageSetConfig to test mirroring an operator with a version range (minVersion != maxVersion)
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+      packages:
+      - name: foo
+        defaultChannel: beta
+        channels:
+        - name: beta
+          minVersion: '0.2.0'
+          maxVersion: '0.3.1'
