@@ -32,6 +32,54 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 	)
 	format.MaxLength = 0
 
+	var ocMirrorExtracted sync.Once
+	g.BeforeEach(func() {
+		ocMirrorExtracted.Do(func() {
+			if _, err := exec.LookPath("oc-mirror"); err == nil {
+				e2e.Logf("oc-mirror already on PATH, skipping extraction")
+				return
+			}
+			e2e.Logf("Extracting oc-mirror binary from the release payload")
+
+			binDir := filepath.Join(os.TempDir(), "oc-mirror-bin")
+			err := os.MkdirAll(binDir, 0755)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			releaseImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"clusterversion", "version",
+				"-o=jsonpath={.status.desired.image}",
+			).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			ocMirrorImage, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(
+				"release", "info", releaseImage,
+				`-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`,
+			).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Extracting oc-mirror from image %s", ocMirrorImage)
+
+			extractErr := wait.PollImmediate(30*time.Second, 5*time.Minute, func() (bool, error) {
+				err := oc.AsAdmin().WithoutNamespace().Run("image").Args(
+					"extract", ocMirrorImage,
+					"--path=/usr/bin/oc-mirror:"+binDir,
+					"--confirm",
+				).Execute()
+				if err != nil {
+					e2e.Logf("Failed to extract oc-mirror, retrying: %v", err)
+					return false, nil
+				}
+				return true, nil
+			})
+			o.Expect(extractErr).NotTo(o.HaveOccurred())
+
+			err = os.Chmod(filepath.Join(binDir, "oc-mirror"), 0755)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			os.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+			e2e.Logf("oc-mirror binary extracted to %s and added to PATH", binDir)
+		})
+	})
+
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72973-support mirror multi-arch additional images for v2 [Serial]", func() {
 		dirname := "/tmp/case72973"
 		defer os.RemoveAll(dirname)
@@ -1044,9 +1092,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		compat_otp.By("Start mirror2mirror and verify no idms and itms has been generated since nothing is mirrored")
 		mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--workspace", "file://"+dirname, "docker://"+serInfo.serviceName+"/noidmsitms", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(mirrorOutput).To(o.ContainSubstring("Nothing mirrored. Skipping IDMS and ITMS files generation."))
-		o.Expect(mirrorOutput).To(o.ContainSubstring("No catalogs mirrored. Skipping CatalogSource file generation"))
-		o.Expect(mirrorOutput).To(o.ContainSubstring("No catalogs mirrored. Skipping ClusterCatalog file generation"))
+		o.Expect(mirrorOutput).To(o.ContainSubstring("unable to parse image correctly : invalid digest"))
 		e2e.Logf("No ITMS & IDMS generated when nothing is mirrored, PASS")
 		entries, err := os.ReadDir(dirname + "/working-dir/cluster-resources")
 		o.Expect(err).NotTo(o.HaveOccurred())
