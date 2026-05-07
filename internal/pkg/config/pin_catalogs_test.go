@@ -1,13 +1,18 @@
 package config
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
+	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/types"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -15,7 +20,50 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+// MockManifest provides a test double for ManifestInterface
+// Based on the pattern from filtered_collector_test.go
+type MockManifest struct {
+	digestMap map[string]string // maps image reference to digest
+}
+
+func (m *MockManifest) ImageDigest(ctx context.Context, srcCtx *types.SystemContext, ref string) (string, error) {
+	if m.digestMap != nil {
+		if digest, ok := m.digestMap[ref]; ok {
+			return digest, nil
+		}
+	}
+	// Return empty string if not in map (catalog won't be pinned)
+	return "", nil
+}
+
+// Stub implementations for unused ManifestInterface methods
+func (m *MockManifest) GetOCIImageIndex(file string) (*specv1.Index, error) {
+	return nil, nil
+}
+func (m *MockManifest) GetOCIImageManifest(file string) (*specv1.Manifest, error) {
+	return nil, nil
+}
+func (m *MockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
+	return nil, nil
+}
+func (m *MockManifest) ExtractOCILayers(img gcrv1.Image, toPath, label string) error {
+	return nil
+}
+func (m *MockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index) error {
+	return nil
+}
+func (m *MockManifest) GetReleaseSchema(filePath string) ([]v2alpha1.RelatedImage, error) {
+	return nil, nil
+}
+func (m *MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error) {
+	return nil, nil
+}
+func (m *MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemContext, ref string, instanceDigest *digest.Digest) ([]byte, string, error) {
+	return nil, "", nil
+}
 
 const (
 	// Valid SHA256 digests for testing (64 hex characters)
@@ -54,8 +102,30 @@ const (
 	nonexistentDirectory = "/nonexistent/directory/path"
 )
 
+// createM2DTestOpts creates a CopyOptions configured for MirrorToDisk mode
+// for testing catalog pinning (resolves digests via network calls via mock)
+func createM2DTestOpts(t *testing.T) *mirror.CopyOptions {
+	global := &mirror.GlobalOptions{
+		WorkingDir: t.TempDir(),
+	}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+
+	return &mirror.CopyOptions{
+		Mode:                mirror.MirrorToDisk,
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+	}
+}
+
 func TestPinCatalogDigests_CopyBehavior(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	cfg := v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
@@ -69,14 +139,13 @@ func TestPinCatalogDigests_CopyBehavior(t *testing.T) {
 		},
 	}
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker: testDigestShort1,
 		},
 	}
 
-	pinnedCfg, err := pinCatalogDigests(cfg, catalogMap, logger)
-	require.NoError(t, err)
+	pinnedCfg := PinCatalogDigests(ctx, cfg, manifest, opts, logger)
 	assert.Equal(t,
 		image.WithDigest(redhatIndexBase, testDigestShort1),
 		pinnedCfg.Mirror.Operators[0].Catalog,
@@ -91,6 +160,8 @@ func TestPinCatalogDigests_CopyBehavior(t *testing.T) {
 
 func TestPinCatalogDigests_NoOperators(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	cfg := v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
@@ -100,15 +171,16 @@ func TestPinCatalogDigests_NoOperators(t *testing.T) {
 		},
 	}
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{}
+	manifest := &MockManifest{}
 
-	pinnedCfg, err := pinCatalogDigests(cfg, catalogMap, logger)
-	require.NoError(t, err)
+	pinnedCfg := PinCatalogDigests(ctx, cfg, manifest, opts, logger)
 	assert.Empty(t, pinnedCfg.Mirror.Operators)
 }
 
 func TestPinCatalogDigests_MultipleOperators(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	cfg := v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
@@ -128,17 +200,14 @@ func TestPinCatalogDigests_MultipleOperators(t *testing.T) {
 		},
 	}
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort2,
-		},
-		certifiedIndexTagDocker: {
-			Digest: testDigestShort3,
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker:    testDigestShort2,
+			certifiedIndexTagDocker: testDigestShort3,
 		},
 	}
 
-	pinnedCfg, err := pinCatalogDigests(cfg, catalogMap, logger)
-	require.NoError(t, err)
+	pinnedCfg := PinCatalogDigests(ctx, cfg, manifest, opts, logger)
 
 	// First operator should be pinned
 	assert.Equal(t,
@@ -217,28 +286,23 @@ func TestWritePinnedISC_InvalidDirectory(t *testing.T) {
 }
 
 func TestPinAndWriteConfigs(t *testing.T) {
-	tmpDir := t.TempDir()
 	logger := clog.New("trace")
+	opts := createM2DTestOpts(t)
 
+	// Simulate already-pinned config (as it would be after pinOperatorCatalogs())
 	cfg := v2alpha1.ImageSetConfiguration{
 		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog: redhatIndexTag,
+						Catalog: image.WithDigest(redhatIndexBase, testDigestShort1),
 					},
 				},
 			},
 		},
 	}
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
-		},
-	}
-
-	iscPath, discPath, err := PinAndWriteISCAndDSC(cfg, catalogMap, tmpDir, logger)
+	iscPath, discPath, err := PinAndWriteISCAndDSC(cfg, opts, logger)
 	require.NoError(t, err)
 	assert.FileExists(t, iscPath)
 	assert.FileExists(t, discPath)
@@ -468,142 +532,197 @@ func TestCreateDISCFromISC_InvalidDirectory(t *testing.T) {
 
 func TestPinSingleCatalog_Success(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+	op := &v2alpha1.Operator{
+		Catalog: redhatIndexTag,
+	}
+
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker: testDigestShort1,
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef)
+	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), op.Catalog)
 }
 
 func TestPinSingleCatalog_AlreadyPinned(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	alreadyPinnedCatalog := image.WithDigest(redhatIndexBase, testDigest1)
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		consts.DockerProtocol + alreadyPinnedCatalog: {
-			Digest: "newdigest123",
+	op := &v2alpha1.Operator{
+		Catalog: alreadyPinnedCatalog,
+	}
+
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			consts.DockerProtocol + alreadyPinnedCatalog: "newdigest123",
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(alreadyPinnedCatalog, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Empty(t, pinnedRef, "Should return empty string for already pinned catalog")
+	assert.Equal(t, alreadyPinnedCatalog, op.Catalog, "Should not modify already pinned catalog")
 }
 
 func TestPinSingleCatalog_NotInMap(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
-	// Empty catalog map
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{}
+	op := &v2alpha1.Operator{
+		Catalog: redhatIndexTag,
+	}
 
-	pinnedRef, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	// Empty digest map - will use default digest
+	manifest := &MockManifest{
+		digestMap: map[string]string{},
+	}
+
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Empty(t, pinnedRef, "Should return empty string when catalog not found in map")
+	assert.Equal(t, redhatIndexTag, op.Catalog, "Should not modify catalog when not found in map")
 }
 
 func TestPinSingleCatalog_EmptyDigest(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: "", // Empty digest
+	op := &v2alpha1.Operator{
+		Catalog: redhatIndexTag,
+	}
+
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker: "", // Empty digest
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Empty(t, pinnedRef, "Should return empty string for empty digest")
+	assert.Equal(t, redhatIndexTag, op.Catalog, "Should not modify catalog for empty digest")
 }
 
 func TestPinSingleCatalog_InvalidCatalog(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{}
+	op := &v2alpha1.Operator{
+		Catalog: "", // Empty catalog reference should fail parsing
+	}
 
-	// Empty catalog reference should fail parsing
-	pinnedRef, err := pinSingleCatalogDigest("", catalogMap, logger)
+	manifest := &MockManifest{
+		digestMap: map[string]string{},
+	}
+
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errMsgParseCatalog)
-	assert.Empty(t, pinnedRef)
 }
 
 func TestPinSingleCatalog_OCITransport(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	ociCatalog := "oci:///path/to/catalog"
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		ociCatalog: {
-			Digest: "ocidigests123",
+	op := &v2alpha1.Operator{
+		Catalog: ociCatalog,
+	}
+
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			ociCatalog: "ocidigests123",
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(ociCatalog, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, consts.OciProtocol+image.WithDigest("/path/to/catalog", "ocidigests123"), pinnedRef,
-		"Should preserve OCI transport prefix")
+	assert.Equal(t, ociCatalog, op.Catalog, "Should skip OCI catalog (already local)")
 }
 
 func TestPinSingleCatalog_DockerTransport(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
 	dockerCatalog := consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.12"
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		dockerCatalog: {
-			Digest: testDigestShort1,
+	op := &v2alpha1.Operator{
+		Catalog: dockerCatalog,
+	}
+
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			dockerCatalog: testDigestShort1,
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(dockerCatalog, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef,
+	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), op.Catalog,
 		"Should omit docker:// transport prefix")
 }
 
 func TestPinSingleCatalog_NoTransport(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
+
+	op := &v2alpha1.Operator{
+		Catalog: redhatIndexTag,
+	}
 
 	// Catalog without explicit transport (docker:// is implied)
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker: testDigestShort1,
 		},
 	}
 
-	pinnedRef, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	err := pinSingleCatalogDigest(ctx, op, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef,
+	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), op.Catalog,
 		"Should not add transport prefix when none specified")
-	assert.NotContains(t, pinnedRef, consts.DockerProtocol,
+	assert.NotContains(t, op.Catalog, consts.DockerProtocol,
 		"Should not include docker:// prefix in pinned reference")
 }
 
 func TestPinSingleCatalog_MultipleCatalogs(t *testing.T) {
 	logger := clog.New("trace")
+	ctx := context.Background()
+	opts := createM2DTestOpts(t)
 
-	catalogMap := map[string]v2alpha1.CatalogFilterResult{
-		redhatIndexTagDocker: {
-			Digest: testDigestShort1,
-		},
-		certifiedIndexTagDocker: {
-			Digest: testDigestShort2,
+	manifest := &MockManifest{
+		digestMap: map[string]string{
+			redhatIndexTagDocker:    testDigestShort1,
+			certifiedIndexTagDocker: testDigestShort2,
 		},
 	}
 
 	// Pin first catalog
-	pinnedRef1, err := pinSingleCatalogDigest(redhatIndexTag, catalogMap, logger)
+	op1 := &v2alpha1.Operator{
+		Catalog: redhatIndexTag,
+	}
+	err := pinSingleCatalogDigest(ctx, op1, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), pinnedRef1)
+	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort1), op1.Catalog)
 
 	// Pin second catalog
-	pinnedRef2, err := pinSingleCatalogDigest(certifiedIndexTag, catalogMap, logger)
+	op2 := &v2alpha1.Operator{
+		Catalog: certifiedIndexTag,
+	}
+	err = pinSingleCatalogDigest(ctx, op2, manifest, opts, logger)
 	require.NoError(t, err)
-	assert.Equal(t, image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2), pinnedRef2)
+	assert.Equal(t, image.WithDigest("registry.redhat.io/redhat/certified-operator-index", testDigestShort2), op2.Catalog)
 }

@@ -77,6 +77,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			allErrs = append(allErrs, fmt.Errorf("collect catalog %q: %w", op.Catalog, err))
 			continue
 		}
+		// OCPBUGS-81712: In M2D/M2M modes, op.Catalog is already pinned to digest by executor.go
 		// CLID-513: For OCI paths with digest, use a consistent key format (without digest)
 		// This matches how catalogImage is constructed in collectOperator
 		mapKey := imgSpec.ReferenceWithTransport
@@ -277,6 +278,8 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		catalogName = path.Base(imgSpec.Name)
 	}
 
+	// OCPBUGS-81712: In M2D/M2M modes, op.Catalog is already pinned to digest by PinCatalogDigests()
+	// so catalogImage will use the digest-based reference directly
 	catalogImage := op.Catalog
 	if imgSpec.Transport == consts.OciProtocol {
 		// ensure correct oci format and directory lookup
@@ -371,7 +374,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: filterConfigDir,
 			ToRebuild:          false,
 			DeclConfig:         filteredDC,
-			Digest:             string(filteredImageDigest),
+			Digest:             catalogDigest,
 		}, nil
 	}
 	o.Log.Debug("Catalog has not been filtered previously")
