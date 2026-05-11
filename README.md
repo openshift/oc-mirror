@@ -239,7 +239,7 @@ The `delete` sub-command has its own set of flags:
 ```
 
 ### Other Features
-* [Enclave support](v2/docs/features/enclave_support.md)
+* [Enclave support](docs/features/enclave_support.md)
 
 #### Catalog Pinning
 
