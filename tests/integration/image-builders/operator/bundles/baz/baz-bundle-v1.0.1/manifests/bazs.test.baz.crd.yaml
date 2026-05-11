@@ -1,0 +1,19 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: bazs.test.baz
+spec:
+  group: test.baz
+  scope: Namespaced
+  names:
+    kind: Baz
+    plural: bazs
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true

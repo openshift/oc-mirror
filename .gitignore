@@ -29,6 +29,7 @@ tests/graph-staging/cincinnati-graph-data.tar
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 isc*.yaml
+!tests/integration/testdata/**/isc*.yaml
 
 # Logs.
 **/.oc-mirror.log

@@ -1,0 +1,13 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: registry.invalid.example.com/nonexistent/catalog:v4.20
+      packages:
+        - name: nonexistent-operator
+  additionalImages:
+    - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+  helm:
+    local:
+      - name: nonexistent-chart
+        path: /nonexistent/path/to/chart

@@ -1,0 +1,6 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: registry.invalid.example.com/nonexistent/image:latest
+    - name: quay.io/nonexistent-org/nonexistent-image:v1.0.0

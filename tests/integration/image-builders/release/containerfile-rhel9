@@ -1,0 +1,12 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.23-openshift-4.19 AS builder_rhel9
+WORKDIR cmd/ 
+COPY . .
+RUN make build
+
+FROM registry.access.redhat.com/ubi9-minimal:latest AS ubi
+LABEL maintainer="luzuccar@redhat.com"
+COPY --from=builder_rhel9 cmd/bin/simple-release /usr/local/bin
+
+USER 1000
+
+CMD ["simple-release"]
