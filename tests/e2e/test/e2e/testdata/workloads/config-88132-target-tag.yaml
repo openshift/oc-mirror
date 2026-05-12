@@ -1,0 +1,6 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: registry.redhat.io/ubi8/ubi:latest
+      targetTag: v8

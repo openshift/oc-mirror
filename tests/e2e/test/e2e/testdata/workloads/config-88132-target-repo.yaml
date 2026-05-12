@@ -1,0 +1,6 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: docker://registry.redhat.io/ubi8/ubi:latest
+      targetRepo: custom-ns/my-ubi8
