@@ -149,7 +149,7 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 
 	graphPrepDir := suite.tempFolder + "/release/m2d/working-dir/graph-preparation"
 
-	err = copy.Copy("../../../tests/graph-staging", graphPrepDir)
+	err = copy.Copy(filepath.Join(consts.TestFolder, "graph-staging"), graphPrepDir)
 	assert.NoError(t, err)
 
 	// create the image set config

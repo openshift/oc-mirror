@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -269,7 +270,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 				"catalog-on-disk2.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:          "coffee-shop-index",
-						Image:         consts.OciProtocol + "../../../tests/catalog-on-disk2",
+						Image:         consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 						Type:          v2alpha1.TypeOperatorCatalog,
 						TargetTag:     "v1.0",
 						TargetCatalog: "coffee-shop-index",
@@ -280,16 +281,16 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.OciProtocol + "../../../tests/catalog-on-disk2",
+					Source:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 					Destination: "docker://localhost:9999/coffee-shop-index:v1.0",
-					Origin:      consts.OciProtocol + "../../../tests/catalog-on-disk2",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "af7a9e933d930758fcf18e1c6e6deff3",
 				},
 				{
 					Source:      "docker://localhost:9999/coffee-shop-index:af7a9e933d930758fcf18e1c6e6deff3",
 					Destination: "docker://localhost:5000/test/coffee-shop-index:v1.0",
-					Origin:      consts.OciProtocol + "../../../tests/catalog-on-disk2",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "af7a9e933d930758fcf18e1c6e6deff3",
 				},
@@ -301,7 +302,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 				"catalog-on-disk3.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:          "tea-shop-index",
-						Image:         consts.OciProtocol + "../../../tests/catalog-on-disk3",
+						Image:         consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 						Type:          v2alpha1.TypeOperatorCatalog,
 						TargetCatalog: "tea-shop-index",
 						RebuiltTag:    "bf7a9e933d930758fcf18e1c6e6deff3",
@@ -311,16 +312,16 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk3",
+					Source:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 					Destination: "docker://localhost:9999/tea-shop-index:latest",
-					Origin:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk3",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "bf7a9e933d930758fcf18e1c6e6deff3",
 				},
 				{
 					Source:      "docker://localhost:9999/tea-shop-index:bf7a9e933d930758fcf18e1c6e6deff3",
 					Destination: "docker://localhost:5000/test/tea-shop-index:latest",
-					Origin:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk3",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "bf7a9e933d930758fcf18e1c6e6deff3",
 				},
@@ -332,7 +333,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 				"catalog-on-disk1.f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:       "catalog-on-disk1",
-						Image:      consts.OciProtocol + "../../../tests/catalog-on-disk1",
+						Image:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 						Type:       v2alpha1.TypeOperatorCatalog,
 						TargetTag:  "v1.1",
 						RebuiltTag: "cf7a9e933d930758fcf18e1c6e6deff3",
@@ -342,16 +343,16 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.OciProtocol + "../../../tests/catalog-on-disk1",
+					Source:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 					Destination: "docker://localhost:9999/catalog-on-disk1:v1.1",
-					Origin:      consts.OciProtocol + "../../../tests/catalog-on-disk1",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "cf7a9e933d930758fcf18e1c6e6deff3",
 				},
 				{
 					Source:      "docker://localhost:9999/catalog-on-disk1:cf7a9e933d930758fcf18e1c6e6deff3",
 					Destination: "docker://localhost:5000/test/catalog-on-disk1:v1.1",
-					Origin:      consts.OciProtocol + "../../../tests/catalog-on-disk1",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "cf7a9e933d930758fcf18e1c6e6deff3",
 				},
@@ -363,7 +364,7 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 				"catalog-on-disk1.0987660452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea": {
 					{
 						Name:       "catalog-on-disk4",
-						Image:      consts.OciProtocol + "../../../tests/catalog-on-disk4",
+						Image:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk4"),
 						Type:       v2alpha1.TypeOperatorCatalog,
 						RebuiltTag: "09876e933d930758fcf18e1c6e6deff3",
 					},
@@ -372,16 +373,16 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 			expectedError: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk4",
+					Source:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk4"),
 					Destination: "docker://localhost:9999/catalog-on-disk4:latest",
-					Origin:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk4",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk4"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "09876e933d930758fcf18e1c6e6deff3",
 				},
 				{
 					Source:      "docker://localhost:9999/catalog-on-disk4:09876e933d930758fcf18e1c6e6deff3",
 					Destination: "docker://localhost:5000/test/catalog-on-disk4:latest",
-					Origin:      consts.OciProtocol + consts.TestFolder + "catalog-on-disk4",
+					Origin:      consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk4"),
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "09876e933d930758fcf18e1c6e6deff3",
 				},

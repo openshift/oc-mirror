@@ -162,7 +162,7 @@ func TestFindImages(t *testing.T) {
 		},
 		{
 			name: "chart with aliased subchart",
-			path: "../../../../tests/helm-data/charts/my-chart-with-subchart-alias-0.1.0.tgz",
+			path: "../../../../tests/unit/testdata/helm-data/charts/my-chart-with-subchart-alias-0.1.0.tgz",
 			want: []v1alpha2.Image{
 				{Name: "quay.io/rhdh-community/rhdh:next"},
 				{Name: "nginx:1.16.0"},
