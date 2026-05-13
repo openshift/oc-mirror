@@ -8,5 +8,5 @@ const (
 	OciProtocol        string = "oci://"
 	OciProtocolTrimmed string = "oci:"
 
-	TestFolder string = "../../../tests/"
+	TestFolder string = "../../../tests/unit/testdata/"
 )

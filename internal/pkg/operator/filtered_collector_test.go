@@ -53,7 +53,7 @@ var (
 						Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
 					},
 					{
-						Catalog: consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog: consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 					},
 				},
 			},
@@ -64,7 +64,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 						TargetCatalog: "test-catalog:v4.14",
 					},
 				},
@@ -76,7 +76,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 						TargetTag:     "v4.14",
 						TargetCatalog: "test-catalog",
 					},
@@ -148,7 +148,7 @@ var (
 						Catalog: "community-operators:v4.7",
 					},
 					{
-						Catalog: consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog: consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 					},
 				},
 				AdditionalImages: []v2alpha1.AdditionalImage{
@@ -185,7 +185,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog:   consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog:   consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 						TargetTag: "v4.14",
 					},
 				},
@@ -198,7 +198,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 						TargetCatalog: "test-catalog:v4.14",
 					},
 				},
@@ -210,7 +210,7 @@ var (
 			Mirror: v2alpha1.Mirror{
 				Operators: []v2alpha1.Operator{
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "simple-test-bundle",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "simple-test-bundle"),
 						TargetCatalog: "test-catalog",
 						TargetTag:     "v4.14",
 					},
@@ -278,7 +278,7 @@ var (
 						},
 					},
 					{
-						Catalog: consts.OciProtocol + consts.TestFolder + "catalog-on-disk1",
+						Catalog: consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk1"),
 						IncludeConfig: v2alpha1.IncludeConfig{
 							Packages: []v2alpha1.IncludePackage{
 								{Name: "op1"},
@@ -286,7 +286,7 @@ var (
 						},
 					},
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "catalog-on-disk2",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk2"),
 						Full:          true,
 						TargetCatalog: "coffee-shop-index",
 						IncludeConfig: v2alpha1.IncludeConfig{
@@ -296,7 +296,7 @@ var (
 						},
 					},
 					{
-						Catalog:       consts.OciProtocol + consts.TestFolder + "catalog-on-disk3",
+						Catalog:       consts.OciProtocol + filepath.Join(consts.TestFolder, "catalog-on-disk3"),
 						TargetCatalog: "tea-shop-index",
 						TargetTag:     "v3.14",
 						IncludeConfig: v2alpha1.IncludeConfig{
@@ -378,7 +378,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: consts.DockerProtocol + "localhost:9999/simple-test-bundle:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
+					RebuiltTag:  "6f0b9a9e7b6f972ba55a7629da6fcf04",
 				},
 			},
 		},
@@ -410,7 +410,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: consts.DockerProtocol + "localhost:9999/simple-test-bundle:v4.14",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
+					RebuiltTag:  "6f0b9a9e7b6f972ba55a7629da6fcf04",
 				},
 			},
 		},
@@ -448,7 +448,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Destination: "docker://localhost:9999/test-catalog:v4.14",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
+					RebuiltTag:  "6f0b9a9e7b6f972ba55a7629da6fcf04",
 				},
 			},
 		},
@@ -562,11 +562,11 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/simple-test-bundle:eaf28fd0a9f205e44fb52a8b0bd8e678",
+					Source:      "docker://localhost:9999/simple-test-bundle:6f0b9a9e7b6f972ba55a7629da6fcf04",
 					Destination: "docker://localhost:5000/test/simple-test-bundle:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
+					RebuiltTag:  "6f0b9a9e7b6f972ba55a7629da6fcf04",
 				},
 				{
 					Source:      "docker://localhost:9999/redhat/redhat-operator-index:94563f14d54e0ea1d600fa8c002c204b",
@@ -606,11 +606,11 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/test-catalog:eaf28fd0a9f205e44fb52a8b0bd8e678",
+					Source:      "docker://localhost:9999/test-catalog:6f0b9a9e7b6f972ba55a7629da6fcf04",
 					Destination: "docker://localhost:5000/test/test-catalog:v4.14",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "simple-test-bundle"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "eaf28fd0a9f205e44fb52a8b0bd8e678",
+					RebuiltTag:  "6f0b9a9e7b6f972ba55a7629da6fcf04",
 				},
 			},
 		},
@@ -749,21 +749,21 @@ func TestFilterCollectorM2M(t *testing.T) {
 					Destination: "docker://localhost:9999/catalog-on-disk1:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "bff06b6d6cc99438ad7a080e38025b52",
+					RebuiltTag:  "84dda2b9eda9d2ef95e1d6bbb7b73f88",
 				},
 				{
 					Source:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk2"),
 					Destination: "docker://localhost:9999/coffee-shop-index:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "04a29cd46d562afadfa317467451756e",
+					RebuiltTag:  "b8450ea7460b26d662b016d9ccc8647c",
 				},
 				{
 					Source:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk3"),
 					Destination: "docker://localhost:9999/tea-shop-index:v3.14",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "4b3bae8f9360ced2d4a4473d5481cc9f",
+					RebuiltTag:  "f8a315cdd0f7bfc1ee7f05d8b59b51bf",
 				},
 
 				{
@@ -781,25 +781,25 @@ func TestFilterCollectorM2M(t *testing.T) {
 					RebuiltTag:  "37e8b17cf0089fb1de93893cfb41dbfb",
 				},
 				{
-					Source:      "docker://localhost:9999/catalog-on-disk1:bff06b6d6cc99438ad7a080e38025b52",
+					Source:      "docker://localhost:9999/catalog-on-disk1:84dda2b9eda9d2ef95e1d6bbb7b73f88",
 					Destination: "docker://localhost:5000/test/catalog-on-disk1:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk1"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "bff06b6d6cc99438ad7a080e38025b52",
+					RebuiltTag:  "84dda2b9eda9d2ef95e1d6bbb7b73f88",
 				},
 				{
-					Source:      "docker://localhost:9999/coffee-shop-index:04a29cd46d562afadfa317467451756e",
+					Source:      "docker://localhost:9999/coffee-shop-index:b8450ea7460b26d662b016d9ccc8647c",
 					Destination: "docker://localhost:5000/test/coffee-shop-index:latest",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk2"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "04a29cd46d562afadfa317467451756e",
+					RebuiltTag:  "b8450ea7460b26d662b016d9ccc8647c",
 				},
 				{
-					Source:      "docker://localhost:9999/tea-shop-index:4b3bae8f9360ced2d4a4473d5481cc9f",
+					Source:      "docker://localhost:9999/tea-shop-index:f8a315cdd0f7bfc1ee7f05d8b59b51bf",
 					Destination: "docker://localhost:5000/test/tea-shop-index:v3.14",
 					Origin:      consts.OciProtocol + filepath.Join(testDir, "catalog-on-disk3"),
 					Type:        v2alpha1.TypeOperatorCatalog,
-					RebuiltTag:  "4b3bae8f9360ced2d4a4473d5481cc9f",
+					RebuiltTag:  "f8a315cdd0f7bfc1ee7f05d8b59b51bf",
 				},
 			},
 		},

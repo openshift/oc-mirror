@@ -752,7 +752,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template.yaml",
+								TargetCatalogSourceTemplate: filepath.Join(consts.TestFolder, "catalog-source_template.yaml"),
 							},
 						},
 					},
@@ -830,7 +830,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template_KO.yaml",
+								TargetCatalogSourceTemplate: filepath.Join(consts.TestFolder, "catalog-source_template_KO.yaml"),
 							},
 						},
 					},
@@ -863,7 +863,7 @@ func TestCatalogSourceGenerator(t *testing.T) {
 						Operators: []v2alpha1.Operator{
 							{
 								Catalog:                     "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-								TargetCatalogSourceTemplate: consts.TestFolder + "catalog-source_template_KO2.yaml",
+								TargetCatalogSourceTemplate: filepath.Join(consts.TestFolder, "catalog-source_template_KO2.yaml"),
 							},
 						},
 					},
@@ -1432,7 +1432,7 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 
 		for _, file := range files {
-			err = copy.Copy("../../../tests/37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531",
+			err = copy.Copy(filepath.Join(consts.TestFolder, "37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531"),
 				workingDir+"/"+signatureDir+"/"+file)
 			if err != nil {
 				t.Fatal(err)

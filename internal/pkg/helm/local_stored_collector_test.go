@@ -22,9 +22,12 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
+var (
+	testChartsDataPath  = filepath.Join(consts.TestFolder, "helm-data", "charts")
+	testIndexesDataPath = filepath.Join(consts.TestFolder, "helm-data", "indexes")
+)
+
 const (
-	testChartsDataPath   = "../../../tests/helm-data/charts/"
-	testIndexesDataPath  = "../../../tests/helm-data/indexes/"
 	testLocalStorageFQDN = "localhost:8888"
 	testDest             = consts.DockerProtocol + "myreg:5000/test"
 )

@@ -27,7 +27,7 @@ pkg/release/release.log
 .scannerwork/
 imagebuilder/test/
 pkg/cli/registry.log
-tests/graph-staging/cincinnati-graph-data.tar
+tests/unit/testdata/graph-staging/cincinnati-graph-data.tar
 pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
 olm_artifacts/
 isc*.yaml
