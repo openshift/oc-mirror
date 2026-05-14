@@ -145,7 +145,7 @@ var _ = Describe("operators", func() {
 			By("verifying the generated ClusterCatalog matches the checked-in local ISC")
 			localISC := parseImageSetConfig(localISCPath)
 			Expect(localISC.Mirror.Operators).To(HaveLen(1))
-			Expect(expectSingleClusterCatalogSourceRef(workDir)).To(Equal(localISC.Mirror.Operators[0].Catalog))
+			expectClusterCatalogSource(workDir, localISC.Mirror.Operators[0].Catalog)
 
 			By("running mirrorToDisk from the local registry catalog")
 			result, err = runner.MirrorToDisk(ctx, localISCPath, archiveDir,
