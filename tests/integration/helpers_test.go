@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
+	olmv1 "github.com/operator-framework/operator-controller/api/v1"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"gopkg.in/yaml.v3"
 
@@ -706,6 +707,26 @@ func expectCorrectIDMS(workDir, iscPath string) {
 	}
 
 	expectIDMSContainsExpectedContent(iscPath, allSources)
+}
+
+// expectSingleClusterCatalogSourceRef verifies that exactly one ClusterCatalog file
+// was generated and returns spec.source.image.ref from that file.
+func expectSingleClusterCatalogSourceRef(workDir string) string {
+	matches, err := filepath.Glob(filepath.Join(workDir, dirWorkingDir, dirClusterResources, "cc-*.yaml"))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(matches).To(HaveLen(1), "expected exactly one ClusterCatalog file, found: %v", matches)
+
+	data, err := os.ReadFile(matches[0])
+	Expect(err).NotTo(HaveOccurred(), "failed to read ClusterCatalog file: %s", matches[0])
+
+	var cc olmv1.ClusterCatalog
+	err = yaml.Unmarshal(data, &cc)
+	Expect(err).NotTo(HaveOccurred(), "failed to parse ClusterCatalog file: %s", matches[0])
+	Expect(cc.Spec.Source.Type).To(Equal(olmv1.SourceTypeImage))
+	Expect(cc.Spec.Source.Image).NotTo(BeNil(), "ClusterCatalog source.image is nil in %s", matches[0])
+	Expect(cc.Spec.Source.Image.Ref).NotTo(BeEmpty(), "ClusterCatalog source.image.ref is empty in %s", matches[0])
+
+	return cc.Spec.Source.Image.Ref
 }
 
 // expectNoEmptyFields recursively walks a parsed YAML map and fails if any field

@@ -6,7 +6,8 @@ user-invocable: true
 
 # Automate Manual Test Case to Go
 
-Convert a manual test case description into a Ginkgo v2 integration test for the oc-mirror integration test suite.
+Convert a manual test case description into a Ginkgo v2 integration test for the oc-mirror integration test suite. 
+The integration tests are functional tests that use the `oc-mirror` CLI and local, in-process container registries.
 
 ## Test Images
 
@@ -18,13 +19,17 @@ These are minimal images we generated and host ourselves to keep tests fast and 
 
 ## Step-by-step process
 
-### 1. Read project conventions
+### 1. Read project documentation
 
-Read `AGENTS.md` at the project root for architecture, conventions, and pitfalls.
+Read `README.md`, `AGENTS.md`, and other documentation at the project root for architecture, conventions, and pitfalls.
+Run `oc-mirror --help --v2` if necessary to clarify `oc-mirror` usage.
 
-### 2. Clarify if needed
+### 2. Plan and clarify
 
-If the test case is ambiguous, ask before writing code:
+Once you have analyzed the scenario and the `oc-mirror` documentation, define a high-level, concise plan of the test steps.
+Ask the user to review this plan before starting the implementation.
+
+If the test case is ambiguous, ask the user:
 - Which mirror mode? (`mirrorToMirror`, `mirrorToDisk` + `diskToMirror`, or both)
 - Does it include a delete workflow (phase 1 + phase 2)?
 - Is a new ISC or DISC YAML needed, or does an existing one suffice?
@@ -47,16 +52,20 @@ Prefer existing helpers. If a new one is needed, follow the `expect*` naming pat
 ### 5. Analyze oc-mirror APIs if needed
 
 If technical details are unclear:
-- Check for a local copy at `./oc-mirror`
-- Otherwise ask the user for a path or permission to clone from `github.com:openshift/oc-mirror.git`
+- Check the `oc-mirror` code at `./internal`.
 
 ### 6. Write the test
 
 Follow the patterns from existing tests. Key rules:
-- Match the structure of existing tests in the target file - `Describe`, `BeforeEach`/`AfterEach`, `It`, `By` steps
-- Consider if the scenario covers all critical paths, and suggest new ones
-- Implement meaningful assertions - avoid surface-level or redundant checks
-- For error scenarios, assert on `result.ExitCode` and `result.Stderr` content
+- Match the structure of existing tests in the target file - `Describe`, `BeforeEach`/`AfterEach`, `It`, `By` steps.
+- Consider if the scenario covers all critical paths, and suggest new ones.
+- Implement meaningful, robutst assertions - avoid surface-level or redundant checks. Examples:
+  - Assert that the expected images have been mirrored or saved in an archive.
+  - Assert the local cache has been populated.
+  - Assert that the expected cluster resources have been created with the correct content.
+- Prefer using existing libraries over reinventing the wheel. Examples:
+  - Don't create structs to define cluster resources, find the right libraries and APIs instead.
+- For error scenarios, assert on `result.ExitCode` and `result.Stderr` content.
 
 ### 7. Choose or create ISC/DISC configs
 
@@ -71,11 +80,10 @@ Before running, review the generated code for:
 
 ### 9. Run the tests
 
-Ask permission, then run. The `registry` binary must be in PATH - ask the user for its location if unknown:
 ```bash
-PATH=$PATH:<path-to-registry-bin> go test -v ./tests/integration/ --ginkgo.focus "<test label>"
+go test -v ./tests/integration/ --ginkgo.focus "<test label>"
 ```
 
 ### 10. Output
 
-Provide the complete Go test code, any new YAML configs, and a one-line summary of where each file goes. Be concise - the user knows the project.
+Provide the complete Go test code, any new YAML configs, and a concise summary of where each file goes. Be concise - the user knows the project.

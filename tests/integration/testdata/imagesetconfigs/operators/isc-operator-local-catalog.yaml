@@ -1,0 +1,8 @@
+# ImageSetConfig to test mirroring from a mirrored local operator catalog
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: localhost:5000/oc-mirror/oc-mirror-dev:test-catalog-latest
+      packages:
+        - name: foo

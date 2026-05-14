@@ -1,0 +1,8 @@
+# ImageSetConfig to test mirroring an operator catalog from a remote registry first
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+      packages:
+        - name: foo

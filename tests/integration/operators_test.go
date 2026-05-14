@@ -1,9 +1,11 @@
 package integration_test
 
 import (
+	"os"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("operators", func() {
@@ -97,6 +99,64 @@ var _ = Describe("operators", func() {
 
 			By("verifying the rebuilt catalog tag matches the fetched manifest digest")
 			expectRebuiltTagMatchesDigest(ctx, *testRegistry, filepath.Join(iscDir, iscFile))
+		})
+	})
+
+	Describe("using a mirrored local catalog as source", func() {
+		remoteISCFile := filepath.Join("operators", "isc-operator-remote-catalog.yaml")
+		localISCFile := filepath.Join("operators", "isc-operator-local-catalog.yaml")
+
+		var archiveDir string
+		var mirrorToMirrorCacheDir string
+		var mirrorToDiskCacheDir string
+
+		BeforeEach(func() {
+			var err error
+			archiveDir = setupWorkDir()
+
+			mirrorToMirrorCacheDir, err = os.MkdirTemp("", "oc-mirror-m2m-cache-*")
+			Expect(err).NotTo(HaveOccurred())
+
+			mirrorToDiskCacheDir, err = os.MkdirTemp("", "oc-mirror-m2d-cache-*")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			cleanupWorkDir(archiveDir)
+			cleanupWorkDir(mirrorToMirrorCacheDir)
+			cleanupWorkDir(mirrorToDiskCacheDir)
+		})
+
+		It("should mirror from the generated local catalog reference to disk", func() {
+			remoteISCPath := filepath.Join(iscDir, remoteISCFile)
+			localISCPath := filepath.Join(iscDir, localISCFile)
+
+			By("running mirrorToMirror for the remote operator catalog")
+			result, err := runner.MirrorToMirror(ctx, remoteISCPath, workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false", "--cache-dir", mirrorToMirrorCacheDir)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the operator catalog is mirrored in the local registry")
+			expectSuccessfulMirrorInRegistry(remoteISCPath, *testRegistry)
+
+			By("verifying IDMS contains the mirrored operator content")
+			expectCorrectIDMS(workDir, remoteISCPath)
+
+			By("verifying the generated ClusterCatalog matches the checked-in local ISC")
+			localISC := parseImageSetConfig(localISCPath)
+			Expect(localISC.Mirror.Operators).To(HaveLen(1))
+			Expect(expectSingleClusterCatalogSourceRef(workDir)).To(Equal(localISC.Mirror.Operators[0].Catalog))
+
+			By("running mirrorToDisk from the local registry catalog")
+			result, err = runner.MirrorToDisk(ctx, localISCPath, archiveDir,
+				"--remove-signatures=true", "--src-tls-verify=false", "--cache-dir", mirrorToDiskCacheDir)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the operator catalog content was cached locally")
+			expectSuccessfulMirrorInLocalCache(localISCPath, filepath.Join(mirrorToDiskCacheDir, ".oc-mirror", ".cache"))
+
+			By("verifying a tar archive was created for the mirrored content")
+			expectCorrectTarArchiveContents(localISCPath, archiveDir)
 		})
 	})
 })
