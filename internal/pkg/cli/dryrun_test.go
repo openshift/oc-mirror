@@ -162,7 +162,7 @@ func runDryRunTestCase(t *testing.T, tt struct {
 	ex, testImages, err := setupDryRunTest(t, testFolder, tt, imgs, log)
 	assert.NoError(t, err)
 
-	err = ex.DryRun(context.TODO(), testImages)
+	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: testImages})
 	assert.NoError(t, err)
 
 	verifyDryRunResults(t, testFolder, tt, testImages)
@@ -771,7 +771,7 @@ func TestDryRunWithManifestList(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), imgs)
+		err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
@@ -860,7 +860,7 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 	}
 
 	// Should not fail even though manifest inspection will warn for unreachable images
-	err = ex.DryRun(context.TODO(), imgs)
+	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
 	if err != nil {
 		t.Fatalf("should not fail: %v", err)
 	}

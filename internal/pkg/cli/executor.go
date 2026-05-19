@@ -887,7 +887,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -947,7 +947,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -1005,7 +1005,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	// call the batch worker
