@@ -1,0 +1,7 @@
+# ImageSetConfig for --parallel-layers testing with a multi-layer additional image.
+# Image source: tests/integration/image-builders/additional_images/multilayers (see README there).
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirror:
+  additionalImages:
+    - name: quay.io/oc-mirror/oc-mirror-dev:multilayers-latest
