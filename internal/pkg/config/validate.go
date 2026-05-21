@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/Masterminds/semver/v3"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -16,7 +17,7 @@ type (
 )
 
 var (
-	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels}
+	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages}
 	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
 )
 
@@ -150,6 +151,21 @@ func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {
 			)}
 		}
 		channels.Insert(channel.Name)
+	}
+	return nil
+}
+
+func validateBlockedImages(cfg *v2alpha1.ImageSetConfiguration) []error {
+	var errs []error
+	for _, img := range cfg.Mirror.BlockedImages {
+		if _, err := regexp.Compile(img.Name); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"blocked image %q: invalid regular expression: %w", img.Name, err,
+			))
+		}
+	}
+	if len(errs) > 0 {
+		return errs
 	}
 	return nil
 }

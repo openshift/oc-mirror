@@ -305,6 +305,32 @@ func TestValidate(t *testing.T) {
 			expError: `invalid configuration: catalog "test-catalog1:latest": duplicate package entry "package1"`,
 		},
 		{
+			name: "Valid/BlockedImagesWithValidRegex",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						BlockedImages: []v2alpha1.BlockedImage{
+							{Name: "registry/namespace/image@sha256:.*"},
+							{Name: "registry\\.example\\.com/.*"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/BlockedImageWithMalformedRegex",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						BlockedImages: []v2alpha1.BlockedImage{
+							{Name: "[invalid"},
+						},
+					},
+				},
+			},
+			expError: `invalid configuration: blocked image "[invalid": invalid regular expression: error parsing regexp: missing closing ]: ` + "`[invalid`",
+		},
+		{
 			name: "Invalid/DuplicateOperatorPackageChannels",
 			config: &v2alpha1.ImageSetConfiguration{
 				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
