@@ -388,7 +388,12 @@ func (o FilterCollector) ensureCatalogInOCIFormat(ctx context.Context, imgSpec i
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
 
 	if imgSpec.Transport != ociProtocol {
+		var localGlobal mirror.GlobalOptions
+		if o.Opts.Global != nil {
+			localGlobal = *o.Opts.Global
+		}
 		opts := o.Opts
+		opts.Global = &localGlobal
 		opts.Stdout = io.Discard
 		opts.RemoveSignatures = true
 		opts.Global.SecurePolicy = false
