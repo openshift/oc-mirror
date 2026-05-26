@@ -1,0 +1,9 @@
+schema: olm.channel
+package: foo
+name: beta
+entries:
+  - name: foo.v0.2.0
+    skipRange: <0.2.0
+    skips:
+      - foo.v0.1.1
+      - foo.v0.1.2
