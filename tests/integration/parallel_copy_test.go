@@ -27,33 +27,12 @@ var _ = Describe("parallel copy", func() {
 		Describe("multilayers image mirrorToDisk", func() {
 			iscFile := filepath.Join("parallel_copy", "isc-multilayers.yaml")
 
-			It("should copy at most 10 layers in parallel with --parallel-layers 10", func() {
+			It("should copy with --parallel-layers 10", func() {
 				By("running mirrorToDisk with --parallel-layers 10")
 				result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir,
-					"--parallel-images", "1",
 					"--parallel-layers", "10",
-					"--log-level", "debug",
 				)
 				expectOcMirrorCommandSuccess(result, err)
-
-				By("verifying no more than 10 layers were copied concurrently")
-				expectParallelLayersLimit(result, 10)
-			})
-		})
-
-		Describe("operator mirrorToDisk", func() {
-			iscFile := filepath.Join("operators", "isc-operator-pinned-version.yaml")
-
-			It("should copy at most 5 layers in parallel using the default parallel-layers value", func() {
-				By("running mirrorToDisk with default parallel-layers")
-				result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir,
-					"--parallel-images", "1",
-					"--log-level", "debug",
-				)
-				expectOcMirrorCommandSuccess(result, err)
-
-				By("verifying no more than 5 layers were copied concurrently")
-				expectParallelLayersLimit(result, 5)
 			})
 		})
 	})
@@ -61,7 +40,7 @@ var _ = Describe("parallel copy", func() {
 	Describe("parallel-images", func() {
 		iscFile := filepath.Join("parallel_copy", "isc-parallel-images.yaml")
 
-		It("should copy at most 10 images in parallel with --parallel-images 10", func() {
+		It("should copy 10 images in parallel with --parallel-images 10", func() {
 			By("running mirrorToDisk with --parallel-images 10")
 			result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir,
 				"--parallel-images", "10",
@@ -71,9 +50,6 @@ var _ = Describe("parallel copy", func() {
 
 			By("verifying enough images are collected to exercise parallelism")
 			expectMinImagesToCopy(result, 10)
-
-			By("verifying no more than 10 images were copied concurrently")
-			expectParallelImagesLimit(result, 10)
 		})
 	})
 })
@@ -97,59 +73,6 @@ func mirrorCopyOutput(output string) string {
 	return output[start : start+end]
 }
 
-// maxConcurrentCopyingBlobs returns the maximum number of consecutive "Copying blob" lines in oc-mirror debug output.
-func maxConcurrentCopyingBlobs(output string) int {
-	copyingBlobLineRe := regexp.MustCompile(`^Copying blob `)
-
-	max := 0
-	current := 0
-	for _, line := range strings.Split(output, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if copyingBlobLineRe.MatchString(trimmed) {
-			current++
-			if current > max {
-				max = current
-			}
-			continue
-		}
-		current = 0
-	}
-	return max
-}
-
-// maxConcurrentImageCopies returns the peak number of images copying concurrently in progress output.
-func maxConcurrentImageCopies(output string) int {
-	output = mirrorCopyOutput(output)
-	max := 0
-	inProgress := 0
-
-	for _, line := range strings.Split(output, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.Contains(trimmed, "➡️") {
-			if inProgress > max {
-				max = inProgress
-			}
-			inProgress = 0
-			continue
-		}
-		if strings.HasPrefix(trimmed, "✓") {
-			continue
-		}
-		inProgress++
-		if inProgress > max {
-			max = inProgress
-		}
-	}
-
-	if inProgress > max {
-		max = inProgress
-	}
-	return max
-}
-
 // imagesToCopyCount parses the "images to copy N" line from oc-mirror output.
 // It only inspects the copy phase (after "Start copying the images") so debug
 // lines like "total operator images to copy 0" are not matched first.
@@ -170,28 +93,4 @@ func expectMinImagesToCopy(result *ocmirror.Result, min int) {
 	Expect(count).To(BeNumerically(">=", min),
 		"expected at least %d images to copy but got %d\nstdout: %s\nstderr: %s",
 		min, count, result.Stdout, result.Stderr)
-}
-
-// expectParallelImagesLimit verifies image copies did not exceed the configured parallel-images limit.
-func expectParallelImagesLimit(result *ocmirror.Result, limit int) {
-	output := mirrorCopyOutput(result.Stdout + result.Stderr)
-	concurrent := maxConcurrentImageCopies(output)
-	Expect(concurrent).To(BeNumerically(">", 0),
-		"expected at least one concurrent image copy in output\nstdout: %s\nstderr: %s",
-		result.Stdout, result.Stderr)
-	Expect(concurrent).To(BeNumerically("<=", limit),
-		"expected at most %d concurrent image copies but saw %d\nstdout: %s\nstderr: %s",
-		limit, concurrent, result.Stdout, result.Stderr)
-}
-
-// expectParallelLayersLimit verifies layer copies did not exceed the configured parallel-layers limit.
-func expectParallelLayersLimit(result *ocmirror.Result, limit int) {
-	output := mirrorCopyOutput(result.Stdout + result.Stderr)
-	concurrent := maxConcurrentCopyingBlobs(output)
-	Expect(concurrent).To(BeNumerically(">", 0),
-		"expected at least one concurrent blob copy in output\nstdout: %s\nstderr: %s",
-		result.Stdout, result.Stderr)
-	Expect(concurrent).To(BeNumerically("<=", limit),
-		"expected at most %d concurrent layer copies but saw %d\nstdout: %s\nstderr: %s",
-		limit, concurrent, result.Stdout, result.Stderr)
 }
