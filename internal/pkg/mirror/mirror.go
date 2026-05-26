@@ -237,9 +237,9 @@ func isErrorRetryable(err error) bool {
 	case errors.Is(err, context.Canceled):
 		return false
 	case errors.As(err, &httpError):
-		// Retry on 502, 503, and 504 server errors, they appear to be quite common in the field
+		// Retry on 500-504 server errors, they appear to be quite common in the field
 		// We duplicate this here because older versions of oc-mirror cannot bump containers/common given Golang version restrictions
-		if httpError.StatusCode >= http.StatusBadGateway && httpError.StatusCode <= http.StatusGatewayTimeout {
+		if httpError.StatusCode >= http.StatusInternalServerError && httpError.StatusCode <= http.StatusGatewayTimeout {
 			return true
 		}
 		return false
