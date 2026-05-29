@@ -33,7 +33,7 @@ If the test case is ambiguous, ask before writing code:
 ### 3. Check for duplicate or superfluous coverage
 
 Read existing test files to ensure the scenario isn't already covered. If it is, tell the user and suggest what would add value instead.
-Also consider if one of the existing tests could be extended to cover the scenario, without blurrying the testing boundaries.
+Also consider if one of the existing tests could be extended to cover the scenario, without blurring the testing boundaries.
 
 ### 4. Discover available APIs
 
@@ -71,9 +71,9 @@ Before running, review the generated code for:
 
 ### 9. Run the tests
 
-Ask permission, then run. The `registry` binary must be in PATH - ask the user for its location if unknown:
+Ask for permission, then run.
 ```bash
-PATH=$PATH:<path-to-registry-bin> go test -v ./tests/integration/ --ginkgo.focus "<test label>"
+go test -v ./tests/integration/ --ginkgo.focus "<test label>"
 ```
 
 ### 10. Output

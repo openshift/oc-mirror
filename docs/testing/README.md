@@ -34,7 +34,7 @@ All the images used in these tests are built by us, in order to control their co
 
 In these tests we assert the tangible outputs of `oc-mirror`: archive contents, mirrored images present on the target registry, etc.
 
-> **Example:** Execute the oc-mirror CLI command to successfully copy one image from a source registry to a local registry, and then verify the image exists in the local registry.
+> **Example:** Execute the oc-mirror CLI command to successfully copy one image from a source registry to a target registry, and then verify the image exists in the target registry.
 
 ### End-to-end Tests
 
@@ -67,7 +67,7 @@ Catch defects as early as possible in the development cycle. The earlier a bug i
 
 Follow the testing pyramid: many unit tests at the base, fewer integration tests in the middle, and the fewest E2E tests at the top. Each level should test what it is best suited for — don't push scenarios up the pyramid unnecessarily.
 
-```
+```text
                     /\
                    /  \
                   /    \

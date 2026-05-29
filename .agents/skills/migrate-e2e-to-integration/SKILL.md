@@ -18,7 +18,7 @@ The user provides one of:
 
 ### 1. Read project conventions
 
-Read `AGENTS.md` at the project root, and the the documents at `docs/testing` for architecture, conventions, and pitfalls.
+Read `AGENTS.md` at the project root, and the documents at `docs/testing` for architecture, conventions, and pitfalls.
 
 ### 2. Locate and analyze the e2e test case
 

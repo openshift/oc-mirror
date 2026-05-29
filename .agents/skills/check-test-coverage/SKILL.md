@@ -65,7 +65,7 @@ Present results in this format:
 
 #### Summary table
 
-```
+```text
 | Feature / Flag       | Integration | E2E  | Status           |
 |----------------------|-------------|------|------------------|
 | m2m workflow         | m2m_test.go | 73359| Covered          |
