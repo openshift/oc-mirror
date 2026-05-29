@@ -15,7 +15,9 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 func TestRelatedImagesFromCatalog(t *testing.T) {
@@ -589,4 +591,63 @@ func TestFilterCatalog(t *testing.T) {
 			}
 		})
 	}
+}
+
+type securePolicyRecordingMirror struct {
+	SecurePolicyAtRun bool
+	RunCalled         bool
+}
+
+func (m *securePolicyRecordingMirror) Run(ctx context.Context, src, dest string, mode mirror.Mode, opts *mirror.CopyOptions) error {
+	m.RunCalled = true
+	if opts.Global != nil {
+		m.SecurePolicyAtRun = opts.Global.SecurePolicy
+	}
+	return nil
+}
+
+func (m *securePolicyRecordingMirror) Check(ctx context.Context, imageName string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
+	return true, nil
+}
+
+func TestEnsureCatalogInOCIFormatDoesNotMutateSharedSecurePolicy(t *testing.T) {
+	log := clog.New("trace")
+	tempDir := t.TempDir()
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy: true,
+		WorkingDir:   filepath.Join(tempDir, "working-dir"),
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, retryOpts := mirror.RetryFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+
+	recordingMirror := &securePolicyRecordingMirror{}
+	handler := CatalogHandler{
+		Log:    log,
+		Mirror: recordingMirror,
+	}
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:9999",
+	}
+
+	imgSpec, err := image.ParseRef("docker://registry.example.com/catalog:v1.0")
+	assert.NoError(t, err)
+
+	imageIndexDir := filepath.Join(tempDir, "working-dir", operatorCatalogsDir, "catalog", "abc123")
+	err = handler.EnsureCatalogInOCIFormat(context.Background(), imgSpec, "registry.example.com/catalog:v1.0", imageIndexDir, opts)
+	assert.NoError(t, err)
+	assert.True(t, recordingMirror.RunCalled, "Mirror.Run should be called for docker:// catalog")
+	assert.False(t, recordingMirror.SecurePolicyAtRun, "local copy passed to Mirror.Run should have SecurePolicy=false")
+	assert.True(t, global.SecurePolicy, "shared GlobalOptions.SecurePolicy must remain true after EnsureCatalogInOCIFormat")
 }
