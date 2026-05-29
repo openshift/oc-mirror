@@ -1,0 +1,6 @@
+schema: olm.channel
+package: bar
+name: alpha
+entries:
+  - name: bar.v0.1.0
+    skipRange: <0.1.0

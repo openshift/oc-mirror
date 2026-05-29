@@ -2,11 +2,18 @@ REGISTRY ?= quay.io/oc-mirror/oc-mirror-dev
 RUNTIME ?= podman
 OUTPUT = _output
 
+CATALOGDIRS := $(foreach DIR,$(shell find catalogs -maxdepth 1 -mindepth 1 -type d),$(subst catalogs/,,$(DIR)))
+CATALOG_TARGETS := $(addprefix build-catalog.,$(CATALOGDIRS))
+CATALOG_PUSH_TARGETS := $(addprefix push-catalog.,$(CATALOGDIRS))
+
 all: build
 .PHONY: all
 
-build:
-	go run ./cmd/build-catalogs
+build: $(CATALOG_TARGETS)
+$(CATALOG_TARGETS): build-catalog.%:
+	@echo "Building catalog $*"
+	cd "catalogs" && $(RUNTIME) build --format=docker -f "./catalog.Dockerfile" --build-arg "CATALOG=$*" -t "$(REGISTRY):$*" .
+
 .PHONY: build
 
 push: push-bundles push-related push-catalogs
@@ -33,14 +40,10 @@ push-related: push-bundles
 	done
 .PHONY: push-related
 
-push-catalogs: build
-	@for dir in $(OUTPUT)/test-catalog-*/; do \
-		name=$$(basename "$$dir"); \
-		echo "Pushing catalog $$name"; \
-		$(RUNTIME) build --format=docker -t "$(REGISTRY):$$name" \
-			-f "$(OUTPUT)/$$name.Dockerfile" $(OUTPUT); \
-		$(RUNTIME) push --format=docker "$(REGISTRY):$$name"; \
-	done
+push-catalogs: $(CATALOG_PUSH_TARGETS)
+$(CATALOG_PUSH_TARGETS): push-catalog.%:
+	@echo "Pushing catalog $*"
+	$(RUNTIME) push --format=docker "$(REGISTRY):$*"
 .PHONY: push-catalogs
 
 clean:
