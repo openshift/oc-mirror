@@ -1,0 +1,17 @@
+# ImageSetConfig for parallel-images testing.
+# Operator mirrorToDisk copies only catalog images (source + rebuilt), not bundle
+# related images. Use additionalImages to mirror 10+ distinct images.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.1.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.2.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.3.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.3.1
+    - name: quay.io/oc-mirror/oc-mirror-dev:bar-v0.1.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:bar-v0.2.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:bar-v1.0.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:baz-v1.0.0
+    - name: quay.io/oc-mirror/oc-mirror-dev:baz-v1.0.1
+    - name: quay.io/oc-mirror/oc-mirror-dev:baz-v1.1.0
