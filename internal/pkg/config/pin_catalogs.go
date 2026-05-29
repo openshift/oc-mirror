@@ -19,10 +19,10 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-// PinAndWriteISCAndDSC writes both ISC and DISC files from an already-pinned configuration.
+// WriteISCAndDSC writes both ISC and DISC files from an already-pinned configuration.
 // For M2D/M2M modes, catalogs are already pinned during Complete() before collection starts.
 // Returns paths to both written files (ISC path, DISC path).
-func PinAndWriteISCAndDSC(
+func WriteISCAndDSC(
 	cfg v2alpha1.ImageSetConfiguration,
 	opts *mirror.CopyOptions,
 	log clog.PluggableLoggerInterface,

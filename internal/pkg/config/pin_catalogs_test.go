@@ -302,7 +302,7 @@ func TestPinAndWriteConfigs(t *testing.T) {
 		},
 	}
 
-	iscPath, discPath, err := PinAndWriteISCAndDSC(cfg, opts, logger)
+	iscPath, discPath, err := WriteISCAndDSC(cfg, opts, logger)
 	require.NoError(t, err)
 	assert.FileExists(t, iscPath)
 	assert.FileExists(t, discPath)

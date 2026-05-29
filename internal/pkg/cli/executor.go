@@ -1358,7 +1358,7 @@ func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode st
 // Catalogs are already pinned by pinOperatorCatalogs() at workflow start for M2D/M2M modes.
 func (o *ExecutorSchema) createConfigsWithPinnedCatalogs() {
 	o.Log.Info("Generating pinned configurations...")
-	iscPath, discPath, err := config.PinAndWriteISCAndDSC(
+	iscPath, discPath, err := config.WriteISCAndDSC(
 		o.Config,
 		o.Opts,
 		o.Log,
