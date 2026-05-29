@@ -1,6 +1,6 @@
-# Claude Commands for oc-mirror
+# Agent Commands for oc-mirror
 
-This directory contains custom Claude slash commands to help with oc-mirror development and configuration.
+This directory contains custom agent commands to help with oc-mirror development and configuration.
 
 ## Available Commands
 
@@ -14,9 +14,9 @@ This command provides an interactive workflow to create properly formatted confi
 
 #### Usage
 
-Simply type `/generate-imageset` in your conversation with Claude Code and follow the prompts.
+Invoke `/generate-imageset` and follow the prompts.
 
-Claude will ask you questions about:
+The agent will ask you questions about:
 
 1. **Configuration type** - Choose between:
    - `ImageSetConfiguration` - for mirroring container images
@@ -40,15 +40,15 @@ Claude will ask you questions about:
 
 ```
 User: /generate-imageset
-Claude: Which type of configuration do you want to generate?
+Agent: Which type of configuration do you want to generate?
 User: ImageSetConfiguration
-Claude: Which components do you want to configure?
+Agent: Which components do you want to configure?
 User: Just platform
-Claude: What channel name? (e.g., stable-4.18)
+Agent: What channel name? (e.g., stable-4.18)
 User: stable-4.18
-Claude: Min version?
+Agent: Min version?
 User: 4.18.0
-Claude: Max version?
+Agent: Max version?
 User: 4.18.5
 ...
 ```
@@ -81,7 +81,7 @@ This generates a complete configuration with multiple sections.
 
 ```
 User: /generate-imageset
-Claude: Which type of configuration do you want to generate?
+Agent: Which type of configuration do you want to generate?
 User: DeleteImageSetConfiguration
 ...
 ```
