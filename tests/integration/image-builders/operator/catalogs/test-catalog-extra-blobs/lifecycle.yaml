@@ -1,0 +1,35 @@
+schema: io.openshift.operators.lifecycles.v1alpha1
+versions:
+  - name: "4.12"
+    phases:
+      - name: Full support
+        startDate: "2023-01-17"
+        endDate: "2023-08-17"
+      - name: Maintenance support
+        startDate: "2023-08-18"
+        endDate: "2024-07-17"
+      - name: Extended update support
+        startDate: "2024-07-18"
+        endDate: "2025-01-17"
+      - name: Extended support Term 2
+        startDate: "2025-01-18"
+        endDate: "2026-01-17"
+      - name: Extended support Term 3
+        startDate: "2026-01-18"
+        endDate: "2027-01-17"
+    platformCompatibility:
+      - name: openshift
+        versions:
+          - "4.12"
+  - name: "4.17"
+    phases:
+      - name: Full support
+        startDate: "2024-10-01"
+        endDate: "2025-05-25"
+      - name: Maintenance support
+        startDate: "2025-05-26"
+        endDate: "2026-04-01"
+    platformCompatibility:
+      - name: openshift
+        versions:
+          - "4.17"

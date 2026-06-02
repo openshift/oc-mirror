@@ -110,6 +110,40 @@ opm render ${REPO}:bar-bundle-v0.1.0 --output=yaml > ${CATALOG}/bar/bundles.yaml
 ```
 
 
+## test-catalog-extra-blobs
+
+This catalog contains blobs of types other than `Package`, `Channel`, and,
+`Bundle`. These extra blobs were manually created. Even though some of them
+might resemble existing blob types, their content is arbitrary and should not
+be relied on.
+
+### Contents
+ * Packages: foo, bar, baz
+ * Channels:
+    - foo: beta
+    - bar: alpha, stable
+    - baz: stable
+ * Bundles:
+    - foo: v0.1.0, v0.2.0, v0.3.0, v0.3.1
+    - bar: v0.1.0, v0.2.0, v1.0.0
+    - baz: v1.0.0, v1.0.1, v1.1.0
+
+### Creating
+```bash
+CATALOG=test-catalog-extra-blobs
+mkdir -p ${CATALOG}/{foo,bar,baz}
+
+opm init foo -c beta -o yaml > ${CATALOG}/foo/operator.yaml
+opm init bar -c stable -o yaml > ${CATALOG}/bar/operator.yaml
+opm init baz -c stable -o yaml > ${CATALOG}/baz/operator.yaml
+
+REPO="quay.io/oc-mirror/oc-mirror-dev"
+opm render ${REPO}:foo-bundle-v0.1.0 ${REPO}:foo-bundle-v0.2.0 ${REPO}:foo-bundle-v0.3.0 ${REPO}:foo-bundle-v0.3.1 --output=yaml > ${CATALOG}/foo/bundles.yaml
+opm render ${REPO}:bar-bundle-v0.1.0 ${REPO}:bar-bundle-v0.2.0 ${REPO}:bar-bundle-v1.0.0 --output=yaml > ${CATALOG}/bar/bundles.yaml
+opm render ${REPO}:baz-bundle-v1.0.0 ${REPO}:baz-bundle-v1.0.1 ${REPO}:baz-bundle-v1.1.0 --output=yaml > ${CATALOG}/baz/bundles.yaml
+```
+
+
 ## Catalog building
 ```bash
 make build # for all catalogs
