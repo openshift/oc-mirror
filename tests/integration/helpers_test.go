@@ -653,6 +653,20 @@ func loadCatalogBundles(ctx context.Context, configsDir, packageName string) []d
 	return bundles
 }
 
+func loadOtherBlobs(ctx context.Context, configsDir, packageName string) []declcfg.Meta {
+	pkgDir := filepath.Join(configsDir, packageName)
+	cfg, err := declcfg.LoadFS(ctx, os.DirFS(pkgDir))
+	Expect(err).NotTo(HaveOccurred(), "failed to load FBC from %s", pkgDir)
+	var others []declcfg.Meta
+	for _, other := range cfg.Others {
+		if other.Package == packageName {
+			others = append(others, other)
+		}
+	}
+
+	return others
+}
+
 // extractTag extracts the tag from an image reference (e.g., "quay.io/foo/bar:v4.19" -> "v4.19").
 func extractTag(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)
