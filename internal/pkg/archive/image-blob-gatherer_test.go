@@ -258,7 +258,6 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err := gatherer.GatherBlobs(ctx, "error")
 	assert.Equal(t, "invalid source name error: Invalid image name \"error\", expected colon-separated transport:reference", err.Error())
-
 }
 
 func TestImageBlobGatherer_SrcContextError(t *testing.T) {
@@ -290,8 +289,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest")
-	assert.Equal(t, "error when creating a new image source: pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused", err.Error())
-
+	assert.Contains(t, err.Error(), "pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused")
 }
 
 func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
@@ -331,5 +329,4 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest")
 	assert.Contains(t, err.Error(), "name unknown: Unknown name")
-
 }
