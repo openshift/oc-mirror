@@ -264,6 +264,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	// copy-only options
 	cmd.Flags().StringVar(&opts.Global.From, "from", "", "Local storage directory for disk to mirror workflow")
 	cmd.Flags().BoolVarP(&opts.IsDryRun, "dry-run", "", false, "Print actions without mirroring images")
+	cmd.Flags().BoolVar(&opts.IsDryRunManifestLists, "dry-run-manifest-lists", false, "Like --dry-run, but also includes manifest list sub-digests in mapping.txt (implies --dry-run)")
 	cmd.Flags().BoolVarP(&opts.Global.Quiet, "quiet", "q", false, "Enable detailed logging when copying images")
 	cmd.Flags().BoolVarP(&opts.Global.Force, "force", "f", false, "Force the copy and mirror functionality")
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
@@ -404,6 +405,12 @@ func (o ExecutorSchema) Validate(dest []string) error {
 		if _, err := time.Parse(time.DateOnly, o.Opts.Global.SinceString); err != nil {
 			return fmt.Errorf("--since flag needs to be in format yyyy-MM-dd")
 		}
+	}
+	if o.Opts.IsDryRunManifestLists {
+		if o.Opts.IsDryRun {
+			o.Log.Warn("--dry-run is redundant when --dry-run-manifest-lists is set")
+		}
+		o.Opts.IsDryRun = true
 	}
 	// OCPBUGS-58467
 	if o.Opts.ParallelImages > 10 || o.Opts.ParallelImages < 1 {
@@ -887,7 +894,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema)
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -947,7 +954,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema)
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -1005,7 +1012,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema)
+		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
 	// call the batch worker

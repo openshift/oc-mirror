@@ -162,7 +162,7 @@ func runDryRunTestCase(t *testing.T, tt struct {
 	ex, testImages, err := setupDryRunTest(t, testFolder, tt, imgs, log)
 	assert.NoError(t, err)
 
-	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: testImages})
+	err = ex.DryRun(context.TODO(), testImages)
 	assert.NoError(t, err)
 
 	verifyDryRunResults(t, testFolder, tt, testImages)
@@ -733,15 +733,16 @@ func TestDryRunWithManifestList(t *testing.T) {
 		}
 
 		opts := &mirror.CopyOptions{
-			Global:              global,
-			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-			SrcImage:            srcOpts,
-			DestImage:           destOpts,
-			RetryOpts:           retryOpts,
-			IsDryRun:            true,
-			Mode:                mirror.MirrorToDisk,
-			Dev:                 false,
-			LocalStorageFQDN:    regCfg.HTTP.Addr,
+			Global:                global,
+			DeprecatedTLSVerify:   deprecatedTLSVerifyOpt,
+			SrcImage:              srcOpts,
+			DestImage:             destOpts,
+			RetryOpts:             retryOpts,
+			IsDryRun:              true,
+			IsDryRunManifestLists: true,
+			Mode:                  mirror.MirrorToDisk,
+			Dev:                   false,
+			LocalStorageFQDN:      regCfg.HTTP.Addr,
 		}
 
 		// read the ImageSetConfiguration
@@ -771,7 +772,7 @@ func TestDryRunWithManifestList(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
+		err = ex.DryRun(context.TODO(), imgs)
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
@@ -831,16 +832,17 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 	}
 
 	opts := &mirror.CopyOptions{
-		Global:              global,
-		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
-		SrcImage:            srcOpts,
-		DestImage:           destOpts,
-		RetryOpts:           retryOpts,
-		IsDryRun:            true,
-		Mode:                mirror.DiskToMirror,
-		Dev:                 false,
-		LocalStorageFQDN:    regCfg.HTTP.Addr,
-		ParallelImages:      4,
+		Global:                global,
+		DeprecatedTLSVerify:   deprecatedTLSVerifyOpt,
+		SrcImage:              srcOpts,
+		DestImage:             destOpts,
+		RetryOpts:             retryOpts,
+		IsDryRun:              true,
+		IsDryRunManifestLists: true,
+		Mode:                  mirror.DiskToMirror,
+		Dev:                   false,
+		LocalStorageFQDN:      regCfg.HTTP.Addr,
+		ParallelImages:        4,
 	}
 
 	cfg := v2alpha1.ImageSetConfiguration{}
@@ -860,7 +862,7 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 	}
 
 	// Should not fail even though manifest inspection will warn for unreachable images
-	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
+	err = ex.DryRun(context.TODO(), imgs)
 	if err != nil {
 		t.Fatalf("should not fail: %v", err)
 	}

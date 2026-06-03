@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,39 +19,22 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
-func (o *ExecutorSchema) DryRun(ctx context.Context, collectorSchema v2alpha1.CollectorSchema) error {
-	allImages := collectorSchema.AllImages
-	preCollectedManifestLists := collectorSchema.CopyImageSchemaMap.ManifestListDigests
-	// set up location of logs dir
+func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
 	outDir := filepath.Join(o.Opts.Global.WorkingDir, dryRunOutDir)
-	// clean up logs directory
 	os.RemoveAll(outDir)
 
-	// create logs directory
 	err := o.MakeDir.makeDirAll(outDir, 0755)
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
 	}
 
-	// Inspect only images not already classified during collection.
-	var remaining []v2alpha1.CopyImageSchema
-	for _, img := range allImages {
-		if _, found := preCollectedManifestLists[img.Origin]; !found {
-			remaining = append(remaining, img)
-		}
+	var manifestListDigests map[string][]string
+	if o.Opts.IsDryRunManifestLists {
+		o.Log.Info(emoji.LeftPointingMagnifyingGlass+" inspecting %d images for manifest lists...", len(allImages))
+		manifestListDigests = o.inspectManifestLists(ctx, allImages)
 	}
 
-	o.Log.Info(emoji.LeftPointingMagnifyingGlass+" inspecting %d remaining images for manifest lists (%d already detected during collection)...",
-		len(remaining), len(allImages)-len(remaining))
-	runtimeDigests := o.inspectManifestLists(ctx, remaining)
-
-	// Merge pre-collected and runtime manifest list results.
-	manifestListDigests := make(map[string][]string, len(preCollectedManifestLists)+len(runtimeDigests))
-	maps.Copy(manifestListDigests, preCollectedManifestLists)
-	maps.Copy(manifestListDigests, runtimeDigests)
-
-	// creating file for storing list of cached images
 	mappingTxtFilePath := filepath.Join(outDir, mappingFile)
 	mappingTxtFile, err := os.Create(mappingTxtFilePath)
 	if err != nil {
