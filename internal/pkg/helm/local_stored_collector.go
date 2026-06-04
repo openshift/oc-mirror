@@ -168,8 +168,12 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 			}
 
 			for _, chart := range charts {
-				src := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
-				path := filepath.Join(src, fmt.Sprintf("%s-%s.tgz", chart.Name, chart.Version))
+				chartDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
+				path, err := resolveChartPath(chartDir, chart.Name, chart.Version)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
 
 				imgs, err := getImages(path, chart.ImagePaths...)
 				if err != nil {
@@ -347,6 +351,60 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 		}
 	}
 	return charts, nil
+}
+
+// resolveChartPath returns the filesystem path to a Helm chart tarball stored
+// under dir.  It first tries "{name}-{version}.tgz".  If that file is absent
+// it retries with the version's "v" prefix toggled (added when missing, or
+// stripped when present), because some Helm repositories embed the prefix in
+// the tarball URL while others omit it.  A descriptive error is returned when
+// neither candidate exists.
+func resolveChartPath(dir, name, version string) (string, error) {
+	baseDir := filepath.Clean(dir)
+
+	// buildCandidate constructs a candidate path and ensures it stays inside
+	// baseDir, preventing path traversal via crafted name or version values.
+	buildCandidate := func(ver string) (string, error) {
+		p := filepath.Join(baseDir, fmt.Sprintf("%s-%s.tgz", name, ver))
+		rel, err := filepath.Rel(baseDir, p)
+		if err != nil {
+			return "", fmt.Errorf("resolve chart path: %w", err)
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("invalid chart reference %q:%q escapes chart directory", name, ver)
+		}
+		return p, nil
+	}
+
+	primary, err := buildCandidate(version)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(primary); err == nil {
+		return primary, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("stat %s: %w", primary, err)
+	}
+
+	var altVersion string
+	if strings.HasPrefix(version, "v") {
+		altVersion = strings.TrimPrefix(version, "v")
+	} else {
+		altVersion = "v" + version
+	}
+
+	alt, err := buildCandidate(altVersion)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(alt); err == nil {
+		lsc.Log.Debug("chart %s: %s not found, using %s (v-prefix variant)", name, filepath.Base(primary), filepath.Base(alt))
+		return alt, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("stat %s: %w", alt, err)
+	}
+
+	return "", fmt.Errorf("chart file not found for %s version %s: tried %s and %s", name, version, primary, alt)
 }
 
 func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
