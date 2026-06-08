@@ -581,6 +581,14 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
+	// OCPBUGS-81712: Pin all operator catalogs to digest before initializing collectors
+	// This prevents race conditions in M2D/M2M where catalog tags might change during execution
+	// Best-effort approach: failures are logged as warnings, invalid catalogs handled during collection
+	if len(o.Config.Mirror.Operators) > 0 && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+		o.Log.Debug("Resolving operator catalog digests for %d operators", len(o.Config.Mirror.Operators))
+		o.Config = config.PinCatalogDigests(context.Background(), o.Config, o.Manifest, o.Opts, o.Log)
+	}
+
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
@@ -905,7 +913,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		return batchError
 	}
 
-	o.createConfigsWithPinnedCatalogs(collectorSchema)
+	o.createConfigsWithPinnedCatalogs()
 
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
@@ -953,7 +961,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 
-	o.createConfigsWithPinnedCatalogs(collectorSchema)
+	o.createConfigsWithPinnedCatalogs()
 
 	// create IDMS/ITMS
 	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
@@ -1375,12 +1383,12 @@ func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode st
 }
 
 // createConfigsWithPinnedCatalogs generates and writes pinned ISC and DISC configurations.
-func (o *ExecutorSchema) createConfigsWithPinnedCatalogs(collectorSchema v2alpha1.CollectorSchema) {
+// Catalogs are already pinned by pinOperatorCatalogs() at workflow start for M2D/M2M modes.
+func (o *ExecutorSchema) createConfigsWithPinnedCatalogs() {
 	o.Log.Info("Generating pinned configurations...")
-	iscPath, discPath, err := config.PinAndWriteISCAndDSC(
+	iscPath, discPath, err := config.WriteISCAndDSC(
 		o.Config,
-		collectorSchema.CatalogToFBCMap,
-		o.Opts.Global.WorkingDir,
+		o.Opts,
 		o.Log,
 	)
 	if err != nil {

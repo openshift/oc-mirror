@@ -21,6 +21,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -354,22 +355,22 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      consts.DockerProtocol + "redhat-operators:v4.7",
+					Source:      consts.DockerProtocol + "redhat-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: consts.DockerProtocol + "localhost:9999/redhat-operators:v4.7",
-					Origin:      consts.DockerProtocol + "redhat-operators:v4.7",
+					Origin:      consts.DockerProtocol + "redhat-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      consts.DockerProtocol + "certified-operators:v4.7",
+					Source:      consts.DockerProtocol + "certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: consts.DockerProtocol + "localhost:9999/certified-operators:v4.7",
-					Origin:      consts.DockerProtocol + "certified-operators:v4.7",
+					Origin:      consts.DockerProtocol + "certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "70eb0b2116707316c6130de415ceeb69",
 				},
 				{
-					Source:      consts.DockerProtocol + "community-operators:v4.7",
+					Source:      consts.DockerProtocol + "community-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: consts.DockerProtocol + "localhost:9999/community-operators:v4.7",
-					Origin:      consts.DockerProtocol + "community-operators:v4.7",
+					Origin:      consts.DockerProtocol + "community-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "ac8e314872a499f2c6edb0616489c628",
 				},
@@ -476,9 +477,9 @@ func TestFilterCollectorM2D(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://certified-operators:v4.7",
+					Source:      "docker://certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/test-namespace/test-catalog:v2.0",
-					Origin:      "docker://certified-operators:v4.7",
+					Origin:      "docker://certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "70eb0b2116707316c6130de415ceeb69",
 				},
@@ -489,6 +490,10 @@ func TestFilterCollectorM2D(t *testing.T) {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			ex := setupFilterCollector_MirrorToDisk(tempDir, log, manifest)
 			ex = ex.withConfig(testCase.config)
+
+			// OCPBUGS-81712: Pin catalogs to digest before collection (matches real M2D flow)
+			ex.Config = config.PinCatalogDigests(ctx, ex.Config, ex.Manifest, &ex.Opts, ex.Log)
+
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
 				assert.Error(t, err)
@@ -719,28 +724,28 @@ func TestFilterCollectorM2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
+					Source:      "docker://registry.redhat.io/redhat/community-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/redhat/community-operator-index:v4.18",
-					Origin:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
+					Origin:      "docker://registry.redhat.io/redhat/community-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
+					Source:      "docker://registry.redhat.io/redhat/community-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:5000/test/redhat/community-operator-index:v4.18",
-					Origin:      "docker://registry.redhat.io/redhat/community-operator-index:v4.18",
+					Origin:      "docker://registry.redhat.io/redhat/community-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 				},
 				{
-					Source:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					Source:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/redhat/redhat-filtered-index:v4.17",
-					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "b6db5253b0a8b995840d4d6b5a8aefca",
 				},
 				{
-					Source:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
+					Source:      "docker://registry.redhat.io/redhat/certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Destination: "docker://localhost:9999/redhat/certified-operators-pinned:v4.17.0-20241114",
-					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "37e8b17cf0089fb1de93893cfb41dbfb",
 				},
@@ -769,14 +774,14 @@ func TestFilterCollectorM2M(t *testing.T) {
 				{
 					Source:      "docker://localhost:9999/redhat/redhat-filtered-index:b6db5253b0a8b995840d4d6b5a8aefca",
 					Destination: "docker://localhost:5000/test/redhat/redhat-filtered-index:v4.17",
-					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "b6db5253b0a8b995840d4d6b5a8aefca",
 				},
 				{
 					Source:      "docker://localhost:9999/redhat/certified-operators-pinned:37e8b17cf0089fb1de93893cfb41dbfb",
 					Destination: "docker://localhost:5000/test/redhat/certified-operators-pinned:v4.17.0-20241114",
-					Origin:      "docker://registry.redhat.io/redhat/certified-operators:v4.17",
+					Origin:      "docker://registry.redhat.io/redhat/certified-operators@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
 					Type:        v2alpha1.TypeOperatorCatalog,
 					RebuiltTag:  "37e8b17cf0089fb1de93893cfb41dbfb",
 				},
@@ -810,6 +815,10 @@ func TestFilterCollectorM2M(t *testing.T) {
 			ex.Opts.Mode = mirror.MirrorToMirror
 			ex.Opts.Destination = "docker://localhost:5000/test"
 			ex = ex.withConfig(testCase.config)
+
+			// OCPBUGS-81712: Pin catalogs to digest before collection (matches real M2M flow)
+			ex.Config = config.PinCatalogDigests(ctx, ex.Config, ex.Manifest, &ex.Opts, ex.Log)
+
 			res, err := ex.OperatorImageCollector(ctx)
 			if testCase.expectedError {
 				assert.Error(t, err)
