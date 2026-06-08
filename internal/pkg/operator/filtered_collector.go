@@ -249,7 +249,10 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
-	ri, err := o.ctlgHandler.getRelatedImagesFromCatalog(result.DeclConfig, copyImageSchemaMap)
+	// Convert platform filters to string format
+	platforms := v2alpha1.ConvertPlatformsToStringSlice(op.Platforms)
+
+	ri, err := o.ctlgHandler.getRelatedImagesFromCatalog(result.DeclConfig, platforms, copyImageSchemaMap)
 	if err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}

@@ -67,7 +67,7 @@ func TestMirrorCopy(t *testing.T) {
 	opts.MultiArch = "other"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
-		assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
+		assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', 'index-only', or a comma-separated platform list like 'linux/amd64,linux/arm64'", err.Error())
 	})
 
 	opts.All = true
@@ -225,17 +225,35 @@ func TestMirrorDelete(t *testing.T) {
 
 // TestMirrorParseMultiArch
 func TestMirrorParseMultiArch(t *testing.T) {
-	res, _ := parseMultiArch("system")
+	res, platforms, err := parseMultiArch("system")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(0), res)
+	assert.Nil(t, platforms)
 
-	res, _ = parseMultiArch("all")
+	res, platforms, err = parseMultiArch("all")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(1), res)
+	assert.Nil(t, platforms)
 
-	res, _ = parseMultiArch("index-only")
+	res, platforms, err = parseMultiArch("index-only")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(2), res)
+	assert.Nil(t, platforms)
 
-	_, err := parseMultiArch("other")
-	assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
+	// Test platform specification
+	res, platforms, err = parseMultiArch("linux/amd64,linux/arm64")
+	assert.NoError(t, err)
+	assert.Equal(t, copy.ImageListSelection(2), res) // CopySpecificImages
+	assert.Len(t, platforms, 2)
+	assert.Equal(t, "linux", platforms[0].OS)
+	assert.Equal(t, "amd64", platforms[0].Architecture)
+	assert.Equal(t, "linux", platforms[1].OS)
+	assert.Equal(t, "arm64", platforms[1].Architecture)
+
+	// Test invalid option
+	_, _, err = parseMultiArch("other")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown multi-arch option")
 }
 
 type (

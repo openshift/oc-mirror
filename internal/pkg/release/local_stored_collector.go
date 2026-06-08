@@ -50,6 +50,31 @@ func (o LocalStorageCollector) destinationRegistry() string {
 	return o.destReg
 }
 
+// getPlatformFilters converts Platform configuration to platform filter strings.
+// It prioritizes the new Platforms field over the deprecated Architectures field.
+// Returns nil if no platforms are specified (meaning mirror all platforms).
+func (o LocalStorageCollector) getPlatformFilters() *[]string {
+	// Use new Platforms field if available
+	if len(o.Config.Mirror.Platform.Platforms) > 0 {
+		return v2alpha1.ConvertPlatformsToStringSlice(o.Config.Mirror.Platform.Platforms)
+	}
+
+	// Fall back to deprecated Architectures field (assume linux)
+	//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
+	if len(o.Config.Mirror.Platform.Architectures) > 0 {
+		//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
+		platformStrs := make([]string, len(o.Config.Mirror.Platform.Architectures))
+		//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
+		for i, arch := range o.Config.Mirror.Platform.Architectures {
+			platformStrs[i] = "linux/" + arch
+		}
+		return &platformStrs
+	}
+
+	// No platforms specified - mirror all
+	return nil
+}
+
 func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	// we just care for 1 platform release, in order to read release images
 	o.Opts.MultiArch = "system"
@@ -114,8 +139,21 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s%w", collectorPrefix, err)
 		}
 
+		// Convert platform configuration to string format for RelatedImages
+		platforms := o.getPlatformFilters()
+
+		// Set platforms for all collected images
+		for i := range allRelatedImages {
+			allRelatedImages[i].Platforms = platforms
+		}
+
 		// add the release image itself
-		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
+		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{
+			Image:     value.Source,
+			Name:      value.Source,
+			Type:      v2alpha1.TypeOCPRelease,
+			Platforms: platforms,
+		})
 		tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 		if err != nil {
 			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
@@ -355,7 +393,13 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+			Platforms:   img.Platforms,
+		})
 	}
 	return result, nil
 }
@@ -383,7 +427,13 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+			Platforms:   img.Platforms,
+		})
 
 	}
 	return result, nil
@@ -417,7 +467,11 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 		releasePath = strings.TrimPrefix(releasePath, consts.OciProtocolTrimmed)
 		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
 		releaseFolders = append(releaseFolders, releaseHoldPath)
-		releaseImages = append(releaseImages, v2alpha1.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v2alpha1.TypeOCPRelease})
+		releaseImages = append(releaseImages, v2alpha1.RelatedImage{
+			Name:  copy.Source,
+			Image: copy.Source,
+			Type:  v2alpha1.TypeOCPRelease,
+		})
 	}
 	return releaseImages, releaseFolders, nil
 }
@@ -545,6 +599,7 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 				Destination: graphImgRef,
 				Origin:      cachedImageRef,
 				Type:        v2alpha1.TypeCincinnatiGraph,
+				Platforms:   o.getPlatformFilters(),
 			}
 			return graphCopy, nil
 		}
@@ -559,6 +614,7 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 				Destination: graphImgRef,
 				Origin:      workingDirGraphImageRef,
 				Type:        v2alpha1.TypeCincinnatiGraph,
+				Platforms:   o.getPlatformFilters(),
 			}
 			return graphCopy, nil
 		}
@@ -576,6 +632,7 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 			Destination: graphImgRef,
 			Origin:      graphImgRef,
 			Type:        v2alpha1.TypeCincinnatiGraph,
+			Platforms:   o.getPlatformFilters(),
 		}
 		return graphCopy, nil
 	}

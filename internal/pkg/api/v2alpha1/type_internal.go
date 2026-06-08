@@ -182,6 +182,10 @@ type RelatedImage struct {
 	OriginFromOperatorCatalogOnDisk bool
 	// Used to identify if it is a full catalog (full: true && zero packages)
 	FullCatalog bool
+	// Platforms defines one or more OS/Architecture pairs to mirror
+	// for this multi-architecture image. Formatted as "os/arch" (e.g., "linux/amd64").
+	// Using a pointer to maintain struct comparability.
+	Platforms *[]string `json:"-"`
 }
 
 type CollectorSchema struct {
@@ -211,6 +215,11 @@ type CopyImageSchema struct {
 	// it doesn´t need to be persisted to json
 	Type       ImageType `json:"-"`
 	RebuiltTag string    `json:"rebuiltTag"`
+	// Platforms defines one or more OS/Architecture pairs to mirror
+	// for this multi-architecture image. If nil, defaults to "all" (mirrors all platforms).
+	// Formatted as "os/arch" (e.g., "linux/amd64", "linux/arm64").
+	// Using a pointer to maintain struct comparability for use in maps and slices.Compact.
+	Platforms *[]string `json:"-"`
 }
 
 // SignatureContentSchema

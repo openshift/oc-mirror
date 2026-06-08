@@ -109,11 +109,11 @@ func filterCatalog(ctx context.Context, operatorCatalog declcfg.DeclarativeConfi
 	return dc, nil
 }
 
-func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, platforms *[]string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	var errs []error
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	for _, bundle := range dc.Bundles {
-		ris, err := handleRelatedImages(bundle, bundle.Package, copyImageSchemaMap)
+		ris, err := handleRelatedImages(bundle, bundle.Package, platforms, copyImageSchemaMap)
 		if err != nil {
 			o.Log.Warn("%s SKIPPING bundle %s of operator %s", err.Error(), bundle.Name, bundle.Package)
 			errs = append(errs, err)
@@ -129,15 +129,16 @@ func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfi
 	return relatedImages, errors.Join(errs...)
 }
 
-func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
+func handleRelatedImages(bundle declcfg.Bundle, operatorName string, platforms *[]string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
 	var relatedImages []v2alpha1.RelatedImage
 	for _, ri := range bundle.RelatedImages {
 		if strings.Contains(ri.Image, consts.OciProtocol) {
 			return relatedImages, fmt.Errorf("invalid image: %s 'oci' is not supported in operator catalogs", ri.Image)
 		}
 		relatedImage := v2alpha1.RelatedImage{
-			Name:  ri.Name,
-			Image: ri.Image,
+			Name:      ri.Name,
+			Image:     ri.Image,
+			Platforms: platforms,
 		}
 		if ri.Image == bundle.Image {
 			relatedImage.Type = v2alpha1.TypeOperatorBundle

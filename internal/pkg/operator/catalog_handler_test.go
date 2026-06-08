@@ -42,7 +42,7 @@ func TestRelatedImagesFromCatalog(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
-			res, err := handler.getRelatedImagesFromCatalog(testCase.cfg, copyImageSchemaMap)
+			res, err := handler.getRelatedImagesFromCatalog(testCase.cfg, nil, copyImageSchemaMap)
 			if testCase.expectedError != nil {
 				assert.EqualError(t, err, testCase.expectedError.Error())
 			} else {
