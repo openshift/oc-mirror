@@ -1,10 +1,10 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS builder
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN CGO_ENABLED=0 make build
 RUN cd tests/integration && CGO_ENABLED=0 go test -mod=mod -c -o /tmp/integration.test .
 
-FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
+FROM registry.ci.openshift.org/ocp/5.0:base-rhel9
 WORKDIR /artifacts
 RUN mkdir -p /artifacts && chmod -R 777 /artifacts
 RUN mkdir -p /root/{.docker,.cache} /root/.oc-mirror/.cache && chmod -R 777 /root
