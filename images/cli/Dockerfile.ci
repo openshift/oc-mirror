@@ -1,10 +1,10 @@
 # This Dockerfile is used by CI to publish the oc-mirror image.
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.25-openshift-4.22 AS builder_rhel8
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.26-openshift-5.0 AS builder_rhel8
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder_rhel9
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS builder_rhel9
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
@@ -25,7 +25,7 @@ RUN cd tests/e2e && \
     gzip -c bin/oc-mirror-tests-ext > bin/oc-mirror-tests-ext.gz && \
     rm -f bin/oc-mirror-tests-ext
 
-FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
+FROM registry.ci.openshift.org/ocp/5.0:base-rhel9
 COPY --from=builder_rhel8 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel8
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel9
