@@ -129,16 +129,56 @@ func createFolders(paths []string) error {
 	return errors.Join(errs...)
 }
 
-func digestOfFilter(catalog v2alpha1.Operator) (string, error) {
+// digestOfFilter computes a hash of the operator filter configuration.
+//
+// The catalogDigest parameter controls normalization behavior:
+//   - When non-empty: normalizes the catalog reference to "name@sha256:digest" form (CLID-513).
+//     This ensures consistent hashes whether catalog is specified by tag or digest in the ISC.
+//   - When empty: uses the catalog reference as-is.
+func digestOfFilter(catalog v2alpha1.Operator, catalogDigest string) (string, error) {
 	c := catalog
 	c.TargetCatalog = ""
 	c.TargetTag = ""
 	c.TargetCatalogSourceTemplate = ""
+	if c.Catalog != "" && catalogDigest != "" {
+		imgSpec, err := image.ParseRef(c.Catalog)
+		if err == nil {
+			c.Catalog = image.WithDigest(imgSpec.Name, catalogDigest)
+		}
+	}
 	pkgs, err := json.Marshal(c)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%x", md5.Sum(pkgs))[0:32], nil
+}
+
+// findFilterDigest returns the filter digest to use, checking for an existing
+// filtered catalog on disk and falling back to the legacy digest if needed.
+func findFilterDigest(op v2alpha1.Operator, catalogDigest, filteredCatalogsDir string) (string, error) {
+	filterDigest, err := digestOfFilter(op, catalogDigest)
+	if err != nil {
+		return "", err
+	}
+
+	digestFile := filepath.Join(filteredCatalogsDir, filterDigest, "digest")
+	if _, err := os.Stat(digestFile); err == nil {
+		return filterDigest, nil
+	}
+
+	// Try legacy digest (without normalization) for backwards compatibility
+	// Error is intentionally ignored - if legacy digest fails, we use the normalized one
+	legacyDigest, _ := digestOfFilter(op, "")
+	if legacyDigest == filterDigest {
+		return filterDigest, nil
+	}
+
+	legacyDigestFile := filepath.Join(filteredCatalogsDir, legacyDigest, "digest")
+	if _, err := os.Stat(legacyDigestFile); err == nil {
+		return legacyDigest, nil
+	}
+
+	return filterDigest, nil
 }
 
 func (o FilterCollector) isAlreadyFiltered(ctx context.Context, srcImage, filteredImageDigest string) bool {
@@ -251,7 +291,10 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 
 	rebuiltTag := ""
 	if !isFullCatalog(op) {
-		tag, err := digestOfFilter(op)
+		imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
+		filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
+
+		tag, err := findFilterDigest(op, catalogDigest, filteredCatalogsDir)
 		if err != nil {
 			return v2alpha1.CatalogFilterResult{}, err
 		}
@@ -297,7 +340,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
 	filteredCatalogsDir := filepath.Join(imageIndexDir, operatorCatalogFilteredDir)
 
-	filterDigest, err := digestOfFilter(op)
+	filterDigest, err := findFilterDigest(op, catalogDigest, filteredCatalogsDir)
 	if err != nil {
 		return v2alpha1.CatalogFilterResult{}, err
 	}
@@ -328,7 +371,7 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 			FilteredConfigPath: filterConfigDir,
 			ToRebuild:          false,
 			DeclConfig:         filteredDC,
-			Digest:             string(filteredImageDigest),
+			Digest:             catalogDigest,
 		}, nil
 	}
 	o.Log.Debug("Catalog has not been filtered previously")

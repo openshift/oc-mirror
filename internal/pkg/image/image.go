@@ -167,3 +167,8 @@ func (i ImageSpec) SetTag(tag string) ImageSpec {
 	i.ReferenceWithTransport = strings.Replace(i.ReferenceWithTransport, oldTag, tag, 1)
 	return i
 }
+
+// WithDigest constructs an image reference with a SHA256 digest.
+func WithDigest(name, digest string) string {
+	return fmt.Sprintf("%s@sha256:%s", name, digest)
+}

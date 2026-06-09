@@ -564,6 +564,14 @@ func (o *ExecutorSchema) Complete(args []string) error {
 
 	client, _ := release.NewOCPClient(uuid.New(), o.Log)
 
+	// OCPBUGS-81712: Pin all operator catalogs to digest before initializing collectors
+	// This prevents race conditions in M2D/M2M where catalog tags might change during execution
+	// Best-effort approach: failures are logged as warnings, invalid catalogs handled during collection
+	if len(o.Config.Mirror.Operators) > 0 && (o.Opts.IsMirrorToDisk() || o.Opts.IsMirrorToMirror()) {
+		o.Log.Debug("Resolving operator catalog digests for %d operators", len(o.Config.Mirror.Operators))
+		o.Config = config.PinCatalogDigests(context.Background(), o.Config, o.Manifest, o.Opts, o.Log)
+	}
+
 	o.ImageBuilder = imagebuilder.NewBuilder(o.Log, *o.Opts)
 	o.CatalogBuilder = imagebuilder.NewGCRCatalogBuilder(o.Log, *o.Opts)
 	signature := release.NewSignatureClient(o.Log, o.Config, *o.Opts)
