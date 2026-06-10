@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
@@ -183,12 +184,12 @@ func GetAllManifestDigests(imgRef string) ([]string, error) {
 	if desc.MediaType.IsIndex() {
 		idx, err := desc.ImageIndex()
 		if err != nil {
-			return digests, nil // Return what we have
+			return digests, nil //nolint:nilerr,errcheck // Return what we have
 		}
 
 		manifest, err := idx.IndexManifest()
 		if err != nil {
-			return digests, nil
+			return digests, nil //nolint:nilerr,errcheck
 		}
 
 		// Add all manifest digests from the index
@@ -464,7 +465,10 @@ func PushSignatureImage(imgDigest, registryHost, repository string) error {
 	}
 
 	// Create the signature image
-	img, _ := crane.Image(sigContent)
+	img, err := crane.Image(sigContent)
+	if err != nil {
+		return fmt.Errorf("failed to create signature image: %w", err)
+	}
 
 	// Convert to OCI manifest format
 	ociImg := mutate.MediaType(img, types.OCIManifestSchema1)
