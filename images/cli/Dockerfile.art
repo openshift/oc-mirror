@@ -22,10 +22,26 @@ COPY . .
 RUN source $REMOTE_SOURCES_DIR/cachito-gomod-with-deps/cachito.env \
     && make build
 
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS test-extension-builder
+COPY $REMOTE_SOURCES $REMOTE_SOURCES_DIR
+WORKDIR $REMOTE_SOURCES_DIR/cachito-gomod-with-deps/app
+RUN cat $REMOTE_SOURCES_DIR/cachito-gomod-with-deps/cachito.env
+RUN mkdir -p /go/src/github.com/openshift/oc-mirror
+RUN ln -s $REMOTE_SOURCES_DIR/cachito-gomod-with-deps/app /go/src/github.com/openshift/oc-mirror
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN source $REMOTE_SOURCES_DIR/cachito-gomod-with-deps/cachito.env \
+    && cd tests/e2e \
+    && GOTOOLCHAIN=auto go mod vendor \
+    && CGO_ENABLED=0 GO_COMPLIANCE_POLICY="exempt_all" GOGC=20 GOTOOLCHAIN=auto go build -mod=vendor -p 1 -o bin/oc-mirror-tests-ext ./cmd \
+    && gzip -c bin/oc-mirror-tests-ext > bin/oc-mirror-tests-ext.gz \
+    && rm -f bin/oc-mirror-tests-ext
+
 FROM registry.ci.openshift.org/ocp/5.0:base-rhel9
 COPY --from=builder_rhel8 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel8
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel9
+COPY --from=test-extension-builder /go/src/github.com/openshift/oc-mirror/tests/e2e/bin/oc-mirror-tests-ext.gz /usr/bin/oc-mirror-tests-ext.gz
 
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
