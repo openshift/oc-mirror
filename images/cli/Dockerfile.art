@@ -1,3 +1,6 @@
+# URGENT! ART metadata configuration has a different number of FROMs
+# than this Dockerfile. ART will be unable to build your component or
+# reconcile this Dockerfile until that disparity is addressed.
 # This Dockerfile is used by CI to publish the oc-mirror image.
 FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.26-openshift-5.0 AS builder_rhel8
 COPY $REMOTE_SOURCES $REMOTE_SOURCES_DIR
