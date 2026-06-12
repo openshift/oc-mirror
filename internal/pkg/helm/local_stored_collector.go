@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -354,42 +355,43 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 }
 
 // resolveChartPath returns the filesystem path to a Helm chart tarball stored
-// under dir.  It first tries "{name}-{version}.tgz".  If that file is absent
-// it retries with the version's "v" prefix toggled (added when missing, or
-// stripped when present), because some Helm repositories embed the prefix in
-// the tarball URL while others omit it.  A descriptive error is returned when
-// neither candidate exists.
+// under dir.  It normalises the version with semver (which strips any leading
+// "v") and then probes two candidate filenames — "{name}-{canonical}.tgz" and
+// "{name}-v{canonical}.tgz" — because Helm repositories differ on whether they
+// embed the "v" prefix in tarball URLs.  A descriptive error naming both
+// attempted paths is returned when neither file exists.
 func resolveChartPath(dir, name, version string) (string, error) {
+	ver, err := semver.NewVersion(version)
+	if err != nil {
+		return "", fmt.Errorf("invalid chart version %q: %w", version, err)
+	}
+	canonical := ver.String() // always without "v" prefix, regardless of how version was specified
+
 	baseDir := filepath.Clean(dir)
+	candidateVersions := []string{canonical, "v" + canonical}
+	var candidatePaths []string
 
-	primary, err := buildChartCandidatePath(baseDir, name, version)
-	if err != nil {
-		return "", err
-	}
+	for _, candidateVer := range candidateVersions {
+		path, err := buildChartCandidatePath(baseDir, name, candidateVer)
+		if err != nil {
+			return "", err
+		}
+		candidatePaths = append(candidatePaths, path)
 
-	primaryFound, err := chartPathExists(primary)
-	if err != nil {
-		return "", err
-	}
-	if primaryFound {
-		return primary, nil
-	}
-
-	alt, err := buildChartCandidatePath(baseDir, name, toggleVersionPrefix(version))
-	if err != nil {
-		return "", err
-	}
-
-	altFound, err := chartPathExists(alt)
-	if err != nil {
-		return "", err
-	}
-	if altFound {
-		lsc.Log.Debug("chart %s: %s not found, using %s (v-prefix variant)", name, filepath.Base(primary), filepath.Base(alt))
-		return alt, nil
+		found, err := chartPathExists(path)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			if candidateVer != candidateVersions[0] {
+				lsc.Log.Debug("chart %s: %s not found, using %s (v-prefix variant)", name, filepath.Base(candidatePaths[0]), filepath.Base(path))
+			}
+			return path, nil
+		}
 	}
 
-	return "", fmt.Errorf("chart file not found for %s version %s: tried %s and %s", name, version, primary, alt)
+	return "", fmt.Errorf("chart file not found for %s version %s: tried %s and %s",
+		name, version, filepath.Base(candidatePaths[0]), filepath.Base(candidatePaths[1]))
 }
 
 // chartPathExists reports whether the given path exists on disk.
@@ -418,16 +420,6 @@ func buildChartCandidatePath(baseDir, name, ver string) (string, error) {
 		return "", fmt.Errorf("invalid chart reference %q:%q escapes chart directory", name, ver)
 	}
 	return p, nil
-}
-
-// toggleVersionPrefix adds a "v" prefix to ver when absent, or removes it when
-// present.  This normalises between Helm repositories that differ on whether
-// chart tarball filenames carry the prefix.
-func toggleVersionPrefix(ver string) string {
-	if strings.HasPrefix(ver, "v") {
-		return strings.TrimPrefix(ver, "v")
-	}
-	return "v" + ver
 }
 
 func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
