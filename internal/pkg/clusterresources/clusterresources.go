@@ -557,7 +557,8 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 			// CLID-205: In order to achieve retrocompatibility with v1, and allow for the installer
 			// to have the correct mirror for the release images as well as for the release components in the IDMS
 			// we include the release image mirror in the IDMS, even though it is by tag
-			if !srcImgSpec.IsImageByDigestOnly() && relatedImage.Type != v2alpha1.TypeOCPRelease {
+			// OCPBUGS-85331: Also include images referenced by both tag and digest (they have a digest, so they can be in IDMS)
+			if !srcImgSpec.IsImageByDigestOnly() && !srcImgSpec.IsImageByTagAndDigest() && relatedImage.Type != v2alpha1.TypeOCPRelease {
 				toBeAdded = false
 			}
 		}

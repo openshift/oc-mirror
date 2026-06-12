@@ -197,6 +197,15 @@ var (
 			Type:        v2alpha1.TypeOCPRelease,
 		},
 	}
+	// OCPBUGS-85331: images with both tag and digest should appear in both IDMS and ITMS
+	imageListTagAndDigest = []v2alpha1.CopyImageSchema{
+		{
+			Source:      consts.DockerProtocol + "localhost:5000/nvidia/k8s/container-toolkit:v1.19.1",
+			Destination: consts.DockerProtocol + "myregistry/mynamespace/nvidia/k8s/container-toolkit:v1.19.1",
+			Origin:      consts.DockerProtocol + "nvcr.io/nvidia/k8s/container-toolkit:v1.19.1@sha256:c927adbc9b7755c5cb90022fdcc5c1295f5fe5fe1f38200a2dc65e85632b029c",
+			Type:        v2alpha1.TypeOperatorRelatedImage,
+		},
+	}
 )
 
 func TestIDMS_ITMSGenerator(t *testing.T) {
@@ -232,6 +241,14 @@ func TestIDMS_ITMSGenerator(t *testing.T) {
 			imgList:                      imageListDigestsOnly,
 			expectedNumberFilesGenerated: 1,
 			expectedItms:                 false,
+			expectedIdms:                 true,
+			expectedError:                false,
+		},
+		{
+			caseName:                     "Testing IDMS_ITMSGenerator - OCPBUGS-85331 tag and digest : should generate both idms and itms",
+			imgList:                      imageListTagAndDigest,
+			expectedNumberFilesGenerated: 2,
+			expectedItms:                 true,
 			expectedIdms:                 true,
 			expectedError:                false,
 		},
