@@ -48,8 +48,14 @@ const (
 	// catalog include config data for incorporation
 	// into the metadata is located.
 	IncludeConfigFile = "include-config.gob"
+	// VersionMetadataFile records which oc-mirror build produced a mirror-to-disk archive.
+	VersionMetadataFile = "oc-mirror-version.json"
 )
 
 // MetadataBasePath is the local path relative to the oc-mirror workspace
 // where metadata is stored.
 var MetadataBasePath = filepath.Join(PublishDir, MetadataFile)
+
+// VersionMetadataPath is the local path relative to the oc-mirror workspace
+// where mirror-to-disk version metadata is stored.
+var VersionMetadataPath = filepath.Join(InternalDir, VersionMetadataFile)
