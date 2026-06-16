@@ -32,6 +32,31 @@ func (o Manifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemCont
 	return bytesManifest, mime, nil
 }
 
+// GetManifestListDigests inspects the source image to check if it's a manifest list
+// and returns the sub-manifest digests.
+func (o Manifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
+	manifestBytes, manifestType, err := o.ImageManifest(ctx, sourceCtx, source, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if !manifest.MIMETypeIsMultiImage(manifestType) {
+		return nil, nil
+	}
+
+	list, err := manifest.ListFromBlob(manifestBytes, manifestType)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing manifest list for %s: %w", source, err)
+	}
+
+	instances := list.Instances()
+	digests := make([]string, 0, len(instances))
+	for _, instance := range instances {
+		digests = append(digests, instance.String())
+	}
+	return digests, nil
+}
+
 func (o Manifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error) {
 	if err := mirror.ReexecIfNecessaryForImages(imgRef); err != nil {
 		return "", fmt.Errorf("reexec mirror: %w", err)

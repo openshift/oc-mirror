@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	imgmanifest "go.podman.io/image/v5/manifest"
-	"go.podman.io/image/v5/transports/alltransports"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -81,7 +79,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 
 func (o *ExecutorSchema) writeMissingImagesFile(outDir string, data []byte, nbMissing, total int) error {
 	missingImgsFilePath := filepath.Join(outDir, missingImgsFile)
-	if err := os.WriteFile(missingImgsFilePath, data, 0644); err != nil { // #nosec G306
+	if err := os.WriteFile(missingImgsFilePath, data, 0600); err != nil {
 		return fmt.Errorf("error writing missing images file: %w", err)
 	}
 	o.Log.Warn(emoji.Warning+"  %d/%d images necessary for mirroring are not available in the cache.", nbMissing, total)
@@ -176,7 +174,11 @@ func (o *ExecutorSchema) inspectManifestLists(ctx context.Context, images []v2al
 			defer wg.Done()
 			defer func() { <-semaphore }()
 
-			digests, err := o.getManifestListDigests(cancelCtx, source)
+			var digests []string
+			sysCtx, err := o.newSystemContextForSource(source)
+			if err == nil {
+				digests, err = o.Manifest.GetManifestListDigests(cancelCtx, sysCtx, source)
+			}
 			if err != nil {
 				o.Log.Warn("unable to inspect manifest for %s: %v", source, err)
 				return
@@ -201,50 +203,4 @@ func (o *ExecutorSchema) newSystemContextForSource(source string) (*types.System
 		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 	return sysCtx, nil
-}
-
-// getManifestListDigests inspects the source image to check if it's a manifest list
-// and returns the sub-manifest digests. Works with any transport supported by
-// containers/image (docker://, oci:, etc.) via alltransports.ParseImageName.
-// Returns a slice of digest strings (e.g., ["sha256:abc...", "sha256:def..."]) or nil if not a manifest list.
-func (o *ExecutorSchema) getManifestListDigests(ctx context.Context, source string) ([]string, error) {
-	srcRef, err := alltransports.ParseImageName(source)
-	if err != nil {
-		srcRef, err = alltransports.ParseImageName(consts.DockerProtocol + source)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing image name %s: %w", source, err)
-		}
-	}
-
-	sysCtx, err := o.newSystemContextForSource(source)
-	if err != nil {
-		return nil, err
-	}
-
-	imgSrc, err := srcRef.NewImageSource(ctx, sysCtx)
-	if err != nil {
-		return nil, fmt.Errorf("error creating image source for %s: %w", source, err)
-	}
-	defer imgSrc.Close()
-
-	manifestBytes, manifestType, err := imgSrc.GetManifest(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error getting manifest for %s: %w", source, err)
-	}
-
-	if !imgmanifest.MIMETypeIsMultiImage(manifestType) {
-		return nil, nil
-	}
-
-	list, err := imgmanifest.ListFromBlob(manifestBytes, manifestType)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing manifest list for %s: %w", source, err)
-	}
-
-	instances := list.Instances()
-	digests := make([]string, 0, len(instances))
-	for _, instance := range instances {
-		digests = append(digests, instance.String())
-	}
-	return digests, nil
 }

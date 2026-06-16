@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -738,7 +739,6 @@ func TestDryRunWithManifestList(t *testing.T) {
 			SrcImage:              srcOpts,
 			DestImage:             destOpts,
 			RetryOpts:             retryOpts,
-			IsDryRun:              true,
 			IsDryRunManifestLists: true,
 			Mode:                  mirror.MirrorToDisk,
 			Dev:                   false,
@@ -767,6 +767,7 @@ func TestDryRunWithManifestList(t *testing.T) {
 			Release:             collector,
 			AdditionalImages:    collector,
 			Mirror:              mockMirror,
+			Manifest:            manifest.New(log),
 			LocalStorageService: *reg,
 			LogsDir:             testFolder,
 			MakeDir:             MakeDir{},
@@ -837,7 +838,6 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 		SrcImage:              srcOpts,
 		DestImage:             destOpts,
 		RetryOpts:             retryOpts,
-		IsDryRun:              true,
 		IsDryRunManifestLists: true,
 		Mode:                  mirror.DiskToMirror,
 		Dev:                   false,
@@ -856,6 +856,7 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 		Release:             collector,
 		AdditionalImages:    collector,
 		Mirror:              mockMirror,
+		Manifest:            manifest.New(log),
 		LocalStorageService: *reg,
 		LogsDir:             testFolder,
 		MakeDir:             MakeDir{},

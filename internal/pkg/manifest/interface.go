@@ -21,4 +21,5 @@ type ManifestInterface interface {
 	GetOperatorConfig(file string) (*v2alpha1.OperatorConfigSchema, error)
 	ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
 	ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error)
+	GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error)
 }
