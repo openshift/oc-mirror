@@ -18,6 +18,7 @@ include $(addprefix ${GOMODCACHE}/${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERS
 	targets/openshift/deps-gomod.mk \
 )
 
+
 GO_LD_EXTRAFLAGS=$(call version-ldflags,github.com/openshift/oc-mirror/v2/internal/pkg/version)
 
 .PHONY: all test build clean
