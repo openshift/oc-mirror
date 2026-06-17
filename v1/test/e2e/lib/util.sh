@@ -45,6 +45,27 @@ function cleanup_conn() {
     [[ -n $PID_CONN ]] && kill $PID_CONN
 }
 
+function download_binary() {
+    local url="${1:?url required}"
+    local name="${2:?name required}"
+
+    local max_attempts=3
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        if curl --connect-timeout 15 --max-time 300 -fL "$url" -o "$name"; then
+            chmod +x "$name"
+            break
+        fi
+        if [[ $attempt -eq $max_attempts ]]; then
+            echo "download $name failed after ${max_attempts} attempts"
+            exit 1
+        fi
+        echo "Attempt ${attempt} failed, retrying in 30s..."
+        sleep 30
+        ((attempt++))
+    done
+}
+
 # install_deps will install crane and registry2 in go bin dir
 function install_deps() {
   # Keep this version in sync with the version in go.mod
@@ -61,16 +82,14 @@ function install_deps() {
     tar xvf opm.tar bin/opm
     mv bin/opm $GOBIN
     rm -f registry2.tar opm.tar
-    wget -O $GOBIN/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-    chmod +x $GOBIN/jq
+    download_binary "https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64" "$GOBIN/jq"
   else
     # non-x86_64 flow
     pushd ${DATA_TMP}
 
     # For ppc64le, this is compiled with Power9 compatibility (does not run on Power8)
     ARCH=$(arch | sed 's|aarch64|arm64|g')
-    curl -o $GOBIN/opm -L https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm
-    chmod +x $GOBIN/opm
+    download_binary "https://github.com/operator-framework/operator-registry/releases/download/v1.27.1/linux-${ARCH}-opm" "$GOBIN/opm"
 
     GOFLAGS=-mod=mod go install github.com/google/go-containerregistry/cmd/crane@${crane_version}
     mv ~/go/bin/crane $GOBIN/
@@ -218,13 +237,8 @@ function setup_helm_repository_testdata() {
   export HELM_REPOSITORY_CACHE=$DATA_DIR
   echo -e "\nSetting up test directory in $DATA_DIR"
   mkdir -p "$OUTPUT_DIR"
-  if [ "${CATALOG_ARCH}" == "x86_64" ]
-  then
-    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o ./helm
-  else
-    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${CATALOG_ARCH} -o ./helm
-  fi
-  chmod +x ./helm
+  arch="$(echo ${CATALOG_ARCH} | sed 's/x86_64/amd64/')"
+  download_binary "https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-${arch}" "./helm"
   ./helm repo add sbo https://redhat-developer.github.io/service-binding-operator-helm-chart/
   cp "${DIR}/configs/${CONFIG_PATH}" "${OUTPUT_DIR}/"
   cp -a "${DIR}/artifacts/." "${DATA_DIR}/"
