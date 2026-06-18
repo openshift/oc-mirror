@@ -1,6 +1,6 @@
-// incremental_mirroring_test.go validates the incremental mirroring workflow using the --since flag.
-// It verifies that oc-mirror produces a smaller archive (no image layer blobs) when the
-// --since date filters out previously mirrored content.
+// incremental_mirroring_test.go validates incremental mirroring workflows.
+// It verifies that oc-mirror produces archives containing only new content on
+// subsequent runs, whether filtered by --since date or by config changes.
 package integration_test
 
 import (
@@ -54,7 +54,6 @@ func expectNoImageBlobsInArchives(tarFiles []string) {
 		len(blobEntries), strings.Join(blobEntries, "\n"))
 }
 
-// CLID-655: Validate incremental mirroring using archives filtered by date.
 var _ = Describe("incremental mirroring", func() {
 	var workDir string
 
@@ -66,9 +65,10 @@ var _ = Describe("incremental mirroring", func() {
 		cleanupWorkDir(workDir)
 	})
 
-	// Verifies that --since flag produces an incremental archive with only new content.
-	// When --since is set to a future date (nothing cached after that date), the archive
-	// should contain no image layer blobs, only repository metadata links.
+	// CLID-655: Validate date-based incremental mirroring using --since.
+	// Runs mirrorToDisk twice with the same ISC: the first run produces a full
+	// archive, and the second run with --since set to a future date produces an
+	// archive with no image blobs (nothing is newer than the cutoff).
 	Describe("mirrorToDisk incremental with --since flag", func() {
 		iscFile := filepath.Join("happy_path", "isc-happy-path.yaml")
 
@@ -106,6 +106,85 @@ var _ = Describe("incremental mirroring", func() {
 
 			By("verifying incremental archive contains no image layer blobs")
 			expectNoImageBlobsInArchives(incrementalArchives)
+		})
+	})
+
+	// CLID-614: Validate config-based incremental mirroring for operators.
+	// Runs mirrorToDisk twice with different ISCs against the same workspace:
+	//   Step 1: mirror foo pinned at 0.2.0
+	//   Step 2: expand foo to 0.2.0–0.3.1 and add bar (stable)
+	// The second archive should contain only the new blobs (expanded foo versions
+	// and bar) with no overlap from the first archive.
+	Describe("operator incremental mirrorToDisk", func() {
+		iscInitial := filepath.Join("operators", "isc-operator-incremental-initial.yaml")
+		iscUpdate := filepath.Join("operators", "isc-operator-incremental-update.yaml")
+
+		It("should produce a second tar with only incremental blob content", func() {
+			findSingleMirrorTar := func(dir, phase string) string {
+				matches, err := filepath.Glob(filepath.Join(dir, "mirror_*.tar"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matches).To(HaveLen(1), "%s expected exactly one tar archive, got: %v", phase, matches)
+				return matches[0]
+			}
+
+			iscInitialPath := filepath.Join(iscDir, iscInitial)
+			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
+
+			By("running mirrorToDisk with the initial ISC (foo pinned at 0.2.0)")
+			result, err := runner.MirrorToDisk(ctx, iscInitialPath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("incremental step-1 mirrorToDisk", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the initial tar archive was created")
+			initialTar := findSingleMirrorTar(workDir, "initial")
+			Expect(initialTar).To(BeAnExistingFile(), "initial tar archive not found")
+			logTarSummary("initial", initialTar)
+
+			By("verifying the initial tar contains expected content")
+			expectCorrectTarArchiveContents(iscInitialPath, workDir)
+
+			By("moving the initial tar outside the working directory to preserve it")
+			preserveDir, err := os.MkdirTemp("", "oc-mirror-preserved-tar-*")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.RemoveAll(preserveDir)
+			preservedTar := filepath.Join(preserveDir, "mirror_initial.tar")
+			err = os.Rename(initialTar, preservedTar)
+			Expect(err).NotTo(HaveOccurred(), "failed to move initial tar")
+
+			By("running mirrorToDisk with the updated ISC (foo 0.2.0-0.3.1 + bar stable)")
+			result, err = runner.MirrorToDisk(ctx, iscUpdatePath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("incremental step-2 mirrorToDisk", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the incremental tar archive was created")
+			incrementalTar := findSingleMirrorTar(workDir, "incremental")
+			Expect(incrementalTar).To(BeAnExistingFile(), "incremental tar archive not found")
+			logTarSummary("incremental", incrementalTar)
+
+			By("comparing blob paths between the two tars")
+			const blobPrefix = "docker/registry/v2/blobs/sha256"
+			initialBlobs := collectTarBlobPaths(preservedTar, blobPrefix)
+			incrementalBlobs := collectTarBlobPaths(incrementalTar, blobPrefix)
+			GinkgoWriter.Printf("initial tar blob count:     %d\n", len(initialBlobs))
+			GinkgoWriter.Printf("incremental tar blob count: %d\n", len(incrementalBlobs))
+
+			Expect(incrementalBlobs).NotTo(BeEmpty(), "incremental tar should contain at least one blob")
+			initialBlobSet := make(map[string]struct{}, len(initialBlobs))
+			for _, b := range initialBlobs {
+				initialBlobSet[b] = struct{}{}
+			}
+			for _, b := range incrementalBlobs {
+				_, alreadyMirrored := initialBlobSet[b]
+				Expect(alreadyMirrored).To(BeFalse(),
+					"incremental tar re-included previously mirrored blob: %s", b)
+			}
+
+			By("verifying the initial tar does not contain the new operator package")
+			initialEntries := listTarEntries(preservedTar)
+			expectTarDoesNotContainPath(initialEntries, "/bar")
+
+			By("verifying the incremental tar contains the expected repositories")
+			expectCorrectTarArchiveContents(iscUpdatePath, workDir)
 		})
 	})
 })

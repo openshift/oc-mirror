@@ -805,3 +805,73 @@ func isOCMirrorVersionBefore(major int, minor int) bool {
 	}
 	return verMajor < major
 }
+
+// logOcMirrorResult writes the oc-mirror command result to GinkgoWriter for diagnostics.
+func logOcMirrorResult(label string, result *ocmirror.Result) {
+	if result == nil {
+		GinkgoWriter.Printf("[%s] result is nil\n", label)
+		return
+	}
+	GinkgoWriter.Printf("[%s] exit_code=%d duration=%s\n", label, result.ExitCode, result.Duration)
+	if result.Stdout != "" {
+		GinkgoWriter.Printf("[%s] stdout:\n%s\n", label, result.Stdout)
+	}
+	if result.Stderr != "" {
+		GinkgoWriter.Printf("[%s] stderr:\n%s\n", label, result.Stderr)
+	}
+}
+
+// logTarSummary logs the size, total entry count, and blob count of a tar archive.
+func logTarSummary(label, tarPath string) {
+	info, err := os.Stat(tarPath)
+	Expect(err).NotTo(HaveOccurred())
+
+	entries := listTarEntries(tarPath)
+
+	blobCount := 0
+	repoSet := map[string]bool{}
+	for _, e := range entries {
+		if strings.Contains(e, "blobs/sha256/") {
+			blobCount++
+		}
+		if strings.HasPrefix(e, tarRepositoriesPath) {
+			parts := strings.SplitN(strings.TrimPrefix(e, tarRepositoriesPath), "/", 3)
+			if len(parts) >= 2 {
+				repoSet[parts[0]+"/"+parts[1]] = true
+			}
+		}
+	}
+
+	GinkgoWriter.Printf("[%s tar] path=%s size=%d bytes entries=%d blobs=%d repositories=%d\n",
+		label, tarPath, info.Size(), len(entries), blobCount, len(repoSet))
+	for repo := range repoSet {
+		GinkgoWriter.Printf("[%s tar]   repo: %s\n", label, repo)
+	}
+}
+
+// collectTarBlobPaths returns the sorted list of tar entry names that fall under
+// the given prefix. OCI blobs are content-addressed (the SHA-256 digest is part of
+// the path), so comparing blob paths is equivalent to comparing blob content.
+func collectTarBlobPaths(tarPath, prefix string) []string {
+	prefix = filepath.ToSlash(prefix)
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	var paths []string
+	for _, entry := range listTarEntries(tarPath) {
+		e := filepath.ToSlash(entry)
+		if strings.HasPrefix(e, prefix) {
+			paths = append(paths, e)
+		}
+	}
+	return paths
+}
+
+// expectTarDoesNotContainPath verifies that no tar entry contains the given substring.
+func expectTarDoesNotContainPath(entries []string, substring string) {
+	for _, entry := range entries {
+		Expect(entry).NotTo(ContainSubstring(substring),
+			"tar archive should not contain path matching %q, but found: %s", substring, entry)
+	}
+}
