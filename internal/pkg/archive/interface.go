@@ -3,11 +3,13 @@ package archive
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
 type BlobsGatherer interface {
-	GatherBlobs(ctx context.Context, imgRef string) (map[string]struct{}, error)
+	GatherBlobs(ctx context.Context, imgRef string) (sets.Set[string], error)
 }
 
 type Archiver interface {

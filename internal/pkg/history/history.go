@@ -11,17 +11,21 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
 var log clog.PluggableLoggerInterface
 
-type OSFileCreator struct{}
-type history struct {
-	historyDir  string
-	before      time.Time
-	fileCreator FileCreator
-}
+type (
+	OSFileCreator struct{}
+	history       struct {
+		historyDir  string
+		before      time.Time
+		fileCreator FileCreator
+	}
+)
 
 func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerInterface, fileCreator FileCreator) (history, error) {
 	if logg == nil {
@@ -31,7 +35,7 @@ func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerIn
 	}
 	historyDir := filepath.Join(workingDir, historyPath)
 
-	err := os.MkdirAll(historyDir, 0755)
+	err := os.MkdirAll(historyDir, 0o755)
 	if err != nil {
 		return history{}, fmt.Errorf("error creating directories %w", err)
 	}
@@ -42,8 +46,8 @@ func NewHistory(workingDir string, before time.Time, logg clog.PluggableLoggerIn
 	}, nil
 }
 
-func (o history) Read() (map[string]struct{}, error) {
-	historyMap := make(map[string]struct{})
+func (o history) Read() (sets.Set[string], error) {
+	historyMap := sets.New[string]()
 	historyFile, err := o.getHistoryFile(o.before)
 	// if err is of type EmptyHistoryError
 	// then return the erorr and an empty historyMap
@@ -63,7 +67,7 @@ func (o history) Read() (map[string]struct{}, error) {
 
 	for scanner.Scan() {
 		blob := scanner.Text()
-		historyMap[blob] = struct{}{}
+		historyMap.Insert(blob)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -129,8 +133,7 @@ func getFileDate(historyFile fs.DirEntry) (time.Time, error) {
 	return dateTime, nil
 }
 
-func (o history) Append(blobsToAppend map[string]struct{}) (map[string]struct{}, error) {
-
+func (o history) Append(blobsToAppend sets.Set[string]) (sets.Set[string], error) {
 	filename := o.newFileName()
 
 	historyBlobs, err := o.Read()
@@ -138,9 +141,7 @@ func (o history) Append(blobsToAppend map[string]struct{}) (map[string]struct{},
 		return nil, err
 	}
 
-	for k := range blobsToAppend {
-		historyBlobs[k] = struct{}{}
-	}
+	historyBlobs = historyBlobs.Union(blobsToAppend)
 
 	file, err := o.fileCreator.Create(filename)
 	if err != nil {
@@ -157,13 +158,11 @@ func (o history) Append(blobsToAppend map[string]struct{}) (map[string]struct{},
 		}
 	}
 
-	err = writer.Flush()
-	if err != nil {
+	if err := writer.Flush(); err != nil {
 		return historyBlobs, fmt.Errorf("unable to flush history file: %w", err)
 	}
 
 	return historyBlobs, nil
-
 }
 
 func (o history) newFileName() string {
