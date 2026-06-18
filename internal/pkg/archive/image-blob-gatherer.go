@@ -80,15 +80,15 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 	}
 
 	if in.copySignatures {
-		sigBlobs, err := o.imageSignatureBlobs(ctx, in)
-		if err == nil {
-			for _, digest := range sigBlobs {
-				blobs.Insert(digest)
-			}
+		// OCPBUGS-87160:
+		// In the beginning, cosign did not support signing manifest lists.
+		// Also podman/clusterimagepolicy only verifies the single arch manifest signatures.
+		// Because of that, ART only signs the single arch manifests not the manifest list itself.
+		if sigBlobs, err := o.imageSignatureBlobs(ctx, in); err == nil {
+			blobs.Insert(sigBlobs...)
 		} else {
-			sigErrors = append(sigErrors, err)
+			o.log.Debug("Skip signature gathering for manifest list %q: %s", in.digest.String(), err.Error())
 		}
-
 	}
 
 	digests := manifestList.Instances()
