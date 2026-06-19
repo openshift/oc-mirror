@@ -243,7 +243,117 @@ func expectRepositoriesExist(registry registry.Registry, expected []string) {
 	}
 }
 
-// expectEmptyRegistry verifies that no non-catalog repos have tags remaining after a delete operation.
+// expectNoSignaturesInRegistry verifies that no .sig tags exist in the registry.
+func expectNoSignaturesInRegistry(reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred())
+		for _, tag := range tags {
+			Expect(tag).NotTo(HaveSuffix(".sig"),
+				"repo %q has unexpected signature tag %q when --remove-signatures=true", repo, tag)
+		}
+	}
+}
+
+// expectNonCatalogSignaturesDeleted verifies that after delete with --delete-signatures,
+// no .sig tags remain in repos that don't contain a catalog image.
+// Catalog signatures are never deleted by design.
+func expectNonCatalogSignaturesDeleted(reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred())
+
+		hasCatalog := false
+		hasSigTag := false
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ".sig") {
+				hasSigTag = true
+				continue
+			}
+			if !hasCatalog {
+				isCatalog, err := reg.IsCatalog(ctx, repo, tag)
+				Expect(err).NotTo(HaveOccurred())
+				hasCatalog = isCatalog
+			}
+		}
+
+		if hasSigTag {
+			Expect(hasCatalog).To(BeTrue(),
+				"repo %q has .sig tags remaining but contains no catalog image", repo)
+		}
+	}
+}
+
+// expectSignaturesInRegistry verifies that every non-catalog image in the registry
+// has a corresponding .sig tag.
+func expectSignaturesInRegistry(reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	sigCount := 0
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred())
+
+		tagSet := make(map[string]struct{})
+		for _, t := range tags {
+			tagSet[t] = struct{}{}
+		}
+
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ".sig") {
+				continue
+			}
+
+			ref, err := name.NewTag(fmt.Sprintf("%s/%s:%s", reg.Endpoint(), repo, tag), name.Insecure)
+			Expect(err).NotTo(HaveOccurred())
+
+			desc, err := remote.Get(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+			Expect(err).NotTo(HaveOccurred())
+
+			sigTag := strings.Replace(desc.Digest.String(), ":", "-", 1) + ".sig"
+			_, hasSig := tagSet[sigTag]
+			Expect(hasSig).To(BeTrue(),
+				"image %s/%s:%s (digest %s) has no signature tag %s", reg.Endpoint(), repo, tag, desc.Digest, sigTag)
+			sigCount++
+		}
+	}
+	Expect(sigCount).To(BeNumerically(">", 0), "no images with signatures found in registry")
+}
+
+// expectOnlySignatureTagsRemain verifies that after a delete without --delete-signatures,
+// non-catalog repos only have .sig tags remaining, and at least one .sig tag exists.
+func expectOnlySignatureTagsRemain(reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	foundSigTag := false
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred())
+		if len(tags) == 0 {
+			continue
+		}
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ".sig") {
+				foundSigTag = true
+				continue
+			}
+			isCatalog, err := reg.IsCatalog(ctx, repo, tag)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isCatalog).To(BeTrue(),
+				"non-catalog repo %q has non-signature tag %q after delete", repo, tag)
+		}
+	}
+	Expect(foundSigTag).To(BeTrue(), "expected at least one .sig tag to remain after delete")
+}
+
 func expectEmptyRegistry(reg registry.Registry) {
 	repos, err := reg.ListRepositories(ctx)
 	Expect(err).NotTo(HaveOccurred())
@@ -408,7 +518,7 @@ func setupWorkDir() string {
 
 	var sigFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name() != releasePublicKeyFile {
+		if !entry.IsDir() && entry.Name() != releasePublicKeyFile && !strings.HasPrefix(entry.Name(), "cosign") {
 			sigFiles = append(sigFiles, entry.Name())
 		}
 	}

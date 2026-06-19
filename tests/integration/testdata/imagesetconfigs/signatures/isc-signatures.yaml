@@ -1,0 +1,9 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    graph: false
+    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    full: true
