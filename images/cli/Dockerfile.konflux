@@ -1,0 +1,37 @@
+# Dockerfile for the Konflux CDN release pipeline: builds oc-mirror binaries for RHEL 8/9,
+# packages them as compressed tarballs in /releases/ for push-artifacts-to-cdn.
+
+# Stage 1: Build and compress RHEL 8 binary
+FROM registry.access.redhat.com/ubi8/go-toolset:1.24 AS builder_rhel8
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN make build && \
+    mkdir -p /output && \
+    GOARCH=$(go env GOARCH) && \
+    tar -czf /output/oc-mirror-rhel8-linux-${GOARCH}.tar.gz -C bin oc-mirror
+
+# Stage 2: Build and compress RHEL 9 binary
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26 AS builder_rhel9
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN make build && \
+    mkdir -p /output && \
+    GOARCH=$(go env GOARCH) && \
+    tar -czf /output/oc-mirror-linux-${GOARCH}.tar.gz -C bin oc-mirror
+
+# Stage 3: Final delivery image for push-artifacts-to-cdn
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+RUN mkdir -p /releases/
+COPY --from=builder_rhel8 /output/ /releases/
+COPY --from=builder_rhel9 /output/ /releases/
+
+# Required EC Metadata Labels
+LABEL vendor="Red Hat, Inc." \
+      name="oc-mirror" \
+      com.redhat.component="oc-mirror" \
+      version="1.0.0" \
+      release="1" \
+      summary="oc-mirror CLI tool transport container" \
+      description="OpenShift is a platform for developing, building, and deploying containerized applications." \
+      io.k8s.display-name="oc-mirror" \
+      io.openshift.tags="openshift,cli,mirror"
