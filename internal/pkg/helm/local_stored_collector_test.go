@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/otiai10/copy"
@@ -708,6 +709,168 @@ func TestHelmImageCollector(t *testing.T) {
 				assert.NotEmpty(t, imgs)
 				assert.ElementsMatch(t, testCase.expectedResult, imgs)
 			}
+		})
+	}
+}
+
+// TestResolveChartPath verifies that resolveChartPath tolerates mismatches
+// between the version string in the ImageSetConfiguration and the "v" prefix
+// that a Helm repository may embed in its tarball filenames.
+func TestResolveChartPath(t *testing.T) {
+	dir := t.TempDir()
+
+	// chartA-1.0.0.tgz  – version stored without "v"
+	// chartB-v2.0.0.tgz – version stored with "v"
+	chartAFile := filepath.Join(dir, "chartA-1.0.0.tgz")
+	chartBFile := filepath.Join(dir, "chartB-v2.0.0.tgz")
+	assert.NoError(t, os.WriteFile(chartAFile, []byte("placeholder"), 0600))
+	assert.NoError(t, os.WriteFile(chartBFile, []byte("placeholder"), 0600))
+
+	// resolveChartPath calls lsc.Log.Debug; initialise the global so the
+	// helper does not panic.
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+
+	tests := []struct {
+		name      string
+		chartName string
+		version   string
+		wantPath  string
+		wantErr   bool
+	}{
+		{
+			name:      "exact match – no v prefix",
+			chartName: "chartA",
+			version:   "1.0.0",
+			wantPath:  chartAFile,
+		},
+		{
+			name:      "config omits v; file on disk has v prefix",
+			chartName: "chartB",
+			version:   "2.0.0",
+			wantPath:  chartBFile,
+		},
+		{
+			name:      "config has v; file on disk has no v prefix",
+			chartName: "chartA",
+			version:   "v1.0.0",
+			wantPath:  chartAFile,
+		},
+		{
+			name:      "neither candidate exists returns error",
+			chartName: "missing",
+			version:   "9.9.9",
+			wantErr:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveChartPath(dir, tc.chartName, tc.version)
+			if tc.wantErr {
+				assert.Error(t, err)
+				// Both attempted candidate paths must appear in the error so
+				// callers can diagnose which filenames were probed.
+				assert.Contains(t, err.Error(), fmt.Sprintf("%s-%s.tgz", tc.chartName, tc.version))
+				altVersion := "v" + tc.version
+				if strings.HasPrefix(tc.version, "v") {
+					altVersion = strings.TrimPrefix(tc.version, "v")
+				}
+				assert.Contains(t, err.Error(), fmt.Sprintf("%s-%s.tgz", tc.chartName, altVersion))
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantPath, got)
+		})
+	}
+}
+
+// TestHelmImageCollectorVPrefixDiskToMirror ensures that the disk-to-mirror
+// collector succeeds even when the chart tarball on disk was saved by the Helm
+// downloader using a "v"-prefixed version (e.g. podinfo-v5.0.0.tgz) while the
+// ImageSetConfiguration specifies the version without the prefix (5.0.0), or
+// vice-versa.
+func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
+	log := clog.New("trace")
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		configVersion  string
+		diskVersion    string
+		expectedImages []v2alpha1.CopyImageSchema
+	}{
+		{
+			name:          "config without v; disk file has v prefix",
+			configVersion: "5.0.0",
+			diskVersion:   "v5.0.0",
+			expectedImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
+					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
+					Origin:      "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+		},
+		{
+			name:          "config with v; disk file has no v prefix",
+			configVersion: "v5.0.0",
+			diskVersion:   "5.0.0",
+			expectedImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
+					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
+					Origin:      "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workingDir, err := prepareFolder(t.TempDir())
+			assert.NoError(t, err)
+
+			helmCfg := v2alpha1.Helm{
+				Repositories: []v2alpha1.Repository{
+					{
+						Name: "podinfo",
+						URL:  "https://stefanprodan.github.io/podinfo",
+						Charts: []v2alpha1.Chart{
+							{Name: "podinfo", Version: tc.configVersion},
+						},
+					},
+				},
+			}
+
+			testCfg := v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{Helm: helmCfg},
+				},
+			}
+
+			_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+			opts := mirror.CopyOptions{
+				Mode:             mirror.DiskToMirror,
+				Global:           &mirror.GlobalOptions{WorkingDir: workingDir},
+				LocalStorageFQDN: testLocalStorageFQDN,
+				Destination:      testDest,
+				SrcImage:         srcOpts,
+			}
+
+			New(log, testCfg, opts, nil, nil, nil)
+
+			// Place the chart on disk using the downloader-supplied version
+			// string (which may differ from what the config specifies).
+			diskFile := filepath.Join(tempChartDir, fmt.Sprintf("podinfo-%s.tgz", tc.diskVersion))
+			assert.NoError(t, copy.Copy(filepath.Join(testChartsDataPath, "podinfo-5.0.0.tgz"), diskFile))
+
+			helmCollector := lsc
+			imgs, err := helmCollector.HelmImageCollector(ctx)
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedImages, imgs)
 		})
 	}
 }
