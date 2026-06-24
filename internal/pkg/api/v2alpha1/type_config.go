@@ -117,7 +117,9 @@ type Platform struct {
 
 func (p Platform) DeepCopy() Platform {
 	platformCopy := Platform{
-		Graph: p.Graph,
+		Graph:             p.Graph,
+		Release:           p.Release,
+		KubeVirtContainer: p.KubeVirtContainer,
 	}
 
 	platformCopy.Channels = make([]ReleaseChannel, len(p.Channels))

@@ -1,10 +1,38 @@
 package v2alpha1
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestPlatformDeepCopy(t *testing.T) {
+	orig := Platform{
+		Graph:             true,
+		Channels:          []ReleaseChannel{{Name: "stable-4.19", MinVersion: "4.19.0"}},
+		Architectures:     []string{"amd64"},
+		Platforms:         []InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}},
+		Release:           "quay.io/openshift-release-dev/ocp-release:4.19.0-x86_64",
+		KubeVirtContainer: true,
+	}
+	// every field must be set above, so that a new Platform field fails this
+	// test until it is both set here and copied by DeepCopy
+	rv := reflect.ValueOf(orig)
+	for i := range rv.NumField() {
+		assert.Falsef(t, rv.Field(i).IsZero(), "field %s must be set in this test", rv.Type().Field(i).Name)
+	}
+
+	cp := orig.DeepCopy()
+	assert.Equal(t, orig, cp)
+
+	cp.Channels[0].Name = "changed"
+	cp.Architectures[0] = "changed"
+	cp.Platforms[0].OS = "changed"
+	assert.Equal(t, "stable-4.19", orig.Channels[0].Name)
+	assert.Equal(t, "amd64", orig.Architectures[0])
+	assert.Equal(t, "linux", orig.Platforms[0].OS)
+}
 
 func TestIsValidPathComponent(t *testing.T) {
 	tests := []struct {
