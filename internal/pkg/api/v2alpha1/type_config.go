@@ -113,6 +113,8 @@ type Platform struct {
 func (p Platform) DeepCopy() Platform {
 	platformCopy := Platform{
 		Graph:                p.Graph,
+		Release:              p.Release,
+		KubeVirtContainer:    p.KubeVirtContainer,
 		ReleaseImageRepo:     p.ReleaseImageRepo,
 		ReleaseComponentRepo: p.ReleaseComponentRepo,
 	}
