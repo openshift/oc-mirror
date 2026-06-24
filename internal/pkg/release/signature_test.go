@@ -26,6 +26,33 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
+func TestGenerateReleaseSignaturesIgnoreFlag(t *testing.T) {
+	log := clog.New("trace")
+	// an unparseable source makes any attempt at verification fail
+	imgs := []v2alpha1.CopyImageSchema{{Source: "quay.io/openshift-release-dev/ocp-release-4.13.10-x86_64"}}
+
+	for _, tt := range []struct {
+		name    string
+		release string
+	}{
+		{name: "channel-based discovery"},
+		{name: "direct platform.release", release: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: t.TempDir(), IgnoreReleaseSignature: true}}
+			cfg := v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{Release: tt.release}},
+				},
+			}
+
+			res, err := NewSignatureClient(log, cfg, opts).GenerateReleaseSignatures(context.Background(), imgs)
+			assert.NoError(t, err)
+			assert.Equal(t, imgs, res)
+		})
+	}
+}
+
 func TestReleaseSignature(t *testing.T) {
 	log := clog.New("trace")
 
