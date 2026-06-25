@@ -759,12 +759,15 @@ func expectIDMSContainsExpectedContent(iscPath string, idmsSources []string) {
 	}
 }
 
+// referenceWithoutTagOrDigest strips the tag or digest from an image reference,
+// returning "domain/path" (e.g. "quay.io/ns/repo").
 func referenceWithoutTagOrDigest(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)
 	Expect(err).NotTo(HaveOccurred(), "failed to parse image ref: %s", imageRef)
 	return reference.Domain(ref) + "/" + reference.Path(ref)
 }
 
+// idmsSourceCoversRef returns true if any IDMS source is a prefix of the given image reference.
 func idmsSourceCoversRef(sources []string, ref string) bool {
 	for _, src := range sources {
 		if strings.HasPrefix(ref, src) {
@@ -774,6 +777,42 @@ func idmsSourceCoversRef(sources []string, ref string) bool {
 	return false
 }
 
+// logOcMirrorResult writes the oc-mirror command result to GinkgoWriter for diagnostics.
+func logOcMirrorResult(label string, result *ocmirror.Result) {
+	if result == nil {
+		GinkgoWriter.Printf("[%s] result is nil\n", label)
+		return
+	}
+	GinkgoWriter.Printf("[%s] exit_code=%d duration=%s\n", label, result.ExitCode, result.Duration)
+	if result.Stdout != "" {
+		GinkgoWriter.Printf("[%s] stdout:\n%s\n", label, result.Stdout)
+	}
+	if result.Stderr != "" {
+		GinkgoWriter.Printf("[%s] stderr:\n%s\n", label, result.Stderr)
+	}
+}
+
+// logRegistryRepositories lists all repositories in the registry and writes them to GinkgoWriter.
+func logRegistryRepositories(label string, reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	if err != nil {
+		GinkgoWriter.Printf("[%s registry] failed to list repositories: %v\n", label, err)
+		return
+	}
+	GinkgoWriter.Printf("[%s registry] %d repositories:\n", label, len(repos))
+	for _, repo := range repos {
+		tags, tagErr := reg.ListTags(ctx, repo)
+		if tagErr != nil {
+			GinkgoWriter.Printf("  %s (tags error: %v)\n", repo, tagErr)
+		} else {
+			GinkgoWriter.Printf("  %s  tags=%v\n", repo, tags)
+		}
+	}
+}
+
+// isOCMirrorVersionBefore returns true if the OC_MIRROR_VERSION environment variable
+// indicates a version strictly before major.minor. Returns false when the variable
+// is unset or set to "main".
 func isOCMirrorVersionBefore(major int, minor int) bool {
 	ver := os.Getenv("OC_MIRROR_VERSION")
 	if ver == "" || ver == "main" {
