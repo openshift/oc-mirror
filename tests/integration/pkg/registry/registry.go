@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,7 +31,16 @@ type Registry struct {
 }
 
 // Start parses the config file, creates an in-process registry, and starts it in the background.
+// Pass port 0 to let the OS assign a free port automatically.
 func Start(ctx context.Context, configPath string, port int) (*Registry, error) {
+	if port == 0 {
+		p, err := freePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate a free port: %w", err)
+		}
+		port = p
+	}
+
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read registry config: %w", err)
@@ -166,4 +176,13 @@ func (r *Registry) IsCatalog(ctx context.Context, repo, tag string) (bool, error
 
 	_, ok := cf.Config.Labels["operators.operatorframework.io.index.configs.v1"]
 	return ok, nil
+}
+
+func freePort() (int, error) {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }
