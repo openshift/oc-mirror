@@ -915,6 +915,12 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 
 	o.createConfigsWithPinnedCatalogs()
 
+	if err := version.WriteVersionMetadata(o.Opts.Global.WorkingDir, version.Get()); err != nil {
+		o.Log.Warn("unable to write oc-mirror version metadata: %v", err)
+	} else {
+		o.Log.Debug("wrote version metadata: %s", version.Get().GitVersion)
+	}
+
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
 }
@@ -1008,6 +1014,12 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	if err := o.MirrorUnArchiver.Unarchive(); err != nil {
 		o.Log.Error(" %v ", err)
 		return err
+	}
+
+	if warning := version.CheckVersionMetadata(o.Opts.Global.WorkingDir, version.Get()); warning != "" {
+		o.Log.Warn(emoji.Warning+"  %s", warning)
+	} else {
+		o.Log.Debug("version metadata check passed: %s", version.Get().GitVersion)
 	}
 
 	// start the local storage registry
