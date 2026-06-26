@@ -48,4 +48,3 @@ rm -rf ../config/tmp_index.json ../config/final_index.json
 cd ../../
 rm -rf artifacts/staging/*
 
-
