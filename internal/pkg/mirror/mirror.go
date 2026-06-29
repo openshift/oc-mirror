@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -229,6 +230,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 // Custom implementation to extend `containers/common/pkg/retry.retry`
 func isErrorRetryable(err error) bool {
 	var httpError docker.UnexpectedHTTPStatusError
+	var tlsErr tls.AlertError
 	switch {
 	case err == nil:
 		return false
@@ -236,6 +238,15 @@ func isErrorRetryable(err error) bool {
 		return true
 	case errors.Is(err, context.Canceled):
 		return false
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return true
+	case errors.As(err, &tlsErr):
+		// Go's crypto/tls does not export alert code constants, so we cannot
+		// distinguish transient server-side errors from systematic ones. In
+		// practice, any systematic TLS failures (bad cert, version mismatch,
+		// etc.) are likely to occur before we get to the point of copying
+		// blobs, so we won't get here.
+		return true
 	case errors.As(err, &httpError):
 		// Retry on 500-504 server errors, they appear to be quite common in the field
 		// We duplicate this here because older versions of oc-mirror cannot bump containers/common given Golang version restrictions
