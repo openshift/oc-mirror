@@ -144,6 +144,11 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 								options.PreserveDigests = false
 							}
 
+							// If this image has specific platform requirements, use them
+							if img.Platforms != nil && len(*img.Platforms) > 0 {
+								options.InstancePlatforms = *img.Platforms
+							}
+
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
 
 							switch {

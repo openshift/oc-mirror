@@ -130,7 +130,10 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 					continue
 				}
 
-				imgs, err := getImages(path, chart.ImagePaths...)
+				// Convert platform filters to string format
+				platforms := v2alpha1.ConvertPlatformsToStringSlice(chart.Platforms)
+
+				imgs, err := getImages(path, platforms, chart.ImagePaths...)
 				if err != nil {
 					errs = append(errs, err)
 				}
@@ -176,7 +179,10 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 					continue
 				}
 
-				imgs, err := getImages(path, chart.ImagePaths...)
+				// Convert platform filters to string format
+				platforms := v2alpha1.ConvertPlatformsToStringSlice(chart.Platforms)
+
+				imgs, err := getImages(path, platforms, chart.ImagePaths...)
 				if err != nil {
 					errs = append(errs, err)
 				}
@@ -231,7 +237,10 @@ func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, []error) {
 	var errs []error
 
 	for _, chart := range lsc.Config.Mirror.Helm.Local {
-		imgs, err := getImages(chart.Path, chart.ImagePaths...)
+		// Convert platform filters to string format
+		platforms := v2alpha1.ConvertPlatformsToStringSlice(chart.Platforms)
+
+		imgs, err := getImages(chart.Path, platforms, chart.ImagePaths...)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -422,7 +431,7 @@ func buildChartCandidatePath(baseDir, name, ver string) (string, error) {
 	return p, nil
 }
 
-func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
+func getImages(path string, platforms *[]string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
 	lsc.Log.Debug("Reading from path %s", path)
 
 	p := getImagesPath(imagePaths...)
@@ -442,6 +451,11 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 		imgs, err := findImages(templateData, p...)
 		if err != nil {
 			return nil, err
+		}
+
+		// Set platforms for each image
+		for i := range imgs {
+			imgs[i].Platforms = platforms
 		}
 
 		images = append(images, imgs...)
@@ -590,7 +604,13 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 
 		lsc.Log.Debug("source %s", src)
 		lsc.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+			Platforms:   img.Platforms,
+		})
 	}
 	return result, nil
 }
@@ -630,7 +650,13 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 
 		lsc.Log.Debug("source %s", src)
 		lsc.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+			Platforms:   img.Platforms,
+		})
 
 	}
 	return result, nil

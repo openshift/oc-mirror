@@ -60,3 +60,33 @@ func (pt PlatformType) validate() error {
 	}
 	return nil
 }
+
+// InstancePlatformFilter defines OS and Architecture for filtering
+// multi-architecture manifest lists. This allows selecting specific
+// platforms (e.g., linux/amd64, linux/arm64) when mirroring images.
+type InstancePlatformFilter struct {
+	// OS is the operating system (e.g., "linux", "windows")
+	OS string `json:"os"`
+	// Architecture is the CPU architecture (e.g., "amd64", "arm64", "ppc64le", "s390x")
+	Architecture string `json:"architecture"`
+}
+
+// String returns the platform in "os/architecture" format (e.g., "linux/amd64")
+func (p InstancePlatformFilter) String() string {
+	return p.OS + "/" + p.Architecture
+}
+
+// ConvertPlatformsToStringSlice converts a slice of InstancePlatformFilter to a pointer
+// to a slice of platform strings in "os/architecture" format.
+// Returns nil if the input slice is empty.
+func ConvertPlatformsToStringSlice(platforms []InstancePlatformFilter) *[]string {
+	if len(platforms) == 0 {
+		return nil
+	}
+
+	platformStrs := make([]string, len(platforms))
+	for i, p := range platforms {
+		platformStrs[i] = p.String()
+	}
+	return &platformStrs
+}

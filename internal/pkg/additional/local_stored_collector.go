@@ -114,7 +114,16 @@ func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([
 		o.Log.Debug(collectorPrefix+"source %s", src)
 		o.Log.Debug(collectorPrefix+"destination %s", dest)
 
-		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: origin, Type: v2alpha1.TypeGeneric})
+		// Convert platform filters to string format for CopyImageSchema
+		platforms := v2alpha1.ConvertPlatformsToStringSlice(img.Platforms)
+
+		allImages = append(allImages, v2alpha1.CopyImageSchema{
+			Source:      src,
+			Destination: dest,
+			Origin:      origin,
+			Type:        v2alpha1.TypeGeneric,
+			Platforms:   platforms,
+		})
 	}
 	return allImages, errors.Join(allErrs...)
 }

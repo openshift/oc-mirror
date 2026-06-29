@@ -16,7 +16,7 @@ type CollectorInterface interface {
 
 type catalogHandlerInterface interface {
 	GetDeclarativeConfig(ctx context.Context, filePath string) (*declcfg.DeclarativeConfig, error)
-	getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
+	getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, platforms *[]string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error)
 	EnsureCatalogInOCIFormat(ctx context.Context, imgSpec image.ImageSpec, catalog, imageIndexDir string, opts mirror.CopyOptions) error
 	ExtractOCIConfigLayers(imgSpec image.ImageSpec, imageIndexDir string) (string, error)
 }
