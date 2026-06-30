@@ -79,7 +79,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 
 func (o *ExecutorSchema) writeMissingImagesFile(outDir string, data []byte, nbMissing, total int) error {
 	missingImgsFilePath := filepath.Join(outDir, missingImgsFile)
-	if err := os.WriteFile(missingImgsFilePath, data, 0600); err != nil {
+	if err := os.WriteFile(missingImgsFilePath, data, 0644); err != nil { //nolint: gosec // no sensitive data in file and it must be readable by others
 		return fmt.Errorf("error writing missing images file: %w", err)
 	}
 	o.Log.Warn(emoji.Warning+"  %d/%d images necessary for mirroring are not available in the cache.", nbMissing, total)
