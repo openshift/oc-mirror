@@ -2,73 +2,70 @@ Contributing to `oc-mirror`
 ====
 
 - [Contributing to `oc-mirror`](#contributing-to-oc-mirror)
-  - [What should I know before I get started?](#what-should-i-know-before-i-get-started)
-  - [How can I contribute?](#how-can-i-contribute)
-    - [Reporting Bugs](#reporting-bugs)
-    - [Requesting Enhancements](#requesting-enhancements)
-    - [Your First Code Contribution](#your-first-code-contribution)
-      - [Getting Started](#getting-started)
-    - [Pull Requests](#pull-requests)
-    - [Docs Contributions](#docs-contributions)
+  - [Development](#development)
+  - [Reporting Bugs](#reporting-bugs)
+  - [Requesting Enhancements](#requesting-enhancements)
+  - [Pull Requests](#pull-requests)
   - [Testing](#testing)
+  - [Docs Contributions](#docs-contributions)
 
-Welcome to our contributing guide! We are eager to receive contributions of all types. Ways to contribute include:
+Welcome to our contributing guide! We are eager to receive contributions of all types. Here are some ways to contribute:
 
-## What should I know before I get started?
+Development
+-----------
 
-[`oc-mirror` design](docs/design/overview.md)
+Active development happens in the root directory (v2). Code under `v1/` is deprecated. Please do not submit changes there.
 
-## How can I contribute?
-### Reporting Bugs
-Please submit bug reports as GitHub Issues. When submitting bug reports, please include:
+Development workflow:
+
+```bash
+make build            # compile the oc-mirror binary (do not use `go build` directly)
+make test-unit        # run unit tests
+make test-integration # run integration tests
+make verify           # run golangci-lint
+make sanity           # run tidy, format, and vet checks
+make clean            # clean build artifacts
+```
+
+Always run `make sanity` before committing.
+
+Reporting Bugs
+--------------
+
+Please submit bug reports as GitHub Issues using our [template](.github/ISSUE_TEMPLATE.md). Include:
 1. A concise title
 2. Log snippets
-3. The command used to execute the task.
+3. The command used to execute the task
 4. The imageset-config used in the execution (if applicable)
-5. Use our [template](.github/ISSUE_TEMPLATE.md)
 
-### Requesting Enhancements
-1. A concise title
-2. A concise description of the modification
-3. The conditions under which the modification would be relevant
-3. The desired outcome of the modification
-4. Provide step-by-step instructions of the enhancement
-5. Explain the difference between enhancement and current functionality
-6. Explain enhancement use cases
-7. Explain current workaround/alternatives without the enhancement
+Requesting Enhancements
+-----------------------
 
-### Your First Code Contribution
+Please submit enhancement requests as GitHub Issues. Note that prioritization happens in the RFE project in Jira.
 
-#### Getting Started
-Please refer to the [developer docs](./docs/dev/getting-started.md) for information on getting started with developing on `oc-mirror`.
+1. A concise title and description of the modification
+2. The conditions under which the modification would be relevant
+3. The desired outcome and how it differs from current functionality
+4. Use cases for the enhancement
+5. Current workaround/alternatives without the enhancement
 
-### Pull Requests
+Pull Requests
+-------------
+
 When submitting pull requests, please ensure the following:
-1. Include unit tests if applicable
-2. Update `./docs` if applicable
-3. Update `./data` if modifying schema
-4. Follow our [styleguides](docs/dev/styleguides.md)
-5. Use our [template](.github/PULL_REQUEST_TEMPLATE.md)
+1. Make sure all commits are signed, otherwise github will refuse to merge
+2. Include unit tests if applicable
+3. Update `./docs` if applicable
+4. Use our [template](.github/PULL_REQUEST_TEMPLATE.md)
 
-### Docs Contributions
+Testing
+-------
 
-We will always need better docs! You can contribute to our `./docs` in the following ways:
+See our [testing strategy](docs/testing/README.md) for guidelines on testing levels and principles.
 
-1. Markdown-formatted tutorials for using `oc-mirror` in different scenarios.
-2. Enhanced Developer/hacking docs
-3. Linux man style docs
+Docs Contributions
+------------------
 
-## Testing
-
-To test basic functionality locally, we have developed an end to end test. Please use `make test-e2e`.
-
-Functional testing of `oc-mirror` is difficult. Building a comprehensive test matrix is nearly impossible. If we do some thought experiments about how `oc-mirror` works, we can see the complexity quickly developing:
-
-1. If over the lifecycle of differential use of `oc-mirror`, we have synchronized 3 openshift releases between 3 imagesets and we specify a latest openshift release for our next imageset, which prior openshift versions will have upgradeability to the incoming imageset with the latest openshift release? The answer **should** be that all previous downloads have an upgrade path to the highest incoming version because `oc-mirror` should have pulled any intermediary openshift versions needed. Is that the case? Test it out and submit an issue if it does something unexpected!
-
-
-
-
-
-
-
+We welcome improvements to our `./docs`:
+1. Markdown-formatted tutorials for using `oc-mirror` in different scenarios
+2. Enhanced developer/hacking docs
