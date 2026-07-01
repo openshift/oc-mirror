@@ -1,6 +1,6 @@
 module github.com/openshift/oc-mirror/v2
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -31,10 +31,10 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/term v0.43.0
 	helm.sh/helm/v3 v3.18.6
-	k8s.io/api v0.35.4
-	k8s.io/apimachinery v0.35.4
-	k8s.io/client-go v0.35.4
-	k8s.io/kubectl v0.35.0
+	k8s.io/api v0.36.2
+	k8s.io/apimachinery v0.36.2
+	k8s.io/client-go v0.36.2
+	k8s.io/kubectl v0.36.2
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -111,11 +111,9 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.27.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/h2non/go-is-svg v0.0.0-20160927212452-35e8c4b0612c // indirect
@@ -219,24 +217,24 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/grpc v1.81.1 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.35.4 // indirect
-	k8s.io/cli-runtime v0.35.0 // indirect
-	k8s.io/component-base v0.35.4 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570 // indirect
+	k8s.io/cli-runtime v0.36.2 // indirect
+	k8s.io/component-base v0.36.2 // indirect
+	k8s.io/klog/v2 v2.140.0 // indirect
+	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
-	sigs.k8s.io/kustomize/api v0.20.1 // indirect
-	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
+	sigs.k8s.io/kustomize/api v0.21.1 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
 
 tool github.com/openshift/build-machinery-go
