@@ -1,10 +1,14 @@
 package history
 
-import "io"
+import (
+	"io"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+)
 
 type History interface {
-	Read() (map[string]struct{}, error)
-	Append(map[string]struct{}) (map[string]struct{}, error)
+	Read() (sets.Set[string], error)
+	Append(sets.Set[string]) (sets.Set[string], error)
 }
 
 type FileCreator interface {

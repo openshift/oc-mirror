@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 
 	digest "github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -41,7 +41,7 @@ func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInte
 }
 
 // GatherBlobs returns all container image blobs (including signature blobs if they exists).
-func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs map[string]struct{}, retErr error) {
+func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs sets.Set[string], retErr error) {
 	// we are always gathering blobs from the local cache registry - skipping tls verification
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
@@ -69,12 +69,10 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 }
 
 // multiArchBlobs returns the blobs of all architectures (including signature blobs if they exists).
-func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImageBlobGatherer) (sets.Set[string], error) {
 	var sigErrors []error
 
-	blobs := make(map[string]struct{})
-
-	blobs[in.digest.String()] = struct{}{}
+	blobs := sets.New(in.digest.String())
 
 	manifestList, err := manifest.ListFromBlob(in.manifestBytes, in.mimeType)
 	if err != nil {
@@ -82,20 +80,20 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 	}
 
 	if in.copySignatures {
-		sigBlobs, err := o.imageSignatureBlobs(ctx, in)
-		if err == nil {
-			for _, digest := range sigBlobs {
-				blobs[digest] = struct{}{}
-			}
+		// OCPBUGS-87160:
+		// In the beginning, cosign did not support signing manifest lists.
+		// Also podman/clusterimagepolicy only verifies the single arch manifest signatures.
+		// Because of that, ART only signs the single arch manifests not the manifest list itself.
+		if sigBlobs, err := o.imageSignatureBlobs(ctx, in); err == nil {
+			blobs.Insert(sigBlobs...)
 		} else {
-			sigErrors = append(sigErrors, err)
+			o.log.Debug("Skip signature gathering for manifest list %q: %s", in.digest.String(), err.Error())
 		}
-
 	}
 
 	digests := manifestList.Instances()
 	for _, digest := range digests {
-		blobs[digest.String()] = struct{}{}
+		blobs.Insert(digest.String())
 		singleIn := in
 
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
@@ -114,19 +112,17 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 			}
 		}
 
-		maps.Copy(blobs, singleArchBlobs)
+		blobs = blobs.Union(singleArchBlobs)
 	}
 
 	return blobs, errors.Join(sigErrors...)
 }
 
 // singleArchBlobs returns the blobs of single architecture (including signature blobs if they exists).
-func (o *ImageBlobGatherer) singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (map[string]struct{}, error) {
+func (o *ImageBlobGatherer) singleArchBlobs(ctx context.Context, in internalImageBlobGatherer) (sets.Set[string], error) {
 	var err error
 
-	blobs := make(map[string]struct{})
-
-	blobs[in.digest.String()] = struct{}{}
+	blobs := sets.New(in.digest.String())
 
 	manifestBlobs, err := imageBlobs(in.manifestBytes, in.mimeType)
 	if err != nil {
@@ -141,9 +137,7 @@ func (o *ImageBlobGatherer) singleArchBlobs(ctx context.Context, in internalImag
 		}
 	}
 
-	for _, digest := range manifestBlobs {
-		blobs[digest] = struct{}{}
-	}
+	blobs.Insert(manifestBlobs...)
 
 	return blobs, err
 }
