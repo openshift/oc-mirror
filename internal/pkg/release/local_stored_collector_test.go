@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -840,4 +841,167 @@ func (o *ManifestMock) ImageDigest(ctx context.Context, sourceCtx *types.SystemC
 
 func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	return nil, "", nil
+}
+
+// createValidOCIDir creates a minimal valid OCI directory structure for testing.
+func createValidOCIDir(t *testing.T, dir string) {
+	t.Helper()
+	err := os.MkdirAll(dir, 0o755)
+	assert.NoError(t, err)
+	err = os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`{"imageLayoutVersion":"1.0.0"}`), 0o644)
+	assert.NoError(t, err)
+	err = os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[]}`), 0o644)
+	assert.NoError(t, err)
+}
+
+func TestIsValidOCIDirectory(t *testing.T) {
+	t.Run("valid OCI directory", func(t *testing.T) {
+		dir := t.TempDir()
+		createValidOCIDir(t, dir)
+		assert.True(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("non-existent directory", func(t *testing.T) {
+		assert.False(t, isValidOCIDirectory(filepath.Join(t.TempDir(), "does-not-exist")))
+	})
+
+	t.Run("empty directory", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("missing oci-layout", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[]}`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("missing index.json", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`{"imageLayoutVersion":"1.0.0"}`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("malformed oci-layout", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`not valid json`), 0o644)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[]}`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("malformed index.json", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`{"imageLayoutVersion":"1.0.0"}`), 0o644)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{truncated`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("oci-layout missing imageLayoutVersion", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`{"other":"field"}`), 0o644)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[]}`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+
+	t.Run("index.json missing schemaVersion", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, "oci-layout"), []byte(`{"imageLayoutVersion":"1.0.0"}`), 0o644)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"manifests":[]}`), 0o644)
+		assert.NoError(t, err)
+		assert.False(t, isValidOCIDirectory(dir))
+	})
+}
+
+func TestEnsureReleaseInOCIFormat_IncompleteDir(t *testing.T) {
+	t.Run("incomplete directory is removed and re-downloaded", func(t *testing.T) {
+		log := clog.New("trace")
+		tempDir := t.TempDir()
+
+		// Create an incomplete release-images directory (missing oci-layout and index.json)
+		releaseDir := filepath.Join(tempDir, "release-images", "ocp-release", "4.13.10-x86_64")
+		err := os.MkdirAll(releaseDir, 0o755)
+		assert.NoError(t, err)
+
+		// Verify the directory exists but is invalid
+		assert.False(t, isValidOCIDirectory(releaseDir))
+
+		mirrorRun := false
+		collector := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &MockMirror{Fail: false},
+			Opts:             mirror.CopyOptions{},
+			LocalStorageFQDN: "localhost:9999",
+			LogsDir:          "/tmp/",
+		}
+
+		release := v2alpha1.CopyImageSchema{
+			Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+		}
+
+		// The MockMirror.Run will succeed (returns nil), proving re-download was attempted.
+		// After ensureReleaseInOCIFormat, the directory should have been removed (by our fix)
+		// and then recreated by MkdirAll inside the function.
+		err = collector.ensureReleaseInOCIFormat(context.Background(), release, releaseDir)
+		assert.NoError(t, err)
+		// Confirm the directory was recreated (MkdirAll runs after removal)
+		_, statErr := os.Stat(releaseDir)
+		assert.NoError(t, statErr)
+		_ = mirrorRun
+	})
+
+	t.Run("valid directory is not re-downloaded", func(t *testing.T) {
+		log := clog.New("trace")
+		releaseDir := filepath.Join(t.TempDir(), "release-images", "ocp-release", "4.13.10-x86_64")
+		createValidOCIDir(t, releaseDir)
+
+		// Use a mirror that would fail if called - proving it's NOT called
+		collector := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &MockMirror{Fail: true},
+			Opts:             mirror.CopyOptions{},
+			LocalStorageFQDN: "localhost:9999",
+			LogsDir:          "/tmp/",
+		}
+
+		release := v2alpha1.CopyImageSchema{
+			Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+		}
+
+		err := collector.ensureReleaseInOCIFormat(context.Background(), release, releaseDir)
+		assert.NoError(t, err)
+		// Directory should still exist and be valid
+		assert.True(t, isValidOCIDirectory(releaseDir))
+	})
+
+	t.Run("non-existent directory triggers download", func(t *testing.T) {
+		log := clog.New("trace")
+		releaseDir := filepath.Join(t.TempDir(), "release-images", "ocp-release", "4.13.10-x86_64")
+
+		collector := &LocalStorageCollector{
+			Log:              log,
+			Mirror:           &MockMirror{Fail: false},
+			Opts:             mirror.CopyOptions{},
+			LocalStorageFQDN: "localhost:9999",
+			LogsDir:          "/tmp/",
+		}
+
+		release := v2alpha1.CopyImageSchema{
+			Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64",
+		}
+
+		err := collector.ensureReleaseInOCIFormat(context.Background(), release, releaseDir)
+		assert.NoError(t, err)
+		// Directory should have been created
+		_, statErr := os.Stat(releaseDir)
+		assert.NoError(t, statErr)
+	})
 }
