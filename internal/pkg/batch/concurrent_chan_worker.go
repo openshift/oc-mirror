@@ -143,6 +143,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 								options.RemoveSignatures = true
 								options.PreserveDigests = false
 							}
+							if img.Type.IsAdditionalImage() && options.IsDiskToMirror() {
+								options.PreserveDigests = false
+							}
 
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
 

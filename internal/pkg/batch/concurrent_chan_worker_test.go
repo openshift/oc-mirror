@@ -34,6 +34,7 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 	tests := []struct {
 		name                     string
 		catalogImage             v2alpha1.CopyImageSchema
+		mode                     string
 		expectedPreserveDigests  bool
 		expectedRemoveSignatures bool
 		description              string
@@ -45,9 +46,10 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				Origin:      consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.17",
 				Destination: consts.DockerProtocol + "nexus:8082/redhat/redhat-operator-index:v4.17",
 				Type:        v2alpha1.TypeOperatorCatalog,
-				RebuiltTag:  "sha256-rebuilthash.tag", // This indicates a rebuilt catalog
+				RebuiltTag:  "sha256-rebuilthash.tag",
 			},
-			expectedPreserveDigests:  false, // CRITICAL: Must be false to allow format conversion
+			mode:                     mirror.MirrorToMirror,
+			expectedPreserveDigests:  false,
 			expectedRemoveSignatures: true,
 			description:              "Rebuilt catalogs need format conversion support for registries like Nexus",
 		},
@@ -58,9 +60,10 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				Origin:      consts.DockerProtocol + "registry.redhat.io/redhat/redhat-operator-index:v4.17",
 				Destination: consts.DockerProtocol + "nexus:8082/redhat/redhat-operator-index:v4.17",
 				Type:        v2alpha1.TypeOperatorCatalog,
-				RebuiltTag:  "", // Empty RebuiltTag means it's not rebuilt
+				RebuiltTag:  "",
 			},
-			expectedPreserveDigests:  true, // Default behavior
+			mode:                     mirror.MirrorToMirror,
+			expectedPreserveDigests:  true,
 			expectedRemoveSignatures: false,
 			description:              "Non-rebuilt catalogs should preserve digests",
 		},
@@ -73,6 +76,7 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				Type:        v2alpha1.TypeOperatorBundle,
 				RebuiltTag:  "",
 			},
+			mode:                     mirror.MirrorToMirror,
 			expectedPreserveDigests:  true,
 			expectedRemoveSignatures: false,
 			description:              "Operator bundles must preserve digests for signature verification",
@@ -86,9 +90,38 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				Type:        v2alpha1.TypeOperatorRelatedImage,
 				RebuiltTag:  "",
 			},
+			mode:                     mirror.MirrorToMirror,
 			expectedPreserveDigests:  true,
 			expectedRemoveSignatures: false,
 			description:              "Related images must preserve digests",
+		},
+		{
+			name: "Additional image in diskToMirror should have PreserveDigests=false",
+			catalogImage: v2alpha1.CopyImageSchema{
+				Source:      consts.DockerProtocol + "localhost:55000/prometheus/prometheus:latest",
+				Origin:      consts.DockerProtocol + "quay.io/prometheus/prometheus:latest",
+				Destination: consts.DockerProtocol + "nexus:8082/prometheus/prometheus:latest",
+				Type:        v2alpha1.TypeGeneric,
+				RebuiltTag:  "",
+			},
+			mode:                     mirror.DiskToMirror,
+			expectedPreserveDigests:  false,
+			expectedRemoveSignatures: false,
+			description:              "Additional images in diskToMirror need format conversion for multi-arch manifests",
+		},
+		{
+			name: "Additional image in mirrorToMirror should have PreserveDigests=true",
+			catalogImage: v2alpha1.CopyImageSchema{
+				Source:      consts.DockerProtocol + "quay.io/prometheus/prometheus:latest",
+				Origin:      consts.DockerProtocol + "quay.io/prometheus/prometheus:latest",
+				Destination: consts.DockerProtocol + "nexus:8082/prometheus/prometheus:latest",
+				Type:        v2alpha1.TypeGeneric,
+				RebuiltTag:  "",
+			},
+			mode:                     mirror.MirrorToMirror,
+			expectedPreserveDigests:  true,
+			expectedRemoveSignatures: false,
+			description:              "Additional images in mirrorToMirror should preserve digests",
 		},
 	}
 
@@ -112,7 +145,7 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				RetryOpts:           retryOpts,
 				Destination:         consts.DockerProtocol + "nexus:8082",
 				Dev:                 false,
-				Mode:                mirror.MirrorToMirror,
+				Mode:                tt.mode,
 				Function:            "copy",
 			}
 
