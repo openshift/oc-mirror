@@ -6,5 +6,6 @@ reviewers:
 approvers:
   - aguidirh
   - r4f4
+  - adolfo-ab
 component: oc
 subcomponent: oc-mirror
