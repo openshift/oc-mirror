@@ -1,0 +1,140 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: false
+  commit_status: true
+  fail_commit_status: true
+  review_status: true
+  review_details: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: true
+  auto_assign_reviewers: false
+  poem: false
+  in_progress_fortune: false
+  abort_on_close: true
+
+  path_filters:
+    - "!v1/**"
+    - "!vendor/**"
+
+  path_instructions:
+    - path: "internal/pkg/**/*.go"
+      instructions: |
+        This is the core business logic of oc-mirror. Pay close attention to
+        error handling, concurrency safety, and correct use of the
+        containers/image library types.
+    - path: "internal/pkg/api/v2alpha1/**"
+      instructions: |
+        This directory defines the ImageSetConfiguration API types.
+        Changes here affect the user-facing YAML contract. Ensure backward
+        compatibility and that validation logic stays consistent.
+    - path: "internal/pkg/batch/**"
+      instructions: |
+        This package handles concurrent image copying in batches. Watch for
+        race conditions, goroutine leaks, and proper context cancellation.
+    - path: "**/*_test.go"
+      instructions: |
+        Ensure tests are meaningful and cover edge cases. Prefer table-driven
+        tests. Do not suggest removing or weakening existing test assertions.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    drafts: false
+    base_branches: []
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+    simplify:
+      enabled: false
+
+  tools:
+    golangci-lint:
+      enabled: true
+      config_file: ".golangci.v2.yaml"
+    shellcheck:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    checkmake:
+      enabled: true
+    actionlint:
+      enabled: true
+    # Disable tools not relevant to this Go project
+    ruff:
+      enabled: false
+    biome:
+      enabled: false
+    eslint:
+      enabled: false
+    phpstan:
+      enabled: false
+    phpmd:
+      enabled: false
+    phpcs:
+      enabled: false
+    swiftlint:
+      enabled: false
+    detekt:
+      enabled: false
+    rubocop:
+      enabled: false
+    flake8:
+      enabled: false
+    pylint:
+      enabled: false
+    clippy:
+      enabled: false
+    oxc:
+      enabled: false
+    stylelint:
+      enabled: false
+    htmlhint:
+      enabled: false
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
+  art: false
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: "auto"
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"
+  linked_repositories:
+    - repository: "containers/container-libs"
+      instructions: |
+        Core dependency for low-level container image operations including
+        image transport, copying, signature handling, and registry interactions.
