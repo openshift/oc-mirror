@@ -61,4 +61,5 @@ var _ = Describe("mirrorToDisk + diskToMirror", func() {
 			expectEmptyRegistry(*testRegistry)
 		})
 	})
+
 })
