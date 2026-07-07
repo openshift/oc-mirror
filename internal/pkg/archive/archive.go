@@ -10,6 +10,7 @@ import (
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/history"
@@ -135,8 +136,8 @@ func (o *MirrorArchive) createTarball() error {
 	return nil
 }
 
-func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema, historyBlobs map[string]struct{}) (map[string]struct{}, error) {
-	allAddedBlobs := make(map[string]struct{})
+func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema, historyBlobs sets.Set[string]) (sets.Set[string], error) {
+	allAddedBlobs := sets.New[string]()
 	for _, img := range collectedImages {
 		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
 		var sigErr *SignatureBlobGathererError
@@ -156,34 +157,29 @@ func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2a
 			return nil, fmt.Errorf("unable to add blobs corresponding to %s: %w", img.Destination, err)
 		}
 
-		for hash, value := range addedBlobs {
-			allAddedBlobs[hash] = value
-		}
-
+		allAddedBlobs = allAddedBlobs.Union(addedBlobs)
 	}
 
 	return allAddedBlobs, nil
 }
 
-func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs map[string]struct{}, alreadyAddedBlobs map[string]struct{}) (map[string]struct{}, error) {
-	blobsInDiff := make(map[string]struct{})
+func (o *MirrorArchive) addBlobsDiff(collectedBlobs, historyBlobs, alreadyAddedBlobs sets.Set[string]) (sets.Set[string], error) {
+	blobsInDiff := sets.New[string]()
 	for hash := range collectedBlobs {
-		_, alreadyMirrored := historyBlobs[hash]
-		_, previouslyAdded := alreadyAddedBlobs[hash]
-		skip := alreadyMirrored || previouslyAdded
-		if !skip {
-			// Add to tar
-			d, err := digest.Parse(hash)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing digest %w", err)
-			}
-			blobPath := filepath.Join(o.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Encoded()[:2], d.Encoded())
-			err = o.adder.addAllFolder(blobPath, o.cacheDir)
-			if err != nil {
-				return nil, err
-			}
-			blobsInDiff[hash] = struct{}{}
+		if historyBlobs.Has(hash) || alreadyAddedBlobs.Has(hash) {
+			continue
 		}
+		// Add to tar
+		d, err := digest.Parse(hash)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing digest %w", err)
+		}
+		blobPath := filepath.Join(o.cacheDir, cacheBlobsDir, d.Algorithm().String(), d.Encoded()[:2], d.Encoded())
+		err = o.adder.addAllFolder(blobPath, o.cacheDir)
+		if err != nil {
+			return nil, err
+		}
+		blobsInDiff.Insert(hash)
 	}
 	return blobsInDiff, nil
 }
@@ -210,7 +206,6 @@ func RemovePastArchives(destination string) error {
 }
 
 func handleSignatureErrors(img v2alpha1.CopyImageSchema, err error) error {
-
 	var sigErr *SignatureBlobGathererError
 	if err == nil || !errors.As(err, &sigErr) {
 		return nil

@@ -10,6 +10,7 @@ import (
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/image/v5/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
@@ -521,8 +522,8 @@ func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.Collecto
 	return collectorSchema, nil
 }
 
-func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (map[string]struct{}, error) {
-	res := map[string]struct{}{"sha256:95ad8395795ee0460baf05458f669d3b865535f213f015519ef9a221a6a08280": {}}
+func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (sets.Set[string], error) {
+	res := sets.New("sha256:95ad8395795ee0460baf05458f669d3b865535f213f015519ef9a221a6a08280")
 	if o.Fail {
 		return nil, fmt.Errorf("forced error")
 	}
