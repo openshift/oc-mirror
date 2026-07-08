@@ -1,0 +1,11 @@
+# ImageSetConfig with only a filtered operator catalog, used to isolate operator
+# catalog collection/rebuild behavior from release, helm and additional images.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    packages:
+    - name: foo
+    - name: bar
+    - name: baz

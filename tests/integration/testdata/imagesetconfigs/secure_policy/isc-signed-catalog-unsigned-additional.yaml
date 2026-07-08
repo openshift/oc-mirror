@@ -1,0 +1,12 @@
+# ImageSetConfig combining a fully-mirrored (unfiltered) operator catalog, whose image and
+# bundles are genuinely cosign-signed at their source digests, with an additional image that
+# carries no signature at all. Used to verify that --secure-policy=true actually enforces a
+# real signature-based trust policy: signed content is mirrored, unsigned content is rejected.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    full: true
+  additionalImages:
+  - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27

@@ -20,6 +20,7 @@ var (
 	registryConfig string
 	iscDir         string
 	keysDir        string
+	policiesDir    string
 	cacheDir       string
 	graphDataDir   string
 	ctx            context.Context
@@ -43,6 +44,7 @@ var _ = BeforeSuite(func() {
 	iscDir = filepath.Join(artifactsDir, "imagesetconfigs")
 	graphDataDir = filepath.Join(artifactsDir, "graphdatas")
 	keysDir = filepath.Join(artifactsDir, "keys")
+	policiesDir = filepath.Join(artifactsDir, "policies")
 
 	os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", filepath.Join(keysDir, "release-pk.asc"))
 
