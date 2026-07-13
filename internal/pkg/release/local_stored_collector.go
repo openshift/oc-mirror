@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -190,8 +191,17 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, release v2alpha1.CopyImageSchema, dir string) error {
 	_, err := os.Stat(dir)
 	if err == nil {
-		o.Log.Debug(collectorPrefix+"release-images index directory alredy exists %s", dir)
-		return nil
+		// OCPBUGS-77670: directory exists, but may be incomplete from a previous
+		// interrupted run (Ctrl+C, disk full, reboot). Validate that the OCI
+		// layout is complete before reusing.
+		if isValidOCIDirectory(dir) {
+			o.Log.Debug(collectorPrefix+"release-images index directory already exists %s", dir)
+			return nil
+		}
+		o.Log.Warn(collectorPrefix+"detected incomplete OCI directory %s, removing and re-downloading", dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("remove incomplete OCI directory %s: %w", dir, err)
+		}
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -212,6 +222,46 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 	o.Log.Debug(collectorPrefix+"copied release index image %s ", release.Source)
 
 	return nil
+}
+
+// isValidOCIDirectory checks whether a directory contains a valid OCI image
+// layout by verifying the presence and basic validity of oci-layout and
+// index.json files. This is used to detect partially written directories left
+// behind by interrupted mirror operations (OCPBUGS-77670).
+func isValidOCIDirectory(dir string) bool {
+	// Check oci-layout
+	ociLayoutPath := filepath.Join(dir, "oci-layout")
+	ociLayoutData, err := os.ReadFile(ociLayoutPath)
+	if err != nil {
+		return false
+	}
+	var ociLayout struct {
+		ImageLayoutVersion string `json:"imageLayoutVersion"`
+	}
+	if err := json.Unmarshal(ociLayoutData, &ociLayout); err != nil {
+		return false
+	}
+	if ociLayout.ImageLayoutVersion == "" {
+		return false
+	}
+
+	// Check index.json
+	indexPath := filepath.Join(dir, "index.json")
+	indexData, err := os.ReadFile(indexPath)
+	if err != nil {
+		return false
+	}
+	var index struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal(indexData, &index); err != nil {
+		return false
+	}
+	if index.SchemaVersion == 0 {
+		return false
+	}
+
+	return true
 }
 
 // collects release images from the disk
