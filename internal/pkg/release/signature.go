@@ -80,7 +80,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		// OCPBUGS-56009
 		// not worrying about code complexity as this module will eventually be deprecated
 		// in favor of the cosign signature work
-		if o.Opts.Global.IgnoreReleaseSignature && len(o.Config.Mirror.Platform.Release) > 0 {
+		if o.Opts.Global.IgnoreReleaseSignature {
 			imgs = append(imgs, img)
 			continue
 		}

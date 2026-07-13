@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -840,4 +841,30 @@ func (o *ManifestMock) ImageDigest(ctx context.Context, sourceCtx *types.SystemC
 
 func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	return nil, "", nil
+}
+
+func TestPreparePathComponentsWithOverrides(t *testing.T) {
+	releaseImgSpec, err := image.ParseRef("docker://quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64")
+	assert.NoError(t, err)
+	componentImgSpec, err := image.ParseRef("docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e4182331e")
+	assert.NoError(t, err)
+
+	t.Run("defaults when no overrides", func(t *testing.T) {
+		assert.Equal(t, releaseImagePathComponents, preparePathComponents(releaseImgSpec, v2alpha1.TypeOCPRelease, "", releaseImagePathComponents, releaseComponentPathComponents))
+		assert.Equal(t, releaseComponentPathComponents, preparePathComponents(componentImgSpec, v2alpha1.TypeOCPReleaseContent, "agent-installer-api-server", releaseImagePathComponents, releaseComponentPathComponents))
+	})
+
+	t.Run("release image path override", func(t *testing.T) {
+		assert.Equal(t, "openshift-release-dev/ocp-release", preparePathComponents(releaseImgSpec, v2alpha1.TypeOCPRelease, "", "openshift-release-dev/ocp-release", releaseComponentPathComponents))
+	})
+
+	t.Run("release component path override", func(t *testing.T) {
+		assert.Equal(t, "openshift-release-dev/ocp-v4.0-art-dev", preparePathComponents(componentImgSpec, v2alpha1.TypeOCPReleaseContent, "agent-installer-api-server", releaseImagePathComponents, "openshift-release-dev/ocp-v4.0-art-dev"))
+	})
+
+	t.Run("graph image unaffected by overrides", func(t *testing.T) {
+		graphSpec, err := image.ParseRef("docker://localhost:9999/openshift/graph-image:latest")
+		assert.NoError(t, err)
+		assert.Equal(t, graphSpec.PathComponent, preparePathComponents(graphSpec, v2alpha1.TypeCincinnatiGraph, "", "override-release", "override-component"))
+	})
 }

@@ -102,11 +102,21 @@ type Platform struct {
 	// will be used to extract the kubeVirtContainer image
 	// from the release payload file 0000_50_installer_coreos-bootimages
 	KubeVirtContainer bool `json:"kubeVirtContainer,omitempty"`
+	// ReleaseImageRepo overrides the destination repository path for
+	// release images (default: openshift/release-images)
+	ReleaseImageRepo string `json:"releaseImageRepo,omitempty"`
+	// ReleaseComponentRepo overrides the destination repository path for
+	// release component images (default: openshift/release)
+	ReleaseComponentRepo string `json:"releaseComponentRepo,omitempty"`
 }
 
 func (p Platform) DeepCopy() Platform {
 	platformCopy := Platform{
-		Graph: p.Graph,
+		Graph:                p.Graph,
+		Release:              p.Release,
+		KubeVirtContainer:    p.KubeVirtContainer,
+		ReleaseImageRepo:     p.ReleaseImageRepo,
+		ReleaseComponentRepo: p.ReleaseComponentRepo,
 	}
 
 	platformCopy.Channels = make([]ReleaseChannel, len(p.Channels))

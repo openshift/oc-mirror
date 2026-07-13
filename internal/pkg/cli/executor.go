@@ -708,6 +708,10 @@ http:
 // setupLocalStorage - private function that sets up
 // a local (distribution) registry
 func (o *ExecutorSchema) setupLocalStorage(ctx context.Context) error {
+	// distribution/distribution parses all REGISTRY_* env vars as config overrides,
+	// colliding with the Podman/containers REGISTRY_AUTH_FILE convention.
+	// The value has already been captured as the --authfile default (options.go).
+	os.Unsetenv("REGISTRY_AUTH_FILE")
 	config, err := o.setupLocalRegistryConfig()
 	if err != nil {
 		o.Log.Error("parsing config %v", err)
