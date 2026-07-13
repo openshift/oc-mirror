@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
@@ -34,13 +35,12 @@ func TestNewHistory(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-
 	type testCase struct {
 		caseName      string
 		workingDir    string
 		before        time.Time
 		expectedError string
-		expectedHist  map[string]struct{}
+		expectedHist  sets.Set[string]
 	}
 
 	testCases := []testCase{
@@ -49,28 +49,21 @@ func TestRead(t *testing.T) {
 			workingDir:    historyFakePath,
 			before:        time.Time{},
 			expectedError: "",
-			expectedHist: map[string]struct{}{
-				"sha256:1dddb0988d16": {},
-				"sha256:3658954f1990": {},
-				"sha256:e3dad360d035": {},
-				"sha256:422e4fbe1ed8": {},
-			},
+			expectedHist:  sets.New("sha256:1dddb0988d16", "sha256:3658954f1990", "sha256:e3dad360d035", "sha256:422e4fbe1ed8"),
 		},
 		{
 			caseName:      "valid history file - with specified time",
 			workingDir:    historyFakePath,
 			before:        time.Date(2023, 11, 22, 0, 0, 0, 0, time.UTC),
 			expectedError: "",
-			expectedHist: map[string]struct{}{
-				"sha256:1dddb0988d16": {},
-			},
+			expectedHist:  sets.New("sha256:1dddb0988d16"),
 		},
 		{
 			caseName:      "invalid working dir",
 			workingDir:    "./invalid-workindir",
 			before:        time.Time{},
 			expectedError: "no history metadata found under invalid-workindir",
-			expectedHist:  map[string]struct{}{},
+			expectedHist:  sets.New[string](),
 		},
 	}
 
@@ -83,63 +76,45 @@ func TestRead(t *testing.T) {
 			if test.expectedError != "" {
 				assert.EqualError(t, err, test.expectedError)
 			}
-			assert.Equal(t, test.expectedHist, historyMap)
+			assert.Equal(t, sets.List(test.expectedHist), sets.List(historyMap))
 		})
 	}
 }
 
 func TestAppend(t *testing.T) {
-
 	type testCase struct {
 		caseName      string
 		workingDir    string
 		before        time.Time
-		blobsToAppend map[string]struct{}
+		blobsToAppend sets.Set[string]
 		expectedError string
-		expectedHist  map[string]struct{}
+		expectedHist  sets.Set[string]
 	}
 
 	testCases := []testCase{
 		{
-			caseName:   "valid history file - without specified time",
-			workingDir: historyFakePath,
-			before:     time.Time{},
-			blobsToAppend: map[string]struct{}{
-				"sha256:20f695d2a913": {},
-			},
+			caseName:      "valid history file - without specified time",
+			workingDir:    historyFakePath,
+			before:        time.Time{},
+			blobsToAppend: sets.New("sha256:20f695d2a913"),
 			expectedError: "",
-			expectedHist: map[string]struct{}{
-				"sha256:422e4fbe1ed8": {},
-				"sha256:1dddb0988d16": {},
-				"sha256:3658954f1990": {},
-				"sha256:e3dad360d035": {},
-				"sha256:20f695d2a913": {},
-			},
+			expectedHist:  sets.New("sha256:422e4fbe1ed8", "sha256:1dddb0988d16", "sha256:3658954f1990", "sha256:e3dad360d035", "sha256:20f695d2a913"),
 		},
 		{
-			caseName:   "valid history file - with specified time",
-			workingDir: historyFakePath,
-			before:     time.Date(2023, 11, 22, 0, 0, 0, 0, time.UTC),
-			blobsToAppend: map[string]struct{}{
-				"sha256:20f695d2a913": {},
-			},
+			caseName:      "valid history file - with specified time",
+			workingDir:    historyFakePath,
+			before:        time.Date(2023, 11, 22, 0, 0, 0, 0, time.UTC),
+			blobsToAppend: sets.New("sha256:20f695d2a913"),
 			expectedError: "",
-			expectedHist: map[string]struct{}{
-				"sha256:1dddb0988d16": {},
-				"sha256:20f695d2a913": {},
-			},
+			expectedHist:  sets.New("sha256:1dddb0988d16", "sha256:20f695d2a913"),
 		},
 		{
-			caseName:   "empty working dir - error is ignored",
-			workingDir: "./empty-workindir",
-			before:     time.Time{},
-			blobsToAppend: map[string]struct{}{
-				"sha256:20f695d2a913": {},
-			},
+			caseName:      "empty working dir - error is ignored",
+			workingDir:    "./empty-workindir",
+			before:        time.Time{},
+			blobsToAppend: sets.New("sha256:20f695d2a913"),
 			expectedError: "",
-			expectedHist: map[string]struct{}{
-				"sha256:20f695d2a913": {},
-			},
+			expectedHist:  sets.New("sha256:20f695d2a913"),
 		},
 	}
 
@@ -153,7 +128,7 @@ func TestAppend(t *testing.T) {
 				assert.EqualError(t, err, test.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, test.expectedHist, historyBlobs)
+				assert.Equal(t, sets.List(test.expectedHist), sets.List(historyBlobs))
 			}
 		})
 	}
