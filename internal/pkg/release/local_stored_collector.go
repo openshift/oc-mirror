@@ -503,7 +503,7 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 		return v2alpha1.RelatedImage{}, fmt.Errorf("marshalling kubevirt yaml file %w", err)
 	}
 
-	o.Log.Trace(fmt.Sprintf("data %v", icm.Data.Stream))
+	o.Log.Trace("data %v", icm.Data.Stream)
 	// now parse the json section
 	ibi, err := parser.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
 	if err != nil {
@@ -516,7 +516,7 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 	if image == "" {
 		return v2alpha1.RelatedImage{}, fmt.Errorf("could not find kubevirt image in this release")
 	}
-	o.Log.Info(fmt.Sprintf("kubeVirtContainer set to true [ including : %v ]", image))
+	o.Log.Info("kubeVirtContainer set to true [ including : %v ]", image)
 	kubeVirtImage := v2alpha1.RelatedImage{
 		Image: image,
 		Name:  "kube-virt-container",
@@ -625,6 +625,6 @@ func logCollectionError(log clog.PluggableLoggerInterface, spinner *mpb.Bar, isT
 	spinner.Abort(true)
 	spinner.Wait()
 	if !isTerminal {
-		log.Error("Failed to collect release image %s: %w", releaseImage, err)
+		log.Error("Failed to collect release image %s: %v", releaseImage, err)
 	}
 }

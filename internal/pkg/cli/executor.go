@@ -720,7 +720,7 @@ func (o *ExecutorSchema) setupLocalStorage(ctx context.Context) error {
 	} else {
 		absPath, err := filepath.Abs(registryLogPath)
 		if err != nil {
-			o.Log.Error(err.Error())
+			o.Log.Error("%s", err.Error())
 		} else {
 			o.Log.Debug("local storage registry will log to %s", absPath)
 		}
