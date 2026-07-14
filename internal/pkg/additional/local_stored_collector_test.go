@@ -671,3 +671,7 @@ func (o MockManifest) ImageDigest(ctx context.Context, sourceCtx *types.SystemCo
 func (o MockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	return nil, "", nil
 }
+
+func (o MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
+	return nil, nil
+}
