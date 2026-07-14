@@ -64,6 +64,9 @@ func (m *MockManifest) GetOperatorConfig(file string) (*v2alpha1.OperatorConfigS
 func (m *MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemContext, ref string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	return nil, "", nil
 }
+func (m *MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
+	return nil, nil
+}
 
 const (
 	// Valid SHA256 digests for testing (64 hex characters)
