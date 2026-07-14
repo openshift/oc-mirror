@@ -256,3 +256,7 @@ func (o mockManifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.In
 func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error) {
 	return nil, "", nil
 }
+
+func (o mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
+	return nil, nil
+}
