@@ -55,7 +55,7 @@ func saveErrors(logger clog.PluggableLoggerInterface, logsDir, timestamp string,
 
 		for _, err := range errArray {
 			errorMsg := formatErrorMsg(err)
-			logger.Error(workerPrefix + errorMsg)
+			logger.Error("%s", workerPrefix+errorMsg)
 			fmt.Fprintln(file, errorMsg)
 		}
 		return filename, nil

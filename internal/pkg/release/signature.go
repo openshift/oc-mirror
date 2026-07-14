@@ -91,13 +91,13 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 			// do a lookup and download it to cache
 			sigFiles, err := os.ReadDir(o.Opts.Global.WorkingDir + SignatureDir)
 			if err != nil {
-				o.Log.Debug("[GenerateReleaseSignatures] no directory found for signatures %w", err)
+				o.Log.Debug("[GenerateReleaseSignatures] no directory found for signatures %v", err)
 			}
 			for _, file := range sigFiles {
 				if strings.Contains(file.Name(), digest) {
 					data, err = os.ReadFile(o.Opts.Global.WorkingDir + SignatureDir + file.Name())
 					if err != nil {
-						o.Log.Warn("[GenerateReleaseSignatures] could not read %s %w", file.Name(), err)
+						o.Log.Warn("[GenerateReleaseSignatures] could not read %s %v", file.Name(), err)
 					}
 					break
 				}
@@ -196,7 +196,7 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		}
 		sigFilePath := fmt.Sprintf("%s%s/%s-sha256-%s", o.Opts.Global.WorkingDir, SignatureDir, newImgSpec.Tag, digest)
 		if _, err := os.Stat(sigFilePath); err != nil {
-			ferr := os.WriteFile(sigFilePath, data, 0600)
+			ferr := os.WriteFile(sigFilePath, data, 0o600)
 			if ferr != nil {
 				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] writing %w", ferr)
 			}
