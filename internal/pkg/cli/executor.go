@@ -953,39 +953,8 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 
 	o.createConfigsWithPinnedCatalogs()
 
-	// create IDMS/ITMS
-	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
+	if err := o.generateClusterResources(cmd.Context(), copiedSchema.AllImages); err != nil {
 		return err
-	}
-
-	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
-		return err
-	}
-
-	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-		return err
-	}
-
-	// generate signature config map
-	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
-		// as this is not a seriously fatal error we just log the error
-		o.Log.Warn("%s", err)
-	}
-
-	// create updateService
-	if o.Config.Mirror.Platform.Graph {
-		graphImage, err := o.Release.GraphImage()
-		if err != nil {
-			return err
-		}
-		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-		if err != nil {
-			return err
-		}
-		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
-			return err
-		}
 	}
 
 	return batchError
@@ -1033,43 +1002,80 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 
-	// create IDMS/ITMS
-	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
-	if err := o.ClusterResources.IDMS_ITMSGenerator(copiedSchema.AllImages, forceRepositoryScope); err != nil {
+	if err := o.generateClusterResources(cmd.Context(), copiedSchema.AllImages); err != nil {
 		return err
-	}
-
-	// create catalog source
-	if err := o.ClusterResources.CatalogSourceGenerator(copiedSchema.AllImages); err != nil {
-		return err
-	}
-
-	if err := o.ClusterResources.ClusterCatalogGenerator(copiedSchema.AllImages); err != nil {
-		return err
-	}
-
-	// generate signature config map
-	if err := o.ClusterResources.GenerateSignatureConfigMap(copiedSchema.AllImages); err != nil {
-		// as this is not a seriously fatal error we just log the error
-		o.Log.Warn("%s", err)
-	}
-
-	// create updateService
-	if o.Config.Mirror.Platform.Graph {
-		graphImage, err := o.Release.GraphImage()
-		if err != nil {
-			return err
-		}
-		releaseImage, err := o.Release.ReleaseImage(cmd.Context())
-		if err != nil {
-			return err
-		}
-		if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
-			return err
-		}
 	}
 
 	return batchError
+}
+
+// generateClusterResources generates the following cluster resources:
+// IDMS/ITMS, CatalogSource, ClusterCatalog, UpdateService and SignatureConfigMap.
+func (o *ExecutorSchema) generateClusterResources(ctx context.Context, images []v2alpha1.CopyImageSchema) error {
+	if o.ClusterResources == nil {
+		return fmt.Errorf("cluster resources generator is not initialized")
+	}
+	o.Log.Info(emoji.PageFacingUp + " Generating cluster resources...")
+
+	if err := o.generateImageMirrorSet(images); err != nil {
+		return err
+	}
+
+	if err := o.generateCatalogResources(images); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.GenerateSignatureConfigMap(images); err != nil {
+		o.Log.Warn("Failed to generate signature ConfigMap: %v", err)
+	}
+
+	if err := o.generateUpdateServiceResource(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateImageMirrorSet generates IDMS/ITMS resources
+func (o *ExecutorSchema) generateImageMirrorSet(images []v2alpha1.CopyImageSchema) error {
+	forceRepositoryScope := o.Opts.Global.MaxNestedPaths > 0
+	if err := o.ClusterResources.IDMS_ITMSGenerator(images, forceRepositoryScope); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *ExecutorSchema) generateCatalogResources(images []v2alpha1.CopyImageSchema) error {
+	if err := o.ClusterResources.CatalogSourceGenerator(images); err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.ClusterCatalogGenerator(images); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *ExecutorSchema) generateUpdateServiceResource(ctx context.Context) error {
+	if !o.Config.Mirror.Platform.Graph {
+		return nil
+	}
+
+	graphImage, err := o.Release.GraphImage()
+	if err != nil {
+		return err
+	}
+
+	releaseImage, err := o.Release.ReleaseImage(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // setupLogsLevelAndDir - private utility to setup log
