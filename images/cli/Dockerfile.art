@@ -45,7 +45,5 @@ COPY --from=test-extension-builder /go/src/github.com/openshift/oc-mirror/tests/
 
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
-      io.openshift.tags="openshift,cli,mirror" \
-      # We're not really an operator, we're just getting some data into the release image.
-      io.openshift.release.operator=true
+      io.openshift.tags="openshift,cli,mirror"
 ENTRYPOINT ["/usr/bin/oc-mirror"]
