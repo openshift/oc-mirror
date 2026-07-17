@@ -43,6 +43,10 @@ COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /
 COPY --from=builder_rhel9 /go/src/github.com/openshift/oc-mirror/bin/oc-mirror /usr/bin/oc-mirror.rhel9
 COPY --from=test-extension-builder /go/src/github.com/openshift/oc-mirror/tests/e2e/bin/oc-mirror-tests-ext.gz /usr/bin/oc-mirror-tests-ext.gz
 
+RUN mkdir -p /releases/
+RUN tar czf /releases/oc-mirror-rhel9-linux-amd64.tar.gz -C /usr/bin oc-mirror
+RUN tar czf /releases/oc-mirror-rhel8-linux-amd64.tar.gz -C /usr/bin oc-mirror.rhel8
+
 LABEL io.k8s.display-name="oc-mirror" \
       io.k8s.description="OpenShift is a platform for developing, building, and deploying containerized applications." \
       io.openshift.tags="openshift,cli,mirror" \
