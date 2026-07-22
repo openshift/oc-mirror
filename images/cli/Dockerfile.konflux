@@ -2,7 +2,7 @@
 # packages them as compressed tarballs in /releases/ for push-artifacts-to-cdn.
 
 # Stage 1: Build and compress RHEL 8 binary
-FROM registry.access.redhat.com/ubi8/go-toolset:1.24 AS builder_rhel8
+FROM registry.access.redhat.com/ubi8/go-toolset:1.26 AS builder_rhel8
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build && \
