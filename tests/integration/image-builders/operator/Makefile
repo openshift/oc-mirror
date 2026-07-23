@@ -73,6 +73,13 @@ $(addprefix sign-catalog.,$(CATALOGDIRS)): sign-catalog.%:
 	COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$*"
 .PHONY: sign-catalogs
 
+sign-multi:
+	@for tag in foo-bundle-v0.3.1-multi foo-v0.3.1-multi bar-bundle-v1.0.0-multi bar-v1.0.0-multi test-catalog-multi; do \
+		echo "Signing $$tag"; \
+		COSIGN_PASSWORD="" cosign sign --recursive --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$$tag"; \
+	done
+.PHONY: sign-multi
+
 clean:
 	rm -rf $(OUTPUT)
 .PHONY: clean

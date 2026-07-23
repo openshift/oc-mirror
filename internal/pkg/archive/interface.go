@@ -9,11 +9,15 @@ import (
 )
 
 type BlobsGatherer interface {
-	GatherBlobs(ctx context.Context, imgRef string) (sets.Set[string], error)
+	// GatherBlobs returns all blobs for the given image.
+	// allowedPlatforms is the set of os/arch pairs that were intentionally mirrored
+	// (from CollectorSchema.PlatformFilters). Missing platforms outside this set are
+	// skipped; missing platforms inside it are real errors.
+	GatherBlobs(ctx context.Context, imgRef string, allowedPlatforms []string) (sets.Set[string], error)
 }
 
 type Archiver interface {
-	BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error
+	BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error
 }
 
 type UnArchiver interface {

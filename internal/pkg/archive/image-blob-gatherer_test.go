@@ -221,7 +221,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 
 		gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 
-		blobs, err := gatherer.GatherBlobs(ctx, parentImage.destProtocol+u.Host+parentImage.dest)
+		blobs, err := gatherer.GatherBlobs(ctx, parentImage.destProtocol+u.Host+parentImage.dest, nil)
 		if tc.expectedErrorType != nil {
 			assert.True(t, reflect.TypeOf(err) == reflect.TypeOf(tc.expectedErrorType))
 		} else {
@@ -257,7 +257,7 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, "error")
+	_, err := gatherer.GatherBlobs(ctx, "error", nil)
 	assert.Equal(t, "invalid source name error: Invalid image name \"error\", expected colon-separated transport:reference", err.Error())
 }
 
@@ -289,7 +289,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest")
+	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest", nil)
 	assert.Contains(t, err.Error(), "pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused")
 }
 
@@ -328,6 +328,6 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest")
+	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest", nil)
 	assert.Contains(t, err.Error(), "name unknown: Unknown name")
 }

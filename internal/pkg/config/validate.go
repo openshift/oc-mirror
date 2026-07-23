@@ -17,7 +17,7 @@ type (
 )
 
 var (
-	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages}
+	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
 	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
 )
 
@@ -138,6 +138,19 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 
 	if len(errs) > 0 {
 		return errs
+	}
+	return nil
+}
+
+// validateReleasePlatformFields ensures that platform.platforms and platform.architectures
+// are not used together — they are mutually exclusive.
+func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
+	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity
+	if len(cfg.Mirror.Platform.Platforms) > 0 && len(cfg.Mirror.Platform.Architectures) > 0 {
+		return []error{fmt.Errorf(
+			"platform.platforms and platform.architectures cannot be used together; " +
+				"use platform.platforms for sparse manifest filtering (requires disabling manifest list blob checks on container registry side), or platform.architectures (deprecated) for OCP multi payload or single arch payloads",
+		)}
 	}
 	return nil
 }

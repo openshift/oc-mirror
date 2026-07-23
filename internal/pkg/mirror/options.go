@@ -79,6 +79,7 @@ type CopyOptions struct {
 	Format                   string    // Force conversion of the image to a specified format
 	All                      bool      // Copy all of the images if the source is a list
 	MultiArch                string    // How to handle multi architecture images
+	InstancePlatforms        []string  // Platform specifications (e.g., "linux/amd64", "linux/arm64") for multi-arch images
 	PreserveDigests          bool      // Preserve digests during copy
 	EncryptLayer             []int     // The list of layers to encrypt
 	EncryptionKeys           []string  // Keys needed to encrypt the image

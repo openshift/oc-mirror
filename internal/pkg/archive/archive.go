@@ -66,7 +66,7 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
+func (o *MirrorArchive) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error {
 	if err := o.createTarball(); err != nil {
 		return fmt.Errorf("unable to create the mirror archive: %w", err)
 	}
@@ -97,7 +97,7 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, collectedImages []v2al
 	}
 	// ignoring the error otherwise: continuing with an empty map in blobsInHistory
 
-	addedBlobs, err := o.addImagesDiff(ctx, collectedImages, blobsInHistory)
+	addedBlobs, err := o.addImagesDiff(ctx, schema, blobsInHistory)
 	if err != nil {
 		return fmt.Errorf("unable to add image blobs to the archive : %w", err)
 	}
@@ -136,10 +136,11 @@ func (o *MirrorArchive) createTarball() error {
 	return nil
 }
 
-func (o *MirrorArchive) addImagesDiff(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema, historyBlobs sets.Set[string]) (sets.Set[string], error) {
+func (o *MirrorArchive) addImagesDiff(ctx context.Context, schema v2alpha1.CollectorSchema, historyBlobs sets.Set[string]) (sets.Set[string], error) {
 	allAddedBlobs := sets.New[string]()
-	for _, img := range collectedImages {
-		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination)
+	for _, img := range schema.AllImages {
+		allowedPlatforms := schema.PlatformFilters[img.Origin]
+		imgBlobs, err := o.blobGatherer.GatherBlobs(ctx, img.Destination, allowedPlatforms)
 		var sigErr *SignatureBlobGathererError
 		if err != nil && !errors.As(err, &sigErr) {
 			return nil, fmt.Errorf("unable to find blobs corresponding to %s: %w", img.Destination, err)

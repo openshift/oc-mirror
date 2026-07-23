@@ -2,8 +2,10 @@ package archive
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	digest "github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/manifest"
@@ -24,12 +26,13 @@ type ImageBlobGatherer struct {
 }
 
 type internalImageBlobGatherer struct {
-	imgRef         string
-	sourceCtx      *types.SystemContext
-	manifestBytes  []byte
-	mimeType       string
-	digest         digest.Digest
-	copySignatures bool
+	imgRef           string
+	sourceCtx        *types.SystemContext
+	manifestBytes    []byte
+	mimeType         string
+	digest           digest.Digest
+	copySignatures   bool
+	allowedPlatforms []string // non-empty = only these os/arch pairs were mirrored (sparse)
 }
 
 func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *ImageBlobGatherer {
@@ -40,8 +43,9 @@ func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInte
 	}
 }
 
-// GatherBlobs returns all container image blobs (including signature blobs if they exists).
-func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs sets.Set[string], retErr error) {
+// GatherBlobs returns all container image blobs (including signature blobs if they exist).
+// See BlobsGatherer.GatherBlobs for the allowedPlatforms semantics.
+func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allowedPlatforms []string) (blobs sets.Set[string], retErr error) {
 	// we are always gathering blobs from the local cache registry - skipping tls verification
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
@@ -59,7 +63,7 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 		return nil, fmt.Errorf("error to get the digest of the image manifest %w", err)
 	}
 
-	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures}
+	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, allowedPlatforms: allowedPlatforms}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
 		return o.multiArchBlobs(ctx, inImageBlogGather)
@@ -93,13 +97,23 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 
 	digests := manifestList.Instances()
 	for _, digest := range digests {
-		blobs.Insert(digest.String())
 		singleIn := in
 
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
+			if strings.Contains(err.Error(), "manifest unknown") && len(in.allowedPlatforms) > 0 {
+				platform := platformForDigest(in.manifestBytes, digest.String())
+				if platform != "" && !platformAllowed(platform, in.allowedPlatforms) {
+					// Platform was intentionally not mirrored (sparse manifest filtering).
+					// Do not add its digest to blobs — the blob file does not exist locally.
+					o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, digest.String())
+					continue
+				}
+			}
 			return nil, err
 		}
+		// Only insert the platform digest after confirming the manifest is present.
+		blobs.Insert(digest.String())
 		singleIn.digest = digest
 
 		singleArchBlobs, err := o.singleArchBlobs(ctx, singleIn)
@@ -187,4 +201,37 @@ func (o *ImageBlobGatherer) imageSignatureBlobs(ctx context.Context, in internal
 	sigBlobs = append(sigBlobs, signatureDigest.String())
 
 	return sigBlobs, nil
+}
+
+// platformForDigest returns the "os/arch" string for the manifest list entry
+// matching digestStr, or an empty string if not found.
+func platformForDigest(manifestBytes []byte, digestStr string) string {
+	var ml struct {
+		Manifests []struct {
+			Digest   string `json:"digest"`
+			Platform struct {
+				OS           string `json:"os"`
+				Architecture string `json:"architecture"`
+			} `json:"platform"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(manifestBytes, &ml); err != nil {
+		return ""
+	}
+	for _, m := range ml.Manifests {
+		if m.Digest == digestStr {
+			return m.Platform.OS + "/" + m.Platform.Architecture
+		}
+	}
+	return ""
+}
+
+// platformAllowed reports whether platform is in allowedPlatforms.
+func platformAllowed(platform string, allowedPlatforms []string) bool {
+	for _, allowed := range allowedPlatforms {
+		if platform == allowed {
+			return true
+		}
+	}
+	return false
 }

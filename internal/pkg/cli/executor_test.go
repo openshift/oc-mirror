@@ -1245,9 +1245,9 @@ func (o *Collector) OperatorImageCollector(ctx context.Context) (v2alpha1.Collec
 	return v2alpha1.CollectorSchema{AllImages: test}, nil
 }
 
-func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+func (o *Collector) ReleaseImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	if o.Fail {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error release collector")
+		return v2alpha1.CollectorSchema{}, fmt.Errorf("forced error release collector")
 	}
 	test := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -1257,7 +1257,7 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyI
 		{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 	}
-	return test, nil
+	return v2alpha1.CollectorSchema{AllImages: test}, nil
 }
 
 func (o *Collector) GraphImage() (string, error) {
@@ -1268,9 +1268,9 @@ func (o *Collector) ReleaseImage(ctx context.Context) (string, error) {
 	return "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", nil
 }
 
-func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+func (o *Collector) AdditionalImagesCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	if o.Fail {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error additionalImages collector")
+		return v2alpha1.CollectorSchema{}, fmt.Errorf("forced error additionalImages collector")
 	}
 	test := []v2alpha1.CopyImageSchema{
 		{Source: "docker://registry/name/namespace/sometestimage-a@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
@@ -1280,17 +1280,17 @@ func (o *Collector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.C
 		{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 	}
-	return test, nil
+	return v2alpha1.CollectorSchema{AllImages: test}, nil
 }
 
-func (o *Collector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+func (o *Collector) HelmImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	if o.Fail {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("forced error helm collector")
+		return v2alpha1.CollectorSchema{}, fmt.Errorf("forced error helm collector")
 	}
-	return []v2alpha1.CopyImageSchema{}, nil
+	return v2alpha1.CollectorSchema{}, nil
 }
 
-func (o MockArchiver) BuildArchive(ctx context.Context, collectedImages []v2alpha1.CopyImageSchema) error {
+func (o MockArchiver) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error {
 	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
 	return nil
 }

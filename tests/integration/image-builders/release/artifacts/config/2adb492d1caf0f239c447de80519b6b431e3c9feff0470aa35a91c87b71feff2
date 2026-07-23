@@ -1,0 +1,48 @@
+{
+  "created": "2023-01-24T02:27:38Z",
+  "architecture": "arm64",
+  "os": "linux",
+  "config": {
+    "User": "0",
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "container=oci",
+      "__doozer=merge",
+      "BUILD_RELEASE=202212061458.p0.g7e8a010.assembly.stream",
+      "BUILD_VERSION=v4.12.0",
+      "OS_GIT_MAJOR=4",
+      "OS_GIT_MINOR=12",
+      "OS_GIT_PATCH=0",
+      "OS_GIT_TREE_STATE=clean",
+      "OS_GIT_VERSION=4.12.0-202212061458.p0.g7e8a010.assembly.stream-7e8a010",
+      "SOURCE_GIT_TREE_STATE=clean",
+      "OS_GIT_COMMIT=7e8a010",
+      "SOURCE_DATE_EPOCH=1666997438",
+      "SOURCE_GIT_COMMIT=7e8a0105eb7369f3f92ad7b2581a2efffab5b28e",
+      "SOURCE_GIT_TAG=7e8a010",
+      "SOURCE_GIT_URL=https://github.com/oc-mirror-test/integration",
+      "GODEBUG=x509ignoreCN=0,madvdontneed=1",
+      "OPENSHIFT_CI=true",
+      "BUILD_LOGLEVEL=0",
+      "OPENSHIFT_BUILD_NAME=test-release-image",
+      "OPENSHIFT_BUILD_NAMESPACE=ci-op-1c0qqwdy"
+    ],
+    "Entrypoint": [
+      "/usr/bin/simple-release"
+    ],
+    "Labels": {
+      "io.openshift.release": "4.18.0-0.ocp-2025-03-24-022732",
+      "io.openshift.release.base-image-digest": "sha256:0ed55ee636f5703b212337ff8a82833c5dfc4553069dc3f6cd52564cc0adcd08"
+    }
+  },
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": []
+  },
+  "history": [
+    {
+      "created": "2025-03-24T02:27:38Z",
+      "comment": "Release image for testing oc-mirror v2"
+    }
+  ]
+}
