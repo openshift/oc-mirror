@@ -111,7 +111,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 				Type:        v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -137,10 +137,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
-		if len(res) == 0 {
+		if len(res.AllImages) == 0 {
 			t.Fatalf("should contain at least 1 image")
 		}
-		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+		if !strings.Contains(res.AllImages[0].Source, ex.LocalStorageFQDN) {
 			t.Fatalf("source images should be from local storage")
 		}
 		// must contain 4 release component images
@@ -191,7 +191,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 				Type:        v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -218,10 +218,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
-		if len(res) == 0 {
+		if len(res.AllImages) == 0 {
 			t.Fatalf("should contain at least 1 image")
 		}
-		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+		if !strings.Contains(res.AllImages[0].Source, ex.LocalStorageFQDN) {
 			t.Fatalf("source images should be from local storage")
 		}
 		log.Debug("completed test related images %v ", res)

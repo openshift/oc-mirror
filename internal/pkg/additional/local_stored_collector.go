@@ -47,76 +47,81 @@ func (o LocalStorageCollector) destinationRegistry() string {
 // AdditionalImagesCollector - this looks into the additional images field
 // taking into account the mode we are in (mirrorToDisk, diskToMirror)
 // the image is downloaded in oci format
-func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
-
+func (o LocalStorageCollector) AdditionalImagesCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	var allImages []v2alpha1.CopyImageSchema
 	var allErrs []error
+	platformFilters := make(map[string][]string)
 
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 	for _, img := range o.Config.ImageSetConfigurationSpec.Mirror.AdditionalImages {
-		var src, dest, tmpSrc, tmpDest string
-
-		origin := img.Name
-
-		imgSpec, err := image.ParseRef(img.Name)
+		src, dest, origin, err := o.resolveAdditionalImageSrcDest(img)
 		if err != nil {
-			// OCPBUGS-33081 - skip if parse error (i.e semver and other)
-			o.Log.Warn("%v : SKIPPING", err)
-			allErrs = append(allErrs, fmt.Errorf("parse image %q: %w", img.Name, err))
+			allErrs = append(allErrs, err)
 			continue
 		}
-
-		if img.TargetRepo != "" && !v2alpha1.IsValidPathComponent(img.TargetRepo) {
-			o.Log.Warn("invalid targetRepo %s for image %s : SKIPPING", img.TargetRepo, img.Name)
-			allErrs = append(allErrs, fmt.Errorf("invalid targetRepo %s for image %s", img.TargetRepo, img.Name))
-			continue
-		}
-
-		targetRepo := imgSpec.PathComponent
-		if img.TargetRepo != "" {
-			targetRepo = img.TargetRepo
-		}
-
-		targetTag := imgSpec.Tag
-		if img.TargetTag != "" {
-			targetTag = img.TargetTag
-		}
-
-		switch {
-		case o.Opts.IsMirrorToDisk(), o.Opts.IsMirrorToMirror():
-			tmpSrc, tmpDest = o.buildMirrorToDiskPaths(img, imgSpec, targetRepo, targetTag)
-		case o.Opts.IsDiskToMirror(), o.Opts.IsDelete():
-			tmpSrc, tmpDest = o.buildDiskToMirrorPaths(img, imgSpec, targetRepo, targetTag)
-		}
-
-		if tmpSrc == "" || tmpDest == "" {
-			o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
-			allErrs = append(allErrs, fmt.Errorf("unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name))
-			continue
-		}
-
-		srcSpec, err := image.ParseRef(tmpSrc) // makes sure this ref is valid, and adds transport if needed
-		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-			allErrs = append(allErrs, fmt.Errorf("parse source %q: %w", tmpSrc, err))
-			continue
-		}
-		src = srcSpec.ReferenceWithTransport
-
-		destSpec, err := image.ParseRef(tmpDest) // makes sure this ref is valid, and adds transport if needed
-		if err != nil {
-			o.Log.Error(errMsg, err.Error())
-			allErrs = append(allErrs, fmt.Errorf("parse destination %q: %w", tmpDest, err))
-			continue
-		}
-		dest = destSpec.ReferenceWithTransport
-
 		o.Log.Debug(collectorPrefix+"source %s", src)
 		o.Log.Debug(collectorPrefix+"destination %s", dest)
 
-		allImages = append(allImages, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: origin, Type: v2alpha1.TypeGeneric})
+		allImages = append(allImages, v2alpha1.CopyImageSchema{
+			Source:      src,
+			Destination: dest,
+			Origin:      origin,
+			Type:        v2alpha1.TypeGeneric,
+		})
+		if platforms := v2alpha1.ConvertPlatformsToStringSlice(img.Platforms); len(platforms) > 0 {
+			platformFilters[origin] = platforms
+		}
 	}
-	return allImages, errors.Join(allErrs...)
+	cs := v2alpha1.CollectorSchema{AllImages: allImages}
+	if len(platformFilters) > 0 {
+		cs.PlatformFilters = platformFilters
+	}
+	return cs, errors.Join(allErrs...)
+}
+
+// resolveAdditionalImageSrcDest validates an additional image entry and returns its
+// resolved source, destination and origin references ready for mirroring.
+func (o LocalStorageCollector) resolveAdditionalImageSrcDest(img v2alpha1.AdditionalImage) (src, dest, origin string, err error) {
+	origin = img.Name
+
+	imgSpec, err := image.ParseRef(img.Name)
+	if err != nil {
+		// OCPBUGS-33081 - skip if parse error (i.e semver and other)
+		o.Log.Warn("%v : SKIPPING", err)
+		return "", "", "", fmt.Errorf("parse image %q: %w", img.Name, err)
+	}
+
+	if img.TargetRepo != "" && !v2alpha1.IsValidPathComponent(img.TargetRepo) {
+		o.Log.Warn("invalid targetRepo %s for image %s : SKIPPING", img.TargetRepo, img.Name)
+		return "", "", "", fmt.Errorf("invalid targetRepo %s for image %s", img.TargetRepo, img.Name)
+	}
+
+	targetRepo, targetTag := resolveTargetRepoTag(img, imgSpec)
+
+	var tmpSrc, tmpDest string
+	switch {
+	case o.Opts.IsMirrorToDisk(), o.Opts.IsMirrorToMirror():
+		tmpSrc, tmpDest = o.buildMirrorToDiskPaths(img, imgSpec, targetRepo, targetTag)
+	case o.Opts.IsDiskToMirror(), o.Opts.IsDelete():
+		tmpSrc, tmpDest = o.buildDiskToMirrorPaths(img, imgSpec, targetRepo, targetTag)
+	}
+
+	if tmpSrc == "" || tmpDest == "" {
+		o.Log.Error(collectorPrefix+"unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
+		return "", "", "", fmt.Errorf("unable to determine src %s or dst %s for %s", tmpSrc, tmpDest, img.Name)
+	}
+
+	srcSpec, err := image.ParseRef(tmpSrc)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", "", "", fmt.Errorf("parse source %q: %w", tmpSrc, err)
+	}
+	destSpec, err := image.ParseRef(tmpDest)
+	if err != nil {
+		o.Log.Error(errMsg, err.Error())
+		return "", "", "", fmt.Errorf("parse destination %q: %w", tmpDest, err)
+	}
+	return srcSpec.ReferenceWithTransport, destSpec.ReferenceWithTransport, origin, nil
 }
 
 // buildMirrorToDiskPaths constructs source and destination paths for mirror-to-disk and mirror-to-mirror operations
@@ -187,4 +192,18 @@ func (o LocalStorageCollector) buildDiskToMirrorPaths(img v2alpha1.AdditionalIma
 	}
 
 	return tmpSrc, tmpDest
+}
+
+// resolveTargetRepoTag returns the effective target repository and tag for an additional image,
+// applying any overrides from the image configuration.
+func resolveTargetRepoTag(img v2alpha1.AdditionalImage, imgSpec image.ImageSpec) (string, string) {
+	targetRepo := imgSpec.PathComponent
+	if img.TargetRepo != "" {
+		targetRepo = img.TargetRepo
+	}
+	targetTag := imgSpec.Tag
+	if img.TargetTag != "" {
+		targetTag = img.TargetTag
+	}
+	return targetRepo, targetTag
 }

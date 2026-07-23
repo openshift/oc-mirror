@@ -50,9 +50,21 @@ func (o LocalStorageCollector) destinationRegistry() string {
 	return o.destReg
 }
 
-func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+// getPlatformFilters returns the platform filter strings for the new Platforms field.
+// Returns nil when Platforms is not set — the Architectures path uses Cincinnati
+// directly and does not need InstancePlatforms in the batch worker.
+func (o LocalStorageCollector) getPlatformFilters() []string {
+	return v2alpha1.ConvertPlatformsToStringSlice(o.Config.Mirror.Platform.Platforms)
+}
+
+func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
 	// we just care for 1 platform release, in order to read release images
 	o.Opts.MultiArch = "system"
+	if len(o.Config.Mirror.Platform.Platforms) > 0 {
+		// New Platforms field: download all arch payloads from the multi-arch release so that
+		// ensureReleaseInOCIFormat can extract image-references with manifest-list component digests.
+		o.Opts.MultiArch = "all"
+	}
 	o.Log.Debug(collectorPrefix+"setting copy option o.Opts.MultiArch=%s when collecting releases image", o.Opts.MultiArch)
 
 	var err error
@@ -68,24 +80,29 @@ func (o *LocalStorageCollector) ReleaseImageCollector(ctx context.Context) ([]v2
 		err = fmt.Errorf("release collector: invalid mirror mode %s", o.Opts.Mode)
 	}
 	if err != nil {
-		return []v2alpha1.CopyImageSchema{}, err
+		return v2alpha1.CollectorSchema{}, err
 	}
 
 	// OCPBUGS-43275: deduplicating
-	slices.SortFunc(allImages, func(a, b v2alpha1.CopyImageSchema) int {
-		cmp := strings.Compare(a.Origin, b.Origin)
-		if cmp == 0 {
-			cmp = strings.Compare(a.Source, b.Source)
-		}
-		if cmp == 0 { // this comparison is important because the same digest can be used
-			// several times in image-references for different components
-			cmp = strings.Compare(a.Destination, b.Destination)
-		}
-		return cmp
-	})
+	slices.SortFunc(allImages, compareByOriginSourceDest)
 	allImages = slices.Compact(allImages)
 
-	return allImages, nil
+	// TODO probably does not need to loop all the images, it would be possible to check the image type, if it is from a release, apply always the same os/arch saved somewhere else.
+	// TBD with team - Keeping in this way the advantages is that we create a standard and don't treat releases in a different way
+	// The disadvantage is performance
+	cs := v2alpha1.CollectorSchema{AllImages: allImages}
+	if platforms := o.getPlatformFilters(); len(platforms) > 0 {
+		cs.PlatformFilters = make(map[string][]string, len(allImages))
+		for _, img := range allImages {
+			// Graph images are excluded: in the non-enclave case they are already built for
+			// the requested architectures by CreateGraphImage; in the enclave case they are
+			// pre-built external artifacts that must be copied whole.
+			if img.Type != v2alpha1.TypeCincinnatiGraph {
+				cs.PlatformFilters[img.Origin] = platforms
+			}
+		}
+	}
+	return cs, nil
 }
 
 // collects release images from a mirror.
@@ -115,7 +132,11 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 		}
 
 		// add the release image itself
-		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{Image: value.Source, Name: value.Source, Type: v2alpha1.TypeOCPRelease})
+		allRelatedImages = append(allRelatedImages, v2alpha1.RelatedImage{
+			Image: value.Source,
+			Name:  value.Source,
+			Type:  v2alpha1.TypeOCPRelease,
+		})
 		tmpAllImages, err := o.prepareM2DCopyBatch(allRelatedImages, releaseTag)
 		if err != nil {
 			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
@@ -200,11 +221,12 @@ func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, re
 
 	optsCopy := o.Opts
 	optsCopy.Stdout = io.Discard
+	// Converting docker→OCI changes the digest, which invalidates existing signatures.
+	// This copy is for metadata extraction only, so signatures are not needed.
+	optsCopy.RemoveSignatures = true
 
 	src := consts.DockerProtocol + release.Source
 	dest := consts.OciProtocolTrimmed + dir
-
-	optsCopy.RemoveSignatures = true
 
 	if err := o.Mirror.Run(ctx, src, dest, "copy", &optsCopy); err != nil {
 		return fmt.Errorf("copy release index image: %w", err)
@@ -355,7 +377,12 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+		})
 	}
 	return result, nil
 }
@@ -383,7 +410,12 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 
 		o.Log.Debug("source %s", src)
 		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      img.Image,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+		})
 
 	}
 	return result, nil
@@ -417,7 +449,11 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 		releasePath = strings.TrimPrefix(releasePath, consts.OciProtocolTrimmed)
 		releaseHoldPath := strings.Replace(releasePath, releaseImageDir, releaseImageExtractDir, 1)
 		releaseFolders = append(releaseFolders, releaseHoldPath)
-		releaseImages = append(releaseImages, v2alpha1.RelatedImage{Name: copy.Source, Image: copy.Source, Type: v2alpha1.TypeOCPRelease})
+		releaseImages = append(releaseImages, v2alpha1.RelatedImage{
+			Name:  copy.Source,
+			Image: copy.Source,
+			Type:  v2alpha1.TypeOCPRelease,
+		})
 	}
 	return releaseImages, releaseFolders, nil
 }
@@ -564,6 +600,8 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		}
 
 	} else {
+		// TODO: pass o.getPlatformFilters() to CreateGraphImage so the graph image is built
+		// only for the requested architectures. Tracked as a separate PR.
 		graphImgRef, err := o.CreateGraphImage(ctx, graphURL)
 		if err != nil {
 			return v2alpha1.CopyImageSchema{}, err
@@ -579,6 +617,19 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		}
 		return graphCopy, nil
 	}
+}
+
+// compareByOriginSourceDest sorts CopyImageSchema entries deterministically.
+// The same digest can appear several times in image-references for different
+// components, so all three fields are compared to produce a stable order.
+func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
+	if cmp := strings.Compare(a.Origin, b.Origin); cmp != 0 {
+		return cmp
+	}
+	if cmp := strings.Compare(a.Source, b.Source); cmp != 0 {
+		return cmp
+	}
+	return strings.Compare(a.Destination, b.Destination)
 }
 
 func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {

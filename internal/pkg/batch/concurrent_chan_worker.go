@@ -52,7 +52,8 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	startTime := time.Now()
 
 	copiedImages := v2alpha1.CollectorSchema{
-		AllImages: []v2alpha1.CopyImageSchema{},
+		AllImages:       []v2alpha1.CopyImageSchema{},
+		PlatformFilters: collectorSchema.PlatformFilters,
 	}
 
 	var errArray []mirrorErrorSchema
@@ -144,7 +145,23 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 								options.PreserveDigests = false
 							}
 
+							// If this image has specific platform requirements, use them
+							if platforms, ok := collectorSchema.PlatformFilters[img.Origin]; ok && len(platforms) > 0 {
+								options.InstancePlatforms = platforms
+							}
+
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
+
+							// "no instances found for platform" is only emitted by the copy library
+							// for manifest lists (multi-arch indexes) when none of the instances
+							// match the requested InstancePlatforms. The error itself confirms the
+							// source is a manifest list, so retrying without the filter would mirror
+							// all platforms and contradict the user's configuration. Return the
+							// original error so the user can correct their ImageSetConfiguration.
+							if err != nil && options.InstancePlatforms != nil && strings.Contains(err.Error(), "no instances found for platform") {
+								o.Log.Warn("Requested platform(s) not found in source manifest list for %s; verify the platforms field in your ISC", img.Origin)
+								// err stays as "no instances found for platform"; do not retry.
+							}
 
 							switch {
 							case err == nil:

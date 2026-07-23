@@ -192,6 +192,9 @@ type CollectorSchema struct {
 	AllImages             []CopyImageSchema
 	CopyImageSchemaMap    CopyImageSchemaMap
 	CatalogToFBCMap       map[string]CatalogFilterResult // key is the mirror.operator.catalog
+	// PlatformFilters maps image origin to its platform filter list ("os/arch" strings).
+	// Populated by collectors; consumed by the batch worker to set InstancePlatforms per image.
+	PlatformFilters map[string][]string
 }
 
 type CopyImageSchemaMap struct {

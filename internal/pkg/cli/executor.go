@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -677,6 +678,10 @@ http:
       #htpasswd:
       #realm: basic-realm
       #path: /etc/registry
+validation:
+  manifests:
+    indexes:
+      platforms: none
 `
 
 	var buff bytes.Buffer
@@ -929,7 +934,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema.AllImages)
+	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema)
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality
@@ -1153,8 +1158,10 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	if len(o.Config.Mirror.Platform.Channels) > 0 || o.Config.Mirror.Platform.Release != "" || o.Config.Mirror.Platform.Graph {
 		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting release images...")
 	}
+	collectorSchema.PlatformFilters = make(map[string][]string)
+
 	// collect releases
-	releaseImgs, err := o.Release.ReleaseImageCollector(ctx)
+	releaseCS, err := o.Release.ReleaseImageCollector(ctx)
 	if err != nil {
 		if !o.Opts.IsDelete() {
 			// Release image errors are fatal: we don't want to continue collection when they happen.
@@ -1162,13 +1169,12 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		}
 		releaseErr = err
 	}
-	// exclude blocked images
-	releaseImgs = excludeImages(releaseImgs, o.Config.Mirror.BlockedImages)
+	releaseImgs := excludeImages(releaseCS.AllImages, o.Config.Mirror.BlockedImages)
 	releaseImgs = removeDuplicatedImages(releaseImgs, o.Opts.Function)
-
 	collectorSchema.TotalReleaseImages = len(releaseImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
 	allRelatedImages = append(allRelatedImages, releaseImgs...)
+	maps.Copy(collectorSchema.PlatformFilters, releaseCS.PlatformFilters)
 
 	if len(o.Config.Mirror.Operators) > 0 {
 		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting operator images...")
@@ -1178,45 +1184,51 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 	if err != nil {
 		operatorErr = err
 	} else {
-		oImgs := operatorImgs.AllImages
-		// exclude blocked images
-		oImgs = excludeImages(oImgs, o.Config.Mirror.BlockedImages)
+		oImgs := excludeImages(operatorImgs.AllImages, o.Config.Mirror.BlockedImages)
 		oImgs = removeDuplicatedImages(oImgs, o.Opts.Function)
 		collectorSchema.TotalOperatorImages = len(oImgs)
 		o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 		allRelatedImages = append(allRelatedImages, oImgs...)
 		collectorSchema.CopyImageSchemaMap = operatorImgs.CopyImageSchemaMap
 		collectorSchema.CatalogToFBCMap = operatorImgs.CatalogToFBCMap
+
+		// TODO: if images are shared between types, maps.Copy will override platform filters for
+		// the same origin. Consider replacing with an append-based merge across all collectors:
+		// for k, v := range releaseCS.PlatformFilters {
+		//     collectorSchema.PlatformFilters[k] = append(collectorSchema.PlatformFilters[k], v...)
+		// }
+
+		maps.Copy(collectorSchema.PlatformFilters, operatorImgs.PlatformFilters)
 	}
 
 	if len(o.Config.Mirror.AdditionalImages) > 0 {
 		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting additional images...")
 	}
 	// collect additionalImages
-	aImgs, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
+	additionalCS, err := o.AdditionalImages.AdditionalImagesCollector(ctx)
 	if err != nil {
 		additionalImgErr = err
 	}
-	// exclude blocked images
-	aImgs = excludeImages(aImgs, o.Config.Mirror.BlockedImages)
+	aImgs := excludeImages(additionalCS.AllImages, o.Config.Mirror.BlockedImages)
 	aImgs = removeDuplicatedImages(aImgs, o.Opts.Function)
 	collectorSchema.TotalAdditionalImages = len(aImgs)
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 	allRelatedImages = append(allRelatedImages, aImgs...)
+	maps.Copy(collectorSchema.PlatformFilters, additionalCS.PlatformFilters)
 
 	if len(o.Config.Mirror.Helm.Repositories) > 0 || len(o.Config.Mirror.Helm.Local) > 0 {
 		o.Log.Info(emoji.LeftPointingMagnifyingGlass + " collecting helm images...")
 	}
-	hImgs, err := o.HelmCollector.HelmImageCollector(ctx)
+	helmCS, err := o.HelmCollector.HelmImageCollector(ctx)
 	if err != nil {
 		helmErr = err
 	} else {
-		// exclude blocked images
-		hImgs = excludeImages(hImgs, o.Config.Mirror.BlockedImages)
+		hImgs := excludeImages(helmCS.AllImages, o.Config.Mirror.BlockedImages)
 		hImgs = removeDuplicatedImages(hImgs, o.Opts.Function)
 		collectorSchema.TotalHelmImages = len(hImgs)
 		o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
 		allRelatedImages = append(allRelatedImages, hImgs...)
+		maps.Copy(collectorSchema.PlatformFilters, helmCS.PlatformFilters)
 	}
 
 	sort.Sort(customsort.ByTypePriority(allRelatedImages))

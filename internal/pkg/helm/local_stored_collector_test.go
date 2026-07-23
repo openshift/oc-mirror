@@ -709,8 +709,8 @@ func TestHelmImageCollector(t *testing.T) {
 			}
 
 			if len(testCase.expectedResult) > 0 {
-				assert.NotEmpty(t, imgs)
-				assert.ElementsMatch(t, testCase.expectedResult, imgs)
+				assert.NotEmpty(t, imgs.AllImages)
+				assert.ElementsMatch(t, testCase.expectedResult, imgs.AllImages)
 			}
 		})
 	}
@@ -873,7 +873,7 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 			imgs, err := helmCollector.HelmImageCollector(ctx)
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tc.expectedImages, imgs)
+			assert.ElementsMatch(t, tc.expectedImages, imgs.AllImages)
 		})
 	}
 }

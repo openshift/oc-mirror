@@ -159,109 +159,29 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 
 	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 
-	for _, arch := range filterCopy.Architectures {
-		cincinnatiParams.Arch = arch
+	if len(filterCopy.Platforms) > 0 {
+		// New Platforms field: always use the multi-arch payload. It is the only manifest
+		// list, enabling sparse manifest platform filtering. Requires the target registry
+		// to support sparse manifest lists (e.g. validation.manifests.indexes.platforms: none).
+		o.Log.Warn("Platform filtering with the Platforms field requires a registry with manifest list " +
+			"blob check disabled (e.g. validation.manifests.indexes.platforms: none). " +
+			"Ensure your target registry supports sparse manifest lists.")
+		cincinnatiParams.Arch = "multi"
 		o.CincinnatiParams = cincinnatiParams
-		versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(filterCopy.Channels))
-		for _, ch := range filterCopy.Channels {
-			var err error
-			switch ch.Type {
-			case v2alpha1.TypeOCP:
-				err = o.NewOCPClient()
-				if err != nil {
-					errs = append(errs, err)
-				}
-			case v2alpha1.TypeOKD:
-				err = o.NewOKDClient()
-				if err != nil {
-					errs = append(errs, err)
-				}
-			default:
-				errs = append(errs, fmt.Errorf("invalid platform type %v", ch.Type))
-				continue
-			}
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-
-			// CLID-135
-			// detect and log as early as possible
-			if len(ch.MaxVersion) > 0 && len(ch.MinVersion) > 0 {
-				max := semver.MustParse(ch.MaxVersion)
-				min := semver.MustParse(ch.MinVersion)
-				if strings.Contains(ch.Name, "eus") && ((max.Minor - min.Minor) >= 2) && !flagReport {
-					msg := "Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
-						"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
-						"\t\t\t\tTo correctly determine the upgrade path for EUS releases"
-					flagReport = true
-					o.Log.Warn(msg)
-				}
-			}
-
-			if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 {
-				// Find channel maximum value and only set the minimum as well if heads-only is true
-				if len(ch.MaxVersion) == 0 {
-					latest, err := GetChannelMinOrMax(ctx, *o, ch.Name, false)
-					if err != nil {
-						errs = append(errs, err)
-						continue
-					}
-
-					// Update version to release channel
-					ch.MaxVersion = latest.String()
-					o.Log.Debug("detected minimum version as %s", ch.MaxVersion)
-					if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
-						min := latest.String()
-						ch.MinVersion = min
-						o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
-					}
-				}
-
-				// Find channel minimum if full is true or just the minimum is not set
-				// in the config
-				if len(ch.MinVersion) == 0 {
-					first, err := GetChannelMinOrMax(ctx, *o, ch.Name, true)
-					if err != nil {
-						errs = append(errs, err)
-						continue
-					}
-					ch.MinVersion = first.String()
-					o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
-				}
-				versionsByChannel[ch.Name] = ch
-			} else {
-				// Range is set. Ensure full is true so this
-				// is skipped when processing release metadata.
-				o.Log.Debug("processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
-				ch.Full = true
-				versionsByChannel[ch.Name] = ch
-			}
-
-			downloads, err := getChannelDownloads(ctx, *o, nil, ch)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			allImages = append(allImages, downloads...)
-		}
-
-		// Update cfg release channels with maximum and minimum versions
-		// if applicable
-		for i, ch := range filterCopy.Channels {
-			ch, found := versionsByChannel[ch.Name]
-			if found {
-				filterCopy.Channels[i] = ch
-			}
-		}
-
-		if len(filterCopy.Channels) > 1 {
-			newDownloads, err := getCrossChannelDownloads(ctx, *o, filterCopy.Channels)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("[GetReleaseReferenceImages] error calculating cross channel upgrades: %w", err))
-				continue
-			}
-			allImages = append(allImages, newDownloads...)
+		imgs, channelErrs := o.collectChannelImages(ctx, filterCopy.Channels, &flagReport)
+		allImages = append(allImages, imgs...)
+		errs = append(errs, channelErrs...)
+	} else {
+		// Deprecated Architectures field: original per-arch loop.
+		// Each arch results in a separate Cincinnati call and a separate release payload.
+		o.Log.Warn("platform.architectures is deprecated; use platform.platforms instead for sparse manifest platform filtering")
+		//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
+		for _, arch := range filterCopy.Architectures {
+			cincinnatiParams.Arch = arch
+			o.CincinnatiParams = cincinnatiParams
+			imgs, channelErrs := o.collectChannelImages(ctx, filterCopy.Channels, &flagReport)
+			allImages = append(allImages, imgs...)
+			errs = append(errs, channelErrs...)
 		}
 	}
 
@@ -283,6 +203,125 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		return imgs, fmt.Errorf("[GetReleaseReferenceImages] error list %v", errorArray)
 	}
 	return imgs, nil
+}
+
+// collectChannelImages queries the Cincinnati API for all configured channels with
+// the arch already set on o.CincinnatiParams, returning collected images and errors.
+// The channels slice is updated in place with resolved min/max versions.
+// flagReport is shared across calls to ensure the EUS warning is emitted only once.
+func (o *CincinnatiSchema) collectChannelImages(ctx context.Context, channels []v2alpha1.ReleaseChannel, flagReport *bool) ([]v2alpha1.CopyImageSchema, []error) {
+	var allImages []v2alpha1.CopyImageSchema
+	var errs []error
+
+	versionsByChannel := make(map[string]v2alpha1.ReleaseChannel, len(channels))
+	for _, ch := range channels {
+		if err := o.initCincinnatiClient(ch); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		o.warnEUSChannel(ch, flagReport)
+
+		resolved, err := o.resolveChannelVersions(ctx, ch)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		versionsByChannel[resolved.Name] = resolved
+
+		downloads, err := getChannelDownloads(ctx, *o, nil, resolved)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		allImages = append(allImages, downloads...)
+	}
+
+	// Update channels with resolved min/max versions
+	for i, ch := range channels {
+		if updated, found := versionsByChannel[ch.Name]; found {
+			channels[i] = updated
+		}
+	}
+
+	if len(channels) > 1 {
+		newDownloads, err := getCrossChannelDownloads(ctx, *o, channels)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("[GetReleaseReferenceImages] error calculating cross channel upgrades: %w", err))
+		} else {
+			allImages = append(allImages, newDownloads...)
+		}
+	}
+
+	return allImages, errs
+}
+
+// initCincinnatiClient sets up the OCP or OKD Cincinnati client for the given channel type.
+func (o *CincinnatiSchema) initCincinnatiClient(ch v2alpha1.ReleaseChannel) error {
+	switch ch.Type {
+	case v2alpha1.TypeOCP:
+		return o.NewOCPClient()
+	case v2alpha1.TypeOKD:
+		return o.NewOKDClient()
+	default:
+		return fmt.Errorf("invalid platform type %v", ch.Type)
+	}
+}
+
+// warnEUSChannel emits a one-time warning when an EUS channel spans two or more minor versions.
+func (o *CincinnatiSchema) warnEUSChannel(ch v2alpha1.ReleaseChannel, flagReport *bool) {
+	if len(ch.MaxVersion) == 0 || len(ch.MinVersion) == 0 || *flagReport {
+		return
+	}
+	// CLID-135: detect and log as early as possible
+	max, err := semver.Parse(ch.MaxVersion)
+	if err != nil {
+		return
+	}
+	min, err := semver.Parse(ch.MinVersion)
+	if err != nil {
+		return
+	}
+	if strings.Contains(ch.Name, "eus") && (max.Minor-min.Minor) >= 2 {
+		o.Log.Warn("Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
+			"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
+			"\t\t\t\tTo correctly determine the upgrade path for EUS releases")
+		*flagReport = true
+	}
+}
+
+// resolveChannelVersions detects and fills in missing min/max version bounds for a channel,
+// or marks the channel as full when both are explicitly provided.
+func (o *CincinnatiSchema) resolveChannelVersions(ctx context.Context, ch v2alpha1.ReleaseChannel) (v2alpha1.ReleaseChannel, error) {
+	if len(ch.MaxVersion) > 0 && len(ch.MinVersion) > 0 {
+		// Range is set. Ensure full is true so this is skipped when processing release metadata.
+		o.Log.Debug("processing minimum version %s and maximum version %s", ch.MinVersion, ch.MaxVersion)
+		ch.Full = true
+		return ch, nil
+	}
+
+	if len(ch.MaxVersion) == 0 {
+		latest, err := GetChannelMinOrMax(ctx, *o, ch.Name, false)
+		if err != nil {
+			return ch, err
+		}
+		ch.MaxVersion = latest.String()
+		o.Log.Debug("detected maximum version as %s", ch.MaxVersion)
+		if len(ch.MinVersion) == 0 && ch.IsHeadsOnly() {
+			ch.MinVersion = latest.String()
+			o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
+		}
+	}
+
+	if len(ch.MinVersion) == 0 {
+		first, err := GetChannelMinOrMax(ctx, *o, ch.Name, true)
+		if err != nil {
+			return ch, err
+		}
+		ch.MinVersion = first.String()
+		o.Log.Debug("detected minimum version as %s\n", ch.MinVersion)
+	}
+
+	return ch, nil
 }
 
 // getDownloads will prepare the downloads map for mirroring

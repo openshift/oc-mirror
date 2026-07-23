@@ -81,7 +81,7 @@ func TestArchive_BuildArchive(t *testing.T) {
 				Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			},
 		}
-		err = ma.BuildArchive(context.Background(), images)
+		err = ma.BuildArchive(context.Background(), v2alpha1.CollectorSchema{AllImages: images})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,7 +104,7 @@ func TestArchive_BuildArchive(t *testing.T) {
 				Origin:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
 			},
 		}
-		err = ma.BuildArchive(context.Background(), images)
+		err = ma.BuildArchive(context.Background(), v2alpha1.CollectorSchema{AllImages: images})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestArchive_CacheDirError(t *testing.T) {
 	ma.cacheDir = "none"
 	ma.workingDir = consts.TestFolder + "working-dir-fake"
 
-	err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), v2alpha1.CollectorSchema{AllImages: images})
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -158,7 +158,7 @@ func TestArchive_WorkingDirError(t *testing.T) {
 	ma.cacheDir = consts.TestFolder + "cache-fake"
 	ma.workingDir = "none"
 
-	err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), v2alpha1.CollectorSchema{AllImages: images})
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -182,7 +182,7 @@ func TestArchive_FileError(t *testing.T) {
 	// force error for addFile
 	ma.iscPath = "none"
 
-	err = ma.BuildArchive(context.Background(), images)
+	err = ma.BuildArchive(context.Background(), v2alpha1.CollectorSchema{AllImages: images})
 	if err == nil {
 		t.Fatal("should fail")
 	}
@@ -463,7 +463,7 @@ func (ma *MirrorArchive) WithFakes(maxArchiveSize int64) (*MirrorArchive, error)
 	return ma, nil
 }
 
-func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (sets.Set[string], error) {
+func (mbg mockBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allowedPlatforms []string) (sets.Set[string], error) {
 	blobs := sets.New(
 		"sha256:2e39d55595ea56337b5b788e96e6afdec3db09d2759d903cbe120468187c4644",
 		"sha256:94343313ec1512ab02267e4bc3ce09eecb01fda5bf26c56e2f028ecc72e80b18",

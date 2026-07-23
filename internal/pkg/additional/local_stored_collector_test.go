@@ -107,7 +107,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 	})
 
 	// update opts
@@ -148,7 +148,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 	})
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror with generateV1Tags should use latest for images by digest", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			log.Error(" %v ", err)
 			t.Fatalf("should not fail")
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 	})
 
 	// should error mirrorToDisk
@@ -219,7 +219,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 		res, err := ex.AdditionalImagesCollector(ctx)
 		// Should return error for images that failed to parse
 		require.Error(t, err)
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 	})
 
 	t.Run("Testing AdditionalImagesCollector : diskToMirror should collect valid images and return parse errors", func(t *testing.T) {
@@ -250,7 +250,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 		res, err := ex.AdditionalImagesCollector(ctx)
 		// Should return error for images that failed to parse
 		require.Error(t, err)
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 	})
 }
 
@@ -586,7 +586,7 @@ func TestAdditionalImageCollectorWithTargetRepoAndTag(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			assert.ElementsMatch(t, c.expected, res)
+			assert.ElementsMatch(t, c.expected, res.AllImages)
 		})
 	}
 }

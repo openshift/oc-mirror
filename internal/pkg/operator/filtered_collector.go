@@ -39,6 +39,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	collectorSchema := v2alpha1.CollectorSchema{
 		CatalogToFBCMap: make(map[string]v2alpha1.CatalogFilterResult),
+		PlatformFilters: make(map[string][]string),
 	}
 	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{
 		OperatorsByImage: make(map[string]map[string]struct{}),
@@ -70,13 +71,34 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 			continue
 		}
 
-		result, err := o.collectOperator(ctx, op, relatedImages, copyImageSchemaMap)
+		// Use a fresh local map per catalog so we can read exactly which images this
+		// catalog contributed — needed to populate platform filters correctly when the
+		// same bundle appears in multiple catalogs with different platform requirements.
+		localRelatedImages := make(map[string][]v2alpha1.RelatedImage)
+		result, err := o.collectOperator(ctx, op, localRelatedImages, copyImageSchemaMap)
 		if err != nil {
 			spinner.Abort(true)
 			spinner.Wait()
 			allErrs = append(allErrs, fmt.Errorf("collect catalog %q: %w", op.Catalog, err))
 			continue
 		}
+
+		// Append this catalog's platform filters into PlatformFilters using localRelatedImages.
+		// The same bundle appearing in two catalogs with different platforms gets both appended.
+		if platforms := v2alpha1.ConvertPlatformsToStringSlice(op.Platforms); len(platforms) > 0 {
+			for _, imgs := range localRelatedImages {
+				for _, img := range imgs {
+					if ref, parseErr := image.ParseRef(img.Image); parseErr == nil {
+						origin := ref.ReferenceWithTransport
+						collectorSchema.PlatformFilters[origin] = append(collectorSchema.PlatformFilters[origin], platforms...)
+					}
+				}
+			}
+		}
+
+		// Merge this catalog's images into the global map.
+		maps.Copy(relatedImages, localRelatedImages)
+
 		// OCPBUGS-81712: In M2D/M2M modes, op.Catalog is already pinned to digest by executor.go
 		// CLID-513: For OCI paths with digest, use a consistent key format (without digest)
 		// This matches how catalogImage is constructed in collectOperator
