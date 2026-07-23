@@ -512,7 +512,7 @@ func setupWorkDir() string {
 	err = os.MkdirAll(sigDir, 0o755)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Find the single signature file in keys/ (any file that isn't the public key)
+	// Copy all release signature files from keys/ (any file that isn't the public key or cosign key)
 	entries, err := os.ReadDir(keysDir)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -522,10 +522,12 @@ func setupWorkDir() string {
 			sigFiles = append(sigFiles, entry.Name())
 		}
 	}
-	Expect(sigFiles).To(HaveLen(1), "expected exactly one signature file in keys/, found: %v", sigFiles)
+	Expect(sigFiles).NotTo(BeEmpty(), "no signature files found in keys/")
 
-	err = copyFile(filepath.Join(keysDir, sigFiles[0]), filepath.Join(sigDir, sigFiles[0]))
-	Expect(err).NotTo(HaveOccurred())
+	for _, sigFile := range sigFiles {
+		err = copyFile(filepath.Join(keysDir, sigFile), filepath.Join(sigDir, sigFile))
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	return workDir
 }

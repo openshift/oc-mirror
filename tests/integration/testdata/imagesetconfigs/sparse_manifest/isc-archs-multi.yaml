@@ -1,0 +1,9 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    architectures:
+      - multi
+      - amd64
+  additionalImages:
+    - name: quay.io/rh_ee_aguidi/multi-platform-container:latest
