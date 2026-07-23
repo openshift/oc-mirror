@@ -12,6 +12,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/blang/semver/v4"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/operator-framework/operator-registry/alpha/property"
@@ -34,6 +35,9 @@ const (
 	certifiedCatalogRegistry   string = "registry.redhat.io/redhat/certified-operator-index"
 	marketplaceCatalogRegistry string = "registry.redhat.io/redhat/redhat-marketplace-index"
 )
+
+// See https://redhat.atlassian.net/browse/OPRUN-4417
+var marketplaceRemoveVersion semver.Version = semver.MustParse("4.22.0")
 
 type listOperatorsOptions struct {
 	catalogs   bool
@@ -264,8 +268,13 @@ func listCatalogsForVersion(ctx context.Context, log log.PluggableLoggerInterfac
 	fmt.Fprintln(w, "Available OpenShift OperatorHub catalogs:")
 	fmt.Fprintf(w, "OpenShift %s:\n", version)
 
+	defaultCatalogs := []string{redhatCatalogRegistry, certifiedCatalogRegistry, communityCatalogRegistry}
+	if sv, err := semver.ParseTolerant(version); err == nil && sv.LT(marketplaceRemoveVersion) {
+		defaultCatalogs = append(defaultCatalogs, marketplaceCatalogRegistry)
+	}
+
 	var errs []error
-	for _, catalog := range []string{redhatCatalogRegistry, certifiedCatalogRegistry, communityCatalogRegistry, marketplaceCatalogRegistry} {
+	for _, catalog := range defaultCatalogs {
 		ref := fmt.Sprintf("%s:v%s", catalog, version)
 		log.Debug("Checking whether catalog %q exists", ref)
 		exists, err := taggedCatalogExists(ctx, ref, opts)
