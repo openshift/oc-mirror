@@ -111,7 +111,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 				Type:        v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -137,10 +137,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
-		if len(res) == 0 {
+		if len(res.AllImages) == 0 {
 			t.Fatalf("should contain at least 1 image")
 		}
-		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+		if !strings.Contains(res.AllImages[0].Source, ex.LocalStorageFQDN) {
 			t.Fatalf("source images should be from local storage")
 		}
 		// must contain 4 release component images
@@ -191,7 +191,7 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 				Type:        v2alpha1.TypeCincinnatiGraph,
 			},
 		}
-		assert.ElementsMatch(t, expected, res)
+		assert.ElementsMatch(t, expected, res.AllImages)
 		log.Debug("completed test related images %v ", res)
 	})
 
@@ -218,10 +218,10 @@ func TestReleaseLocalStoredCollector(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
-		if len(res) == 0 {
+		if len(res.AllImages) == 0 {
 			t.Fatalf("should contain at least 1 image")
 		}
-		if !strings.Contains(res[0].Source, ex.LocalStorageFQDN) {
+		if !strings.Contains(res.AllImages[0].Source, ex.LocalStorageFQDN) {
 			t.Fatalf("source images should be from local storage")
 		}
 		log.Debug("completed test related images %v ", res)
@@ -848,4 +848,27 @@ func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.Syste
 
 func (o *ManifestMock) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
 	return nil, nil
+}
+
+func TestBuildReleasePlatformFilters(t *testing.T) {
+	platforms := []v2alpha1.InstancePlatformFilter{
+		{OS: "linux", Architecture: "amd64"},
+		{OS: "linux", Architecture: "arm64"},
+	}
+
+	allImages := []v2alpha1.CopyImageSchema{
+		{Origin: "docker://registry/release:latest", Type: v2alpha1.TypeOCPRelease},
+		{Origin: "docker://registry/component:latest", Type: v2alpha1.TypeOCPReleaseContent},
+		{Origin: "docker://registry/graph:latest", Type: v2alpha1.TypeCincinnatiGraph},
+	}
+
+	filters := buildReleasePlatformFilters(allImages, platforms)
+
+	// Release and component images must have platform filters applied.
+	assert.Equal(t, platforms, filters["docker://registry/release:latest"])
+	assert.Equal(t, platforms, filters["docker://registry/component:latest"])
+
+	// Graph images must always be excluded — they are not platform-filtered.
+	_, graphPresent := filters["docker://registry/graph:latest"]
+	assert.False(t, graphPresent, "TypeCincinnatiGraph images must not appear in platform filters")
 }

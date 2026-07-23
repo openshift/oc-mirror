@@ -19,6 +19,7 @@ import (
 	"go.podman.io/image/v5/transports/alltransports"
 	"go.podman.io/image/v5/types"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )
 
@@ -135,20 +136,9 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		}
 	}
 
-	imageListSelection := copy.CopySystemImage
-	if len(opts.MultiArch) > 0 && opts.All {
-		return fmt.Errorf("cannot use --all and --multi-arch flags together")
-	}
-
-	if len(opts.MultiArch) > 0 {
-		imageListSelection, err = parseMultiArch(opts.MultiArch)
-		if err != nil {
-			return err
-		}
-	}
-
-	if opts.All {
-		imageListSelection = copy.CopyAllImages
+	imageListSelection, instancePlatforms, err := determinePlatformSelection(opts)
+	if err != nil {
+		return err
 	}
 
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
@@ -193,6 +183,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		DestinationCtx:                   destinationCtx,
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
+		InstancePlatforms:                instancePlatforms,
 		PreserveDigests:                  opts.PreserveDigests,
 		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
@@ -323,22 +314,61 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 	}, opts.RetryOpts)
 }
 
-// parseMultiArch
-func parseMultiArch(multiArch string) (copy.ImageListSelection, error) {
+// determinePlatformSelection determines the image list selection and platform filters
+// based on the provided copy options. It prioritizes InstancePlatforms (from ImageSetConfig)
+// over the MultiArch flag.
+func determinePlatformSelection(opts *CopyOptions) (copy.ImageListSelection, []copy.InstancePlatformFilter, error) {
+	// Priority 1: Use InstancePlatforms if provided (set by batch worker from ImageSetConfig)
+	if len(opts.InstancePlatforms) > 0 {
+		platforms := make([]copy.InstancePlatformFilter, 0, len(opts.InstancePlatforms))
+		for _, s := range opts.InstancePlatforms {
+			p, err := v2alpha1.ParseInstancePlatformFilter(s)
+			if err != nil {
+				return copy.CopySystemImage, nil, err
+			}
+			platforms = append(platforms, copy.InstancePlatformFilter{OS: p.OS, Architecture: p.Architecture})
+		}
+		return copy.CopySpecificImages, platforms, nil
+	}
+
+	// Priority 2: Fall back to MultiArch flag (for CLI direct usage or default "all")
+	if len(opts.MultiArch) > 0 && opts.All {
+		return copy.CopySystemImage, nil, fmt.Errorf("MultiArch and All options cannot be used together")
+	}
+
+	imageListSelection := copy.CopySystemImage
+	var instancePlatforms []copy.InstancePlatformFilter
+	var err error
+
+	if len(opts.MultiArch) > 0 {
+		imageListSelection, instancePlatforms, err = parseMultiArch(opts.MultiArch)
+		if err != nil {
+			return copy.CopySystemImage, nil, err
+		}
+	}
+
+	if opts.All {
+		imageListSelection = copy.CopyAllImages
+	}
+
+	return imageListSelection, instancePlatforms, nil
+}
+
+// parseMultiArch parses legacy multi-arch option strings and returns the corresponding
+// image list selection. Supports 'system', 'all', and 'index-only'.
+// Platform filter strings (e.g. "linux/amd64") are handled by determinePlatformSelection.
+func parseMultiArch(multiArch string) (copy.ImageListSelection, []copy.InstancePlatformFilter, error) {
 	switch multiArch {
 	case "system":
-		return copy.CopySystemImage, nil
+		return copy.CopySystemImage, nil, nil
 	case "all":
-		return copy.CopyAllImages, nil
+		return copy.CopyAllImages, nil, nil
 	// There is no CopyNoImages value in copy.ImageListSelection, but because we
 	// don't provide an option to select a set of images to copy, we can use
 	// CopySpecificImages.
 	case "index-only":
-		return copy.CopySpecificImages, nil
-	// We don't expose CopySpecificImages other than index-only above, because
-	// we currently don't provide an option to choose the images to copy. That
-	// could be added in the future.
+		return copy.CopySpecificImages, nil, nil
 	default:
-		return copy.CopySystemImage, fmt.Errorf("unknown multi-arch option %q. Choose one of the supported options: 'system', 'all', or 'index-only'", multiArch)
+		return copy.CopySystemImage, nil, fmt.Errorf("unknown multi-arch option %q. Choose one of the supported options: 'system', 'all', 'index-only', or a comma-separated platform list like 'linux/amd64,linux/arm64'", multiArch)
 	}
 }

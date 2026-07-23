@@ -522,7 +522,7 @@ func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.Collecto
 	return collectorSchema, nil
 }
 
-func (o *mockBlobs) GatherBlobs(ctx context.Context, image string) (sets.Set[string], error) {
+func (o *mockBlobs) GatherBlobs(ctx context.Context, image string, allowedPlatforms []string) (sets.Set[string], error) {
 	res := sets.New("sha256:95ad8395795ee0460baf05458f669d3b865535f213f015519ef9a221a6a08280")
 	if o.Fail {
 		return nil, fmt.Errorf("forced error")

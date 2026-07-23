@@ -53,7 +53,6 @@ func ReadConfig(configPath string, kind string) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		Complete(&cfg)
 		err = Validate(&cfg)
 		if err != nil {
 			return nil, err

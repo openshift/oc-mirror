@@ -1,0 +1,38 @@
+{
+  "kind": "ImageStream",
+  "apiVersion": "image.openshift.io/v1",
+  "metadata": {
+    "name": "test-release-image",
+    "creationTimestamp": "2023-01-24T02:27:38Z",
+    "annotations": {
+      "release.openshift.io/from-image-stream": "test-image"
+    }
+  },
+  "spec": {
+    "lookupPolicy": {
+      "local": false
+    },
+    "tags": [
+      {
+        "name": "alpine",
+        "annotations": {
+          "io.openshift.build.commit.id": "",
+          "io.openshift.build.commit.ref": "",
+          "io.openshift.build.source-location": "https://github.com/oc-mirror-test"
+        },
+        "from": {
+          "kind": "DockerImage",
+          "name": "quay.io/oc-mirror/release/test-image-multi:v0.0.1"
+        },
+        "generation": null,
+        "importPolicy": {},
+        "referencePolicy": {
+          "type": ""
+        }
+      }
+    ]
+  },
+  "status": {
+    "dockerImageRepository": ""
+  }
+}

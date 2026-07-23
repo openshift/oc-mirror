@@ -26,3 +26,7 @@ sign:
 	COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false quay.io/oc-mirror/release/test-release-index:v0.0.1
 .PHONY: sign
 
+sign-multi:
+	COSIGN_PASSWORD="" cosign sign --recursive --key $(COSIGN_KEY) --tlog-upload=false quay.io/oc-mirror/release/test-image-multi:v0.0.1
+	COSIGN_PASSWORD="" cosign sign --recursive --key $(COSIGN_KEY) --tlog-upload=false quay.io/oc-mirror/release/test-release-index-multi:v0.0.1
+.PHONY: sign-multi

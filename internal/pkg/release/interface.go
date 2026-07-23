@@ -7,7 +7,7 @@ import (
 )
 
 type CollectorInterface interface {
-	ReleaseImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error)
+	ReleaseImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error)
 	// Returns the graphImage if generated, especially with the reference to the image
 	// on the destination repository
 	// Returns an error if the graph image was not generated (graph : false)

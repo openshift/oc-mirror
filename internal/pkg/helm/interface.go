@@ -8,7 +8,7 @@ import (
 )
 
 type CollectorInterface interface {
-	HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error)
+	HelmImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error)
 }
 
 type indexDownloader interface {
