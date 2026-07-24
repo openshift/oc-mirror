@@ -174,8 +174,8 @@ func (o Manifest) ConvertOCIIndexToSingleManifest(dir string, oci *specv1.Index)
 	}
 	dgest := digest.FromBytes(data)
 	size := len(data)
-	o.Log.Debug("Digest:", dgest.String())
-	o.Log.Debug("Size:", size)
+	o.Log.Debug("Digest:%s", dgest.String())
+	o.Log.Debug("Size:%d", size)
 
 	err = copy.Copy(filepath.Join(dir, "index.json"), filepath.Join(dir, "blobs", "sha256", dgest.Encoded()))
 	if err != nil {

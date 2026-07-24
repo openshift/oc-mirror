@@ -195,7 +195,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 						"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
 						"\t\t\t\tTo correctly determine the upgrade path for EUS releases"
 					flagReport = true
-					o.Log.Warn(msg)
+					o.Log.Warn("%s", msg)
 				}
 			}
 
