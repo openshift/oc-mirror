@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -168,8 +169,12 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alp
 			}
 
 			for _, chart := range charts {
-				src := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
-				path := filepath.Join(src, fmt.Sprintf("%s-%s.tgz", chart.Name, chart.Version))
+				chartDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
+				path, err := resolveChartPath(chartDir, chart.Name, chart.Version)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
 
 				imgs, err := getImages(path, chart.ImagePaths...)
 				if err != nil {
@@ -347,6 +352,74 @@ func getChartsFromIndex(indexURL string, indexFile helmrepo.IndexFile) ([]v2alph
 		}
 	}
 	return charts, nil
+}
+
+// resolveChartPath returns the filesystem path to a Helm chart tarball stored
+// under dir.  It normalises the version with semver (which strips any leading
+// "v") and then probes two candidate filenames — "{name}-{canonical}.tgz" and
+// "{name}-v{canonical}.tgz" — because Helm repositories differ on whether they
+// embed the "v" prefix in tarball URLs.  A descriptive error naming both
+// attempted paths is returned when neither file exists.
+func resolveChartPath(dir, name, version string) (string, error) {
+	ver, err := semver.NewVersion(version)
+	if err != nil {
+		return "", fmt.Errorf("invalid chart version %q: %w", version, err)
+	}
+	canonical := ver.String() // always without "v" prefix, regardless of how version was specified
+
+	baseDir := filepath.Clean(dir)
+	candidateVersions := []string{canonical, "v" + canonical}
+	var candidatePaths []string
+
+	for _, candidateVer := range candidateVersions {
+		path, err := buildChartCandidatePath(baseDir, name, candidateVer)
+		if err != nil {
+			return "", err
+		}
+		candidatePaths = append(candidatePaths, path)
+
+		found, err := chartPathExists(path)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			if candidateVer != candidateVersions[0] {
+				lsc.Log.Debug("chart %s: %s not found, using %s (v-prefix variant)", name, filepath.Base(candidatePaths[0]), filepath.Base(path))
+			}
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("chart file not found for %s version %s: tried %s and %s",
+		name, version, filepath.Base(candidatePaths[0]), filepath.Base(candidatePaths[1]))
+}
+
+// chartPathExists reports whether the given path exists on disk.
+// It returns false (without error) for missing files and propagates
+// real I/O or permission errors so they are not silently swallowed.
+func chartPathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, fmt.Errorf("stat %s: %w", path, err)
+}
+
+// buildChartCandidatePath constructs the expected tarball path for a chart
+// version and validates it stays within baseDir to prevent path traversal.
+func buildChartCandidatePath(baseDir, name, ver string) (string, error) {
+	p := filepath.Join(baseDir, fmt.Sprintf("%s-%s.tgz", name, ver))
+	rel, err := filepath.Rel(baseDir, p)
+	if err != nil {
+		return "", fmt.Errorf("resolve chart path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid chart reference %q:%q escapes chart directory", name, ver)
+	}
+	return p, nil
 }
 
 func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
