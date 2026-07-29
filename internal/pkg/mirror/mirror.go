@@ -141,6 +141,19 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		return err
 	}
 
+	// TODO: remove filterAttestationPlatforms when OCI1.1 is supported by containers-libs [OCPNODE-2018](https://redhat.atlassian.net/browse/OCPNODE-2018)
+	// OCPBUGS-62723: When copying all images from a manifest list, check for
+	// attestation entries (unknown/unknown platform) that cannot be pulled from
+	// proxy registries. If found, switch to CopySpecificImages with only the
+	// real platforms so the copy skips unpullable attestation manifests.
+	if imageListSelection == copy.CopyAllImages {
+		attestationPlatforms, attestationErr := filterAttestationPlatforms(ctx, srcRef, sourceCtx)
+		if attestationErr == nil && len(attestationPlatforms) > 0 {
+			imageListSelection = copy.CopySpecificImages
+			instancePlatforms = attestationPlatforms
+		}
+	}
+
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
 	}
