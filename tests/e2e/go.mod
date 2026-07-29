@@ -6,10 +6,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/openshift-eng/openshift-tests-extension v0.0.0-20260127124016-0fed2b824818
-	github.com/openshift/api v0.0.0-20260114133223-6ab113cb7368
-	github.com/openshift/origin v1.5.0-alpha.3.0.20260319150657-3318a72fb0d6
+	github.com/openshift/origin v1.5.2
 	github.com/spf13/cobra v1.10.1
-	github.com/tidwall/gjson v1.18.0
 	k8s.io/apimachinery v0.34.1
 	k8s.io/component-base v0.34.1
 	k8s.io/kubernetes v1.34.1
@@ -198,6 +196,7 @@ require (
 	github.com/opencontainers/runc v1.2.5 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opencontainers/selinux v1.11.1 // indirect
+	github.com/openshift/api v0.0.0-20260114133223-6ab113cb7368 // indirect
 	github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13 // indirect
 	github.com/openshift/library-go v0.0.0-20251015151611-6fc7a74b67c5 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
@@ -221,6 +220,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tecbiz-ch/nutanix-go-sdk v0.1.15 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/vmware/govmomi v0.51.0 // indirect
