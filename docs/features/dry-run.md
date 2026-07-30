@@ -10,13 +10,13 @@ Add `--dry-run` to any mirroring command:
 
 ```bash
 # Dry run for mirror-to-disk
-oc-mirror -c ./isc.yaml --dry-run file:///home/user/oc-mirror/output
+oc-mirror --v2 -c ./isc.yaml --dry-run file:///home/user/oc-mirror/output
 
 # Dry run for disk-to-mirror
-oc-mirror -c ./isc.yaml --dry-run --from file:///home/user/oc-mirror/output docker://registry.example.com
+oc-mirror --v2 -c ./isc.yaml --dry-run --from file:///home/user/oc-mirror/output docker://registry.example.com
 
 # Dry run for mirror-to-mirror
-oc-mirror -c ./isc.yaml --dry-run --workspace file:///home/user/oc-mirror/workspace docker://registry.example.com
+oc-mirror --v2 -c ./isc.yaml --dry-run --workspace file:///home/user/oc-mirror/workspace docker://registry.example.com
 ```
 
 ## Output files
@@ -27,7 +27,7 @@ Dry-run output is written to `working-dir/dry-run/` under the workspace or desti
 
 Lists every image that would be mirrored, in `source=destination` format:
 
-```
+```text
 quay.io/openshift-release-dev/ocp-release@sha256:abc123...=registry.example.com/openshift-release-dev/ocp-release@sha256:abc123...
 registry.redhat.io/redhat/redhat-operator-index:v4.18=registry.example.com/redhat/redhat-operator-index:v4.18
 ```
@@ -38,11 +38,11 @@ This file is always generated for all workflow types.
 
 For mirror-to-disk workflows only, lists images that are not yet available in the local cache. These images would need to be downloaded from the source registry during an actual mirroring run:
 
-```
+```text
 quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:def456...=docker://localhost:55000/openshift-release-dev/ocp-v4.0-art-dev@sha256:def456...
 ```
 
-If all required images are already in the cache, `missing.txt` is not created and a message confirms that mirroring from disk to a disconnected registry can proceed.
+If all required images are already in the cache, `missing.txt` is not created and a message confirms that all images are available locally.
 
 ## Cluster resources in dry-run mode
 

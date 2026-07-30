@@ -18,19 +18,19 @@ To troubleshoot issues with ImageSetConfiguration content selection, use the `li
 
 ```bash
 # List available release versions
-oc-mirror list releases --version=4.18
+oc-mirror list releases --version=4.18 --v2
 
 # List available operator catalogs
-oc-mirror list operators --catalogs --version=4.18
+oc-mirror list operators --catalogs --version=4.18 --v2
 
 # List packages in a catalog
-oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18
+oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18 --v2
 
 # List channels for a package
-oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18 --package=kiali
+oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18 --package=kiali --v2
 
 # List versions in a channel
-oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18 --package=kiali --channel=stable
+oc-mirror list operators --catalog=registry.redhat.io/redhat/redhat-operator-index:v4.18 --package=kiali --channel=stable --v2
 ```
 
 ## Dry run
@@ -47,18 +47,12 @@ oc-mirror checks registry access before starting a mirror operation. If authenti
 
 ## Cache issues
 
-oc-mirror uses a local cache at `~/.oc-mirror` (configurable via `--cache-dir` or the `OC_MIRROR_CACHE` environment variable). If the cache becomes corrupted:
+oc-mirror uses a local cache under the base cache directory (defaults to `$HOME`, configurable via `--cache-dir` or the `OC_MIRROR_CACHE` environment variable). Image data is stored at `<cache-dir>/.oc-mirror/.cache`. If the cache becomes corrupted:
 
 ```bash
 # Remove the cache and re-run mirroring
-rm -rf ~/.oc-mirror
-oc-mirror -c ./isc.yaml file:///path/to/output
-```
-
-Use `--force` to re-copy all content regardless of cache/history state:
-
-```bash
-oc-mirror -c ./isc.yaml --force file:///path/to/output
+rm -rf <cache-dir>/.oc-mirror/.cache
+oc-mirror -c ./isc.yaml file:///path/to/output --v2
 ```
 
 ## Operator installation
@@ -66,7 +60,7 @@ oc-mirror -c ./isc.yaml --force file:///path/to/output
 To troubleshoot issues with the created file-based catalog on a cluster, inspect the package manifests:
 
 ```bash
-oc get packagemanifests -n openshift-marketplace <packagename> -o json | jq ‘.status.channels[]|{name: .name, currentCSV: .currentCSV}’
+oc get packagemanifests -n openshift-marketplace <packagename> -o json | jq '.status.channels[]|{name: .name, currentCSV: .currentCSV}'
 ```
 
 ## Destination registry parsing

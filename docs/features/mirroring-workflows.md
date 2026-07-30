@@ -6,9 +6,9 @@ oc-mirror supports three core mirroring workflows to handle different connectivi
 
 | Workflow | Use case | Command pattern |
 |----------|----------|----------------|
-| Mirror-to-Disk (m2d) | Air-gapped: download images to a local archive | `oc-mirror -c <config> file://<path>` |
-| Disk-to-Mirror (d2m) | Air-gapped: upload archive contents to a registry | `oc-mirror -c <config> --from file://<path> docker://<registry>` |
-| Mirror-to-Mirror (m2m) | Partially disconnected: copy directly between registries | `oc-mirror -c <config> --workspace file://<path> docker://<registry>` |
+| Mirror-to-Disk (m2d) | Air-gapped: download images to a local archive | `oc-mirror --v2 -c <config> file://<path>` |
+| Disk-to-Mirror (d2m) | Air-gapped: upload archive contents to a registry | `oc-mirror --v2 -c <config> --from file://<path> docker://<registry>` |
+| Mirror-to-Mirror (m2m) | Partially disconnected: copy directly between registries | `oc-mirror --v2 -c <config> --workspace file://<path> docker://<registry>` |
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ oc-mirror references the host system for certificate trust. Add all certificates
 Pulls container images from the sources defined in the ImageSetConfiguration and packs them into a tar archive on disk.
 
 ```bash
-oc-mirror -c ./isc.yaml file:///home/user/oc-mirror/output
+oc-mirror --v2 -c ./isc.yaml file:///home/user/oc-mirror/output
 ```
 
 **What it produces:**
@@ -38,7 +38,6 @@ oc-mirror -c ./isc.yaml file:///home/user/oc-mirror/output
 
 **Key flags:**
 - `--since yyyy-MM-dd` — Only include content mirrored after the specified date
-- `--force` — Force copy even if nothing needs updating
 - `--strict-archive` — Fail if any single file exceeds the `archiveSize` limit set in the ImageSetConfiguration
 
 See [Archive Management](archive-management.md) for details on archive segmentation and incremental mirroring.
@@ -48,7 +47,7 @@ See [Archive Management](archive-management.md) for details on archive segmentat
 Copies images from a previously created tar archive to a destination container registry.
 
 ```bash
-oc-mirror -c ./isc.yaml --from file:///home/user/oc-mirror/output docker://registry.example.com
+oc-mirror --v2 -c ./isc.yaml --from file:///home/user/oc-mirror/output docker://registry.example.com
 ```
 
 **What it produces:**
@@ -68,7 +67,7 @@ See [Cluster Resources](cluster-resources.md) for details on the generated manif
 Copies images directly from source registries to the destination registry without creating an intermediate archive. Requires network access to both source and destination.
 
 ```bash
-oc-mirror -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace docker://registry.example.com
+oc-mirror --v2 -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace docker://registry.example.com
 ```
 
 **What it produces:**
@@ -86,13 +85,16 @@ oc-mirror -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace docker
 |------|-------------|
 | `-c`, `--config` | Path to ImageSetConfiguration file (required) |
 | `--dry-run` | Preview what would be mirrored without copying. See [Dry Run](dry-run.md) |
-| `--parallel-images` | Number of images mirrored in parallel (default 10, max 10) |
-| `--parallel-layers` | Number of image layers mirrored in parallel (default 10, max 10) |
+| `--parallel-images` | Number of images mirrored in parallel (default 4, max 10) |
+| `--parallel-layers` | Number of image layers mirrored in parallel (default 5, max 10) |
 | `--image-timeout` | Timeout for mirroring a single image (default 10m) |
 | `--max-nested-paths` | Limit nested paths for registries that restrict path depth |
 | `--log-level` | Log level: info, debug, trace, error (default info) |
 | `--secure-policy` | Enable signature verification. See [Signature Verification](signature-verification.md) |
-| `--cache-dir` | Override the default cache directory (`~/.oc-mirror`) |
+| `--remove-signatures` | Do not copy image signatures to the destination |
+| `--cache-dir` | Override the default cache directory (defaults to `$HOME`; see [Archive Management](archive-management.md)) |
+
+Signature handling can also be configured at a more granular level using YAML configuration files in the `registries.d` directory, allowing per-registry control over signature behavior.
 
 ## Incremental mirroring
 
@@ -101,7 +103,7 @@ All workflows support incremental mirroring. On subsequent runs with the same wo
 Use the `--since` flag to include only content mirrored after a specific date:
 
 ```bash
-oc-mirror -c ./isc.yaml --since 2024-06-01 file:///home/user/oc-mirror/output
+oc-mirror --v2 -c ./isc.yaml --since 2024-06-01 file:///home/user/oc-mirror/output
 ```
 
 See [Archive Management](archive-management.md) for more details on incremental behavior.
@@ -110,7 +112,7 @@ See [Archive Management](archive-management.md) for more details on incremental 
 
 oc-mirror creates a `working-dir/` directory at the workspace or destination location. This directory contains:
 
-```
+```text
 working-dir/
   cluster-resources/     # Generated IDMS, ITMS, CatalogSource, etc.
   logs/                  # Detailed operation logs

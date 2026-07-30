@@ -10,7 +10,7 @@ The generated resources tell the cluster where to find mirrored images, how to a
 
 All cluster resource files are written to:
 
-```
+```text
 <workspace>/working-dir/cluster-resources/
 ```
 
@@ -78,7 +78,7 @@ spec:
   sourceType: grpc
 ```
 
-Generated for each operator catalog mirrored. The CatalogSource name is derived from the catalog image path and tag/digest.
+Generated for each operator catalog mirrored. The CatalogSource name uses a `cs-` prefix followed by the catalog image path and tag/digest.
 
 Custom CatalogSource templates can be specified in the ImageSetConfiguration using the `targetCatalogSourceTemplate` field on each operator entry.
 
@@ -100,7 +100,7 @@ spec:
       ref: registry.example.com/redhat/redhat-operator-index:v4.18
 ```
 
-Generated alongside CatalogSource resources for each mirrored operator catalog.
+Generated alongside CatalogSource resources for each mirrored operator catalog. The ClusterCatalog name uses a `cc-` prefix followed by the catalog image path and tag/digest.
 
 ### UpdateService
 

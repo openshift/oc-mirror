@@ -13,7 +13,8 @@ When running mirror-to-disk, oc-mirror creates tar archives under the specified 
 - **`docker/v2/repositories/`** — Image manifests for all mirrored images
 - **`docker/v2/blobs/sha256/`** — Image layer blobs (only new/changed blobs in incremental runs)
 - **`working-dir/`** — Internal metadata, cluster resources, and logs
-- **Image set configuration** — A timestamped copy of the ISC used for the run
+- **Image set configuration** — A timestamped copy of the ISC used for the run with catalogs pinned by digest
+- **Delete image set configuration** — A timestamped generated DISC used for deleting images with catalogs pinned by digest
 
 ## Archive segmentation
 
@@ -38,19 +39,22 @@ By default, oc-mirror uses **permissive** archiving: if a single file (e.g., a l
 Use the `--strict-archive` flag for **strict** archiving: the operation fails with an error if any individual file exceeds the `archiveSize` limit. This is useful when transport media have hard size constraints.
 
 ```bash
-oc-mirror -c ./isc.yaml --strict-archive file:///home/user/output
+oc-mirror --v2 -c ./isc.yaml --strict-archive file:///home/user/output
 ```
 
 ## Local cache
 
-oc-mirror maintains a local cache for image data. The default cache location is `~/.oc-mirror`, and it can be configured with:
+oc-mirror maintains a local cache for image data in mirror-to-disk and disk-to-mirror workflows. The base cache directory is resolved in this order:
 
-- The `--cache-dir` flag: `oc-mirror -c ./isc.yaml --cache-dir /custom/cache file:///home/user/output`
-- The `OC_MIRROR_CACHE` environment variable
+1. The `--cache-dir` flag: `oc-mirror --v2 -c ./isc.yaml --cache-dir /custom/cache file:///home/user/output`
+2. The `OC_MIRROR_CACHE` environment variable
+3. `$HOME` (default fallback)
 
-These two options are mutually exclusive.
+The `--cache-dir` flag and `OC_MIRROR_CACHE` are mutually exclusive. Image data is stored under `<cache-dir>/.oc-mirror/.cache`.
 
 The cache stores downloaded image layers and manifests between runs. In mirror-to-disk workflows, the archive contains only the blobs that are new since the last run, while the cache retains the complete set of previously downloaded data.
+
+**Note:** In mirror-to-mirror workflows, the cache is not used for image storage. Only a small number of images are cached internally for oc-mirror's own use.
 
 ## Incremental mirroring
 
@@ -69,25 +73,17 @@ This means the first run produces a full archive, and subsequent runs produce sm
 The `--since` flag allows you to include all content mirrored after a specific date, overriding the default incremental behavior:
 
 ```bash
-oc-mirror -c ./isc.yaml --since 2024-06-01 file:///home/user/output
+oc-mirror --v2 -c ./isc.yaml --since 2024-06-01 file:///home/user/output
 ```
 
 The date format is `yyyy-MM-dd`. When `--since` is specified, oc-mirror considers only history entries after the given date when calculating the differential.
-
-### Using `--force`
-
-The `--force` flag forces oc-mirror to re-copy all content regardless of what was previously mirrored:
-
-```bash
-oc-mirror -c ./isc.yaml --force file:///home/user/output
-```
 
 ## Extracting archives (disk-to-mirror)
 
 To publish an archive to a registry, use the `--from` flag to point to the directory containing the archive:
 
 ```bash
-oc-mirror -c ./isc.yaml --from file:///home/user/output docker://registry.example.com
+oc-mirror --v2 -c ./isc.yaml --from file:///home/user/output docker://registry.example.com
 ```
 
 oc-mirror extracts the archive, loads the image data, and pushes it to the destination registry.
@@ -104,28 +100,34 @@ Previous archives in the destination directory are automatically removed before 
 
 ### Lost archive
 
-If an archive is lost during transport, re-run oc-mirror with the `--force` flag to regenerate a full archive:
+If an archive is lost during transport, delete the incremental history files from `working-dir/.history/` and re-run oc-mirror to regenerate a full archive:
 
 ```bash
-oc-mirror -c ./isc.yaml --force file:///home/user/output
+oc-mirror --v2 -c ./isc.yaml file:///home/user/output
 ```
 
 ### Corrupted cache
 
-If the local cache becomes corrupted, delete the cache directory and re-run oc-mirror. A fresh cache will be built from scratch:
+If the local cache becomes corrupted, delete the cache storage directory and re-run oc-mirror. A fresh cache will be built from scratch:
 
 ```bash
-rm -rf ~/.oc-mirror
-oc-mirror -c ./isc.yaml file:///home/user/output
+rm -rf <cache-dir>/.oc-mirror/.cache
+oc-mirror --v2 -c ./isc.yaml file:///home/user/output
 ```
+
+Replace `<cache-dir>` with the base cache directory (see [Local cache](#local-cache) above).
 
 ### Restoring cache from archives
 
-If the cache is lost but you have the tar archives, extract the `docker/` directory from the archives and copy its contents to the cache directory:
+If the cache is lost but you have the tar archives, extract the `docker/` directory from the archives into the cache storage directory:
 
 ```bash
-tar xf mirror_*.tar -C ~/.oc-mirror/.cache docker/
+for archive in mirror_*.tar; do
+  tar xf "$archive" -C <cache-dir>/.oc-mirror/.cache docker/
+done
 ```
+
+Replace `<cache-dir>` with the base cache directory.
 
 ## Related documentation
 

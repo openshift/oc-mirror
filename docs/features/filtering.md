@@ -21,7 +21,7 @@ mirror:
 
 ### Version ranges
 
-Use `minVersion` and `maxVersion` to constrain the range of releases mirrored within a channel:
+Use `minVersion` to constrain the range of releases mirrored within a channel:
 
 ```yaml
 mirror:
@@ -29,29 +29,14 @@ mirror:
     channels:
       - name: stable-4.18
         minVersion: 4.18.1
-        maxVersion: 4.18.5
 ```
 
 Version range behavior:
 - **Neither set:** Only the channel head (latest version) is mirrored (heads-only mode, the default).
 - **Only `minVersion` set:** All versions from `minVersion` up to the channel head.
-- **Only `maxVersion` set:** All versions from the oldest in the channel up to `maxVersion`.
-- **Both set:** All versions between `minVersion` and `maxVersion`, inclusive.
 - **`full: true`:** Mirrors the entire channel regardless of version constraints.
 
-### Shortest path mode
-
-When `shortestPath: true` is set, oc-mirror calculates the shortest upgrade path between `minVersion` and `maxVersion` using the Cincinnati graph, rather than including all versions in the range:
-
-```yaml
-mirror:
-  platform:
-    channels:
-      - name: stable-4.18
-        minVersion: 4.18.1
-        maxVersion: 4.18.5
-        shortestPath: true
-```
+**Note:** The `maxVersion` field is supported but **not recommended**. Using `maxVersion` can result in mirroring a version that is not the channel head, which may lack metadata required for proper cluster upgrades. Prefer using `minVersion` alone or `full: true` instead.
 
 ### Architecture selection
 
@@ -69,6 +54,8 @@ mirror:
 ```
 
 The `multi` option mirrors fat manifests (multi-architecture image indexes) containing all four architectures. This uses approximately 4x more registry space than a single architecture.
+
+**Note:** The `architectures` field is deprecated starting with OpenShift 5 in favor of the `platforms` field.
 
 ### Graph data
 
@@ -100,7 +87,7 @@ Operator filtering controls which packages, channels, and bundle versions from a
 
 ### Entire catalog (heads-only)
 
-With no package filtering, oc-mirror mirrors only the channel head (latest version) of each package's default channel:
+With no package filtering, oc-mirror mirrors the channel head of every channel for every package in the catalog:
 
 ```yaml
 mirror:
@@ -121,7 +108,7 @@ mirror:
 
 ### Filter by package
 
-Mirror only specific operator packages (channel head of each):
+Mirror only specific operator packages (channel head of every channel in each package):
 
 ```yaml
 mirror:
@@ -134,7 +121,7 @@ mirror:
 
 ### Filter by package and channel
 
-Mirror specific channels for a package. Use `defaultChannel` if the filtered channels do not include the catalog's default channel:
+Mirror specific channels for a package. If the filtered channels do not include the catalog's original default channel, you **must** set `defaultChannel` to one of the included channels — otherwise oc-mirror will return an error:
 
 ```yaml
 mirror:
@@ -149,7 +136,7 @@ mirror:
 
 ### Filter by version range
 
-Version ranges can be specified at the package level (applies to all channels) or per channel:
+Use `minVersion` to mirror bundles starting from a specific version up to the channel head:
 
 ```yaml
 # Per-channel version range
@@ -161,19 +148,19 @@ mirror:
           channels:
             - name: stable
               minVersion: 5.6.0
-              maxVersion: 6.0.0
 
-# Package-level version range (cannot be combined with channel filtering)
+# Package-level version range (applies to all channels)
 mirror:
   operators:
     - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.18
       packages:
         - name: elasticsearch-operator
           minVersion: 5.6.0
-          maxVersion: 6.0.0
 ```
 
-**Important:** Specifying both package-level `minVersion`/`maxVersion` and channel-level filtering is not allowed and will produce an error. Similarly, `full: true` cannot be combined with version ranges.
+**Important:** Specifying both package-level and channel-level version ranges is not allowed and will produce an error. However, you can specify channel names alongside a package-level version range (the range applies to each named channel). Similarly, `full: true` cannot be combined with version ranges.
+
+**Note:** The `maxVersion` field is supported but **not recommended**. If the specified maximum version is not the channel head, the mirrored bundles may lack metadata required to display the operator correctly in the cluster.
 
 ### Target catalog overrides
 
@@ -195,19 +182,6 @@ File-based catalogs stored locally can be referenced with the `oci://` protocol:
 mirror:
   operators:
     - catalog: oci:///path/to/local/catalog
-```
-
-### Skip dependencies
-
-By default, oc-mirror includes operator bundle dependencies. Set `skipDependencies: true` to mirror only the explicitly specified bundles:
-
-```yaml
-mirror:
-  operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.18
-      skipDependencies: true
-      packages:
-        - name: my-operator
 ```
 
 ## Additional images
