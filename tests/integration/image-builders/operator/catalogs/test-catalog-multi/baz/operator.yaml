@@ -1,0 +1,4 @@
+---
+defaultChannel: stable
+name: baz
+schema: olm.package

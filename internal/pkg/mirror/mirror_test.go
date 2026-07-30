@@ -67,13 +67,13 @@ func TestMirrorCopy(t *testing.T) {
 	opts.MultiArch = "other"
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
-		assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
+		assert.Contains(t, err.Error(), "unknown multi-arch option")
 	})
 
 	opts.All = true
 	t.Run("Testing Mirror : copy should fail", func(t *testing.T) {
 		err := m.Run(context.Background(), consts.DockerProtocol+"localhost.localdomain:5000/tes", "oci:test", "copy", &opts)
-		assert.Equal(t, "cannot use --all and --multi-arch flags together", err.Error())
+		assert.Equal(t, "MultiArch and All options cannot be used together", err.Error())
 	})
 
 	opts.All = true
@@ -225,17 +225,87 @@ func TestMirrorDelete(t *testing.T) {
 
 // TestMirrorParseMultiArch
 func TestMirrorParseMultiArch(t *testing.T) {
-	res, _ := parseMultiArch("system")
+	res, platforms, err := parseMultiArch("system")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(0), res)
+	assert.Nil(t, platforms)
 
-	res, _ = parseMultiArch("all")
+	res, platforms, err = parseMultiArch("all")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(1), res)
+	assert.Nil(t, platforms)
 
-	res, _ = parseMultiArch("index-only")
+	res, platforms, err = parseMultiArch("index-only")
+	assert.NoError(t, err)
 	assert.Equal(t, copy.ImageListSelection(2), res)
+	assert.Nil(t, platforms)
 
-	_, err := parseMultiArch("other")
-	assert.Equal(t, "unknown multi-arch option \"other\". Choose one of the supported options: 'system', 'all', or 'index-only'", err.Error())
+	// Platform strings are no longer handled by parseMultiArch — they go through
+	// determinePlatformSelection via InstancePlatforms. Any unknown string is an error.
+	_, _, err = parseMultiArch("linux/amd64,linux/arm64")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown multi-arch option")
+
+	_, _, err = parseMultiArch("other")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown multi-arch option")
+}
+
+func TestDeterminePlatformSelection(t *testing.T) {
+	t.Run("Priority 1: valid InstancePlatforms returns CopySpecificImages", func(t *testing.T) {
+		opts := &CopyOptions{InstancePlatforms: []string{"linux/amd64", "linux/arm64"}}
+		sel, platforms, err := determinePlatformSelection(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, copy.CopySpecificImages, sel)
+		assert.Equal(t, []copy.InstancePlatformFilter{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+		}, platforms)
+	})
+
+	t.Run("Priority 1: invalid platform string returns error", func(t *testing.T) {
+		opts := &CopyOptions{InstancePlatforms: []string{"invalid"}}
+		_, _, err := determinePlatformSelection(opts)
+		assert.Error(t, err)
+	})
+
+	t.Run("Priority 2: MultiArch=all returns CopyAllImages", func(t *testing.T) {
+		opts := &CopyOptions{MultiArch: "all"}
+		sel, platforms, err := determinePlatformSelection(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, copy.CopyAllImages, sel)
+		assert.Nil(t, platforms)
+	})
+
+	t.Run("Priority 2: MultiArch=system returns CopySystemImage", func(t *testing.T) {
+		opts := &CopyOptions{MultiArch: "system"}
+		sel, platforms, err := determinePlatformSelection(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, copy.CopySystemImage, sel)
+		assert.Nil(t, platforms)
+	})
+
+	t.Run("Priority 2: All=true returns CopyAllImages", func(t *testing.T) {
+		opts := &CopyOptions{All: true}
+		sel, platforms, err := determinePlatformSelection(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, copy.CopyAllImages, sel)
+		assert.Nil(t, platforms)
+	})
+
+	t.Run("Priority 2: MultiArch and All together return error", func(t *testing.T) {
+		opts := &CopyOptions{MultiArch: "all", All: true}
+		_, _, err := determinePlatformSelection(opts)
+		assert.Error(t, err)
+	})
+
+	t.Run("empty options returns CopySystemImage", func(t *testing.T) {
+		opts := &CopyOptions{}
+		sel, platforms, err := determinePlatformSelection(opts)
+		assert.NoError(t, err)
+		assert.Equal(t, copy.CopySystemImage, sel)
+		assert.Nil(t, platforms)
+	})
 }
 
 type (

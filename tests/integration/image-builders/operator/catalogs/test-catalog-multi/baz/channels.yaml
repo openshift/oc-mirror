@@ -1,0 +1,13 @@
+schema: olm.channel
+package: baz
+name: stable
+entries:
+  - name: baz.v1.0.0
+    skipRange: <1.0.0
+  - name: baz.v1.0.1
+    skipRange: <1.0.1
+    skips:
+      - baz.v1.0.0
+  - name: baz.v1.1.0
+    skipRange: <1.1.0
+    replaces: baz.v1.0.1

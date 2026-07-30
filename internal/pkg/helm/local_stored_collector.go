@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -78,123 +79,152 @@ func WithV1Tags(o CollectorInterface) CollectorInterface {
 	return o
 }
 
-func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
-	var (
-		allImages     []v2alpha1.CopyImageSchema
-		allHelmImages []v2alpha1.RelatedImage
-		errs          []error
-	)
+func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) (v2alpha1.CollectorSchema, error) {
+	var allImages []v2alpha1.CopyImageSchema
+	var platformFilters map[string][]v2alpha1.InstancePlatformFilter
+	var errs []error
 
 	switch {
 	case lsc.Opts.IsMirrorToDisk() || lsc.Opts.IsMirrorToMirror():
 		defer lsc.cleanup()
+		allImages, platformFilters, errs = lsc.collectHelmImagesM2D()
+	case lsc.Opts.IsDiskToMirror():
+		allImages, platformFilters, errs = lsc.collectHelmImagesD2M(o.generateV1DestTags)
+	}
 
-		var err error
-		imgs, errors := getHelmImagesFromLocalChart()
-		if len(errors) > 0 {
-			errs = append(errs, errors...)
+	cs := v2alpha1.CollectorSchema{AllImages: allImages}
+	if len(platformFilters) > 0 {
+		cs.PlatformFilters = platformFilters
+	}
+	return cs, errors.Join(errs...)
+}
+
+func (lsc *LocalStorageCollector) collectHelmImagesM2D() ([]v2alpha1.CopyImageSchema, map[string][]v2alpha1.InstancePlatformFilter, []error) { //nolint:cyclop
+	var allHelmImages []v2alpha1.RelatedImage
+	var errs []error
+	platformFilters := make(map[string][]v2alpha1.InstancePlatformFilter)
+
+	imgs, localPlatforms, errors := getHelmImagesFromLocalChart()
+	errs = append(errs, errors...)
+	if len(imgs) > 0 {
+		allHelmImages = append(allHelmImages, imgs...)
+		maps.Copy(platformFilters, localPlatforms)
+	}
+
+	for _, repo := range lsc.Config.Mirror.Helm.Repositories {
+		charts := repo.Charts
+		if err := repoAdd(repo); err != nil {
+			errs = append(errs, err)
+			continue
 		}
-		if len(imgs) > 0 {
-			allHelmImages = append(allHelmImages, imgs...)
-		}
-
-		for _, repo := range lsc.Config.Mirror.Helm.Repositories {
-			charts := repo.Charts
-
-			if err := repoAdd(repo); err != nil {
+		if charts == nil {
+			var indexFile helmrepo.IndexFile
+			var err error
+			if indexFile, err = createIndexFile(repo.URL); err != nil {
 				errs = append(errs, err)
 				continue
 			}
-
-			if charts == nil {
-				var indexFile helmrepo.IndexFile
-				if indexFile, err = createIndexFile(repo.URL); err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				if charts, err = getChartsFromIndex("", indexFile); err != nil && charts == nil {
-					errs = append(errs, err)
-					continue
-				}
-			}
-
-			for _, chart := range charts {
-				lsc.Log.Debug("Pulling chart %s", chart.Name)
-				ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
-				dest := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
-				path, _, err := lsc.Downloaders.chartDownloader.DownloadTo(ref, chart.Version, dest)
-				if err != nil {
-					errs = append(errs, err)
-					lsc.Log.Error("error pulling chart %s:%s", ref, err.Error())
-					continue
-				}
-
-				imgs, err := getImages(path, chart.ImagePaths...)
-				if err != nil {
-					errs = append(errs, err)
-				}
-
-				allHelmImages = append(allHelmImages, imgs...)
-
+			if charts, err = getChartsFromIndex("", indexFile); err != nil && charts == nil {
+				errs = append(errs, err)
+				continue
 			}
 		}
-
-		allImages, err = prepareM2DCopyBatch(allHelmImages)
-		if err != nil {
-			lsc.Log.Error(errMsg, err.Error())
-			errs = append(errs, err)
-		}
-
-	case lsc.Opts.IsDiskToMirror():
-		imgs, errors := getHelmImagesFromLocalChart()
-		if len(errors) > 0 {
-			errs = append(errs, errors...)
-		}
-		if len(imgs) > 0 {
-			allHelmImages = append(allHelmImages, imgs...)
-		}
-
-		for _, repo := range lsc.Config.Mirror.Helm.Repositories {
-			charts := repo.Charts
-
-			if charts == nil {
-				var err error
-				if charts, err = getChartsFromIndex(repo.URL, helmrepo.IndexFile{}); err != nil {
-					errs = append(errs, err)
-					if charts == nil {
-						continue
-					}
-				}
+		for _, chart := range charts {
+			lsc.Log.Debug("Pulling chart %s", chart.Name)
+			ref := fmt.Sprintf("%s/%s", repo.Name, chart.Name)
+			dest := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
+			path, _, err := lsc.Downloaders.chartDownloader.DownloadTo(ref, chart.Version, dest)
+			if err != nil {
+				errs = append(errs, err)
+				lsc.Log.Error("error pulling chart %s:%s", ref, err.Error())
+				continue
 			}
-
-			for _, chart := range charts {
-				chartDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
-				path, err := resolveChartPath(chartDir, chart.Name, chart.Version)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				imgs, err := getImages(path, chart.ImagePaths...)
-				if err != nil {
-					errs = append(errs, err)
-				}
-
-				allHelmImages = append(allHelmImages, imgs...)
-
+			if err := v2alpha1.ValidatePlatforms(chart.Platforms); err != nil {
+				errs = append(errs, fmt.Errorf("invalid platform for chart %q: %w", chart.Name, err))
+				continue
 			}
-		}
-
-		var err error
-		allImages, err = prepareD2MCopyBatch(allHelmImages, o.generateV1DestTags)
-		if err != nil {
-			lsc.Log.Error(errMsg, err.Error())
-			errs = append(errs, err)
+			chartImgs, err := getImages(path, chart.ImagePaths...)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			allHelmImages = append(allHelmImages, chartImgs...)
+			addChartPlatformFilters(platformFilters, chartImgs, chart.Platforms)
 		}
 	}
 
-	return allImages, errors.Join(errs...)
+	allImages, err := prepareM2DCopyBatch(allHelmImages)
+	if err != nil {
+		lsc.Log.Error(errMsg, err.Error())
+		errs = append(errs, err)
+	}
+	return allImages, platformFilters, errs
+}
+
+func (lsc *LocalStorageCollector) collectHelmImagesD2M(generateV1Tags bool) ([]v2alpha1.CopyImageSchema, map[string][]v2alpha1.InstancePlatformFilter, []error) {
+	var allHelmImages []v2alpha1.RelatedImage
+	var errs []error
+	platformFilters := make(map[string][]v2alpha1.InstancePlatformFilter)
+
+	imgs, localPlatforms, errors := getHelmImagesFromLocalChart()
+	errs = append(errs, errors...)
+	allHelmImages = append(allHelmImages, imgs...)
+	maps.Copy(platformFilters, localPlatforms)
+
+	for _, repo := range lsc.Config.Mirror.Helm.Repositories {
+		charts, err := resolveChartsForRepo(repo)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if charts == nil {
+			continue
+		}
+		for _, chart := range charts {
+			chartDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmChartDir)
+			path, err := resolveChartPath(chartDir, chart.Name, chart.Version)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if err := v2alpha1.ValidatePlatforms(chart.Platforms); err != nil {
+				errs = append(errs, fmt.Errorf("invalid platform for chart %q: %w", chart.Name, err))
+				continue
+			}
+			chartImgs, err := getImages(path, chart.ImagePaths...)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			allHelmImages = append(allHelmImages, chartImgs...)
+			addChartPlatformFilters(platformFilters, chartImgs, chart.Platforms)
+		}
+	}
+
+	allImages, err := prepareD2MCopyBatch(allHelmImages, generateV1Tags)
+	if err != nil {
+		lsc.Log.Error(errMsg, err.Error())
+		errs = append(errs, err)
+	}
+	return allImages, platformFilters, errs
+}
+
+func addChartPlatformFilters(filters map[string][]v2alpha1.InstancePlatformFilter, imgs []v2alpha1.RelatedImage, platforms []v2alpha1.InstancePlatformFilter) {
+	if len(platforms) == 0 {
+		return
+	}
+	for _, img := range imgs {
+		ref, err := image.ParseRef(img.Image)
+		if err != nil {
+			continue
+		}
+		origin := ref.ReferenceWithTransport
+		filters[origin] = append(filters[origin], platforms...)
+	}
+}
+
+func resolveChartsForRepo(repo v2alpha1.Repository) ([]v2alpha1.Chart, error) {
+	if repo.Charts != nil {
+		return repo.Charts, nil
+	}
+	return getChartsFromIndex(repo.URL, helmrepo.IndexFile{})
 }
 
 func createTempFile(dir string) (func(), string, error) {
@@ -226,22 +256,30 @@ func GetDefaultChartDownloader() chartDownloader {
 	}
 }
 
-func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, []error) {
+func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, map[string][]v2alpha1.InstancePlatformFilter, []error) {
 	var allHelmImages []v2alpha1.RelatedImage
 	var errs []error
+	platformFilters := make(map[string][]v2alpha1.InstancePlatformFilter)
 
 	for _, chart := range lsc.Config.Mirror.Helm.Local {
+		if err := v2alpha1.ValidatePlatforms(chart.Platforms); err != nil {
+			errs = append(errs, fmt.Errorf("invalid platform for chart %q: %w", chart.Name, err))
+			continue
+		}
+
 		imgs, err := getImages(chart.Path, chart.ImagePaths...)
 		if err != nil {
 			errs = append(errs, err)
 		}
 
-		if len(imgs) > 0 {
-			allHelmImages = append(allHelmImages, imgs...)
+		if len(imgs) == 0 {
+			continue
 		}
+		allHelmImages = append(allHelmImages, imgs...)
+		addChartPlatformFilters(platformFilters, imgs, chart.Platforms)
 	}
 
-	return allHelmImages, errs
+	return allHelmImages, platformFilters, errs
 }
 
 func repoAdd(chartRepo v2alpha1.Repository) error {
@@ -528,7 +566,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 		}
 
 		for _, result := range results {
-			_, err := image.ParseRef(result)
+			ref, err := image.ParseRef(result)
 			if err != nil {
 				lsc.Log.Debug("invalid helm image: %s", result)
 				continue
@@ -536,7 +574,7 @@ func findImages(templateData []byte, paths ...string) (images []v2alpha1.Related
 
 			lsc.Log.Debug("Found image %s", result)
 			img := v2alpha1.RelatedImage{
-				Image: result,
+				Image: ref.ReferenceWithTransport,
 				Type:  v2alpha1.TypeHelmImage,
 			}
 
@@ -590,7 +628,12 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 
 		lsc.Log.Debug("source %s", src)
 		lsc.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      imgSpec.ReferenceWithTransport,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+		})
 	}
 	return result, nil
 }
@@ -630,7 +673,12 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 
 		lsc.Log.Debug("source %s", src)
 		lsc.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{Origin: img.Image, Source: src, Destination: dest, Type: img.Type})
+		result = append(result, v2alpha1.CopyImageSchema{
+			Origin:      imgSpec.ReferenceWithTransport,
+			Source:      src,
+			Destination: dest,
+			Type:        img.Type,
+		})
 
 	}
 	return result, nil

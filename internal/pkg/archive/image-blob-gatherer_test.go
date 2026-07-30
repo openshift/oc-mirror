@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"go.podman.io/image/v5/manifest"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -31,6 +33,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 		caseName          string
 		images            []image
 		removeSignatures  bool
+		allowedPlatforms  []string
 		expectedBlobs     sets.Set[string]
 		expectedErrorType error
 	}
@@ -96,6 +99,51 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 				"sha256:ed81f580f1cc03b20cb0600084a76b3da35a9e303ffc1b908e5b5e61e05d9f27",
 				"sha256:1faf95412673f2c4345d6961ed543c92173589cfe364282f129d5de056003980",
 				"sha256:5e7a034f575bb1b9188e4ea29470a2b86c640170125fa8c7ec9dc9c4bc17a373",
+			),
+		},
+		{
+			caseName: "multi arch image with allowedPlatforms=[linux/amd64]: only amd64 blobs returned",
+			images: []image{
+				{
+					srcProtocol:    consts.OciProtocol,
+					src:            "multi-platform-container-latest",
+					destProtocol:   consts.DockerProtocol,
+					dest:           "/multi-platform-container:latest",
+					isParentImage:  true,
+					isManifestList: true,
+				},
+			},
+			removeSignatures: true,
+			allowedPlatforms: []string{"linux/amd64"},
+			expectedBlobs: sets.New(
+				"sha256:0de0e983a4980f32b1aad2d7f7f387cea2d4e9517b47f336cef27f63735911fa", // manifest list
+				"sha256:e033aa62f84267cf44de611acac2e76bfa4d2f0b6b2b61f1c4fecbefefde7159", // amd64 manifest
+				"sha256:6db70183199d1d7a1c7ae19c982988c82180aa10383e7ebbbc9071d7a6cae87d", // amd64 config
+				"sha256:e8170da5e917b5a8fd29726001e996f567f248541fde0f7bf42a4c7a5cca9ed0", // amd64 layer
+			),
+		},
+		{
+			caseName: "multi arch image with allowedPlatforms=[linux/amd64,linux/arm64]: only amd64+arm64 blobs returned",
+			images: []image{
+				{
+					srcProtocol:    consts.OciProtocol,
+					src:            "multi-platform-container-latest",
+					destProtocol:   consts.DockerProtocol,
+					dest:           "/multi-platform-container:latest",
+					isParentImage:  true,
+					isManifestList: true,
+				},
+			},
+			removeSignatures: true,
+			allowedPlatforms: []string{"linux/amd64", "linux/arm64"},
+			expectedBlobs: sets.New(
+				"sha256:0de0e983a4980f32b1aad2d7f7f387cea2d4e9517b47f336cef27f63735911fa", // manifest list
+				"sha256:e033aa62f84267cf44de611acac2e76bfa4d2f0b6b2b61f1c4fecbefefde7159", // amd64 manifest
+				"sha256:6db70183199d1d7a1c7ae19c982988c82180aa10383e7ebbbc9071d7a6cae87d", // amd64 config
+				"sha256:e8170da5e917b5a8fd29726001e996f567f248541fde0f7bf42a4c7a5cca9ed0", // amd64 layer
+				"sha256:02f29c270f30416a266571383098d7b98a49488723087fd917128045bcd1ca75", // arm64 manifest
+				"sha256:b1a8f85a8bf03345f76c684778bb4e56bf2e540d103bb87bf82c81e7139e2f3f", // arm64 config
+				"sha256:e92ae2b67386a079de2f99e6045637f2612d9aa9b0089736152c060b338ba5b3", // arm64 layer
 			),
 		},
 		{
@@ -221,7 +269,7 @@ func TestImageBlobGatherer_GatherBlobs(t *testing.T) {
 
 		gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
 
-		blobs, err := gatherer.GatherBlobs(ctx, parentImage.destProtocol+u.Host+parentImage.dest)
+		blobs, err := gatherer.GatherBlobs(ctx, parentImage.destProtocol+u.Host+parentImage.dest, tc.allowedPlatforms)
 		if tc.expectedErrorType != nil {
 			assert.True(t, reflect.TypeOf(err) == reflect.TypeOf(tc.expectedErrorType))
 		} else {
@@ -257,7 +305,7 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, "error")
+	_, err := gatherer.GatherBlobs(ctx, "error", nil)
 	assert.Equal(t, "invalid source name error: Invalid image name \"error\", expected colon-separated transport:reference", err.Error())
 }
 
@@ -289,7 +337,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest")
+	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest", nil)
 	assert.Contains(t, err.Error(), "pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused")
 }
 
@@ -328,6 +376,32 @@ func TestImageBlobGatherer_ImageSourceError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest")
+	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+u.Host+"/bad-test:latest", nil)
 	assert.Contains(t, err.Error(), "name unknown: Unknown name")
+}
+
+func TestPlatformForDigest(t *testing.T) {
+	amd64Digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	arm64Digest := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	noPlat := "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+	indexJSON := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.oci.image.index.v1+json",
+		"manifests": [
+			{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + amd64Digest + `","size":1,"platform":{"os":"linux","architecture":"amd64"}},
+			{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + arm64Digest + `","size":1,"platform":{"os":"linux","architecture":"arm64"}},
+			{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + noPlat + `","size":1}
+		]
+	}`
+
+	ml, err := manifest.ListFromBlob([]byte(indexJSON), "application/vnd.oci.image.index.v1+json")
+	if err != nil {
+		t.Fatalf("failed to parse manifest list: %v", err)
+	}
+
+	assert.Equal(t, "linux/amd64", platformForDigest(ml, digest.Digest(amd64Digest)))
+	assert.Equal(t, "linux/arm64", platformForDigest(ml, digest.Digest(arm64Digest)))
+	assert.Equal(t, "", platformForDigest(ml, digest.Digest(noPlat)))
+	assert.Equal(t, "", platformForDigest(ml, digest.Digest("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")))
 }

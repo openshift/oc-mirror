@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	digest "github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/manifest"
@@ -24,12 +25,13 @@ type ImageBlobGatherer struct {
 }
 
 type internalImageBlobGatherer struct {
-	imgRef         string
-	sourceCtx      *types.SystemContext
-	manifestBytes  []byte
-	mimeType       string
-	digest         digest.Digest
-	copySignatures bool
+	imgRef           string
+	sourceCtx        *types.SystemContext
+	manifestBytes    []byte
+	mimeType         string
+	digest           digest.Digest
+	copySignatures   bool
+	allowedPlatforms []string // non-empty = only these os/arch pairs were mirrored (sparse)
 }
 
 func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *ImageBlobGatherer {
@@ -40,8 +42,9 @@ func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInte
 	}
 }
 
-// GatherBlobs returns all container image blobs (including signature blobs if they exists).
-func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blobs sets.Set[string], retErr error) {
+// GatherBlobs returns all container image blobs (including signature blobs if they exist).
+// See BlobsGatherer.GatherBlobs for the allowedPlatforms semantics.
+func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allowedPlatforms []string) (blobs sets.Set[string], retErr error) {
 	// we are always gathering blobs from the local cache registry - skipping tls verification
 	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
@@ -59,7 +62,7 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string) (blo
 		return nil, fmt.Errorf("error to get the digest of the image manifest %w", err)
 	}
 
-	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures}
+	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, allowedPlatforms: allowedPlatforms}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
 		return o.multiArchBlobs(ctx, inImageBlogGather)
@@ -93,13 +96,20 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 
 	digests := manifestList.Instances()
 	for _, digest := range digests {
-		blobs.Insert(digest.String())
-		singleIn := in
+		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
+			// Platform was intentionally not mirrored (sparse manifest filtering).
+			// Do not add its digest to blobs — the blob file does not exist locally.
+			o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, digest.String())
+			continue
+		}
 
+		singleIn := in
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
 			return nil, err
 		}
+		// Only insert the platform digest after confirming the manifest is present.
+		blobs.Insert(digest.String())
 		singleIn.digest = digest
 
 		singleArchBlobs, err := o.singleArchBlobs(ctx, singleIn)
@@ -187,4 +197,13 @@ func (o *ImageBlobGatherer) imageSignatureBlobs(ctx context.Context, in internal
 	sigBlobs = append(sigBlobs, signatureDigest.String())
 
 	return sigBlobs, nil
+}
+
+// platformForDigest returns the "os/arch" string for the manifest list entry
+// matching d, or an empty string if not found or if platform is unset.
+func platformForDigest(manifestList manifest.List, d digest.Digest) string {
+	if m, err := manifestList.Instance(d); err == nil && m.ReadOnly.Platform != nil {
+		return m.ReadOnly.Platform.OS + "/" + m.ReadOnly.Platform.Architecture
+	}
+	return ""
 }

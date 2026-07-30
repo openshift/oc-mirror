@@ -1,0 +1,4 @@
+---
+defaultChannel: stable
+name: bar
+schema: olm.package
