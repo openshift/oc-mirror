@@ -8,7 +8,7 @@ require (
 	github.com/distribution/distribution/v3 v3.1.1
 	github.com/distribution/reference v0.6.0
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect; OCPBUGS-51217 - CVE-2025-27144, OCPBUGS-84389 - CVE-2026-34986
-	github.com/google/go-containerregistry v0.21.1
+	github.com/google/go-containerregistry v0.21.5
 	github.com/google/uuid v1.6.0
 	github.com/microlib/simple v1.0.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -106,12 +106,12 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/cel-go v0.28.1 // indirect
+	github.com/google/cel-go v0.29.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/h2non/go-is-svg v0.0.0-20160927212452-35e8c4b0612c // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -168,8 +168,8 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.11.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/sigstore/fulcio v1.8.5 // indirect
-	github.com/sigstore/protobuf-specs v0.5.0 // indirect
+	github.com/sigstore/fulcio v1.8.6 // indirect
+	github.com/sigstore/protobuf-specs v0.5.1 // indirect
 	github.com/sigstore/sigstore v1.10.6 // indirect
 	github.com/smallstep/pkcs7 v0.2.1 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
@@ -210,10 +210,10 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
-	google.golang.org/grpc v1.82.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
