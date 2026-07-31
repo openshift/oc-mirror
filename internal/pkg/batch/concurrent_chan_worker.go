@@ -73,7 +73,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	total := len(collectorSchema.AllImages)
 
-	o.Log.Info(emoji.Rocket + " Start " + mirrorMsg + " the images...")
+	o.Log.Info(emoji.Rocket+" Start %s the images...", mirrorMsg)
 	o.Log.Info(emoji.Pushpin+" images to %s %d ", opts.Function, total)
 
 	p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !opts.Global.IsTerminal))
@@ -335,7 +335,8 @@ func newSpinner(img v2alpha1.CopyImageSchema, localStorage string, p *mpb.Progre
 }
 
 func newOverallProgress(p *mpb.Progress, total int) *mpb.Bar {
-	return p.AddBar(int64(total),
+	return p.AddBar(
+		int64(total),
 		mpb.PrependDecorators(
 			decor.CountersNoUnit("%d / %d"),
 			decor.Name(" ("),
