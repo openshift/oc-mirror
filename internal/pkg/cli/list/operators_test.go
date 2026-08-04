@@ -85,12 +85,40 @@ registry.redhat.io/redhat/certified-operator-index:v4.20
 registry.redhat.io/redhat/community-operator-index:v4.20
 registry.redhat.io/redhat/redhat-marketplace-index:v4.20
 `, w.String())
+
+		t.Run("but not include marketplace when version >= 4.22", func(t *testing.T) {
+			w := strings.Builder{}
+			err := listCatalogsForVersion(t.Context(), log, &w, "4.22", *opts)
+			assert.NoError(t, err)
+			assert.Equal(t, `Available OpenShift OperatorHub catalogs:
+OpenShift 4.22:
+registry.redhat.io/redhat/redhat-operator-index:v4.22
+registry.redhat.io/redhat/certified-operator-index:v4.22
+registry.redhat.io/redhat/community-operator-index:v4.22
+`, w.String())
+
+			w = strings.Builder{}
+			err = listCatalogsForVersion(t.Context(), log, &w, "5.0", *opts)
+			assert.NoError(t, err)
+			assert.Equal(t, `Available OpenShift OperatorHub catalogs:
+OpenShift 5.0:
+registry.redhat.io/redhat/redhat-operator-index:v5.0
+registry.redhat.io/redhat/certified-operator-index:v5.0
+registry.redhat.io/redhat/community-operator-index:v5.0
+`, w.String())
+		})
 	})
 
 	t.Run("should fail when OCP version is invalid", func(t *testing.T) {
 		w := strings.Builder{}
 		err := listCatalogsForVersion(t.Context(), log, &w, "foobar", *opts)
-		assert.ErrorContains(t, err, "failed to check catalog")
+		assert.NoError(t, err)
+		assert.Equal(t, `Available OpenShift OperatorHub catalogs:
+OpenShift foobar:
+Invalid catalog reference "registry.redhat.io/redhat/redhat-operator-index:vfoobar", please check version
+Invalid catalog reference "registry.redhat.io/redhat/certified-operator-index:vfoobar", please check version
+Invalid catalog reference "registry.redhat.io/redhat/community-operator-index:vfoobar", please check version
+`, w.String())
 	})
 }
 
