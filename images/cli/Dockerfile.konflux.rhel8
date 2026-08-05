@@ -1,0 +1,31 @@
+# Dockerfile for the Konflux CDN release pipeline: cross-compiles oc-mirror binaries
+# for all supported architectures on RHEL 8, packages them as compressed tarballs
+# in /releases/ for push-artifacts-to-cdn.
+
+# Stage 1: Cross-compile RHEL 8 binaries for all architectures
+FROM registry.access.redhat.com/ubi8/go-toolset:1.26 AS builder_rhel8
+USER root
+WORKDIR /go/src/github.com/openshift/oc-mirror
+COPY . .
+RUN git config --global --add safe.directory /go/src/github.com/openshift/oc-mirror && \
+    CGO_ENABLED=0 make cross-build && \
+    mkdir -p /output && \
+    for arch in amd64 arm64 ppc64le s390x; do \
+      tar -czf /output/oc-mirror-rhel8-linux-${arch}.tar.gz -C bin/linux-${arch} oc-mirror || exit 1; \
+    done
+
+# Stage 2: Final delivery image for push-artifacts-to-cdn
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+RUN mkdir -p /releases/
+COPY --from=builder_rhel8 /output/ /releases/
+
+# Required EC Metadata Labels
+LABEL vendor="Red Hat, Inc." \
+      name="oc-mirror" \
+      com.redhat.component="oc-mirror" \
+      version="1.0.0" \
+      release="1" \
+      summary="oc-mirror CLI tool transport container" \
+      description="OpenShift is a platform for developing, building, and deploying containerized applications." \
+      io.k8s.display-name="oc-mirror" \
+      io.openshift.tags="openshift,cli,mirror"

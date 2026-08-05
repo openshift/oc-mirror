@@ -1,20 +1,8 @@
 # Dockerfile for the Konflux CDN release pipeline: cross-compiles oc-mirror binaries
-# for all supported architectures on RHEL 8/9, packages them as compressed tarballs
+# for all supported architectures on RHEL 9, packages them as compressed tarballs
 # in /releases/ for push-artifacts-to-cdn.
 
-# Stage 1: Cross-compile RHEL 8 binaries for all architectures
-FROM registry.access.redhat.com/ubi8/go-toolset:1.26 AS builder_rhel8
-USER root
-WORKDIR /go/src/github.com/openshift/oc-mirror
-COPY . .
-RUN git config --global --add safe.directory /go/src/github.com/openshift/oc-mirror && \
-    CGO_ENABLED=0 make cross-build && \
-    mkdir -p /output && \
-    for arch in amd64 arm64 ppc64le s390x; do \
-      tar -czf /output/oc-mirror-rhel8-linux-${arch}.tar.gz -C bin/linux-${arch} oc-mirror || exit 1; \
-    done
-
-# Stage 2: Cross-compile RHEL 9 binaries for all architectures
+# Stage 1: Cross-compile RHEL 9 binaries for all architectures
 FROM registry.access.redhat.com/ubi9/go-toolset:1.26 AS builder_rhel9
 USER root
 WORKDIR /go/src/github.com/openshift/oc-mirror
@@ -26,10 +14,9 @@ RUN git config --global --add safe.directory /go/src/github.com/openshift/oc-mir
       tar -czf /output/oc-mirror-rhel9-linux-${arch}.tar.gz -C bin/linux-${arch} oc-mirror || exit 1; \
     done
 
-# Stage 3: Final delivery image for push-artifacts-to-cdn
+# Stage 2: Final delivery image for push-artifacts-to-cdn
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 RUN mkdir -p /releases/
-COPY --from=builder_rhel8 /output/ /releases/
 COPY --from=builder_rhel9 /output/ /releases/
 
 # Required EC Metadata Labels
