@@ -144,6 +144,38 @@ opm render ${REPO}:baz-bundle-v1.0.0 ${REPO}:baz-bundle-v1.0.1 ${REPO}:baz-bundl
 ```
 
 
+## test-catalog-invalid-images
+
+Used to test OCPBUGS-33081: a catalog may contain bundles with invalid
+related images (missing name, missing tag/digest, unsupported `oci://`
+scheme, ...), and oc-mirror is expected to handle that gracefully rather than
+failing the whole catalog. `foo.v0.9.9-invalid-related-image`'s bad related
+image is never actually pulled - the string only needs to fail image
+reference parsing, so it doesn't need to point at a real image.
+
+### Contents
+ * Packages: foo
+ * Channels:
+    - foo: beta
+ * Bundles:
+    - foo.v0.1.0: valid, points at the real, already-published `foo-bundle-v0.1.0` image
+    - foo.v0.9.9-invalid-related-image: has a related image with no tag or digest
+      (`registry.example.com/foo/operand-missing-tag`)
+
+### Creating
+```bash
+CATALOG=test-catalog-invalid-images
+mkdir -p ${CATALOG}/foo
+
+opm init foo -c beta -o yaml > ${CATALOG}/foo/operator.yaml
+
+REPO="quay.io/oc-mirror/oc-mirror-dev"
+opm render ${REPO}:foo-bundle-v0.1.0 --output=yaml > ${CATALOG}/foo/bundles.yaml
+# then hand-edit ${CATALOG}/foo/channels.yaml and append the invalid bundle to
+# ${CATALOG}/foo/bundles.yaml - see the checked-in files for the exact content.
+```
+
+
 ## Catalog building
 ```bash
 make build # for all catalogs
