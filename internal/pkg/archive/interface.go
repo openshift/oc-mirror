@@ -17,7 +17,9 @@ type BlobsGatherer interface {
 }
 
 type Archiver interface {
-	BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error
+	// BuildArchive creates the mirror archive. onBlobsGathered, if non-nil, is called
+	// once the local registry is no longer needed, before working-dir is archived.
+	BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema, onBlobsGathered func()) error
 }
 
 type UnArchiver interface {

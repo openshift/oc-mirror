@@ -150,6 +150,7 @@ type ExecutorSchema struct {
 	MakeDir              MakeDirInterface
 	Delete               delete.DeleteInterface
 	MirrorStartTimeStamp string
+	registryStopped      bool
 }
 
 type MakeDirInterface interface {
@@ -759,8 +760,15 @@ func (o *ExecutorSchema) startLocalRegistry() {
 	}
 }
 
-// stopLocalRegistry - stops the local registry and closes the registry.log file
+// stopLocalRegistry - stops the local registry and closes the registry.log file.
+// Safe to call multiple times (e.g. from BuildArchive's callback and again in Run):
+// only the first call runs the shutdown logic.
 func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
+	if o.registryStopped {
+		return
+	}
+	o.registryStopped = true
+
 	// Try to gracefully shutdown the local registry
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -933,7 +941,11 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema)
+	// The registry is stopped via callback once BuildArchive no longer needs it (see
+	// BuildArchive's doc comment), and before it archives working-dir/logs/registry-*.log.
+	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema, func() {
+		o.stopLocalRegistry(cmd.Context())
+	})
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality

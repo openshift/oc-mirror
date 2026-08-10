@@ -1290,8 +1290,11 @@ func (o *Collector) HelmImageCollector(ctx context.Context) (v2alpha1.CollectorS
 	return v2alpha1.CollectorSchema{}, nil
 }
 
-func (o MockArchiver) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error {
+func (o MockArchiver) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema, onBlobsGathered func()) error {
 	// return filepath.Join(o.destination, "mirror_000001.tar"), nil
+	if onBlobsGathered != nil {
+		onBlobsGathered()
+	}
 	return nil
 }
 

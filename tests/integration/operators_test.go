@@ -123,7 +123,7 @@ var _ = Describe("operators", func() {
 	Describe("catalog with a bundle containing an invalid related image", func() {
 		iscFile := filepath.Join("operators", "isc-operator-invalid-images.yaml")
 
-		It("fails the whole catalog", func() {
+		It("handles invalid related image references in a catalog", func() {
 			By("running mirrorToMirror against a catalog with one valid and one invalid bundle")
 			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
 				"--dest-tls-verify=false")

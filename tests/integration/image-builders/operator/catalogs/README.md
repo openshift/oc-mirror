@@ -148,10 +148,11 @@ opm render ${REPO}:baz-bundle-v1.0.0 ${REPO}:baz-bundle-v1.0.1 ${REPO}:baz-bundl
 
 Used to test OCPBUGS-33081: a catalog may contain bundles with invalid
 related images (missing name, missing tag/digest, unsupported `oci://`
-scheme, ...), and oc-mirror is expected to handle that gracefully rather than
-failing the whole catalog. `foo.v0.9.9-invalid-related-image`'s bad related
-image is never actually pulled - the string only needs to fail image
-reference parsing, so it doesn't need to point at a real image.
+scheme, ...). Currently, oc-mirror fails the whole catalog collection when
+any bundle has such an invalid related image, instead of skipping just the
+invalid bundle. `foo.v0.9.9-invalid-related-image`'s bad related image is
+never actually pulled - the string only needs to fail image reference
+parsing, so it doesn't need to point at a real image.
 
 ### Contents
  * Packages: foo
