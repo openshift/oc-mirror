@@ -23,7 +23,10 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/types"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 )
 
@@ -159,6 +162,45 @@ func buildAndPushFakeImage(content map[string][]byte, imgRef string, dir string)
 	return digest.String(), nil
 }
 
+// GetAllManifestDigests retrieves all manifest digests from a pushed image
+func GetAllManifestDigests(imgRef string) ([]string, error) {
+	var digests []string
+
+	ref, err := name.ParseReference(imgRef)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the image descriptor
+	desc, err := remote.Get(ref)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the main digest
+	digests = append(digests, desc.Digest.String())
+
+	// Check if it's an index/manifest list
+	if desc.MediaType.IsIndex() {
+		idx, err := desc.ImageIndex()
+		if err != nil {
+			return digests, nil //nolint:nilerr,errcheck // Return what we have
+		}
+
+		manifest, err := idx.IndexManifest()
+		if err != nil {
+			return digests, nil //nolint:nilerr,errcheck
+		}
+
+		// Add all manifest digests from the index
+		for _, m := range manifest.Manifests {
+			digests = append(digests, m.Digest.String())
+		}
+	}
+
+	return digests, nil
+}
+
 // GenerateFakeImage will use go-containerregistry to push a test image to
 // an httptest.Server and will write the image to an OCI layout if dir is not "".
 func GenerateFakeImage(content, imgRef string, tempFolder string) (string, error) {
@@ -251,6 +293,17 @@ func GenerateReleaseAndComponents(toRegistry, tempFolder string, templatePath st
 	contents.Ref1 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest1
 	relatedImages = append(relatedImages, contents.Ref1)
 
+	// Push signature images for all manifests in component1
+	digests1, err := GetAllManifestDigests(component1)
+	if err != nil {
+		return "", relatedImages, fmt.Errorf("failed to get manifests for component1: %w", err)
+	}
+	for _, d := range digests1 {
+		if err := PushSignatureImage(d, toRegistry, "openshift-release-dev/ocp-v4.0-art-dev"); err != nil {
+			return "", relatedImages, fmt.Errorf("failed to push signature for component1 manifest %s: %w", d, err)
+		}
+	}
+
 	component2 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component2"
 	digest2, err := GenerateFakeImage("component2", component2, tempFolder)
 	if err != nil {
@@ -258,6 +311,17 @@ func GenerateReleaseAndComponents(toRegistry, tempFolder string, templatePath st
 	}
 	contents.Ref2 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest2
 	relatedImages = append(relatedImages, contents.Ref2)
+
+	// Push signature images for all manifests in component2
+	digests2, err := GetAllManifestDigests(component2)
+	if err != nil {
+		return "", relatedImages, fmt.Errorf("failed to get manifests for component2: %w", err)
+	}
+	for _, d := range digests2 {
+		if err := PushSignatureImage(d, toRegistry, "openshift-release-dev/ocp-v4.0-art-dev"); err != nil {
+			return "", relatedImages, fmt.Errorf("failed to push signature for component2 manifest %s: %w", d, err)
+		}
+	}
 
 	component3 := toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev:component3"
 	digest3, err := GenerateFakeImage("component3", component3, tempFolder)
@@ -267,11 +331,35 @@ func GenerateReleaseAndComponents(toRegistry, tempFolder string, templatePath st
 	contents.Ref3 = toRegistry + "/openshift-release-dev/ocp-v4.0-art-dev@" + digest3
 	relatedImages = append(relatedImages, contents.Ref3)
 
-	digest, err := GenerateFakeRelease(contents, toRegistry+"/openshift-release-dev/ocp-release:4.15.0-x86_64", tempFolder, templatePath)
+	// Push signature images for all manifests in component3
+	digests3, err := GetAllManifestDigests(component3)
+	if err != nil {
+		return "", relatedImages, fmt.Errorf("failed to get manifests for component3: %w", err)
+	}
+	for _, d := range digests3 {
+		if err := PushSignatureImage(d, toRegistry, "openshift-release-dev/ocp-v4.0-art-dev"); err != nil {
+			return "", relatedImages, fmt.Errorf("failed to push signature for component3 manifest %s: %w", d, err)
+		}
+	}
+
+	releaseImg := toRegistry + "/openshift-release-dev/ocp-release:4.15.0-x86_64"
+	digest, err := GenerateFakeRelease(contents, releaseImg, tempFolder, templatePath)
 	if err != nil {
 		return "", relatedImages, err
 	}
 	relatedImages = append(relatedImages, toRegistry+"/openshift-release-dev/ocp-release@"+digest)
+
+	// Push signature images for all manifests in the release image
+	releaseDigests, err := GetAllManifestDigests(releaseImg)
+	if err != nil {
+		return "", relatedImages, fmt.Errorf("failed to get manifests for release: %w", err)
+	}
+	for _, d := range releaseDigests {
+		if err := PushSignatureImage(d, toRegistry, "openshift-release-dev/ocp-release"); err != nil {
+			return "", relatedImages, fmt.Errorf("failed to push signature for release manifest %s: %w", d, err)
+		}
+	}
+
 	return digest, relatedImages, nil
 }
 
@@ -354,4 +442,42 @@ func (c CincinnatiMock) CincinnatiHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+// PushSignatureImage creates and pushes a sigstore-style signature image to the registry.
+// The signature tag format is: sha256-<digest>.sig
+func PushSignatureImage(imgDigest, registryHost, repository string) error {
+	// Parse the digest to create the signature tag
+	digestStr := strings.TrimPrefix(imgDigest, "sha256:")
+	sigTag := fmt.Sprintf("sha256-%s.sig", digestStr)
+
+	// Create a minimal signature image (just a config layer)
+	sigContent := map[string][]byte{
+		"/signature": []byte("fake signature content for " + imgDigest),
+	}
+
+	// Build the full image reference with signature tag
+	sigImgRef := fmt.Sprintf("%s/%s:%s", registryHost, repository, sigTag)
+
+	tag, err := name.NewTag(sigImgRef)
+	if err != nil {
+		return fmt.Errorf("failed to create signature tag: %w", err)
+	}
+
+	// Create the signature image
+	img, err := crane.Image(sigContent)
+	if err != nil {
+		return fmt.Errorf("failed to create signature image: %w", err)
+	}
+
+	// Convert to OCI manifest format
+	ociImg := mutate.MediaType(img, types.OCIManifestSchema1)
+	ociImg = mutate.ConfigMediaType(ociImg, types.OCIConfigJSON)
+
+	// Push the image
+	if err := remote.Write(tag, ociImg); err != nil {
+		return fmt.Errorf("failed to push signature image: %w", err)
+	}
+
+	return nil
 }
