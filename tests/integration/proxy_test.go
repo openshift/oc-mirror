@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -30,11 +31,14 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		DeferCleanup(fwdProxy.Stop)
 
 		// Custom runner so we don't mutate the shared global runner's env.
+		// Clear NO_PROXY/no_proxy so an inherited value can't bypass the proxy.
 		proxyRunner := ocmirror.NewRunner(os.Getenv("OC_MIRROR_BINARY")).WithEnv([]string{
 			"HTTP_PROXY=" + fwdProxy.URL(),
 			"HTTPS_PROXY=" + fwdProxy.URL(),
 			"http_proxy=" + fwdProxy.URL(),
 			"https_proxy=" + fwdProxy.URL(),
+			"NO_PROXY=",
+			"no_proxy=",
 		})
 
 		By("running mirrorToDisk with HTTP_PROXY/HTTPS_PROXY set")
@@ -52,6 +56,9 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 			"expected the proxy to observe a connection to stefanprodan.github.io (helm repository index/chart); hosts seen: %v", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("ghcr.io")).To(BeTrue(),
 			"expected the proxy to observe a connection to ghcr.io (image referenced by the helm chart); hosts seen: %v", fwdProxy.Hosts())
+
+		By("verifying the proxy itself did not fail unexpectedly while serving connections")
+		Expect(fwdProxy.Err()).NotTo(HaveOccurred())
 	})
 
 	It("should fail when the configured proxy is unreachable", func() {
@@ -63,6 +70,8 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 			"HTTPS_PROXY=http://" + unreachableAddr,
 			"http_proxy=http://" + unreachableAddr,
 			"https_proxy=http://" + unreachableAddr,
+			"NO_PROXY=",
+			"no_proxy=",
 		})
 
 		By("running mirrorToDisk with an unreachable proxy configured")
@@ -89,10 +98,17 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 			"HTTPS_PROXY=http://" + unreachableAddr,
 			"http_proxy=http://" + unreachableAddr,
 			"https_proxy=http://" + unreachableAddr,
+			"NO_PROXY=",
+			"no_proxy=",
 		})
 
+		// Bound this command so a regression of the 60-minute timeout fails
+		// fast instead of burning the suite's time budget.
+		commandCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+		DeferCleanup(cancel)
+
 		By("running mirrorToDisk with graph+channels and an unreachable proxy configured")
-		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscProxyChannels), workDir)
+		result, err := proxyRunner.MirrorToDisk(commandCtx, filepath.Join(iscDir, iscProxyChannels), workDir)
 		expectOcMirrorCommandFailure(result, err)
 
 		By("verifying oc-mirror exits promptly instead of hanging until the Cincinnati request times out")
