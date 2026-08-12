@@ -33,13 +33,23 @@ type Images struct {
 	Kubevirt Kubevirt `json:"kubevirt"`
 }
 
-type X86_64 struct {
+// ArchImages holds the bootable image data for a single CPU architecture.
+// The JSON key names (x86_64, aarch64, etc.) come directly from the
+// 0000_50_installer_coreos-bootimages ConfigMap embedded in each release payload.
+type ArchImages struct {
 	Artifacts Artifacts `json:"artifacts"`
 	Images    Images    `json:"images"`
 }
 
+// X86_64 is kept as a type alias for ArchImages to preserve backward
+// compatibility with code that was written before multi-arch support.
+type X86_64 = ArchImages
+
 type Architectures struct {
-	X86_64 X86_64 `json:"x86_64"`
+	X86_64  ArchImages `json:"x86_64"`
+	Aarch64 ArchImages `json:"aarch64"`
+	Ppc64le ArchImages `json:"ppc64le"`
+	S390x   ArchImages `json:"s390x"`
 }
 
 // InstallerConfigMap - this is the yaml structure

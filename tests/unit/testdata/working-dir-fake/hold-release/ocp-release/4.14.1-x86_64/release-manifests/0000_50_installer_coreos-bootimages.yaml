@@ -23,6 +23,21 @@ data:
               "url": "https://rhcos.blob.core.windows.net/imagebucket/rhcos-415.92.202402201450-0-azure.x86_64.vhd"
             }
           }
+        },
+        "aarch64": {
+          "rhel-coreos-extensions": {}
+        },
+        "ppc64le": {
+          "rhel-coreos-extensions": {}
+        },
+        "s390x": {
+          "images": {
+            "kubevirt": {
+              "release": "415.92.202402201450-0",
+              "image": "quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.15-9.2-kubevirt-s390x",
+              "digest-ref": "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390"
+            }
+          }
         }
       }
     }
