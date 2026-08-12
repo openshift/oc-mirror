@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/delete"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/helm"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -129,6 +130,12 @@ func (o DeleteSchema) ValidateDelete(args []string) error {
 	}
 	if len(args[0]) > 1 && !strings.Contains(args[0], consts.DockerProtocol) {
 		return fmt.Errorf("the destination registry argument must have a docker:// protocol prefix")
+	}
+	// OCPBUGS-78497: reject uppercase registry hostnames early; CRI-O cannot pull them.
+	if strings.Contains(args[0], consts.DockerProtocol) {
+		if err := image.ValidateDockerDestinationRegistry(args[0]); err != nil {
+			return err
+		}
 	}
 
 	deleteFile := o.Opts.Global.DeleteYaml

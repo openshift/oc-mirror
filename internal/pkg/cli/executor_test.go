@@ -482,6 +482,9 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.From = "" // reset
 		opts.Global.WorkingDir = consts.FileProtocol + "test"
 		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "test"}))
+
+		// OCPBUGS-78497: lowercase registry hostnames are accepted
+		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "registry.example.com:5000"}))
 	})
 
 	t.Run("Testing Executor : validate should fail", func(t *testing.T) {
@@ -587,6 +590,13 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.WorkingDir = "" // reset
 		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
+
+		// OCPBUGS-78497: uppercase registry hostnames must be rejected
+		opts.Global.ConfigPath = "test"
+		opts.Global.From = consts.FileProtocol + "abc"
+		opts.Global.WorkingDir = ""
+		err = ex.Validate([]string{consts.DockerProtocol + "REGISTRY.EXAMPLE.COM:5000"})
+		assert.EqualError(t, err, `destination registry hostname "REGISTRY.EXAMPLE.COM" contains uppercase characters; use lowercase (e.g. "registry.example.com") because CRI-O rejects uppercase registry hostnames`)
 	})
 }
 
