@@ -108,7 +108,7 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 }
 
 // Validate - cobra validation
-func (o DeleteSchema) ValidateDelete(args []string) error {
+func (o *DeleteSchema) ValidateDelete(args []string) error { //nolint:cyclop // pre-existing complexity, unrelated to the pointer-receiver change; refactor out of scope for this PR
 	if o.Opts.Global.DeleteGenerate {
 		if len(o.Opts.Global.WorkingDir) == 0 {
 			return fmt.Errorf("use the --workspace flag, it is mandatory when using the delete command with the --generate flag")
