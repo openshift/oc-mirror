@@ -1,6 +1,6 @@
-// incremental_mirroring_test.go validates the incremental mirroring workflow using the --since flag.
-// It verifies that oc-mirror produces a smaller archive (no image layer blobs) when the
-// --since date filters out previously mirrored content.
+// incremental_mirroring_test.go validates incremental mirroring workflows.
+// It covers both the --since flag (date-based filtering) and expanded ImageSetConfiguration
+// scenarios (adding new content between runs).
 package integration_test
 
 import (
@@ -106,6 +106,49 @@ var _ = Describe("incremental mirroring", func() {
 
 			By("verifying incremental archive contains no image layer blobs")
 			expectNoImageBlobsInArchives(incrementalArchives)
+		})
+	})
+
+	// OCP-70756: Verifies that expanding the ImageSetConfiguration between runs produces
+	// an incremental archive containing only the new content (delta), not a full re-mirror.
+	// First run mirrors a single pinned operator version; second run expands the version
+	// range, and the resulting archive should contain new blobs but fewer than the initial.
+	Describe("mirrorToDisk incremental with expanded config", func() {
+		narrowISC := filepath.Join("incremental", "isc-incremental-narrow.yaml")
+		expandedISC := filepath.Join("incremental", "isc-incremental-expanded.yaml")
+
+		It("should produce an incremental archive with only new content when ISC scope expands", SpecTimeout(5*time.Minute), func(_ SpecContext) {
+			By("running initial mirrorToDisk with narrow config (single pinned version)")
+			result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, narrowISC), workDir, "--remove-signatures=true")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying initial tar archive was produced with blobs")
+			initialArchives := findTarArchives(workDir)
+			initialBlobCount := countBlobEntriesInArchives(initialArchives)
+			GinkgoWriter.Printf("initial archive blob count: %d (files: %v)\n", initialBlobCount, initialArchives)
+			Expect(initialBlobCount).To(BeNumerically(">", 0), "initial archive should contain blobs")
+
+			By("removing initial tar archives to isolate incremental results")
+			for _, f := range initialArchives {
+				Expect(os.Remove(f)).To(Succeed(), "failed to remove initial archive %s", f)
+			}
+
+			By("running incremental mirrorToDisk with expanded config (broader version range)")
+			result, err = runner.MirrorToDisk(ctx, filepath.Join(iscDir, expandedISC), workDir, "--remove-signatures=true")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying incremental archive contains new blobs (delta is non-empty)")
+			incrementalArchives := findTarArchives(workDir)
+			incrementalBlobCount := countBlobEntriesInArchives(incrementalArchives)
+			GinkgoWriter.Printf("incremental archive blob count: %d (initial was %d, files: %v)\n",
+				incrementalBlobCount, initialBlobCount, incrementalArchives)
+			Expect(incrementalBlobCount).To(BeNumerically(">", 0),
+				"incremental archive should contain new blobs from the expanded version range")
+
+			By("verifying incremental archive is smaller than initial (only delta, not full re-mirror)")
+			Expect(incrementalBlobCount).To(BeNumerically("<", initialBlobCount),
+				"incremental archive blob count (%d) should be less than initial (%d) — only new content expected",
+				incrementalBlobCount, initialBlobCount)
 		})
 	})
 })
