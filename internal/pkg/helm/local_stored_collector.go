@@ -3,6 +3,8 @@ package helm
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -577,10 +579,28 @@ func prepareChartValuesFiles(chart v2alpha1.Chart, persist bool) (v2alpha1.Chart
 }
 
 func chartValuesDirName(chart v2alpha1.Chart) string {
-	if chart.Version == "" {
-		return chart.Name
+	// Hash name/version/values-file paths so directories stay unique across repos
+	// and cannot escape the working directory via crafted chart names.
+	key := chart.Name + "\x00" + chart.Version + "\x00" + strings.Join(chart.ValuesFiles, "\x00")
+	sum := sha256.Sum256([]byte(key))
+	return fmt.Sprintf("%s-%s-%s", sanitizePathComponent(chart.Name), sanitizePathComponent(defaultString(chart.Version, "unversioned")), hex.EncodeToString(sum[:8]))
+}
+
+func sanitizePathComponent(s string) string {
+	s = filepath.Base(filepath.Clean(s))
+	switch s {
+	case ".", "..", string(filepath.Separator), "":
+		return "chart"
+	default:
+		return strings.ReplaceAll(s, string(filepath.Separator), "_")
 	}
-	return fmt.Sprintf("%s-%s", chart.Name, chart.Version)
+}
+
+func defaultString(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
 }
 
 // getImagesPath returns known jsonpaths and user defined jsonpaths where images are found
@@ -623,21 +643,29 @@ func getHelmTemplates(ch *helmchart.Chart, valueOpts map[string]any) (string, er
 		return "", fmt.Errorf("error rendering chart %s: %w", ch.Name(), err)
 	}
 
-	// Skip the NOTES.txt files
+	dropNotesFiles(files)
+	writeCRDs(out, ch)
+	return writeRenderedManifests(out, files, caps)
+}
+
+func dropNotesFiles(files map[string]string) {
 	for k := range files {
 		if strings.HasSuffix(k, ".txt") {
 			delete(files, k)
 		}
 	}
+}
 
+func writeCRDs(out *bytes.Buffer, ch *helmchart.Chart) {
 	for _, crd := range ch.CRDObjects() {
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", crd.Name, string(crd.File.Data[:]))
 	}
+}
 
+func writeRenderedManifests(out *bytes.Buffer, files map[string]string, caps *chartutil.Capabilities) (string, error) {
 	_, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
 	if err != nil {
-		// We return the files as a big blob of data to help the user debug parser
-		// errors.
+		// Return the files as a blob to help debug parser errors.
 		for name, content := range files {
 			if strings.TrimSpace(content) == "" {
 				continue
