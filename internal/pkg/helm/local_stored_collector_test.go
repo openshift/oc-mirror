@@ -669,6 +669,45 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			expectedError: nil,
 		},
+		{
+			caseName:     "local helm chart requiring values - with inline values - MirrorToDisk: should pass",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{
+						Name: "required-values-chart",
+						Path: filepath.Join(testChartsDataPath, "required-values-chart-0.1.0.tgz"),
+						Values: map[string]any{
+							"secretName": "dummy-secret",
+						},
+					},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult: []v2alpha1.CopyImageSchema{
+				{
+					Source:      consts.DockerProtocol + "quay.io/example/required-app:1.0.0",
+					Destination: consts.DockerProtocol + "localhost:8888/example/required-app:1.0.0",
+					Origin:      consts.DockerProtocol + "quay.io/example/required-app:1.0.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			caseName:     "local helm chart requiring values - without values - MirrorToDisk: should fail",
+			mirrorMode:   mirror.MirrorToDisk,
+			localStorage: testLocalStorageFQDN,
+			helmConfig: v2alpha1.Helm{
+				Local: []v2alpha1.Chart{
+					{Name: "required-values-chart", Path: filepath.Join(testChartsDataPath, "required-values-chart-0.1.0.tgz")},
+				},
+			},
+			generateV1DestTags: false,
+			expectedResult:     nil,
+			expectedError:      fmt.Errorf("secretName is required!"),
+		},
 	}
 
 	tempDir := t.TempDir()
@@ -706,6 +745,9 @@ func TestHelmImageCollector(t *testing.T) {
 
 			if testCase.expectedError == nil {
 				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, testCase.expectedError.Error())
 			}
 
 			if len(testCase.expectedResult) > 0 {
@@ -948,4 +990,133 @@ func prepareFolder(tempDir string) (string, error) {
 	}
 
 	return workingDir, nil
+}
+
+func TestGetImagesWithRequiredValues(t *testing.T) {
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+	chartPath := filepath.Join(testChartsDataPath, "required-values-chart-0.1.0.tgz")
+
+	t.Run("fails without required values", func(t *testing.T) {
+		_, err := getImages(chartPath, v2alpha1.Chart{Name: "required-values-chart"})
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "secretName is required!")
+	})
+
+	t.Run("succeeds with inline values", func(t *testing.T) {
+		imgs, err := getImages(chartPath, v2alpha1.Chart{
+			Name: "required-values-chart",
+			Values: map[string]any{
+				"secretName": "inline-secret",
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []v2alpha1.RelatedImage{
+			{Image: consts.DockerProtocol + "quay.io/example/required-app:1.0.0", Type: v2alpha1.TypeHelmImage},
+		}, imgs)
+	})
+
+	t.Run("succeeds with values file", func(t *testing.T) {
+		valuesFile := filepath.Join(t.TempDir(), "values.yaml")
+		assert.NoError(t, os.WriteFile(valuesFile, []byte("secretName: file-secret\n"), 0o600))
+
+		imgs, err := getImages(chartPath, v2alpha1.Chart{
+			Name:        "required-values-chart",
+			ValuesFiles: []string{valuesFile},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []v2alpha1.RelatedImage{
+			{Image: consts.DockerProtocol + "quay.io/example/required-app:1.0.0", Type: v2alpha1.TypeHelmImage},
+		}, imgs)
+	})
+
+	t.Run("inline values override values file", func(t *testing.T) {
+		valuesFile := filepath.Join(t.TempDir(), "values.yaml")
+		assert.NoError(t, os.WriteFile(valuesFile, []byte("secretName: file-secret\nimage:\n  repository: quay.io/example/from-file\n  tag: \"9.9.9\"\n"), 0o600))
+
+		imgs, err := getImages(chartPath, v2alpha1.Chart{
+			Name:        "required-values-chart",
+			ValuesFiles: []string{valuesFile},
+			Values: map[string]any{
+				"image": map[string]any{
+					"repository": "quay.io/example/from-inline",
+					"tag":        "2.0.0",
+				},
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []v2alpha1.RelatedImage{
+			{Image: consts.DockerProtocol + "quay.io/example/from-inline:2.0.0", Type: v2alpha1.TypeHelmImage},
+		}, imgs)
+	})
+}
+
+func TestMergeChartValues(t *testing.T) {
+	dir := t.TempDir()
+	file1 := filepath.Join(dir, "values1.yaml")
+	file2 := filepath.Join(dir, "values2.yaml")
+	assert.NoError(t, os.WriteFile(file1, []byte("a: 1\nb: 1\n"), 0o600))
+	assert.NoError(t, os.WriteFile(file2, []byte("b: 2\nc: 2\n"), 0o600))
+
+	inline := map[string]any{
+		"c": 3,
+		"d": 4,
+	}
+	vals, err := mergeChartValues(v2alpha1.Chart{
+		ValuesFiles: []string{file1, file2},
+		Values:      inline,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), vals["a"])
+	assert.Equal(t, float64(2), vals["b"])
+	assert.Equal(t, 3, vals["c"])
+	assert.Equal(t, 4, vals["d"])
+
+	// Inline config map must not gain keys from coalescing (dst mutation).
+	assert.NotContains(t, inline, "a")
+	assert.NotContains(t, inline, "b")
+	assert.Len(t, inline, 2)
+
+	_, err = mergeChartValues(v2alpha1.Chart{ValuesFiles: []string{filepath.Join(dir, "missing.yaml")}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "read values file")
+}
+
+func TestPrepareChartValuesFiles(t *testing.T) {
+	workingDir := t.TempDir()
+	lsc = &LocalStorageCollector{
+		Log:  clog.New("trace"),
+		Opts: mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: workingDir}},
+	}
+
+	srcDir := t.TempDir()
+	srcFile := filepath.Join(srcDir, "values.yaml")
+	assert.NoError(t, os.WriteFile(srcFile, []byte("secretName: persisted\n"), 0o600))
+
+	chart := v2alpha1.Chart{
+		Name:        "required-values-chart",
+		Version:     "0.1.0",
+		ValuesFiles: []string{srcFile},
+	}
+
+	persisted, err := prepareChartValuesFiles(chart, true)
+	assert.NoError(t, err)
+	assert.Len(t, persisted.ValuesFiles, 1)
+	assert.NotEqual(t, srcFile, persisted.ValuesFiles[0])
+	assert.FileExists(t, persisted.ValuesFiles[0])
+	assert.True(t, strings.HasPrefix(persisted.ValuesFiles[0], filepath.Join(workingDir, helmDir, helmValuesDir)))
+
+	content, err := os.ReadFile(persisted.ValuesFiles[0])
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), "secretName: persisted")
+
+	// Original source can be removed; disk-to-mirror still resolves the copy.
+	assert.NoError(t, os.Remove(srcFile))
+	resolved, err := prepareChartValuesFiles(chart, false)
+	assert.NoError(t, err)
+	assert.Equal(t, persisted.ValuesFiles, resolved.ValuesFiles)
+
+	missing := v2alpha1.Chart{Name: "missing-chart", Version: "1.0.0", ValuesFiles: []string{srcFile}}
+	_, err = prepareChartValuesFiles(missing, false)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "persisted values file")
 }
