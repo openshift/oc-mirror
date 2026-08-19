@@ -192,12 +192,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		co.ReportWriter = opts.Stdout
 	}
 
-	var retryOpts retry.Options
-	if opts.RetryOpts != nil {
-		retryOpts = *opts.RetryOpts
-	}
-	retryOpts.IsErrorRetryable = isErrorRetryable
-
 	//nolint:wrapcheck // context will be added by the calling function
 	return retry.IfNecessary(ctx, func() error {
 		manifestBytes, err := o.mc.CopyImage(ctx, policyContext, destRef, srcRef, co)
@@ -214,11 +208,26 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 			}
 		}
 		return nil
-	}, &retryOpts)
+	}, retryOptionsFrom(opts))
 }
 
-// Custom implementation to extend `containers/common/pkg/retry.retry`
-func isErrorRetryable(err error) bool {
+// retryOptionsFrom returns a copy of the caller's retry options with oc-mirror's
+// error classification installed. The copy matters: opts.RetryOpts is shared
+// across all images and must not be mutated.
+func retryOptionsFrom(opts *CopyOptions) *retry.Options {
+	var ro retry.Options
+	if opts.RetryOpts != nil {
+		ro = *opts.RetryOpts
+	}
+	ro.IsErrorRetryable = IsErrorRetryable
+	return &ro
+}
+
+// IsErrorRetryable is a custom implementation that extends
+// `go.podman.io/common/pkg/retry.IsErrorRetryable`. The name intentionally mirrors
+// the imported upstream function that the `default` branch delegates to; the
+// package qualifier keeps the two distinct, so there is no conflict.
+func IsErrorRetryable(err error) bool {
 	var httpError docker.UnexpectedHTTPStatusError
 	switch {
 	case err == nil:
@@ -227,10 +236,20 @@ func isErrorRetryable(err error) bool {
 		return true
 	case errors.Is(err, context.Canceled):
 		return false
+	case errors.Is(err, docker.ErrTooManyRequests):
+		// Bare 429 sentinel from httpResponseToError; retryable by neither this
+		// switch nor go.podman.io/common.
+		return true
 	case errors.As(err, &httpError):
+		// 429: registries under sustained load (notably AWS ECR) rate-limit rather than
+		// returning 5xx. Upstream only retries this shape when it parses as errcode.Error.
+		if httpError.StatusCode == http.StatusTooManyRequests {
+			return true
+		}
 		// Retry on 500-504 server errors, they appear to be quite common in the field
 		// We duplicate this here because older versions of oc-mirror cannot bump containers/common given Golang version restrictions
-		if httpError.StatusCode >= http.StatusInternalServerError && httpError.StatusCode <= http.StatusGatewayTimeout {
+		if httpError.StatusCode >= http.StatusInternalServerError &&
+			httpError.StatusCode <= http.StatusGatewayTimeout {
 			return true
 		}
 		return false
@@ -273,7 +292,7 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 			return err
 		}
 		return nil
-	}, opts.RetryOpts)
+	}, retryOptionsFrom(opts))
 
 	if err == nil {
 		return true, nil
@@ -311,7 +330,7 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 			return err
 		}
 		return nil
-	}, opts.RetryOpts)
+	}, retryOptionsFrom(opts))
 }
 
 // determinePlatformSelection determines the image list selection and platform filters
