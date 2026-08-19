@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/template"
 	"time"
@@ -150,6 +151,7 @@ type ExecutorSchema struct {
 	MakeDir              MakeDirInterface
 	Delete               delete.DeleteInterface
 	MirrorStartTimeStamp string
+	stopRegistryOnce     sync.Once
 }
 
 type MakeDirInterface interface {
@@ -361,7 +363,7 @@ func (o *ExecutorSchema) setupEnvironment() error {
 }
 
 // Validate - cobra validation
-func (o ExecutorSchema) Validate(dest []string) error {
+func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-existing complexity, unrelated to the pointer-receiver change; refactor out of scope for this PR
 	keyWords := []string{
 		"cluster-resources",
 		"dry-run",
@@ -759,23 +761,27 @@ func (o *ExecutorSchema) startLocalRegistry() {
 	}
 }
 
-// stopLocalRegistry - stops the local registry and closes the registry.log file
+// stopLocalRegistry - stops the local registry and closes the registry.log file.
+// Safe to call multiple times (e.g. from BuildArchive's callback and again in Run):
+// only the first call runs the shutdown logic, guarded by stopRegistryOnce.
 func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
-	// Try to gracefully shutdown the local registry
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	if err := o.LocalStorageService.Shutdown(ctx); err != nil {
-		o.Log.Warn("Registry shutdown failure: %v", err)
-	}
-
-	if o.registryLogFile != nil {
-		// NOTE: we cannot just close the registry.log file as it is set as logrus output, which could still be in use
-		// by other dependencies before we exit. First we need to make sure logrus uses a different output.
-		logrus.SetOutput(io.Discard)
-		if err := o.registryLogFile.Close(); err != nil {
-			o.Log.Warn("Close registry.log failed: %v", err)
+	o.stopRegistryOnce.Do(func() {
+		// Try to gracefully shutdown the local registry
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+		if err := o.LocalStorageService.Shutdown(ctx); err != nil {
+			o.Log.Warn("Registry shutdown failure: %v", err)
 		}
-	}
+
+		if o.registryLogFile != nil {
+			// NOTE: we cannot just close the registry.log file as it is set as logrus output, which could still be in use
+			// by other dependencies before we exit. First we need to make sure logrus uses a different output.
+			logrus.SetOutput(io.Discard)
+			if err := o.registryLogFile.Close(); err != nil {
+				o.Log.Warn("Close registry.log failed: %v", err)
+			}
+		}
+	})
 }
 
 // isLocalStoragePortBound - private utility to check if port is bound
@@ -933,7 +939,11 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
-	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema)
+	// The registry is stopped via callback once BuildArchive no longer needs it (see
+	// BuildArchive's doc comment), and before it archives working-dir/logs/registry-*.log.
+	return o.MirrorArchiver.BuildArchive(cmd.Context(), copiedSchema, func() {
+		o.stopLocalRegistry(cmd.Context())
+	})
 }
 
 // RunMirrorToMirror - execute the mirror to mirror functionality

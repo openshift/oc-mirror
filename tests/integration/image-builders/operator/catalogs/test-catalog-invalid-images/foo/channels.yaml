@@ -1,0 +1,7 @@
+schema: olm.channel
+package: foo
+name: beta
+entries:
+  - name: foo.v0.1.0
+  - name: foo.v0.9.9-invalid-related-image
+    replaces: foo.v0.1.0

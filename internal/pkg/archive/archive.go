@@ -66,7 +66,12 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 // * docker/v2/blobs/sha256 : blobs that haven't been mirrored (diff)
 // * working-dir
 // * image set config
-func (o *MirrorArchive) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema) error {
+//
+// onBlobsGathered, if non-nil, runs once the image blobs diff is gathered (the last step
+// needing the local registry) and before working-dir - which includes the registry's
+// still-open log file - is archived. This lets callers stop the registry at the right
+// time, avoiding a race between the tar header size and the log file still growing.
+func (o *MirrorArchive) BuildArchive(ctx context.Context, schema v2alpha1.CollectorSchema, onBlobsGathered func()) error {
 	if err := o.createTarball(); err != nil {
 		return fmt.Errorf("unable to create the mirror archive: %w", err)
 	}
@@ -79,18 +84,7 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, schema v2alpha1.Collec
 	if err != nil {
 		return fmt.Errorf("unable to add cache repositories to the archive : %w", err)
 	}
-	// 2- Add working-dir contents to archive
-	err = o.adder.addAllFolder(o.workingDir, filepath.Dir(o.workingDir))
-	if err != nil {
-		return fmt.Errorf("unable to add working-dir to the archive : %w", err)
-	}
-	// 3 - Add imageSetConfig
-	iscName := imageSetConfigPrefix + time.Now().UTC().Format(time.RFC3339)
-	err = o.adder.addFile(o.iscPath, iscName)
-	if err != nil {
-		return fmt.Errorf("unable to add image set configuration to the archive : %w", err)
-	}
-	// 4 - Add blobs
+	// 2 - Add blobs
 	blobsInHistory, err := o.history.Read()
 	if err != nil && !errors.Is(err, &history.EmptyHistoryError{}) {
 		return fmt.Errorf("unable to read history metadata from working-dir : %w", err)
@@ -101,7 +95,24 @@ func (o *MirrorArchive) BuildArchive(ctx context.Context, schema v2alpha1.Collec
 	if err != nil {
 		return fmt.Errorf("unable to add image blobs to the archive : %w", err)
 	}
-	// 5 - update history file with addedBlobs
+
+	// 3 - local registry no longer needed: let the caller stop it before working-dir is added
+	if onBlobsGathered != nil {
+		onBlobsGathered()
+	}
+
+	// 4- Add working-dir contents to archive
+	err = o.adder.addAllFolder(o.workingDir, filepath.Dir(o.workingDir))
+	if err != nil {
+		return fmt.Errorf("unable to add working-dir to the archive : %w", err)
+	}
+	// 5 - Add imageSetConfig
+	iscName := imageSetConfigPrefix + time.Now().UTC().Format(time.RFC3339)
+	err = o.adder.addFile(o.iscPath, iscName)
+	if err != nil {
+		return fmt.Errorf("unable to add image set configuration to the archive : %w", err)
+	}
+	// 6 - update history file with addedBlobs
 	_, err = o.history.Append(addedBlobs)
 	if err != nil {
 		return fmt.Errorf("unable to update history metadata: %w", err)
