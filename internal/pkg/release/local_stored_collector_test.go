@@ -850,6 +850,220 @@ func (o *ManifestMock) GetManifestListDigests(ctx context.Context, sourceCtx *ty
 	return nil, nil
 }
 
+// TestRequestedKubeVirtArchKeys verifies that the architecture-key resolution
+// logic correctly maps user-facing architecture names to bootimages JSON keys
+// and handles all three configuration paths (Platforms, Architectures, default).
+// Only x86_64 (amd64) and s390x carry kubevirt images in the bootimages JSON.
+func TestRequestedKubeVirtArchKeys(t *testing.T) {
+	log := clog.New("trace")
+
+	makeCollector := func(cfg v2alpha1.ImageSetConfiguration) LocalStorageCollector {
+		return LocalStorageCollector{
+			Log:    log,
+			Config: cfg,
+		}
+	}
+
+	t.Run("platform.platforms amd64+s390x maps to x86_64+s390x", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Platforms: []v2alpha1.InstancePlatformFilter{
+							{OS: "linux", Architecture: "amd64"},
+							{OS: "linux", Architecture: "s390x"},
+						},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		keys := makeCollector(cfg).requestedKubeVirtArchKeys()
+		assert.ElementsMatch(t, []string{"x86_64", "s390x"}, keys)
+	})
+
+	t.Run("platform.platforms with unsupported arch (arm64) is skipped", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Platforms: []v2alpha1.InstancePlatformFilter{
+							{OS: "linux", Architecture: "arm64"},
+						},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		// arm64 has no kubevirt entry; falls back to all known keys
+		keys := makeCollector(cfg).requestedKubeVirtArchKeys()
+		assert.ElementsMatch(t, allKubeVirtArchKeys, keys)
+	})
+
+	t.Run("deprecated platform.architectures amd64 maps to x86_64", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Architectures:     []string{"amd64"},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		keys := makeCollector(cfg).requestedKubeVirtArchKeys()
+		assert.Equal(t, []string{"x86_64"}, keys)
+	})
+
+	t.Run("deprecated platform.architectures multi returns all kubevirt arch keys", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Architectures:     []string{"multi"},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		keys := makeCollector(cfg).requestedKubeVirtArchKeys()
+		assert.ElementsMatch(t, allKubeVirtArchKeys, keys)
+	})
+
+	t.Run("no architecture config defaults to x86_64", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		keys := makeCollector(cfg).requestedKubeVirtArchKeys()
+		assert.Equal(t, []string{"x86_64"}, keys)
+	})
+}
+
+// TestGetKubeVirtImages verifies that getKubeVirtImages returns one image per
+// architecture that carries a kubevirt digest-ref in the bootimages ConfigMap.
+// Per the upstream coreos-rhel-9.json, only x86_64 and s390x have kubevirt images.
+func TestGetKubeVirtImages(t *testing.T) {
+	log := clog.New("trace")
+
+	// The testdata bootimages file mirrors the upstream shape:
+	// x86_64 and s390x have kubevirt images; aarch64 and ppc64le do not.
+	testdataDir := filepath.Join(consts.TestFolder, "working-dir-fake", "hold-release", "ocp-release", "4.14.1-x86_64")
+
+	t.Run("default (no arch config) returns only x86_64 kubevirt image with legacy name", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{KubeVirtContainer: true},
+				},
+			},
+		}
+		col := LocalStorageCollector{Log: log, Config: cfg}
+		images, err := col.getKubeVirtImages(testdataDir)
+		assert.NoError(t, err)
+		assert.Len(t, images, 1)
+		assert.Contains(t, images[0].Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+		// Backward compatibility: single-arch mirrors use the legacy name without suffix
+		assert.Equal(t, "kube-virt-container", images[0].Name)
+	})
+
+	t.Run("platform.platforms amd64+s390x returns two kubevirt images with arch suffix", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Platforms: []v2alpha1.InstancePlatformFilter{
+							{OS: "linux", Architecture: "amd64"},
+							{OS: "linux", Architecture: "s390x"},
+						},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		col := LocalStorageCollector{Log: log, Config: cfg}
+		images, err := col.getKubeVirtImages(testdataDir)
+		assert.NoError(t, err)
+		assert.Len(t, images, 2)
+
+		// Multi-arch: names include architecture suffix to avoid tag collision
+		for _, img := range images {
+			switch img.Name {
+			case "kube-virt-container-x86_64":
+				assert.Contains(t, img.Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+			case "kube-virt-container-s390x":
+				assert.Contains(t, img.Image, "sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
+			default:
+				t.Fatalf("unknown kubevirt image: %s", img.Name)
+			}
+		}
+	})
+
+	t.Run("platform.platforms with all arches returns only x86_64+s390x kubevirt images with arch suffix", func(t *testing.T) {
+		// aarch64 and ppc64le have no kubevirt entry in the bootimages JSON; they are skipped.
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Platforms: []v2alpha1.InstancePlatformFilter{
+							{OS: "linux", Architecture: "amd64"},
+							{OS: "linux", Architecture: "arm64"},
+							{OS: "linux", Architecture: "ppc64le"},
+							{OS: "linux", Architecture: "s390x"},
+						},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		col := LocalStorageCollector{Log: log, Config: cfg}
+		images, err := col.getKubeVirtImages(testdataDir)
+		assert.NoError(t, err)
+		// arm64 and ppc64le have no kubevirt mapping, so only x86_64 and s390x images are returned.
+		assert.Len(t, images, 2)
+		names := make([]string, len(images))
+		for i, img := range images {
+			assert.Equal(t, v2alpha1.TypeOCPReleaseContent, img.Type)
+			assert.NotEmpty(t, img.Image)
+			names[i] = img.Name
+		}
+		// Multi-arch: names include architecture suffix
+		assert.ElementsMatch(t, []string{"kube-virt-container-x86_64", "kube-virt-container-s390x"}, names)
+	})
+
+	t.Run("deprecated platform.architectures multi returns x86_64+s390x kubevirt images with arch suffix", func(t *testing.T) {
+		cfg := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Platform: v2alpha1.Platform{
+						Architectures:     []string{"multi"},
+						KubeVirtContainer: true,
+					},
+				},
+			},
+		}
+		col := LocalStorageCollector{Log: log, Config: cfg}
+		images, err := col.getKubeVirtImages(testdataDir)
+		assert.NoError(t, err)
+		assert.Len(t, images, 2)
+		for _, img := range images {
+			switch img.Name {
+			case "kube-virt-container-x86_64":
+				assert.Contains(t, img.Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+			case "kube-virt-container-s390x":
+				assert.Contains(t, img.Image, "sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
+			default:
+				t.Fatalf("unknown kubevirt image %s", img.Name)
+			}
+		}
+	})
+}
+
 func TestBuildReleasePlatformFilters(t *testing.T) {
 	platforms := []v2alpha1.InstancePlatformFilter{
 		{OS: "linux", Architecture: "amd64"},
