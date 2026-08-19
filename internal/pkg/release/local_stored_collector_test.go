@@ -955,7 +955,7 @@ func TestGetKubeVirtImages(t *testing.T) {
 	// x86_64 and s390x have kubevirt images; aarch64 and ppc64le do not.
 	testdataDir := filepath.Join(consts.TestFolder, "working-dir-fake", "hold-release", "ocp-release", "4.14.1-x86_64")
 
-	t.Run("default (no arch config) returns only x86_64 kubevirt image", func(t *testing.T) {
+	t.Run("default (no arch config) returns only x86_64 kubevirt image with legacy name", func(t *testing.T) {
 		cfg := v2alpha1.ImageSetConfiguration{
 			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 				Mirror: v2alpha1.Mirror{
@@ -968,9 +968,11 @@ func TestGetKubeVirtImages(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, images, 1)
 		assert.Contains(t, images[0].Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+		// Backward compatibility: single-arch mirrors use the legacy name without suffix
+		assert.Equal(t, "kube-virt-container", images[0].Name)
 	})
 
-	t.Run("platform.platforms amd64+s390x returns two kubevirt images", func(t *testing.T) {
+	t.Run("platform.platforms amd64+s390x returns two kubevirt images with arch suffix", func(t *testing.T) {
 		cfg := v2alpha1.ImageSetConfiguration{
 			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 				Mirror: v2alpha1.Mirror{
@@ -989,15 +991,20 @@ func TestGetKubeVirtImages(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, images, 2)
 
-		refs := make([]string, len(images))
-		for i, img := range images {
-			refs[i] = img.Image
+		// Multi-arch: names include architecture suffix to avoid tag collision
+		for _, img := range images {
+			switch img.Name {
+			case "kube-virt-container-x86_64":
+				assert.Contains(t, img.Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+			case "kube-virt-container-s390x":
+				assert.Contains(t, img.Image, "sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
+			default:
+				t.Fatalf("unknown kubevirt image: %s", img.Name)
+			}
 		}
-		assert.Contains(t, refs, "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
-		assert.Contains(t, refs, "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
 	})
 
-	t.Run("platform.platforms with all arches returns only x86_64+s390x kubevirt images", func(t *testing.T) {
+	t.Run("platform.platforms with all arches returns only x86_64+s390x kubevirt images with arch suffix", func(t *testing.T) {
 		// aarch64 and ppc64le have no kubevirt entry in the bootimages JSON; they are skipped.
 		cfg := v2alpha1.ImageSetConfiguration{
 			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
@@ -1019,14 +1026,17 @@ func TestGetKubeVirtImages(t *testing.T) {
 		assert.NoError(t, err)
 		// arm64 and ppc64le have no kubevirt mapping, so only x86_64 and s390x images are returned.
 		assert.Len(t, images, 2)
-		for _, img := range images {
+		names := make([]string, len(images))
+		for i, img := range images {
 			assert.Equal(t, v2alpha1.TypeOCPReleaseContent, img.Type)
-			assert.Equal(t, "kube-virt-container", img.Name)
 			assert.NotEmpty(t, img.Image)
+			names[i] = img.Name
 		}
+		// Multi-arch: names include architecture suffix
+		assert.ElementsMatch(t, []string{"kube-virt-container-x86_64", "kube-virt-container-s390x"}, names)
 	})
 
-	t.Run("deprecated platform.architectures multi returns x86_64+s390x kubevirt images", func(t *testing.T) {
+	t.Run("deprecated platform.architectures multi returns x86_64+s390x kubevirt images with arch suffix", func(t *testing.T) {
 		cfg := v2alpha1.ImageSetConfiguration{
 			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
 				Mirror: v2alpha1.Mirror{
@@ -1041,12 +1051,16 @@ func TestGetKubeVirtImages(t *testing.T) {
 		images, err := col.getKubeVirtImages(testdataDir)
 		assert.NoError(t, err)
 		assert.Len(t, images, 2)
-		refs := make([]string, len(images))
-		for i, img := range images {
-			refs[i] = img.Image
+		for _, img := range images {
+			switch img.Name {
+			case "kube-virt-container-x86_64":
+				assert.Contains(t, img.Image, "sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
+			case "kube-virt-container-s390x":
+				assert.Contains(t, img.Image, "sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
+			default:
+				t.Fatalf("unknown kubevirt image %s", img.Name)
+			}
 		}
-		assert.Contains(t, refs, "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:729265d5ef6ed6a45bcd55c46877e3acb9eae3f49c78cd795d5b53aa85e3775b")
-		assert.Contains(t, refs, "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:s390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390xs390")
 	})
 }
 

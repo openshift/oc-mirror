@@ -604,9 +604,18 @@ func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]
 			continue
 		}
 		o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v) ]", digestRef, archKey)
+
+		// For backward compatibility, only append the architecture suffix when
+		// mirroring multiple architectures. Single-arch mirrors retain the legacy
+		// tag name "kube-virt-container".
+		imageName := "kube-virt-container"
+		if len(archKeys) > 1 {
+			imageName += "-" + archKey
+		}
+
 		images = append(images, v2alpha1.RelatedImage{
 			Image: digestRef,
-			Name:  "kube-virt-container",
+			Name:  imageName,
 			Type:  v2alpha1.TypeOCPReleaseContent,
 		})
 	}
