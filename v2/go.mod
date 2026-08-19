@@ -26,10 +26,10 @@ require (
 	go.podman.io/common v0.65.0
 	go.podman.io/image/v5 v5.37.0
 	go.podman.io/storage v1.60.0
-	golang.org/x/crypto v0.41.0
+	golang.org/x/crypto v0.47.0
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
-	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/term v0.34.0
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/term v0.40.0
 	helm.sh/helm/v3 v3.18.6
 	k8s.io/api v0.33.4
 	k8s.io/apimachinery v0.33.4
@@ -199,10 +199,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
@@ -226,5 +226,7 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 )
+
+replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.48.0-sec.2
 
 tool github.com/openshift/build-machinery-go
