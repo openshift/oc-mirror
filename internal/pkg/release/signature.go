@@ -178,6 +178,10 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		if md.SignatureError != nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] signature error for %s image %s: %w", digest, img.Source, md.SignatureError)
 		}
+		// Sanity: even if the signature is valid, let's double-check it's the signature of the payload we expect.
+		if readDigest := signSchema.Critical.Image.DockerManifestDigest; readDigest != fmt.Sprintf("%s:%s", imgSpec.Algorithm, digest) {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] mismatched digest %q: expected %q", readDigest, digest)
+		}
 		img.Source = signSchema.Critical.Identity.DockerReference
 		o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
 
