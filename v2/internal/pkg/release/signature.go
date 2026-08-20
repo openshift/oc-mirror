@@ -150,17 +150,22 @@ func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images [
 		if !md.IsSigned {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] message was not signed for %s image %s", digest, img.Source)
 		}
-		if md.SignatureError != nil {
-			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] signature error for %s image %s", digest, img.Source)
-		}
 		if md.SignedBy == nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] invalid signature for %s image %s", digest, img.Source)
 		}
 
+		// NOTE: md.SignatureError cannot be trusted until md.UnverifiedBody has been
+		// read to EOF: per the openpgp API, the signature is verified as the body is
+		// consumed, and the check can only complete once the whole message has been
+		// read. So we must fully read UnverifiedBody first, then check SignatureError.
+		//
 		// update the image with the actual reference from the contents json
 		signSchema, err := parser.ParseJsonReader[v2alpha1.SignatureContentSchema](md.UnverifiedBody)
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] unmarshal json %w", err)
+		}
+		if md.SignatureError != nil {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GenerateReleaseSignatures] signature error for %s image %s: %w", digest, img.Source, md.SignatureError)
 		}
 		img.Source = signSchema.Critical.Identity.DockerReference
 		o.Log.Debug("image found : %s", signSchema.Critical.Identity.DockerReference)
