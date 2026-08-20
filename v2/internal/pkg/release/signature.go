@@ -18,6 +18,17 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 
 	// nolint
+	// NOTE: Do NOT replace this with the community-maintained fork
+	// github.com/ProtonMail/go-crypto/openpgp: that library intentionally dropped
+	// support for verifying legacy PGP V3 signature packets (MessageDetails no
+	// longer exposes SignatureV3, and V3-signed messages always fail with a
+	// SignatureError). OpenShift release payloads signed before ~August 2023
+	// (roughly OCP 4.1 through 4.13.10) use V3 signatures, and those releases are
+	// still served by the Cincinnati graph and still pullable from quay.io today,
+	// so oc-mirror must keep verifying them. Migrating to ProtonMail/go-crypto
+	// would silently break signature verification for any of those older
+	// releases/channels. Revisit only once V3-signed releases are no longer
+	// reachable, or if a hybrid verifier is implemented to handle V3 separately.
 	"golang.org/x/crypto/openpgp"
 )
 
