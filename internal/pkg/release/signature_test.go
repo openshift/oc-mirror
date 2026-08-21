@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -247,4 +248,41 @@ func TestVerifySignature(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "mismatched digest")
 	})
+}
+
+// TestSaveSignatureSanitizesPathTraversal verifies that saveSignature cannot be made to
+// write outside of the signature cache directory, even when the docker-reference tag it
+// derives the destination filename from is attacker/signer-controlled.
+//
+// image.ParseRef does not validate its "tag" component against the Docker reference
+// grammar, so a docker-reference such as "repo:../pwned" yields Tag == "../pwned"
+// verbatim. Without sanitization, joining that into a file path lets a maliciously (or
+// accidentally) signed release payload write its cached signature one directory level
+// above the intended <workingDir>/signatures/ cache dir - i.e. directly into workingDir,
+// where it could collide with/overwrite other oc-mirror state (CWE-22). A tag with more
+// "../" segments could escape arbitrarily further up the filesystem the same way.
+func TestSaveSignatureSanitizesPathTraversal(t *testing.T) {
+	log := clog.New("trace")
+
+	workingDir := t.TempDir()
+	err := os.MkdirAll(filepath.Join(workingDir, SignatureDir), 0o755)
+	assert.NoError(t, err)
+
+	ex := SignatureSchema{Log: log, Opts: mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: workingDir}}}
+
+	maliciousRef := "quay.io/openshift-release-dev/ocp-release:../pwned"
+	err = ex.saveSignature(maliciousRef, "deadbeef", []byte("payload"))
+	assert.NoError(t, err)
+
+	// The file must never be written directly into workingDir (i.e. one level above
+	// the signature cache dir, which is what the unsanitized "../pwned" tag targets).
+	_, statErr := os.Stat(filepath.Join(workingDir, "pwned-sha256-deadbeef"))
+	assert.True(t, os.IsNotExist(statErr), "signature file must not escape the signature cache directory")
+
+	// It must instead land safely inside the signature cache directory, with the
+	// traversal sequence stripped out of the filename entirely.
+	entries, err := os.ReadDir(filepath.Join(workingDir, SignatureDir))
+	assert.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, "pwned-sha256-deadbeef", entries[0].Name())
 }
