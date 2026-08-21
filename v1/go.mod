@@ -55,7 +55,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.1 // indirect
-	cyphar.com/go-pathrs v0.2.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -282,3 +281,10 @@ replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.1
 replace github.com/distribution/distribution/v3 => github.com/aguidirh/distribution/v3 v3.0.0-beta.1.ocmirror1
 
 replace github.com/mholt/archiver/v3 => github.com/aguidirh/archiver/v3 v3.5.0-ocmirror1
+
+// Pin filepath-securejoin to v0.5.1. containers/storage still uses the
+// top-level securejoin.OpenInRoot/Reopen API (removed in v0.6+), while
+// opencontainers/selinux v1.13.1 (pulled by containerd v1.7.33) needs the
+// pathrs-lite subpackage (added in v0.5). v0.5.1 is the transitional release
+// that provides both, so it satisfies storage, selinux, and go-git together.
+replace github.com/cyphar/filepath-securejoin => github.com/cyphar/filepath-securejoin v0.5.1
