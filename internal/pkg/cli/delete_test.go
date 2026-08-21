@@ -98,6 +98,11 @@ func TestExecutorValidateDelete(t *testing.T) {
 		opts.Global.DeleteYaml = "../../nothing"
 		err = ex.ValidateDelete([]string{consts.DockerProtocol + "test"})
 		assert.Equal(t, "file not found ../../nothing", err.Error())
+
+		// OCPBUGS-78497: uppercase registry hostnames must be rejected
+		opts.Global.DeleteYaml = consts.TestFolder + "delete/delete-images.yaml"
+		err = ex.ValidateDelete([]string{consts.DockerProtocol + "REGISTRY.EXAMPLE.COM:5000"})
+		assert.Equal(t, `destination registry hostname "REGISTRY.EXAMPLE.COM" contains uppercase characters; use lowercase (e.g. "registry.example.com") because CRI-O rejects uppercase registry hostnames`, err.Error())
 	})
 }
 

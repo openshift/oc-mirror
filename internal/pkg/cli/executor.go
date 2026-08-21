@@ -430,6 +430,12 @@ func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-
 	if strings.Contains(dest[0], consts.DockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
 		return fmt.Errorf("when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
 	}
+	// OCPBUGS-78497: reject uppercase registry hostnames early; CRI-O cannot pull them.
+	if strings.Contains(dest[0], consts.DockerProtocol) {
+		if err := image.ValidateDockerDestinationRegistry(dest[0]); err != nil {
+			return err
+		}
+	}
 	if strings.Contains(dest[0], consts.FileProtocol) || strings.Contains(dest[0], consts.DockerProtocol) {
 		return nil
 	} else {
