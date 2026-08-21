@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,7 +33,9 @@ var _ = Describe("breakpoint resume", func() {
 			iscPath := filepath.Join(iscDir, iscFile)
 
 			By("running mirrorToDisk with an early interruption")
-			interruptCtx, interruptCancel := context.WithTimeout(specCtx, 1*time.Second)
+			interruptAfter := time.Duration(1+rand.Intn(2)) * time.Second // 1-2 seconds
+			GinkgoWriter.Printf("will interrupt after %v\n", interruptAfter)
+			interruptCtx, interruptCancel := context.WithTimeout(specCtx, interruptAfter)
 			defer interruptCancel()
 
 			result, err := runner.MirrorToDisk(interruptCtx, iscPath, workDir, "--remove-signatures=true")
