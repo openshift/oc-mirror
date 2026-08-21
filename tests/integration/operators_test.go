@@ -117,6 +117,22 @@ var _ = Describe("operators", func() {
 			expectRebuiltTagMatchesDigest(ctx, *testRegistry, filepath.Join(iscDir, iscFile))
 		})
 	})
+
+	// OCPBUGS-33081: a catalog may contain bundles with invalid related images (missing
+	// name, missing tag/digest, unsupported oci:// scheme, ...).
+	Describe("catalog with a bundle containing an invalid related image", func() {
+		iscFile := filepath.Join("operators", "isc-operator-invalid-images.yaml")
+
+		It("handles invalid related image references in a catalog", func() {
+			By("running mirrorToMirror against a catalog with one valid and one invalid bundle")
+			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
+				"--dest-tls-verify=false")
+			expectOcMirrorExitCode(result, err, 4, "collection error", "tag and digest are empty")
+
+			By("verifying no content was mirrored, even though one of the two bundles was valid")
+			expectNoRepositoriesInRegistry(*testRegistry)
+		})
+	})
 })
 
 // expectCatalogContainsOnlyExpectedPackages verifies that the rebuilt catalog in the registry

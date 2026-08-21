@@ -2,14 +2,22 @@ package mirror
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/docker/distribution/registry/api/errcode"
+	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
+	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
 
@@ -305,6 +313,132 @@ func TestDeterminePlatformSelection(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, copy.CopySystemImage, sel)
 		assert.Nil(t, platforms)
+	})
+}
+
+func TestIsErrorRetryable(t *testing.T) {
+	tooManyRequests := docker.UnexpectedHTTPStatusError{StatusCode: http.StatusTooManyRequests}
+
+	tests := []struct {
+		name      string
+		err       error
+		retryable bool
+	}{
+		{
+			name:      "nil error is not retryable",
+			err:       nil,
+			retryable: false,
+		},
+		{
+			name:      "429 too many requests is retryable",
+			err:       tooManyRequests,
+			retryable: true,
+		},
+		{
+			name:      "wrapped 429 too many requests is retryable",
+			err:       fmt.Errorf("wrapped: %w", tooManyRequests),
+			retryable: true,
+		},
+		{
+			name:      "500 internal server error is retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusInternalServerError},
+			retryable: true,
+		},
+		{
+			name:      "502 bad gateway is retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusBadGateway},
+			retryable: true,
+		},
+		{
+			name:      "504 gateway timeout is retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusGatewayTimeout},
+			retryable: true,
+		},
+		{
+			name:      "400 bad request is not retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusBadRequest},
+			retryable: false,
+		},
+		{
+			name:      "401 unauthorized is not retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusUnauthorized},
+			retryable: false,
+		},
+		{
+			name:      "404 not found is not retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusNotFound},
+			retryable: false,
+		},
+		{
+			name:      "505 http version not supported is not retryable",
+			err:       docker.UnexpectedHTTPStatusError{StatusCode: http.StatusHTTPVersionNotSupported},
+			retryable: false,
+		},
+		{
+			name:      "context deadline exceeded is retryable",
+			err:       context.DeadlineExceeded,
+			retryable: true,
+		},
+		{
+			name:      "context canceled is not retryable",
+			err:       context.Canceled,
+			retryable: false,
+		},
+		{
+			name:      "bare ErrTooManyRequests sentinel is retryable",
+			err:       docker.ErrTooManyRequests,
+			retryable: true,
+		},
+		{
+			name:      "wrapped ErrTooManyRequests sentinel is retryable",
+			err:       fmt.Errorf("wrapped: %w", docker.ErrTooManyRequests),
+			retryable: true,
+		},
+		{
+			// Delegated to go.podman.io/common, which retries every errcode
+			// except unauthorized/denied/nameunknown/manifestunknown.
+			name:      "errcode TOOMANYREQUESTS is retryable",
+			err:       errcode.Error{Code: errcode.ErrorCodeTooManyRequests, Message: "Rate exceeded"},
+			retryable: true,
+		},
+		{
+			name:      "errcode MANIFESTUNKNOWN is not retryable",
+			err:       errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown},
+			retryable: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.retryable, IsErrorRetryable(tt.err))
+		})
+	}
+}
+
+func TestRetryOptionsFrom(t *testing.T) {
+	t.Run("nil RetryOpts yields usable options rather than a nil dereference", func(t *testing.T) {
+		ro := retryOptionsFrom(&CopyOptions{})
+		require.NotNil(t, ro)
+		assert.NotNil(t, ro.IsErrorRetryable)
+		assert.Equal(t, 0, ro.MaxRetry)
+	})
+
+	t.Run("caller options are copied, not mutated", func(t *testing.T) {
+		shared := &retry.Options{MaxRetry: 5, Delay: 2 * time.Second}
+		ro := retryOptionsFrom(&CopyOptions{RetryOpts: shared})
+		require.NotNil(t, ro)
+		assert.NotSame(t, shared, ro)
+		assert.Equal(t, 5, ro.MaxRetry)
+		assert.Equal(t, 2*time.Second, ro.Delay)
+		assert.NotNil(t, ro.IsErrorRetryable)
+		assert.Nil(t, shared.IsErrorRetryable, "opts.RetryOpts is shared across images and must not be mutated")
+	})
+
+	t.Run("installed classifier retries a 429", func(t *testing.T) {
+		ro := retryOptionsFrom(&CopyOptions{RetryOpts: &retry.Options{MaxRetry: 5}})
+		require.NotNil(t, ro.IsErrorRetryable)
+		assert.True(t, ro.IsErrorRetryable(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusTooManyRequests}))
+		assert.True(t, ro.IsErrorRetryable(docker.ErrTooManyRequests))
 	})
 }
 

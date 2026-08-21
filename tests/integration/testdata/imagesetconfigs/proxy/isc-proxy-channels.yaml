@@ -1,0 +1,12 @@
+# ImageSetConfig used to verify that oc-mirror exits promptly instead of
+# hanging until the Cincinnati request timeout when HTTP_PROXY/HTTPS_PROXY
+# point at an unreachable proxy. platform.graph is never actually reached in
+# this scenario: channel resolution fails first (see local_stored_collector.go),
+# so this is safe to run without a real proxy or network access.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    graph: true
+    channels:
+    - name: stable-4.15

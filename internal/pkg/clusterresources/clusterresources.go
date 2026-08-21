@@ -856,7 +856,7 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 func generateOcMirrorAnnotations() map[string]string {
 	return map[string]string{
 		"createdBy":         "oc-mirror v2",
-		"createdAt":         time.Now().UTC().Format(time.RFC850),
+		"createdAt":         time.Now().UTC().Format(time.RFC3339),
 		"oc-mirror_version": version.Get().GitVersion,
 	}
 }

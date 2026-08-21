@@ -208,11 +208,11 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	}
 
 	if o.Config.Mirror.Platform.KubeVirtContainer {
-		ki, err := o.getKubeVirtImage(cacheDir)
+		kvImages, err := o.getKubeVirtImages(cacheDir)
 		if err != nil {
 			return []v2alpha1.RelatedImage{}, err
 		}
-		allRelatedImages = append(allRelatedImages, ki)
+		allRelatedImages = append(allRelatedImages, kvImages...)
 	}
 
 	return allRelatedImages, nil
@@ -318,11 +318,11 @@ func (o *LocalStorageCollector) prepareReleaseBatchFromDir(releaseDir string) ([
 	}
 
 	if o.Config.Mirror.Platform.KubeVirtContainer {
-		ki, err := o.getKubeVirtImage(releaseDir)
+		kvImages, err := o.getKubeVirtImages(releaseDir)
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, err
 		}
-		releaseRelatedImages = append(releaseRelatedImages, ki)
+		releaseRelatedImages = append(releaseRelatedImages, kvImages...)
 	}
 
 	return o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
@@ -537,16 +537,34 @@ func (o *LocalStorageCollector) ReleaseImage(ctx context.Context) (string, error
 	}
 }
 
-// getKubeVirtImage - CLID-179 : include coreos-bootable container image
-// if set it will be across the board for all releases
-func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2alpha1.RelatedImage, error) {
+// kubeVirtArchName maps the Go/OCP architecture names used in the
+// ImageSetConfiguration to the keys used in the
+// 0000_50_installer_coreos-bootimages ConfigMap JSON (architectures.*).
+// Only architectures that actually ship a kubevirt container image are listed;
+// as of RHCOS 4.15+ those are x86_64 and s390x.
+// aarch64 and ppc64le are present in the bootimages JSON but carry no
+// kubevirt image entry, so they are intentionally omitted here.
+var kubeVirtArchName = map[string]string{
+	"amd64": "x86_64",
+	"s390x": "s390x",
+}
+
+// allKubeVirtArchKeys lists the bootimages JSON architecture keys that carry a
+// kubevirt image. Used when the user selects the "multi" sparse-manifest-list
+// workflow (platform.platforms) so that every supported arch is mirrored.
+var allKubeVirtArchKeys = []string{"x86_64", "s390x"}
+
+// getKubeVirtImages - CLID-179 : include coreos-bootable container images
+// for all requested architectures. Returns one RelatedImage per architecture
+// whose kubevirt digest-ref is non-empty in the bootimages ConfigMap.
+func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]v2alpha1.RelatedImage, error) {
 	// parse the main yaml file
 	biFile := strings.Join([]string{releaseArtifactsDir, releaseBootableImagesFullPath}, "/")
 	icm, err := parser.ParseYamlFile[v2alpha1.InstallerConfigMap](biFile)
 	if err != nil {
 		// this should not break the release process
 		// we just report the error and continue
-		return v2alpha1.RelatedImage{}, fmt.Errorf("marshalling kubevirt yaml file %w", err)
+		return nil, fmt.Errorf("marshalling kubevirt yaml file %w", err)
 	}
 
 	o.Log.Trace("data %v", icm.Data.Stream)
@@ -555,20 +573,108 @@ func (o LocalStorageCollector) getKubeVirtImage(releaseArtifactsDir string) (v2a
 	if err != nil {
 		// this should not break the release process
 		// we just report the error and continue
-		return v2alpha1.RelatedImage{}, fmt.Errorf("parsing json from kubevirt configmap data %w", err)
+		return nil, fmt.Errorf("parsing json from kubevirt configmap data %w", err)
 	}
 
-	image := ibi.Architectures.X86_64.Images.Kubevirt.DigestRef
-	if image == "" {
-		return v2alpha1.RelatedImage{}, fmt.Errorf("could not find kubevirt image in this release")
+	// Build the set of bootimages JSON architecture keys to collect.
+	// When the user chose platform.platforms (the "multi" payload path) we
+	// collect every architecture present in the ConfigMap. When the user
+	// chose the older platform.architectures field we map each entry to its
+	// JSON key. Defaults to x86_64 for backward compatibility.
+	archKeys := o.requestedKubeVirtArchKeys()
+
+	// archImages maps a bootimages JSON key to its ArchImages struct.
+	archImages := map[string]v2alpha1.ArchImages{
+		"x86_64":  ibi.Architectures.X86_64,
+		"aarch64": ibi.Architectures.Aarch64,
+		"ppc64le": ibi.Architectures.Ppc64le,
+		"s390x":   ibi.Architectures.S390x,
 	}
-	o.Log.Info("kubeVirtContainer set to true [ including : %v ]", image)
-	kubeVirtImage := v2alpha1.RelatedImage{
-		Image: image,
-		Name:  "kube-virt-container",
-		Type:  v2alpha1.TypeOCPReleaseContent,
+
+	var images []v2alpha1.RelatedImage
+	for _, archKey := range archKeys {
+		ai, ok := archImages[archKey]
+		if !ok {
+			o.Log.Warn("kubevirt: unknown architecture key %q — skipping", archKey)
+			continue
+		}
+		digestRef := ai.Images.Kubevirt.DigestRef
+		if digestRef == "" {
+			o.Log.Debug("kubevirt: no digest-ref for architecture %q in this release — skipping", archKey)
+			continue
+		}
+		o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v) ]", digestRef, archKey)
+
+		// For backward compatibility, only append the architecture suffix when
+		// mirroring multiple architectures. Single-arch mirrors retain the legacy
+		// tag name "kube-virt-container".
+		imageName := "kube-virt-container"
+		if len(archKeys) > 1 {
+			imageName += "-" + archKey
+		}
+
+		images = append(images, v2alpha1.RelatedImage{
+			Image: digestRef,
+			Name:  imageName,
+			Type:  v2alpha1.TypeOCPReleaseContent,
+		})
 	}
-	return kubeVirtImage, nil
+
+	if len(images) == 0 {
+		return nil, fmt.Errorf("could not find kubevirt image in this release")
+	}
+	return images, nil
+}
+
+// requestedKubeVirtArchKeys returns the bootimages JSON architecture keys
+// that correspond to the architectures requested in the ImageSetConfiguration.
+// When platform.platforms is set (the "multi" sparse-manifest-list workflow)
+// all known architecture keys are returned. When platform.architectures is
+// set each entry is mapped from its Go name (e.g. "amd64") to its JSON key
+// (e.g. "x86_64"). Defaults to ["x86_64"] for backward compatibility.
+func (o LocalStorageCollector) requestedKubeVirtArchKeys() []string {
+	cfg := o.Config.Mirror.Platform
+
+	// New path: platform.platforms was set — the release payload is the "multi"
+	// manifest list and we want kubevirt images for every architecture.
+	if len(cfg.Platforms) > 0 {
+		var keys []string
+		for _, pf := range cfg.Platforms {
+			if jsonKey, ok := kubeVirtArchName[pf.Architecture]; ok {
+				keys = append(keys, jsonKey)
+			} else {
+				o.Log.Warn("kubevirt: no bootimages key for platform architecture %q — skipping", pf.Architecture)
+			}
+		}
+		if len(keys) > 0 {
+			return keys
+		}
+		// Fall through: none of the requested architectures had a known mapping;
+		// return all keys so we still attempt to collect something.
+		return allKubeVirtArchKeys
+	}
+
+	// Deprecated path: platform.architectures was set.
+	//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
+	if len(cfg.Architectures) > 0 {
+		var keys []string
+		for _, arch := range cfg.Architectures {
+			if arch == "multi" {
+				return allKubeVirtArchKeys
+			}
+			if jsonKey, ok := kubeVirtArchName[arch]; ok {
+				keys = append(keys, jsonKey)
+			} else {
+				o.Log.Warn("kubevirt: no bootimages key for architecture %q — skipping", arch)
+			}
+		}
+		if len(keys) > 0 {
+			return keys
+		}
+	}
+
+	// Default: backward-compatible single-arch (x86_64).
+	return []string{"x86_64"}
 }
 
 func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.CopyImageSchema, error) {

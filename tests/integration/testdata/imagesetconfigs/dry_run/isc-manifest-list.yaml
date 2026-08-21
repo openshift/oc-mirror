@@ -1,0 +1,9 @@
+# ImageSetConfig to test dry-run mapping of a manifest list (multi-arch) additional image.
+# quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+# is a manifest list with two platform-specific sub-manifests (arm64, ppc64le), used to verify that
+# dry-run mapping.txt includes an entry for each sub-digest (OCPBUGS-66263).
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
