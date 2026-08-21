@@ -256,10 +256,18 @@ func (o SignatureSchema) saveSignature(imgRef string, digest string, data []byte
 	if err != nil {
 		return fmt.Errorf("could not parse identity docker reference image %w", err)
 	}
-	sigFilePath := filepath.Join(o.Opts.Global.WorkingDir, SignatureDir, fmt.Sprintf("%s-sha256-%s", newImgSpec.Tag, digest))
-	//nolint:gosec // FIXME: G703: sanitize paths
-	if _, err := os.Stat(sigFilePath); err != nil {
-		if err := os.WriteFile(sigFilePath, data, 0o600); err != nil {
+
+	// newImgSpec.Tag comes from the (already cryptographically verified) signed
+	// payload's docker-reference. image.ParseRef does not validate it against the
+	// Docker tag grammar, so it can contain path separators or ".." sequences (e.g. a
+	// docker-reference of "repo:evil/../../../etc/passwd"). filepath.Base collapses
+	// that down to a single path element, which fully neutralizes any attempt to
+	// escape the signature cache directory below (gosec: path traversal via taint).
+	fileName := filepath.Base(fmt.Sprintf("%s-sha256-%s", newImgSpec.Tag, digest))
+	sigFilePath := filepath.Join(o.Opts.Global.WorkingDir, SignatureDir, fileName)
+
+	if _, err := os.Stat(sigFilePath); err != nil { //#nosec G703 // path is sanitized
+		if err := os.WriteFile(sigFilePath, data, 0o600); err != nil { //#nosec G703 // path is sanitized
 			return fmt.Errorf("write signature: %w", err)
 		}
 	}
