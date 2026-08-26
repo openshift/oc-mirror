@@ -207,7 +207,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		installOperatorFromCustomCS(oc, localstorageSub, localstorageOG, "openshift-local-storage", "local-storage-operator")
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-73452-Validate mirror2mirror for OCI operator  and addition image for v2 [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-73452-Validate mirror2mirror for OCI operator  and addition image for v2 [Serial] [Level0]", func() {
 		compat_otp.By("Set registry config")
 		dirname := "/tmp/case73452"
 		defer os.RemoveAll(dirname)
@@ -495,7 +495,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		validateTargetcatalogAndTag(rhOperatorUri, "v4.15")
 	})
 
-	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72938-should give clear information for invalid operator filter setting [Serial] [Level0]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72938-should give clear information for invalid operator filter setting [Serial]", func() {
 		dirname := "/tmp/case72938"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -1067,7 +1067,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73783-Do not generate IDMS or ITMS if nothing has been mirrored [Serial] [Level0]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73783-Do not generate IDMS or ITMS if nothing has been mirrored [Serial]", func() {
 		dirname := "/tmp/case73783"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -1099,7 +1099,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(len(entries) == 0).Should(o.BeTrue())
 	})
 
-	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72971-support mirror multiple catalogs (v2docker2 +oci) for v2 [Serial]", func() {
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-72971-support mirror multiple catalogs (v2docker2 +oci) for v2 [Serial] [Level0]", func() {
 		compat_otp.By("Set registry config")
 		dirname := "/tmp/case72971"
 		defer os.RemoveAll(dirname)
@@ -1522,7 +1522,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		compat_otp.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
 	})
 
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75425-Validate oc-mirror is able to pull hypershift kubevirt coreos container image and mirror the same [Serial]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75425-Validate oc-mirror is able to pull hypershift kubevirt coreos container image and mirror the same [Serial] [Level0]", func() {
 		compat_otp.By("Set registry config")
 		dirname := "/tmp/case75425"
 		defer os.RemoveAll(dirname)
@@ -2558,7 +2558,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-79215-oc mirror v2 to support creating clustercatalog [Serial]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-79215-oc mirror v2 to support creating clustercatalog [Serial] [Level0]", func() {
 		ocmirrorBaseDir := testdata.FixturePath("workloads")
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-79215.yaml")
 		sa79215 := filepath.Join(ocmirrorBaseDir, "sa-79215.yaml")
