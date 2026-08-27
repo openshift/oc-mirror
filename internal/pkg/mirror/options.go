@@ -61,6 +61,7 @@ type GlobalOptions struct {
 	CacheDir               string        // Path to the cache directory
 	IsTerminal             bool          // Whether we're running in a terminal console or not
 	IgnoreReleaseSignature bool          // Ignore release signatures, used primarily for qe testing unpublished signatures
+	SignatureVerification  string        // "strict" (default): all images must have signatures; "best-effort": skip missing signatures for unsigned images
 }
 
 type CopyOptions struct {
