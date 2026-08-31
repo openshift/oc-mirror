@@ -32,7 +32,7 @@ func main() {
 	defer logs.FlushLogs()
 
 	registry := e.NewRegistry()
-	ext := e.NewExtension("openshift", "payload", "oc-mirror")
+	ext := e.NewExtension("openshift", "layered", "oc-mirror")
 
 	// Register test suites (parallel, serial, disruptive, all)
 	registerSuites(ext)
