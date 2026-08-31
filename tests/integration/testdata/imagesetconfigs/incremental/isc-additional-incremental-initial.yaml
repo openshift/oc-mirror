@@ -1,0 +1,6 @@
+# ImageSetConfig for incremental additional-images test - Step 1: mirror a single additional image
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.1.0

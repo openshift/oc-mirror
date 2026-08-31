@@ -1,6 +1,6 @@
 // incremental_mirroring_test.go validates incremental mirroring workflows.
-// It covers both the --since flag (date-based filtering) and expanded ImageSetConfiguration
-// scenarios (adding new content between runs).
+// It covers the --since flag (date-based filtering) and expanded ImageSetConfiguration
+// scenarios for operators and additional images (adding new content between runs).
 package integration_test
 
 import (
@@ -19,6 +19,13 @@ func findTarArchives(workDir string) []string {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(matches).NotTo(BeEmpty(), "no tar archive found in %s", workDir)
 	return matches
+}
+
+// findSingleMirrorTar returns the single mirror_*.tar in dir, failing if there is not exactly one.
+func findSingleMirrorTar(dir, phase string) string {
+	matches := findTarArchives(dir)
+	Expect(matches).To(HaveLen(1), "%s expected exactly one tar archive, got: %v", phase, matches)
+	return matches[0]
 }
 
 // countBlobEntriesInArchives counts the number of blob entries (under docker/registry/v2/blobs/)
@@ -163,13 +170,6 @@ var _ = Describe("incremental mirroring", func() {
 		iscUpdate := filepath.Join("operators", "isc-operator-incremental-update.yaml")
 
 		It("should produce a second tar with only incremental blob content", func() {
-			findSingleMirrorTar := func(dir, phase string) string {
-				matches, err := filepath.Glob(filepath.Join(dir, "mirror_*.tar"))
-				Expect(err).NotTo(HaveOccurred())
-				Expect(matches).To(HaveLen(1), "%s expected exactly one tar archive, got: %v", phase, matches)
-				return matches[0]
-			}
-
 			iscInitialPath := filepath.Join(iscDir, iscInitial)
 			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
 
@@ -189,7 +189,9 @@ var _ = Describe("incremental mirroring", func() {
 			By("moving the initial tar outside the working directory to preserve it")
 			preserveDir, err := os.MkdirTemp("", "oc-mirror-preserved-tar-*")
 			Expect(err).NotTo(HaveOccurred())
-			defer os.RemoveAll(preserveDir)
+			defer func() {
+				Expect(os.RemoveAll(preserveDir)).To(Succeed(), "failed to clean up preserved tar dir %s", preserveDir)
+			}()
 			preservedTar := filepath.Join(preserveDir, "mirror_initial.tar")
 			err = os.Rename(initialTar, preservedTar)
 			Expect(err).NotTo(HaveOccurred(), "failed to move initial tar")
@@ -228,6 +230,112 @@ var _ = Describe("incremental mirroring", func() {
 
 			By("verifying the incremental tar contains the expected repositories")
 			expectCorrectTarArchiveContents(iscUpdatePath, workDir)
+		})
+	})
+
+	// CLID-722: Validate config-based incremental mirroring for additional images.
+	// Runs mirrorToDisk twice against the same workspace:
+	//   Step 1: mirror foo-v0.1.0
+	//   Step 2: keep foo-v0.1.0 and add multilayers-latest (distinct layers)
+	// The second archive should contain only the new blobs with no overlap
+	// from the first archive. A same-ISC re-run should produce no image blobs.
+	Describe("additional images incremental mirrorToDisk", func() {
+		iscInitial := filepath.Join("incremental", "isc-additional-incremental-initial.yaml")
+		iscUpdate := filepath.Join("incremental", "isc-additional-incremental-update.yaml")
+
+		It("should skip already-mirrored additional images on a subsequent run with the same ISC", SpecTimeout(5*time.Minute), func(_ SpecContext) {
+			iscInitialPath := filepath.Join(iscDir, iscInitial)
+
+			By("running initial mirrorToDisk with a single additional image")
+			result, err := runner.MirrorToDisk(ctx, iscInitialPath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("additional-images incremental same-ISC step-1", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the initial tar archive contains blobs")
+			initialTar := findSingleMirrorTar(workDir, "initial")
+			logTarSummary("initial", initialTar)
+			Expect(countBlobEntriesInArchives([]string{initialTar})).To(BeNumerically(">", 0),
+				"initial archive should contain blobs")
+
+			By("removing the initial tar to isolate incremental results")
+			Expect(os.Remove(initialTar)).To(Succeed(), "failed to remove initial archive %s", initialTar)
+
+			By("re-running mirrorToDisk with the same additional-images ISC")
+			result, err = runner.MirrorToDisk(ctx, iscInitialPath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("additional-images incremental same-ISC step-2", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the incremental archive contains no image layer blobs")
+			incrementalTar := findSingleMirrorTar(workDir, "incremental")
+			logTarSummary("incremental", incrementalTar)
+			expectNoImageBlobsInArchives([]string{incrementalTar})
+
+			By("verifying the incremental archive still contains the additional-image repository")
+			expectCorrectTarArchiveContents(iscInitialPath, workDir)
+		})
+
+		It("should produce a second tar with only incremental blob content when additional images are added", SpecTimeout(5*time.Minute), func(_ SpecContext) {
+			iscInitialPath := filepath.Join(iscDir, iscInitial)
+			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
+
+			By("running mirrorToDisk with the initial ISC (foo-v0.1.0)")
+			result, err := runner.MirrorToDisk(ctx, iscInitialPath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("additional-images incremental step-1 mirrorToDisk", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the initial tar archive was created")
+			initialTar := findSingleMirrorTar(workDir, "initial")
+			logTarSummary("initial", initialTar)
+			Expect(countBlobEntriesInArchives([]string{initialTar})).To(BeNumerically(">", 0),
+				"initial archive should contain blobs")
+
+			By("verifying the initial tar contains expected content")
+			expectCorrectTarArchiveContents(iscInitialPath, workDir)
+
+			By("moving the initial tar outside the working directory to preserve it")
+			preserveDir, err := os.MkdirTemp("", "oc-mirror-preserved-tar-*")
+			Expect(err).NotTo(HaveOccurred(), "failed to create temp dir to preserve initial tar")
+			defer func() {
+				Expect(os.RemoveAll(preserveDir)).To(Succeed(), "failed to clean up preserved tar dir %s", preserveDir)
+			}()
+			preservedTar := filepath.Join(preserveDir, "mirror_initial.tar")
+			err = os.Rename(initialTar, preservedTar)
+			Expect(err).NotTo(HaveOccurred(), "failed to move initial tar")
+
+			By("running mirrorToDisk with the updated ISC (foo-v0.1.0 + multilayers-latest)")
+			result, err = runner.MirrorToDisk(ctx, iscUpdatePath, workDir, "--remove-signatures=true")
+			logOcMirrorResult("additional-images incremental step-2 mirrorToDisk", result)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the incremental tar archive was created")
+			incrementalTar := findSingleMirrorTar(workDir, "incremental")
+			logTarSummary("incremental", incrementalTar)
+
+			By("comparing blob paths between the two tars")
+			const blobPrefix = "docker/registry/v2/blobs/sha256"
+			initialBlobs := collectTarBlobPaths(preservedTar, blobPrefix)
+			incrementalBlobs := collectTarBlobPaths(incrementalTar, blobPrefix)
+			GinkgoWriter.Printf("initial tar blob count:     %d\n", len(initialBlobs))
+			GinkgoWriter.Printf("incremental tar blob count: %d\n", len(incrementalBlobs))
+
+			Expect(incrementalBlobs).NotTo(BeEmpty(), "incremental tar should contain at least one blob")
+			initialBlobSet := make(map[string]struct{}, len(initialBlobs))
+			for _, b := range initialBlobs {
+				initialBlobSet[b] = struct{}{}
+			}
+			for _, b := range incrementalBlobs {
+				_, alreadyMirrored := initialBlobSet[b]
+				Expect(alreadyMirrored).To(BeFalse(),
+					"incremental tar re-included previously mirrored blob: %s", b)
+			}
+
+			By("verifying the initial tar does not contain the newly added additional image")
+			initialEntries := listTarEntries(preservedTar)
+			expectTarDoesNotContainPath(initialEntries, "_manifests/tags/multilayers-latest")
+
+			By("verifying the incremental tar contains the newly added additional image")
+			expectTarContainsPath(listTarEntries(incrementalTar),
+				tarRepositoriesPath+"oc-mirror/oc-mirror-dev/_manifests/tags/multilayers-latest")
 		})
 	})
 })
