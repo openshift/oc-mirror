@@ -59,6 +59,19 @@ var _ = Describe("secure policy", func() {
 		expectSuccessfulMirrorInRegistry(filepath.Join(iscDir, iscHappyPath), *testRegistry)
 	})
 
+	// CLID-724: Verify secure-policy flag does not give error in m2m workflow.
+	It("should not error in mirrorToMirror with --secure-policy=true", func() {
+		policyPath := filepath.Join(policiesDir, "insecure-accept-anything.json")
+
+		By("running mirrorToMirror with --secure-policy=true")
+		result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscHappyPath), workDir, testRegistry.Endpoint(),
+			"--secure-policy=true", "--policy", policyPath, "--dest-tls-verify=false")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying all images are mirrored in the local registry")
+		expectSuccessfulMirrorInRegistry(filepath.Join(iscDir, iscHappyPath), *testRegistry)
+	})
+
 	It("should still collect and rebuild the operator catalog when a strict trust policy rejects unsigned images", func() {
 		iscOperatorsOnly := filepath.Join("secure_policy", "isc-operators-only.yaml")
 		cfg := parseImageSetConfig(filepath.Join(iscDir, iscOperatorsOnly))
