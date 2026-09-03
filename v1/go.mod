@@ -16,7 +16,7 @@ require (
 	github.com/mholt/archiver/v3 v3.5.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/openshift/build-machinery-go v0.0.0-20240419090851-af9c868bcf52
+	github.com/openshift/build-machinery-go v0.0.0-20250530140348-dc5b2804eeee
 	github.com/operator-framework/operator-registry v1.47.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/afero v1.15.0
@@ -42,7 +42,7 @@ require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/distribution/v3 v3.0.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/openshift/api v0.0.0-20240529192326-16d44e6d3e7d
+	github.com/openshift/api v0.0.0-20260710095909-1cb630ce7109
 	github.com/openshift/cincinnati-operator v1.0.2-0.20220126212014-b56cf3346609
 	github.com/openshift/library-go v0.0.0-20240905123346-5bdbfe35a6f5
 	github.com/openshift/oc v4.2.0-alpha.0+incompatible
@@ -190,7 +190,7 @@ require (
 	github.com/onsi/gomega v1.38.2 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opencontainers/selinux v1.13.1 // indirect
-	github.com/openshift/client-go v0.0.0-20240528061634-b054aa794d87 // indirect
+	github.com/openshift/client-go v0.0.0-20251205093018-96a6cbc1420c // indirect
 	github.com/openshift/custom-resource-status v1.1.0 // indirect
 	github.com/operator-framework/api v0.27.0 // indirect
 	github.com/ostreedev/ostree-go v0.0.0-20210805093236-719684c64e4f // indirect
@@ -263,7 +263,6 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
