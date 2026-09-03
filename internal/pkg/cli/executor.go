@@ -277,6 +277,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", false, "Do not copy image signature")
 	cmd.Flags().BoolVar(&opts.Global.IgnoreReleaseSignature, "ignore-release-signature", false, "Ignore release signature")
+	cmd.Flags().StringVar(&opts.Global.SignatureVerification, "signature-verification", mirror.SignatureVerificationStrict,
+		`Signature verification mode: "strict" requires all images to have signatures; "best-effort" skips missing signatures for unsigned images`)
 	HideFlags(cmd)
 
 	ex.Opts.Stdout = cmd.OutOrStdout()
@@ -407,6 +409,11 @@ func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-
 		if _, err := time.Parse(time.DateOnly, o.Opts.Global.SinceString); err != nil {
 			return fmt.Errorf("--since flag needs to be in format yyyy-MM-dd")
 		}
+	}
+	if o.Opts.Global.SignatureVerification != mirror.SignatureVerificationStrict &&
+		o.Opts.Global.SignatureVerification != mirror.SignatureVerificationBestEffort {
+		return fmt.Errorf("--signature-verification must be %q or %q",
+			mirror.SignatureVerificationStrict, mirror.SignatureVerificationBestEffort)
 	}
 	if o.Opts.IsDryRunManifestLists && o.Opts.IsDryRun {
 		return fmt.Errorf("--dry-run and --dry-run-manifest-lists cannot be used together")
