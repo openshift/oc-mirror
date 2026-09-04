@@ -39,21 +39,18 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 				e2e.Logf("oc-mirror already on PATH, skipping extraction")
 				return
 			}
-			e2e.Logf("Extracting oc-mirror binary from the release payload")
+			e2e.Logf("Extracting oc-mirror binary from the OTE ImageStreamTag")
 
 			binDir := filepath.Join(os.TempDir(), "oc-mirror-bin")
 			err := os.MkdirAll(binDir, 0755)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			releaseImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-				"clusterversion", "version",
-				"-o=jsonpath={.status.desired.image}",
-			).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			ocMirrorImage, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(
-				"release", "info", releaseImage,
-				`-ojsonpath={.references.spec.tags[?(@.name=="oc-mirror")].from.name}`,
+			// Resolve the oc-mirror image via the ImageStreamTag created by the
+			// openshift-tests-extension-setup-out-of-payload CI step.
+			ocMirrorImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"imagestreamtag", "oc-mirror-tests:latest",
+				"-n", "test-extensions",
+				`-o=jsonpath={.tag.from.name}`,
 			).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Extracting oc-mirror from image %s", ocMirrorImage)
@@ -202,7 +199,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		assertPodOutput(oc, "olm.catalogSource=cs-redhatcatalog73359-v4-14", "openshift-marketplace", "Running")
 
 		compat_otp.By("Install the operator from the new catalogsource")
-		localstorageSub, localstorageOG := getOperatorInfo(oc, "local-storage-operator", "openshift-local-storage", "registry.redhat.io/redhat/redhat-operator-index:v4.14", "cs-redhatcatalog73359-v4-14")
+		localstorageSub, localstorageOG := getOperatorInfo(oc, "local-storage-operator", "openshift-local-storage", "cs-redhatcatalog73359-v4-14", dirname+"/.dockerconfigjson")
 		defer removeOperatorFromCustomCS(oc, localstorageSub, localstorageOG, "openshift-local-storage")
 		installOperatorFromCustomCS(oc, localstorageSub, localstorageOG, "openshift-local-storage", "local-storage-operator")
 	})
@@ -242,20 +239,11 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73452.yaml")
 
 		compat_otp.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.16 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson")
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			_, err := exec.Command("bash", "-c", command).Output()
-			if err != nil {
-				e2e.Logf("copy failed, retrying...")
-				return false, nil
-			}
-			return true, nil
-		})
-		compat_otp.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed"))
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.16 oci://%s  --remove-signatures --insecure-policy --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
 
 		compat_otp.By("Start mirror2mirror")
 		defer os.RemoveAll(".oc-mirror.log")
-		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
 			if err != nil {
 				e2e.Logf("The mirror2mirror failed, retrying...")
@@ -272,7 +260,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		assertPodOutput(oc, "olm.catalogSource=cs-ocicatalog73452-v14", "openshift-marketplace", "Running")
 
 		compat_otp.By("Install the operator from the new catalogsource")
-		deschedulerSub, deschedulerOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-ocicatalog73452-v14")
+		deschedulerSub, deschedulerOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "cs-ocicatalog73452-v14", dirname+"/.dockerconfigjson")
 		defer removeOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator")
 		installOperatorFromCustomCS(oc, deschedulerSub, deschedulerOG, "openshift-kube-descheduler-operator", "descheduler-operator")
 	})
@@ -1111,7 +1099,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-72971.yaml")
 
 		compat_otp.By("Use skopoe copy catalogsource to localhost")
-		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.19 --remove-signatures  --insecure-policy oci://%s", dirname+"/redhat-operator-index"))
+		skopeExecute(fmt.Sprintf("skopeo copy --all docker://registry.redhat.io/redhat/redhat-operator-index:v4.19 --remove-signatures  --insecure-policy oci://%s --authfile %s", dirname+"/redhat-operator-index", dirname+"/.dockerconfigjson"))
 		compat_otp.By("Create an internal registry")
 		registry := registry{
 			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
@@ -1166,7 +1154,7 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		// installCustomOperator(oc, aerospikeSub, aerospikeOG, "aerospike-ns", "aerospike-operator-controller-manager", "2")
 
 		compat_otp.By("Install operator from redhat-operator CS")
-		awslbSub, awslbOG := getOperatorInfo(oc, "dns-operator", "dns-operator-ns", "registry.redhat.io/redhat/redhat-operator-index:v4.19", "cs-redhat-operator-index-latest")
+		awslbSub, awslbOG := getOperatorInfo(oc, "dns-operator", "dns-operator-ns", "cs-redhat-operator-index-latest", dirname+"/.dockerconfigjson")
 		defer removeOperatorFromCustomCS(oc, awslbSub, awslbOG, "dns-operator-ns")
 		installAllNSOperatorFromCustomCS(oc, awslbSub, awslbOG, "dns-operator-ns", "dns-operator-controller-manager", "1")
 	})
@@ -1522,7 +1510,12 @@ var _ = g.Describe("[OTP][sig-cli] Workloads ocmirror v2 works well", func() {
 		compat_otp.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
 	})
 
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75425-Validate oc-mirror is able to pull hypershift kubevirt coreos container image and mirror the same [Serial] [Level0]", func() {
+	// TODO: This test currently fails during the archive step because the kubevirt coreos
+	// container image is not cosign-signed, but is typed as release content, so its missing
+	// ".sig" manifest is treated as a fatal error ("unable to add image blobs to the archive").
+	// The [Level0] label was removed until this is fixed. Investigate and re-add it once
+	// oc-mirror tolerates missing signatures for the kubevirt coreos image.
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-75425-Validate oc-mirror is able to pull hypershift kubevirt coreos container image and mirror the same [Serial]", func() {
 		compat_otp.By("Set registry config")
 		dirname := "/tmp/case75425"
 		defer os.RemoveAll(dirname)

@@ -2,6 +2,7 @@ package workloads
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
@@ -268,50 +269,96 @@ func assertPodOutput(oc *exutil.CLI, podLabel string, namespace string, expected
 	compat_otp.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
 }
 
-func executeBashWithTimeout(timeout time.Duration, command string) (string, error) {
-	// 1. Create a context with a timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel() // Always call cancel to release resources
+// runListOperators runs "oc-mirror --v2 list operators" against the given catalog
+// and returns its stdout. It captures stdout and stderr separately so that, on a
+// failure or timeout, the caller can surface the real oc-mirror error (registry
+// authentication/network problem) instead of an opaque timeout. The catalog is
+// expected to be a registry reference (v2 list operators does not accept oci://
+// on-disk catalogs).
+func runListOperators(catalog string, authfile string, extraArgs ...string) (string, error) {
+	args := []string{"list", "operators", "--catalog", catalog, "--authfile", authfile, "--src-tls-verify=false", "--v2"}
+	args = append(args, extraArgs...)
 
-	// 2. Use CommandContext to bind the command execution to the context
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
-	// 3. Run the command and capture output
-	output, err := cmd.Output()
+	cmd := exec.CommandContext(ctx, "oc-mirror", args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 
-	// Check for context-related errors first (Timeout)
 	if ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("command timed out after %v", timeout)
+		return "", fmt.Errorf("oc-mirror list operators timed out for catalog %q (extra args %v)\nstdout:\n%s\nstderr:\n%s",
+			catalog, extraArgs, stdout.String(), stderr.String())
 	}
-
-	// Handle standard execution errors (non-zero exit code, etc.)
 	if err != nil {
-		// Output the full stderr/stdout on failure for better debugging
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("command failed with exit code %d: %s",
-				exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return "", fmt.Errorf("command execution failed: %w", err)
+		return "", fmt.Errorf("oc-mirror list operators failed for catalog %q (extra args %v): %w\nstdout:\n%s\nstderr:\n%s",
+			catalog, extraArgs, err, stdout.String(), stderr.String())
 	}
-
-	return strings.TrimSpace(string(output)), nil
+	return stdout.String(), nil
 }
 
-func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace string, catalogName string, catalogSourceName string) (*customsub, *operatorgroup) {
-	getOperatorChannelCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --v1 | grep -E \"^%s\\s+\" |awk '{print $NF}'", catalogName, operatorName)
-	e2e.Logf("The command get operator channel %v", getOperatorChannelCMD)
-	channel, err := executeBashWithTimeout(3*time.Minute, getOperatorChannelCMD)
+// getDefaultChannel returns the default channel for the given operator by parsing
+// the "NAME  DISPLAY NAME  DEFAULT CHANNEL" table produced by "list operators".
+// The default channel is always the last whitespace-delimited field on the row.
+func getDefaultChannel(catalog string, operatorName string, authfile string) string {
+	out, err := runListOperators(catalog, authfile)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The default channel %v", string(channel))
-	channelName := strings.ReplaceAll(string(channel), "\n", "")
+
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == operatorName {
+			return fields[len(fields)-1]
+		}
+	}
+	e2e.Failf("could not find default channel for operator %q in catalog %q; list operators output:\n%s", operatorName, catalog, out)
+	return ""
+}
+
+// getChannelHead returns the head bundle (starting CSV) of the given channel by
+// parsing the "PACKAGE  CHANNEL  HEAD" table produced by "list operators --package".
+// Parsing only begins after the PACKAGE/CHANNEL/HEAD header so the leading
+// package summary table cannot produce a false match.
+func getChannelHead(catalog string, operatorName string, channelName string, authfile string) string {
+	out, err := runListOperators(catalog, authfile, "--package", operatorName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	inChannels := false
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && fields[0] == "PACKAGE" && fields[1] == "CHANNEL" {
+			inChannels = true
+			continue
+		}
+		if !inChannels {
+			continue
+		}
+		if len(fields) >= 3 && fields[0] == operatorName && fields[1] == channelName {
+			return fields[2]
+		}
+	}
+	e2e.Failf("could not find channel head (starting CSV) for operator %q channel %q in catalog %q; list operators output:\n%s",
+		operatorName, channelName, catalog, out)
+	return ""
+}
+
+func getOperatorInfo(oc *exutil.CLI, operatorName string, operatorNamespace string, catalogSourceName string, authfile string) (*customsub, *operatorgroup) {
+	// Query the catalog that was actually mirrored during this test, read straight
+	// from the running CatalogSource, instead of re-downloading the (slow, flaky)
+	// upstream registry.redhat.io index on every run. This keeps the lookup on the
+	// cluster-local mirror registry and always matches the mirrored content.
+	catalogImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catalogSourceName,
+		"-n", "openshift-marketplace", "-o=jsonpath={.spec.image}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	catalogImage = strings.TrimSpace(catalogImage)
+	o.Expect(catalogImage).NotTo(o.BeEmpty(), fmt.Sprintf("catalogsource %s has an empty spec.image", catalogSourceName))
+	e2e.Logf("Querying mirrored catalog %s (from catalogsource %s)", catalogImage, catalogSourceName)
+
+	channelName := getDefaultChannel(catalogImage, operatorName, authfile)
 	e2e.Logf("The default channel name %s", channelName)
 
-	getstartingCSVCMD := fmt.Sprintf("oc-mirror list operators --catalog %s --package %s --v1 |awk '{if($2~/^%s$/) print $3}'", catalogName, operatorName, channelName)
-	e2e.Logf("The command get operator csv %v", getstartingCSVCMD)
-	e2e.Logf("The csv name: %v", getstartingCSVCMD)
-	startingCsv, err := executeBashWithTimeout(3*time.Minute, getstartingCSVCMD)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	startingCsvName := strings.ReplaceAll(string(startingCsv), "\n", "")
+	startingCsvName := getChannelHead(catalogImage, operatorName, channelName, authfile)
 	e2e.Logf("The csv name: %v", startingCsvName)
 
 	buildPruningBaseDir := compat_otp.FixturePath("testdata", "workloads")
@@ -394,15 +441,22 @@ func trustCert(oc *exutil.CLI, registry string, cert string, configmapName strin
 }
 
 func restoreAddCA(oc *exutil.CLI, addCA string, configmapName string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", configmapName).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	var message string
+	// Restore (or remove) the additionalTrustedCA reference on the cluster image
+	// config FIRST. The temporary ConfigMap must only be deleted once image-registry
+	// no longer references it; otherwise the operator briefly observes a dangling
+	// reference to a missing ConfigMap and goes Degraded, which the monitor catches
+	// as a spurious failure.
+	var err error
 	if addCA == "" {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=json", "-p", "[{\"op\":\"remove\", \"path\":\"/spec/additionalTrustedCA\"}]").Execute()
 	} else {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "--type=merge", "--patch", fmt.Sprintf("{\"spec\":{\"additionalTrustedCA\":%s}}", addCA)).Execute()
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Wait for image-registry to reconcile and become healthy again before removing
+	// the ConfigMap.
+	var message string
 	waitErr := wait.Poll(60*time.Second, 10*time.Minute, func() (bool, error) {
 		registryHealth := checkCOHealth(oc, "image-registry")
 		if registryHealth {
@@ -413,6 +467,10 @@ func restoreAddCA(oc *exutil.CLI, addCA string, configmapName string) {
 		return false, nil
 	})
 	compat_otp.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
+
+	// Now it is safe to delete the temporary trusted-ca ConfigMap.
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", configmapName).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Check if image-registry is healthy
@@ -643,21 +701,24 @@ func validateRepo(serviceName string, prefixFilter string, checkSignature bool) 
 
 func skopeExecute(skopeoCommand string) {
 	e2e.Logf("skopeo command %v :", skopeoCommand)
-	var skopeooutStr string
+	// Retain stdout AND stderr for every attempt and log the real error. skopeo
+	// reports authentication/network failures on stderr, so capturing only stdout
+	// (as before) hid the actual reason for a failed copy and made a registry
+	// problem indistinguishable from a test defect.
+	var lastErr string
 	waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-		skopeoout, err := exec.Command("bash", "-c", skopeoCommand).Output()
-		if err != nil {
-			e2e.Logf("copy failed, retrying...")
-			skopeooutStr = string(skopeoout)
+		cmd := exec.Command("bash", "-c", skopeoCommand)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			lastErr = fmt.Sprintf("error: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+			e2e.Logf("skopeo copy failed, retrying...\n%s", lastErr)
 			return false, nil
 		}
 		return true, nil
-
 	})
-	if waitErr != nil {
-		e2e.Logf("output: %v", skopeooutStr)
-	}
-	compat_otp.AssertWaitPollNoErr(waitErr, "max time reached but the skopeo copy still failed")
+	compat_otp.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the skopeo copy still failed: %s", lastErr))
 }
 
 func readFileContent(filePath string) string {
