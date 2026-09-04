@@ -13,11 +13,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/blang/semver/v4"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
+	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
@@ -437,6 +440,8 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
+	filteredDC = eliminatingIntermediaryVersions(filteredDC, op, o.Log)
+
 	filteredDigestPath := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
 
 	if err := folder.CreateFolders(filteredDigestPath); err != nil {
@@ -454,6 +459,133 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		DeclConfig:         filteredDC,
 		Digest:             catalogDigest,
 	}, nil
+}
+
+func eliminatingIntermediaryVersions(dc *declcfg.DeclarativeConfig, iscCatalogFilter v2alpha1.Operator, log clog.PluggableLoggerInterface) *declcfg.DeclarativeConfig {
+	maxVersions := map[string]string{}
+	for _, pkg := range iscCatalogFilter.Packages {
+		maxVersions[pkg.Name] = pkg.MaxVersion
+	}
+	for _, pkg := range dc.Packages {
+		maxVersion, ok := maxVersions[pkg.Name]
+		if !ok {
+			log.Debug("No max version found for package %q and thus no elimination of versions", pkg.Name)
+			continue
+		}
+		var channels []declcfg.Channel
+		for _, chanel := range dc.Channels {
+			chanel.Entries = eliminatingIntermediaryVersionsWithMaxVersion(chanel, maxVersion, log)
+			channels = append(channels, chanel)
+		}
+		dc.Channels = channels
+	}
+	return dc
+}
+
+// eliminatingIntermediaryVersions eliminates intermediary versions between maxVersion to the head if
+// the replaces chain holds from maxVersion to the head of the channel
+// and each between them skips all older versions
+func eliminatingIntermediaryVersionsWithMaxVersion(channel declcfg.Channel, maxVersion string, log clog.PluggableLoggerInterface) []declcfg.ChannelEntry {
+	maxV, err := semver.Parse(maxVersion)
+	if err != nil {
+		return channel.Entries
+	}
+	eliminationIndex := -1
+	for i, entry := range channel.Entries {
+		if i+1 >= len(channel.Entries) {
+			break
+		}
+		if greater(entry.Name, maxV) && entry.Replaces == channel.Entries[i+1].Name {
+			eliminationIndex = i
+			continue
+		}
+		break
+	}
+	if eliminationIndex == -1 || !skipLookGood(channel.Entries, eliminationIndex) {
+		return channel.Entries
+	}
+	for i := 0; i <= eliminationIndex; i++ {
+		log.Info("eliminating intermediary version %q for channel %q of package %q", channel.Entries[i].Name, channel.Name, channel.Package)
+	}
+	entryHead := channel.Entries[0]
+	entryHead.Replaces = channel.Entries[eliminationIndex+1].Name
+	return append([]declcfg.ChannelEntry{entryHead}, channel.Entries[eliminationIndex+1:]...)
+}
+
+// skipLookGood checks if the condition on skip is satisfied
+// let entries[eliminationIndex+1] be with version x.
+// it returns true iff for each entries[i] with 0 <= i <= eliminationIndex, entries[i].name with version y skips every version z with z >= x and z < y,
+// where z comes from entries[i+1].name ... entries[eliminationIndex+1].name.
+// A version z is considered skipped by entries[i] when its name is listed in
+// entries[i].Skips or when z falls within entries[i].SkipRange.
+func skipLookGood(entries []declcfg.ChannelEntry, eliminationIndex int) bool {
+	if eliminationIndex < 0 || eliminationIndex+1 >= len(entries) {
+		return false
+	}
+	// x is the version of the entry the head will replace once the
+	// intermediary versions are eliminated.
+	x, ok := versionFromEntryName(entries[eliminationIndex+1].Name)
+	if !ok {
+		return false
+	}
+	for i := 0; i <= eliminationIndex; i++ {
+		y, ok := versionFromEntryName(entries[i].Name)
+		if !ok {
+			return false
+		}
+		skips := map[string]struct{}{}
+		for _, s := range entries[i].Skips {
+			skips[s] = struct{}{}
+		}
+		// skipRange is nil when the entry has no SkipRange or when it fails
+		// to parse; in either case only the explicit Skips list is honored.
+		var skipRange semver.Range
+		if entries[i].SkipRange != "" {
+			if r, err := semver.ParseRange(entries[i].SkipRange); err == nil {
+				skipRange = r
+			}
+		}
+		// Every entry between i+1 and eliminationIndex+1 whose version z
+		// satisfies x <= z < y must be skipped by entries[i]. Otherwise
+		// eliminating it would drop an upgrade edge that is not covered by
+		// a skip, so the elimination is not safe.
+		for j := i + 1; j <= eliminationIndex+1; j++ {
+			z, ok := versionFromEntryName(entries[j].Name)
+			if !ok {
+				return false
+			}
+			if z.GTE(x) && z.LT(y) {
+				_, listed := skips[entries[j].Name]
+				inRange := skipRange != nil && skipRange(z)
+				if !listed && !inRange {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// versionFromEntryName extracts the semver from a channel entry name of the
+// form "<package>.v<semver>" (e.g. "foo.v1.3.0").
+func versionFromEntryName(entryName string) (semver.Version, bool) {
+	idx := strings.LastIndex(entryName, ".v")
+	if idx == -1 {
+		return semver.Version{}, false
+	}
+	v, err := semver.Parse(entryName[idx+2:])
+	if err != nil {
+		return semver.Version{}, false
+	}
+	return v, true
+}
+
+func greater(entryName string, version semver.Version) bool {
+	entryVersion, ok := versionFromEntryName(entryName)
+	if !ok {
+		return false
+	}
+	return entryVersion.GT(version)
 }
 
 func TagRebuiltCatalogByDigestOnly(collectorSchema *v2alpha1.CollectorSchema, localStorageFQDN, workingDir string) {
