@@ -495,6 +495,9 @@ func eliminatingIntermediaryVersionsWithMaxVersion(channel declcfg.Channel, maxV
 		if i+1 >= len(channel.Entries) {
 			break
 		}
+		// https://redhat-internal.slack.com/archives/CHMALGJV6/p1788314377012859?thread_ts=1788277075.814849&cid=CHMALGJV6
+		// The catalog-filter library will ensure that a contiguous replaces chain extends from minVersion...channel-head.
+		// Checking it again here (the 2nd condition below) might be redundant but should not be a big deal anyway.
 		if greater(entry.Name, maxV) && entry.Replaces == channel.Entries[i+1].Name {
 			eliminationIndex = i
 			continue
