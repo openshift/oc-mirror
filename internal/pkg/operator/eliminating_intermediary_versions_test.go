@@ -118,6 +118,60 @@ func TestEliminatingIntermediaryVersions(t *testing.T) {
 					},
 				}}}},
 		},
+		{
+			// Only the head's coverage matters: the intermediary entries
+			// (v1.2.0, v1.1.0) carry no skips of their own, yet elimination
+			// still proceeds because the surviving head skips every version
+			// it jumps over. A check that required each intermediary to skip
+			// its successors would refuse this case.
+			name: "only head coverage matters",
+			dc: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{{Name: "foo"}},
+				Channels: []declcfg.Channel{{Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+					{
+						Name:     "foo.v1.3.0",
+						Replaces: "foo.v1.2.0",
+						Skips: []string{
+							"foo.v1.2.0",
+							"foo.v1.1.0",
+							"foo.v1.0.0",
+						},
+					},
+					{
+						Name:     "foo.v1.2.0",
+						Replaces: "foo.v1.1.0",
+					},
+					{
+						Name:     "foo.v1.1.0",
+						Replaces: "foo.v1.0.0",
+					},
+					{
+						Name: "foo.v1.0.0",
+					},
+				}}},
+			},
+			filter: v2alpha1.Operator{
+				IncludeConfig: v2alpha1.IncludeConfig{
+					Packages: []v2alpha1.IncludePackage{{Name: "foo", IncludeBundle: v2alpha1.IncludeBundle{MaxVersion: "1.0.0"}}},
+				},
+			},
+			want: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{{Name: "foo"}},
+				Channels: []declcfg.Channel{{Name: "stable", Package: "foo", Entries: []declcfg.ChannelEntry{
+					{
+						Name:     "foo.v1.3.0",
+						Replaces: "foo.v1.0.0",
+						Skips: []string{
+							"foo.v1.2.0",
+							"foo.v1.1.0",
+							"foo.v1.0.0",
+						},
+					},
+					{
+						Name: "foo.v1.0.0",
+					},
+				}}}},
+		},
 	}
 
 	for _, tt := range tests {

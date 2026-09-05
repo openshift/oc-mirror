@@ -512,56 +512,34 @@ func eliminatingIntermediaryVersionsWithMaxVersion(channel declcfg.Channel, maxV
 	return append([]declcfg.ChannelEntry{entryHead}, channel.Entries[eliminationIndex+1:]...)
 }
 
-// skipLookGood checks if the condition on skip is satisfied
-// let entries[eliminationIndex+1] be with version x.
-// it returns true iff for each entries[i] with 0 <= i <= eliminationIndex, entries[i].name with version y skips every version z with z >= x and z < y,
-// where z comes from entries[i+1].name ... entries[eliminationIndex+1].name.
-// A version z is considered skipped by entries[i] when its name is listed in
-// entries[i].Skips or when z falls within entries[i].SkipRange.
+// skipLookGood reports whether the intermediary versions in
+// entries[1 .. eliminationIndex] can be safely eliminated. After elimination
+// only the head (entries[0]) survives above entries[eliminationIndex+1], so it
+// is safe only when the head skips every version it would then jump over: each
+// entry from index 1 through eliminationIndex+1. A version is skipped when its
+// name is listed in the head's Skips or when it falls within the head's SkipRange.
 func skipLookGood(entries []declcfg.ChannelEntry, eliminationIndex int) bool {
 	if eliminationIndex < 0 || eliminationIndex+1 >= len(entries) {
 		return false
 	}
-	// x is the version of the entry the head will replace once the
-	// intermediary versions are eliminated.
-	x, ok := versionFromEntryName(entries[eliminationIndex+1].Name)
-	if !ok {
-		return false
+	head := entries[0]
+	skips := make(map[string]struct{}, len(head.Skips))
+	for _, s := range head.Skips {
+		skips[s] = struct{}{}
 	}
-	for i := 0; i <= eliminationIndex; i++ {
-		y, ok := versionFromEntryName(entries[i].Name)
-		if !ok {
-			return false
+	// A missing or malformed SkipRange simply provides no coverage.
+	var skipRange semver.Range
+	if head.SkipRange != "" {
+		skipRange, _ = semver.ParseRange(head.SkipRange)
+	}
+	for _, entry := range entries[1 : eliminationIndex+2] {
+		if _, listed := skips[entry.Name]; listed {
+			continue
 		}
-		skips := map[string]struct{}{}
-		for _, s := range entries[i].Skips {
-			skips[s] = struct{}{}
+		if v, ok := versionFromEntryName(entry.Name); ok && skipRange != nil && skipRange(v) {
+			continue
 		}
-		// skipRange is nil when the entry has no SkipRange or when it fails
-		// to parse; in either case only the explicit Skips list is honored.
-		var skipRange semver.Range
-		if entries[i].SkipRange != "" {
-			if r, err := semver.ParseRange(entries[i].SkipRange); err == nil {
-				skipRange = r
-			}
-		}
-		// Every entry between i+1 and eliminationIndex+1 whose version z
-		// satisfies x <= z < y must be skipped by entries[i]. Otherwise
-		// eliminating it would drop an upgrade edge that is not covered by
-		// a skip, so the elimination is not safe.
-		for j := i + 1; j <= eliminationIndex+1; j++ {
-			z, ok := versionFromEntryName(entries[j].Name)
-			if !ok {
-				return false
-			}
-			if z.GTE(x) && z.LT(y) {
-				_, listed := skips[entries[j].Name]
-				inRange := skipRange != nil && skipRange(z)
-				if !listed && !inRange {
-					return false
-				}
-			}
-		}
+		return false
 	}
 	return true
 }
