@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
@@ -146,11 +147,13 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	// attestation entries (unknown/unknown platform) that cannot be pulled from
 	// proxy registries. If found, switch to CopySpecificImages with only the
 	// real platforms so the copy skips unpullable attestation manifests.
+	var instanceDigests []digest.Digest
 	if imageListSelection == copy.CopyAllImages {
-		attestationPlatforms, attestationErr := filterAttestationPlatforms(ctx, srcRef, sourceCtx)
-		if attestationErr == nil && len(attestationPlatforms) > 0 {
+		filter, attestationErr := filterAttestationInstances(ctx, srcRef, sourceCtx)
+		if attestationErr == nil && filter != nil && !filter.empty() {
 			imageListSelection = copy.CopySpecificImages
-			instancePlatforms = attestationPlatforms
+			instancePlatforms = filter.platforms
+			instanceDigests = filter.digests
 		}
 	}
 
@@ -197,6 +200,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		InstancePlatforms:                instancePlatforms,
+		Instances:                        instanceDigests,
 		PreserveDigests:                  opts.PreserveDigests,
 		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
