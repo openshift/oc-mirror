@@ -705,6 +705,31 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 	})
 }
 
+func TestExecutorSetupLocalRegistryConfig(t *testing.T) {
+	// The local storage registry runs without auth or TLS and with deletes enabled,
+	// so it must never be reachable off-host: an empty or wildcard bind host would
+	// expose it to the network for the duration of a mirror run.
+	t.Run("Testing Executor : local registry binds to loopback only", func(t *testing.T) {
+		ex := &ExecutorSchema{
+			Log:              clog.New("trace"),
+			Opts:             &mirror.CopyOptions{Global: &mirror.GlobalOptions{Port: 7777}},
+			LocalStorageDisk: common.TestFolder + "cache-fake",
+		}
+
+		cfg, err := ex.setupLocalRegistryConfig()
+		assert.NoError(t, err)
+
+		host, port, err := net.SplitHostPort(cfg.HTTP.Addr)
+		assert.NoError(t, err)
+		assert.Equal(t, "7777", port)
+		assert.Equal(t, localStorageHost, host)
+
+		ip := net.ParseIP(host)
+		assert.NotNil(t, ip, "bind host must be a literal IP, not a name that could resolve off-loopback")
+		assert.True(t, ip.IsLoopback(), "local storage registry must bind a loopback address, got %q", host)
+	})
+}
+
 // TestExecutorSetupWorkingDir
 func TestExecutorSetupWorkingDir(t *testing.T) {
 	workingDir := t.TempDir()
