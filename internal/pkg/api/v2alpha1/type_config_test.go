@@ -9,12 +9,14 @@ import (
 
 func TestPlatformDeepCopy(t *testing.T) {
 	orig := Platform{
-		Graph:             true,
-		Channels:          []ReleaseChannel{{Name: "stable-4.19", MinVersion: "4.19.0"}},
-		Architectures:     []string{"amd64"},
-		Platforms:         []InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}},
-		Release:           "quay.io/openshift-release-dev/ocp-release:4.19.0-x86_64",
-		KubeVirtContainer: true,
+		Graph:                true,
+		Channels:             []ReleaseChannel{{Name: "stable-4.19", MinVersion: "4.19.0"}},
+		Architectures:        []string{"amd64"},
+		Platforms:            []InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}},
+		Release:              "quay.io/openshift-release-dev/ocp-release:4.19.0-x86_64",
+		KubeVirtContainer:    true,
+		ReleaseImageRepo:     "openshift-release-dev/ocp-release",
+		ReleaseComponentRepo: "openshift-release-dev/ocp-v4.0-art-dev",
 	}
 	// every field must be set above, so that a new Platform field fails this
 	// test until it is both set here and copied by DeepCopy
