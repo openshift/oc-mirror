@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
@@ -141,6 +142,21 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		return err
 	}
 
+	// TODO: remove filterAttestationPlatforms when OCI1.1 is supported by containers-libs [OCPNODE-2018](https://redhat.atlassian.net/browse/OCPNODE-2018)
+	// OCPBUGS-62723: When copying all images from a manifest list, check for
+	// attestation entries (unknown/unknown platform) that cannot be pulled from
+	// proxy registries. If found, switch to CopySpecificImages with only the
+	// real platforms so the copy skips unpullable attestation manifests.
+	var instanceDigests []digest.Digest
+	if imageListSelection == copy.CopyAllImages {
+		filter, attestationErr := filterAttestationInstances(ctx, srcRef, sourceCtx)
+		if attestationErr == nil && filter != nil && !filter.empty() {
+			imageListSelection = copy.CopySpecificImages
+			instancePlatforms = filter.platforms
+			instanceDigests = filter.digests
+		}
+	}
+
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
 	}
@@ -184,6 +200,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		InstancePlatforms:                instancePlatforms,
+		Instances:                        instanceDigests,
 		PreserveDigests:                  opts.PreserveDigests,
 		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
