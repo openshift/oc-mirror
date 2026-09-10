@@ -327,6 +327,51 @@ func expectSignaturesInRegistry(reg registry.Registry) {
 	Expect(sigCount).To(BeNumerically(">", 0), "no images with signatures found in registry")
 }
 
+// expectSignatureTagsMirroredM2M verifies that cosign .sig tags are mirrored alongside
+// images in a mirrorToMirror workflow. It skips digest-style tags (sha256-<hex>) that
+// originate from rebuilt catalog images and may not resolve to a manifest in the target
+// registry, then asserts that every resolvable non-.sig tag has a corresponding .sig tag.
+func expectSignatureTagsMirroredM2M(reg registry.Registry) {
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred(), "failed to list repositories in registry %s", reg.Endpoint())
+
+	digestTagPattern := regexp.MustCompile(`^sha256-[a-f0-9]{64}$`)
+	sigCount := 0
+
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred(), "failed to list tags for repository %q in registry %s", repo, reg.Endpoint())
+
+		tagSet := make(map[string]struct{})
+		for _, t := range tags {
+			tagSet[t] = struct{}{}
+		}
+
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ".sig") {
+				continue
+			}
+			if digestTagPattern.MatchString(tag) {
+				continue
+			}
+
+			imgRef := fmt.Sprintf("%s/%s:%s", reg.Endpoint(), repo, tag)
+			ref, err := name.NewTag(imgRef, name.Insecure)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse image reference %q", imgRef)
+
+			desc, err := remote.Get(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+			Expect(err).NotTo(HaveOccurred(), "failed to fetch manifest for image %q", imgRef)
+
+			sigTag := strings.Replace(desc.Digest.String(), ":", "-", 1) + ".sig"
+			_, hasSig := tagSet[sigTag]
+			Expect(hasSig).To(BeTrue(),
+				"image %s (digest %s) has no signature tag %s", imgRef, desc.Digest, sigTag)
+			sigCount++
+		}
+	}
+	Expect(sigCount).To(BeNumerically(">", 0), "no images with signatures found in registry %s", reg.Endpoint())
+}
+
 // expectOnlySignatureTagsRemain verifies that after a delete without --delete-signatures,
 // non-catalog repos only have .sig tags remaining, and at least one .sig tag exists.
 func expectOnlySignatureTagsRemain(reg registry.Registry) {
@@ -483,6 +528,43 @@ func listLocalCacheRepositories(cacheDir string) ([]string, error) {
 		return nil
 	})
 	return repos, err
+}
+
+// listLocalCacheTags lists the tag names for a repository in the local cache by
+// reading the _manifests/tags directory entries.
+func listLocalCacheTags(cacheDir, repo string) ([]string, error) {
+	tagsDir := filepath.Join(cacheDir, cacheRepositoriesSubdir, repo, "_manifests", "tags")
+	entries, err := os.ReadDir(tagsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tags directory %s: %w", tagsDir, err)
+	}
+	var tags []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			tags = append(tags, entry.Name())
+		}
+	}
+	return tags, nil
+}
+
+// expectSignatureTagsInLocalCache verifies that at least one .sig tag is present
+// in the local cache, confirming that cosign signatures were cached during mirroring.
+func expectSignatureTagsInLocalCache(cacheDir string) {
+	repos, err := listLocalCacheRepositories(cacheDir)
+	Expect(err).NotTo(HaveOccurred(), "failed to list repositories in local cache at %s", cacheDir)
+	Expect(repos).NotTo(BeEmpty(), "local cache has no repositories at %s", cacheDir)
+
+	sigCount := 0
+	for _, repo := range repos {
+		tags, err := listLocalCacheTags(cacheDir, repo)
+		Expect(err).NotTo(HaveOccurred(), "failed to list tags for cached repository %q", repo)
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ".sig") {
+				sigCount++
+			}
+		}
+	}
+	Expect(sigCount).To(BeNumerically(">", 0), "no .sig tags found in local cache at %s", cacheDir)
 }
 
 // copyFile copies a single file from src to dst, preserving file permissions

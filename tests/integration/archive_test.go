@@ -103,13 +103,13 @@ var _ = Describe("strict archive size", func() {
 
 	iscFile := filepath.Join("archive", "isc-strict-archive.yaml")
 
-	It("should fail mirrorToDisk with --strict-archive when a file exceeds archiveSize", SpecTimeout(5*time.Minute), func(_ SpecContext) {
+	It("should fail mirrorToDisk with --strict-archive when a file exceeds archiveSize", SpecTimeout(5*time.Minute), func(specCtx SpecContext) {
 		By("creating a 2 GB sparse file in the working directory to exceed the 1 GB archiveSize limit")
 		oversizedFile := filepath.Join(workDir, dirWorkingDir, "oversized-test-file.bin")
 		createSparseFile(oversizedFile, 2*1024*1024*1024)
 
 		By("running mirrorToDisk with --strict-archive and archiveSize: 1")
-		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir,
+		result, err := runner.MirrorToDisk(specCtx, filepath.Join(iscDir, iscFile), workDir,
 			"--remove-signatures=true", "--strict-archive")
 		logOcMirrorResult("strict-archive mirrorToDisk", result)
 		expectOcMirrorCommandFailure(result, err)
@@ -120,9 +120,9 @@ var _ = Describe("strict archive size", func() {
 			"expected strict archive error in output:\nstdout: %s\nstderr: %s", result.Stdout, result.Stderr)
 	})
 
-	It("should succeed mirrorToDisk with --strict-archive when content fits within archiveSize", SpecTimeout(5*time.Minute), func(_ SpecContext) {
+	It("should succeed mirrorToDisk with --strict-archive when content fits within archiveSize", SpecTimeout(5*time.Minute), func(specCtx SpecContext) {
 		By("running mirrorToDisk with --strict-archive and archiveSize: 1 (no oversized files)")
-		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir,
+		result, err := runner.MirrorToDisk(specCtx, filepath.Join(iscDir, iscFile), workDir,
 			"--remove-signatures=true", "--strict-archive")
 		logOcMirrorResult("strict-archive-success mirrorToDisk", result)
 		expectOcMirrorCommandSuccess(result, err)

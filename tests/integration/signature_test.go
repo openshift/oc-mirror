@@ -42,6 +42,23 @@ var _ = Describe("signatures", func() {
 		expectNoSignaturesInRegistry(*testRegistry)
 	})
 
+	It("should preserve signature tags with --remove-signatures=false in m2d + d2m", func() {
+		By("running mirrorToDisk with --remove-signatures=false")
+		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscSignatures), workDir, "--remove-signatures=false")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying signature tags are present in the local cache")
+		expectSignatureTagsInLocalCache(cacheDir)
+
+		By("running diskToMirror with --remove-signatures=false")
+		result, err = runner.DiskToMirror(ctx, filepath.Join(iscDir, iscSignatures), workDir, testRegistry.Endpoint(),
+			"--remove-signatures=false", "--dest-tls-verify=false")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying signature tags are present in the target registry")
+		expectSignatureTagsMirroredM2M(*testRegistry)
+	})
+
 	It("should mirror with signatures preserved and delete them", func() {
 		deleteYaml := filepath.Join(workDir, "working-dir", "delete", "delete-images.yaml")
 
@@ -113,6 +130,19 @@ var _ = Describe("signatures", func() {
 		By("verifying oc-mirror failed gracefully instead of panicking")
 		expectOcMirrorExitCode(result, err, 2, "collection error", "http request")
 		expectNoTarArchive(unseededWorkDir)
+	})
+
+	It("should mirror cosign signature tags along with images in mirrorToMirror workflow", func() {
+		By("running mirrorToMirror")
+		result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscSignatures), workDir, testRegistry.Endpoint(),
+			"--dest-tls-verify=false")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying cosign signature tags are present in the local registry")
+		expectSignatureTagsMirroredM2M(*testRegistry)
+
+		By("verifying the signature configmap was generated correctly")
+		expectSignatureConfigMapGenerated(workDir)
 	})
 
 	Describe("release signature configmap", func() {
