@@ -1,0 +1,19 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  helm:
+    repositories:
+      - name: flex-gateway
+        url: https://flex-packages.anypoint.mulesoft.com/helm
+        charts:
+          - name: flex-gateway
+            version: 1.10.4
+            # Used only for image discovery while mirroring (not for install).
+            # Copied into the working-dir/archive for disk-to-mirror.
+            valuesFiles:
+              - ./values-for-mirroring.yaml
+            values:
+              registration:
+                secretName: dummy-registration-secret
+            imagePaths:
+              - "{.spec.template.spec.containers[*].image}"
