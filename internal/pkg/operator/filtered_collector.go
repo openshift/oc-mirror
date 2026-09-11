@@ -437,6 +437,8 @@ func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operato
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 
+	filteredDC = eliminatingIntermediaryVersions(filteredDC, op, o.Log)
+
 	filteredDigestPath := filepath.Join(filteredCatalogsDir, filterDigest, operatorCatalogConfigDir)
 
 	if err := folder.CreateFolders(filteredDigestPath); err != nil {
