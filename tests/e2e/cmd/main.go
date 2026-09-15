@@ -32,7 +32,7 @@ func main() {
 	defer logs.FlushLogs()
 
 	registry := e.NewRegistry()
-	ext := e.NewExtension("openshift", "payload", "oc-mirror")
+	ext := e.NewExtension("openshift", "layered", "oc-mirror")
 
 	// Register test suites (parallel, serial, disruptive, all)
 	registerSuites(ext)
@@ -102,6 +102,10 @@ func registerSuites(ext *e.Extension) {
 			Qualifiers: []string{
 				`name.contains("[Level0]") && name.contains("[Serial]") && !name.contains("[Disruptive]")`,
 			},
+			// These tests apply cluster-wide IDMS/ITMS, which drains every node and trips
+			// the availability monitors. Mark the suite Disruptive so those zero-disruption
+			// invariants are not registered.
+			ClusterStability: e.ClusterStabilityDisruptive,
 		},
 		{
 			Name:        "oc-mirror/disruptive",
