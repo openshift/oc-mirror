@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
@@ -193,6 +194,61 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: [catalog \"test-catalog1:latest\": operator \"operator1\": channel \"fast\": maxVersion \"abc\" must respect semantic versioning notation, catalog \"test-catalog1:latest\": operator \"operator1\": channel \"fast\": minVersion \"-+?\" must respect semantic versioning notation]",
+		},
+		{
+			name: "Valid/CatalogFilteringBySelectors",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name: "operator1",
+											Selectors: []*metav1.LabelSelector{
+												{
+													MatchLabels: map[string]string{"version": "1.2.3"},
+													MatchExpressions: []metav1.LabelSelectorRequirement{
+														{Key: "GreatFeatureB", Operator: metav1.LabelSelectorOpExists},
+														{Key: "tier", Operator: metav1.LabelSelectorOpIn, Values: []string{"frontend"}},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/CatalogFilteringByMalformedSelector",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog: "test-catalog1:latest",
+								IncludeConfig: v2alpha1.IncludeConfig{
+									Packages: []v2alpha1.IncludePackage{
+										{
+											Name: "operator1",
+											Selectors: []*metav1.LabelSelector{
+												{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "tier", Operator: "Bogus"}}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expError: "invalid configuration: catalog \"test-catalog1:latest\": operator \"operator1\": invalid selector: \"Bogus\" is not a valid label selector operator",
 		},
 		{
 			name: "Invalid/CatalogFilteringIncorrectVersions",
