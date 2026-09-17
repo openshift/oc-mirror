@@ -224,6 +224,7 @@ func validateReleaseChannelsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) er
 	return nil
 }
 
+// validateBlockedImagesDelete validates blocked image regex patterns in delete configuration.
 func validateBlockedImagesDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
 	var errs []error
 	for _, img := range cfg.Delete.BlockedImages {
