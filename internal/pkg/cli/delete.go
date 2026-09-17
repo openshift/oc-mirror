@@ -171,6 +171,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 					Operators:        converted.Delete.Operators,
 					AdditionalImages: converted.Delete.AdditionalImages,
 					Helm:             converted.Delete.Helm,
+					BlockedImages:    converted.Delete.BlockedImages,
 				},
 			},
 		}

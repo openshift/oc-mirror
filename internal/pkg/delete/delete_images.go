@@ -93,6 +93,7 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 				Operators:        o.Config.Mirror.Operators,
 				AdditionalImages: o.Config.Mirror.AdditionalImages,
 				Helm:             o.Config.Mirror.Helm,
+				BlockedImages:    o.Config.Mirror.BlockedImages,
 			},
 		},
 	}
