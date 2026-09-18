@@ -130,6 +130,34 @@ func (i ImageSpec) IsImageByTagAndDigest() bool {
 	return len(strings.Split(i.Reference, ":")) > 2 && strings.Contains(i.Reference, "@")
 }
 
+// AlgorithmAndDigest returns the digest as a tag-safe token "<algorithm>-<hex>"
+// (e.g. "sha256-abc..."), or "" if the image has no digest.
+func (i ImageSpec) AlgorithmAndDigest() string {
+	if i.Digest == "" {
+		return ""
+	}
+	return i.Algorithm + "-" + i.Digest
+}
+
+// CacheTag is the tag under which the image is stored in the LOCAL CACHE: the digest when
+// present (so distinct digests never collide - OCPBUGS-105878), otherwise the human tag.
+// Callers handle the OCI "no tag, no digest" case (latestTag) before using this.
+func (i ImageSpec) CacheTag() string {
+	if i.Digest != "" {
+		return i.AlgorithmAndDigest()
+	}
+	return i.Tag
+}
+
+// DestinationTag is the tag used at the REAL destination registry: the human tag when
+// present (including tag+digest, per OCPBUGS-33196/37867), otherwise the digest.
+func (i ImageSpec) DestinationTag() string {
+	if i.Tag != "" {
+		return i.Tag
+	}
+	return i.AlgorithmAndDigest()
+}
+
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	if maxNestedPaths == 0 {
 		return imageRef, nil
