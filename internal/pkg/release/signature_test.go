@@ -111,7 +111,8 @@ func TestReleaseSignature(t *testing.T) {
 		t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", common.TestFolder+"custom-ocp-sig-key.asc")
 		tmpDir := t.TempDir()
 		workingDir := tmpDir + "/" + "working-dir"
-		os.MkdirAll(workingDir+SignatureDir, 0o755)
+		err := os.MkdirAll(workingDir+SignatureDir, 0o755)
+		assert.NoError(t, err)
 		defer os.RemoveAll(workingDir)
 		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
@@ -150,7 +151,8 @@ func TestReleaseSignature(t *testing.T) {
 
 		tmpDir := t.TempDir()
 		workingDir := tmpDir + "/" + "working-dir"
-		os.MkdirAll(workingDir+SignatureDir, 0o755)
+		err := os.MkdirAll(workingDir+SignatureDir, 0o755)
+		assert.NoError(t, err)
 		defer os.RemoveAll(workingDir)
 		opts.Global.WorkingDir = workingDir
 		ex := NewSignatureClient(log, cfg, opts)
