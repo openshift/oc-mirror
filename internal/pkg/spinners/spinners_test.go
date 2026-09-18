@@ -41,7 +41,7 @@ func TestStatusDecorator(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, _ := statusDecorator().Decor(tc.stats)
+			got, _ := newStatusDecorator().Decor(tc.stats)
 			assert.Equal(t, tc.expected, got)
 		})
 	}

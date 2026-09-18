@@ -31,16 +31,23 @@ func BarFillerClearOnAbort() mpb.BarOption {
 // final PopCompletedMode frame (bar context cancel uses context.Canceled
 // as the cause). Prefer Completed so a successful copy does not also
 // show the failure mark.
-func statusDecorator() decor.Decorator {
-	return decor.Any(func(s decor.Statistics) string {
-		if s.Completed {
-			return emoji.SpinnerCheckMark
-		}
-		if s.Aborted {
-			return emoji.SpinnerCrossMark
-		}
-		return ""
-	})
+type statusDecorator struct {
+	decor.WC
+}
+
+func newStatusDecorator() statusDecorator {
+	wc := decor.WC{}
+	return statusDecorator{WC: wc.Init()}
+}
+
+func (d statusDecorator) Decor(s decor.Statistics) (string, int) {
+	if s.Completed {
+		return d.Format(emoji.SpinnerCheckMark)
+	}
+	if s.Aborted {
+		return d.Format(emoji.SpinnerCrossMark)
+	}
+	return d.Format("")
 }
 
 func AddSpinner(progressBar *mpb.Progress, message string) *mpb.Bar {
@@ -48,7 +55,7 @@ func AddSpinner(progressBar *mpb.Progress, message string) *mpb.Bar {
 		1, mpb.BarFillerMiddleware(PositionSpinnerLeft),
 		mpb.BarWidth(3),
 		mpb.PrependDecorators(
-			statusDecorator(),
+			newStatusDecorator(),
 		),
 		mpb.AppendDecorators(
 			decor.Name("("),
