@@ -1,0 +1,24 @@
+# ImageSetConfig that reproduces the tag+digest cache collision for operator related images.
+#
+# The collisiontest package has two channels (alpha, stable). Each channel's bundle
+# references the SAME operand repository and tag (oc-mirror-dev:shared-operand) but pins
+# a DIFFERENT digest via the "repo:tag@sha256:..." form. oc-mirror stores tag+digest
+# related images in the local cache under the tag only, so the two digests collide on a
+# single cache tag and the archive keeps blob data for only one of them.
+#
+# Expected (after fix): both related-image digests are archived and pushed, resolvable by
+# digest at the destination. Before fix: one digest's blobs are missing from the tar and
+# it is reported as "manifest unknown" at the destination.
+#
+# NOTE: requires the test-catalog-tag-digest-collision catalog image to be built and
+# pushed - see tests/integration/image-builders/operator/catalogs/README.md.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-tag-digest-collision
+    packages:
+    - name: collisiontest
+      channels:
+      - name: alpha
+      - name: stable

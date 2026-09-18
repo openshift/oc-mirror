@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
 )
 
@@ -155,6 +157,44 @@ func (r *Registry) ListTags(ctx context.Context, repo string) ([]string, error) 
 	}
 
 	return remote.List(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+}
+
+// ManifestExistsByDigest reports whether a manifest with the given digest can be
+// resolved in the repository. It resolves the image strictly by digest (repo@sha256:...),
+// so it detects images that were pushed by revision even when no tag points at them.
+// A missing manifest (HTTP 404 / MANIFEST_UNKNOWN) returns (false, nil); any other
+// error is returned to the caller.
+func (r *Registry) ManifestExistsByDigest(ctx context.Context, repo, digest string) (bool, error) {
+	ref, err := name.NewDigest(fmt.Sprintf("%s/%s@%s", r.Endpoint(), repo, digest), name.Insecure)
+	if err != nil {
+		return false, fmt.Errorf("couldn't create digest reference for %s@%s: %w", repo, digest, err)
+	}
+
+	_, err = remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+	if err != nil {
+		var terr *transport.Error
+		if errors.As(err, &terr) && terr.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("couldn't resolve manifest %s@%s: %w", repo, digest, err)
+	}
+	return true, nil
+}
+
+// TagDigest resolves the manifest digest that the given repository tag points to
+// (e.g. "sha256:abcd..."). It is used to assert that distinct tags reference the same
+// underlying digest.
+func (r *Registry) TagDigest(ctx context.Context, repo, tag string) (string, error) {
+	ref, err := name.NewTag(fmt.Sprintf("%s/%s:%s", r.Endpoint(), repo, tag), name.Insecure)
+	if err != nil {
+		return "", fmt.Errorf("couldn't create tag reference for %s:%s: %w", repo, tag, err)
+	}
+
+	desc, err := remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("couldn't resolve tag %s:%s: %w", repo, tag, err)
+	}
+	return desc.Digest.String(), nil
 }
 
 // IsCatalog returns true if the given repository and tag is an OLM operator catalog image.
