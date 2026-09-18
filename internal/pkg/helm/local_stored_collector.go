@@ -613,16 +613,19 @@ func prepareM2DCopyBatch(images []v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSc
 		}
 		src = imgSpec.ReferenceWithTransport
 
-		if imgSpec.IsImageByDigestOnly() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-			if len(tag) > 128 {
-				tag = tag[:127]
-			}
-			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, tag)
-		} else if imgSpec.IsImageByTagAndDigest() {
+		switch {
+		case imgSpec.IsImageByDigestOnly():
+			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.AlgorithmAndDigest())
+		// OCPBUGS-105878 - tag+digest: pull by digest. M2D keys the cache by digest
+		// (collision-safe); M2M has no cache, so keep the human tag at the destination.
+		case imgSpec.IsImageByTagAndDigest():
 			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, imgSpec.Domain, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
-			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
-		} else {
+			if lsc.Opts.IsMirrorToDisk() {
+				dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.CacheTag())
+			} else {
+				dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.DestinationTag())
+			}
+		default:
 			dest = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, destinationRegistry(), imgSpec.PathComponent, imgSpec.Tag)
 		}
 
@@ -649,21 +652,21 @@ func prepareD2MCopyBatch(images []v2alpha1.RelatedImage, generateV1TagsFromDiges
 			lsc.Log.Error("%s", err.Error())
 			return nil, err
 		}
-		if imgSpec.IsImageByDigestOnly() {
-			tag := fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-			if len(tag) > 128 {
-				tag = tag[:127]
-			}
-			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, tag)
+		switch {
+		case imgSpec.IsImageByDigestOnly():
+			digestTag := imgSpec.AlgorithmAndDigest()
+			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, digestTag)
 			if generateV1TagsFromDigests {
 				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, "latest")
 			} else {
-				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, tag)
+				dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, digestTag)
 			}
-		} else if imgSpec.IsImageByTagAndDigest() {
-			src = fmt.Sprintf("%s%s/%s@%s:%s", imgSpec.Transport, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
-			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
-		} else {
+		// OCPBUGS-105878 - tag+digest: read cache by digest key (as M2D wrote it),
+		// push to destination under the human tag.
+		case imgSpec.IsImageByTagAndDigest():
+			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.CacheTag())
+			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.DestinationTag())
+		default:
 			src = fmt.Sprintf("%s%s/%s:%s", consts.DockerProtocol, lsc.Opts.LocalStorageFQDN, imgSpec.PathComponent, imgSpec.Tag)
 			dest = fmt.Sprintf("%s/%s:%s", lsc.Opts.Destination, imgSpec.PathComponent, imgSpec.Tag)
 		}

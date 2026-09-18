@@ -1004,6 +1004,47 @@ func collectTarBlobPaths(tarPath, prefix string) []string {
 	return paths
 }
 
+// expectTarContainsBlobForDigests verifies that the tar archive in workDir contains the
+// content-addressed blob data file for every given digest (e.g. "sha256:abcd..."). Because
+// OCI blobs are content-addressed, the presence of blobs/sha256/<xx>/<hex>/data is proof
+// that the manifest/config/layer bytes for that digest were archived. A missing entry is
+// the fingerprint of the tag+digest cache collision: the digest has link pointers but no data.
+func expectTarContainsBlobForDigests(workDir string, digests ...string) {
+	matches, err := filepath.Glob(filepath.Join(workDir, "mirror_*.tar"))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(matches).NotTo(BeEmpty(), "no tar archive found")
+
+	entries := listTarEntries(matches[0])
+	Expect(entries).NotTo(BeEmpty(), "tar archive has no entries")
+
+	for _, d := range digests {
+		hex := strings.TrimPrefix(d, "sha256:")
+		Expect(len(hex)).To(BeNumerically(">", 2), "invalid digest %q", d)
+		blobPath := fmt.Sprintf("docker/registry/v2/blobs/sha256/%s/%s/data", hex[:2], hex)
+		expectTarContainsPath(entries, blobPath)
+	}
+}
+
+// expectManifestExistsByDigest asserts that a manifest with the given digest can be resolved
+// by digest in the destination registry. When an image is lost to a tag collision it is
+// reported as "manifest unknown" (HTTP 404), which fails this assertion.
+func expectManifestExistsByDigest(reg registry.Registry, repo, digest string) {
+	exists, err := reg.ManifestExistsByDigest(ctx, repo, digest)
+	Expect(err).NotTo(HaveOccurred(), "error resolving manifest %s@%s", repo, digest)
+	Expect(exists).To(BeTrue(),
+		"manifest %s@%s is missing from the destination registry (digest lost to a tag collision)", repo, digest)
+}
+
+// expectTagResolvesToDigest asserts that repo:tag in the destination registry resolves to
+// the given digest. Used to verify the inverse of the tag+digest collision: two distinct
+// tags that share a single digest must both survive and point to that digest.
+func expectTagResolvesToDigest(reg registry.Registry, repo, tag, digest string) {
+	got, err := reg.TagDigest(ctx, repo, tag)
+	Expect(err).NotTo(HaveOccurred(), "error resolving tag %s:%s", repo, tag)
+	Expect(got).To(Equal(digest),
+		"tag %s:%s should resolve to %s but resolved to %s", repo, tag, digest, got)
+}
+
 // expectTarDoesNotContainPath verifies that no tar entry contains the given substring.
 func expectTarDoesNotContainPath(entries []string, substring string) {
 	for _, entry := range entries {
