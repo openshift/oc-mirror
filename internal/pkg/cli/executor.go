@@ -33,7 +33,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
 	imgconfig "go.podman.io/image/v5/pkg/docker/config"
@@ -1283,21 +1282,7 @@ func (o *ExecutorSchema) RebuildCatalogs(ctx context.Context, operatorImgs v2alp
 					o.Log.Info("Rebuilding catalog %s", copyImage.Origin)
 				}
 				p := mpb.New(mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
-				spinner := p.AddSpinner(
-					1, mpb.BarFillerMiddleware(spinners.PositionSpinnerLeft),
-					mpb.BarWidth(3),
-					mpb.PrependDecorators(
-						decor.OnComplete(spinners.EmptyDecorator(), "\x1b[1;92m ✓ \x1b[0m"),
-						decor.OnAbort(spinners.EmptyDecorator(), "\x1b[1;91m ✗ \x1b[0m"),
-					),
-					mpb.AppendDecorators(
-						decor.Name("("),
-						decor.Elapsed(decor.ET_STYLE_GO),
-						decor.Name(") Rebuilding catalog "+copyImage.Origin+" "),
-					),
-					mpb.BarFillerClearOnComplete(),
-					spinners.BarFillerClearOnAbort(),
-				)
+				spinner := spinners.AddSpinner(p, "Rebuilding catalog "+copyImage.Origin)
 				ref, err := image.ParseRef(copyImage.Origin)
 				if err != nil {
 					spinner.Abort(false)
