@@ -1,6 +1,6 @@
 module github.com/openshift/oc-mirror/v2
 
-go 1.26.3
+go 1.26.5
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
@@ -107,7 +107,7 @@ require (
 	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/cel-go v0.29.2 // indirect
+	github.com/google/cel-go v0.31.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
@@ -146,7 +146,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/gomega v1.42.1 // indirect
+	github.com/onsi/gomega v1.43.0 // indirect
 	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/opencontainers/selinux v1.15.1 // indirect
 	github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda // indirect
@@ -214,14 +214,14 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260729162451-8efbd57d26e0 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiextensions-apiserver v0.36.3 // indirect
+	k8s.io/apiextensions-apiserver v0.36.4 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
 	k8s.io/component-base v0.37.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
@@ -236,3 +236,14 @@ require (
 )
 
 tool github.com/openshift/build-machinery-go
+
+// CLID-717 needs declcfg.RelatedImage.Labels, which is not released yet.
+// TODO: drop this replace once https://github.com/operator-framework/operator-registry/pull/2089 (OPRUN-4727)
+// merges and a release of github.com/operator-framework/operator-registry carries RelatedImage.Labels.
+replace github.com/operator-framework/operator-registry => github.com/hongkailiu/operator-registry v0.0.0-20260916134742-35aa11c2c1f1
+
+// Required by the operator-registry replace above: Go ignores the replace directives of dependencies,
+// so the one operator-registry declares for operator-framework/api has to be repeated here.
+// TODO: drop this replace once https://github.com/operator-framework/api/pull/524 (OPRUN-4764) merges
+// and a release of github.com/operator-framework/api carries RelatedImage.Labels.
+replace github.com/operator-framework/api => github.com/hongkailiu/operator-framework-api v0.0.0-20260915192809-dc0d2ebcaa20

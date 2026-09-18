@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/Masterminds/semver/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -80,6 +81,16 @@ func validateOperator(ctlg v2alpha1.Operator) []error {
 				errs = append(errs, fmt.Errorf(
 					"catalog %q: operator %q: minVersion %q must respect semantic versioning notation",
 					ctlg.Catalog, pkg.Name, pkg.MinVersion,
+				))
+			}
+		}
+
+		// CLID-717 reject malformed selectors at configuration load time rather than
+		// halfway through a mirror.
+		for _, selector := range pkg.Selectors {
+			if _, err := metav1.LabelSelectorAsSelector(selector); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"catalog %q: operator %q: invalid selector: %w", ctlg.Catalog, pkg.Name, err,
 				))
 			}
 		}
