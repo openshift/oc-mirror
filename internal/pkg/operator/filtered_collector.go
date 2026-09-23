@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/vbauerster/mpb/v8"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -282,6 +283,12 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	}
 	o.Log.Debug("Found %d related images for catalog %q", len(ri), op.Catalog)
 
+	// OCPBUGS-61236: when deleting a version filter, do not remove related images
+	// that sibling versions of the same package still reference.
+	if o.Opts.IsDeleteMode() && hasVersionConstraints(op) && !isFullCatalog(op) && result.DeclConfig != nil {
+		ri = o.excludeSharedRelatedForDelete(ctx, op, imgSpec, catalogDigest, result.DeclConfig, ri, copyImageSchemaMap)
+	}
+
 	// OCPBUGS-45059
 	// TODO: remove me when the migration from oc-mirror v1 to v2 ends
 	if imgSpec.Transport == consts.OciProtocol && o.isDeleteOfV1CatalogFromDisk() {
@@ -366,6 +373,36 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 	}
 
 	return o.Manifest.ImageDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
+}
+
+// excludeSharedRelatedForDelete reloads the package-wide catalog view and drops
+// related images from the delete set that sibling versions still reference.
+func (o FilterCollector) excludeSharedRelatedForDelete(
+	ctx context.Context,
+	op v2alpha1.Operator,
+	imgSpec image.ImageSpec,
+	catalogDigest string,
+	deleteDC *declcfg.DeclarativeConfig,
+	deleteRelated map[string][]v2alpha1.RelatedImage,
+	_ *v2alpha1.CopyImageSchemaMap,
+) map[string][]v2alpha1.RelatedImage {
+	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
+	dcPath, err := o.ctlgHandler.ExtractOCIConfigLayers(imgSpec, imageIndexDir)
+	if err != nil {
+		o.Log.Warn("unable to load full catalog for shared-image delete filtering: %v", err)
+		return deleteRelated
+	}
+	originalDC, err := o.ctlgHandler.GetDeclarativeConfig(ctx, dcPath)
+	if err != nil {
+		o.Log.Warn("unable to parse full catalog for shared-image delete filtering: %v", err)
+		return deleteRelated
+	}
+	packageDC, err := filterCatalog(ctx, *originalDC, packagesWithoutVersionBounds(op))
+	if err != nil {
+		o.Log.Warn("unable to filter package-wide catalog for shared-image delete filtering: %v", err)
+		return deleteRelated
+	}
+	return excludeRelatedImagesSharedWithSiblingBundles(o.Log, deleteRelated, deleteDC, packageDC)
 }
 
 func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring
