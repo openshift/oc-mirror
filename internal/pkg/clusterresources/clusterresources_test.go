@@ -12,6 +12,7 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
@@ -1026,6 +1027,87 @@ func TestCatalogSourceGenerator(t *testing.T) {
 
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
 	})
+
+	// OCPBUGS-69908: truncating targetTag "logging-clo-v6.2.7-coo-v1.3.1" to 12 chars
+	// produced suffix "logging-clo-" which fails DNS-1035 (must not end with '-').
+	t.Run("Testing GenerateCatalogSource with targetTag truncated mid-hyphen : should pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetCatalog: "redhat/redhat-operator-index-logging",
+								TargetTag:     "logging-clo-v6.2.7-coo-v1.3.1",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		assert.NoError(t, err)
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		assert.NoError(t, err)
+		assert.Len(t, csFiles, 1)
+
+		expectedCSName := "cs-redhat-operator-index-logging-logging-clo"
+		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+		assert.True(t, isValidRFC1123(customResourceName), "name %q must be RFC1123", customResourceName)
+		assert.Empty(t, validation.IsDNS1035Label(customResourceName), "name %q must be DNS-1035", customResourceName)
+		assert.Equal(t, expectedCSName, customResourceName)
+		assert.False(t, strings.HasSuffix(customResourceName, "-"))
+	})
+}
+
+func TestRFC1035NameSuffix(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "OCPBUGS-69908 truncation leaves trailing hyphen",
+			raw:  "logging-clo-v6.2.7-coo-v1.3.1",
+			want: "logging-clo",
+		},
+		{
+			name: "short tag unchanged when already valid",
+			raw:  "v4.20",
+			want: "v4-20",
+		},
+		{
+			name: "digest prefix stays alphanumeric",
+			raw:  "7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			want: "7c4ef7434c97",
+		},
+		{
+			name: "only hyphens falls back to 0",
+			raw:  "------------extra",
+			want: "0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, rfc1035NameSuffix(tt.raw))
+		})
+	}
 }
 
 func TestClusterCatalogGenerator(t *testing.T) {
