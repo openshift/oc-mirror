@@ -181,6 +181,10 @@ func (o *ImageBlobGatherer) imageSignatureBlobs(ctx context.Context, in internal
 
 	manifestBytes, mime, err := o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, ref.ReferenceWithTransport, nil)
 	if err != nil {
+		if o.opts.Global.SignatureVerification == mirror.SignatureVerificationBestEffort &&
+			mirror.IsSignatureNotFoundError(err) {
+			return nil, nil
+		}
 		return nil, &SignatureBlobGathererError{SigError: err}
 	}
 

@@ -195,6 +195,19 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	//nolint:wrapcheck // context will be added by the calling function
 	return retry.IfNecessary(ctx, func() error {
 		manifestBytes, err := o.mc.CopyImage(ctx, policyContext, destRef, srcRef, co)
+		if err != nil && !opts.RemoveSignatures &&
+			opts.SrcImage.global.SignatureVerification == SignatureVerificationBestEffort &&
+			IsSignatureNotFoundError(err) {
+			coRetry := *co
+			coRetry.RemoveSignatures = true
+			sourceCtxRetry := *co.SourceCtx
+			sourceCtxRetry.RegistriesDirPath = ""
+			coRetry.SourceCtx = &sourceCtxRetry
+			destCtxRetry := *co.DestinationCtx
+			destCtxRetry.RegistriesDirPath = ""
+			coRetry.DestinationCtx = &destCtxRetry
+			manifestBytes, err = o.mc.CopyImage(ctx, policyContext, destRef, srcRef, &coRetry)
+		}
 		if err != nil {
 			return err
 		}
@@ -331,6 +344,15 @@ func (o *Mirror) delete(ctx context.Context, image string, opts *CopyOptions) er
 		}
 		return nil
 	}, retryOptionsFrom(opts))
+}
+
+func IsSignatureNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "reading signatures") &&
+		(strings.Contains(msg, "name unknown") || strings.Contains(msg, "manifest unknown"))
 }
 
 // determinePlatformSelection determines the image list selection and platform filters
