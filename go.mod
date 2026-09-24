@@ -26,7 +26,7 @@ require (
 	go.podman.io/common v0.65.0
 	go.podman.io/image/v5 v5.37.0
 	go.podman.io/storage v1.60.0
-	golang.org/x/crypto v0.47.0
+	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/term v0.40.0
@@ -233,3 +233,5 @@ require (
 replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.48.0-sec.2
 
 tool github.com/openshift/build-machinery-go
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.50.0-sec.4
