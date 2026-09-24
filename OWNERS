@@ -1,11 +1,11 @@
 reviewers:
   - aguidirh
-  - r4f4
+  - rdossant-rh
   - adolfo-ab
   - dorzel
 approvers:
   - aguidirh
-  - r4f4
+  - rdossant-rh
   - adolfo-ab
 component: oc
 subcomponent: oc-mirror
