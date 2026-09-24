@@ -26,10 +26,10 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/vbauerster/mpb/v8 v8.9.3
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.40.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
-	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/term v0.31.0
+	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/term v0.34.0
 	helm.sh/helm/v3 v3.17.0
 	k8s.io/api v0.32.0
 	k8s.io/apimachinery v0.32.0
@@ -220,10 +220,10 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/oauth2 v0.29.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
@@ -246,3 +246,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.18.1 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )
+
+replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.41.0-sec.3
