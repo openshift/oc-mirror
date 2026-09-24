@@ -240,6 +240,12 @@ func IsErrorRetryable(err error) bool {
 		// Bare 429 sentinel from httpResponseToError; retryable by neither this
 		// switch nor go.podman.io/common.
 		return true
+	case isServerClosedIdleConnection(err):
+		// net/http returns an unexported sentinel ("http: server closed idle
+		// connection") when Quay/registry drops an idle upload connection.
+		// Upstream retry.IsErrorRetryable does not treat it as retryable, so
+		// --retry-times is a no-op (OCPBUGS-100297).
+		return true
 	case errors.As(err, &httpError):
 		// 429: registries under sustained load (notably AWS ECR) rate-limit rather than
 		// returning 5xx. Upstream only retries this shape when it parses as errcode.Error.
@@ -257,6 +263,18 @@ func IsErrorRetryable(err error) bool {
 		// Delegate the remaining checks to containers/common
 		return retry.IsErrorRetryable(err)
 	}
+}
+
+// isServerClosedIdleConnection reports whether err (or any wrapped cause) is the
+// net/http idle-connection reset: "http: server closed idle connection".
+func isServerClosedIdleConnection(err error) bool {
+	for err != nil {
+		if strings.Contains(err.Error(), "http: server closed idle connection") {
+			return true
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
 }
 
 // check exists - checks if image exists
