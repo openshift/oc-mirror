@@ -332,3 +332,62 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateMaxNestedPaths(t *testing.T) {
+	type testCase struct {
+		caseName       string
+		destination    string
+		maxNestedPaths int
+		expectedError  string
+	}
+	testCases := []testCase{
+		{
+			caseName:       "max 0 is a no-op",
+			destination:    "docker://registry.example.com:8443",
+			maxNestedPaths: 0,
+		},
+		{
+			caseName:       "bare registry with max 1 should fail",
+			destination:    "docker://registry.example.com:8443",
+			maxNestedPaths: 1,
+			expectedError:  "the max-nested-paths value (1) must be strictly higher than the number of path-components in the destination  - try increasing the value",
+		},
+		{
+			caseName:       "bare registry with max 2 should pass",
+			destination:    "docker://registry.example.com:8443",
+			maxNestedPaths: 2,
+		},
+		{
+			caseName:       "single path component with max 1 should fail",
+			destination:    "docker://registry.example.com:8443/org",
+			maxNestedPaths: 1,
+			expectedError:  "the max-nested-paths value (1) must be strictly higher than the number of path-components in the destination org - try increasing the value",
+		},
+		{
+			caseName:       "single path component with max 2 should pass",
+			destination:    "docker://registry.example.com:8443/org",
+			maxNestedPaths: 2,
+		},
+		{
+			caseName:       "two path components with max 2 should fail",
+			destination:    "docker://registry.example.com:8443/org/repo",
+			maxNestedPaths: 2,
+			expectedError:  "the max-nested-paths value (2) must be strictly higher than the number of path-components in the destination org/repo - try increasing the value",
+		},
+		{
+			caseName:       "two path components with max 3 should pass",
+			destination:    "docker://registry.example.com:8443/org/repo",
+			maxNestedPaths: 3,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.caseName, func(t *testing.T) {
+			err := ValidateMaxNestedPaths(tc.destination, tc.maxNestedPaths)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tc.expectedError)
+		})
+	}
+}

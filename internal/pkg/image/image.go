@@ -130,6 +130,26 @@ func (i ImageSpec) IsImageByTagAndDigest() bool {
 	return len(strings.Split(i.Reference, ":")) > 2 && strings.Contains(i.Reference, "@")
 }
 
+// ValidateMaxNestedPaths checks that maxNestedPaths is strictly greater than the
+// number of path components in the docker destination, matching v1 checkDockerReference.
+// destination may be a bare registry (e.g. docker://host:8443) with no path prefix.
+func ValidateMaxNestedPaths(destination string, maxNestedPaths int) error {
+	if maxNestedPaths <= 0 {
+		return nil
+	}
+	ref := strings.TrimPrefix(destination, consts.DockerProtocol)
+	path := ""
+	if i := strings.Index(ref, "/"); i >= 0 {
+		path = ref[i+1:]
+	}
+	// Match v1: strings.Split(RepositoryName(), "/") — empty path yields one empty component.
+	depth := strings.Split(path, "/")
+	if len(depth) >= maxNestedPaths {
+		return fmt.Errorf("the max-nested-paths value (%d) must be strictly higher than the number of path-components in the destination %s - try increasing the value", maxNestedPaths, path)
+	}
+	return nil
+}
+
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	if maxNestedPaths == 0 {
 		return imageRef, nil
