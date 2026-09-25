@@ -279,7 +279,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Global.SinceString, "since", "", "Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored")
 	cmd.Flags().DurationVar(&opts.Global.CommandTimeout, "image-timeout", 10*time.Minute, "Timeout for mirroring an image")
 	cmd.Flags().BoolVar(&opts.Global.SecurePolicy, "secure-policy", false, "If set, will enable signature verification (secure policy for signature verification)")
-	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
+	cmd.PersistentFlags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "If set, generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB)")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", false, "Do not copy image signature")

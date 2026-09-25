@@ -10,6 +10,7 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
@@ -99,6 +100,22 @@ func TestExecutorValidateDelete(t *testing.T) {
 		err = ex.ValidateDelete([]string{consts.DockerProtocol + "test"})
 		assert.Equal(t, "file not found ../../nothing", err.Error())
 	})
+}
+
+// TestWithMaxNestedPathsForDeleteGenerate
+func TestWithMaxNestedPathsForDeleteGenerate(t *testing.T) {
+	in := []v2alpha1.CopyImageSchema{
+		{
+			Source:      "docker://registry.redhat.io/compliance/openshift-file-integrity-rhel8-operator@sha256:627ef29a0a3288a31a036da3c3628c5a47ce243c3b671c7288f25dddcb6ff8ae",
+			Destination: "docker://amuhamme-bastion.mycluster.com:8443/amuhamme/compliance/openshift-file-integrity-rhel8-operator:sha256-627ef29a0a3288a31a036da3c3628c5a47ce243c3b671c7288f25dddcb6ff8ae",
+		},
+	}
+	out, err := withMaxNestedPaths(in, 2)
+	require.NoError(t, err)
+	require.Equal(t,
+		"docker://amuhamme-bastion.mycluster.com:8443/amuhamme/compliance-openshift-file-integrity-rhel8-operator:sha256-627ef29a0a3288a31a036da3c3628c5a47ce243c3b671c7288f25dddcb6ff8ae",
+		out[0].Destination,
+	)
 }
 
 // TestExecutorCompleteDelete
