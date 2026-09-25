@@ -120,6 +120,13 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 `
 )
 
+// localStorageHost - the address oc-mirror's local storage (cache) registry binds to.
+// The cache is only ever consumed by this process, so it is kept on the loopback
+// interface: an empty host in the registry config would bind every interface instead.
+// The literal address is used rather than "localhost" so that the bind address and the
+// reference host cannot diverge through name resolution.
+const localStorageHost = "127.0.0.1"
+
 var (
 	errWrongWorkingDirProtocol error = fmt.Errorf("when --workspace is used, it must have file:// prefix")
 	errConflictingCacheValues        = fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
@@ -576,7 +583,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
-	o.Opts.LocalStorageFQDN = "localhost:" + strconv.Itoa(int(o.Opts.Global.Port))
+	o.Opts.LocalStorageFQDN = localStorageHost + ":" + strconv.Itoa(int(o.Opts.Global.Port))
 
 	err = o.setupWorkingDir()
 	if err != nil {
@@ -672,7 +679,7 @@ storage:
   filesystem:
     rootdirectory: {{ .LocalStorageDisk }}
 http:
-  addr: :{{ .LocalStoragePort }}
+  addr: {{ .LocalStorageHost }}:{{ .LocalStoragePort }}
   headers:
     X-Content-Type-Options: [nosniff]
       #auth:
@@ -688,6 +695,7 @@ validation:
 	var buff bytes.Buffer
 	type RegistryConfig struct {
 		LocalStorageDisk string
+		LocalStorageHost string
 		LocalStoragePort int
 		LogLevel         string
 		LogAccessOff     bool
@@ -695,6 +703,7 @@ validation:
 
 	rc := RegistryConfig{
 		LocalStorageDisk: o.LocalStorageDisk,
+		LocalStorageHost: localStorageHost,
 		LocalStoragePort: int(o.Opts.Global.Port),
 		LogLevel:         o.Opts.Global.LogLevel,
 		LogAccessOff:     true,
@@ -786,8 +795,11 @@ func (o *ExecutorSchema) stopLocalRegistry(ctx context.Context) {
 
 // isLocalStoragePortBound - private utility to check if port is bound
 func (o *ExecutorSchema) isLocalStoragePortBound() bool {
-	// Check if the port is already bound
-	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", o.Opts.Global.Port))
+	// Check if the port is already bound, on the same address the local storage
+	// registry will actually bind to, so that this probe cannot succeed while the
+	// registry itself fails to listen.
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", localStorageHost, o.Opts.Global.Port))
 	if err != nil {
 		return true
 	}
