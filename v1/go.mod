@@ -23,7 +23,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.18.4
 	k8s.io/apimachinery v0.33.2
@@ -273,3 +273,5 @@ replace github.com/distribution/distribution/v3 => github.com/aguidirh/distribut
 replace github.com/mholt/archiver/v3 => github.com/aguidirh/archiver/v3 v3.5.0-ocmirror1
 
 replace golang.org/x/crypto => github.com/openshift-sustaining/crypto v0.48.0-sec.2
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.50.0-sec.4
