@@ -294,6 +294,8 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	return nil
 }
 
+// generateDeleteFile collects images and writes delete-images.yaml,
+// applying --max-nested-paths flattening when configured.
 func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	collectorSchema, collectErr := o.CollectAll(ctx)
 

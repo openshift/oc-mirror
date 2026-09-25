@@ -102,6 +102,7 @@ func TestExecutorValidateDelete(t *testing.T) {
 	})
 }
 
+// TestWithMaxNestedPathsForDeleteGenerate
 func TestWithMaxNestedPathsForDeleteGenerate(t *testing.T) {
 	in := []v2alpha1.CopyImageSchema{
 		{
