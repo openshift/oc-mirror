@@ -257,6 +257,7 @@ func TestImage_TestParseRef(t *testing.T) {
 	}
 }
 
+// TestImage_TestWithMaxNestedPaths
 func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 	type testCase struct {
 		caseName       string
@@ -333,6 +334,7 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 	}
 }
 
+// TestValidateMaxNestedPaths
 func TestValidateMaxNestedPaths(t *testing.T) {
 	type testCase struct {
 		caseName       string

@@ -150,6 +150,7 @@ func ValidateMaxNestedPaths(destination string, maxNestedPaths int) error {
 	return nil
 }
 
+// WithMaxNestedPaths flattens destination path components that exceed maxNestedPaths.
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	if maxNestedPaths == 0 {
 		return imageRef, nil
