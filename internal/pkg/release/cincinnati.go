@@ -350,7 +350,17 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 
 	var newDownloads []v2alpha1.CopyImageSchema
 	if channel.ShortestPath {
-		current, newest, updates, err := CalculateUpgrades(ctx, cs, channel.Name, channel.Name, first, last)
+		// OCPBUGS-85582: when min/max span multiple minors on one ISC channel entry
+		// (e.g. stable-4.14 with 4.12.40→4.14.10), same-channel GetUpdates cannot
+		// see intermediate minors. Use cross-channel CalculateUpgrades instead.
+		sourceCh, targetCh, err := shortestPathChannels(channel.Name, first, last)
+		if err != nil {
+			return allImages, err
+		}
+		if sourceCh != targetCh {
+			cs.Log.Info("shortestPath spans minors %s → %s; calculating cross-channel upgrade path", sourceCh, targetCh)
+		}
+		current, newest, updates, err := CalculateUpgrades(ctx, cs, sourceCh, targetCh, first, last)
 		if err != nil {
 			return allImages, err
 		}
@@ -428,4 +438,36 @@ func gatherUpdates(log clog.PluggableLoggerInterface, current, newest cincinnati
 		allImages = append(allImages, img)
 	}
 	return allImages
+}
+
+// shortestPathChannels returns Cincinnati source/target channel names for a
+// ShortestPath plot. Same minor keeps a single channel; cross-minor ranges use
+// the channel prefix with each version's major.minor (OCPBUGS-85582).
+func shortestPathChannels(channelName string, first, last semver.Version) (source, target string, err error) {
+	if first.Major == last.Major && first.Minor == last.Minor {
+		return channelName, channelName, nil
+	}
+	source, err = channelNameForRelease(channelName, first)
+	if err != nil {
+		return "", "", err
+	}
+	target, err = channelNameForRelease(channelName, last)
+	if err != nil {
+		return "", "", err
+	}
+	return source, target, nil
+}
+
+// channelNameForRelease builds "<prefix>-<major>.<minor>" from an ISC channel
+// name (e.g. stable-4.14 + 4.12.40 → stable-4.12).
+func channelNameForRelease(channelName string, ver semver.Version) (string, error) {
+	idx := strings.LastIndex(channelName, "-")
+	if idx < 0 {
+		return "", fmt.Errorf("invalid channel name %s", channelName)
+	}
+	prefix := channelName[:idx]
+	if prefix == "" {
+		return "", fmt.Errorf("invalid channel name %s", channelName)
+	}
+	return fmt.Sprintf("%s-%d.%d", prefix, ver.Major, ver.Minor), nil
 }
