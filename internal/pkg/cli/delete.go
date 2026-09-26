@@ -158,7 +158,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 			return err
 		}
 		converted := cfg.(v2alpha1.DeleteImageSetConfiguration)
-		o.Log.Trace("delete imagesetconfig : %v ", converted)
+		o.Log.Trace("delete imagesetconfig summary: %s", config.DeleteImageSetConfigurationLogSummary(converted))
 		if converted.Kind != "DeleteImageSetConfiguration" {
 			return fmt.Errorf("using the delete functionality requires the 'DeleteImageSetConfiguration' kind set in the yaml file")
 		}
@@ -171,6 +171,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 					Operators:        converted.Delete.Operators,
 					AdditionalImages: converted.Delete.AdditionalImages,
 					Helm:             converted.Delete.Helm,
+					BlockedImages:    converted.Delete.BlockedImages,
 				},
 			},
 		}
@@ -263,7 +264,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 // RunDelete - cobra run
 func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	startTime := time.Now()
-	o.Log.Debug("config %v", o.Config)
+	o.Log.Debug("delete config summary: %s", config.ImageSetConfigurationLogSummary(o.Config))
 	o.Log.Debug(startMessage, o.Opts.Global.Port)
 
 	go o.startLocalRegistry()
