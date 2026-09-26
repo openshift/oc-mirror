@@ -155,6 +155,86 @@ func TestExecutorCompleteDelete(t *testing.T) {
 			t.Fatalf("should fail")
 		}
 	})
+
+	t.Run("Testing Executor : complete delete with --delete-yaml-file sets WorkingDir", func(t *testing.T) {
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			CacheDir:     "/tmp/",
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+
+		workspace := t.TempDir()
+		workingDirPath := filepath.Join(workspace, workingDir)
+		deleteDirPath := filepath.Join(workingDirPath, deleteSubDir)
+		assert.NoError(t, os.MkdirAll(deleteDirPath, 0o755))
+		deleteYamlPath := filepath.Join(deleteDirPath, "delete-images.yaml")
+		assert.NoError(t, os.WriteFile(deleteYamlPath, []byte("kind: DeleteImageList\n"), 0o644))
+
+		opts.Global.DeleteGenerate = false
+		opts.Global.DeleteYaml = deleteYamlPath
+		opts.Global.WorkingDir = ""
+
+		ex := &DeleteSchema{
+			ExecutorSchema: ExecutorSchema{
+				Log:     log,
+				Opts:    &opts,
+				MakeDir: MakeDir{},
+				LogsDir: "/tmp/",
+			},
+		}
+
+		err := ex.CompleteDelete([]string{consts.DockerProtocol + "myregistry:5000"})
+		assert.NoError(t, err)
+		assert.Equal(t, workingDirPath, ex.Opts.Global.WorkingDir)
+		assert.Equal(t, filepath.Join(workingDirPath, logsDir), ex.LogsDir)
+		_, err = os.Stat(ex.LogsDir)
+		assert.NoError(t, err)
+	})
+}
+
+func TestWorkingDirFromDeleteYaml(t *testing.T) {
+	t.Run("standard delete yaml path", func(t *testing.T) {
+		root := t.TempDir()
+		yamlPath := filepath.Join(root, "workspace", workingDir, deleteSubDir, "delete-images.yaml")
+		assert.NoError(t, os.MkdirAll(filepath.Dir(yamlPath), 0o755))
+		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o644))
+
+		got, err := workingDirFromDeleteYaml(yamlPath)
+		assert.NoError(t, err)
+		assert.Equal(t, filepath.Join(root, "workspace", workingDir), got)
+	})
+
+	t.Run("delete-id style filename still under delete/", func(t *testing.T) {
+		root := t.TempDir()
+		yamlPath := filepath.Join(root, workingDir, deleteSubDir, "delete-images-delete1-test.yaml")
+		assert.NoError(t, os.MkdirAll(filepath.Dir(yamlPath), 0o755))
+		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o644))
+
+		got, err := workingDirFromDeleteYaml(yamlPath)
+		assert.NoError(t, err)
+		assert.Equal(t, filepath.Join(root, workingDir), got)
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		_, err := workingDirFromDeleteYaml("")
+		assert.EqualError(t, err, "the --delete-yaml-file flag is mandatory when not using the --generate flag")
+	})
 }
 
 // TestExecutorRunDelete
