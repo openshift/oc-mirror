@@ -433,6 +433,161 @@ func TestPrepareM2MCopyBatch(t *testing.T) {
 	}
 }
 
+// TestPrepareCopyBatchTagDigestCollision reproduces OCPBUGS-105878 at the operator
+// collector level: two related images share the same repository and tag but pin
+// different digests (the "repo:tag@sha256:..." form). Before the fix both collapsed to
+// a single tag-only cache destination, so the archive dropped one digest's blobs.
+// After the fix, mirrorToDisk keys the cache by digest (distinct destinations, no
+// collision) and diskToMirror reads each back by its own digest key while pushing both
+// to the shared human tag at the destination.
+func TestPrepareCopyBatchTagDigestCollision(t *testing.T) {
+	log := clog.New("trace")
+	tempDir := t.TempDir()
+
+	const (
+		digestA = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+		digestB = "1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad"
+	)
+	imgA := "quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:" + digestA
+	imgB := "quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:" + digestB
+
+	relatedImages := map[string][]v2alpha1.RelatedImage{
+		"collisiontest": {
+			{Name: "operandA", Image: imgA, Type: v2alpha1.TypeOperatorRelatedImage},
+			{Name: "operandB", Image: imgB, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+	}
+
+	t.Run("MirrorToDisk keys the cache by digest (no collision)", func(t *testing.T) {
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+		res, err := ex.prepareM2DCopyBatch(relatedImages)
+		assert.NoError(t, err)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digestA,
+				Destination: consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digestA,
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digestB,
+				Destination: consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digestB,
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
+
+		// Core property: the two cache destinations must differ, otherwise one digest's
+		// blobs would be lost during archiving.
+		assert.Len(t, res, 2)
+		assert.NotEqual(t, res[0].Destination, res[1].Destination, "cache destinations must not collide")
+	})
+
+	t.Run("DiskToMirror reads each digest from the cache, pushes both to the human tag", func(t *testing.T) {
+		ex := setupFilterCollector_DiskToMirror(tempDir, log)
+		res, err := ex.prepareD2MCopyBatch(relatedImages)
+		assert.NoError(t, err)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digestA,
+				Destination: consts.DockerProtocol + "localhost:5000/test/oc-mirror/oc-mirror-dev:shared-operand",
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digestB,
+				Destination: consts.DockerProtocol + "localhost:5000/test/oc-mirror/oc-mirror-dev:shared-operand",
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
+
+		// Core property: distinct cache sources (both readable by digest) that resolve to
+		// the same human tag at the destination.
+		assert.Len(t, res, 2)
+		assert.NotEqual(t, res[0].Source, res[1].Source, "cache sources must be distinct per digest")
+		assert.Equal(t, res[0].Destination, res[1].Destination, "both digests push to the shared human tag")
+	})
+}
+
+// TestPrepareCopyBatchSameDigestDifferentTags covers the inverse of OCPBUGS-105878: two
+// related images share the same digest but carry different tags. The digest-keyed cache
+// is content-addressed, so both share a single cache entry (stored/archived once), while
+// diskToMirror recreates BOTH human tags at the destination pointing to that one digest.
+// This guards against a regression where digest-keying the cache could drop a tag.
+func TestPrepareCopyBatchSameDigestDifferentTags(t *testing.T) {
+	log := clog.New("trace")
+	tempDir := t.TempDir()
+
+	const digest = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+	imgA := "quay.io/oc-mirror/oc-mirror-dev:tag-one@sha256:" + digest
+	imgB := "quay.io/oc-mirror/oc-mirror-dev:tag-two@sha256:" + digest
+
+	relatedImages := map[string][]v2alpha1.RelatedImage{
+		"sharedigest": {
+			{Name: "tagOne", Image: imgA, Type: v2alpha1.TypeOperatorRelatedImage},
+			{Name: "tagTwo", Image: imgB, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+	}
+
+	t.Run("MirrorToDisk shares a single digest-keyed cache entry", func(t *testing.T) {
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+		res, err := ex.prepareM2DCopyBatch(relatedImages)
+		assert.NoError(t, err)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digest,
+				Destination: consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digest,
+				Destination: consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
+
+		// Core property: both images resolve to the SAME digest-keyed cache entry.
+		assert.Len(t, res, 2)
+		assert.Equal(t, res[0].Destination, res[1].Destination, "same digest must share one cache entry")
+	})
+
+	t.Run("DiskToMirror recreates both tags from the shared cache entry", func(t *testing.T) {
+		ex := setupFilterCollector_DiskToMirror(tempDir, log)
+		res, err := ex.prepareD2MCopyBatch(relatedImages)
+		assert.NoError(t, err)
+
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Destination: consts.DockerProtocol + "localhost:5000/test/oc-mirror/oc-mirror-dev:tag-one",
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "localhost:9999/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Destination: consts.DockerProtocol + "localhost:5000/test/oc-mirror/oc-mirror-dev:tag-two",
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+		}
+		assert.ElementsMatch(t, expected, res)
+
+		// Core property: one shared cache source recreates BOTH distinct human tags.
+		assert.Len(t, res, 2)
+		assert.Equal(t, res[0].Source, res[1].Source, "both tags are read from the one shared cache entry")
+		assert.NotEqual(t, res[0].Destination, res[1].Destination, "both distinct tags must be recreated")
+	})
+}
+
 func TestOperatorCollector(t *testing.T) {
 	log := clog.New("trace")
 

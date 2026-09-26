@@ -779,10 +779,7 @@ func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag,
 	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
 		tag = releaseTag + "-" + imgName
 	case imgSpec.IsImageByDigestOnly():
-		tag = fmt.Sprintf("%s-%s", imgSpec.Algorithm, imgSpec.Digest)
-		if len(tag) > 128 {
-			tag = tag[:127]
-		}
+		tag = imgSpec.AlgorithmAndDigest()
 	}
 
 	return tag

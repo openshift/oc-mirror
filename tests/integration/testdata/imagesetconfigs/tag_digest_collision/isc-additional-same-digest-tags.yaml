@@ -1,0 +1,15 @@
+# ImageSetConfig for the INVERSE of the tag+digest cache collision (OCPBUGS-105878).
+#
+# Both entries reference the SAME repository AND digest but under two DIFFERENT tags via
+# the "repo:tag@sha256:..." form. Because the local cache is keyed by digest, both share a
+# single content-addressed cache entry (stored/archived once). diskToMirror must recreate
+# BOTH human tags at the destination, each pointing to that one digest.
+#
+# This needs no operator catalog - it uses an existing public digest directly. The tags
+# themselves need not exist at the source since the image is pulled by digest.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:same-digest-a@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
+  - name: quay.io/oc-mirror/oc-mirror-dev:same-digest-b@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
