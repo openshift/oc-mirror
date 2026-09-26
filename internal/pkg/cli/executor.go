@@ -437,6 +437,12 @@ func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-
 	if strings.Contains(dest[0], consts.DockerProtocol) && o.Opts.Global.WorkingDir == "" && o.Opts.Global.From == "" {
 		return fmt.Errorf("when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
 	}
+	// OCPBUGS-127439: match v1 — reject max-nested-paths that are not strictly greater than dest path depth
+	if strings.Contains(dest[0], consts.DockerProtocol) && o.Opts.Global.MaxNestedPaths > 0 {
+		if err := image.ValidateMaxNestedPaths(dest[0], o.Opts.Global.MaxNestedPaths); err != nil {
+			return err
+		}
+	}
 	if strings.Contains(dest[0], consts.FileProtocol) || strings.Contains(dest[0], consts.DockerProtocol) {
 		return nil
 	} else {
