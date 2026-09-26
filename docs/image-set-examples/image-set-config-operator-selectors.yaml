@@ -1,0 +1,37 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    channels:
+    - name: stable-4.18
+      minVersion: 4.18.1
+      maxVersion: 4.18.1
+    graph: true
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.18
+    packages:
+    # mirror the images without labels, the ones for CoolFeatureA, and the ones for
+    # GreatFeatureB that are version 1.2.3 and tier frontend
+    # logic OR between selectors, logic AND within a selector
+    - name: aws-load-balancer-operator
+      selectors:
+      - matchExpressions:
+        - key: CoolFeatureA
+          operator: Exists
+      - matchExpressions:
+        - key: GreatFeatureB
+          operator: Exists
+        - key: tier
+          operator: In
+          values:
+          - frontend
+        matchLabels:
+          version: "1.2.3"
+    # mirror everything except the images for CoolFeatureC
+    - name: 3scale-operator
+      selectors:
+      - matchExpressions:
+        - key: CoolFeatureC
+          operator: DoesNotExist
+    # no selectors: mirror only the images without labels (default, backward compatible)
+    - name: node-observability-operator

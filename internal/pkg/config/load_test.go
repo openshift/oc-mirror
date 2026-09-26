@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -103,6 +104,64 @@ func TestLoadConfig(t *testing.T) {
 						{Name: "ruby"},
 						{Name: "python"},
 						{Name: "nginx"},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid/OperatorPackageSelectors",
+			inline: `
+apiVersion: mirror.openshift.io/v2alpha1
+kind: ImageSetConfiguration
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.18
+    packages:
+    - name: aws-load-balancer-operator
+      selectors:
+      - matchExpressions:
+        - key: CoolFeatureA
+          operator: Exists
+      - matchExpressions:
+        - key: GreatFeatureB
+          operator: Exists
+        - key: tier
+          operator: In
+          values:
+          - frontend
+        matchLabels:
+          version: "1.2.3"
+    - name: node-observability-operator
+`,
+			assertion: require.NoError,
+			expConfig: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Operators: []v2alpha1.Operator{
+						{
+							Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.18",
+							IncludeConfig: v2alpha1.IncludeConfig{
+								Packages: []v2alpha1.IncludePackage{
+									{
+										Name: "aws-load-balancer-operator",
+										Selectors: []*metav1.LabelSelector{
+											{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists},
+												},
+											},
+											{
+												MatchLabels: map[string]string{"version": "1.2.3"},
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{Key: "GreatFeatureB", Operator: metav1.LabelSelectorOpExists},
+													{Key: "tier", Operator: metav1.LabelSelectorOpIn, Values: []string{"frontend"}},
+												},
+											},
+										},
+									},
+									{Name: "node-observability-operator"},
+								},
+							},
+						},
 					},
 				},
 			},
