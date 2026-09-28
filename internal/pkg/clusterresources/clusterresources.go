@@ -264,22 +264,9 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 
 	var csSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		if len(catalogSpec.Digest) >= hashTruncLen {
-			csSuffix = catalogSpec.Digest[:hashTruncLen]
-		} else {
-			csSuffix = catalogSpec.Digest
-		}
+		csSuffix = rfc1035NameSuffix(catalogSpec.Digest)
 	} else {
-		tag := catalogSpec.Tag
-		if len(tag) >= hashTruncLen {
-			csSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
-		} else {
-			csSuffix = strings.Map(toRFC1035, tag)
-		}
-	}
-
-	if csSuffix == "" {
-		csSuffix = "0" // default value
+		csSuffix = rfc1035NameSuffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -287,6 +274,7 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 	catalogSourceName := "cs-" + catalogRepository + "-" + csSuffix
 	// maybe needs some updating (i.e other unwanted characters !@# etc )
 	catalogSourceName = strings.Replace(catalogSourceName, ".", "-", -1)
+	catalogSourceName = strings.TrimRight(catalogSourceName, "-")
 	errs := validation.IsDNS1035Label(catalogSourceName)
 	if len(errs) != 0 && !isValidRFC1123(catalogSourceName) {
 		return fmt.Errorf("error creating catalog source name: %s", strings.Join(errs, ", "))
@@ -412,22 +400,9 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 
 	var ccSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		if len(catalogSpec.Digest) >= hashTruncLen {
-			ccSuffix = catalogSpec.Digest[:hashTruncLen]
-		} else {
-			ccSuffix = catalogSpec.Digest
-		}
+		ccSuffix = rfc1035NameSuffix(catalogSpec.Digest)
 	} else {
-		tag := catalogSpec.Tag
-		if len(tag) >= hashTruncLen {
-			ccSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
-		} else {
-			ccSuffix = strings.Map(toRFC1035, tag)
-		}
-	}
-
-	if ccSuffix == "" {
-		ccSuffix = "0" // default value
+		ccSuffix = rfc1035NameSuffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -435,6 +410,7 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 	clusterCatalogName := "cc-" + catalogRepository + "-" + ccSuffix
 	// maybe needs some updating (i.e other unwanted characters !@# etc )
 	clusterCatalogName = strings.ReplaceAll(clusterCatalogName, ".", "-")
+	clusterCatalogName = strings.TrimRight(clusterCatalogName, "-")
 	errs := validation.IsDNS1035Label(clusterCatalogName)
 	if len(errs) != 0 && !isValidRFC1123(clusterCatalogName) {
 		return fmt.Errorf("error creating cluster catalog name: %s", strings.Join(errs, ", "))
@@ -733,6 +709,22 @@ func isValidRFC1123(name string) bool {
 	rfc1123Regex := "^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]$"
 	match, _ := regexp.MatchString(rfc1123Regex, name)
 	return match && len(name) <= 63
+}
+
+// rfc1035NameSuffix builds a truncated DNS-1035-safe suffix from a tag or digest.
+// Truncation alone can leave a trailing '-' (OCPBUGS-69908: targetTag
+// "logging-clo-v6.2.7-coo-v1.3.1" → first 12 chars "logging-clo-"), which fails
+// IsDNS1035Label. Strip trailing hyphens so the suffix ends alphanumeric.
+func rfc1035NameSuffix(raw string) string {
+	mapped := strings.Map(toRFC1035, raw)
+	if len(mapped) >= hashTruncLen {
+		mapped = mapped[:hashTruncLen]
+	}
+	mapped = strings.TrimRight(mapped, "-")
+	if mapped == "" {
+		return "0"
+	}
+	return mapped
 }
 
 func toRFC1035(r rune) rune {
