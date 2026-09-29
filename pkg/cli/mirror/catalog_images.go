@@ -559,7 +559,12 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 		}
 
 		// descriptor points to the file being read
-		descriptor := filepath.Join(destFolder, header.Name)
+		// guard against path traversal ("zip-slip"): header.Name comes from an
+		// attacker-controlled catalog image and must not escape destFolder.
+		descriptor, err := sanitizeArchivePath(destFolder, header.Name)
+		if err != nil {
+			return err
+		}
 
 		// check the file type
 		// if its a dir and it doesn't exist create it
@@ -594,7 +599,12 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/opm"; 					".../oc-mirror-workspace/src/catalogs/.../extracted/bin/registry/opm"
 			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/etc/alternatives/easy_install-3"; ".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"
 			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/hostname"
-			symLinks[descriptor] = filepath.Join(destFolder, header.Linkname)
+			// guard against symlink traversal: the link target must not escape destFolder.
+			linkTarget, err := sanitizeArchivePath(destFolder, header.Linkname)
+			if err != nil {
+				return err
+			}
+			symLinks[descriptor] = linkTarget
 		}
 
 	}
@@ -641,4 +651,25 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 	}
 
 	return nil
+}
+
+// sanitizeArchivePath guards against path traversal ("zip-slip") when extracting
+// archive entries whose names are attacker-controlled.
+// see https://github.com/securego/gosec/issues/324#issuecomment-935927967
+func sanitizeArchivePath(dir, filePath string) (string, error) {
+	v := filepath.Join(dir, filePath)
+	// use absolute paths otherwise the `.` needs special treatment because of
+	// the way Golang handles it after `Clean`
+	absV, err := filepath.Abs(v)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", v, err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", dir, err)
+	}
+	if strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
+		return v, nil
+	}
+	return "", fmt.Errorf("content filepath is tainted: %s", v)
 }
