@@ -366,7 +366,12 @@ func extractDeclarativeConfigFromImage(img v1.Image, extractedImageDir string) (
 			return "", err
 		}
 
-		targetFileName := filepath.Join(extractedImageDir, header.Name)
+		// guard against path traversal ("zip-slip"): header.Name comes from an
+		// attacker-controlled catalog image and must not escape extractedImageDir.
+		targetFileName, err := sanitizeArchivePath(extractedImageDir, header.Name)
+		if err != nil {
+			return "", err
+		}
 		bytes := buf.Bytes()
 
 		baseDir := filepath.Dir(targetFileName)
