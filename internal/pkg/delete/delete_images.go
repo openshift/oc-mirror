@@ -176,13 +176,13 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		switch img.Type {
 		case v2alpha1.TypeOCPReleaseContent:
 			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
-			if imgSpecRef.Name != expectedPath {
+			if !matchesExpectedReleaseRepo(imgSpecRef.Name, deleteDestBase, releaseContentPathComponents) {
 				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
 				continue
 			}
 		case v2alpha1.TypeOCPRelease:
 			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
-			if imgSpecRef.Name != expectedPath {
+			if !matchesExpectedReleaseRepo(imgSpecRef.Name, deleteDestBase, releaseImagePathComponents) {
 				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
 				continue
 			}
@@ -231,6 +231,36 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	}
 
 	return errors.Join(allErrs...)
+}
+
+// matchesExpectedReleaseRepo reports whether gotName is the canonical release
+// repository under deleteDestBase, or a valid WithMaxNestedPaths flattening of it.
+func matchesExpectedReleaseRepo(gotName, deleteDestBase, releasePathComponents string) bool {
+	expected := deleteDestBase + "/" + releasePathComponents
+	if gotName == expected {
+		return true
+	}
+	// ParseRef requires a tag or digest; use a placeholder for path-only matching.
+	ref := consts.DockerProtocol + expected + ":oc-mirror-path-check"
+	spec, err := image.ParseRef(ref)
+	if err != nil {
+		return false
+	}
+	comps := strings.Split(spec.PathComponent, "/")
+	for n := 1; n < len(comps); n++ {
+		flat, err := image.WithMaxNestedPaths(ref, n)
+		if err != nil {
+			continue
+		}
+		flatSpec, err := image.ParseRef(flat)
+		if err != nil {
+			continue
+		}
+		if gotName == flatSpec.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadDeleteMetaData - read the list of images to delete

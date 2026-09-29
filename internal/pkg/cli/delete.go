@@ -294,6 +294,8 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	return nil
 }
 
+// generateDeleteFile collects images and writes delete-images.yaml,
+// applying --max-nested-paths flattening when configured.
 func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	collectorSchema, collectErr := o.CollectAll(ctx)
 
@@ -302,7 +304,16 @@ func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	// collected, we want to generate a delete file so those images can be deleted
 	var writeErr error
 	if len(collectorSchema.AllImages) > 0 {
-		writeErr = o.Delete.WriteDeleteMetaData(ctx, collectorSchema.AllImages)
+		images := collectorSchema.AllImages
+		// OCPBUGS-128073: apply the same max-nested-paths flattening as mirror
+		if o.Opts.Global.MaxNestedPaths > 0 {
+			var err error
+			images, err = withMaxNestedPaths(images, o.Opts.Global.MaxNestedPaths)
+			if err != nil {
+				return errors.Join(collectErr, err)
+			}
+		}
+		writeErr = o.Delete.WriteDeleteMetaData(ctx, images)
 		if collectErr != nil && writeErr == nil {
 			o.Log.Warn("image discovery finished with errors: the delete file might not be complete")
 		}
