@@ -153,24 +153,42 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 		}
 
 		if strings.Contains(header.Name, cfgDirName) {
+			// guard against path traversal ("zip-slip"): header.Name comes from
+			// an attacker-controlled catalog image layer and must not escape path.
+			target, err := sanitizeArchivePath(path, header.Name)
+			if err != nil {
+				return fmt.Errorf("untar: %w", err)
+			}
 			switch header.Typeflag {
 			case tar.TypeDir:
 				if header.Name != "./" {
-					if err := os.MkdirAll(filepath.Join(path, header.Name), 0755); err != nil {
+					if err := os.MkdirAll(target, 0755); err != nil {
 						return fmt.Errorf("untar: Mkdir() failed: %v", err)
 					}
 				}
 			case tar.TypeReg:
-				err := os.MkdirAll(filepath.Dir(filepath.Join(path, header.Name)), 0755)
+				err := os.MkdirAll(filepath.Dir(target), 0755)
 				if err != nil {
 					return fmt.Errorf("untar: Create() failed: %v", err)
 				}
-				outFile, err := os.Create(filepath.Join(path, header.Name))
+				outFile, err := os.Create(target)
 				if err != nil {
 					return fmt.Errorf("untar: Create() failed: %v", err)
 				}
-				if _, err := io.Copy(outFile, tarReader); err != nil {
-					return fmt.Errorf("untar: Copy() failed: %v", err)
+				// copy in bounded chunks to avoid a decompression bomb (gosec G110)
+				// https://stackoverflow.com/questions/67327323/g110-potential-dos-vulnerability-via-decompression-bomb-gosec
+				const maxChunkSize = 2048
+				remaining := header.Size
+				for remaining > 0 {
+					n, err := io.CopyN(outFile, tarReader, maxChunkSize)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						outFile.Close()
+						return fmt.Errorf("untar: Copy() failed: %v", err)
+					}
+					remaining -= n
 				}
 				outFile.Close()
 
@@ -180,6 +198,27 @@ func untar(gzipStream io.Reader, path string, cfgDirName string) error {
 		}
 	}
 	return nil
+}
+
+// sanitizeArchivePath guards against path traversal ("zip-slip") when extracting
+// archive entries whose names are attacker-controlled.
+// see https://github.com/securego/gosec/issues/324#issuecomment-935927967
+func sanitizeArchivePath(dir, filePath string) (string, error) {
+	v := filepath.Join(dir, filePath)
+	// use absolute paths otherwise the `.` needs special treatment because of
+	// the way Golang handles it after `Clean`
+	absV, err := filepath.Abs(v)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", v, err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("get absolute path for %q: %w", dir, err)
+	}
+	if strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
+		return v, nil
+	}
+	return "", fmt.Errorf("content filepath is tainted: %s", v)
 }
 
 // ConvertIndex converts the index.json to a single manifest which refers to a multi manifest index in the blobs/sha256 directory
