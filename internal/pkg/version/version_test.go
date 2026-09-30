@@ -1,9 +1,12 @@
 package version
 
 import (
+	"encoding/json"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/yaml"
 
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
@@ -100,4 +103,34 @@ func TestVersionRun(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSupportedOCPVersions guards against the SupportedOCPVersions list
+// being accidentally emptied or populated with malformed entries (e.g. a
+// typo like "v4.21" or "4.21.0" instead of "4.21").
+func TestSupportedOCPVersions(t *testing.T) {
+	info := Get()
+
+	require.NotEmpty(t, info.SupportedOCPVersions, "SupportedOCPVersions must not be empty")
+
+	versionPattern := regexp.MustCompile(`^\d+\.\d+$`)
+	for _, v := range info.SupportedOCPVersions {
+		require.Regexp(t, versionPattern, v, "supported OCP version %q does not look like a X.Y version", v)
+	}
+}
+
+// TestSupportedOCPVersionsInOutput is a regression guard ensuring the
+// supportedOCPVersions field is actually surfaced in both the json and
+// yaml output of `oc-mirror version`, not just present on the Go struct.
+func TestSupportedOCPVersionsInOutput(t *testing.T) {
+	clientVersion := Get()
+	versionInfo := Version{ClientVersion: &clientVersion}
+
+	jsonBytes, err := json.Marshal(&versionInfo)
+	require.NoError(t, err)
+	require.Contains(t, string(jsonBytes), `"supportedOCPVersions"`)
+
+	yamlBytes, err := yaml.Marshal(&versionInfo)
+	require.NoError(t, err)
+	require.Contains(t, string(yamlBytes), "supportedOCPVersions:")
 }
