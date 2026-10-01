@@ -21,7 +21,8 @@ func New(log clog.PluggableLoggerInterface,
 	if !opts.IsDiskToMirror() {
 		wClient = httpClient
 
-		cleanup, file, _ := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
+		cleanup, file, err := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
+		lsc.initErr = err
 		lsc.Helm.settings.RepositoryConfig = file
 		lsc.cleanup = cleanup
 
