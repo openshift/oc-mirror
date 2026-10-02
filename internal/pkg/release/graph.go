@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.podman.io/image/v5/types"
 
@@ -15,20 +16,36 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 )
 
+// graphDownloadTimeout matches the timeout used by Cincinnati graph downloads.
+const graphDownloadTimeout = time.Minute * 60
+
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
 // it follows https://docs.openshift.com/container-platform/4.13/updating/updating-restricted-network-cluster/restricted-network-update-osus.html#update-service-graph-data_updating-restricted-network-cluster-osus
 func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string) (string, error) {
 	// HTTP Get the graph updates from api endpoint
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid request: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, graphDownloadTimeout)
+	defer cancel()
+
+	client := http.Client{}
+	resp, err := client.Do(req.WithContext(timeoutCtx)) //nolint:gosec // G704: URL validated at request construction
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// save graph data in a container layer modifying UID and GID to root.
