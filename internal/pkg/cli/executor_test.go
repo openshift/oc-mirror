@@ -437,7 +437,8 @@ func TestExecutorValidate(t *testing.T) {
 		log := new(LogMock)
 
 		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
+			SecurePolicy:          false,
+			SignatureVerification: mirror.SignatureVerificationStrict,
 		}
 
 		_, sharedOpts := mirror.SharedImageFlags()
@@ -488,7 +489,8 @@ func TestExecutorValidate(t *testing.T) {
 		log := clog.New("trace")
 
 		global := &mirror.GlobalOptions{
-			SecurePolicy: false,
+			SecurePolicy:          false,
+			SignatureVerification: mirror.SignatureVerificationStrict,
 		}
 
 		_, sharedOpts := mirror.SharedImageFlags()

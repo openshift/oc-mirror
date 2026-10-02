@@ -6,4 +6,7 @@ const (
 	MirrorToMirror      = "mirrorToMirror"
 	CopyMode       Mode = "copy"
 	DeleteMode     Mode = "delete"
+
+	SignatureVerificationStrict     = "strict"
+	SignatureVerificationBestEffort = "best-effort"
 )
