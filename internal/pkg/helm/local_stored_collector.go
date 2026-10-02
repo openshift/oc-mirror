@@ -61,6 +61,7 @@ type LocalStorageCollector struct {
 	Helm               *HelmOptions
 	Downloaders        Downloaders
 	cleanup            func()
+	initErr            error
 	generateV1DestTags bool
 }
 
@@ -87,6 +88,10 @@ func (o *LocalStorageCollector) HelmImageCollector(ctx context.Context) (v2alpha
 	switch {
 	case lsc.Opts.IsMirrorToDisk() || lsc.Opts.IsMirrorToMirror():
 		defer lsc.cleanup()
+		if lsc.initErr != nil {
+			errs = append(errs, lsc.initErr)
+			break
+		}
 		allImages, platformFilters, errs = lsc.collectHelmImagesM2D()
 	case lsc.Opts.IsDiskToMirror():
 		allImages, platformFilters, errs = lsc.collectHelmImagesD2M(o.generateV1DestTags)
@@ -229,11 +234,21 @@ func resolveChartsForRepo(repo v2alpha1.Repository) ([]v2alpha1.Chart, error) {
 
 func createTempFile(dir string) (func(), string, error) {
 	file, err := os.CreateTemp(dir, "repo.*")
-	return func() {
-		if err := os.Remove(file.Name()); err != nil {
+	if err != nil {
+		return func() {}, "", fmt.Errorf("create temporary Helm repository file: %w", err)
+	}
+
+	name := file.Name()
+	cleanup := func() {
+		if err := os.Remove(name); err != nil {
 			lsc.Log.Error("%s", err.Error())
 		}
-	}, file.Name(), err
+	}
+	if err := file.Close(); err != nil {
+		return cleanup, name, fmt.Errorf("close temporary Helm repository file %q: %w", name, err)
+	}
+
+	return cleanup, name, nil
 }
 
 func (cdw *ChartDownloaderWrapper) DownloadTo(ref, version, dest string) (string, any, error) {
