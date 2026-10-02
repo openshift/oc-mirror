@@ -41,6 +41,9 @@ type Info struct {
 	GoVersion    string `json:"goVersion"`
 	Compiler     string `json:"compiler"`
 	Platform     string `json:"platform"`
+	// SupportedOCPVersions lists the OpenShift versions this oc-mirror
+	// build is actively tested against. See compatibility.go for details.
+	SupportedOCPVersions []string `json:"supportedOCPVersions"`
 }
 
 type VersionOptions struct {
@@ -133,14 +136,15 @@ func (o *VersionOptions) Run() error {
 
 func Get() Info {
 	return Info{
-		Major:        majorFromGit,
-		Minor:        minorFromGit,
-		GitCommit:    commitFromGit,
-		GitVersion:   versionFromGit,
-		GitTreeState: gitTreeState,
-		BuildDate:    buildDate,
-		GoVersion:    runtime.Version(),
-		Compiler:     runtime.Compiler,
-		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		Major:                majorFromGit,
+		Minor:                minorFromGit,
+		GitCommit:            commitFromGit,
+		GitVersion:           versionFromGit,
+		GitTreeState:         gitTreeState,
+		BuildDate:            buildDate,
+		GoVersion:            runtime.Version(),
+		Compiler:             runtime.Compiler,
+		Platform:             fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		SupportedOCPVersions: SupportedOCPVersions,
 	}
 }
