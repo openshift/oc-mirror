@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -405,6 +406,18 @@ func TestIsErrorRetryable(t *testing.T) {
 			name:      "errcode MANIFESTUNKNOWN is not retryable",
 			err:       errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown},
 			retryable: false,
+		},
+		{
+			name:      "server closed idle connection is retryable",
+			err:       errors.New("http: server closed idle connection"),
+			retryable: true,
+		},
+		{
+			name: "wrapped server closed idle connection is retryable",
+			err: fmt.Errorf("writing blob: Patch %q: %w",
+				"https://registry.example/v2/repo/blobs/uploads/abc",
+				errors.New("http: server closed idle connection")),
+			retryable: true,
 		},
 	}
 
