@@ -600,7 +600,12 @@ func extractCatalog(img v1.Image, destFolder string, opmBin string) error {
 			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/etc/alternatives/easy_install-3"; ".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"
 			// descriptor=".../oc-mirror-workspace/src/catalogs/.../extracted/usr/bin/easy_install-3.6"; 		".../oc-mirror-workspace/src/catalogs/.../extracted/hostname"
 			// guard against symlink traversal: the link target must not escape destFolder.
-			linkTarget, err := sanitizeArchivePath(destFolder, header.Linkname)
+			target := header.Linkname
+			if !filepath.IsAbs(target) {
+				// Relative targets are resolved from the symlink's directory.
+				target = filepath.Join(filepath.Dir(header.Name), target)
+			}
+			linkTarget, err := sanitizeArchivePath(destFolder, target)
 			if err != nil {
 				return err
 			}
@@ -668,7 +673,8 @@ func sanitizeArchivePath(dir, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("get absolute path for %q: %w", dir, err)
 	}
-	if strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
+	// Archive root entries and symlink targets may resolve to dir itself.
+	if absV == absDir || strings.HasPrefix(absV, absDir+string(os.PathSeparator)) {
 		return v, nil
 	}
 	return "", fmt.Errorf("content filepath is tainted: %s", v)
