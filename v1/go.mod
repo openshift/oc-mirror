@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bshuster-repo/logrus-logstash-hook v1.0.2 // indirect
-	github.com/containerd/containerd v1.7.35
+	github.com/containerd/containerd v1.7.36
 	github.com/containers/image/v5 v5.33.1
 	github.com/docker/cli v29.4.0+incompatible
 	github.com/go-git/go-git/v5 v5.19.2 // indirect
