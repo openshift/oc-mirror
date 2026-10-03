@@ -118,6 +118,68 @@ var _ = Describe("operators", func() {
 		})
 	})
 
+	// CLID-717: the related images of a bundle may carry labels, typically saying which
+	// product feature each image belongs to. The `selectors` of a package pick the labelled
+	// images to mirror; images without labels are always mirrored.
+	Describe("related image selection by label", func() {
+		// Tags of the test-catalog-labels catalog: the bundle and the operator image of
+		// foo.v0.3.1 carry no label, each operand carries a different feature label.
+		const (
+			testImagesRepo = "oc-mirror/oc-mirror-dev"
+
+			bundleTag    = "foo-bundle-v0.3.1"
+			operatorTag  = "foo-v0.3.1"
+			analyticsTag = "bar-v1.0.0"
+			loggingTag   = "baz-v1.0.0"
+			metricsTag   = "baz-v1.1.0"
+		)
+
+		It("should mirror the unlabelled images and the ones matched by matchLabels", func() {
+			iscFile := filepath.Join("operators", "isc-operator-selectors-match-labels.yaml")
+
+			By("running mirrorToMirror with a selector on feature=analytics")
+			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the operator catalog is mirrored in the registry")
+			expectSuccessfulMirrorInRegistry(filepath.Join(iscDir, iscFile), *testRegistry)
+
+			By("verifying only the unlabelled images and the analytics operand are mirrored")
+			expectMirroredTags(*testRegistry, testImagesRepo,
+				[]string{bundleTag, operatorTag, analyticsTag},
+				[]string{loggingTag, metricsTag})
+		})
+
+		It("should mirror the images matched by any of the matchExpressions selectors", func() {
+			iscFile := filepath.Join("operators", "isc-operator-selectors-match-expressions.yaml")
+
+			By("running mirrorToMirror with a selector on feature in (analytics, metrics)")
+			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying the analytics and metrics operands are mirrored, the logging one is not")
+			expectMirroredTags(*testRegistry, testImagesRepo,
+				[]string{bundleTag, operatorTag, analyticsTag, metricsTag},
+				[]string{loggingTag})
+		})
+
+		It("should mirror only the unlabelled images when the package has no selector", func() {
+			iscFile := filepath.Join("operators", "isc-operator-no-selectors.yaml")
+
+			By("running mirrorToMirror without any selector")
+			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying no labelled operand is mirrored")
+			expectMirroredTags(*testRegistry, testImagesRepo,
+				[]string{bundleTag, operatorTag},
+				[]string{analyticsTag, loggingTag, metricsTag})
+		})
+	})
+
 	// OCPBUGS-33081: a catalog may contain bundles with invalid related images (missing
 	// name, missing tag/digest, unsupported oci:// scheme, ...).
 	Describe("catalog with a bundle containing an invalid related image", func() {
@@ -165,6 +227,22 @@ func expectCatalogContainsOnlyExpectedPackages(ctx context.Context, reg registry
 
 		Expect(actualPackages).To(ConsistOf(expectedPackages),
 			"rebuilt catalog for %q should contain only the packages selected in the ISC", op.Catalog)
+	}
+}
+
+// expectMirroredTags verifies which tags of a repository reached the destination registry:
+// every tag of present must be there, none of the tags of absent may be.
+func expectMirroredTags(reg registry.Registry, repo string, present, absent []string) {
+	GinkgoHelper()
+
+	tags, err := reg.ListTags(ctx, repo)
+	Expect(err).NotTo(HaveOccurred(), "failed to list the tags of repository %q", repo)
+
+	for _, tag := range present {
+		Expect(tags).To(ContainElement(tag), "image %s:%s should have been mirrored, got tags: %v", repo, tag, tags)
+	}
+	for _, tag := range absent {
+		Expect(tags).NotTo(ContainElement(tag), "image %s:%s should have been left out, got tags: %v", repo, tag, tags)
 	}
 }
 

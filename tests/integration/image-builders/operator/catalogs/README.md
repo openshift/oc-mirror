@@ -177,6 +177,36 @@ opm render ${REPO}:foo-bundle-v0.1.0 --output=yaml > ${CATALOG}/foo/bundles.yaml
 ```
 
 
+## test-catalog-labels
+
+Used to test CLID-717: the related images of a bundle may carry labels, and the
+`selectors` of a package of the ImageSetConfiguration pick which of them are
+mirrored. The bundle image and the operator image carry no label, so they are
+always mirrored; each operand carries a different `feature` label. The operands
+are the already-published `bar-v1.0.0`, `baz-v1.0.0` and `baz-v1.1.0` images:
+what they contain does not matter, only that the tag they are mirrored under
+tells one feature from another.
+
+### Contents
+ * Packages: foo
+ * Channels:
+    - foo: beta
+ * Bundles:
+    - foo.v0.3.1, with the related images:
+      | name              | image                 | labels             |
+      | ----------------- | --------------------- | ------------------ |
+      | (bundle)          | `foo-bundle-v0.3.1`   | none               |
+      | operator          | `foo-v0.3.1`          | none               |
+      | operand-analytics | `bar-v1.0.0`          | `feature=analytics`|
+      | operand-logging   | `baz-v1.0.0`          | `feature=logging`  |
+      | operand-metrics   | `baz-v1.1.0`          | `feature=metrics`  |
+
+### Creating
+The catalog is hand-written: `opm render` does not label related images, the
+labels come from the operator authors. See the checked-in files for the exact
+content.
+
+
 ## Catalog building
 ```bash
 make build # for all catalogs

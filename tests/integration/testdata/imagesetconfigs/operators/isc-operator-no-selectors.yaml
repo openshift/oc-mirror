@@ -1,0 +1,9 @@
+# ImageSetConfig to test the default related image selection (CLID-717): a package without
+# selectors mirrors only the related images that carry no label
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-labels
+      packages:
+      - name: foo

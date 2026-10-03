@@ -162,6 +162,63 @@ mirror:
 
 **Note:** The `maxVersion` field is supported but **not recommended**. If the specified maximum version is not the channel head, the mirrored bundles may lack metadata required to display the operator correctly in the cluster.
 
+### Filter related images by label
+
+Operator authors can label the related images of a bundle, typically to say which product
+feature each image belongs to. Use `selectors` on a package to mirror only the related
+images you need, and leave the images of the features you do not use behind:
+
+```yaml
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.18
+      packages:
+        # mirror the images without labels, the ones for CoolFeatureA, and the ones for
+        # GreatFeatureB that are version 1.2.3 and tier frontend
+        - name: aws-load-balancer-operator
+          selectors:
+            - matchExpressions:
+                - key: CoolFeatureA
+                  operator: Exists
+            - matchExpressions:
+                - key: GreatFeatureB
+                  operator: Exists
+                - key: tier
+                  operator: In
+                  values:
+                    - frontend
+              matchLabels:
+                version: "1.2.3"
+
+        # mirror everything except the images for CoolFeatureC
+        - name: 3scale-operator
+          selectors:
+            - matchExpressions:
+                - key: CoolFeatureC
+                  operator: DoesNotExist
+
+        # no selectors: mirror only the images without labels (default)
+        - name: node-observability-operator
+```
+
+A `selectors` entry is a [Kubernetes label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors),
+with the syntax and the semantics Kubernetes defines for it. A related image is mirrored when:
+
+- it carries no label at all, **or**
+- at least one selector of its package matches its labels.
+
+The requirements within one selector are ANDed; the selectors of a package are ORed. A package
+with no selector therefore mirrors only the related images that carry no label, which is also
+what packages absent from the configuration and catalogs without any label do — so catalogs that
+carry no label are mirrored exactly as before.
+
+Selection is per package: an image left out for one package is still mirrored when another
+package selects it. Every image left out is logged, so you can audit what a run skipped:
+
+```text
+image registry.redhat.io/feature-c:v1.2.3 is not mirrored in bundle 3scale-operator.v1.2.3: its labels map[CoolFeatureC:] are selected by no selector of operator 3scale-operator
+```
+
 ### Target catalog overrides
 
 Customize the destination path and tag for a mirrored catalog:

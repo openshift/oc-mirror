@@ -12,6 +12,7 @@ import (
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -42,7 +43,7 @@ func TestRelatedImagesFromCatalog(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
-			res, err := handler.getRelatedImagesFromCatalog(testCase.cfg, copyImageSchemaMap)
+			res, err := handler.getRelatedImagesFromCatalog(testCase.cfg, v2alpha1.Operator{}, copyImageSchemaMap)
 			if testCase.expectedError != nil {
 				assert.EqualError(t, err, testCase.expectedError.Error())
 			} else {
@@ -650,4 +651,262 @@ func TestEnsureCatalogInOCIFormatDoesNotMutateSharedSecurePolicy(t *testing.T) {
 	assert.True(t, recordingMirror.RunCalled, "Mirror.Run should be called for docker:// catalog")
 	assert.False(t, recordingMirror.SecurePolicyAtRun, "local copy passed to Mirror.Run should have SecurePolicy=false")
 	assert.True(t, global.SecurePolicy, "shared GlobalOptions.SecurePolicy must remain true after EnsureCatalogInOCIFormat")
+}
+
+func TestRelatedImageSelection(t *testing.T) {
+	type testCase struct {
+		caseName  string
+		selectors []*metav1.LabelSelector
+		imgLabels map[string]string
+		expected  bool
+	}
+
+	testCases := []testCase{
+		{
+			caseName:  "no selectors - an unlabeled image is selected",
+			selectors: nil,
+			imgLabels: nil,
+			expected:  true,
+		},
+		{
+			caseName:  "no selectors - a labeled image is not selected",
+			selectors: nil,
+			imgLabels: map[string]string{"CoolFeatureA": ""},
+			expected:  false,
+		},
+		{
+			caseName:  "an unlabeled image is selected even when selectors match nothing",
+			selectors: []*metav1.LabelSelector{{MatchLabels: map[string]string{"tier": "frontend"}}},
+			imgLabels: nil,
+			expected:  true,
+		},
+		{
+			caseName: "Exists selects an image carrying the key",
+			selectors: []*metav1.LabelSelector{
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists}}},
+			},
+			imgLabels: map[string]string{"CoolFeatureA": ""},
+			expected:  true,
+		},
+		{
+			caseName: "Exists does not select an image carrying another key",
+			selectors: []*metav1.LabelSelector{
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists}}},
+			},
+			imgLabels: map[string]string{"CoolFeatureC": ""},
+			expected:  false,
+		},
+		{
+			caseName: "DoesNotExist selects every labeled image but the excluded one",
+			selectors: []*metav1.LabelSelector{
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureC", Operator: metav1.LabelSelectorOpDoesNotExist}}},
+			},
+			imgLabels: map[string]string{"CoolFeatureA": ""},
+			expected:  true,
+		},
+		{
+			caseName: "DoesNotExist does not select the excluded image",
+			selectors: []*metav1.LabelSelector{
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureC", Operator: metav1.LabelSelectorOpDoesNotExist}}},
+			},
+			imgLabels: map[string]string{"CoolFeatureC": ""},
+			expected:  false,
+		},
+		{
+			caseName: "requirements of a single selector are ANDed",
+			selectors: []*metav1.LabelSelector{
+				{
+					MatchLabels: map[string]string{"version": "1.2.3"},
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{Key: "GreatFeatureB", Operator: metav1.LabelSelectorOpExists},
+						{Key: "tier", Operator: metav1.LabelSelectorOpIn, Values: []string{"frontend"}},
+					},
+				},
+			},
+			imgLabels: map[string]string{"GreatFeatureB": "", "tier": "frontend", "version": "1.2.3"},
+			expected:  true,
+		},
+		{
+			caseName: "an image missing one requirement of a selector is not selected",
+			selectors: []*metav1.LabelSelector{
+				{
+					MatchLabels: map[string]string{"version": "1.2.3"},
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{Key: "GreatFeatureB", Operator: metav1.LabelSelectorOpExists},
+						{Key: "tier", Operator: metav1.LabelSelectorOpIn, Values: []string{"frontend"}},
+					},
+				},
+			},
+			imgLabels: map[string]string{"GreatFeatureB": "", "tier": "backend", "version": "1.2.3"},
+			expected:  false,
+		},
+		{
+			caseName: "selectors of a package are ORed",
+			selectors: []*metav1.LabelSelector{
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists}}},
+				{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "GreatFeatureB", Operator: metav1.LabelSelectorOpExists}}},
+			},
+			imgLabels: map[string]string{"GreatFeatureB": ""},
+			expected:  true,
+		},
+		{
+			caseName:  "an empty selector selects every image",
+			selectors: []*metav1.LabelSelector{{}},
+			imgLabels: map[string]string{"CoolFeatureC": ""},
+			expected:  true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			selectors, err := packageSelectors([]v2alpha1.IncludePackage{{Name: "aws-load-balancer-operator", Selectors: testCase.selectors}})
+			assert.NoError(t, err)
+			assert.Equal(t, testCase.expected, isRelatedImageSelected(testCase.imgLabels, selectors["aws-load-balancer-operator"]))
+		})
+	}
+}
+
+func TestPackageSelectorsRejectsInvalidSelector(t *testing.T) {
+	_, err := packageSelectors([]v2alpha1.IncludePackage{{
+		Name: "3scale-operator",
+		Selectors: []*metav1.LabelSelector{
+			{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "tier", Operator: "Bogus"}}},
+		},
+	}})
+	assert.ErrorContains(t, err, "3scale-operator")
+}
+
+// labeledCatalog builds a catalog holding one bundle per package, each with an
+// unlabeled image, an image labeled CoolFeatureA and an image labeled CoolFeatureC.
+func labeledCatalog(packageNames ...string) *declcfg.DeclarativeConfig {
+	dc := &declcfg.DeclarativeConfig{}
+	for _, packageName := range packageNames {
+		bundleImage := "registry.redhat.io/" + packageName + "-bundle:v1.2.3"
+		dc.Bundles = append(dc.Bundles, declcfg.Bundle{
+			Name:    packageName + ".v1.2.3",
+			Package: packageName,
+			Image:   bundleImage,
+			RelatedImages: []declcfg.RelatedImage{
+				{Name: "bundle", Image: bundleImage},
+				{Name: "controller", Image: "registry.redhat.io/" + packageName + "-controller:v1.2.3"},
+				{Name: "feature-a", Image: "registry.redhat.io/feature-a:v1.2.3", Labels: map[string]string{"CoolFeatureA": ""}},
+				{Name: "feature-c", Image: "registry.redhat.io/feature-c:v1.2.3", Labels: map[string]string{"CoolFeatureC": ""}},
+			},
+		})
+	}
+	return dc
+}
+
+func relatedImageNames(images []v2alpha1.RelatedImage) []string {
+	names := make([]string, 0, len(images))
+	for _, img := range images {
+		names = append(names, img.Name)
+	}
+	return names
+}
+
+func TestRelatedImagesFromCatalogWithSelectors(t *testing.T) {
+	type testCase struct {
+		caseName      string
+		operator      v2alpha1.Operator
+		expectedNames []string
+	}
+
+	testCases := []testCase{
+		{
+			caseName:      "a package without selectors keeps only the images without labels",
+			operator:      v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{Packages: []v2alpha1.IncludePackage{{Name: "3scale-operator"}}}},
+			expectedNames: []string{"bundle", "controller"},
+		},
+		{
+			caseName:      "a package absent from the configuration keeps only the images without labels",
+			operator:      v2alpha1.Operator{},
+			expectedNames: []string{"bundle", "controller"},
+		},
+		{
+			caseName: "a selector adds the images it matches to the images without labels",
+			operator: v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{Packages: []v2alpha1.IncludePackage{{
+				Name:      "3scale-operator",
+				Selectors: []*metav1.LabelSelector{{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists}}}},
+			}}}},
+			expectedNames: []string{"bundle", "controller", "feature-a"},
+		},
+		{
+			caseName: "a DoesNotExist selector keeps every image but the excluded one",
+			operator: v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{Packages: []v2alpha1.IncludePackage{{
+				Name:      "3scale-operator",
+				Selectors: []*metav1.LabelSelector{{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureC", Operator: metav1.LabelSelectorOpDoesNotExist}}}},
+			}}}},
+			expectedNames: []string{"bundle", "controller", "feature-a"},
+		},
+	}
+
+	handler := &CatalogHandler{Log: clog.New("debug")}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+			res, err := handler.getRelatedImagesFromCatalog(labeledCatalog("3scale-operator"), testCase.operator, copyImageSchemaMap)
+			assert.NoError(t, err)
+			assert.Equal(t, testCase.expectedNames, relatedImageNames(res["3scale-operator.v1.2.3"]))
+		})
+	}
+}
+
+func TestRelatedImagesFromCatalogDoesNotRegisterSkippedImages(t *testing.T) {
+	handler := &CatalogHandler{Log: clog.New("debug")}
+	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+	_, err := handler.getRelatedImagesFromCatalog(labeledCatalog("3scale-operator"), v2alpha1.Operator{}, copyImageSchemaMap)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, copyImageSchemaMap.OperatorsByImage, "docker://registry.redhat.io/feature-a:v1.2.3")
+	assert.NotContains(t, copyImageSchemaMap.BundlesByImage, "docker://registry.redhat.io/feature-a:v1.2.3")
+	assert.Contains(t, copyImageSchemaMap.OperatorsByImage, "docker://registry.redhat.io/3scale-operator-controller:v1.2.3")
+}
+
+func TestRelatedImagesFromCatalogLogsSkippedImages(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	handler := &CatalogHandler{Log: clog.New("info")}
+	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+	_, err := handler.getRelatedImagesFromCatalog(labeledCatalog("3scale-operator"), v2alpha1.Operator{}, copyImageSchemaMap)
+	assert.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "image registry.redhat.io/feature-a:v1.2.3 is not mirrored in bundle 3scale-operator.v1.2.3")
+}
+
+func TestRelatedImagesFromCatalogKeepsAnImageSelectedByAnotherPackage(t *testing.T) {
+	handler := &CatalogHandler{Log: clog.New("debug")}
+	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+	operator := v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{Packages: []v2alpha1.IncludePackage{
+		{Name: "3scale-operator"},
+		{
+			Name:      "aws-load-balancer-operator",
+			Selectors: []*metav1.LabelSelector{{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "CoolFeatureA", Operator: metav1.LabelSelectorOpExists}}}},
+		},
+	}}}
+
+	res, err := handler.getRelatedImagesFromCatalog(labeledCatalog("3scale-operator", "aws-load-balancer-operator"), operator, copyImageSchemaMap)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, relatedImageNames(res["3scale-operator.v1.2.3"]), "feature-a")
+	assert.Contains(t, relatedImageNames(res["aws-load-balancer-operator.v1.2.3"]), "feature-a")
+}
+
+func TestRelatedImagesFromCatalogRejectsInvalidSelector(t *testing.T) {
+	handler := &CatalogHandler{Log: clog.New("debug")}
+	copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+
+	operator := v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{Packages: []v2alpha1.IncludePackage{{
+		Name:      "3scale-operator",
+		Selectors: []*metav1.LabelSelector{{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "tier", Operator: "Bogus"}}}},
+	}}}}
+
+	_, err := handler.getRelatedImagesFromCatalog(labeledCatalog("3scale-operator"), operator, copyImageSchemaMap)
+	assert.ErrorContains(t, err, "3scale-operator")
 }
