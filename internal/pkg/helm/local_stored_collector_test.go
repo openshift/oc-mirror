@@ -98,7 +98,7 @@ func TestHelmImageCollector(t *testing.T) {
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
 					Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
-					Destination: consts.DockerProtocol + "localhost:8888/ingress-nginx/controller:v1.12.1",
+					Destination: consts.DockerProtocol + "localhost:8888/ingress-nginx/controller:sha256-d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
@@ -367,7 +367,7 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
 					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
@@ -948,4 +948,162 @@ func prepareFolder(tempDir string) (string, error) {
 	}
 
 	return workingDir, nil
+}
+
+// TestHelmCopyBatchTagDigestCollision reproduces OCPBUGS-105878 for helm images: two
+// chart-referenced images share the same repository and tag but pin different digests.
+// mirrorToDisk must key the cache by digest (distinct destinations, so the archive keeps
+// both digests' blobs) while diskToMirror reads each digest back from the cache and
+// pushes both to the shared human tag at the destination.
+func TestHelmCopyBatchTagDigestCollision(t *testing.T) {
+	log := clog.New("trace")
+
+	const (
+		digestA = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+		digestB = "1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad"
+	)
+	imgA := "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:" + digestA
+	imgB := "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:" + digestB
+
+	images := []v2alpha1.RelatedImage{
+		{Image: imgA, Type: v2alpha1.TypeHelmImage},
+		{Image: imgB, Type: v2alpha1.TypeHelmImage},
+	}
+
+	t.Run("mirrorToDisk keys the cache by digest (no collision)", func(t *testing.T) {
+		lsc = &LocalStorageCollector{
+			Log: log,
+			Opts: mirror.CopyOptions{
+				Mode:             mirror.MirrorToDisk,
+				LocalStorageFQDN: testLocalStorageFQDN,
+			},
+		}
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:" + digestA,
+				Destination: consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digestA,
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:" + digestB,
+				Destination: consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digestB,
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+		}
+		res, err := prepareM2DCopyBatch(images)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+		assert.Len(t, res, 2)
+		assert.NotEqual(t, res[0].Destination, res[1].Destination, "cache destinations must not collide")
+	})
+
+	t.Run("diskToMirror reads each digest from the cache, pushes both to the human tag", func(t *testing.T) {
+		lsc = &LocalStorageCollector{
+			Log: log,
+			Opts: mirror.CopyOptions{
+				Mode:             mirror.DiskToMirror,
+				LocalStorageFQDN: testLocalStorageFQDN,
+				Destination:      consts.DockerProtocol + "mirror.acme.com",
+			},
+		}
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digestA,
+				Destination: consts.DockerProtocol + "mirror.acme.com/ingress-nginx/controller:v1.12.1",
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+			{
+				Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digestB,
+				Destination: consts.DockerProtocol + "mirror.acme.com/ingress-nginx/controller:v1.12.1",
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+		}
+		res, err := prepareD2MCopyBatch(images, false)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+		assert.Len(t, res, 2)
+		assert.NotEqual(t, res[0].Source, res[1].Source, "cache sources must be distinct per digest")
+		assert.Equal(t, res[0].Destination, res[1].Destination, "both digests push to the shared human tag")
+	})
+}
+
+// TestHelmCopyBatchSameDigestDifferentTags covers the inverse of OCPBUGS-105878 for helm
+// images: two chart-referenced images share the same digest but carry different tags. The
+// digest-keyed cache is content-addressed, so both share a single cache entry, while
+// diskToMirror recreates BOTH human tags at the destination pointing to that one digest.
+func TestHelmCopyBatchSameDigestDifferentTags(t *testing.T) {
+	log := clog.New("trace")
+
+	const digest = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+	imgA := "registry.k8s.io/ingress-nginx/controller:tag-one@sha256:" + digest
+	imgB := "registry.k8s.io/ingress-nginx/controller:tag-two@sha256:" + digest
+
+	images := []v2alpha1.RelatedImage{
+		{Image: imgA, Type: v2alpha1.TypeHelmImage},
+		{Image: imgB, Type: v2alpha1.TypeHelmImage},
+	}
+
+	t.Run("mirrorToDisk shares a single digest-keyed cache entry", func(t *testing.T) {
+		lsc = &LocalStorageCollector{
+			Log: log,
+			Opts: mirror.CopyOptions{
+				Mode:             mirror.MirrorToDisk,
+				LocalStorageFQDN: testLocalStorageFQDN,
+			},
+		}
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:" + digest,
+				Destination: consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digest,
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+			{
+				Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:" + digest,
+				Destination: consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digest,
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+		}
+		res, err := prepareM2DCopyBatch(images)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+		assert.Len(t, res, 2)
+		assert.Equal(t, res[0].Destination, res[1].Destination, "same digest must share one cache entry")
+	})
+
+	t.Run("diskToMirror recreates both tags from the shared cache entry", func(t *testing.T) {
+		lsc = &LocalStorageCollector{
+			Log: log,
+			Opts: mirror.CopyOptions{
+				Mode:             mirror.DiskToMirror,
+				LocalStorageFQDN: testLocalStorageFQDN,
+				Destination:      consts.DockerProtocol + "mirror.acme.com",
+			},
+		}
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digest,
+				Destination: consts.DockerProtocol + "mirror.acme.com/ingress-nginx/controller:tag-one",
+				Origin:      consts.DockerProtocol + imgA,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+			{
+				Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-" + digest,
+				Destination: consts.DockerProtocol + "mirror.acme.com/ingress-nginx/controller:tag-two",
+				Origin:      consts.DockerProtocol + imgB,
+				Type:        v2alpha1.TypeHelmImage,
+			},
+		}
+		res, err := prepareD2MCopyBatch(images, false)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expected, res)
+		assert.Len(t, res, 2)
+		assert.Equal(t, res[0].Source, res[1].Source, "both tags are read from the one shared cache entry")
+		assert.NotEqual(t, res[0].Destination, res[1].Destination, "both distinct tags must be recreated")
+	})
 }

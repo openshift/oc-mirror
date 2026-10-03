@@ -1,0 +1,4 @@
+---
+defaultChannel: alpha
+name: collisiontest
+schema: olm.package

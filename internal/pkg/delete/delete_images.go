@@ -201,9 +201,17 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
 
 		if o.Opts.Global.ForceCacheDelete {
+			cacheDestination := strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
+			// OCPBUGS-105878 - tag+digest images are cached under the digest key, not the
+			// human tag in the destination ref above; rebuild it so the cache entry is found.
+			if originSpec, perr := image.ParseRef(img.ImageName); perr == nil && originSpec.IsImageByTagAndDigest() {
+				if cacheSpec, cerr := image.ParseRef(cacheDestination); cerr == nil {
+					cacheDestination = fmt.Sprintf("%s%s:%s", cacheSpec.Transport, cacheSpec.Name, originSpec.CacheTag())
+				}
+			}
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
-				Destination: strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN),
+				Destination: cacheDestination,
 				Type:        img.Type,
 			}
 			o.Log.Debug("deleting images local cache %v", cis.Destination)

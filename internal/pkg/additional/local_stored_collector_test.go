@@ -86,7 +86,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Source:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Destination: consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
+				Destination: consts.DockerProtocol + "test.registry.com/ubi8/ubi:sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -127,7 +127,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -166,7 +166,7 @@ func TestAdditionalImageCollector(t *testing.T) {
 			{
 				Destination: consts.DockerProtocol + "mirror.acme.com/ubi8/ubi:latest",
 				Origin:      "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
-				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:latest",
+				Source:      consts.DockerProtocol + "test.registry.com/ubi8/ubi:sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
 				Type:        v2alpha1.TypeGeneric,
 			},
 			{
@@ -251,6 +251,201 @@ func TestAdditionalImageCollector(t *testing.T) {
 		// Should return error for images that failed to parse
 		require.Error(t, err)
 		assert.ElementsMatch(t, expected, res.AllImages)
+	})
+}
+
+// TestAdditionalImageCollectorTagDigestCollision reproduces OCPBUGS-105878 for
+// additionalImages: two entries share the same repository and tag but pin different
+// digests. mirrorToDisk must key the cache by digest (distinct destinations, so the
+// archive keeps both digests' blobs) while diskToMirror reads each digest back from the
+// cache and pushes both to the shared human tag at the destination.
+func TestAdditionalImageCollectorTagDigestCollision(t *testing.T) {
+	log := clog.New("trace")
+
+	const (
+		digestA = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+		digestB = "1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad"
+	)
+	nameA := "quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:" + digestA
+	nameB := "quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:" + digestB
+
+	global := &mirror.GlobalOptions{SecurePolicy: false}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         consts.OciProtocol + "test",
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "test.registry.com",
+	}
+
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				AdditionalImages: []v2alpha1.AdditionalImage{
+					{Name: nameA},
+					{Name: nameB},
+				},
+			},
+		},
+	}
+
+	mockmirror := MockMirror{}
+	manifest := MockManifest{Log: log}
+	ctx := context.Background()
+
+	t.Run("mirrorToDisk keys the cache by digest (no collision)", func(t *testing.T) {
+		ex := New(log, cfg, opts, mockmirror, manifest)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digestA,
+				Destination: consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digestA,
+				Origin:      nameA,
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digestB,
+				Destination: consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digestB,
+				Origin:      nameB,
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, expected, res.AllImages)
+		assert.Len(t, res.AllImages, 2)
+		assert.NotEqual(t, res.AllImages[0].Destination, res.AllImages[1].Destination, "cache destinations must not collide")
+	})
+
+	t.Run("diskToMirror reads each digest from the cache, pushes both to the human tag", func(t *testing.T) {
+		d2mOpts := opts
+		d2mOpts.Mode = mirror.DiskToMirror
+		d2mOpts.Destination = consts.DockerProtocol + "mirror.acme.com"
+		ex := New(log, cfg, d2mOpts, mockmirror, manifest)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digestA,
+				Destination: consts.DockerProtocol + "mirror.acme.com/oc-mirror/oc-mirror-dev:shared-operand",
+				Origin:      nameA,
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digestB,
+				Destination: consts.DockerProtocol + "mirror.acme.com/oc-mirror/oc-mirror-dev:shared-operand",
+				Origin:      nameB,
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, expected, res.AllImages)
+		assert.Len(t, res.AllImages, 2)
+		assert.NotEqual(t, res.AllImages[0].Source, res.AllImages[1].Source, "cache sources must be distinct per digest")
+		assert.Equal(t, res.AllImages[0].Destination, res.AllImages[1].Destination, "both digests push to the shared human tag")
+	})
+}
+
+// TestAdditionalImageCollectorSameDigestDifferentTags covers the inverse of
+// OCPBUGS-105878 for additionalImages: two entries share the same digest but carry
+// different tags. The digest-keyed cache is content-addressed, so both share a single
+// cache entry, while diskToMirror recreates BOTH human tags at the destination pointing
+// to that one digest.
+func TestAdditionalImageCollectorSameDigestDifferentTags(t *testing.T) {
+	log := clog.New("trace")
+
+	const digest = "1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+	nameA := "quay.io/oc-mirror/oc-mirror-dev:tag-one@sha256:" + digest
+	nameB := "quay.io/oc-mirror/oc-mirror-dev:tag-two@sha256:" + digest
+
+	global := &mirror.GlobalOptions{SecurePolicy: false}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         consts.OciProtocol + "test",
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "test.registry.com",
+	}
+
+	cfg := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				AdditionalImages: []v2alpha1.AdditionalImage{
+					{Name: nameA},
+					{Name: nameB},
+				},
+			},
+		},
+	}
+
+	mockmirror := MockMirror{}
+	manifest := MockManifest{Log: log}
+	ctx := context.Background()
+
+	t.Run("mirrorToDisk shares a single digest-keyed cache entry", func(t *testing.T) {
+		ex := New(log, cfg, opts, mockmirror, manifest)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digest,
+				Destination: consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Origin:      nameA,
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      consts.DockerProtocol + "quay.io/oc-mirror/oc-mirror-dev@sha256:" + digest,
+				Destination: consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Origin:      nameB,
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, expected, res.AllImages)
+		assert.Len(t, res.AllImages, 2)
+		assert.Equal(t, res.AllImages[0].Destination, res.AllImages[1].Destination, "same digest must share one cache entry")
+	})
+
+	t.Run("diskToMirror recreates both tags from the shared cache entry", func(t *testing.T) {
+		d2mOpts := opts
+		d2mOpts.Mode = mirror.DiskToMirror
+		d2mOpts.Destination = consts.DockerProtocol + "mirror.acme.com"
+		ex := New(log, cfg, d2mOpts, mockmirror, manifest)
+		expected := []v2alpha1.CopyImageSchema{
+			{
+				Source:      consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Destination: consts.DockerProtocol + "mirror.acme.com/oc-mirror/oc-mirror-dev:tag-one",
+				Origin:      nameA,
+				Type:        v2alpha1.TypeGeneric,
+			},
+			{
+				Source:      consts.DockerProtocol + "test.registry.com/oc-mirror/oc-mirror-dev:sha256-" + digest,
+				Destination: consts.DockerProtocol + "mirror.acme.com/oc-mirror/oc-mirror-dev:tag-two",
+				Origin:      nameB,
+				Type:        v2alpha1.TypeGeneric,
+			},
+		}
+		res, err := ex.AdditionalImagesCollector(ctx)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, expected, res.AllImages)
+		assert.Len(t, res.AllImages, 2)
+		assert.Equal(t, res.AllImages[0].Source, res.AllImages[1].Source, "both tags are read from the one shared cache entry")
+		assert.NotEqual(t, res.AllImages[0].Destination, res.AllImages[1].Destination, "both distinct tags must be recreated")
 	})
 }
 

@@ -1,0 +1,16 @@
+# ImageSetConfig that reproduces the tag+digest cache collision for additionalImages.
+#
+# Both entries reference the SAME repository and tag (oc-mirror-dev:shared-operand)
+# but pin two DIFFERENT digests via the "repo:tag@sha256:..." form. oc-mirror stores
+# tag+digest images in the local cache under the tag only, so the two digests collide
+# on a single cache tag and the archive keeps blob data for only one of them.
+#
+# Expected (after fix): both digests are archived and pushed, resolvable by digest at
+# the destination. Before fix: one digest's blobs are missing from the tar and it is
+# reported as "manifest unknown" at the destination.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad

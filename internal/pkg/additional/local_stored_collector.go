@@ -142,14 +142,18 @@ func (o LocalStorageCollector) buildMirrorToDiskPaths(img v2alpha1.AdditionalIma
 
 	// Docker protocol
 	switch {
+	// OCPBUGS-105878 - tag+digest: always pull by digest. M2D keys the cache by digest
+	// (collision-safe); M2M has no cache, so keep the human tag at the destination.
 	case imgSpec.IsImageByTagAndDigest():
-		// OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-		// use tag only for both src and dest
-		o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
+		o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull", imgSpec.Reference)
 		tmpSrc = fmt.Sprintf("%s/%s@%s:%s", imgSpec.Domain, imgSpec.PathComponent, imgSpec.Algorithm, imgSpec.Digest)
-		tmpDest = fmt.Sprintf("%s/%s:%s", o.destinationRegistry(), targetRepo, targetTag)
+		if o.Opts.IsMirrorToDisk() {
+			tmpDest = fmt.Sprintf("%s/%s:%s", o.destinationRegistry(), targetRepo, imgSpec.CacheTag())
+		} else {
+			tmpDest = fmt.Sprintf("%s/%s:%s", o.destinationRegistry(), targetRepo, targetTag)
+		}
 	case imgSpec.IsImageByDigestOnly() && img.TargetTag == "":
-		tmpDest = fmt.Sprintf("%s/%s:%s-%s", o.destinationRegistry(), targetRepo, imgSpec.Algorithm, imgSpec.Digest)
+		tmpDest = fmt.Sprintf("%s/%s:%s", o.destinationRegistry(), targetRepo, imgSpec.AlgorithmAndDigest())
 	default:
 		tmpDest = fmt.Sprintf("%s/%s:%s", o.destinationRegistry(), targetRepo, targetTag)
 	}
@@ -175,17 +179,18 @@ func (o LocalStorageCollector) buildDiskToMirrorPaths(img v2alpha1.AdditionalIma
 
 	switch {
 	case imgSpec.IsImageByDigestOnly() && img.TargetTag == "" && o.generateV1DestTags:
-		tmpSrc = fmt.Sprintf("%s/%s:%s-%s", o.LocalStorageFQDN, targetRepo, imgSpec.Algorithm, imgSpec.Digest)
+		tmpSrc = fmt.Sprintf("%s/%s:%s", o.LocalStorageFQDN, targetRepo, imgSpec.AlgorithmAndDigest())
 		tmpDest = fmt.Sprintf("%s/%s:%s", o.Opts.Destination, targetRepo, latestTag)
 	case imgSpec.IsImageByDigestOnly() && img.TargetTag == "":
-		digestTag := imgSpec.Algorithm + "-" + imgSpec.Digest
+		digestTag := imgSpec.AlgorithmAndDigest()
 		tmpSrc = fmt.Sprintf("%s/%s:%s", o.LocalStorageFQDN, targetRepo, digestTag)
 		tmpDest = fmt.Sprintf("%s/%s:%s", o.Opts.Destination, targetRepo, digestTag)
+	// OCPBUGS-105878 - tag+digest: read cache by digest key (as M2D wrote it),
+	// push to destination under the human tag.
+	case imgSpec.IsImageByTagAndDigest():
+		tmpSrc = fmt.Sprintf("%s/%s:%s", o.LocalStorageFQDN, targetRepo, imgSpec.CacheTag())
+		tmpDest = fmt.Sprintf("%s/%s:%s", o.Opts.Destination, targetRepo, targetTag)
 	default:
-		// OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-		if imgSpec.IsImageByTagAndDigest() {
-			o.Log.Warn(collectorPrefix+"%s has both tag and digest : using tag only", imgSpec.Reference)
-		}
 		tmpSrc = fmt.Sprintf("%s/%s:%s", o.LocalStorageFQDN, targetRepo, targetTag)
 		tmpDest = fmt.Sprintf("%s/%s:%s", o.Opts.Destination, targetRepo, targetTag)
 	}
