@@ -107,9 +107,13 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 				defer func() { <-semaphore }()
 				result := GoroutineResult{imgType: img.Type, img: img}
 
+				// Snapshot errArray without holding the lock across destination checks
+				// (Mirror.Check is network I/O).
 				m.Lock()
-				skip, reason := shouldSkipImage(img, opts, errArray)
+				errs := make([]mirrorErrorSchema, len(errArray))
+				copy(errs, errArray)
 				m.Unlock()
+				skip, reason := shouldSkipImage(cancelCtx, o.Mirror, img, opts, errs)
 				if skip {
 					if reason != nil {
 						result.err = &mirrorErrorSchema{image: img, err: reason}
@@ -385,7 +389,12 @@ func incrementTotals(imgType v2alpha1.ImageType, copiedImages *v2alpha1.Collecto
 
 // shouldSkipImage helps determine whether the batch should perform the mirroring of the image
 // or if the image should be skipped.
-func shouldSkipImage(img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errArray []mirrorErrorSchema) (bool, error) {
+//
+// For operator bundles, a related-image failure only cascades into a bundle skip when the
+// failure is non-retriable and the related image is not already present at the destination.
+// Transient errors (429, 5xx, timeout) and "already present" related images must not prevent
+// the bundle from being pushed (OCPBUGS-111614).
+func shouldSkipImage(ctx context.Context, mirrorClient mirror.MirrorInterface, img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errArray []mirrorErrorSchema) (bool, error) {
 	// In MirrorToMirror and MirrorToDisk, the release collector will generally build and push the graph image
 	// to the destination registry (disconnected registry or cache resp.)
 	// Therefore this image can be skipped.
@@ -399,15 +408,30 @@ func shouldSkipImage(img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errA
 	}
 
 	if img.Type == v2alpha1.TypeOperatorBundle {
-		for _, err := range errArray {
-			bundleImage := img.Origin
-			if strings.Contains(bundleImage, "://") {
-				bundleImage = strings.Split(img.Origin, "://")[1]
+		bundleImage := img.Origin
+		if strings.Contains(bundleImage, "://") {
+			bundleImage = strings.Split(img.Origin, "://")[1]
+		}
+
+		for _, mirrorErr := range errArray {
+			if mirrorErr.bundles == nil || !mirrorErr.bundles.Has(bundleImage) {
+				continue
 			}
 
-			if err.bundles != nil && err.bundles.Has(bundleImage) {
-				return true, fmt.Errorf(skippingMsg, img.Origin)
+			// Transient / retriable failures on related images must not cascade-skip the bundle.
+			if mirror.IsErrorRetryable(mirrorErr.err) {
+				continue
 			}
+
+			// If the related image is already present at the destination, push the bundle normally.
+			if mirrorClient != nil && mirrorErr.image.Destination != "" {
+				present, checkErr := mirrorClient.Check(ctx, mirrorErr.image.Destination, &opts, false)
+				if checkErr == nil && present {
+					continue
+				}
+			}
+
+			return true, fmt.Errorf(skippingMsg, img.Origin)
 		}
 	}
 
