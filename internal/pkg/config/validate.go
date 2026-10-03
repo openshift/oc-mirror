@@ -18,7 +18,7 @@ type (
 
 var (
 	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
-	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
+	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete, validateBlockedImagesDelete}
 )
 
 // Validate will check an ImagesetConfiguration for input errors.
@@ -222,4 +222,17 @@ func validateReleaseChannelsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) er
 		channels.Insert(channel.Name)
 	}
 	return nil
+}
+
+// validateBlockedImagesDelete validates blocked image regex patterns in delete configuration.
+func validateBlockedImagesDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
+	var errs []error
+	for _, img := range cfg.Delete.BlockedImages {
+		if _, err := regexp.Compile(img.Name); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"blocked image %q: invalid regular expression: %w", img.Name, err,
+			))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }

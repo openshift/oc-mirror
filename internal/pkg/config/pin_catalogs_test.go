@@ -490,6 +490,9 @@ func TestCreateDISCFromISC_AllSections(t *testing.T) {
 						},
 					},
 				},
+				BlockedImages: []v2alpha1.BlockedImage{
+					{Name: "(aws|gcp|azure)"},
+				},
 			},
 		},
 	}
@@ -510,6 +513,7 @@ func TestCreateDISCFromISC_AllSections(t *testing.T) {
 	assert.Equal(t, image.WithDigest(redhatIndexBase, testDigestShort4), loadedDISC.Delete.Operators[0].Catalog)
 	assert.Equal(t, "quay.io/example/image:latest", loadedDISC.Delete.AdditionalImages[0].Name)
 	assert.Equal(t, "my-repo", loadedDISC.Delete.Helm.Repositories[0].Name)
+	assert.Equal(t, "(aws|gcp|azure)", loadedDISC.Delete.BlockedImages[0].Name)
 }
 
 func TestCreateDISCFromISC_InvalidDirectory(t *testing.T) {

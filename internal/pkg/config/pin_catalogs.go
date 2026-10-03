@@ -219,6 +219,7 @@ func createDISCFromISC(
 				Operators:        pinnedISC.Mirror.Operators,
 				AdditionalImages: pinnedISC.Mirror.AdditionalImages,
 				Helm:             pinnedISC.Mirror.Helm,
+				BlockedImages:    pinnedISC.Mirror.BlockedImages,
 			},
 		},
 	}
