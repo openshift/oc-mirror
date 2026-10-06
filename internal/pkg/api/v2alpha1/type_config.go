@@ -284,6 +284,16 @@ type Chart struct {
 	// ImagePaths are custom JSON paths for images location
 	// in the helm manifest or templates
 	ImagePaths []string `json:"imagePaths,omitempty"`
+	// ValuesFiles are paths to Helm values YAML files used when rendering
+	// the chart to discover images. Files are applied in order; later files
+	// override earlier ones (same behavior as `helm template -f`).
+	// During mirror-to-disk these files are copied into the working directory
+	// so disk-to-mirror can re-render without the original host paths.
+	ValuesFiles []string `json:"valuesFiles,omitempty"`
+	// Values are inline Helm values used when rendering the chart to discover
+	// images. When both ValuesFiles and Values are set, Values override keys
+	// from ValuesFiles.
+	Values map[string]any `json:"values,omitempty"`
 	// Platforms defines one or more OS/Architecture pairs to mirror
 	// for multi-architecture images referenced by this chart. If empty, mirrors all platforms.
 	// Example: [{OS: "linux", Architecture: "amd64"}, {OS: "linux", Architecture: "arm64"}]

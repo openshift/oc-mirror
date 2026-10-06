@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/mitchellh/copystructure"
+	"github.com/otiai10/copy"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -143,7 +145,12 @@ func (lsc *LocalStorageCollector) collectHelmImagesM2D() ([]v2alpha1.CopyImageSc
 				errs = append(errs, fmt.Errorf("invalid platform for chart %q: %w", chart.Name, err))
 				continue
 			}
-			chartImgs, err := getImages(path, chart.ImagePaths...)
+			chart, err = prepareChartValuesFiles(chart, true)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			chartImgs, err := getImages(path, chart)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -189,7 +196,12 @@ func (lsc *LocalStorageCollector) collectHelmImagesD2M(generateV1Tags bool) ([]v
 				errs = append(errs, fmt.Errorf("invalid platform for chart %q: %w", chart.Name, err))
 				continue
 			}
-			chartImgs, err := getImages(path, chart.ImagePaths...)
+			chart, err = prepareChartValuesFiles(chart, false)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			chartImgs, err := getImages(path, chart)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -267,7 +279,15 @@ func getHelmImagesFromLocalChart() ([]v2alpha1.RelatedImage, map[string][]v2alph
 			continue
 		}
 
-		imgs, err := getImages(chart.Path, chart.ImagePaths...)
+		// Persist values files during mirror-to-disk / mirror-to-mirror so
+		// disk-to-mirror can re-render without the original host paths.
+		chart, err := prepareChartValuesFiles(chart, !lsc.Opts.IsDiskToMirror())
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		imgs, err := getImages(chart.Path, chart)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -460,19 +480,24 @@ func buildChartCandidatePath(baseDir, name, ver string) (string, error) {
 	return p, nil
 }
 
-func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImage, err error) {
+func getImages(path string, chart v2alpha1.Chart) (images []v2alpha1.RelatedImage, err error) {
 	lsc.Log.Debug("Reading from path %s", path)
 
-	p := getImagesPath(imagePaths...)
+	p := getImagesPath(chart.ImagePaths...)
 
-	var chart *helmchart.Chart
-	if chart, err = loader.Load(path); err != nil {
+	var helmChart *helmchart.Chart
+	if helmChart, err = loader.Load(path); err != nil {
 		return nil, fmt.Errorf("failed to load %s: %w", path, err)
 	}
 
+	valueOpts, err := mergeChartValues(chart)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load values for chart %s: %w", chart.Name, err)
+	}
+
 	var templates string
-	if templates, err = getHelmTemplates(chart); err != nil {
-		return nil, fmt.Errorf("failed to get template %s: %w", chart.Name(), err)
+	if templates, err = getHelmTemplates(helmChart, valueOpts); err != nil {
+		return nil, fmt.Errorf("failed to get template %s: %w", helmChart.Name(), err)
 	}
 
 	// Process each YAML document seperately
@@ -488,6 +513,76 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 	return images, nil
 }
 
+// mergeChartValues loads ValuesFiles and merges them with inline Values.
+// Later values files override earlier ones; inline Values override files.
+// This mirrors `helm template -f file1 -f file2 --set ...` precedence.
+func mergeChartValues(chart v2alpha1.Chart) (map[string]any, error) {
+	vals := make(map[string]any)
+
+	for _, valuesFile := range chart.ValuesFiles {
+		fileVals, err := chartutil.ReadValuesFile(valuesFile)
+		if err != nil {
+			return nil, fmt.Errorf("read values file %q: %w", valuesFile, err)
+		}
+		// CoalesceTables keeps destination keys when both maps define the same path,
+		// so the newer file must be the destination for later overrides to win.
+		vals = chartutil.CoalesceTables(fileVals, vals)
+	}
+
+	if len(chart.Values) > 0 {
+		// Deep-copy so CoalesceTables does not mutate the shared ImageSetConfiguration map.
+		copied, err := copystructure.Copy(chart.Values)
+		if err != nil {
+			return nil, fmt.Errorf("copy inline values: %w", err)
+		}
+		inlineVals, ok := copied.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("copy inline values: unexpected type %T", copied)
+		}
+		vals = chartutil.CoalesceTables(inlineVals, vals)
+	}
+
+	return vals, nil
+}
+
+// prepareChartValuesFiles rewrites chart.ValuesFiles to paths under the working
+// directory. When persist is true (mirror-to-disk / mirror-to-mirror), source
+// files are copied into the working dir so they are included in the archive.
+// When persist is false (disk-to-mirror), the previously persisted copies are used.
+func prepareChartValuesFiles(chart v2alpha1.Chart, persist bool) (v2alpha1.Chart, error) {
+	if len(chart.ValuesFiles) == 0 {
+		return chart, nil
+	}
+
+	destDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmValuesDir, chartValuesDirName(chart))
+	updated := make([]string, 0, len(chart.ValuesFiles))
+
+	for i, src := range chart.ValuesFiles {
+		dest := filepath.Join(destDir, fmt.Sprintf("%d-%s", i, filepath.Base(src)))
+		if persist {
+			if err := os.MkdirAll(destDir, 0o755); err != nil {
+				return chart, fmt.Errorf("create values dir for chart %q: %w", chart.Name, err)
+			}
+			if err := copy.Copy(src, dest); err != nil {
+				return chart, fmt.Errorf("persist values file %q for chart %q: %w", src, chart.Name, err)
+			}
+		} else if _, err := os.Stat(dest); err != nil {
+			return chart, fmt.Errorf("persisted values file for chart %q not found at %q (required for disk-to-mirror): %w", chart.Name, dest, err)
+		}
+		updated = append(updated, dest)
+	}
+
+	chart.ValuesFiles = updated
+	return chart, nil
+}
+
+func chartValuesDirName(chart v2alpha1.Chart) string {
+	if chart.Version == "" {
+		return chart.Name
+	}
+	return fmt.Sprintf("%s-%s", chart.Name, chart.Version)
+}
+
 // getImagesPath returns known jsonpaths and user defined jsonpaths where images are found
 // it follows the pattern of jsonpath library which is different from text/template
 func getImagesPath(paths ...string) []string {
@@ -501,16 +596,24 @@ func getImagesPath(paths ...string) []string {
 }
 
 // getHelmTemplates returns all chart templates
-func getHelmTemplates(ch *helmchart.Chart) (string, error) {
+func getHelmTemplates(ch *helmchart.Chart, valueOpts map[string]any) (string, error) {
 	out := new(bytes.Buffer)
-	valueOpts := make(map[string]any)
 	caps := chartutil.DefaultCapabilities
+
+	// Match v1 rendering: use non-empty placeholders so charts that concatenate
+	// .Release.Name into metadata fields still produce valid YAML. Charts that
+	// embed .Release.Name into image references are uncommon; prefer overriding
+	// those image values via values/valuesFiles when needed.
+	relOps := chartutil.ReleaseOptions{
+		Name:      "NAME",
+		Namespace: "RELEASE-NAMESPACE",
+	}
 
 	if err := chartutil.ProcessDependencies(ch, valueOpts); err != nil {
 		return "", fmt.Errorf("error processing dependencies: %w", err)
 	}
 
-	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, chartutil.ReleaseOptions{}, caps)
+	valuesToRender, err := chartutil.ToRenderValues(ch, valueOpts, relOps, caps)
 	if err != nil {
 		return "", fmt.Errorf("error rendering values: %w", err)
 	}

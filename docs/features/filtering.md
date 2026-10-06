@@ -249,6 +249,30 @@ mirror:
               - "{.spec.template.spec.custom[*].image}"
 ```
 
+### Charts that require values
+
+oc-mirror renders Helm charts with default values to discover container images. Charts that use `required` (or other validation) need additional values for rendering to succeed. Provide them with `valuesFiles` and/or inline `values`:
+
+```yaml
+mirror:
+  helm:
+    repositories:
+      - name: flex-gateway
+        url: https://flex-packages.anypoint.mulesoft.com/helm
+        charts:
+          - name: flex-gateway
+            version: 1.10.4
+            valuesFiles:
+              - /path/to/values-for-mirroring.yaml
+            values:
+              registration:
+                secretName: dummy-registration-secret
+```
+
+`valuesFiles` are applied in order (later files override earlier ones, same as `helm template -f`). Inline `values` override keys from `valuesFiles`. These values are only used for image discovery during mirroring; they are not applied when you later install the chart.
+
+During mirror-to-disk, `valuesFiles` are copied into the oc-mirror working directory (and therefore into the archive) so disk-to-mirror can re-render the chart on the disconnected host without needing the original paths.
+
 ## Blocked images
 
 Exclude images matching regex patterns from mirroring, regardless of content type:
