@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -327,8 +328,10 @@ func repoAdd(chartRepo v2alpha1.Repository) error {
 }
 
 func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
-	if !strings.HasSuffix(indexURL, "/index.yaml") {
-		indexURL += "index.yaml"
+	repositoryURL := indexURL
+	var err error
+	if indexURL, err = normalizeHelmIndexURL(indexURL); err != nil {
+		return helmrepo.IndexFile{}, err
 	}
 	resp, err := wClient.Get(indexURL)
 	if err != nil {
@@ -345,7 +348,10 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 		return helmrepo.IndexFile{}, fmt.Errorf("failed to parse %q into index file: %w", indexURL, err)
 	}
 
-	namespace := getNamespaceFromURL(indexURL)
+	// Keep the archive namespace based on the configured URL so mirror-to-disk
+	// and disk-to-mirror derive the same location for repositories without a
+	// trailing slash.
+	namespace := getNamespaceFromURL(repositoryURL)
 
 	indexDir := filepath.Join(lsc.Opts.Global.WorkingDir, helmDir, helmIndexesDir, namespace)
 
@@ -360,6 +366,19 @@ func createIndexFile(indexURL string) (helmrepo.IndexFile, error) {
 	}
 
 	return indexFile, nil
+}
+
+func normalizeHelmIndexURL(indexURL string) (string, error) {
+	parsedURL, err := url.Parse(indexURL)
+	if err != nil {
+		return "", fmt.Errorf("parse helm index URL %q: %w", indexURL, err)
+	}
+
+	if parsedURL.Path != "index.yaml" && !strings.HasSuffix(parsedURL.Path, "/index.yaml") {
+		parsedURL = parsedURL.JoinPath("index.yaml")
+	}
+
+	return parsedURL.String(), nil
 }
 
 func getNamespaceFromURL(url string) string {
