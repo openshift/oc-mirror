@@ -716,6 +716,67 @@ func TestHelmImageCollector(t *testing.T) {
 	}
 }
 
+func TestCreateTempFileCleanup(t *testing.T) {
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+
+	cleanup, name, err := createTempFile(t.TempDir())
+	assert.NoError(t, err)
+	assert.FileExists(t, name)
+
+	cleanup()
+	assert.NoFileExists(t, name)
+}
+
+func TestCreateTempFileFailure(t *testing.T) {
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+	dir := filepath.Join(t.TempDir(), "missing")
+
+	var cleanup func()
+	var name string
+	var err error
+	if !assert.NotPanics(t, func() {
+		cleanup, name, err = createTempFile(dir)
+	}) {
+		return
+	}
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, dir)
+	assert.Empty(t, name)
+	if cleanup != nil {
+		assert.NotPanics(t, cleanup)
+	}
+}
+
+func TestHelmImageCollectorReturnsTempFileError(t *testing.T) {
+	log := clog.New("trace")
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+			workingDir := filepath.Join(t.TempDir(), "missing")
+			opts := mirror.CopyOptions{
+				Mode:     mode,
+				Global:   &mirror.GlobalOptions{WorkingDir: workingDir},
+				SrcImage: srcOpts,
+			}
+
+			var collector CollectorInterface
+			if !assert.NotPanics(t, func() {
+				collector = New(log, cfg, opts, MockIndexDownloader{}, MockChartDownloader{}, MockHttpClient{})
+			}) {
+				return
+			}
+			if collector == nil {
+				return
+			}
+
+			_, err := collector.HelmImageCollector(context.Background())
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, filepath.Join(workingDir, helmDir))
+		})
+	}
+}
+
 // TestResolveChartPath verifies that resolveChartPath tolerates mismatches
 // between the version string in the ImageSetConfiguration and the "v" prefix
 // that a Helm repository may embed in its tarball filenames.
