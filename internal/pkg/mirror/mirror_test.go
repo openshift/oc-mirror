@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
 
@@ -453,4 +455,85 @@ func (o *mockMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyCont
 
 func (o *mockMirrorDelete) DeleteImage(ctx context.Context, dest string, opts *CopyOptions) error {
 	return nil
+}
+
+func TestSigstoreAttachmentTagsFromManifest(t *testing.T) {
+	single := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","size":2,"digest":"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},"layers":[]}`)
+	tags, err := sigstoreAttachmentTagsFromManifest(single)
+	require.NoError(t, err)
+	require.Len(t, tags, 1)
+	d, err := manifest.Digest(single)
+	require.NoError(t, err)
+	assert.Equal(t, sigstoreAttachmentTag(d), tags[0])
+
+	list := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1,"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","platform":{"architecture":"amd64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1,"digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","platform":{"architecture":"arm64","os":"linux"}}]}`)
+	tags, err = sigstoreAttachmentTagsFromManifest(list)
+	require.NoError(t, err)
+	require.Len(t, tags, 3)
+	listDigest, err := manifest.Digest(list)
+	require.NoError(t, err)
+	assert.Equal(t, sigstoreAttachmentTag(listDigest), tags[0])
+	assert.Equal(t, "sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.sig", tags[1])
+	assert.Equal(t, "sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.sig", tags[2])
+}
+
+func TestIsManifestUnknownError(t *testing.T) {
+	assert.True(t, isManifestUnknownError(errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown}))
+	assert.True(t, isManifestUnknownError(fmt.Errorf("reading image %q: manifest unknown", "img")))
+	assert.False(t, isManifestUnknownError(fmt.Errorf("manifest invalid")))
+	assert.False(t, isManifestUnknownError(nil))
+}
+
+func TestCopySigstoreAttachmentsSkipsMissing(t *testing.T) {
+	global := &GlobalOptions{SecurePolicy: false}
+	_, sharedOpts := SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
+	_, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := RetryFlags()
+
+	single := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","size":2,"digest":"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},"layers":[]}`)
+	rec := &recordingMirrorCopy{manifest: single, sigErr: errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown}}
+	m := New(rec, &mockMirrorDelete{})
+	opts := CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		RemoveSignatures:    false,
+	}
+	err := m.Run(context.Background(),
+		consts.DockerProtocol+"localhost.localdomain:5000/test:latest",
+		consts.DockerProtocol+"localhost.localdomain:5001/test:latest",
+		"copy", &opts)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rec.calls), 2)
+	assert.True(t, rec.calls[0].removeSignatures, "main image copy must skip PutSignatures rebuild")
+	assert.True(t, rec.calls[1].removeSignatures)
+	assert.True(t, rec.calls[1].preserveDigests)
+	assert.Contains(t, rec.calls[1].src, ".sig")
+	assert.Contains(t, rec.calls[1].dest, ".sig")
+}
+
+type recordingMirrorCopy struct {
+	manifest []byte
+	sigErr   error
+	calls    []struct {
+		src, dest                         string
+		removeSignatures, preserveDigests bool
+	}
+}
+
+func (r *recordingMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyContext, destRef, srcRef types.ImageReference, opts *copy.Options) ([]byte, error) {
+	src := srcRef.StringWithinTransport()
+	dest := destRef.StringWithinTransport()
+	r.calls = append(r.calls, struct {
+		src, dest                         string
+		removeSignatures, preserveDigests bool
+	}{src, dest, opts.RemoveSignatures, opts.PreserveDigests})
+	if strings.Contains(src, ".sig") || strings.Contains(dest, ".sig") {
+		return nil, r.sigErr
+	}
+	return r.manifest, nil
 }
