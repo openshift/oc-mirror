@@ -531,7 +531,11 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", crd.Name, string(crd.File.Data[:]))
 	}
 
-	_, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
+	// Include hook manifests as well as regular ones. SortManifests classifies
+	// templates with helm.sh/hook annotations into the hooks slice; discarding
+	// them silently dropped images from pre-install/pre-upgrade (etc.) resources
+	// (OCPBUGS-129496 / https://github.com/openshift/oc-mirror/issues/1356).
+	hooks, manifests, err := releaseutil.SortManifests(files, caps.APIVersions, releaseutil.InstallOrder)
 	if err != nil {
 		// We return the files as a big blob of data to help the user debug parser
 		// errors.
@@ -542,6 +546,9 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 			fmt.Fprintf(out, "---\n# Source: %s\n%s\n", name, content)
 		}
 		return out.String(), err
+	}
+	for _, h := range hooks {
+		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", h.Path, h.Manifest)
 	}
 	for _, m := range manifests {
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", m.Name, m.Content)

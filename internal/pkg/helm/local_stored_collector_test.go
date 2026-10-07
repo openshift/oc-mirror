@@ -14,6 +14,8 @@ import (
 
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"helm.sh/helm/v3/pkg/chart/loader"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -77,9 +79,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
-					Destination: consts.DockerProtocol + "localhost:8888/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Destination: "docker://localhost:8888/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://curlimages/curl:7.69.0",
+					Destination: "docker://localhost:8888/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -97,9 +111,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
-					Destination: consts.DockerProtocol + "localhost:8888/ingress-nginx/controller:v1.12.1",
-					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Source:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://localhost:8888/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://localhost:8888/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: "docker://localhost:8888/ingress-nginx/controller:v1.12.1",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -117,9 +143,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
-					Destination: consts.DockerProtocol + "localhost:8888/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Destination: "docker://localhost:8888/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://curlimages/curl:7.69.0",
+					Destination: "docker://localhost:8888/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -137,63 +175,123 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Destination: consts.DockerProtocol + "localhost:8888/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -211,9 +309,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
+					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://curlimages/curl:7.69.0",
+					Destination: "docker://myreg:5000/test/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
-					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -231,9 +341,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://myreg:5000/test/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://myreg:5000/test/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
 					Source:      "docker://registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
-					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
-					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: "docker://myreg:5000/test/ingress-nginx/controller:v1.12.1",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -251,9 +373,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
+					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://curlimages/curl:7.69.0",
+					Destination: "docker://myreg:5000/test/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
-					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -271,63 +405,123 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -346,9 +540,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
-					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Source:      "docker://localhost:8888/grpc_health_probe:v0.3.0",
+					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/curl:7.69.0",
+					Destination: "docker://myreg:5000/test/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -367,9 +573,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
-					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
-					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Source:      "docker://localhost:8888/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://myreg:5000/test/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Destination: "docker://myreg:5000/test/ingress-nginx/kube-webhook-certgen:v1.5.2",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
+					Destination: "docker://myreg:5000/test/ingress-nginx/controller:v1.12.1",
+					Origin:      "docker://registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -388,9 +606,21 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
-					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
-					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
+					Source:      "docker://localhost:8888/grpc_health_probe:v0.3.0",
+					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
+					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/curl:7.69.0",
+					Destination: "docker://myreg:5000/test/curl:7.69.0",
+					Origin:      "docker://curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
+					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
+					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -409,63 +639,123 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -484,63 +774,123 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: true,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:ac47f496fb7ecdcbc371f8c809fad2687ec0c35bbc8c522a7ab63b3e5ffd90ea",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:30bf7f0f21024bb2e1e4db901b1f5e89ab56e0f3197a919d2bbb670f3fe5223a",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
-					Destination: testDest + "/redhat-developer/servicebinding-operator:latest",
-					Origin:      consts.DockerProtocol + "quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e01016cacae84dfb6eaf7a1022130e7d95e2a8489c38d4d46e4f734848e93849",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:69a95c6216ead931e01e4144ae8f4fb7ab35d1f68a14c18f6860a085ccb950f5",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
+					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
+					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
+					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:de1881753e82c51b31e958fcf383cb35b0f70f6ec99d402d42243e595d00c6dd",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 			},
@@ -948,4 +1298,62 @@ func prepareFolder(tempDir string) (string, error) {
 	}
 
 	return workingDir, nil
+}
+
+func TestGetHelmTemplatesIncludesHookImages(t *testing.T) {
+	chartDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "Chart.yaml"), []byte(`
+apiVersion: v2
+name: hook-chart
+version: 0.1.0
+`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(chartDir, "templates"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "db.yaml"), []byte(`
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: my-database
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+spec:
+  serviceName: my-database
+  selector:
+    matchLabels:
+      app: my-database
+  template:
+    metadata:
+      labels:
+        app: my-database
+    spec:
+      containers:
+        - name: postgres
+          image: quay.io/example/postgresql:16
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "app.yaml"), []byte(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: app
+          image: quay.io/example/app:1.0
+`), 0o644))
+
+	ch, err := loader.Load(chartDir)
+	require.NoError(t, err)
+
+	rendered, err := getHelmTemplates(ch)
+	require.NoError(t, err)
+	assert.Contains(t, rendered, "quay.io/example/postgresql:16", "images from helm.sh/hook templates must be included")
+	assert.Contains(t, rendered, "quay.io/example/app:1.0")
 }
