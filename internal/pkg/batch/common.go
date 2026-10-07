@@ -1,15 +1,24 @@
 package batch
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
+
+// imageTimeoutHint clarifies that context deadline exceeded during mirroring
+// is often resolved by raising --image-timeout (OCPBUGS-111840).
+const imageTimeoutHint = " hint: image mirroring timed out (context deadline exceeded). " +
+	"Large images (for example kubeVirt containerdisk blobs) often need a higher --image-timeout " +
+	"(default 10m0s); retry with e.g. --image-timeout 30m."
 
 type BatchError struct {
 	source                 error
@@ -64,13 +73,31 @@ func saveErrors(logger clog.PluggableLoggerInterface, logsDir, timestamp string,
 }
 
 func formatErrorMsg(err mirrorErrorSchema) string {
+	detail := annotateImageTimeoutError(err.err)
 	if len(err.operators) > 0 || len(err.bundles) > 0 {
 		bundles := slices.Sorted(maps.Values(err.bundles))
 		operators := slices.Sorted(maps.Keys(err.operators))
-		return fmt.Sprintf("error mirroring image %s (Operator bundles: %v - Operators: %v) error: %s", err.image.Origin, bundles, operators, err.err.Error())
+		return fmt.Sprintf("error mirroring image %s (Operator bundles: %v - Operators: %v) error: %s", err.image.Origin, bundles, operators, detail)
 	}
 
-	return fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
+	return fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, detail)
+}
+
+// annotateImageTimeoutError appends remediation guidance when mirroring fails
+// because the per-image --image-timeout budget was exhausted.
+func annotateImageTimeoutError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "--image-timeout") {
+		return msg
+	}
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(strings.ToLower(msg), "context deadline exceeded") {
+		return msg + imageTimeoutHint
+	}
+	return msg
 }
 
 func (s StringMap) Has(key string) bool {
