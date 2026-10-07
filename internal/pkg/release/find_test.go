@@ -73,3 +73,59 @@ func TestFindLatestRelease(t *testing.T) {
 		})
 	}
 }
+
+func TestShortestPathChannels(t *testing.T) {
+	tests := []struct {
+		name        string
+		channelName string
+		first       string
+		last        string
+		wantSource  string
+		wantTarget  string
+		wantErr     bool
+	}{
+		{
+			name:        "same minor keeps channel name",
+			channelName: "stable-4.14",
+			first:       "4.14.1",
+			last:        "4.14.10",
+			wantSource:  "stable-4.14",
+			wantTarget:  "stable-4.14",
+		},
+		{
+			name:        "OCPBUGS-85582 cross-minor EUS-style path",
+			channelName: "stable-4.14",
+			first:       "4.12.40",
+			last:        "4.14.10",
+			wantSource:  "stable-4.12",
+			wantTarget:  "stable-4.14",
+		},
+		{
+			name:        "eus channel prefix preserved",
+			channelName: "eus-4.14",
+			first:       "4.12.40",
+			last:        "4.14.10",
+			wantSource:  "eus-4.12",
+			wantTarget:  "eus-4.14",
+		},
+		{
+			name:        "invalid channel name",
+			channelName: "stable",
+			first:       "4.12.0",
+			last:        "4.14.0",
+			wantErr:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source, target, err := shortestPathChannels(tt.channelName, semver.MustParse(tt.first), semver.MustParse(tt.last))
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSource, source)
+			require.Equal(t, tt.wantTarget, target)
+		})
+	}
+}
