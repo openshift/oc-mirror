@@ -1,0 +1,21 @@
+# ImageSetConfig that reproduces the tag+digest cache collision for images
+# referenced by a Helm chart (see isc-additional-tag-digest-collision.yaml for
+# the additionalImages equivalent).
+#
+# The local chart at tests/integration/testdata/helm-charts/tag-digest-collision
+# has a container and an initContainer that both reference
+# oc-mirror-dev:shared-operand but pin two DIFFERENT digests. oc-mirror stores
+# tag+digest images in the local cache under the tag only, so the two digests
+# collide on a single cache tag and the archive keeps blob data for only one
+# of them.
+#
+# Expected (after fix): both digests are archived and pushed, resolvable by
+# digest at the destination. Before fix: one digest's blobs are missing from
+# the tar and it is reported as "manifest unknown" at the destination.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  helm:
+    local:
+    - name: tag-digest-collision
+      path: testdata/helm-charts/tag-digest-collision

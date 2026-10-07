@@ -350,7 +350,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 				},
 				{
 					Source:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
-					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Origin:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
@@ -402,7 +402,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 				},
 				{
 					Source:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
-					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Origin:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
@@ -440,7 +440,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 				},
 				{
 					Source:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
-					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: consts.DockerProtocol + "localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Origin:      consts.DockerProtocol + "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
@@ -472,7 +472,7 @@ func TestFilterCollectorM2D(t *testing.T) {
 				},
 				{
 					Source:      "docker://gcr.io/kubebuilder/kube-rbac-proxy@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
-					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Destination: "docker://localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
 				},
@@ -561,7 +561,7 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Destination: "docker://localhost:5000/test/kubebuilder/kube-rbac-proxy:v0.13.1",
 					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
@@ -605,7 +605,7 @@ func TestFilterCollectorD2M(t *testing.T) {
 					Type:        v2alpha1.TypeInvalid,
 				},
 				{
-					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:v0.13.1",
+					Source:      "docker://localhost:9999/kubebuilder/kube-rbac-proxy:sha256-d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Destination: "docker://localhost:5000/test/kubebuilder/kube-rbac-proxy:v0.13.1",
 					Origin:      "docker://gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 					Type:        v2alpha1.TypeInvalid,
