@@ -13,6 +13,7 @@ import (
 	"github.com/otiai10/copy"
 	filter "github.com/sherine-k/catalog-filter/pkg/filter/mirror-config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -109,11 +110,16 @@ func filterCatalog(ctx context.Context, operatorCatalog declcfg.DeclarativeConfi
 	return dc, nil
 }
 
-func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, iscCatalogFilter v2alpha1.Operator, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
+	selectorsByPackage, err := packageSelectors(iscCatalogFilter.Packages)
+	if err != nil {
+		return nil, err
+	}
+
 	var errs []error
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	for _, bundle := range dc.Bundles {
-		ris, err := handleRelatedImages(bundle, bundle.Package, copyImageSchemaMap)
+		ris, err := o.handleRelatedImages(bundle, bundle.Package, selectorsByPackage[bundle.Package], copyImageSchemaMap)
 		if err != nil {
 			o.Log.Warn("%s SKIPPING bundle %s of operator %s", err.Error(), bundle.Name, bundle.Package)
 			errs = append(errs, err)
@@ -129,11 +135,52 @@ func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfi
 	return relatedImages, errors.Join(errs...)
 }
 
-func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
+// packageSelectors converts the label selectors of each package of an operator catalog
+// into their matching form, so that they are parsed once per catalog rather than once
+// per related image. Packages without selectors are absent from the returned map, which
+// is equivalent to an entry with no selector.
+func packageSelectors(packages []v2alpha1.IncludePackage) (map[string][]labels.Selector, error) {
+	selectorsByPackage := make(map[string][]labels.Selector, len(packages))
+	for _, pkg := range packages {
+		for _, ls := range pkg.Selectors {
+			selector, err := v1.LabelSelectorAsSelector(ls)
+			if err != nil {
+				return nil, fmt.Errorf("operator %q: invalid selector: %w", pkg.Name, err)
+			}
+			selectorsByPackage[pkg.Name] = append(selectorsByPackage[pkg.Name], selector)
+		}
+	}
+	return selectorsByPackage, nil
+}
+
+// isRelatedImageSelected reports whether a related image carrying imgLabels is mirrored
+// for a package whose selectors are given. An image without any label is always selected,
+// which keeps catalogs that carry no label at all mirrored in full. Any other image is
+// selected as soon as one of the selectors matches its labels.
+func isRelatedImageSelected(imgLabels map[string]string, selectors []labels.Selector) bool {
+	if len(imgLabels) == 0 {
+		return true
+	}
+	labelSet := labels.Set(imgLabels)
+	for _, selector := range selectors {
+		if selector.Matches(labelSet) {
+			return true
+		}
+	}
+	return false
+}
+
+func (o CatalogHandler) handleRelatedImages(bundle declcfg.Bundle, operatorName string, selectors []labels.Selector, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
 	var relatedImages []v2alpha1.RelatedImage
 	for _, ri := range bundle.RelatedImages {
 		if strings.Contains(ri.Image, consts.OciProtocol) {
 			return relatedImages, fmt.Errorf("invalid image: %s 'oci' is not supported in operator catalogs", ri.Image)
+		}
+		// CLID-717 the image is left out of the mirroring when the labels it carries
+		// are matched by none of the selectors configured for its package.
+		if !isRelatedImageSelected(ri.Labels, selectors) {
+			o.Log.Info("image %s is not mirrored in bundle %s: its labels %v are selected by no selector of operator %s", ri.Image, bundle.Name, ri.Labels, operatorName)
+			continue
 		}
 		relatedImage := v2alpha1.RelatedImage{
 			Name:  ri.Name,

@@ -1,0 +1,17 @@
+# ImageSetConfig to test selecting the related images to mirror with matchExpressions (CLID-717):
+# only the related images without labels and the ones of the analytics and metrics features
+# are mirrored
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-labels
+      packages:
+      - name: foo
+        selectors:
+        - matchExpressions:
+          - key: feature
+            operator: In
+            values:
+            - analytics
+            - metrics
