@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/docker/distribution/registry/api/errcode"
+	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
@@ -191,9 +193,17 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		}
 	}
 
+	// When keeping signatures, copy cosign/sigstore attachment tags as whole
+	// images so the source .sig manifest is preserved verbatim. containers/image
+	// PutSignatures rebuilds attachment manifests (de-duplicating repeated layer
+	// digests and rewriting the config), which Quay rejects as manifest invalid
+	// (OCPBUGS-129492 / https://github.com/openshift/oc-mirror/issues/1478).
+	copySigstoreAttachments := !opts.RemoveSignatures &&
+		srcRef.DockerReference() != nil && destRef.DockerReference() != nil
+
 	// hard coded ReportWriter to io.Discard
 	co := &copy.Options{
-		RemoveSignatures:                 opts.RemoveSignatures,
+		RemoveSignatures:                 opts.RemoveSignatures || copySigstoreAttachments,
 		SignBy:                           opts.SignByFingerprint,
 		SignPassphrase:                   passphrase,
 		SignBySigstorePrivateKeyFile:     opts.SignBySigstorePrivateKey,
@@ -229,8 +239,127 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
 			}
 		}
+		if copySigstoreAttachments {
+			if err := o.copySigstoreAttachmentTags(ctx, srcRef, destRef, manifestBytes, co); err != nil {
+				return err
+			}
+		}
 		return nil
 	}, retryOptionsFrom(opts))
+}
+
+// copySigstoreAttachmentTags copies sha256-<digest>.sig tags from src to dest as
+// ordinary image copies (PreserveDigests), skipping digests with no attachment.
+//
+// Attachment tags are the signatures themselves and are not nested-signed, so a
+// SecurePolicy / sigstoreSigned PolicyContext would reject them. Copies use
+// insecureAcceptAnything while the parent image copy still uses the caller policy.
+func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) error {
+	tags, err := sigstoreAttachmentTagsFromManifest(manifestBytes)
+	if err != nil {
+		return fmt.Errorf("listing sigstore attachment tags: %w", err)
+	}
+	if len(tags) == 0 {
+		return nil
+	}
+
+	attachmentPolicy := &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
+	attachmentPolicyContext, err := signature.NewPolicyContext(attachmentPolicy)
+	if err != nil {
+		return fmt.Errorf("creating policy context for signature attachments: %w", err)
+	}
+	defer func() {
+		_ = attachmentPolicyContext.Destroy()
+	}()
+
+	sigOpts := *base
+	sigOpts.RemoveSignatures = true
+	sigOpts.PreserveDigests = true
+	sigOpts.SignBy = ""
+	sigOpts.SignBySigstorePrivateKeyFile = ""
+	sigOpts.SignIdentity = nil
+	sigOpts.ForceManifestMIMEType = ""
+	sigOpts.ImageListSelection = copy.CopySystemImage
+	sigOpts.InstancePlatforms = nil
+	sigOpts.Instances = nil
+
+	for _, tag := range tags {
+		srcSig, err := dockerTaggedReference(srcRef, tag)
+		if err != nil {
+			return err
+		}
+		destSig, err := dockerTaggedReference(destRef, tag)
+		if err != nil {
+			return err
+		}
+		srcSigRef, err := alltransports.ParseImageName(srcSig)
+		if err != nil {
+			return fmt.Errorf("invalid signature source name %s: %w", srcSig, err)
+		}
+		destSigRef, err := alltransports.ParseImageName(destSig)
+		if err != nil {
+			return fmt.Errorf("invalid signature destination name %s: %w", destSig, err)
+		}
+		if _, err := o.mc.CopyImage(ctx, attachmentPolicyContext, destSigRef, srcSigRef, &sigOpts); err != nil {
+			if isManifestUnknownError(err) {
+				continue
+			}
+			return fmt.Errorf("copying signature attachment %s: %w", tag, err)
+		}
+	}
+	return nil
+}
+
+func sigstoreAttachmentTagsFromManifest(manifestBytes []byte) ([]string, error) {
+	if len(manifestBytes) == 0 {
+		return nil, nil
+	}
+	mimeType := manifest.GuessMIMEType(manifestBytes)
+	topDigest, err := manifest.Digest(manifestBytes)
+	if err != nil {
+		return nil, fmt.Errorf("digest of manifest: %w", err)
+	}
+	tags := []string{sigstoreAttachmentTag(topDigest)}
+	if !manifest.MIMETypeIsMultiImage(mimeType) {
+		return tags, nil
+	}
+	manifestList, err := manifest.ListFromBlob(manifestBytes, mimeType)
+	if err != nil {
+		return nil, fmt.Errorf("parse manifest list: %w", err)
+	}
+	for _, instanceDigest := range manifestList.Instances() {
+		tags = append(tags, sigstoreAttachmentTag(instanceDigest))
+	}
+	return tags, nil
+}
+
+func sigstoreAttachmentTag(d digest.Digest) string {
+	return strings.Replace(d.String(), ":", "-", 1) + ".sig"
+}
+
+func dockerTaggedReference(ref types.ImageReference, tag string) (string, error) {
+	dockerRef := ref.DockerReference()
+	if dockerRef == nil {
+		return "", fmt.Errorf("reference %q is not a docker reference", ref.StringWithinTransport())
+	}
+	tagged, err := reference.WithTag(reference.TrimNamed(dockerRef), tag)
+	if err != nil {
+		return "", fmt.Errorf("tag %q on %s: %w", tag, dockerRef.Name(), err)
+	}
+	return "docker://" + tagged.String(), nil
+}
+
+func isManifestUnknownError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ec errcode.ErrorCoder
+	if errors.As(err, &ec) && ec.ErrorCode() == errcodev2.ErrorCodeManifestUnknown {
+		return true
+	}
+	// Narrow text fallback to the registry "manifest unknown" wording only.
+	// Broader "not found"+"manifest" matching can hide auth/path failures.
+	return strings.Contains(strings.ToLower(err.Error()), "manifest unknown")
 }
 
 // retryOptionsFrom returns a copy of the caller's retry options with oc-mirror's
