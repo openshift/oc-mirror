@@ -481,6 +481,7 @@ func TestIsManifestUnknownError(t *testing.T) {
 	assert.True(t, isManifestUnknownError(errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown}))
 	assert.True(t, isManifestUnknownError(fmt.Errorf("reading image %q: manifest unknown", "img")))
 	assert.False(t, isManifestUnknownError(fmt.Errorf("manifest invalid")))
+	assert.False(t, isManifestUnknownError(fmt.Errorf("repository not found: no such manifest")))
 	assert.False(t, isManifestUnknownError(nil))
 }
 

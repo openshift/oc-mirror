@@ -240,7 +240,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 			}
 		}
 		if copySigstoreAttachments {
-			if err := o.copySigstoreAttachmentTags(ctx, policyContext, srcRef, destRef, manifestBytes, co); err != nil {
+			if err := o.copySigstoreAttachmentTags(ctx, srcRef, destRef, manifestBytes, co); err != nil {
 				return err
 			}
 		}
@@ -250,7 +250,11 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 
 // copySigstoreAttachmentTags copies sha256-<digest>.sig tags from src to dest as
 // ordinary image copies (PreserveDigests), skipping digests with no attachment.
-func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, policyContext *signature.PolicyContext, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) error {
+//
+// Attachment tags are the signatures themselves and are not nested-signed, so a
+// SecurePolicy / sigstoreSigned PolicyContext would reject them. Copies use
+// insecureAcceptAnything while the parent image copy still uses the caller policy.
+func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) error {
 	tags, err := sigstoreAttachmentTagsFromManifest(manifestBytes)
 	if err != nil {
 		return fmt.Errorf("listing sigstore attachment tags: %w", err)
@@ -258,6 +262,15 @@ func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, policyContext *
 	if len(tags) == 0 {
 		return nil
 	}
+
+	attachmentPolicy := &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
+	attachmentPolicyContext, err := signature.NewPolicyContext(attachmentPolicy)
+	if err != nil {
+		return fmt.Errorf("creating policy context for signature attachments: %w", err)
+	}
+	defer func() {
+		_ = attachmentPolicyContext.Destroy()
+	}()
 
 	sigOpts := *base
 	sigOpts.RemoveSignatures = true
@@ -287,7 +300,7 @@ func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, policyContext *
 		if err != nil {
 			return fmt.Errorf("invalid signature destination name %s: %w", destSig, err)
 		}
-		if _, err := o.mc.CopyImage(ctx, policyContext, destSigRef, srcSigRef, &sigOpts); err != nil {
+		if _, err := o.mc.CopyImage(ctx, attachmentPolicyContext, destSigRef, srcSigRef, &sigOpts); err != nil {
 			if isManifestUnknownError(err) {
 				continue
 			}
@@ -344,9 +357,9 @@ func isManifestUnknownError(err error) bool {
 	if errors.As(err, &ec) && ec.ErrorCode() == errcodev2.ErrorCodeManifestUnknown {
 		return true
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "manifest unknown") ||
-		(strings.Contains(msg, "not found") && strings.Contains(msg, "manifest"))
+	// Narrow text fallback to the registry "manifest unknown" wording only.
+	// Broader "not found"+"manifest" matching can hide auth/path failures.
+	return strings.Contains(strings.ToLower(err.Error()), "manifest unknown")
 }
 
 // retryOptionsFrom returns a copy of the caller's retry options with oc-mirror's
