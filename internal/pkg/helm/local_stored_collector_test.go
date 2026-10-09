@@ -1158,6 +1158,18 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 			diskVersion:   "v5.0.0",
 			expectedImages: []v2alpha1.CopyImageSchema{
 				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/grpc_health_probe:v0.3.0",
+					Destination: testDest + "/grpc_health_probe:v0.3.0",
+					Origin:      consts.DockerProtocol + "stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/curl:7.69.0",
+					Destination: testDest + "/curl:7.69.0",
+					Origin:      consts.DockerProtocol + "curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
 					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
 					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -1170,6 +1182,18 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 			configVersion: "v5.0.0",
 			diskVersion:   "5.0.0",
 			expectedImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/grpc_health_probe:v0.3.0",
+					Destination: testDest + "/grpc_health_probe:v0.3.0",
+					Origin:      consts.DockerProtocol + "stefanprodan/grpc_health_probe:v0.3.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
+				{
+					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/curl:7.69.0",
+					Destination: testDest + "/curl:7.69.0",
+					Origin:      consts.DockerProtocol + "curlimages/curl:7.69.0",
+					Type:        v2alpha1.TypeHelmImage,
+				},
 				{
 					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
@@ -1306,7 +1330,7 @@ func TestGetHelmTemplatesIncludesHookImages(t *testing.T) {
 apiVersion: v2
 name: hook-chart
 version: 0.1.0
-`), 0o644))
+`), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(chartDir, "templates"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "db.yaml"), []byte(`
 apiVersion: apps/v1
@@ -1329,7 +1353,7 @@ spec:
       containers:
         - name: postgres
           image: quay.io/example/postgresql:16
-`), 0o644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "app.yaml"), []byte(`
 apiVersion: apps/v1
 kind: Deployment
@@ -1347,7 +1371,7 @@ spec:
       containers:
         - name: app
           image: quay.io/example/app:1.0
-`), 0o644))
+`), 0o600))
 
 	ch, err := loader.Load(chartDir)
 	require.NoError(t, err)
