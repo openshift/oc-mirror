@@ -40,7 +40,27 @@ const (
 	deleteErrMsg = "[delete] %v"
 	deleteYaml   = "/delete/delete-images.yaml"
 	deleteDir    = "/delete/"
+	deleteSubDir = "delete"
 )
+
+// workingDirFromDeleteYaml derives the oc-mirror working-dir from a
+// --delete-yaml-file path. Generated delete files live under
+// <workspace>/working-dir/delete/delete-images*.yaml.
+func workingDirFromDeleteYaml(deleteYamlPath string) (string, error) {
+	if deleteYamlPath == "" {
+		return "", fmt.Errorf("the --delete-yaml-file flag is mandatory when not using the --generate flag")
+	}
+	absPath, err := filepath.Abs(deleteYamlPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving delete yaml path: %w", err)
+	}
+	dir := filepath.Dir(absPath)
+	if filepath.Base(dir) == deleteSubDir {
+		return filepath.Dir(dir), nil
+	}
+	// Custom paths still need an absolute parent for logs.
+	return dir, nil
+}
 
 type DeleteSchema struct {
 	ExecutorSchema
@@ -197,6 +217,14 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 		} else {
 			return fmt.Errorf("--workspace flag must have a file:// protocol prefix")
 		}
+	} else {
+		// OCPBUGS-85713: --delete-yaml-file does not take --workspace, so derive
+		// WorkingDir from the yaml path (…/working-dir/delete/delete-images*.yaml).
+		wd, err := workingDirFromDeleteYaml(o.Opts.Global.DeleteYaml)
+		if err != nil {
+			return err
+		}
+		o.Opts.Global.WorkingDir = wd
 	}
 
 	// setup logs level, and logsDir under workingDir
