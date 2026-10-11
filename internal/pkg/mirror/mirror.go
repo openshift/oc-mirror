@@ -254,7 +254,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 // Attachment tags are the signatures themselves and are not nested-signed, so a
 // SecurePolicy / sigstoreSigned PolicyContext would reject them. Copies use
 // insecureAcceptAnything while the parent image copy still uses the caller policy.
-func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) error {
+func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) (retErr error) {
 	tags, err := sigstoreAttachmentTagsFromManifest(manifestBytes)
 	if err != nil {
 		return fmt.Errorf("listing sigstore attachment tags: %w", err)
@@ -269,7 +269,9 @@ func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef
 		return fmt.Errorf("creating policy context for signature attachments: %w", err)
 	}
 	defer func() {
-		_ = attachmentPolicyContext.Destroy()
+		if err := attachmentPolicyContext.Destroy(); err != nil {
+			retErr = NoteCloseFailure(retErr, "tearing down attachment policy context", err)
+		}
 	}()
 
 	sigOpts := *base
@@ -284,28 +286,36 @@ func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef
 	sigOpts.Instances = nil
 
 	for _, tag := range tags {
-		srcSig, err := dockerTaggedReference(srcRef, tag)
-		if err != nil {
+		if err := o.copyOneSigstoreAttachment(ctx, attachmentPolicyContext, srcRef, destRef, tag, &sigOpts); err != nil {
 			return err
 		}
-		destSig, err := dockerTaggedReference(destRef, tag)
-		if err != nil {
-			return err
+	}
+	return nil
+}
+
+// copyOneSigstoreAttachment copies a single .sig tag. Missing attachments are skipped.
+func (o *Mirror) copyOneSigstoreAttachment(ctx context.Context, policyContext *signature.PolicyContext, srcRef, destRef types.ImageReference, tag string, sigOpts *copy.Options) error {
+	srcSig, err := dockerTaggedReference(srcRef, tag)
+	if err != nil {
+		return err
+	}
+	destSig, err := dockerTaggedReference(destRef, tag)
+	if err != nil {
+		return err
+	}
+	srcSigRef, err := alltransports.ParseImageName(srcSig)
+	if err != nil {
+		return fmt.Errorf("invalid signature source name %s: %w", srcSig, err)
+	}
+	destSigRef, err := alltransports.ParseImageName(destSig)
+	if err != nil {
+		return fmt.Errorf("invalid signature destination name %s: %w", destSig, err)
+	}
+	if _, err := o.mc.CopyImage(ctx, policyContext, destSigRef, srcSigRef, sigOpts); err != nil {
+		if isManifestUnknownError(err) {
+			return nil
 		}
-		srcSigRef, err := alltransports.ParseImageName(srcSig)
-		if err != nil {
-			return fmt.Errorf("invalid signature source name %s: %w", srcSig, err)
-		}
-		destSigRef, err := alltransports.ParseImageName(destSig)
-		if err != nil {
-			return fmt.Errorf("invalid signature destination name %s: %w", destSig, err)
-		}
-		if _, err := o.mc.CopyImage(ctx, attachmentPolicyContext, destSigRef, srcSigRef, &sigOpts); err != nil {
-			if isManifestUnknownError(err) {
-				continue
-			}
-			return fmt.Errorf("copying signature attachment %s: %w", tag, err)
-		}
+		return fmt.Errorf("copying signature attachment %s: %w", tag, err)
 	}
 	return nil
 }
