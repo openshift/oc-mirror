@@ -101,7 +101,7 @@ func TestShortestPathChannels(t *testing.T) {
 			wantTarget:  "stable-4.14",
 		},
 		{
-			name:        "eus channel prefix preserved",
+			name:        "eus channel prefix preserved for source and target",
 			channelName: "eus-4.14",
 			first:       "4.12.40",
 			last:        "4.14.10",

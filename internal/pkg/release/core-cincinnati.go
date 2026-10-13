@@ -201,7 +201,7 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
 	source.Minor++
-	currChannel := fmt.Sprintf("%s-%v.%v", prefix, source.Major, source.Minor)
+	currChannel := upgradeChannelName(prefix, source)
 
 	var targetVer semver.Version
 	if source.EQ(target) {
@@ -287,6 +287,19 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 	}
 	prefix = sourceChannel[:sourceIdx]
 	return source, target, prefix, nil
+}
+
+// upgradeChannelName builds "<prefix>-<major>.<minor>" for a cross-channel
+// walk. EUS channels exist only on even minors, so odd intermediates use stable.
+func upgradeChannelName(prefix string, ver semver.Version) string {
+	return fmt.Sprintf("%s-%d.%d", upgradeChannelPrefix(prefix, ver.Minor), ver.Major, ver.Minor)
+}
+
+func upgradeChannelPrefix(prefix string, minor uint64) string {
+	if prefix == "eus" && minor%2 == 1 {
+		return "stable"
+	}
+	return prefix
 }
 
 // GetChannelMinOrMax fetches the minimum or maximum version from the specified
