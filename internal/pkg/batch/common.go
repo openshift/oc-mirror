@@ -17,8 +17,8 @@ import (
 // imageTimeoutHint clarifies that context deadline exceeded during mirroring
 // is often resolved by raising --image-timeout (OCPBUGS-111840).
 const imageTimeoutHint = " hint: image mirroring timed out (context deadline exceeded). " +
-	"Large images (for example kubeVirt containerdisk blobs) often need a higher --image-timeout " +
-	"(default 10m0s); retry with e.g. --image-timeout 30m."
+	"Large images often need a higher --image-timeout " +
+	"(default 10m0s)."
 
 type BatchError struct {
 	source                 error

@@ -30,7 +30,7 @@ func TestAnnotateImageTimeoutError(t *testing.T) {
 			context.DeadlineExceeded)
 		got := annotateImageTimeoutError(err)
 		assert.Contains(t, got, "--image-timeout")
-		assert.Contains(t, got, "30m")
+		assert.Contains(t, got, "10m0s")
 	})
 
 	t.Run("unrelated errors unchanged", func(t *testing.T) {
