@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -8,7 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 func TestPackagesWithoutVersionBounds(t *testing.T) {
@@ -100,4 +104,184 @@ func TestExcludeRelatedImagesSharedWithSiblingBundles(t *testing.T) {
 	assert.Contains(t, refs, bundleOld)
 	assert.Contains(t, refs, onlyOld)
 	assert.NotContains(t, refs, shared)
+}
+
+func TestHasVersionConstraints(t *testing.T) {
+	tests := map[string]struct {
+		op   v2alpha1.Operator
+		want bool
+	}{
+		"package min version": {
+			op: v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "quay-operator", IncludeBundle: v2alpha1.IncludeBundle{MinVersion: "3.11.5"}}},
+			}},
+			want: true,
+		},
+		"channel max version": {
+			op: v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{
+					Name: "quay-operator",
+					Channels: []v2alpha1.IncludeChannel{{
+						Name:          "stable-3.11",
+						IncludeBundle: v2alpha1.IncludeBundle{MaxVersion: "3.11.5"},
+					}},
+				}},
+			}},
+			want: true,
+		},
+		"no bounds": {
+			op: v2alpha1.Operator{IncludeConfig: v2alpha1.IncludeConfig{
+				Packages: []v2alpha1.IncludePackage{{Name: "quay-operator"}},
+			}},
+			want: false,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasVersionConstraints(tt.op))
+		})
+	}
+}
+
+// fbcCatalogHandler serves an in-memory FBC for delete shared-image filtering.
+type fbcCatalogHandler struct {
+	MockHandler
+	dc *declcfg.DeclarativeConfig
+}
+
+func (h fbcCatalogHandler) GetDeclarativeConfig(_ context.Context, _ string) (*declcfg.DeclarativeConfig, error) {
+	return h.dc, nil
+}
+
+func (h fbcCatalogHandler) ExtractOCIConfigLayers(_ image.ImageSpec, _ string) (string, error) {
+	return "in-memory-fbc", nil
+}
+
+func TestExcludeSharedRelatedForDelete_Integration(t *testing.T) {
+	log := clog.New("error")
+	handler := &CatalogHandler{Log: log}
+	loadFBC := func() *declcfg.DeclarativeConfig {
+		t.Helper()
+		dc, err := handler.GetDeclarativeConfig(t.Context(), consts.TestFolder+"configs")
+		require.NoError(t, err)
+		return dc
+	}
+	originalDC := loadFBC()
+	handlerDC := loadFBC()
+	packageWideSrc := loadFBC()
+
+	deleteFilter := v2alpha1.Operator{
+		Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+		IncludeConfig: v2alpha1.IncludeConfig{
+			Packages: []v2alpha1.IncludePackage{{
+				Name:           "3scale-operator",
+				DefaultChannel: "threescale-2.11",
+				Channels: []v2alpha1.IncludeChannel{{
+					Name: "threescale-2.11",
+					IncludeBundle: v2alpha1.IncludeBundle{
+						MinVersion: "0.8.3",
+						MaxVersion: "0.8.3",
+					},
+				}},
+			}},
+		},
+	}
+	deleteDC, err := filterCatalog(t.Context(), *originalDC, deleteFilter)
+	require.NoError(t, err)
+	require.NotEmpty(t, deleteDC.Bundles)
+
+	copyMap := &v2alpha1.CopyImageSchemaMap{
+		OperatorsByImage: make(map[string]map[string]struct{}),
+		BundlesByImage:   make(map[string]map[string]string),
+	}
+	deleteRelated, err := handler.getRelatedImagesFromCatalog(deleteDC, copyMap)
+	require.NoError(t, err)
+	require.NotEmpty(t, deleteRelated)
+
+	imgSpec, err := image.ParseRef(deleteFilter.Catalog)
+	require.NoError(t, err)
+
+	collector := &FilterCollector{
+		OperatorCollector: OperatorCollector{
+			Log:         log,
+			ctlgHandler: fbcCatalogHandler{dc: handlerDC},
+			Opts: mirror.CopyOptions{
+				Function: string(mirror.DeleteMode),
+				Global:   &mirror.GlobalOptions{WorkingDir: t.TempDir()},
+			},
+		},
+	}
+	got := collector.excludeSharedRelatedForDelete(
+		t.Context(), deleteFilter, imgSpec, "testdigest", deleteDC, deleteRelated, copyMap,
+	)
+
+	packageDC, err := filterCatalog(t.Context(), *packageWideSrc, packagesWithoutVersionBounds(deleteFilter))
+	require.NoError(t, err)
+	deleteNames := make([]string, 0, len(deleteDC.Bundles))
+	for _, b := range deleteDC.Bundles {
+		deleteNames = append(deleteNames, b.Name)
+	}
+	packageNames := make([]string, 0, len(packageDC.Bundles))
+	for _, b := range packageDC.Bundles {
+		packageNames = append(packageNames, b.Name)
+	}
+	t.Logf("delete bundles (%d): %v", len(deleteNames), deleteNames)
+	t.Logf("package-wide bundles (%d): %v", len(packageNames), packageNames)
+	siblingCount := 0
+	for _, name := range packageNames {
+		found := false
+		for _, d := range deleteNames {
+			if d == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			siblingCount++
+		}
+	}
+	require.Greater(t, siblingCount, 0, "package-wide catalog should include sibling versions")
+
+	deleteBundleNames := make(map[string]struct{}, len(deleteDC.Bundles))
+	deleteBundleImages := make(map[string]struct{}, len(deleteDC.Bundles))
+	for _, b := range deleteDC.Bundles {
+		deleteBundleNames[b.Name] = struct{}{}
+		deleteBundleImages[b.Image] = struct{}{}
+	}
+	siblingImages := make(map[string]struct{})
+	for _, b := range packageDC.Bundles {
+		if _, deleting := deleteBundleNames[b.Name]; deleting {
+			continue
+		}
+		for _, ri := range b.RelatedImages {
+			siblingImages[ri.Image] = struct{}{}
+		}
+	}
+	require.NotEmpty(t, siblingImages)
+
+	kept := make(map[string]struct{})
+	for _, images := range got {
+		for _, img := range images {
+			kept[img.Image] = struct{}{}
+		}
+	}
+	droppedShared := 0
+	for bundleName, images := range deleteRelated {
+		require.Contains(t, got, bundleName, "deleted bundle should remain in the delete set")
+		for _, img := range images {
+			if img.Type == v2alpha1.TypeOperatorBundle {
+				assert.Contains(t, kept, img.Image, "bundle image for the deleted version must stay in the delete set")
+				continue
+			}
+			if _, isBundle := deleteBundleImages[img.Image]; isBundle {
+				assert.Contains(t, kept, img.Image)
+				continue
+			}
+			if _, shared := siblingImages[img.Image]; shared {
+				droppedShared++
+				assert.NotContains(t, kept, img.Image, "related image still referenced by a sibling version must not be deleted: %s", img.Image)
+			}
+		}
+	}
+	require.Greater(t, droppedShared, 0, "expected at least one related image to be shared with a sibling version")
 }
