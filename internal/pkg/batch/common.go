@@ -1,12 +1,16 @@
 package batch
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	distributionErrcode "github.com/docker/distribution/registry/api/errcode"
+	"go.podman.io/image/v5/docker"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
@@ -93,17 +97,39 @@ func annotateUnauthorizedUploadError(err error) string {
 	}
 	msg := err.Error()
 	lower := strings.ToLower(msg)
-	if !strings.Contains(lower, "unauthorized") {
+	if !isUnauthorizedOrDenied(err, lower) {
 		return msg
 	}
 	// containers/image and registry clients typically phrase push layer failures this way.
-	if strings.Contains(lower, "unable to upload blob") ||
-		strings.Contains(lower, "uploading blob") ||
-		strings.Contains(lower, "pushing blob") ||
-		strings.Contains(lower, "error uploading layer") {
+	if isBlobUploadFailure(lower) {
 		return msg + unauthorizedBlobUploadHint
 	}
 	return msg
+}
+
+// isUnauthorizedOrDenied prefers typed credential/registry auth errors when present
+// and falls back to message text only when no recognized typed error exists.
+func isUnauthorizedOrDenied(err error, lower string) bool {
+	var credentialErr docker.ErrUnauthorizedForCredentials
+	if errors.As(err, &credentialErr) {
+		return true
+	}
+
+	var registryErr distributionErrcode.ErrorCoder
+	if errors.As(err, &registryErr) {
+		code := registryErr.ErrorCode()
+		return code == distributionErrcode.ErrorCodeUnauthorized ||
+			code == distributionErrcode.ErrorCodeDenied
+	}
+
+	return strings.Contains(lower, "unauthorized")
+}
+
+func isBlobUploadFailure(lower string) bool {
+	return strings.Contains(lower, "unable to upload blob") ||
+		strings.Contains(lower, "uploading blob") ||
+		strings.Contains(lower, "pushing blob") ||
+		strings.Contains(lower, "error uploading layer")
 }
 
 func (s StringMap) Has(key string) bool {
