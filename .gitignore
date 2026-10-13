@@ -1,0 +1,62 @@
+# Build artifacts.
+/bin/
+/v1/bin/
+/cmd/oc-mirror/data/oc-mirror-v1
+
+# Test artifacts.
+coverage.out
+**/mirror*.tar
+sha256sum.txt
+/test/e2e/operator-test.*
+**/publish.tmp.*
+**/test-output
+**/.metadata.json
+oc-mirror-workspace/
+working-dir/
+tests/hold-test-untar
+tests/results
+tests/results-integration
+build/
+cmd/mirror/logs/
+cmd/mirror/working-dir/
+launch.json
+logs/
+pkg/release/release.log
+.scannerwork/
+imagebuilder/test/
+pkg/cli/registry.log
+tests/graph-staging/cincinnati-graph-data.tar
+pkg/image/testdata/v2/single_manifest/manifests/oc-mirror
+olm_artifacts/
+isc*.yaml
+
+# Logs.
+**/.oc-mirror.log
+
+# Local vendor. Remove when ready to vendor dependencies.
+#/vendor/
+
+# Local
+.idea
+tags
+# only ignore tags file, not tags directory
+!tags/
+*.swp
+.vscode
+
+# Local imageset-config.yaml
+imageset-config.yaml
+./isc/*
+
+# Local integration test files
+__pycache__
+*.pyc
+.venv
+.requirements
+.built
+test/integration/collections
+test/integration/bin
+test/integration/output/*
+!test/integration/output/.gitkeep
+test/integration/ci
+

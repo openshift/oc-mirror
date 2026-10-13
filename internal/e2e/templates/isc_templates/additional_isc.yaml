@@ -1,0 +1,7 @@
+{{range .}}
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: {{.}}
+{{end}}

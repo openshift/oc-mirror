@@ -1,0 +1,11 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: DATA_TMP
+mirror:
+  helm:
+    local:
+      - name: podinfo
+        path: DATA_TMP/podinfo-6.0.0.tgz

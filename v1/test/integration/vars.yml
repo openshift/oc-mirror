@@ -1,0 +1,25 @@
+---
+# This generates a random name (which it saves) for your cluster and subdomain
+cluster_name: '{{ lookup("password", output_dir + "/cluster_name chars=ascii_lowercase length=6") }}'
+
+# This domain is only accessible if you're using an AWS account with access to it!
+cluster_domain: redhat4govaws.io
+
+# This is important for default generation of the ImageSetConfiguration, for OpenShift release versions as well as operator catalog versions
+openshift_version: "4.10"
+
+# Basically, there are only a few good choices here (depending on your AWS account configuration). You're best off not changing it unless you know why.
+aws_region: us-west-2
+
+# Mirror metadata directly to the registry (choose from registry or local)
+storage_config_backend: registry
+
+# The type of registry to use in the integration test (choose from docker_registry or redhat_quay)
+registry_type: mirror_registry
+
+# The operators to mirror, install, and test
+# Choose any of the following (or none):
+# - foo
+# - compliance_operator
+operators_to_mirror:
+- foo

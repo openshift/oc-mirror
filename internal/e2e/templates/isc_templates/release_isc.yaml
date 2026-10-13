@@ -1,0 +1,9 @@
+{{range .}}
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    channels:
+    - name: {{.}} 
+    graph: true
+{{end}}

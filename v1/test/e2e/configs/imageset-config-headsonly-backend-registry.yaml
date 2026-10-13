@@ -1,0 +1,10 @@
+---
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  registry:
+    imageURL: METADATA_CATALOGNAMESPACE/metadata
+    skipTLS: true
+mirror:
+  operators:
+  - catalog: METADATA_CATALOGNAMESPACE:test-catalog-latest

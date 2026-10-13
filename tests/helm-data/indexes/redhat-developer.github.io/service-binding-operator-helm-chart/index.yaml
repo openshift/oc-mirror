@@ -1,0 +1,273 @@
+apiVersion: v1
+entries:
+  service-binding-operator:
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.4.1
+    created: "2023-11-13T15:49:16.255495467-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: be95db3858e6a26644f7f127a2c1c30a184abd84a15df22f4d0cbbbac5b2012c
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.4.1.tgz
+    version: 1.4.1
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.4.0
+    created: "2023-11-13T15:49:16.254046628-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: be2d62a35e2e4791cfcba1d35a607fd63ad49c250e581536a33e60daa9c30119
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.4.0.tgz
+    version: 1.4.0
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.3.3
+    created: "2023-11-13T15:49:16.253058185-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: 550237d24b5c88a2e073da333f564c3154e94a5ff300ae6ca36282b82fd1abfe
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.3.3.tgz
+    version: 1.3.3
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.3.2
+    created: "2023-11-13T15:49:16.252048778-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: bae90e76c4063011ce635d6569703420a7a075a11b07cb8c849eb3481397e4ef
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.3.2.tgz
+    version: 1.3.2
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.3.1
+    created: "2023-11-13T15:49:16.250981405-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: c943af3ea887cc0de83eb7f56b14a679fd9f1f6c0357e636724632c085baf10c
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.3.1.tgz
+    version: 1.3.1
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.3.0
+    created: "2023-11-13T15:49:16.249775254-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: 4e448803b5273ef1d0a0d397084c69d9dcf7f2b4623f363370330beae1959481
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.3.0.tgz
+    version: 1.3.0
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.2.0
+    created: "2023-11-13T15:49:16.248377963-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: a4f9cd2121972985f89ecf1d06b7a75355b5aa7d26d0f7ad1ce72bf2691810c1
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.1.0.tgz
+    version: 1.1.0
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.1.1
+    created: "2023-11-13T15:49:16.247562039-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: 49cf84ee3b626771c4d6156d1637a01b40435df977414df7d7b0fb860b241f1d
+    icon: https://raw.githubusercontent.com/redhat-developer/service-binding-operator/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.0.2.tgz
+    version: 1.0.2
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.1.0
+    created: "2023-11-13T15:49:16.246799332-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: 02fb9bb11419f11baf48c238186e8e762a326fc9fc6400207960afb8c9cd97bb
+    icon: https://github.com/redhat-developer/service-binding-operator/blob/master/assets/icon/sbo-logo.png
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.0.1.tgz
+    version: 1.0.1
+  - annotations:
+      charts.openshift.io/name: service-binding-operator
+      charts.openshift.io/provider: RedHat
+      charts.openshift.io/supportURL: https://github.com/redhat-developer/service-binding-operator.git
+    apiVersion: v2
+    appVersion: 1.0.1
+    created: "2023-11-13T15:49:16.246009759-06:00"
+    description: A Helm chart to deploy service binding operator
+    digest: c4f4695c50dd980da068474a864caa524a35285e9cf1b4075276a5a60c4100fc
+    keywords:
+    - ""
+    kubeVersion: '>= 1.19.2-0'
+    maintainers:
+    - email: kmamgain@redhat.com
+      name: Kartikey-star
+    - email: pmacik@redhat.com
+      name: pmacik
+    - email: jchui@redhat.com
+      name: jasperchui
+    - email: dperaza@redhat.com
+      name: dperaza4dustbit
+    name: service-binding-operator
+    type: application
+    urls:
+    - service-binding-operator-1.0.0.tgz
+    version: 1.0.0
+generated: "2023-11-13T15:49:16.245053801-06:00"

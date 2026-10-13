@@ -1,0 +1,66 @@
+{
+  "created": "2023-01-12T18:29:52Z",
+  "architecture": "amd64",
+  "os": "linux",
+  "config": {
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "container=oci",
+      "GODEBUG=x509ignoreCN=0,madvdontneed=1",
+      "__doozer=merge",
+      "BUILD_RELEASE=202301042354.p0.gf1dc3b6.assembly.stream",
+      "BUILD_VERSION=v4.12.0",
+      "OS_GIT_MAJOR=4",
+      "OS_GIT_MINOR=12",
+      "OS_GIT_PATCH=0",
+      "OS_GIT_TREE_STATE=clean",
+      "OS_GIT_VERSION=4.12.0-202301042354.p0.gf1dc3b6.assembly.stream-f1dc3b6",
+      "SOURCE_GIT_TREE_STATE=clean",
+      "OS_GIT_COMMIT=f1dc3b6",
+      "SOURCE_DATE_EPOCH=1668720573",
+      "SOURCE_GIT_COMMIT=f1dc3b6a6b7c5f5a85f94201ab90f9e03547a8a3",
+      "SOURCE_GIT_TAG=v1.0.0-930-gf1dc3b6a",
+      "SOURCE_GIT_URL=https://github.com/openshift/cluster-version-operator"
+    ],
+    "Entrypoint": [
+      "/usr/bin/cluster-version-operator"
+    ],
+    "Labels": {
+      "io.openshift.release": "4.12.0",
+      "io.openshift.release.base-image-digest": "sha256:a4b00a7810910ea260de0d658c0d3d1a0b9ac8867e92c34573503f11de59017a"
+    }
+  },
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": [
+      "sha256:e2e51ecd22dcbc318fb317f20dff685c6d54755d60a80b12ed290658864d45fd",
+      "sha256:d3fbfed1573def1cd078186e307411a8929138baf65bdd0a02bcbdb451707f67",
+      "sha256:10f5b8a5bcc334c27cb0c778c545ce6c3c77c79c9300e3bd5574dc7b12ef1e44",
+      "sha256:50c36aad8a28245871d2cace944a4260d9de58b679a0e4ab285b481e123734eb",
+      "sha256:8125f4f93a05cc066bb1660a63fcc1da73cf2fe10db2f512c79434e5c4108217",
+      "sha256:eab47dc5c5fd4c2ad223788f24e27c437c95099c0e2b93cebf188347e1de9912"
+    ]
+  },
+  "history": [
+    {
+      "created": "2023-01-12T18:29:52Z",
+      "comment": "Release image for OpenShift"
+    },
+    {
+      "created": "2023-01-12T18:29:52Z"
+    },
+    {
+      "created": "2023-01-12T18:29:52Z"
+    },
+    {
+      "created": "2023-01-12T18:29:52Z"
+    },
+    {
+      "created": "2023-01-12T18:29:52Z"
+    },
+    {
+      "created": "2023-01-12T18:29:52Z"
+    }
+  ]
+}
+

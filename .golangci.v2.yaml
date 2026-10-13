@@ -1,0 +1,98 @@
+version: "2"
+run:
+  build-tags:
+    - json1
+    - libdm_no_deferred_remove
+    - exclude_graphdriver_devicemapper
+    - exclude_graphdriver_btrfs
+    - containers_image_openpgp
+  modules-download-mode: readonly
+  issues-exit-code: 1
+  tests: true
+  allow-parallel-runners: false
+output:
+  formats:
+    text:
+      colors: true
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+  path-prefix: ""
+linters:
+  default: none
+  enable:
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - depguard
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - goconst
+    - gocritic
+    - gosec
+    - iface
+    - ineffassign
+    - intrange
+    - ireturn
+    - makezero
+    - mirror
+    - misspell
+    - nestif
+    - nilerr
+    - noctx
+    - nosprintfhostport
+    - prealloc
+    - recvcheck
+    - staticcheck
+    - unused
+    - wrapcheck
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by stdlib errors package
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/openshift/oc-mirror/v2/*
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  uniq-by-line: true
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/openshift/oc-mirror
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

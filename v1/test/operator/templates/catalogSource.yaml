@@ -1,0 +1,14 @@
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: oc-mirror-dev-catalog
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: {{ index.img }}
+  displayName: oc-mirror Development Testing Catalog
+  publisher: RedHatGov
+  updateStrategy:
+    registryPoll:
+      interval: 30m

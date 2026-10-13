@@ -1,0 +1,9 @@
+reviewers:
+  - aguidirh
+  - r4f4
+  - adolfo-ab
+approvers:
+  - aguidirh
+  - r4f4
+component: oc
+subcomponent: oc-mirror

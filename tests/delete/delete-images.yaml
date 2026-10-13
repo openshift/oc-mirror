@@ -1,0 +1,6 @@
+apiVersion: mirror.openshift.io/v2alpha1
+kind: DeleteImageList
+items: 
+  - imageName: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c32a883a6ca7b2e7a58b9dd99a5e8d056bdbbc9d79d8486b2e4c7e07c3dc4512
+    imageReference: docker://localhost:5000/myregistry/openshift/release:4.15.12-x86_64-agent-installer-api-server
+    type: ocpReleaseContent
