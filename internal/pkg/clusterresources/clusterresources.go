@@ -264,9 +264,9 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 
 	var csSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		csSuffix = rfc1035NameSuffix(catalogSpec.Digest)
+		csSuffix = sanitizeRFC1035Suffix(catalogSpec.Digest)
 	} else {
-		csSuffix = rfc1035NameSuffix(catalogSpec.Tag)
+		csSuffix = sanitizeRFC1035Suffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -400,9 +400,9 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 
 	var ccSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		ccSuffix = rfc1035NameSuffix(catalogSpec.Digest)
+		ccSuffix = sanitizeRFC1035Suffix(catalogSpec.Digest)
 	} else {
-		ccSuffix = rfc1035NameSuffix(catalogSpec.Tag)
+		ccSuffix = sanitizeRFC1035Suffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -711,11 +711,11 @@ func isValidRFC1123(name string) bool {
 	return match && len(name) <= 63
 }
 
-// rfc1035NameSuffix builds a truncated DNS-1035-safe suffix from a tag or digest.
+// sanitizeRFC1035Suffix builds a truncated DNS-1035-safe suffix from a tag or digest.
 // Truncation alone can leave a trailing '-' (OCPBUGS-69908: targetTag
 // "logging-clo-v6.2.7-coo-v1.3.1" → first 12 chars "logging-clo-"), which fails
 // IsDNS1035Label. Strip trailing hyphens so the suffix ends alphanumeric.
-func rfc1035NameSuffix(raw string) string {
+func sanitizeRFC1035Suffix(raw string) string {
 	mapped := strings.Map(toRFC1035, raw)
 	if len(mapped) >= hashTruncLen {
 		mapped = mapped[:hashTruncLen]

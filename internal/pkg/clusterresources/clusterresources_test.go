@@ -1105,7 +1105,7 @@ func TestRFC1035NameSuffix(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, rfc1035NameSuffix(tt.raw))
+			assert.Equal(t, tt.want, sanitizeRFC1035Suffix(tt.raw))
 		})
 	}
 }
