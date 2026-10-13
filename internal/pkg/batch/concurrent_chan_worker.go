@@ -107,12 +107,16 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 				defer func() { <-semaphore }()
 				result := GoroutineResult{imgType: img.Type, img: img}
 
-				// Snapshot errArray without holding the lock across destination checks
-				// (Mirror.Check is network I/O).
-				m.Lock()
-				errs := make([]mirrorErrorSchema, len(errArray))
-				copy(errs, errArray)
-				m.Unlock()
+				// Snapshot errArray only for operator bundles (shouldSkipImage uses it
+				// solely on that path). Copying for every image is expensive when
+				// there are many failures. Release the lock before destination checks.
+				var errs []mirrorErrorSchema
+				if img.Type == v2alpha1.TypeOperatorBundle {
+					m.RLock()
+					errs = make([]mirrorErrorSchema, len(errArray))
+					copy(errs, errArray)
+					m.RUnlock()
+				}
 				skip, reason := shouldSkipImage(cancelCtx, o.Mirror, img, opts, errs)
 				if skip {
 					if reason != nil {
