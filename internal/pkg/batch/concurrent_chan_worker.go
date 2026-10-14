@@ -185,7 +185,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 								var operand bool
 								var resolveErr error
 								if img.Type.IsOperator() {
-									operand, resolveErr = o.shouldSkipAsOperand(cancelCtx, img, collectorSchema, opts) //nolint:contextcheck
+									operand, resolveErr = o.shouldSkipAsOperand(timeoutCtx, img, collectorSchema, opts) //nolint:contextcheck
 								}
 
 								switch {
