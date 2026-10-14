@@ -721,6 +721,8 @@ func imageTypeToCategory(imageType v2alpha1.ImageType) mirrorCategory {
 		return operatorCategory
 	case v2alpha1.TypeOperatorRelatedImage:
 		return operatorCategory
+	case v2alpha1.TypeOperatorOperand:
+		return operatorCategory
 	case v2alpha1.TypeInvalid:
 		return genericCategory
 	default:
