@@ -96,11 +96,16 @@ func (o BundleHandler) clusterServiceVersion(ctx context.Context, bundleImage, b
 		}
 	}
 
-	if err := o.Manifest.ExtractOCILayers(img, manifestsDir, label); err != nil {
+	subdir, err := bundleManifestsSubdir(label)
+	if err != nil {
+		return nil, fmt.Errorf("bundle %s: %w", bundleImage, err)
+	}
+
+	if err := o.Manifest.ExtractOCILayers(img, manifestsDir, subdir); err != nil {
 		return nil, fmt.Errorf("extract manifests from bundle %s: %w", bundleImage, err)
 	}
 
-	csv, err := findClusterServiceVersion(filepath.Join(manifestsDir, strings.Trim(label, "/")))
+	csv, err := findClusterServiceVersion(filepath.Join(manifestsDir, subdir))
 	if err != nil {
 		return nil, fmt.Errorf("bundle %s: %w", bundleImage, err)
 	}
@@ -142,6 +147,18 @@ func (o BundleHandler) ensureBundleInOCIFormat(ctx context.Context, bundleImage,
 	}
 
 	return o.Mirror.Run(ctx, src, consts.OciProtocolTrimmed+imageDir, mirror.CopyMode, &localOpts)
+}
+
+// bundleManifestsSubdir returns the directory a bundle declares for its
+// manifests. The label comes from the bundle image, so it is untrusted: it
+// must name a subdirectory of the extraction directory, never a path that
+// escapes it.
+func bundleManifestsSubdir(label string) (string, error) {
+	clean := filepath.Clean(strings.Trim(label, "/"))
+	if clean == "." || !filepath.IsLocal(clean) {
+		return "", fmt.Errorf("invalid manifests directory %q", label)
+	}
+	return clean, nil
 }
 
 // isCSVFileName reports whether a file in a bundle's manifests directory looks
