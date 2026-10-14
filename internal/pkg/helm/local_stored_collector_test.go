@@ -716,6 +716,153 @@ func TestHelmImageCollector(t *testing.T) {
 	}
 }
 
+func TestCreateIndexFileNormalizesRepositoryURL(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "repository URL without trailing slash",
+			url:  "https://example.test/charts",
+			want: "https://example.test/charts/index.yaml",
+		},
+		{
+			name: "repository URL with trailing slash",
+			url:  "https://example.test/charts/",
+			want: "https://example.test/charts/index.yaml",
+		},
+		{
+			name: "repository URL already ending in index",
+			url:  "https://example.test/charts/index.yaml",
+			want: "https://example.test/charts/index.yaml",
+		},
+		{
+			name: "repository URL preserves query",
+			url:  "https://example.test/charts?channel=stable",
+			want: "https://example.test/charts/index.yaml?channel=stable",
+		},
+		{
+			name: "repository URL preserves escaped path",
+			url:  "https://example.test/charts%2Fstable",
+			want: "https://example.test/charts%2Fstable/index.yaml",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lsc = &LocalStorageCollector{
+				Opts: mirror.CopyOptions{
+					Global: &mirror.GlobalOptions{WorkingDir: t.TempDir()},
+				},
+			}
+			client := &recordingHTTPClient{}
+			wClient = client
+
+			_, err := createIndexFile(tc.url)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, client.requestedURL)
+		})
+	}
+}
+
+func TestHelmImageCollectorNormalizesRepositoryURL(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			workingDir, err := prepareFolder(t.TempDir())
+			assert.NoError(t, err)
+
+			_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+			opts := mirror.CopyOptions{
+				Mode:        mode,
+				Global:      &mirror.GlobalOptions{WorkingDir: workingDir},
+				Destination: testDest,
+				SrcImage:    srcOpts,
+			}
+			config := v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Helm: v2alpha1.Helm{
+							Repositories: []v2alpha1.Repository{{
+								Name: "example",
+								URL:  "https://example.test/charts",
+							}},
+						},
+					},
+				},
+			}
+			client := &recordingHTTPClient{}
+
+			collector := New(clog.New("trace"), config, opts, MockIndexDownloader{}, MockChartDownloader{}, client)
+			imgs, err := collector.HelmImageCollector(context.Background())
+
+			assert.NoError(t, err)
+			assert.Equal(t, "https://example.test/charts/index.yaml", client.requestedURL)
+			assert.NotEmpty(t, imgs.AllImages)
+		})
+	}
+}
+
+func TestHelmImageCollectorNoSlashArchiveRoundTrip(t *testing.T) {
+	workingDir, err := prepareFolder(t.TempDir())
+	assert.NoError(t, err)
+
+	config := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Helm: v2alpha1.Helm{
+					Repositories: []v2alpha1.Repository{{
+						Name: "example",
+						URL:  "https://example.test/charts",
+					}},
+				},
+			},
+		},
+	}
+	_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+
+	m2dOpts := mirror.CopyOptions{
+		Mode:     mirror.MirrorToDisk,
+		Global:   &mirror.GlobalOptions{WorkingDir: workingDir},
+		SrcImage: srcOpts,
+	}
+	m2dClient := &recordingHTTPClient{}
+	m2dCollector := New(clog.New("trace"), config, m2dOpts, MockIndexDownloader{}, MockChartDownloader{}, m2dClient)
+	_, err = m2dCollector.HelmImageCollector(context.Background())
+	assert.NoError(t, err)
+
+	d2mOpts := mirror.CopyOptions{
+		Mode:             mirror.DiskToMirror,
+		Global:           &mirror.GlobalOptions{WorkingDir: workingDir},
+		LocalStorageFQDN: testLocalStorageFQDN,
+		Destination:      testDest,
+		SrcImage:         srcOpts,
+	}
+	d2mCollector := New(clog.New("trace"), config, d2mOpts, nil, nil, nil)
+	imgs, err := d2mCollector.HelmImageCollector(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, "https://example.test/charts/index.yaml", m2dClient.requestedURL)
+	assert.NotEmpty(t, imgs.AllImages)
+}
+
+func TestCreateIndexFileReturnsHTTPError(t *testing.T) {
+	lsc = &LocalStorageCollector{
+		Opts: mirror.CopyOptions{
+			Global: &mirror.GlobalOptions{WorkingDir: t.TempDir()},
+		},
+	}
+	client := &recordingHTTPClient{statusCode: http.StatusNotFound}
+	wClient = client
+
+	_, err := createIndexFile("https://example.test/charts")
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "status code")
+	assert.Equal(t, "https://example.test/charts/index.yaml", client.requestedURL)
+}
+
 // TestResolveChartPath verifies that resolveChartPath tolerates mismatches
 // between the version string in the ImageSetConfiguration and the "v" prefix
 // that a Helm repository may embed in its tarball filenames.
@@ -900,6 +1047,28 @@ func prepareDiskToMirror(testCase testCase) error {
 	}
 
 	return nil
+}
+
+type recordingHTTPClient struct {
+	requestedURL string
+	statusCode   int
+	body         string
+}
+
+func (c *recordingHTTPClient) Get(url string) (*http.Response, error) {
+	c.requestedURL = url
+	statusCode := c.statusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	body := c.body
+	if body == "" {
+		body = "apiVersion: v1\nentries:\n  podinfo:\n  - name: podinfo\n    version: 5.0.0\n    urls:\n    - podinfo-5.0.0.tgz\n"
+	}
+	return &http.Response{
+		StatusCode: statusCode,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}, nil
 }
 
 func copyChart(ref, version string) string {
