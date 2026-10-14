@@ -151,7 +151,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		// It does not hurt to check each entry :)
 		// This will avoid the error "Image may not exist or is not stored with a v2 Schema in a v2 registry"
 		// Reverts OCPBUGS-44448
-		_, err := image.ParseRef(img.ImageName)
+		originSpec, err := image.ParseRef(img.ImageName)
 		if err != nil {
 			allErrs = append(allErrs, fmt.Errorf("parse image name %q: %w", img.ImageName, err))
 			continue
@@ -201,14 +201,13 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
 
 		if o.Opts.Global.ForceCacheDelete {
-			cacheDestination := strings.ReplaceAll(img.ImageReference, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
+			cacheDestination := img.ImageReference
 			// OCPBUGS-105878 - tag+digest images are cached under the digest key, not the
-			// human tag in the destination ref above; rebuild it so the cache entry is found.
-			if originSpec, perr := image.ParseRef(img.ImageName); perr == nil && originSpec.IsImageByTagAndDigest() {
-				if cacheSpec, cerr := image.ParseRef(cacheDestination); cerr == nil {
-					cacheDestination = fmt.Sprintf("%s%s:%s", cacheSpec.Transport, cacheSpec.Name, originSpec.CacheTag())
-				}
+			// human tag at the destination; rebuild it from the validated reference.
+			if originSpec.IsImageByTagAndDigest() {
+				cacheDestination = fmt.Sprintf("%s%s:%s", imgSpecRef.Transport, imgSpecRef.Name, originSpec.CacheTag())
 			}
+			cacheDestination = strings.ReplaceAll(cacheDestination, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
 				Destination: cacheDestination,

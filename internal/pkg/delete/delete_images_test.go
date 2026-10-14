@@ -558,6 +558,91 @@ func TestDeleteRegistryImagesForceCacheDeleteTagAndDigest(t *testing.T) {
 	assert.NotContains(t, destinations, "docker://localhost:8888/testns/repo:v1")
 }
 
+func TestDeleteRegistryImagesForceCacheDeleteReferences(t *testing.T) {
+	const dgst = "sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"
+	const digestTag = "sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"
+
+	tests := []struct {
+		name             string
+		imageName        string
+		imageReference   string
+		cacheDestination string
+		expectedError    string
+	}{
+		{
+			name:             "tag and digest with targetRepo and targetTag",
+			imageName:        "test.registry.io/testns/repo:v1@" + dgst,
+			imageReference:   "docker://localhost:5000/myregistry/custom/repo:target-tag",
+			cacheDestination: "docker://localhost:8888/custom/repo:" + digestTag,
+		},
+		{
+			name:             "tag only",
+			imageName:        "test.registry.io/testns/repo:v1",
+			imageReference:   "docker://localhost:5000/myregistry/testns/repo:v1",
+			cacheDestination: "docker://localhost:8888/testns/repo:v1",
+		},
+		{
+			name:             "digest only",
+			imageName:        "test.registry.io/testns/repo@" + dgst,
+			imageReference:   "docker://localhost:5000/myregistry/testns/repo:" + digestTag,
+			cacheDestination: "docker://localhost:8888/testns/repo:" + digestTag,
+		},
+		{
+			name:           "invalid origin",
+			imageName:      "test.registry.io/testns/repo:v1@sha256:invalid",
+			imageReference: "docker://localhost:5000/myregistry/testns/repo:v1",
+			expectedError:  "parse image name",
+		},
+		{
+			name:           "invalid destination",
+			imageName:      "test.registry.io/testns/repo:v1@" + dgst,
+			imageReference: "docker://localhost:5000/myregistry/testns/repo@sha256:invalid",
+			expectedError:  "invalid digest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured v2alpha1.CollectorSchema
+			di := DeleteImages{
+				Log: clog.New("trace"),
+				Opts: mirror.CopyOptions{
+					Global: &mirror.GlobalOptions{
+						DeleteDestination: "docker://localhost:5000/myregistry",
+						ForceCacheDelete:  true,
+					},
+				},
+				Batch:            &mockBatch{capturedSchema: &captured},
+				LocalStorageFQDN: "localhost:8888",
+			}
+			deleteImageList := v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      tt.imageName,
+						ImageReference: tt.imageReference,
+						Type:           v2alpha1.TypeGeneric,
+					},
+				},
+			}
+
+			err := di.DeleteRegistryImages(deleteImageList)
+			if tt.expectedError != "" {
+				assert.ErrorContains(t, err, tt.expectedError)
+				assert.Empty(t, captured.AllImages)
+				assert.Zero(t, captured.TotalAdditionalImages)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, []v2alpha1.CopyImageSchema{
+				{Origin: tt.imageName, Destination: tt.imageReference, Type: v2alpha1.TypeGeneric},
+				{Origin: tt.imageName, Destination: tt.cacheDestination, Type: v2alpha1.TypeGeneric},
+			}, captured.AllImages)
+			assert.Equal(t, 2, captured.TotalAdditionalImages)
+		})
+	}
+}
+
 // mockBatch
 type mockBatch struct {
 	Fail bool
