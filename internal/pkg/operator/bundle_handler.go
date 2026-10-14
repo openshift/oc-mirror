@@ -195,7 +195,11 @@ func findClusterServiceVersion(dir string) (*v1alpha1.ClusterServiceVersion, err
 		if err := yaml.Unmarshal(data, &csv); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", entry.Name(), err)
 		}
-		if csv.Kind != "" && csv.Kind != "ClusterServiceVersion" {
+		// Require the kind rather than merely not contradicting it: the
+		// filename filter is loose, and an unrelated file would unmarshal
+		// into an empty CSV whose missing deployments make every related
+		// image look like an operand.
+		if csv.Kind != "ClusterServiceVersion" {
 			continue
 		}
 		return &csv, nil

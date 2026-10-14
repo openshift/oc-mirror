@@ -255,6 +255,37 @@ func TestClusterServiceVersionRejectsTraversingLabel(t *testing.T) {
 	}
 }
 
+func TestFindClusterServiceVersionRequiresKind(t *testing.T) {
+	// ReadDir returns entries sorted, so the decoy is visited first.
+	const decoy = "aaa-csv-defaults.yaml"
+	const real = "zzz.clusterserviceversion.yaml"
+
+	realCSV := "apiVersion: operators.coreos.com/v1alpha1\n" +
+		"kind: ClusterServiceVersion\n" +
+		"metadata:\n  name: real-operator.v1.0.0\n"
+	kindless := "someKey: someValue\notherKey: 2\n"
+
+	t.Run("a kindless file does not shadow the real CSV", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, decoy), []byte(kindless), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, real), []byte(realCSV), 0o600))
+
+		csv, err := findClusterServiceVersion(dir)
+		require.NoError(t, err)
+		assert.Equal(t, "real-operator.v1.0.0", csv.Name,
+			"an empty CSV would make every related image look like an operand")
+	})
+
+	t.Run("a kindless file alone is not a CSV", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, decoy), []byte(kindless), 0o600))
+
+		_, err := findClusterServiceVersion(dir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no ClusterServiceVersion found")
+	})
+}
+
 func TestFindClusterServiceVersion(t *testing.T) {
 	csv := `apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
