@@ -194,10 +194,18 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 // calculate will calculate Cincinnati upgrades between channels by finding the latest versions in the source channels
 // and incrementing the minor version until the target channel is reached.
 func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested cincinnati.Update, upgrades []cincinnati.Update, err error) {
-	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
+	source, target, _, err := getSemverFromChannels(sourceChannel, targetChannel)
 	if err != nil {
 		return requested, upgrades, err
 	}
+	// Keep the configured target prefix for the whole walk so an EUS path that
+	// hops through stable on odd minors does not lose eus on later even minors.
+	// fast/candidate/stable keep their own prefix on every intermediate minor.
+	targetIdx := strings.LastIndex(targetChannel, "-")
+	if targetIdx == -1 {
+		return requested, upgrades, fmt.Errorf("invalid channel name %s", targetChannel)
+	}
+	prefix := targetChannel[:targetIdx]
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
 	source.Minor++
@@ -265,8 +273,8 @@ func handleBlockedEdges(ctx context.Context, cs CincinnatiSchema, targetChannel 
 	return true, nil
 }
 
-// getSemverFromChannel will return the major and minor version from the source and target channels. The prefix returned is
-// for the source channels for cross channel calculations.
+// getSemverFromChannels returns the major.minor of the source and target channels.
+// The prefix is taken from the source channel name.
 func getSemverFromChannels(sourceChannel, targetChannel string) (source, target semver.Version, prefix string, err error) {
 	// Get semver representation of source and target channel versions
 	sourceIdx := strings.LastIndex(sourceChannel, "-")
@@ -289,12 +297,15 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 	return source, target, prefix, nil
 }
 
-// upgradeChannelName builds "<prefix>-<major>.<minor>" for a cross-channel
-// walk. EUS channels exist only on even minors, so odd intermediates use stable.
+// upgradeChannelName builds "<prefix>-<major>.<minor>" for a cross-channel walk.
 func upgradeChannelName(prefix string, ver semver.Version) string {
 	return fmt.Sprintf("%s-%d.%d", upgradeChannelPrefix(prefix, ver.Minor), ver.Major, ver.Minor)
 }
 
+// upgradeChannelPrefix returns the Cincinnati channel prefix for a minor during
+// a cross-channel walk. EUS graphs exist only on even minors, so odd EUS
+// intermediates use stable. All other prefixes (stable, fast, candidate) are
+// kept as-is for every minor.
 func upgradeChannelPrefix(prefix string, minor uint64) string {
 	if prefix == "eus" && minor%2 == 1 {
 		return "stable"

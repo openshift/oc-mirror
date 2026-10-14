@@ -459,7 +459,7 @@ func shortestPathChannels(channelName string, first, last semver.Version) (sourc
 }
 
 // channelNameForRelease builds "<prefix>-<major>.<minor>" from an ISC channel
-// name (e.g. stable-4.14 + 4.12.40 → stable-4.12).
+// name (e.g. stable-4.14 + 4.12.40 → stable-4.12). Odd EUS minors use stable.
 func channelNameForRelease(channelName string, ver semver.Version) (string, error) {
 	idx := strings.LastIndex(channelName, "-")
 	if idx < 0 {
@@ -469,5 +469,5 @@ func channelNameForRelease(channelName string, ver semver.Version) (string, erro
 	if prefix == "" {
 		return "", fmt.Errorf("invalid channel name %s", channelName)
 	}
-	return fmt.Sprintf("%s-%d.%d", prefix, ver.Major, ver.Minor), nil
+	return upgradeChannelName(prefix, ver), nil
 }
