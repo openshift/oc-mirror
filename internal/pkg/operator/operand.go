@@ -146,6 +146,18 @@ func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string)
 		}
 	})
 
+	if entry.err != nil {
+		// A cached failure would leave every other image in this bundle
+		// unclassified, so let the next caller retry. Drop it only while it is
+		// still the current entry: another goroutine may already have replaced
+		// it with a retry of its own.
+		r.mu.Lock()
+		if r.bundles[bundleImage] == entry {
+			delete(r.bundles, bundleImage)
+		}
+		r.mu.Unlock()
+	}
+
 	return entry, entry.err
 }
 

@@ -29,11 +29,20 @@ type countingBundleHandler struct {
 func (h *countingBundleHandler) ControllerImages(_ context.Context, _, _ string, _ mirror.CopyOptions) (map[string]struct{}, error) {
 	h.mu.Lock()
 	h.calls++
+	controllers, err := h.controllers, h.err
 	h.mu.Unlock()
 	if h.block != nil {
 		<-h.block
 	}
-	return h.controllers, h.err
+	return controllers, err
+}
+
+// succeedWith makes later reads succeed, simulating a bundle that was
+// briefly unreadable.
+func (h *countingBundleHandler) succeedWith(controllers map[string]struct{}) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.controllers, h.err = controllers, nil
 }
 
 func (h *countingBundleHandler) callCount() int {
@@ -115,6 +124,21 @@ func TestOperandResolver(t *testing.T) {
 		}
 
 		assert.Equal(t, 1, handler.callCount(), "the result must be memoised per bundle")
+	})
+
+	t.Run("a failed read is retried, not memoised", func(t *testing.T) {
+		handler := &countingBundleHandler{err: errors.New("transient")}
+		resolver := newResolver(t, handler)
+
+		_, err := resolver.IsOperand(context.Background(), "docker://"+operandImg, bundles)
+		require.Error(t, err, "the first read fails")
+
+		handler.succeedWith(map[string]struct{}{controllerImg: {}})
+
+		got, err := resolver.IsOperand(context.Background(), "docker://"+operandImg, bundles)
+		require.NoError(t, err, "a transient failure must not poison the bundle")
+		assert.True(t, got)
+		assert.Equal(t, 2, handler.callCount(), "the bundle is read again after a failure")
 	})
 
 	t.Run("concurrent callers share a single read", func(t *testing.T) {
