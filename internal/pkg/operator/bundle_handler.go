@@ -82,8 +82,15 @@ func (o BundleHandler) clusterServiceVersion(ctx context.Context, bundleImage, b
 		return nil, fmt.Errorf("read bundle image %s: %w", bundleImage, err)
 	}
 
+	cfg, err := img.ConfigFile()
+	if err != nil {
+		return nil, fmt.Errorf("read config of bundle %s: %w", bundleImage, err)
+	}
+
+	// A bundle without the label keeps the default; only a failed read above
+	// is an error, since guessing the directory hides the real cause.
 	label := defaultBundleManifestsDir
-	if cfg, err := img.ConfigFile(); err == nil && cfg != nil {
+	if cfg != nil {
 		if l := cfg.Config.Labels[bundleManifestsLabel]; l != "" {
 			label = l
 		}
