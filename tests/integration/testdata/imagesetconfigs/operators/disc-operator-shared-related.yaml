@@ -1,0 +1,14 @@
+# Delete only foo.v0.2.0. foo.v0.3.0 and foo.v0.3.1 remain and share the
+# related operator image, which must stay out of the delete set (OCPBUGS-61236).
+kind: DeleteImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+delete:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+      packages:
+      - name: foo
+        defaultChannel: beta
+        channels:
+        - name: beta
+          minVersion: '0.2.0'
+          maxVersion: '0.2.0'
