@@ -36,10 +36,12 @@ type OperandResolver struct {
 }
 
 // bundleControllers holds the images one bundle runs itself, fetched at most
-// once however many goroutines ask for it.
+// once however many goroutines ask for it. specs holds those that parsed; the
+// raw strings remain for references ParseRef cannot handle.
 type bundleControllers struct {
 	once   sync.Once
 	images map[string]struct{}
+	specs  []image.ImageSpec
 	err    error
 }
 
@@ -70,29 +72,55 @@ func NewOperandResolver(
 // operator needs it, so failing to mirror it has to be an error.
 func (r *OperandResolver) IsOperand(ctx context.Context, imageOrigin string, bundles map[string]string) (bool, error) {
 	if len(bundles) == 0 {
-		// Not linked to a bundle, so there is nothing to prove it is an
-		// operand. Treat it as an image the operator needs.
+		// Nothing proves it is an operand, so treat it as one the operator needs.
 		return false, nil
 	}
 
 	ref := referenceWithoutTransport(imageOrigin)
+	spec, specErr := image.ParseRef(ref)
 
 	for bundleImage := range bundles {
 		controllers, err := r.controllersOf(ctx, bundleImage)
 		if err != nil {
 			return false, err
 		}
-		if _, runsIt := controllers[ref]; runsIt {
+		if _, runsIt := controllers.images[ref]; runsIt {
 			return false, nil
+		}
+		if specErr != nil {
+			continue
+		}
+		for _, controller := range controllers.specs {
+			if sameImage(spec, controller) {
+				return false, nil
+			}
 		}
 	}
 
 	return true, nil
 }
 
+// sameImage reports whether two parsed references denote the same image. Name
+// carries the registry, so the same path on different hosts does not match.
+// A tag on one side and a digest on the other cannot be compared, so they are
+// treated as a match: the reverse would silently skip an image the operator runs.
+func sameImage(a, b image.ImageSpec) bool {
+	if a.Name != b.Name {
+		return false
+	}
+	switch {
+	case a.Digest != "" && b.Digest != "":
+		return a.Digest == b.Digest
+	case a.Tag != "" && b.Tag != "":
+		return a.Tag == b.Tag
+	default:
+		return true
+	}
+}
+
 // controllersOf returns the images the given bundle runs itself, pulling and
 // parsing the bundle at most once.
-func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string) (map[string]struct{}, error) {
+func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string) (*bundleControllers, error) {
 	r.initOnce.Do(func() {
 		if r.bundles == nil {
 			r.bundles = make(map[string]*bundleControllers)
@@ -111,9 +139,14 @@ func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string)
 		dir := filepath.Join(r.Opts.Global.WorkingDir, operatorBundlesDir, bundleDirName(bundleImage))
 		r.Log.Debug(collectorPrefix+"reading bundle %s to identify its operands", bundleImage)
 		entry.images, entry.err = r.handler.ControllerImages(ctx, bundleImage, dir, *r.Opts)
+		for controller := range entry.images {
+			if spec, err := image.ParseRef(controller); err == nil {
+				entry.specs = append(entry.specs, spec)
+			}
+		}
 	})
 
-	return entry.images, entry.err
+	return entry, entry.err
 }
 
 // referenceWithoutTransport strips the transport prefix so an image origin can
