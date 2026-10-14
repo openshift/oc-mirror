@@ -950,12 +950,13 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		o.Log.Debug("wrote version metadata: %s", version.Get().GitVersion)
 	}
 
-	// Record what was intentionally not mirrored. The matching disk-to-mirror
-	// run rebuilds its image list from the catalog, which still lists these
-	// images, and would otherwise fail looking for them in the cache.
-	if err := skipped.WriteSkippedImages(o.Opts.Global.WorkingDir, copiedSchema.SkippedImages); err != nil {
-		o.Log.Warn("unable to record skipped images: %v", err)
-	} else {
+	// Failing here is deliberate. Carrying on would produce an archive that
+	// looks fine but makes disk-to-mirror fail at the disconnected site, as a
+	// cache miss that points nowhere.
+	if len(copiedSchema.SkippedImages) > 0 {
+		if err := skipped.WriteSkippedImages(o.Opts.Global.WorkingDir, copiedSchema.SkippedImages); err != nil {
+			return fmt.Errorf("unable to record skipped images: %w", err)
+		}
 		o.Log.Debug("recorded %d skipped images", len(copiedSchema.SkippedImages))
 	}
 
