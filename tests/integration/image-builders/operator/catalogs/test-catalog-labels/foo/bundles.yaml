@@ -1,0 +1,32 @@
+---
+image: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1
+name: foo.v0.3.1
+package: foo
+properties:
+- type: olm.gvk
+  value:
+    group: test.foo
+    kind: Foo
+    version: v1
+- type: olm.package
+  value:
+    packageName: foo
+    version: 0.3.1
+relatedImages:
+- image: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1
+  name: ""
+- image: quay.io/oc-mirror/oc-mirror-dev:foo-v0.3.1
+  name: operator
+- image: quay.io/oc-mirror/oc-mirror-dev:bar-v1.0.0
+  name: operand-analytics
+  labels:
+    feature: analytics
+- image: quay.io/oc-mirror/oc-mirror-dev:baz-v1.0.0
+  name: operand-logging
+  labels:
+    feature: logging
+- image: quay.io/oc-mirror/oc-mirror-dev:baz-v1.1.0
+  name: operand-metrics
+  labels:
+    feature: metrics
+schema: olm.bundle

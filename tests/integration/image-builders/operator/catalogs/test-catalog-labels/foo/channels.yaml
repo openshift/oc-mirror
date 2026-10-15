@@ -1,0 +1,5 @@
+schema: olm.channel
+package: foo
+name: beta
+entries:
+  - name: foo.v0.3.1

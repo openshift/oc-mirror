@@ -4,6 +4,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // IncludeConfig defines a list of packages for
@@ -22,6 +24,14 @@ type IncludePackage struct {
 	// Channels to include.
 	Channels       []IncludeChannel `json:"channels,omitempty" yaml:"channels,omitempty"`
 	DefaultChannel string           `json:"defaultChannel,omitempty"`
+
+	// Selectors choose which related images of this package's bundles are mirrored,
+	// by matching the labels carried by the related images in the catalog.
+	// A related image is mirrored when it has no label at all, or when at least one
+	// selector matches its labels: the requirements within a selector are ANDed,
+	// the selectors of a package are ORed.
+	// When no selector is given, only the related images without labels are mirrored.
+	Selectors []*metav1.LabelSelector `json:"selectors,omitempty" yaml:"selectors,omitempty"`
 
 	// All channels containing these bundles are parsed for an upgrade graph.
 	IncludeBundle `json:",inline"`
