@@ -20,16 +20,17 @@ import (
 
 type MirrorArchive struct {
 	Archiver
-	adder           archiveAdder
-	destination     string
-	iscPath         string
-	workingDir      string
-	cacheDir        string
-	history         history.History
-	blobGatherer    BlobsGatherer
-	maxSize         int64
-	strictArchiving bool
-	logger          clog.PluggableLoggerInterface
+	adder                  archiveAdder
+	destination            string
+	iscPath                string
+	workingDir             string
+	cacheDir               string
+	history                history.History
+	blobGatherer           BlobsGatherer
+	maxSize                int64
+	strictArchiving        bool
+	ignoreReleaseSignature bool
+	logger                 clog.PluggableLoggerInterface
 }
 
 // NewMirrorArchive creates a new MirrorArchive instance
@@ -48,15 +49,16 @@ func NewMirrorArchive(opts *mirror.CopyOptions, destination, iscPath, workingDir
 	maxSize *= segMultiplier
 
 	ma := MirrorArchive{
-		destination:     destination,
-		history:         history,
-		blobGatherer:    bg,
-		workingDir:      workingDir,
-		cacheDir:        cacheDir,
-		iscPath:         iscPath,
-		maxSize:         maxSize,
-		strictArchiving: opts.Global.StrictArchiving,
-		logger:          logg,
+		destination:            destination,
+		history:                history,
+		blobGatherer:           bg,
+		workingDir:             workingDir,
+		cacheDir:               cacheDir,
+		iscPath:                iscPath,
+		maxSize:                maxSize,
+		strictArchiving:        opts.Global.StrictArchiving,
+		ignoreReleaseSignature: opts.Global.IgnoreReleaseSignature,
+		logger:                 logg,
 	}
 	return &ma, nil
 }
@@ -164,7 +166,11 @@ func (o *MirrorArchive) addImagesDiff(ctx context.Context, schema v2alpha1.Colle
 		if err := handleSignatureErrors(img, err); err != nil {
 			var archiveErr *ArchiveError
 			if errors.As(err, &archiveErr) && archiveErr.ReleaseErr != nil {
-				return nil, archiveErr
+				if o.ignoreReleaseSignature {
+					o.logger.Warn("[archive] skipping missing cosign signature for release image %s (--ignore-release-signature is set): %v", img.Destination, archiveErr.ReleaseErr)
+				} else {
+					return nil, archiveErr
+				}
 			}
 		}
 

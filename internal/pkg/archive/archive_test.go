@@ -421,6 +421,58 @@ func assertContents(t *testing.T, archiveFile string, expectedTarContents []stri
 	return assert.ElementsMatch(t, expectedTarContents, actualTarContents)
 }
 
+func TestArchive_AddImagesDiff_IgnoreReleaseSignature(t *testing.T) {
+	// sigErr simulates a missing cosign signature for an unsigned release image
+	// (e.g. a CI nightly build that has no cosign .sig blob in the local cache).
+	sigErr := &SignatureBlobGathererError{SigError: fmt.Errorf("manifest unknown")}
+
+	releaseImg := v2alpha1.CopyImageSchema{
+		Source:      consts.DockerProtocol + "registry.build05.ci.openshift.org/ci-op/release:latest",
+		Destination: consts.DockerProtocol + "localhost:5000/openshift/release:latest",
+		Type:        v2alpha1.TypeOCPRelease,
+	}
+	schema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{releaseImg}}
+
+	t.Run("ignoreReleaseSignature=false: release sig error is fatal", func(t *testing.T) {
+		testFolder := t.TempDir()
+		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ma.blobGatherer = funcBlobGatherer(func(_ context.Context, _ string, _ []string) (sets.Set[string], error) {
+			return sets.New[string](), sigErr
+		})
+		ma.ignoreReleaseSignature = false
+
+		_, err = ma.addImagesDiff(context.Background(), schema, sets.New[string]())
+		var archErr *ArchiveError
+		assert.ErrorAs(t, err, &archErr, "error should be ArchiveError with ReleaseErr set")
+		assert.NotNil(t, archErr.ReleaseErr)
+	})
+
+	t.Run("ignoreReleaseSignature=true: release sig error is non-fatal", func(t *testing.T) {
+		testFolder := t.TempDir()
+		ma, err := newMirrorArchiveWithMocks(testFolder, defaultSegSize*segMultiplier, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ma.blobGatherer = funcBlobGatherer(func(_ context.Context, _ string, _ []string) (sets.Set[string], error) {
+			return sets.New[string](), sigErr
+		})
+		ma.ignoreReleaseSignature = true
+
+		_, err = ma.addImagesDiff(context.Background(), schema, sets.New[string]())
+		assert.NoError(t, err, "release signature error should be non-fatal when ignoreReleaseSignature=true")
+	})
+}
+
+// funcBlobGatherer is a BlobsGatherer backed by a plain function, for use in tests.
+type funcBlobGatherer func(ctx context.Context, imgRef string, allowedPlatforms []string) (sets.Set[string], error)
+
+func (f funcBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allowedPlatforms []string) (sets.Set[string], error) {
+	return f(ctx, imgRef, allowedPlatforms)
+}
+
 // //////     Mocks       ////////
 
 func newMirrorArchiveWithMocks(testFolder string, maxArchiveSize int64, permissive bool) (*MirrorArchive, error) {
