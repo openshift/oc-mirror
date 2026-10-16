@@ -701,6 +701,47 @@ func TestExecutorSetupLocalStorage(t *testing.T) {
 			t.Fatalf("should not fail %v", err)
 		}
 	})
+
+	t.Run("Testing Executor : setup local storage should pass with REGISTRY_AUTH_FILE set", func(t *testing.T) {
+		t.Setenv("REGISTRY_AUTH_FILE", "/tmp/oc-mirror-test-auth.json")
+
+		log := clog.New("trace")
+
+		global := &mirror.GlobalOptions{
+			SecurePolicy: false,
+			Port:         7778,
+		}
+
+		_, sharedOpts := mirror.SharedImageFlags()
+		_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+		_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+		_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+		_, retryOpts := mirror.RetryFlags()
+
+		opts := &mirror.CopyOptions{
+			Global:              global,
+			DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+			SrcImage:            srcOpts,
+			DestImage:           destOpts,
+			RetryOpts:           retryOpts,
+			Dev:                 false,
+		}
+
+		ex := &ExecutorSchema{
+			Log:              log,
+			Opts:             opts,
+			LocalStorageDisk: consts.TestFolder + "cache-fake",
+			MakeDir:          MockMakeDir{},
+			LogsDir:          "/tmp/",
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := ex.setupLocalStorage(ctx)
+		if err != nil {
+			t.Fatalf("should not fail %v", err)
+		}
+		assert.Equal(t, "/tmp/oc-mirror-test-auth.json", os.Getenv("REGISTRY_AUTH_FILE"))
+	})
 }
 
 func TestExecutorSetupLocalRegistryConfig(t *testing.T) {
@@ -725,6 +766,26 @@ func TestExecutorSetupLocalRegistryConfig(t *testing.T) {
 		ip := net.ParseIP(host)
 		assert.NotNil(t, ip, "bind host should be a literal IP, not a name that could resolve off-loopback")
 		assert.True(t, ip.IsLoopback(), "local storage registry should bind a loopback address, got %q", host)
+	})
+
+	t.Run("Testing Executor : REGISTRY_AUTH_FILE does not break parse and is restored", func(t *testing.T) {
+		const authFile = "/tmp/oc-mirror-test-auth.json"
+		t.Setenv("REGISTRY_AUTH_FILE", authFile)
+
+		ex := &ExecutorSchema{
+			Log:              clog.New("trace"),
+			Opts:             &mirror.CopyOptions{Global: &mirror.GlobalOptions{Port: 7777}},
+			LocalStorageDisk: consts.TestFolder + "cache-fake",
+		}
+
+		cfg, err := ex.setupLocalRegistryConfig()
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg)
+		assert.Equal(t, authFile, os.Getenv("REGISTRY_AUTH_FILE"))
+
+		host, _, err := net.SplitHostPort(cfg.HTTP.Addr)
+		assert.NoError(t, err)
+		assert.Equal(t, localStorageHost, host)
 	})
 }
 
