@@ -195,8 +195,16 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
 	completed := 0
+	var workerErr error
 	for completed < len(collectorSchema.AllImages) {
-		res := <-results
+		res, ok := <-results
+		if !ok {
+			workerErr = ctx.Err()
+			if workerErr == nil {
+				workerErr = fmt.Errorf("batch ended before all image results were produced")
+			}
+			break
+		}
 		err := res.err
 		if err == nil {
 			logImageSuccess(o.Log, &res.img, &opts)
@@ -220,6 +228,10 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	close(progressCh)
 
 	p.Wait()
+
+	if workerErr != nil {
+		return copiedImages, workerErr
+	}
 
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
 
