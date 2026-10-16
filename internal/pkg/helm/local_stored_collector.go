@@ -583,7 +583,11 @@ func chartValuesDirName(chart v2alpha1.Chart) string {
 	// and cannot escape the working directory via crafted chart names.
 	key := chart.Name + "\x00" + chart.Version + "\x00" + strings.Join(chart.ValuesFiles, "\x00")
 	sum := sha256.Sum256([]byte(key))
-	return fmt.Sprintf("%s-%s-%s", sanitizePathComponent(chart.Name), sanitizePathComponent(defaultString(chart.Version, "unversioned")), hex.EncodeToString(sum[:8]))
+	version := chart.Version
+	if version == "" {
+		version = "unversioned"
+	}
+	return fmt.Sprintf("%s-%s-%s", sanitizePathComponent(chart.Name), sanitizePathComponent(version), hex.EncodeToString(sum[:8]))
 }
 
 func sanitizePathComponent(s string) string {
@@ -594,13 +598,6 @@ func sanitizePathComponent(s string) string {
 	default:
 		return strings.ReplaceAll(s, string(filepath.Separator), "_")
 	}
-}
-
-func defaultString(v, fallback string) string {
-	if v == "" {
-		return fallback
-	}
-	return v
 }
 
 // getImagesPath returns known jsonpaths and user defined jsonpaths where images are found
@@ -643,17 +640,13 @@ func getHelmTemplates(ch *helmchart.Chart, valueOpts map[string]any) (string, er
 		return "", fmt.Errorf("error rendering chart %s: %w", ch.Name(), err)
 	}
 
-	dropNotesFiles(files)
-	writeCRDs(out, ch)
-	return writeRenderedManifests(out, files, caps)
-}
-
-func dropNotesFiles(files map[string]string) {
 	for k := range files {
 		if strings.HasSuffix(k, ".txt") {
 			delete(files, k)
 		}
 	}
+	writeCRDs(out, ch)
+	return writeRenderedManifests(out, files, caps)
 }
 
 func writeCRDs(out *bytes.Buffer, ch *helmchart.Chart) {
