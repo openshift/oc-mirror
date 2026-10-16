@@ -182,7 +182,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
 				} else {
-					src = src + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
+					src = src + ":" + imgSpec.AlgorithmAndDigest()
 				}
 				// TODO remove me when the migration from oc-mirror v1 to v2 ends
 				if o.generateV1DestTags {
@@ -198,8 +198,17 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 						dest = dest + ":" + fmt.Sprintf("%x", hasher.Sum32())
 					}
 				} else {
-					dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
+					dest = dest + ":" + imgSpec.AlgorithmAndDigest()
 				}
+			// OCPBUGS-105878 - tag+digest: read cache by digest key (as M2D wrote it),
+			// push to destination under the human tag.
+			case imgSpec.IsImageByTagAndDigest():
+				if img.RebuiltTag != "" {
+					src = src + ":" + img.RebuiltTag
+				} else {
+					src = src + ":" + imgSpec.CacheTag()
+				}
+				dest = dest + ":" + imgSpec.DestinationTag()
 			default:
 				if img.RebuiltTag != "" {
 					src = src + ":" + img.RebuiltTag
@@ -264,13 +273,13 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			case imgSpec.Tag == "" && imgSpec.Transport == consts.OciProtocol:
 				dest = dest + "::" + latestTag
 			case imgSpec.IsImageByDigestOnly():
-				dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
-			// OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-			// use tag only for dest, but pull by digest
+				dest = dest + ":" + imgSpec.AlgorithmAndDigest()
+			// OCPBUGS-105878 - tag+digest: pull by digest and key the cache by digest, else
+			// two digests sharing a repo:tag collide and the archive drops one's blobs.
 			case imgSpec.IsImageByTagAndDigest():
-				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
+				o.Log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull and to key the cache", imgSpec.Reference)
 				src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
-				dest = dest + ":" + imgSpec.Tag
+				dest = dest + ":" + imgSpec.CacheTag()
 			default:
 				dest = dest + ":" + imgSpec.Tag
 			}
@@ -361,15 +370,14 @@ func (d OtherImageDispatcher) dispatch(img v2alpha1.RelatedImage) ([]v2alpha1.Co
 	switch {
 	case imgSpec.Tag == "" && imgSpec.Transport == consts.OciProtocol:
 		dest = dest + ":" + latestTag
-	case imgSpec.IsImageByDigestOnly():
-		dest = dest + ":" + imgSpec.Algorithm + "-" + imgSpec.Digest
-	case imgSpec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-		// use tag only for dest, but pull by digest
+	// OCPBUGS-33196/37867 - tag+digest (M2M): pull by digest, keep the human tag at dest.
+	case imgSpec.IsImageByTagAndDigest():
 		d.log.Warn(collectorPrefix+"%s has both tag and digest : using digest to pull, but tag only for mirroring", imgSpec.Reference)
 		src = imgSpec.Transport + strings.Join([]string{imgSpec.Domain, imgSpec.PathComponent}, "/") + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest
-		dest = dest + ":" + imgSpec.Tag
+		dest = dest + ":" + imgSpec.DestinationTag()
 	default:
-		dest = dest + ":" + imgSpec.Tag
+		// tag-only and digest-only: DestinationTag falls back to the digest when untagged.
+		dest = dest + ":" + imgSpec.DestinationTag()
 	}
 	copies = append(copies, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type})
 	return copies, nil
@@ -432,9 +440,11 @@ func saveCtlgToCacheRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRe
 	case spec.Tag == "" && spec.Transport == consts.OciProtocol:
 		saveCtlgDest = saveCtlgDest + ":" + latestTag
 	case spec.IsImageByDigestOnly():
-		saveCtlgDest = saveCtlgDest + ":" + spec.Algorithm + "-" + spec.Digest
+		saveCtlgDest = saveCtlgDest + ":" + spec.AlgorithmAndDigest()
+	// OCPBUGS-105878 - tag+digest: key the cache by digest (collision-safe), consistent
+	// with rebuiltCtlgRef which reads it back from the same cache location.
 	case spec.IsImageByTagAndDigest():
-		saveCtlgDest = saveCtlgDest + ":" + spec.Tag
+		saveCtlgDest = saveCtlgDest + ":" + spec.CacheTag()
 	default:
 		saveCtlgDest = saveCtlgDest + ":" + spec.Tag
 	}
@@ -464,10 +474,10 @@ func rebuiltCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, cacheRegist
 	case spec.Tag == "" && spec.Transport == consts.OciProtocol:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + latestTag
 	case spec.IsImageByDigestOnly():
-		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Algorithm + "-" + spec.Digest
-	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-		// use tag only for dest, but pull by digest
-		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Tag
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.AlgorithmAndDigest()
+	// OCPBUGS-105878 - tag+digest: read the cache by digest (as saveCtlgToCacheRef wrote it).
+	case spec.IsImageByTagAndDigest():
+		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.CacheTag()
 	default:
 		rebuiltCtlgSrc = rebuiltCtlgSrc + ":" + spec.Tag
 	}
@@ -499,14 +509,14 @@ func destCtlgRef(spec image.ImageSpec, img v2alpha1.RelatedImage, destinationReg
 		if img.RebuiltTag != "" {
 			dest = dest + ":" + spec.Algorithm + "-" + img.RebuiltTag
 		} else {
-			dest = dest + ":" + spec.Algorithm + "-" + spec.Digest
+			dest = dest + ":" + spec.AlgorithmAndDigest()
 		}
 
-	case spec.IsImageByTagAndDigest(): // OCPBUGS-33196 + OCPBUGS-37867- check source image for tag and digest
-		// use tag only for dest, but pull by digest
-		dest = dest + ":" + spec.Tag
+	// OCPBUGS-33196/37867 - tag+digest: keep the human tag at the real destination.
+	case spec.IsImageByTagAndDigest():
+		dest = dest + ":" + spec.DestinationTag()
 	default:
-		dest = dest + ":" + spec.Tag
+		dest = dest + ":" + spec.DestinationTag()
 
 	}
 	return dest

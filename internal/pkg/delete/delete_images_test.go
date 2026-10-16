@@ -497,9 +497,158 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 	}
 }
 
+// OCPBUGS-105878: for a tag+digest image, --force-cache-delete must target the cache
+// under the digest key, while the remote deletion keeps the human tag.
+func TestDeleteRegistryImagesForceCacheDeleteTagAndDigest(t *testing.T) {
+	log := clog.New("trace")
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy:      false,
+		WorkingDir:        consts.TestFolder,
+		DeleteDestination: consts.DockerProtocol + "localhost:5000/myregistry",
+		ForceCacheDelete:  true,
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         consts.DockerProtocol + "myregistry",
+		Mode:                mirror.DiskToMirror,
+		LocalStorageFQDN:    "localhost:8888",
+	}
+
+	const dgst = "sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"
+
+	var captured v2alpha1.CollectorSchema
+	mb := &mockBatch{capturedSchema: &captured}
+	di := New(log, opts, mb, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+
+	deleteImageList := v2alpha1.DeleteImageList{
+		Items: []v2alpha1.DeleteItem{
+			{
+				ImageName:      "test.registry.io/testns/repo:v1@" + dgst,
+				ImageReference: "docker://localhost:5000/myregistry/testns/repo:v1",
+				Type:           v2alpha1.TypeGeneric,
+			},
+		},
+	}
+
+	err := di.DeleteRegistryImages(deleteImageList)
+	assert.NoError(t, err)
+
+	destinations := make([]string, 0, len(captured.AllImages))
+	for _, img := range captured.AllImages {
+		destinations = append(destinations, img.Destination)
+	}
+
+	// Remote deletion keeps the human tag (how it was mirrored to the destination).
+	assert.Contains(t, destinations, "docker://localhost:5000/myregistry/testns/repo:v1")
+	// Cache deletion must use the digest-encoded key (matching how M2D stored it).
+	assert.Contains(t, destinations, "docker://localhost:8888/testns/repo:sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2")
+	// And must NOT use the human tag for the cache (that entry does not exist -> orphaned manifest).
+	assert.NotContains(t, destinations, "docker://localhost:8888/testns/repo:v1")
+}
+
+func TestDeleteRegistryImagesForceCacheDeleteReferences(t *testing.T) {
+	const dgst = "sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"
+	const digestTag = "sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2"
+
+	tests := []struct {
+		name             string
+		imageName        string
+		imageReference   string
+		cacheDestination string
+		expectedError    string
+	}{
+		{
+			name:             "tag and digest with targetRepo and targetTag",
+			imageName:        "test.registry.io/testns/repo:v1@" + dgst,
+			imageReference:   "docker://localhost:5000/myregistry/custom/repo:target-tag",
+			cacheDestination: "docker://localhost:8888/custom/repo:" + digestTag,
+		},
+		{
+			name:             "tag only",
+			imageName:        "test.registry.io/testns/repo:v1",
+			imageReference:   "docker://localhost:5000/myregistry/testns/repo:v1",
+			cacheDestination: "docker://localhost:8888/testns/repo:v1",
+		},
+		{
+			name:             "digest only",
+			imageName:        "test.registry.io/testns/repo@" + dgst,
+			imageReference:   "docker://localhost:5000/myregistry/testns/repo:" + digestTag,
+			cacheDestination: "docker://localhost:8888/testns/repo:" + digestTag,
+		},
+		{
+			name:           "invalid origin",
+			imageName:      "test.registry.io/testns/repo:v1@sha256:invalid",
+			imageReference: "docker://localhost:5000/myregistry/testns/repo:v1",
+			expectedError:  "parse image name",
+		},
+		{
+			name:           "invalid destination",
+			imageName:      "test.registry.io/testns/repo:v1@" + dgst,
+			imageReference: "docker://localhost:5000/myregistry/testns/repo@sha256:invalid",
+			expectedError:  "invalid digest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured v2alpha1.CollectorSchema
+			di := DeleteImages{
+				Log: clog.New("trace"),
+				Opts: mirror.CopyOptions{
+					Global: &mirror.GlobalOptions{
+						DeleteDestination: "docker://localhost:5000/myregistry",
+						ForceCacheDelete:  true,
+					},
+				},
+				Batch:            &mockBatch{capturedSchema: &captured},
+				LocalStorageFQDN: "localhost:8888",
+			}
+			deleteImageList := v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      tt.imageName,
+						ImageReference: tt.imageReference,
+						Type:           v2alpha1.TypeGeneric,
+					},
+				},
+			}
+
+			err := di.DeleteRegistryImages(deleteImageList)
+			if tt.expectedError != "" {
+				assert.ErrorContains(t, err, tt.expectedError)
+				assert.Empty(t, captured.AllImages)
+				assert.Zero(t, captured.TotalAdditionalImages)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, []v2alpha1.CopyImageSchema{
+				{Origin: tt.imageName, Destination: tt.imageReference, Type: v2alpha1.TypeGeneric},
+				{Origin: tt.imageName, Destination: tt.cacheDestination, Type: v2alpha1.TypeGeneric},
+			}, captured.AllImages)
+			assert.Equal(t, 2, captured.TotalAdditionalImages)
+		})
+	}
+}
+
 // mockBatch
 type mockBatch struct {
 	Fail bool
+	// capturedSchema, when non-nil, receives the CollectorSchema passed to Worker so tests
+	// can assert on the images (e.g. cache references) the delete flow builds.
+	capturedSchema *v2alpha1.CollectorSchema
 }
 
 // mockBlobs
@@ -510,6 +659,9 @@ type mockBlobs struct {
 type mockManifest struct{}
 
 func (o mockBatch) Worker(ctx context.Context, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
+	if o.capturedSchema != nil {
+		*o.capturedSchema = collectorSchema
+	}
 	copiedImages := v2alpha1.CollectorSchema{
 		AllImages:             []v2alpha1.CopyImageSchema{},
 		TotalReleaseImages:    0,
