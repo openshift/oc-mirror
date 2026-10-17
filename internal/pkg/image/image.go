@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
@@ -47,9 +47,8 @@ const (
 	errMessageImage = "%s unable to parse image correctly"
 )
 
-// It expects the image reference not to have the transport prefix.
-// Otherwise, it will return an error.
-func ParseRef(imgRef string) (ImageSpec, error) {
+// parseImageSpec parses an image string reference an ImageSpec
+func parseImageSpec(imgRef string) (ImageSpec, error) {
 	var imgSpec ImageSpec
 
 	if strings.Contains(imgRef, "://") {
@@ -93,9 +92,6 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 	if imgSpec.Name == "" {
 		return ImageSpec{}, fmt.Errorf("unknown image : reference name is empty")
 	}
-	if imgSpec.Transport == consts.DockerProtocol && imgSpec.Tag == "" && imgSpec.Digest == "" {
-		return ImageSpec{}, fmt.Errorf(errMessageImage+" : tag and digest are empty", imgRef)
-	}
 
 	if imgSpec.Transport == consts.DockerProtocol {
 		imageNameComponents := strings.Split(imgSpec.Name, "/")
@@ -111,6 +107,19 @@ func ParseRef(imgRef string) (ImageSpec, error) {
 		imgSpec.PathComponent = imgSpec.Name
 	}
 
+	return imgSpec, nil
+}
+
+// It expects the image reference not to have the transport prefix.
+// Otherwise, it will return an error.
+func ParseRef(imgRef string) (ImageSpec, error) {
+	imgSpec, err := parseImageSpec(imgRef)
+	if err != nil {
+		return ImageSpec{}, err
+	}
+	if imgSpec.Transport == consts.DockerProtocol && imgSpec.Tag == "" && imgSpec.Digest == "" {
+		return ImageSpec{}, fmt.Errorf(errMessageImage+" : tag and digest are empty", imgRef)
+	}
 	return imgSpec, nil
 }
 
