@@ -2,11 +2,15 @@ package batch
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.podman.io/image/v5/docker"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
@@ -143,4 +147,96 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 				"RemoveSignatures flag mismatch for %s: %s", tt.catalogImage.Type, tt.description)
 		})
 	}
+}
+
+func TestShouldSkipImage_OCPBUGS111614(t *testing.T) {
+	bundleOrigin := "docker://registry.redhat.io/rhoai/odh-operator-bundle@sha256:bundle"
+	bundleRef := "registry.redhat.io/rhoai/odh-operator-bundle@sha256:bundle"
+	relatedDest := "docker://mirror.example.com/rhoai/related@sha256:abc"
+
+	bundle := v2alpha1.CopyImageSchema{
+		Source:      bundleOrigin,
+		Origin:      bundleOrigin,
+		Destination: "docker://mirror.example.com/rhoai/odh-operator-bundle@sha256:bundle",
+		Type:        v2alpha1.TypeOperatorBundle,
+	}
+	opts := mirror.CopyOptions{Mode: mirror.MirrorToMirror}
+
+	relatedFail := func(err error) mirrorErrorSchema {
+		return mirrorErrorSchema{
+			image: v2alpha1.CopyImageSchema{
+				Source:      "docker://registry.redhat.io/rhoai/related@sha256:abc",
+				Origin:      "docker://registry.redhat.io/rhoai/related@sha256:abc",
+				Destination: relatedDest,
+				Type:        v2alpha1.TypeOperatorRelatedImage,
+			},
+			err:     err,
+			bundles: StringMap{bundleRef: "odh-operator.v3.4.3"},
+		}
+	}
+
+	t.Run("skips when related image is permanently missing", func(t *testing.T) {
+		m := new(MirrorMock)
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(false, nil)
+
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(errors.New("manifest unknown")),
+		})
+		assert.True(t, skip)
+		assert.ErrorContains(t, err, fmt.Sprintf(skippingMsg, bundleOrigin))
+		m.AssertExpectations(t)
+	})
+
+	t.Run("does not skip when related image is already present at destination", func(t *testing.T) {
+		m := new(MirrorMock)
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(true, nil)
+
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(errors.New("Instructed to preserve digests")),
+		})
+		assert.False(t, skip)
+		assert.NoError(t, err)
+		m.AssertExpectations(t)
+	})
+
+	t.Run("does not skip on retriable 429 even if destination check says missing", func(t *testing.T) {
+		m := new(MirrorMock)
+		// Check must not be required: retriable filter short-circuits first.
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusTooManyRequests}),
+		})
+		assert.False(t, skip)
+		assert.NoError(t, err)
+	})
+
+	t.Run("does not skip on retriable 503", func(t *testing.T) {
+		m := new(MirrorMock)
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusServiceUnavailable}),
+		})
+		assert.False(t, skip)
+		assert.NoError(t, err)
+	})
+
+	t.Run("does not skip on context deadline exceeded", func(t *testing.T) {
+		m := new(MirrorMock)
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(context.DeadlineExceeded),
+		})
+		assert.False(t, skip)
+		assert.NoError(t, err)
+	})
+
+	t.Run("skips when one related failure is permanent and missing among retriable ones", func(t *testing.T) {
+		m := new(MirrorMock)
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(false, nil)
+
+		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
+			relatedFail(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusTooManyRequests}),
+			relatedFail(errors.New("unauthorized: authentication required")),
+		})
+		assert.True(t, skip)
+		assert.Error(t, err)
+		m.AssertExpectations(t)
+	})
 }
