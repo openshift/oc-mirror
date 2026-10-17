@@ -495,6 +495,67 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+
+	releasePathTests := []struct {
+		name      string
+		imageRef  string
+		imageType v2alpha1.ImageType
+		wantErr   bool
+	}{
+		{
+			name:      "release content canonical",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			name:      "release content flattened max-nested-paths 2",
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			name:      "release images canonical",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release-images:4.15.12-x86_64",
+			imageType: v2alpha1.TypeOCPRelease,
+		},
+		{
+			name:      "release images flattened max-nested-paths 2",
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release-images:4.15.12-x86_64",
+			imageType: v2alpha1.TypeOCPRelease,
+		},
+		{
+			name:      "release content wrong repo rejected",
+			imageRef:  "docker://localhost:5000/myregistry/other/release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+			wantErr:   true,
+		},
+	}
+	for _, tt := range releasePathTests {
+		t.Run("DeleteRegistryImages "+tt.name, func(t *testing.T) {
+			err := di.DeleteRegistryImages(v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+						ImageReference: tt.imageRef,
+						Type:           tt.imageType,
+					},
+				},
+			})
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestMatchesExpectedReleaseRepo(t *testing.T) {
+	base := "localhost:5000/myregistry"
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift/release", base, releaseContentPathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift-release", base, releaseContentPathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift/release-images", base, releaseImagePathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift-release-images", base, releaseImagePathComponents))
+	assert.False(t, matchesExpectedReleaseRepo(base+"/other/release", base, releaseContentPathComponents))
 }
 
 // mockBatch
