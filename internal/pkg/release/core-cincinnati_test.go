@@ -124,6 +124,65 @@ func TestGetUpdates(t *testing.T) {
 	}
 }
 
+func TestGetUpdates_ConnectedClusterEUSPath(t *testing.T) {
+	arch := "test-arch"
+	var mu sync.Mutex
+	seen := map[string]struct{}{}
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ch := r.URL.Query().Get("channel")
+		mu.Lock()
+		seen[ch] = struct{}{}
+		mu.Unlock()
+		if ch != "eus-4.14" {
+			t.Errorf("connected-cluster shortestPath must query only the subscribed channel, got %s", ch)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		body := `{
+			"nodes": [
+				{"version": "4.12.40", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.40"},
+				{"version": "4.12.50", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.50"},
+				{"version": "4.13.5", "payload": "quay.io/openshift-release-dev/ocp-release:4.13.5"},
+				{"version": "4.14.1", "payload": "quay.io/openshift-release-dev/ocp-release:4.14.1"},
+				{"version": "4.14.10", "payload": "quay.io/openshift-release-dev/ocp-release:4.14.10"}
+			],
+			"edges": [[0,1],[1,2],[2,3],[3,4]]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(body))
+		require.NoError(t, err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(ts.Close)
+	endpoint, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+
+	cs := CincinnatiSchema{
+		Log:              clog.New("trace"),
+		Client:           &mockClient{url: endpoint},
+		CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()},
+	}
+	cur, req, updates, err := GetUpdates(
+		context.Background(), cs, "eus-4.14",
+		semver.MustParse("4.12.40"), semver.MustParse("4.14.10"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "4.12.40", cur.Version.String())
+	require.Equal(t, "4.14.10", req.Version.String())
+
+	got := make([]string, 0, len(updates))
+	for _, u := range updates {
+		got = append(got, u.Version.String())
+	}
+	require.Equal(t, []string{"4.12.40", "4.12.50", "4.13.5", "4.14.1", "4.14.10"}, got)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, map[string]struct{}{"eus-4.14": {}}, seen)
+}
+
 func TestGetMinorMax(t *testing.T) {
 	arch := "test-arch"
 	channelName := "stable-4.0"
