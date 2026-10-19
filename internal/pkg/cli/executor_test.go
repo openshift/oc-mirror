@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
@@ -1120,6 +1123,47 @@ func TestExecutorCheckRegistryAccess(t *testing.T) {
 		})
 		// TODO: add HTTPS and cert tests
 	})
+}
+
+func TestCheckRegistryPushAccess(t *testing.T) {
+	var seen []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		switch {
+		case r.URL.Path == "/v2/" || r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, "/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/blobs/uploads"):
+			w.Header().Set("Location", r.URL.Path+"/session")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(ts.Close)
+
+	host := strings.TrimPrefix(ts.URL, "http://")
+	global := &mirror.GlobalOptions{SecurePolicy: false, Force: true, WorkingDir: t.TempDir()}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	fsDest, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	assert.NoError(t, fsDest.Set("dest-tls-verify", "false"))
+
+	ex := &ExecutorSchema{
+		Log:  clog.New("debug"),
+		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
+	}
+
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, host)
+	assert.NoError(t, err)
+
+	joined := strings.Join(seen, "\n")
+	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
+		"push check should probe with HEAD or POST, got:\n%s", joined)
+	assert.Contains(t, joined, "/oc-mirror")
 }
 
 // setup mocks

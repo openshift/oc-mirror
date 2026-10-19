@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,9 @@ import (
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,6 +41,7 @@ import (
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
 	imgconfig "go.podman.io/image/v5/pkg/docker/config"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -462,7 +467,69 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 	}
 
 	o.Log.Info("Verified we can authenticate against registry %q", registry)
+
+	if err := o.checkRegistryPushAccess(ctx, authConfig, registry); err != nil {
+		return err
+	}
 	return nil
+}
+
+// checkRegistryPushAccess confirms destination push rights with a HEAD-based
+// probe on a shallow repository. If this succeeds, later unauthorized blob
+// uploads on deep repository paths are nested-path limits, not missing push auth.
+func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, registry string) error {
+	host := strings.SplitN(registry, "/", 2)[0]
+	probe := host + "/oc-mirror"
+
+	var nameOpts []name.Option
+	rt := remote.DefaultTransport
+	if o.Opts.DestImage != nil && !o.Opts.DestImage.TlsVerify {
+		nameOpts = append(nameOpts, name.Insecure)
+		rt = insecureRegistryTransport()
+	}
+
+	imgRef, err := name.ParseReference(probe, nameOpts...)
+	if err != nil {
+		return fmt.Errorf("parse push-check reference %q: %w", probe, err)
+	}
+
+	kc := pushAccessKeychain{cfg: authn.AuthConfig{
+		Username:      authConfig.Username,
+		Password:      authConfig.Password,
+		IdentityToken: authConfig.IdentityToken,
+	}}
+	if err := remote.CheckPushPermission(imgRef, kc, rt); err != nil {
+		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
+	}
+
+	o.Log.Info("Verified we can push to registry %q", host)
+	return nil
+}
+
+type pushAccessKeychain struct {
+	cfg authn.AuthConfig
+}
+
+func (k pushAccessKeychain) Resolve(_ authn.Resource) (authn.Authenticator, error) {
+	if k.cfg.Username == "" && k.cfg.Password == "" && k.cfg.IdentityToken == "" && k.cfg.RegistryToken == "" {
+		return authn.Anonymous, nil
+	}
+	return authn.FromConfig(k.cfg), nil
+}
+
+func insecureRegistryTransport() http.RoundTripper {
+	base, ok := remote.DefaultTransport.(*http.Transport)
+	if !ok {
+		base = http.DefaultTransport.(*http.Transport)
+	}
+	t := base.Clone()
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	} else {
+		t.TLSClientConfig = t.TLSClientConfig.Clone()
+	}
+	t.TLSClientConfig.InsecureSkipVerify = true
+	return t
 }
 
 // See containers/common/pkg/auth.parseCredentialsKey
