@@ -177,6 +177,34 @@ opm render ${REPO}:foo-bundle-v0.1.0 --output=yaml > ${CATALOG}/foo/bundles.yaml
 ```
 
 
+## test-catalog-tag-digest-collision
+
+Reproduces the tag+digest cache collision (an operator's related images reference the
+same repository and tag but pin different digests via the `repo:tag@sha256:...` form).
+The `collisiontest` package has two channels whose bundles both reference
+`oc-mirror-dev:shared-operand` but with two DIFFERENT, real digests already present in
+the `oc-mirror-dev` repository. The `shared-operand` tag itself does not need to exist -
+the images are pulled by digest.
+
+### Contents
+ * Packages: collisiontest
+ * Channels:
+    - collisiontest: alpha, stable
+ * Bundles:
+    - collisiontest.v1.0.0 (alpha): operand `oc-mirror-dev:shared-operand@sha256:1ce8c0...`
+    - collisiontest.v2.0.0 (stable): operand `oc-mirror-dev:shared-operand@sha256:1b8392...`
+
+### Creating
+This catalog's FBC is hand-written (see the checked-in `collisiontest/` directory). The two
+operand digests are existing manifests in `quay.io/oc-mirror/oc-mirror-dev`:
+ * `sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58` (foo operand)
+ * `sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad` (foo-bundle-v0.2.0)
+
+If those digests are ever pruned from the repository, refresh them with two distinct,
+existing digests (`skopeo manifest-digest`) and update both the FBC and
+`testdata/imagesetconfigs/tag_digest_collision/*.yaml`.
+
+
 ## Catalog building
 ```bash
 make build # for all catalogs

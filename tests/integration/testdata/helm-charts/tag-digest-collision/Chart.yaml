@@ -1,0 +1,7 @@
+apiVersion: v2
+name: tag-digest-collision
+description: >-
+  Minimal local chart used by tests/integration/tag_digest_collision_test.go to
+  reproduce the OCPBUGS-105878 tag+digest cache collision for helm-referenced
+  images. Not a real workload chart - do not use outside of this test.
+version: 0.1.0

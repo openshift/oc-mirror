@@ -1,0 +1,12 @@
+---
+schema: olm.channel
+package: collisiontest
+name: alpha
+entries:
+  - name: collisiontest.v1.0.0
+---
+schema: olm.channel
+package: collisiontest
+name: stable
+entries:
+  - name: collisiontest.v2.0.0

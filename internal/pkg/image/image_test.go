@@ -257,6 +257,112 @@ func TestImage_TestParseRef(t *testing.T) {
 	}
 }
 
+func TestImage_EncodedDigest(t *testing.T) {
+	type testCase struct {
+		caseName    string
+		imgRef      string
+		expectedKey string
+	}
+	testCases := []testCase{
+		{
+			caseName:    "tag only : no digest to encode",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			expectedKey: "",
+		},
+		{
+			caseName:    "digest only : algorithm-hex",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedKey: "sha256-db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+		},
+		{
+			caseName:    "tag and digest : algorithm-hex",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+			expectedKey: "sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+		},
+	}
+	for _, aTestCase := range testCases {
+		t.Run(aTestCase.caseName, func(t *testing.T) {
+			imgSpec, err := ParseRef(aTestCase.imgRef)
+			require.NoError(t, err)
+			require.Equal(t, aTestCase.expectedKey, imgSpec.AlgorithmAndDigest())
+		})
+	}
+}
+
+func TestImage_CacheTag(t *testing.T) {
+	type testCase struct {
+		caseName    string
+		imgRef      string
+		expectedKey string
+	}
+	testCases := []testCase{
+		{
+			caseName:    "tag only : keeps the human tag",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			expectedKey: "latest",
+		},
+		{
+			caseName:    "digest only : keyed by digest",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedKey: "sha256-db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+		},
+		{
+			caseName:    "tag and digest : keyed by digest (collision-safe)",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+			expectedKey: "sha256-44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+		},
+		{
+			caseName:    "oci reference with no tag : empty (caller defaults to latestTag)",
+			imgRef:      "oci:///tmp/ubi8/ubi",
+			expectedKey: "",
+		},
+	}
+	for _, aTestCase := range testCases {
+		t.Run(aTestCase.caseName, func(t *testing.T) {
+			imgSpec, err := ParseRef(aTestCase.imgRef)
+			require.NoError(t, err)
+			require.Equal(t, aTestCase.expectedKey, imgSpec.CacheTag())
+		})
+	}
+}
+
+func TestImage_DestinationTag(t *testing.T) {
+	type testCase struct {
+		caseName    string
+		imgRef      string
+		expectedKey string
+	}
+	testCases := []testCase{
+		{
+			caseName:    "tag only : keeps the human tag",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest",
+			expectedKey: "latest",
+		},
+		{
+			caseName:    "digest only : keyed by digest",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+			expectedKey: "sha256-db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
+		},
+		{
+			caseName:    "tag and digest : keeps the human tag",
+			imgRef:      consts.DockerProtocol + "registry.redhat.io/ubi8/ubi:latest@sha256:44d75007b39e0e1bbf1bcfd0721245add54c54c3f83903f8926fb4bef6827aa2",
+			expectedKey: "latest",
+		},
+		{
+			caseName:    "oci reference with no tag : empty (caller defaults to latestTag)",
+			imgRef:      "oci:///tmp/ubi8/ubi",
+			expectedKey: "",
+		},
+	}
+	for _, aTestCase := range testCases {
+		t.Run(aTestCase.caseName, func(t *testing.T) {
+			imgSpec, err := ParseRef(aTestCase.imgRef)
+			require.NoError(t, err)
+			require.Equal(t, aTestCase.expectedKey, imgSpec.DestinationTag())
+		})
+	}
+}
+
 func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 	type testCase struct {
 		caseName       string
