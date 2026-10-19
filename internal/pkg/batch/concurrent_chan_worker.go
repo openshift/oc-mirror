@@ -399,45 +399,65 @@ func incrementTotals(imgType v2alpha1.ImageType, copiedImages *v2alpha1.Collecto
 // Transient errors (429, 5xx, timeout) and "already present" related images must not prevent
 // the bundle from being pushed (OCPBUGS-111614).
 func shouldSkipImage(ctx context.Context, mirrorClient mirror.MirrorInterface, img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errArray []mirrorErrorSchema) (bool, error) {
-	// In MirrorToMirror and MirrorToDisk, the release collector will generally build and push the graph image
-	// to the destination registry (disconnected registry or cache resp.)
-	// Therefore this image can be skipped.
-	// OCPBUGS-38037: The only exception to this is in the enclave environment. Enclave environment is detected by the presence
-	// of env var UPDATE_URL_OVERRIDE.
-	// When in enclave environment, release collector cannot build nor push the graph image. Therefore graph image
-	// should not be skipped.
-	updateURLOverride := os.Getenv("UPDATE_URL_OVERRIDE")
-	if img.Type == v2alpha1.TypeCincinnatiGraph && (opts.Mode == mirror.MirrorToDisk || opts.Mode == mirror.MirrorToMirror) && len(updateURLOverride) == 0 {
+	if shouldSkipCincinnatiGraph(img, opts) {
 		return true, nil
 	}
+	return shouldSkipFailedOperatorBundle(ctx, mirrorClient, img, opts, errArray)
+}
 
-	if img.Type == v2alpha1.TypeOperatorBundle {
-		bundleImage := img.Origin
-		if strings.Contains(bundleImage, "://") {
-			bundleImage = strings.Split(img.Origin, "://")[1]
-		}
+// shouldSkipCincinnatiGraph reports whether the release collector already builds and
+// pushes the graph image (MirrorToDisk / MirrorToMirror outside an enclave).
+// OCPBUGS-38037: enclave is detected by UPDATE_URL_OVERRIDE; the graph cannot be
+// built there, so it must not be skipped.
+func shouldSkipCincinnatiGraph(img v2alpha1.CopyImageSchema, opts mirror.CopyOptions) bool {
+	if img.Type != v2alpha1.TypeCincinnatiGraph {
+		return false
+	}
+	if opts.Mode != mirror.MirrorToDisk && opts.Mode != mirror.MirrorToMirror {
+		return false
+	}
+	return os.Getenv("UPDATE_URL_OVERRIDE") == ""
+}
 
-		for _, mirrorErr := range errArray {
-			if mirrorErr.bundles == nil || !mirrorErr.bundles.Has(bundleImage) {
-				continue
-			}
-
-			// Transient / retriable failures on related images must not cascade-skip the bundle.
-			if mirror.IsErrorRetryable(mirrorErr.err) {
-				continue
-			}
-
-			// If the related image is already present at the destination, push the bundle normally.
-			if mirrorClient != nil && mirrorErr.image.Destination != "" {
-				present, checkErr := mirrorClient.Check(ctx, mirrorErr.image.Destination, &opts, false)
-				if checkErr == nil && present {
-					continue
-				}
-			}
-
-			return true, fmt.Errorf(skippingMsg, img.Origin)
-		}
+func shouldSkipFailedOperatorBundle(ctx context.Context, mirrorClient mirror.MirrorInterface, img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errArray []mirrorErrorSchema) (bool, error) {
+	if img.Type != v2alpha1.TypeOperatorBundle {
+		return false, nil
 	}
 
+	bundleImage := operatorBundleReference(img.Origin)
+	for _, mirrorErr := range errArray {
+		if skip, err := relatedImageFailureSkipsBundle(ctx, mirrorClient, img, opts, bundleImage, mirrorErr); skip {
+			return true, err
+		}
+	}
 	return false, nil
+}
+
+func operatorBundleReference(origin string) string {
+	if strings.Contains(origin, "://") {
+		return strings.Split(origin, "://")[1]
+	}
+	return origin
+}
+
+func relatedImageFailureSkipsBundle(ctx context.Context, mirrorClient mirror.MirrorInterface, img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, bundleImage string, mirrorErr mirrorErrorSchema) (bool, error) {
+	if mirrorErr.bundles == nil || !mirrorErr.bundles.Has(bundleImage) {
+		return false, nil
+	}
+	// Transient / retriable failures on related images must not cascade-skip the bundle.
+	if mirror.IsErrorRetryable(mirrorErr.err) {
+		return false, nil
+	}
+	if relatedImageAlreadyPresent(ctx, mirrorClient, opts, mirrorErr) {
+		return false, nil
+	}
+	return true, fmt.Errorf(skippingMsg, img.Origin)
+}
+
+func relatedImageAlreadyPresent(ctx context.Context, mirrorClient mirror.MirrorInterface, opts mirror.CopyOptions, mirrorErr mirrorErrorSchema) bool {
+	if mirrorClient == nil || mirrorErr.image.Destination == "" {
+		return false
+	}
+	present, checkErr := mirrorClient.Check(ctx, mirrorErr.image.Destination, &opts, false)
+	return checkErr == nil && present
 }
