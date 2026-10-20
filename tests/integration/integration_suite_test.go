@@ -35,6 +35,25 @@ func TestIntegration(t *testing.T) {
 var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithTimeout(context.Background(), suiteTimeout())
 
+	// AfterEach removes the default cache using this process's HOME, not the
+	// runner's environment. Never let suite cleanup reach a developer's cache.
+	home := GinkgoT().TempDir()
+	for key, value := range map[string]string{
+		"HOME":            home,
+		"XDG_CONFIG_HOME": filepath.Join(home, ".config"),
+		"XDG_CACHE_HOME":  filepath.Join(home, ".cache"),
+		"XDG_RUNTIME_DIR": filepath.Join(home, "run"),
+		"DOCKER_CONFIG":   filepath.Join(home, ".docker"),
+		"OC_MIRROR_CACHE": "",
+	} {
+		GinkgoT().Setenv(key, value)
+	}
+	// Distribution interprets REGISTRY_* variables as its own configuration,
+	// including an empty REGISTRY_AUTH_FILE. Remove it, but restore it on cleanup.
+	GinkgoT().Setenv("REGISTRY_AUTH_FILE", "")
+	Expect(os.Unsetenv("REGISTRY_AUTH_FILE")).To(Succeed())
+	Expect(os.MkdirAll(filepath.Join(home, "run"), 0o700)).To(Succeed())
+
 	artifactsDir := os.Getenv("ARTIFACTS_DIR")
 	if artifactsDir == "" {
 		artifactsDir = "testdata"
