@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"strings"
@@ -22,6 +23,7 @@ import (
 type Proxy struct {
 	listener net.Listener
 	server   *http.Server
+	routes   map[string]string
 
 	mu       sync.Mutex
 	hosts    map[string]struct{}
@@ -30,12 +32,19 @@ type Proxy struct {
 
 // Start starts a forward proxy listening on an OS-assigned local port.
 func Start() (*Proxy, error) {
+	return StartWithRoutes(nil)
+}
+
+// StartWithRoutes redirects requested host:port pairs to test-owned endpoints.
+// A non-nil map rejects destinations without a route, preventing live fallback.
+// Passing nil preserves the normal forward-proxy behavior of Start.
+func StartWithRoutes(routes map[string]string) (*Proxy, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
 
-	p := &Proxy{listener: ln, hosts: make(map[string]struct{})}
+	p := &Proxy{listener: ln, hosts: make(map[string]struct{}), routes: maps.Clone(routes)}
 	p.server = &http.Server{Handler: http.HandlerFunc(p.handleConnect)}
 	go func() {
 		// Save any error other than the expected one from Stop closing the server.
@@ -109,11 +118,20 @@ func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.recordHost(r.Host)
+	destination := r.Host
+	if p.routes != nil {
+		var ok bool
+		destination, ok = p.routes[r.Host]
+		if !ok {
+			http.Error(w, "no test route for "+r.Host, http.StatusBadGateway)
+			return
+		}
+	}
 
 	dialCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	var dialer net.Dialer
-	destConn, err := dialer.DialContext(dialCtx, "tcp", r.Host)
+	destConn, err := dialer.DialContext(dialCtx, "tcp", destination)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

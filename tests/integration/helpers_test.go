@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,8 +17,10 @@ import (
 	"github.com/distribution/reference"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/validate"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
@@ -601,6 +604,80 @@ func expectNoRepositoriesInRegistry(reg registry.Registry) {
 	Expect(repos).To(BeEmpty(), "expected registry to have no repositories, but found: %v", repos)
 }
 
+// expectImageReadableByDigest reads and validates the manifest, config, and all
+// layers from the destination, rather than checking only that a manifest exists.
+func expectImageReadableByDigest(ctx context.Context, reg registry.Registry, repo, digest string) {
+	GinkgoHelper()
+	ref, err := name.NewDigest(reg.Endpoint()+"/"+repo+"@"+digest, name.Insecure)
+	Expect(err).NotTo(HaveOccurred())
+	img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+	Expect(err).NotTo(HaveOccurred(), "failed to read mirrored image %s", ref)
+	Expect(validate.Image(img)).To(Succeed(), "mirrored image %s is incomplete or corrupt", ref)
+}
+
+// expectImageInLocalCache verifies the repository's manifest link and the bytes
+// of its manifest, config, and every layer, without starting a cache registry.
+func expectImageInLocalCache(cacheDir string, ref name.Digest) {
+	GinkgoHelper()
+	Expect(validateCachedImage(cacheDir, ref)).To(Succeed(), "cached image %s is incomplete or corrupt", ref)
+}
+
+func validateCachedImage(cacheDir string, ref name.Digest) error {
+	digest, err := v1.NewHash(ref.DigestStr())
+	if err != nil {
+		return err
+	}
+	linkPath := filepath.Join(cacheDir, cacheRepositoriesSubdir, ref.Context().RepositoryStr(),
+		"_manifests", "revisions", digest.Algorithm, digest.Hex, "link")
+	link, err := os.ReadFile(linkPath)
+	if err != nil {
+		return fmt.Errorf("reading manifest link: %w", err)
+	}
+	if strings.TrimSpace(string(link)) != digest.String() {
+		return fmt.Errorf("manifest link %s does not point to %s", linkPath, digest)
+	}
+	data, err := readCachedBlob(cacheDir, digest)
+	if err != nil {
+		return err
+	}
+	manifest, err := v1.ParseManifest(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("reading cached manifest: %w", err)
+	}
+	for _, descriptor := range append([]v1.Descriptor{manifest.Config}, manifest.Layers...) {
+		data, err := readCachedBlob(cacheDir, descriptor.Digest)
+		if err != nil {
+			return err
+		}
+		if int64(len(data)) != descriptor.Size {
+			return fmt.Errorf("cached blob %s has size %d, expected %d", descriptor.Digest, len(data), descriptor.Size)
+		}
+	}
+	return nil
+}
+
+func readCachedBlob(cacheDir string, digest v1.Hash) ([]byte, error) {
+	if _, err := v1.NewHash(digest.String()); err != nil {
+		return nil, err
+	}
+	if digest.Algorithm != "sha256" {
+		return nil, fmt.Errorf("unsupported cached blob digest %s", digest)
+	}
+	filename := filepath.Join(cacheDir, "docker/registry/v2/blobs", digest.Algorithm, digest.Hex[:2], digest.Hex, "data")
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("reading cached blob %s: %w", digest, err)
+	}
+	actual, _, err := v1.SHA256(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if actual != digest {
+		return nil, fmt.Errorf("cached blob %s has digest %s", digest, actual)
+	}
+	return data, nil
+}
+
 // expectOnlyAllowedExecutableFiles walks the working directory and verifies that only files
 // under graph-preparation/ or filtered-catalog-image/ directories have executable permissions.
 func expectOnlyAllowedExecutableFiles(workDir string) {
@@ -705,6 +782,12 @@ func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRe
 	img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
 	Expect(err).NotTo(HaveOccurred())
 
+	return extractCatalogImageConfigs(img)
+}
+
+// extractCatalogImageConfigs extracts the final FBC filesystem from either a
+// source or mirrored catalog. The caller must remove the returned directory.
+func extractCatalogImageConfigs(img v1.Image) string {
 	// Get the FBC configs path from the standard OLM label
 	cf, err := img.ConfigFile()
 	Expect(err).NotTo(HaveOccurred())
@@ -714,9 +797,11 @@ func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRe
 	destDir, err := os.MkdirTemp("", "catalog-configs-*")
 	Expect(err).NotTo(HaveOccurred())
 
-	// Flatten the image into a single tar stream and extract config files to disk
+	// Read the final image filesystem, with layer deletions applied by the library.
 	rc := mutate.Extract(img)
 	defer rc.Close()
+	configsPath = path.Clean("/" + configsPath)
+	Expect(configsPath).NotTo(Equal("/"), "catalog configs path must not be the filesystem root")
 
 	tr := tar.NewReader(rc)
 	for {
@@ -725,25 +810,17 @@ func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRe
 			break
 		}
 		Expect(err).NotTo(HaveOccurred())
-
-		if hdr.Typeflag != tar.TypeReg {
-			continue
-		}
-		cleanPath := filepath.Clean("/" + hdr.Name)
-		if !strings.HasPrefix(cleanPath, configsPath) {
+		cleanPath := path.Clean("/" + hdr.Name)
+		if hdr.Typeflag != tar.TypeReg || !strings.HasPrefix(cleanPath, configsPath+"/") {
 			continue
 		}
 
-		// Preserve the relative path under configsPath
-		relPath, err := filepath.Rel(configsPath, cleanPath)
-		Expect(err).NotTo(HaveOccurred())
-
-		outPath := filepath.Join(destDir, relPath)
-		Expect(os.MkdirAll(filepath.Dir(outPath), 0o755)).To(Succeed())
-
+		relative := strings.TrimPrefix(cleanPath, configsPath+"/")
+		filename := filepath.Join(destDir, filepath.FromSlash(relative))
+		Expect(os.MkdirAll(filepath.Dir(filename), 0o755)).To(Succeed())
 		data, err := io.ReadAll(tr)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(os.WriteFile(outPath, data, 0o644)).To(Succeed())
+		Expect(os.WriteFile(filename, data, 0o644)).To(Succeed())
 	}
 
 	return destDir

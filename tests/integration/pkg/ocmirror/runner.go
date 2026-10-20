@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -21,6 +24,7 @@ type Result struct {
 type Runner struct {
 	binaryPath string
 	env        []string
+	dir        string
 }
 
 // NewRunner creates a runner pointing to the oc-mirror binary.
@@ -34,9 +38,15 @@ func NewRunner(binaryPath string) *Runner {
 	}
 }
 
-// WithEnv adds environment variables to the runner.
+// WithEnv sets environment overrides on the runner.
 func (r *Runner) WithEnv(env []string) *Runner {
 	r.env = env
+	return r
+}
+
+// WithDir sets the command's working directory without changing the test process.
+func (r *Runner) WithDir(dir string) *Runner {
+	r.dir = dir
 	return r
 }
 
@@ -44,7 +54,16 @@ func (r *Runner) WithEnv(env []string) *Runner {
 func (r *Runner) Run(ctx context.Context, args ...string) (*Result, error) {
 	start := time.Now()
 
-	cmd := exec.CommandContext(ctx, r.binaryPath, args...)
+	binaryPath := r.binaryPath
+	if r.dir != "" && strings.ContainsRune(binaryPath, os.PathSeparator) {
+		var err error
+		binaryPath, err = filepath.Abs(binaryPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve oc-mirror binary: %w", err)
+		}
+	}
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd.Dir = r.dir
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
