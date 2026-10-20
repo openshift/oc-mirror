@@ -184,6 +184,68 @@ mirror:
     - catalog: oci:///path/to/local/catalog
 ```
 
+### Architecture selection for operators
+
+Restrict an operator catalog to specific platforms with the `platforms` field:
+
+```yaml
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.22
+      packages:
+        - name: kubevirt-hyperconverged
+          channels:
+            - name: stable
+      platforms:
+        - os: linux
+          architecture: amd64
+```
+
+An operator bundle lists two kinds of image in its `relatedImages`: the
+operator's own controller images, and the **operands** it deploys as workload.
+oc-mirror treats them differently, because the catalog chooses this list, not
+you:
+
+- **The operator must support a requested platform.** The images decide this,
+  not a catalog annotation: an image the operator runs itself must have an
+  instance for at least one requested platform. If it does not, mirroring fails
+  and names the operator:
+
+  ```
+  operator "kubevirt-hyperconverged" does not support linux/ppc64le:
+    preparing instances for copy: no instances found for platform linux/ppc64le
+  ```
+
+  OLM's `operatorframework.io/arch.<arch>` labels are deliberately **not** used
+  for this. Setting them is up to each operator team, so their absence proves
+  nothing, and a stale value would wrongly block a mirror that would work.
+
+- **Operands are filtered per platform.** Operators legitimately ship optional
+  operands built only for other architectures — a cluster on the requested
+  platform will never pull them. An operand with no instance for any requested
+  platform is skipped with a warning and listed under `=== Skipped images ===`,
+  and the operator is still mirrored in full:
+
+  ```
+  Skipping operand docker://registry.redhat.io/.../virt-launcher-4-nv-rhel10@sha256:...:
+    no instance for the requested platform(s) linux/amd64
+  ```
+
+Images you name yourself, under `additionalImages` or in a release, are not
+filtered this way: there, a platform that the image does not provide is a
+mistake in your configuration and mirroring fails.
+
+Telling the two apart requires reading the bundle's ClusterServiceVersion,
+which costs a small pull of the bundle image. oc-mirror only does this once a
+copy has actually failed on a platform mismatch, and caches the answer per
+bundle, so a catalog whose images all mirror cleanly never pulls a bundle no
+matter how many it contains. If the bundle cannot be read, the image is treated
+as one the operator runs and mirroring fails: nothing is skipped unless it is
+proven to be an operand.
+
+In the mirror-to-disk then disk-to-mirror workflow, the skipped operands are
+recorded in the archive so the disk-to-mirror run makes the same decision.
+
 ## Additional images
 
 Individual container images can be mirrored by specifying their full reference. If no tag is specified, `latest` is assumed:

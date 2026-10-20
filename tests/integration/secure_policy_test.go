@@ -100,7 +100,9 @@ var _ = Describe("secure policy", func() {
 		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for quay.io/oc-mirror")
 		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, isc), workDir,
 			"--secure-policy=true", "--policy", policyPath)
-		expectOcMirrorExitCode(result, err, 8, "2 / 2 operator images mirrored successfully")
+		// Full catalog: 10 bundles, one shared related image, and the catalog.
+		expectOcMirrorExitCode(result, err, 8,
+			"12 / 12 operator images mirrored successfully", "is rejected by policy")
 
 		By("verifying the signed operator catalog was actually written to the local cache")
 		Expect(localCacheHasTag(cacheDir, catalogRepo, catalogTag)).To(BeTrue(),
