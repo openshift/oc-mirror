@@ -50,7 +50,7 @@ func header(warnings []string) string {
 }
 
 func existsError(path string) error {
-	return fmt.Errorf("%s already exists; move it or use another --output-dir", path)
+	return fmt.Errorf("%s already exists; move it or use another --output-dir: %w", path, os.ErrExist)
 }
 
 func writeNew(path, hdr string, obj any) error {
