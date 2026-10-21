@@ -16,7 +16,7 @@ func TestBuildPlatform(t *testing.T) {
 	}
 	p, warns := buildPlatform(tags)
 
-	assert.Equal(t, []string{"amd64", "arm64"}, p.Architectures)
+	assert.Equal(t, []string{"amd64", "arm64"}, p.Architectures) //nolint:staticcheck // deprecated field is what buildPlatform fills
 	assert.Equal(t, []v2alpha1.ReleaseChannel{
 		{Name: "stable-4.16", Type: v2alpha1.TypeOCP, MinVersion: "4.16.1", MaxVersion: "4.16.3"},
 		{Name: "stable-4.17", Type: v2alpha1.TypeOCP, MinVersion: "4.17.0-rc.1", MaxVersion: "4.17.0"},
