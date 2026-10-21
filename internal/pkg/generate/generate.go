@@ -77,6 +77,9 @@ func (g *Generator) targetPath(repo string) string {
 	return strings.TrimPrefix(repo, p+"/")
 }
 
+// classify adds repo to c as an operator catalog (one operator per tag) or as
+// additional images. A failed catalog probe is recorded as a warning and the
+// repository is treated as additional images. Digest-derived tags are added to skipped.
 func (g *Generator) classify(ctx context.Context, c *Content, repo string, tags []string, skipped *int) error {
 	var candidates []string
 	for _, t := range slices.Sorted(slices.Values(tags)) {
