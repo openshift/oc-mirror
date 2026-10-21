@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,4 +78,11 @@ func TestWriteFilesEmptyContentStillParses(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = config.ReadConfig(paths[1], v2alpha1.DeleteImageSetConfigurationKind)
 	assert.NoError(t, err)
+}
+
+func TestWriteFilesExistsWrapsErrExist(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ISCFileName), []byte("x"), 0o600))
+	_, err := WriteFiles(dir, sampleContent(), OutputISC)
+	assert.True(t, errors.Is(err, os.ErrExist))
 }
