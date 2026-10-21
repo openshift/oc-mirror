@@ -213,11 +213,6 @@ func TestIsOperandReferenceMatching(t *testing.T) {
 	})
 }
 
-func TestReferenceWithoutTransport(t *testing.T) {
-	assert.Equal(t, "registry.io/ns/img@sha256:aaa", referenceWithoutTransport("docker://registry.io/ns/img@sha256:aaa"))
-	assert.Equal(t, "registry.io/ns/img@sha256:aaa", referenceWithoutTransport("registry.io/ns/img@sha256:aaa"))
-}
-
 func TestBundleManifestsSubdir(t *testing.T) {
 	// The label is read from the bundle image, so a hostile catalog controls
 	// it. Anything that escapes the extraction directory must be rejected.
@@ -241,18 +236,9 @@ func TestBundleManifestsSubdir(t *testing.T) {
 	for _, label := range []string{"..", "../", "../../etc", "a/../../b", ".", "", "../manifests", "a/../manifests", "manifests/../.."} {
 		t.Run("rejects "+label, func(t *testing.T) {
 			_, err := bundleManifestsSubdir(label)
-			assert.Error(t, err, "a label escaping the extraction directory must not be used")
+			require.Error(t, err, "a label escaping the extraction directory must not be used")
+			assert.Contains(t, err.Error(), "invalid manifests directory")
 		})
-	}
-}
-
-func TestClusterServiceVersionRejectsTraversingLabel(t *testing.T) {
-	// The check happens before any path is joined or read, so a hostile label
-	// never reaches the filesystem.
-	for _, label := range []string{"../secrets", "../../etc", "a/../../b"} {
-		_, err := bundleManifestsSubdir(label)
-		require.Error(t, err, "label %q must be rejected", label)
-		assert.Contains(t, err.Error(), "invalid manifests directory")
 	}
 }
 

@@ -23,9 +23,6 @@ import (
 // only when a copy has already failed because no instance matched the
 // requested platforms, which keeps a catalog of thousands of bundles free of
 // any bundle pulls as long as its images mirror cleanly.
-//
-// Results are memoised per bundle, and concurrent callers asking about the same
-// bundle wait on a single pull.
 type OperandResolver struct {
 	Log      clog.PluggableLoggerInterface
 	Opts     *mirror.CopyOptions
@@ -45,7 +42,6 @@ type bundleControllers struct {
 	err    error
 }
 
-// NewOperandResolver builds a resolver that reads bundles from the registry.
 func NewOperandResolver(
 	log clog.PluggableLoggerInterface,
 	opts *mirror.CopyOptions,
@@ -118,8 +114,6 @@ func sameImage(a, b image.ImageSpec) bool {
 	}
 }
 
-// controllersOf returns the images the given bundle runs itself, pulling and
-// parsing the bundle at most once.
 func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string) (*bundleControllers, error) {
 	r.initOnce.Do(func() {
 		if r.bundles == nil {
@@ -161,8 +155,6 @@ func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string)
 	return entry, entry.err
 }
 
-// referenceWithoutTransport strips the transport prefix so an image origin can
-// be compared with the plain references a ClusterServiceVersion holds.
 func referenceWithoutTransport(ref string) string {
 	if _, after, found := strings.Cut(ref, "://"); found {
 		return after
@@ -170,7 +162,6 @@ func referenceWithoutTransport(ref string) string {
 	return ref
 }
 
-// bundleDirName derives a stable, filesystem-safe directory name for a bundle.
 func bundleDirName(bundleImage string) string {
 	if spec, err := image.ParseRef(bundleImage); err == nil && spec.Digest != "" {
 		return spec.Digest
