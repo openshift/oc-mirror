@@ -13,10 +13,13 @@ import (
 // Source reads the content of a registry. Repository names are relative to
 // the registry host (for example "openshift/release-images").
 type Source interface {
+	// Repositories lists the repositories to inspect.
 	Repositories(ctx context.Context) ([]string, error)
+	// Tags lists the tags of repo.
 	Tags(ctx context.Context, repo string) ([]string, error)
 	// IsCatalog reports whether repo:tag is an operator catalog image.
 	IsCatalog(ctx context.Context, repo, tag string) (bool, error)
+	// CatalogModel loads the declarative config of the catalog image repo:tag.
 	CatalogModel(ctx context.Context, repo, tag string) (model.Model, error)
 }
 

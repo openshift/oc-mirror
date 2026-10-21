@@ -35,6 +35,7 @@ type RegistrySource struct {
 
 var _ Source = (*RegistrySource)(nil)
 
+// insecure reports whether TLS verification is disabled in SysCtx.
 func (s *RegistrySource) insecure() bool {
 	return s.SysCtx != nil && s.SysCtx.DockerInsecureSkipTLSVerify == types.OptionalBoolTrue
 }
