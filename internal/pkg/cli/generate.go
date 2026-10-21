@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
+// generateOptions holds the flag values of the generate command.
 type generateOptions struct {
 	outputType string
 	outputDir  string
@@ -61,6 +62,8 @@ func NewGenerateCommand(log clog.PluggableLoggerInterface, globalOpts *mirror.Co
 	return cmd
 }
 
+// validate checks the flags and arguments and returns the registry host
+// taken from the single docker://<registry> argument.
 func (o *generateOptions) validate(args []string) (string, error) {
 	switch generate.OutputType(o.outputType) {
 	case generate.OutputISC, generate.OutputDISC, generate.OutputBoth:
@@ -83,6 +86,8 @@ func (o *generateOptions) validate(args []string) (string, error) {
 	return host, nil
 }
 
+// run discovers the content of the registry at host and writes the requested
+// config files into the output directory.
 func (o *generateOptions) run(ctx context.Context, log clog.PluggableLoggerInterface, host string) error {
 	sysCtx, err := o.globalOpts.SrcImage.NewSystemContext()
 	if err != nil {
@@ -100,8 +105,10 @@ func (o *generateOptions) run(ctx context.Context, log clog.PluggableLoggerInter
 	if err != nil {
 		return err
 	}
-	for _, w := range content.Warnings {
-		log.Warn("%s", w)
+	// Warnings embed repository names and registry error text, so they go to the
+	// generated files only, not to the logs.
+	if n := len(content.Warnings); n > 0 {
+		log.Warn("%d warnings recorded, see the NOTE comments at the top of the generated files", n)
 	}
 	paths, err := generate.WriteFiles(o.outputDir, content, generate.OutputType(o.outputType))
 	if err != nil {

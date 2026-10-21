@@ -20,6 +20,7 @@ const (
 // Tag format: <version>-<arch>, for example 4.16.3-x86_64 or 4.17.0-rc.1-multi.
 var releaseTagRe = regexp.MustCompile(`^(\d+\.\d+\.\d+.*)-(x86_64|aarch64|ppc64le|s390x|multi)$`)
 
+// archNames maps release tag architecture suffixes to ImageSetConfiguration architecture names.
 var archNames = map[string]string{
 	"x86_64":  "amd64",
 	"aarch64": "arm64",
@@ -33,6 +34,7 @@ func isRepo(repo, base string) bool {
 	return repo == base || strings.HasSuffix(repo, "/"+base)
 }
 
+// isSignatureTag reports whether tag is a cosign signature, attestation or SBOM tag.
 func isSignatureTag(tag string) bool {
 	return strings.HasSuffix(tag, ".sig") || strings.HasSuffix(tag, ".att") || strings.HasSuffix(tag, ".sbom")
 }
