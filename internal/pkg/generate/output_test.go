@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,6 +45,17 @@ func TestWriteFilesRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "stable-4.16",
 		disc.(v2alpha1.DeleteImageSetConfiguration).Delete.Platform.Channels[0].Name)
+}
+
+// Registry error text in a warning must not escape the YAML comment and corrupt the config.
+func TestHeaderFlattensMultiLineWarnings(t *testing.T) {
+	hdr := header([]string{"catalog check failed: line one\nkind: Evil\r\nline three"})
+	lines := strings.Split(strings.TrimSuffix(hdr, "\n"), "\n")
+	require.Len(t, lines, 2)
+	for _, l := range lines {
+		assert.True(t, strings.HasPrefix(l, "#"), "line is not a comment: %q", l)
+	}
+	assert.Contains(t, lines[1], "line one kind: Evil  line three")
 }
 
 func TestWriteFilesRefusesOverwrite(t *testing.T) {
