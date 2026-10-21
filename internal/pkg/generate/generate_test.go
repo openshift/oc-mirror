@@ -3,6 +3,7 @@ package generate
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/blang/semver/v4"
@@ -15,6 +16,10 @@ type fakeSource struct {
 	tags     map[string][]string
 	catalogs map[string]model.Model // key repo:tag
 	repoErr  error
+	tagsErr  error
+	probeErr error
+	modelErr error
+	probed   []string // repo:tag values passed to IsCatalog
 }
 
 func (f *fakeSource) Repositories(context.Context) ([]string, error) {
@@ -29,15 +34,25 @@ func (f *fakeSource) Repositories(context.Context) ([]string, error) {
 }
 
 func (f *fakeSource) Tags(_ context.Context, repo string) ([]string, error) {
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
 	return f.tags[repo], nil
 }
 
 func (f *fakeSource) IsCatalog(_ context.Context, repo, tag string) (bool, error) {
+	f.probed = append(f.probed, repo+":"+tag)
+	if f.probeErr != nil {
+		return false, f.probeErr
+	}
 	_, ok := f.catalogs[repo+":"+tag]
 	return ok, nil
 }
 
 func (f *fakeSource) CatalogModel(_ context.Context, repo, tag string) (model.Model, error) {
+	if f.modelErr != nil {
+		return nil, f.modelErr
+	}
 	return f.catalogs[repo+":"+tag], nil
 }
 
@@ -62,7 +77,9 @@ func TestDiscover(t *testing.T) {
 	assert.Equal(t, "reg.example.com/redhat/redhat-operator-index:v4.16", c.Operators[0].Catalog)
 	require.Len(t, c.AdditionalImages, 1, "release content and catalog repos must not become additional images")
 	assert.Equal(t, "reg.example.com/ubi9/ubi:latest", c.AdditionalImages[0].Name)
-	assert.NotEmpty(t, c.Warnings)
+	assert.Contains(t, c.Warnings, "1 digest-derived tags skipped (operator related images, release components, Helm images); they cannot be told apart from digest-mirrored additional images")
+	assertWarningContaining(t, c.Warnings, "platform channels are inferred")
+	assertWarningContaining(t, c.Warnings, "point at the mirror registry")
 }
 
 func TestDiscoverPrefix(t *testing.T) {
@@ -77,4 +94,50 @@ func TestDiscoverRepoError(t *testing.T) {
 	src := &fakeSource{repoErr: errors.New("boom")}
 	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
 	assert.ErrorContains(t, err, "boom")
+}
+
+func assertWarningContaining(t *testing.T, warnings []string, substr string) {
+	t.Helper()
+	for _, w := range warnings {
+		if strings.Contains(w, substr) {
+			return
+		}
+	}
+	t.Errorf("no warning contains %q; got %v", substr, warnings)
+}
+
+func TestDiscoverTagsError(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{"team/app": {"1"}}, tagsErr: errors.New("tags boom")}
+	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	assert.ErrorContains(t, err, `listing tags for "team/app"`)
+	assert.ErrorContains(t, err, "tags boom")
+}
+
+func TestDiscoverIsCatalogError(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{"team/app": {"1"}}, probeErr: errors.New("probe boom")}
+	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	assert.ErrorContains(t, err, "inspecting team/app:1")
+	assert.ErrorContains(t, err, "probe boom")
+}
+
+func TestDiscoverCatalogModelError(t *testing.T) {
+	src := &fakeSource{
+		tags:     map[string][]string{"team/index": {"v1"}},
+		catalogs: map[string]model.Model{"team/index:v1": {}},
+		modelErr: errors.New("model boom"),
+	}
+	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	assert.ErrorContains(t, err, "reading catalog team/index:v1")
+	assert.ErrorContains(t, err, "model boom")
+}
+
+func TestDiscoverSignatureTags(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{
+		"team/app": {"sha256-" + strings.Repeat("a", 64) + ".sig", "v1"},
+	}}
+	c, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	require.NoError(t, err)
+	require.Len(t, c.AdditionalImages, 1)
+	assert.Equal(t, "h/team/app:v1", c.AdditionalImages[0].Name)
+	assert.Equal(t, []string{"team/app:v1"}, src.probed, "catalog probe must use a non-signature tag")
 }
