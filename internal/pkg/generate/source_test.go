@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	types1 "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/types"
@@ -80,4 +82,29 @@ func TestRegistrySourceCatalogDisabledHint(t *testing.T) {
 	s := &RegistrySource{Host: strings.TrimPrefix(srv.URL, "http://"), SysCtx: testSysCtx()}
 	_, err := s.Repositories(context.Background())
 	assert.ErrorContains(t, err, "--repos")
+}
+
+func TestRegistrySourceIsCatalogNonImageArtifact(t *testing.T) {
+	host := newTestRegistry(t)
+	// A Helm-chart-like OCI artifact: image manifest with a non-image config media type.
+	img := mutate.ConfigMediaType(empty.Image, "application/vnd.cncf.helm.config.v1+json")
+	img = mutate.MediaType(img, types1.OCIManifestSchema1)
+	r, err := name.ParseReference(host+"/charts/foo:0.1.0", name.Insecure)
+	require.NoError(t, err)
+	require.NoError(t, remote.Write(r, img))
+
+	s := &RegistrySource{Host: host, SysCtx: testSysCtx()}
+	ok, err := s.IsCatalog(context.Background(), "charts/foo", "0.1.0")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestInspectCtxDefaultsOSWithoutMutating(t *testing.T) {
+	orig := testSysCtx()
+	s := &RegistrySource{SysCtx: orig}
+	assert.Equal(t, "linux", s.inspectCtx().OSChoice)
+	assert.Empty(t, orig.OSChoice, "caller context must not be mutated")
+	orig.OSChoice = "windows"
+	assert.Equal(t, "windows", s.inspectCtx().OSChoice)
+	assert.Equal(t, "linux", (&RegistrySource{}).inspectCtx().OSChoice)
 }
