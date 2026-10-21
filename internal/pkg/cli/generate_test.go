@@ -33,6 +33,7 @@ func TestGenerateValidate(t *testing.T) {
 		{name: "missing arg", opts: generateOptions{outputType: "both"}, wantErr: "registry argument is required"},
 		{name: "no protocol", opts: generateOptions{outputType: "both"}, args: []string{"reg.example.com"}, wantErr: "docker://"},
 		{name: "path in arg", opts: generateOptions{outputType: "both"}, args: []string{"docker://reg.example.com/team"}, wantErr: "--prefix"},
+		{name: "empty host", opts: generateOptions{outputType: "both"}, args: []string{"docker://"}, wantErr: "empty host"},
 		{name: "bad type", opts: generateOptions{outputType: "xml"}, args: []string{"docker://r"}, wantErr: "--output-type"},
 	}
 	for _, tt := range tests {
@@ -92,4 +93,14 @@ func TestGenerateRun(t *testing.T) {
 	after, err := os.ReadFile(filepath.Join(outDir, generate.ISCFileName))
 	require.NoError(t, err)
 	assert.Equal(t, string(data), string(after))
+}
+
+// TestGenerateCommandArgs checks cobra rejects zero or several registry arguments before RunE.
+func TestGenerateCommandArgs(t *testing.T) {
+	for _, args := range [][]string{{}, {"docker://a", "docker://b"}} {
+		cmd := NewGenerateCommand(clog.New("trace"), &mirror.CopyOptions{})
+		cmd.SetArgs(args)
+		cmd.SilenceUsage, cmd.SilenceErrors = true, true
+		assert.ErrorContains(t, cmd.Execute(), "accepts 1 arg", "args %v", args)
+	}
 }
