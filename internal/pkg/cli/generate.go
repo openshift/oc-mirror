@@ -42,6 +42,7 @@ func NewGenerateCommand(log clog.PluggableLoggerInterface, globalOpts *mirror.Co
 			# Registry with /v2/_catalog disabled
 			oc-mirror --v2 generate docker://registry.example.com:5000 --repos=openshift/release-images,redhat/redhat-operator-index
 		`),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			host, err := o.validate(args)
 			if err != nil {
@@ -73,6 +74,9 @@ func (o *generateOptions) validate(args []string) (string, error) {
 		return "", fmt.Errorf("the registry argument must have a %s prefix", consts.DockerProtocol)
 	}
 	host := strings.TrimPrefix(args[0], consts.DockerProtocol)
+	if host == "" {
+		return "", errors.New("the registry argument has an empty host, for example docker://registry.example.com:5000")
+	}
 	if strings.Contains(host, "/") {
 		return "", errors.New("the registry argument must be host[:port] only, use --prefix to restrict to a registry path")
 	}
