@@ -40,9 +40,27 @@ For registries with a self-signed certificate or plain HTTP, use `--src-tls-veri
 - Original source locations (the registry content does not record them).
 - Additional images that were mirrored by digest.
 
+## Prefix and target fields
+
+`--prefix` matches on path boundaries: `--prefix=team-a` matches `team-a/app` but not `team-ab/app`.
+
+When a prefix is set, mirroring or deleting against `docker://host/<prefix>` appends the target path to the prefix. To avoid a doubled prefix, the generated entries set `targetRepo` (additional images) or `targetCatalog` (operators) to the repository path without the prefix. For example, with `--prefix=mirror` the repository `mirror/ubi9/ubi` produces:
+
+```yaml
+additionalImages:
+  - name: registry.example.com:5000/mirror/ubi9/ubi:latest
+    targetRepo: ubi9/ubi
+```
+
+so that `oc-mirror -c imageset-config.yaml docker://registry.example.com:5000/mirror` writes to `mirror/ubi9/ubi`. Without a prefix, no target fields are set.
+
 ## Warnings
 
-Tags that look like digests (for example `sha256-<hex>` or signature tags) are skipped and counted in a warning. Warnings are logged and also written as header comments in the generated files.
+Tags that look like digests are skipped and counted in a warning: `sha256-<hex>` tags and any 12-character hex tag. The 12-hex rule can give false positives, for example a timestamp-like tag such as `202401011230`. Signature tags (`.sig`, `.att`, `.sbom`) are skipped silently and are not counted. Warnings are logged and also written as header comments in the generated files.
+
+If probing a repository for the operator catalog label fails, the repository is treated as additional images and a warning is emitted. OCI artifacts such as Helm charts are not catalogs.
+
+Image references point at the mirror registry, not the original sources, but this is only partial: platform channels and the related images inside rebuilt operator catalogs still resolve to upstream registries when mirrored again.
 
 ## Registries without `/v2/_catalog`
 
