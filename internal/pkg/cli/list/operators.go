@@ -187,7 +187,7 @@ func downloadCatalog(ctx context.Context, log log.PluggableLoggerInterface, cata
 	return m, nil
 }
 
-// DownloadCatalog loads the declarative config of the catalog image catalog.
+// DownloadCatalog loads the declarative config of the given catalog image.
 func DownloadCatalog(ctx context.Context, log log.PluggableLoggerInterface, catalog string, opts mirror.CopyOptions) (model.Model, error) {
 	return downloadCatalog(ctx, log, catalog, opts)
 }

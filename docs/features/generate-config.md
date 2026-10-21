@@ -23,7 +23,9 @@ The registry argument must be `docker://host[:port]`. Use `--prefix` to restrict
 | `--prefix` | empty | Only consider repositories starting with this registry path |
 | `--repos` | empty | Comma-separated repositories to inspect, for registries where `/v2/_catalog` is disabled |
 
-Authentication and TLS options are the same as for the other commands.
+`--output-dir` must already exist.
+
+For registries with a self-signed certificate or plain HTTP, use `--src-tls-verify=false`. For credentials, use `--authfile` to point to an auth file.
 
 ## What is inferred
 
@@ -37,6 +39,10 @@ Authentication and TLS options are the same as for the other commands.
 - Original channel names.
 - Original source locations (the registry content does not record them).
 - Additional images that were mirrored by digest.
+
+## Warnings
+
+Tags that look like digests (for example `sha256-<hex>` or signature tags) are skipped and counted in a warning. Warnings are logged and also written as header comments in the generated files.
 
 ## Registries without `/v2/_catalog`
 
