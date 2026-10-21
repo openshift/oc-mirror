@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -173,6 +176,12 @@ var _ = Describe("incremental mirroring", func() {
 			iscInitialPath := filepath.Join(iscDir, iscInitial)
 			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
 
+			By("resolving the newly selected bar bundle independently of the mirror")
+			barBundleRef, err := name.NewTag("quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0")
+			Expect(err).NotTo(HaveOccurred())
+			barBundle, err := remote.Head(barBundleRef, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+			Expect(err).NotTo(HaveOccurred())
+
 			By("running mirrorToDisk with the initial ISC (foo pinned at 0.2.0)")
 			result, err := runner.MirrorToDisk(ctx, iscInitialPath, workDir, "--remove-signatures=true")
 			logOcMirrorResult("incremental step-1 mirrorToDisk", result)
@@ -225,10 +234,21 @@ var _ = Describe("incremental mirroring", func() {
 			}
 
 			By("verifying the initial tar does not contain the new operator package")
+			// The catalog describes bar in both runs, but only the second ISC selects it.
+			// Check bar's image tag and manifest rather than its catalog files.
+			barTagPath := tarRepositoriesPath + barBundleRef.Context().RepositoryStr() +
+				"/_manifests/tags/" + barBundleRef.TagStr() + "/current/link"
+			barManifestPath := blobPrefix + "/" + barBundle.Digest.Hex[:2] + "/" + barBundle.Digest.Hex + "/data"
 			initialEntries := listTarEntries(preservedTar)
-			expectTarDoesNotContainPath(initialEntries, "/bar")
+			expectTarDoesNotContainPath(initialEntries, barTagPath)
+			Expect(initialEntries).NotTo(ContainElement(barManifestPath),
+				"initial archive must not contain the newly selected bar bundle manifest")
 
 			By("verifying the incremental tar contains the expected repositories")
+			incrementalEntries := listTarEntries(incrementalTar)
+			expectTarContainsPath(incrementalEntries, barTagPath)
+			Expect(incrementalEntries).To(ContainElement(barManifestPath),
+				"incremental archive must contain the newly selected bar bundle manifest")
 			expectCorrectTarArchiveContents(iscUpdatePath, workDir)
 		})
 	})

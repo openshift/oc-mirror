@@ -50,6 +50,9 @@ const (
 	IncludeConfigFile = "include-config.gob"
 	// VersionMetadataFile records which oc-mirror build produced a mirror-to-disk archive.
 	VersionMetadataFile = "oc-mirror-version.json"
+	// SkippedImagesFile records images that were intentionally not mirrored,
+	// so that a later disk-to-mirror run makes the same decision.
+	SkippedImagesFile = "oc-mirror-skipped-images.json"
 )
 
 // MetadataBasePath is the local path relative to the oc-mirror workspace
@@ -59,3 +62,7 @@ var MetadataBasePath = filepath.Join(PublishDir, MetadataFile)
 // VersionMetadataPath is the local path relative to the oc-mirror workspace
 // where mirror-to-disk version metadata is stored.
 var VersionMetadataPath = filepath.Join(InternalDir, VersionMetadataFile)
+
+// SkippedImagesPath is the local path relative to the oc-mirror workspace
+// where intentionally skipped images are recorded.
+var SkippedImagesPath = filepath.Join(InternalDir, SkippedImagesFile)

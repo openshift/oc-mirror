@@ -21,6 +21,12 @@ type catalogHandlerInterface interface {
 	ExtractOCIConfigLayers(imgSpec image.ImageSpec, imageIndexDir string) (string, error)
 }
 
+// bundleHandlerInterface reads an operator bundle image to tell the bundle's
+// own controller images apart from the operands it deploys.
+type bundleHandlerInterface interface {
+	ControllerImages(ctx context.Context, bundleImage, bundleDir string, opts mirror.CopyOptions) (map[string]struct{}, error)
+}
+
 type imageDispatcher interface {
 	dispatch(image v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error)
 }
