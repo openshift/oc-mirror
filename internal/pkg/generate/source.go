@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/manifest"
 	dockerconfig "go.podman.io/image/v5/pkg/docker/config"
 	"go.podman.io/image/v5/types"
 )
@@ -92,19 +93,37 @@ func (s *RegistrySource) Tags(ctx context.Context, repo string) ([]string, error
 	return tags, nil
 }
 
+// inspectCtx returns a copy of SysCtx whose OSChoice defaults to linux, so
+// inspecting multi-arch indexes does not depend on the host OS. The caller's
+// struct is not modified.
+func (s *RegistrySource) inspectCtx() *types.SystemContext {
+	var sc types.SystemContext
+	if s.SysCtx != nil {
+		sc = *s.SysCtx
+	}
+	if sc.OSChoice == "" {
+		sc.OSChoice = "linux"
+	}
+	return &sc
+}
+
 // IsCatalog reports whether repo:tag carries the OLM catalog label.
 func (s *RegistrySource) IsCatalog(ctx context.Context, repo, tag string) (bool, error) {
 	ref, err := docker.ParseReference(fmt.Sprintf("//%s/%s:%s", s.Host, repo, tag))
 	if err != nil {
 		return false, fmt.Errorf("parsing reference for %s/%s:%s: %w", s.Host, repo, tag, err)
 	}
-	img, err := ref.NewImage(ctx, s.SysCtx)
+	img, err := ref.NewImage(ctx, s.inspectCtx())
 	if err != nil {
 		return false, fmt.Errorf("opening %s/%s:%s: %w", s.Host, repo, tag, err)
 	}
 	defer img.Close()
 	info, err := img.Inspect(ctx)
 	if err != nil {
+		var nonImage manifest.NonImageArtifactError
+		if errors.As(err, &nonImage) {
+			return false, nil // OCI artifact (Helm chart, signature, ...), not a catalog
+		}
 		return false, fmt.Errorf("inspecting %s/%s:%s: %w", s.Host, repo, tag, err)
 	}
 	_, ok := info.Labels[catalogLabel]
