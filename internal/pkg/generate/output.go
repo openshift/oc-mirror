@@ -63,39 +63,54 @@ func writeNew(path, hdr string, obj any) error {
 		if errors.Is(err, os.ErrExist) {
 			return existsError(path)
 		}
-		return err
+		return fmt.Errorf("creating %s: %w", path, err)
 	}
 	if _, err := f.WriteString(hdr + string(body)); err != nil {
 		_ = f.Close()
-		return err
+		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing %s: %w", path, err)
+	}
+	return nil
+}
+
+// checkNoneExist fails if any of paths already exists.
+func checkNoneExist(paths []string) error {
+	for _, p := range paths {
+		_, err := os.Stat(p)
+		if err == nil {
+			return existsError(p)
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("checking %s: %w", p, err)
+		}
+	}
+	return nil
 }
 
 // WriteFiles writes the requested config files into dir and returns their
 // paths. Existing files are never overwritten, and no file is written if any
 // target already exists.
 func WriteFiles(dir string, c Content, t OutputType) ([]string, error) {
+	iscPath := filepath.Join(dir, ISCFileName)
+	discPath := filepath.Join(dir, DISCFileName)
 	var paths []string
 	if t == OutputISC || t == OutputBoth {
-		paths = append(paths, filepath.Join(dir, ISCFileName))
+		paths = append(paths, iscPath)
 	}
 	if t == OutputDISC || t == OutputBoth {
-		paths = append(paths, filepath.Join(dir, DISCFileName))
+		paths = append(paths, discPath)
 	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			return nil, existsError(p)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
+	if err := checkNoneExist(paths); err != nil {
+		return nil, err
 	}
 
 	hdr := header(c.Warnings)
 	var written []string
 	for _, p := range paths {
 		var obj any = c.imageSetConfig()
-		if filepath.Base(p) == DISCFileName {
+		if p == discPath {
 			obj = c.deleteImageSetConfig()
 		}
 		if err := writeNew(p, hdr, obj); err != nil {
