@@ -86,6 +86,7 @@ func buildPlatform(tags []string) (v2alpha1.Platform, []string) {
 			MaxVersion: spans[key].max.String(),
 		})
 	}
+	//nolint:staticcheck // SA1019: Architectures is deprecated but we maintain backward compatibility
 	p.Architectures = slices.Sorted(maps.Keys(archs))
 	warns = append(warns, "platform channels are inferred as stable-X.Y with min/max versions from release tags; review before use")
 	return p, warns
