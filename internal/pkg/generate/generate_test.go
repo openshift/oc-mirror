@@ -113,11 +113,16 @@ func TestDiscoverTagsError(t *testing.T) {
 	assert.ErrorContains(t, err, "tags boom")
 }
 
+// A failing per-repo probe no longer aborts the run (behavior changed deliberately):
+// the repo becomes an additional image and a warning names the cause.
 func TestDiscoverIsCatalogError(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{"team/app": {"1"}}, probeErr: errors.New("probe boom")}
-	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
-	assert.ErrorContains(t, err, "inspecting team/app:1")
-	assert.ErrorContains(t, err, "probe boom")
+	c, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	require.NoError(t, err)
+	require.Len(t, c.AdditionalImages, 1)
+	assert.Equal(t, "h/team/app:1", c.AdditionalImages[0].Name)
+	assertWarningContaining(t, c.Warnings, "team/app:1")
+	assertWarningContaining(t, c.Warnings, "probe boom")
 }
 
 func TestDiscoverCatalogModelError(t *testing.T) {
@@ -140,4 +145,59 @@ func TestDiscoverSignatureTags(t *testing.T) {
 	require.Len(t, c.AdditionalImages, 1)
 	assert.Equal(t, "h/team/app:v1", c.AdditionalImages[0].Name)
 	assert.Equal(t, []string{"team/app:v1"}, src.probed, "catalog probe must use a non-signature tag")
+}
+
+func TestDiscoverPrefixTargets(t *testing.T) {
+	pkg := &model.Package{Name: "foo"}
+	pkg.Channels = map[string]*model.Channel{}
+	src := &fakeSource{
+		tags: map[string][]string{
+			"mirror/ubi9/ubi":                     {"latest"},
+			"mirror/redhat/redhat-operator-index": {"v4.16"},
+		},
+		catalogs: map[string]model.Model{"mirror/redhat/redhat-operator-index:v4.16": {"foo": pkg}},
+	}
+	c, err := (&Generator{Source: src, Host: "h", Prefix: "mirror"}).Discover(context.Background())
+	require.NoError(t, err)
+	require.Len(t, c.AdditionalImages, 1)
+	assert.Equal(t, "h/mirror/ubi9/ubi:latest", c.AdditionalImages[0].Name)
+	assert.Equal(t, "ubi9/ubi", c.AdditionalImages[0].TargetRepo)
+	require.Len(t, c.Operators, 1)
+	assert.Equal(t, "redhat/redhat-operator-index", c.Operators[0].TargetCatalog)
+}
+
+func TestDiscoverNoPrefixNoTargets(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{"ubi9/ubi": {"latest"}}}
+	c, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, c.AdditionalImages[0].TargetRepo)
+}
+
+func TestDiscoverPrefixBoundary(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{"team-a/app": {"1"}, "team-ab/app": {"1"}}}
+	for _, p := range []string{"team-a", "team-a/"} {
+		c, err := (&Generator{Source: src, Host: "h", Prefix: p}).Discover(context.Background())
+		require.NoError(t, err)
+		require.Len(t, c.AdditionalImages, 1, p)
+		assert.Equal(t, "h/team-a/app:1", c.AdditionalImages[0].Name)
+	}
+}
+
+type countingSource struct {
+	*fakeSource
+	tagCalls []string
+}
+
+func (c *countingSource) Tags(ctx context.Context, repo string) ([]string, error) {
+	c.tagCalls = append(c.tagCalls, repo)
+	return c.fakeSource.Tags(ctx, repo)
+}
+
+func TestDiscoverDoesNotListReleaseContentTags(t *testing.T) {
+	src := &countingSource{fakeSource: &fakeSource{tags: map[string][]string{
+		"openshift/release": {"x"}, "openshift/release-images": {"4.16.3-x86_64"},
+	}}}
+	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"openshift/release-images"}, src.tagCalls)
 }
