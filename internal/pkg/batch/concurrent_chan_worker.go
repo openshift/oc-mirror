@@ -182,20 +182,20 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 								// Only an operator image can be an operand, and only now is it
 								// worth finding out: the answer costs a bundle pull, and reaching
 								// here means the image really has no matching instance.
-								var operand bool
+								var class v2alpha1.ImageType
 								var resolveErr error
 								if img.Type.IsOperator() {
-									operand, resolveErr = o.shouldSkipAsOperand(timeoutCtx, img, collectorSchema, opts) //nolint:contextcheck
+									class, resolveErr = o.classifyOperand(timeoutCtx, img, collectorSchema, opts) //nolint:contextcheck
 								}
 
 								switch {
-								case operand:
+								case class == v2alpha1.TypeOperatorOperand:
 									// Workload the operator deploys, listed by the catalog rather
 									// than chosen by the user. Operators legitimately ship
 									// optional operands for other architectures, and a cluster on
 									// the requested platform will never pull them, so skip this
 									// one instead of failing the whole operator.
-									img.Type = v2alpha1.TypeOperatorOperand
+									img.Type = class
 									result.img = img
 									result.imgType = img.Type
 									o.Log.Warn("Skipping operand %s: no instance for the requested platform(s) %s", img.Origin, requested)
@@ -213,7 +213,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 									// claim the operator lacks support, which we have not shown.
 									o.Log.Warn("Unable to tell whether %s is an operand: %v. Treating it as an image the operator runs, so it will not be skipped.", img.Origin, resolveErr)
 
-								case img.Type.IsOperator():
+								case class == v2alpha1.TypeOperatorRelatedImage:
 									// Shown to be an image the operator runs itself. That it has
 									// no instance for the requested platforms is the proof that
 									// the operator cannot run on them, which no catalog
@@ -222,10 +222,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 										err = fmt.Errorf("operator %s does not support %s: %w", operators, requested, err)
 									}
 
-								default:
-									// For every other image type the user named the image
-									// explicitly, so a platform miss is a configuration mistake.
-									// Return the original error so it can be corrected.
+								case !img.Type.IsOperator():
+									// The user named this image explicitly, so a platform miss is
+									// a configuration mistake.
 									o.Log.Warn("Requested platform(s) not found in source manifest list for %s; verify the platforms field in your ISC", img.Origin)
 								}
 							}
@@ -321,22 +320,31 @@ collect:
 	return copiedImages, nil
 }
 
-// shouldSkipAsOperand asks the configured resolver whether the image is an operand.
-// Without a resolver, or for an image no bundle lists, the answer is no: only a
-// proven operand may be skipped.
+// classifyOperand asks the configured resolver what the image is. It returns
+// TypeInvalid when nothing classified it, so the caller never mistakes an
+// unanswered question for proof that the operator runs the image.
 //
 // Disk-to-mirror and delete read from the cache and cannot reach the registry
 // the bundle lives in. They do not need this either: operands skipped during
 // mirror-to-disk are dropped from the image list by the executor instead.
-func (o *ChannelConcurrentBatch) shouldSkipAsOperand(ctx context.Context, img v2alpha1.CopyImageSchema, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (bool, error) {
+func (o *ChannelConcurrentBatch) classifyOperand(ctx context.Context, img v2alpha1.CopyImageSchema, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.ImageType, error) {
 	if o.OperandResolver == nil || opts.IsDiskToMirror() || opts.IsDeleteMode() {
-		return false, nil
+		return v2alpha1.TypeInvalid, nil
 	}
 	bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
 	if len(bundles) == 0 {
-		return false, nil
+		return v2alpha1.TypeInvalid, nil
 	}
-	return o.OperandResolver.IsOperand(ctx, img.Origin, bundles)
+
+	operand, err := o.OperandResolver.IsOperand(ctx, img.Origin, bundles)
+	switch {
+	case err != nil:
+		return v2alpha1.TypeInvalid, err
+	case operand:
+		return v2alpha1.TypeOperatorOperand, nil
+	default:
+		return v2alpha1.TypeOperatorRelatedImage, nil
+	}
 }
 
 // operatorNames renders the operators an image belongs to, sorted so the

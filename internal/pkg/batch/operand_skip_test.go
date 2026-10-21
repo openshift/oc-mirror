@@ -255,18 +255,41 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("an unclassified operator image is not blamed on the operator", func(t *testing.T) {
+		// No bundle lists this image, so nothing showed the operator runs it.
+		schema := operandSchema()
+		schema.CopyImageSchemaMap.BundlesByImage = nil
+
+		resolver := &resolverStub{operand: true}
+		w, logsDir := newWorker(t, newMirror(operandRef), resolver)
+
+		_, err := w.Worker(context.Background(), schema, opts)
+
+		require.Error(t, err)
+		assert.Zero(t, resolver.callCount(), "there is no bundle to ask about")
+
+		reported := readMirroringErrors(t, logsDir)
+		assert.Contains(t, reported, "no instances found for platform")
+		assert.NotContains(t, reported, "does not support",
+			"nothing showed the operator runs this image")
+	})
+
 	t.Run("disk to mirror does not reach for the registry", func(t *testing.T) {
 		d2mOpts := platformFilterOpts(t)
 		d2mOpts.Mode = mirror.DiskToMirror
 
 		resolver := &resolverStub{operand: true}
-		w, _ := newWorker(t, newMirror(operandRef), resolver)
+		w, logsDir := newWorker(t, newMirror(operandRef), resolver)
 
 		_, err := w.Worker(context.Background(), operandSchema(), d2mOpts)
 
 		require.Error(t, err)
 		assert.Zero(t, resolver.callCount(),
 			"the bundle lives in a registry a disconnected run cannot reach")
+
+		reported := readMirroringErrors(t, logsDir)
+		assert.NotContains(t, reported, "does not support",
+			"without classifying, the operator must not be blamed")
 	})
 }
 
