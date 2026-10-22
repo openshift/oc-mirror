@@ -31,6 +31,10 @@ func (g *Generator) Discover(ctx context.Context) (Content, error) {
 		if !g.matchesPrefix(repo) {
 			continue
 		}
+		if g.Prefix != "" && repo == strings.TrimSuffix(g.Prefix, "/") {
+			c.Warnings = append(c.Warnings, fmt.Sprintf("repository %q skipped because it equals the prefix; an empty target path cannot be represented", repo))
+			continue
+		}
 		if isRepo(repo, releaseContentRepo) {
 			// release payload components are implied by release-images
 			continue

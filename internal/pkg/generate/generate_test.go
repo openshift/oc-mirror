@@ -22,6 +22,7 @@ type fakeSource struct {
 	probed   []string // repo:tag values passed to IsCatalog
 }
 
+// Repositories returns fixture repositories or the configured enumeration error.
 func (f *fakeSource) Repositories(context.Context) ([]string, error) {
 	if f.repoErr != nil {
 		return nil, f.repoErr
@@ -33,6 +34,7 @@ func (f *fakeSource) Repositories(context.Context) ([]string, error) {
 	return r, nil
 }
 
+// Tags returns fixture tags or the configured tag error.
 func (f *fakeSource) Tags(_ context.Context, repo string) ([]string, error) {
 	if f.tagsErr != nil {
 		return nil, f.tagsErr
@@ -40,6 +42,7 @@ func (f *fakeSource) Tags(_ context.Context, repo string) ([]string, error) {
 	return f.tags[repo], nil
 }
 
+// IsCatalog records probes and checks the catalog fixtures.
 func (f *fakeSource) IsCatalog(_ context.Context, repo, tag string) (bool, error) {
 	f.probed = append(f.probed, repo+":"+tag)
 	if f.probeErr != nil {
@@ -49,6 +52,7 @@ func (f *fakeSource) IsCatalog(_ context.Context, repo, tag string) (bool, error
 	return ok, nil
 }
 
+// CatalogModel returns fixture catalog content or the configured loading error.
 func (f *fakeSource) CatalogModel(_ context.Context, repo, tag string) (model.Model, error) {
 	if f.modelErr != nil {
 		return nil, f.modelErr
@@ -56,6 +60,7 @@ func (f *fakeSource) CatalogModel(_ context.Context, repo, tag string) (model.Mo
 	return f.catalogs[repo+":"+tag], nil
 }
 
+// TestDiscover checks classification across release, operator, and additional repositories.
 func TestDiscover(t *testing.T) {
 	pkg := &model.Package{Name: "foo"}
 	pkg.Channels = map[string]*model.Channel{"stable": {Name: "stable", Package: pkg,
@@ -82,6 +87,7 @@ func TestDiscover(t *testing.T) {
 	assertWarningContaining(t, c.Warnings, "point at the mirror registry")
 }
 
+// TestDiscoverPrefix checks discovery is restricted to the requested repository path.
 func TestDiscoverPrefix(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{"team-a/app": {"1"}, "team-b/app": {"1"}}}
 	c, err := (&Generator{Source: src, Host: "h", Prefix: "team-a/"}).Discover(context.Background())
@@ -90,12 +96,14 @@ func TestDiscoverPrefix(t *testing.T) {
 	assert.Equal(t, "h/team-a/app:1", c.AdditionalImages[0].Name)
 }
 
+// TestDiscoverRepoError checks repository enumeration failures propagate.
 func TestDiscoverRepoError(t *testing.T) {
 	src := &fakeSource{repoErr: errors.New("boom")}
 	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
 	assert.ErrorContains(t, err, "boom")
 }
 
+// assertWarningContaining asserts at least one warning contains the expected explanation.
 func assertWarningContaining(t *testing.T, warnings []string, substr string) {
 	t.Helper()
 	for _, w := range warnings {
@@ -106,6 +114,7 @@ func assertWarningContaining(t *testing.T, warnings []string, substr string) {
 	t.Errorf("no warning contains %q; got %v", substr, warnings)
 }
 
+// TestDiscoverTagsError checks tag enumeration failures retain their context.
 func TestDiscoverTagsError(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{"team/app": {"1"}}, tagsErr: errors.New("tags boom")}
 	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
@@ -125,6 +134,7 @@ func TestDiscoverIsCatalogError(t *testing.T) {
 	assertWarningContaining(t, c.Warnings, "probe boom")
 }
 
+// TestDiscoverCatalogModelError checks catalog loading failures propagate with image context.
 func TestDiscoverCatalogModelError(t *testing.T) {
 	src := &fakeSource{
 		tags:     map[string][]string{"team/index": {"v1"}},
@@ -136,6 +146,7 @@ func TestDiscoverCatalogModelError(t *testing.T) {
 	assert.ErrorContains(t, err, "model boom")
 }
 
+// TestDiscoverSignatureTags checks signatures are excluded from catalog probes.
 func TestDiscoverSignatureTags(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{
 		"team/app": {"sha256-" + strings.Repeat("a", 64) + ".sig", "v1"},
@@ -147,6 +158,7 @@ func TestDiscoverSignatureTags(t *testing.T) {
 	assert.Equal(t, []string{"team/app:v1"}, src.probed, "catalog probe must use a non-signature tag")
 }
 
+// TestDiscoverPrefixTargets checks generated targets omit the destination prefix.
 func TestDiscoverPrefixTargets(t *testing.T) {
 	pkg := &model.Package{Name: "foo"}
 	pkg.Channels = map[string]*model.Channel{}
@@ -166,6 +178,7 @@ func TestDiscoverPrefixTargets(t *testing.T) {
 	assert.Equal(t, "redhat/redhat-operator-index", c.Operators[0].TargetCatalog)
 }
 
+// TestDiscoverNoPrefixNoTargets checks unprefixed discovery leaves target overrides unset.
 func TestDiscoverNoPrefixNoTargets(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{"ubi9/ubi": {"latest"}}}
 	c, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
@@ -173,6 +186,7 @@ func TestDiscoverNoPrefixNoTargets(t *testing.T) {
 	assert.Empty(t, c.AdditionalImages[0].TargetRepo)
 }
 
+// TestDiscoverPrefixBoundary checks a prefix does not select sibling path names.
 func TestDiscoverPrefixBoundary(t *testing.T) {
 	src := &fakeSource{tags: map[string][]string{"team-a/app": {"1"}, "team-ab/app": {"1"}}}
 	for _, p := range []string{"team-a", "team-a/"} {
@@ -188,11 +202,13 @@ type countingSource struct {
 	tagCalls []string
 }
 
+// Tags records tag requests before delegating to the fixture source.
 func (c *countingSource) Tags(ctx context.Context, repo string) ([]string, error) {
 	c.tagCalls = append(c.tagCalls, repo)
 	return c.fakeSource.Tags(ctx, repo)
 }
 
+// TestDiscoverDoesNotListReleaseContentTags checks release component repositories are skipped before tag enumeration.
 func TestDiscoverDoesNotListReleaseContentTags(t *testing.T) {
 	src := &countingSource{fakeSource: &fakeSource{tags: map[string][]string{
 		"openshift/release": {"x"}, "openshift/release-images": {"4.16.3-x86_64"},
@@ -200,4 +216,23 @@ func TestDiscoverDoesNotListReleaseContentTags(t *testing.T) {
 	_, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"openshift/release-images"}, src.tagCalls)
+}
+
+// TestDiscoverSkipsExactPrefix protects root destinations from prefix duplication.
+func TestDiscoverSkipsExactPrefix(t *testing.T) {
+	for _, prefix := range []string{"mirror", "mirror/"} {
+		for _, catalog := range []bool{false, true} {
+			src := &countingSource{fakeSource: &fakeSource{tags: map[string][]string{"mirror": {"v1"}, "mirror/app": {"v1"}}}}
+			if catalog {
+				src.catalogs = map[string]model.Model{"mirror:v1": {}}
+			}
+			c, err := (&Generator{Source: src, Host: "h", Prefix: prefix}).Discover(context.Background())
+			require.NoError(t, err)
+			require.Len(t, c.AdditionalImages, 1)
+			assert.Equal(t, "app", c.AdditionalImages[0].TargetRepo)
+			assert.Empty(t, c.Operators)
+			assert.Equal(t, []string{"mirror/app"}, src.tagCalls)
+			assertWarningContaining(t, c.Warnings, "equals the prefix")
+		}
+	}
 }

@@ -19,6 +19,7 @@ import (
 	"go.podman.io/image/v5/types"
 )
 
+// newTestRegistry starts a local registry populated with ordinary and catalog images.
 func newTestRegistry(t *testing.T) (host string) {
 	t.Helper()
 	srv := httptest.NewServer(registry.New())
@@ -44,10 +45,12 @@ func newTestRegistry(t *testing.T) (host string) {
 	return host
 }
 
+// testSysCtx returns source options for the local HTTP registry.
 func testSysCtx() *types.SystemContext {
 	return &types.SystemContext{DockerInsecureSkipTLSVerify: types.OptionalBoolTrue}
 }
 
+// TestRegistrySource checks repository enumeration, tags, and catalog detection.
 func TestRegistrySource(t *testing.T) {
 	host := newTestRegistry(t)
 	s := &RegistrySource{Host: host, SysCtx: testSysCtx()}
@@ -69,6 +72,7 @@ func TestRegistrySource(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestRegistrySourceExplicitRepos checks explicit repositories bypass registry enumeration.
 func TestRegistrySourceExplicitRepos(t *testing.T) {
 	s := &RegistrySource{Host: "unused", Repos: []string{"a/b"}}
 	repos, err := s.Repositories(context.Background())
@@ -76,6 +80,7 @@ func TestRegistrySourceExplicitRepos(t *testing.T) {
 	assert.Equal(t, []string{"a/b"}, repos)
 }
 
+// TestRegistrySourceCatalogDisabledHint checks enumeration failures suggest explicit repositories.
 func TestRegistrySourceCatalogDisabledHint(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(srv.Close)
@@ -84,6 +89,7 @@ func TestRegistrySourceCatalogDisabledHint(t *testing.T) {
 	assert.ErrorContains(t, err, "--repos")
 }
 
+// TestRegistrySourceIsCatalogNonImageArtifact checks OCI artifacts are not classified as catalogs.
 func TestRegistrySourceIsCatalogNonImageArtifact(t *testing.T) {
 	host := newTestRegistry(t)
 	// A Helm-chart-like OCI artifact: image manifest with a non-image config media type.
@@ -99,6 +105,7 @@ func TestRegistrySourceIsCatalogNonImageArtifact(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestInspectCtxDefaultsOSWithoutMutating checks inspection defaults to Linux without changing caller options.
 func TestInspectCtxDefaultsOSWithoutMutating(t *testing.T) {
 	orig := testSysCtx()
 	s := &RegistrySource{SysCtx: orig}

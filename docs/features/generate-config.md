@@ -44,6 +44,8 @@ For registries with a self-signed certificate or plain HTTP, use `--src-tls-veri
 
 `--prefix` matches on path boundaries: `--prefix=team-a` matches `team-a/app` but not `team-ab/app`.
 
+A repository exactly equal to the prefix is skipped with a warning: an empty target path cannot represent that destination. Repositories beneath the prefix remain included.
+
 When a prefix is set, mirroring or deleting against `docker://host/<prefix>` appends the target path to the prefix. To avoid a doubled prefix, the generated entries set `targetRepo` (additional images) or `targetCatalog` (operators) to the repository path without the prefix. For example, with `--prefix=mirror` the repository `mirror/ubi9/ubi` produces:
 
 ```yaml
@@ -56,7 +58,7 @@ so that `oc-mirror -c imageset-config.yaml docker://registry.example.com:5000/mi
 
 ## Warnings
 
-Tags that look like digests are skipped and counted in a warning: `sha256-<hex>` tags and any 12-character hex tag. The 12-hex rule can give false positives, for example a timestamp-like tag such as `202401011230`. Signature tags (`.sig`, `.att`, `.sbom`) are skipped silently and are not counted. Warnings are logged and also written as header comments in the generated files.
+Tags that look like digests are skipped and counted in a warning: `sha256-<hex>` tags and any 12-character hex tag. The 12-hex rule can give false positives, for example a timestamp-like tag such as `202401011230`. Signature tags (`.sig`, `.att`, `.sbom`) are skipped silently and are not counted. Warning details are written only as header comments in the generated files; the log reports their count. CLI errors describe the failed operation without registry identifiers, remote error text, or output paths. Catalog download diagnostics are suppressed for this command, including at debug level.
 
 If probing a repository for the operator catalog label fails, the repository is treated as additional images and a warning is emitted. OCI artifacts such as Helm charts are not catalogs.
 

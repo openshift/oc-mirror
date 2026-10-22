@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
+// TestBuildOperator checks package and channel inclusion with inferred version bounds.
 func TestBuildOperator(t *testing.T) {
 	pkg := &model.Package{Name: "foo"}
 	pkg.Channels = map[string]*model.Channel{
