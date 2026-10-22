@@ -247,6 +247,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(log))
 	cmd.AddCommand(NewDeleteCommand(log, opts))
 	cmd.AddCommand(list.NewListCommand(log, opts))
+	cmd.AddCommand(NewGenerateCommand(log, opts))
 
 	// common flags
 	cmd.PersistentFlags().StringVarP(&opts.Global.ConfigPath, "config", "c", "", "Path to imageset configuration file")
