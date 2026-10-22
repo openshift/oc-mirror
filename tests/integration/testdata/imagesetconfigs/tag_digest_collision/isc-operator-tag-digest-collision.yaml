@@ -10,13 +10,12 @@
 # digest at the destination. Before fix: one digest's blobs are missing from the tar and
 # it is reported as "manifest unknown" at the destination.
 #
-# NOTE: requires the test-catalog-tag-digest-collision catalog image to be built and
-# pushed - see tests/integration/image-builders/operator/catalogs/README.md.
+# The catalog is built from testdata/images/operator/catalogs/test-catalog-tag-digest-collision.
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   operators:
-  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-tag-digest-collision
+  - catalog: localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-tag-digest-collision
     packages:
     - name: collisiontest
       channels:

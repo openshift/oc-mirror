@@ -19,7 +19,7 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/proxy"
 )
 
-const testCatalog string = "quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest"
+const testCatalog string = "localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest"
 
 var _ = Describe("oc-mirror list operators", Ordered, func() {
 	BeforeAll(func() {

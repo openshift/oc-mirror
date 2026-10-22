@@ -1,15 +1,15 @@
 {
   "_comment": "Mock update graphs for list releases tests. Each channel/architecture pair returns a different version so incorrect filtering or mixed results fail the tests.",
   "fast-4.20/amd64": {
-    "nodes": [{"version": "4.20.1", "payload": "quay.io/oc-mirror/release/test-release-index:v0.0.1"}],
+    "nodes": [{"version": "4.20.1", "payload": "localhost:5001/oc-mirror/release/test-release-index:v0.0.1"}],
     "edges": []
   },
   "fast-4.20/arm64": {
-    "nodes": [{"version": "4.20.2", "payload": "quay.io/oc-mirror/release/test-release-index-multi:v0.0.1"}],
+    "nodes": [{"version": "4.20.2", "payload": "localhost:5001/oc-mirror/release/test-release-index-multi:v0.0.1"}],
     "edges": []
   },
   "candidate-4.20/amd64": {
-    "nodes": [{"version": "4.20.3", "payload": "quay.io/oc-mirror/release/test-release-index:v0.0.1"}],
+    "nodes": [{"version": "4.20.3", "payload": "localhost:5001/oc-mirror/release/test-release-index:v0.0.1"}],
     "edges": []
   }
 }

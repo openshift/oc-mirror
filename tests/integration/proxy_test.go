@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,7 +16,10 @@ import (
 
 var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 	var workDir string
-	iscHappyPath := filepath.Join("happy_path", "isc-happy-path.yaml")
+	// The ISC references the source registry and the Helm repository through
+	// sourceRegistryAlias and helmRepositoryAlias, since Go never routes traffic to
+	// localhost through a proxy.
+	iscProxy := filepath.Join("proxy", "isc-proxy.yaml")
 
 	BeforeEach(func() {
 		workDir = setupWorkDir()
@@ -26,7 +30,12 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 	})
 
 	It("should route all mirroring traffic through the configured proxy and succeed", func() {
-		fwdProxy, err := proxy.Start()
+		// Routing only the aliases also rejects any other destination, so the test
+		// never reaches the network.
+		fwdProxy, err := proxy.StartWithRoutes(map[string]string{
+			sourceRegistryAlias + ":443": sourceRegistry.Endpoint(),
+			helmRepositoryAlias + ":80":  strings.TrimPrefix(helmRepository.URL(), "http://"),
+		})
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(fwdProxy.Stop)
 
@@ -42,20 +51,18 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		})
 
 		By("running mirrorToDisk with HTTP_PROXY/HTTPS_PROXY set")
-		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscHappyPath), workDir)
+		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscProxy), workDir)
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying images are mirrored in the local cache")
-		expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
+		expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscProxy), cacheDir)
 
-		By("verifying the proxy observed connections to the expected external hosts")
+		By("verifying the proxy observed connections to the expected hosts")
 		GinkgoWriter.Printf("hosts seen by proxy: %v\n", fwdProxy.Hosts())
-		Expect(fwdProxy.SawHost("quay.io")).To(BeTrue(),
-			"expected the proxy to observe a connection to quay.io (release/catalog/additional images); hosts seen: %v", fwdProxy.Hosts())
-		Expect(fwdProxy.SawHost("stefanprodan.github.io")).To(BeTrue(),
-			"expected the proxy to observe a connection to stefanprodan.github.io (helm repository index/chart); hosts seen: %v", fwdProxy.Hosts())
-		Expect(fwdProxy.SawHost("ghcr.io")).To(BeTrue(),
-			"expected the proxy to observe a connection to ghcr.io (image referenced by the helm chart); hosts seen: %v", fwdProxy.Hosts())
+		Expect(fwdProxy.SawHost(sourceRegistryAlias)).To(BeTrue(),
+			"expected the proxy to observe a connection to %s (catalog/additional images); hosts seen: %v", sourceRegistryAlias, fwdProxy.Hosts())
+		Expect(fwdProxy.SawHost(helmRepositoryAlias)).To(BeTrue(),
+			"expected the proxy to observe a connection to %s (helm repository index/chart); hosts seen: %v", helmRepositoryAlias, fwdProxy.Hosts())
 
 		By("verifying the proxy itself did not fail unexpectedly while serving connections")
 		Expect(fwdProxy.Err()).NotTo(HaveOccurred())
@@ -75,7 +82,7 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		})
 
 		By("running mirrorToDisk with an unreachable proxy configured")
-		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscHappyPath), workDir, "--retry-times=1")
+		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscProxy), workDir, "--retry-times=1")
 		expectOcMirrorCommandFailure(result, err)
 
 		output := result.Stdout + result.Stderr

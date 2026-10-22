@@ -1,10 +1,7 @@
-// Package proxy provides a minimal HTTPS forward proxy used by integration
-// tests to verify that oc-mirror routes its network traffic through
-// HTTP_PROXY/HTTPS_PROXY. It only supports CONNECT tunneling: oc-mirror's
-// only plain-HTTP traffic targets its own local cache on localhost, which
-// Go's net/http never routes through a configured proxy, so there is no
-// plain-HTTP destination for this proxy to ever handle. It records every
-// host it has been asked to tunnel traffic to.
+// Package proxy provides a minimal forward proxy used by integration tests to
+// verify that oc-mirror routes its network traffic through HTTP_PROXY/HTTPS_PROXY.
+// It tunnels HTTPS traffic (CONNECT) and forwards plain HTTP requests, and records
+// every host it has been asked to forward traffic to.
 package proxy
 
 import (
@@ -14,6 +11,8 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +44,7 @@ func StartWithRoutes(routes map[string]string) (*Proxy, error) {
 	}
 
 	p := &Proxy{listener: ln, hosts: make(map[string]struct{}), routes: maps.Clone(routes)}
-	p.server = &http.Server{Handler: http.HandlerFunc(p.handleConnect)}
+	p.server = &http.Server{Handler: http.HandlerFunc(p.handle)}
 	go func() {
 		// Save any error other than the expected one from Stop closing the server.
 		if err := p.server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -109,23 +108,58 @@ func (p *Proxy) recordHost(hostport string) {
 	p.mu.Unlock()
 }
 
-// handleConnect handles HTTPS tunneling: it dials the requested host and
-// pipes bytes between the client and destination once the tunnel is established.
-func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodConnect {
-		http.Error(w, "only CONNECT is supported", http.StatusMethodNotAllowed)
+func (p *Proxy) handle(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodConnect {
+		p.handleConnect(w, r)
+		return
+	}
+	p.handleHTTP(w, r)
+}
+
+// destination returns where to forward traffic for hostport (host:port), applying
+// the routes, if any.
+func (p *Proxy) destination(hostport string) (string, bool) {
+	if p.routes == nil {
+		return hostport, true
+	}
+	destination, ok := p.routes[hostport]
+	return destination, ok
+}
+
+// handleHTTP forwards a plain HTTP request, whose URL is absolute.
+func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Host == "" {
+		http.Error(w, "not a proxy request", http.StatusBadRequest)
+		return
+	}
+	hostport := r.URL.Host
+	if r.URL.Port() == "" {
+		hostport = net.JoinHostPort(r.URL.Hostname(), "80")
+	}
+	p.recordHost(hostport)
+	destination, ok := p.destination(hostport)
+	if !ok {
+		http.Error(w, "no test route for "+hostport, http.StatusBadGateway)
 		return
 	}
 
+	target := &url.URL{Scheme: "http", Host: destination}
+	(&httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.Host = r.Host
+		},
+	}).ServeHTTP(w, r)
+}
+
+// handleConnect handles HTTPS tunneling: it dials the requested host and
+// pipes bytes between the client and destination once the tunnel is established.
+func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	p.recordHost(r.Host)
-	destination := r.Host
-	if p.routes != nil {
-		var ok bool
-		destination, ok = p.routes[r.Host]
-		if !ok {
-			http.Error(w, "no test route for "+r.Host, http.StatusBadGateway)
-			return
-		}
+	destination, ok := p.destination(r.Host)
+	if !ok {
+		http.Error(w, "no test route for "+r.Host, http.StatusBadGateway)
+		return
 	}
 
 	dialCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

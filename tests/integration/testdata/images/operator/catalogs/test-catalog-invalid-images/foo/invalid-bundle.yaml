@@ -1,0 +1,22 @@
+# Hand-written bundle with an invalid related image (no tag or digest). It can't be
+# rendered from a bundle image, so it's added to the catalog as is, next to the
+# bundles rendered from basic-template.yaml.
+image: localhost:5001/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+name: foo.v0.9.9-invalid-related-image
+package: foo
+properties:
+- type: olm.gvk
+  value:
+    group: test.foo
+    kind: Foo
+    version: v1
+- type: olm.package
+  value:
+    packageName: foo
+    version: 0.9.9
+relatedImages:
+- image: localhost:5001/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+  name: ""
+- image: registry.example.com/foo/operand-missing-tag
+  name: operand
+schema: olm.bundle
