@@ -25,7 +25,7 @@ The registry argument must be `docker://host[:port]`. Use `--prefix` to restrict
 
 `--output-dir` must already exist.
 
-For registries with a self-signed certificate or plain HTTP, use `--src-tls-verify=false`. For credentials, use `--authfile` to point to an auth file.
+For registries with a self-signed certificate or plain HTTP, use `--src-tls-verify=false`. For a private CA, use `--src-cert-dir` (`*.crt` CA files and `*.cert`/`*.key` client pairs); it applies to repository enumeration as well as tag and image access. For credentials, use `--authfile` to point to an auth file.
 
 ## What is inferred
 

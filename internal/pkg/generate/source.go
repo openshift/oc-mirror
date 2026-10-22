@@ -14,6 +14,7 @@ import (
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/manifest"
 	dockerconfig "go.podman.io/image/v5/pkg/docker/config"
+	"go.podman.io/image/v5/pkg/tlsclientconfig"
 	"go.podman.io/image/v5/types"
 )
 
@@ -54,20 +55,37 @@ func (s *RegistrySource) Repositories(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("parsing registry %q: %w", s.Host, err)
 	}
 	opts := []remote.Option{remote.WithContext(ctx), remote.WithAuth(s.auth())}
-	if s.insecure() {
-		tr, ok := http.DefaultTransport.(*http.Transport)
-		if !ok {
-			return nil, errors.New("default HTTP transport is not an *http.Transport")
-		}
-		tr = tr.Clone()
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // user passed --src-tls-verify=false
-		opts = append(opts, remote.WithTransport(tr))
+	tr, err := s.transport()
+	if err != nil {
+		return nil, err
 	}
+	opts = append(opts, remote.WithTransport(tr))
 	repos, err := remote.Catalog(ctx, reg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("listing repositories on %s (is /v2/_catalog enabled? otherwise pass --repos): %w", s.Host, err)
 	}
 	return repos, nil
+}
+
+// transport returns an HTTP transport honoring the TLS settings in SysCtx: the
+// certificate directory (*.crt CAs, *.cert/*.key client pairs) and disabled verification.
+func (s *RegistrySource) transport() (*http.Transport, error) {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("default HTTP transport is not an *http.Transport")
+	}
+	tr := base.Clone()
+	tlsc := &tls.Config{MinVersion: tls.VersionTLS12}
+	if s.SysCtx != nil && s.SysCtx.DockerCertPath != "" {
+		if err := tlsclientconfig.SetupCertificates(s.SysCtx.DockerCertPath, tlsc); err != nil {
+			return nil, fmt.Errorf("loading certificates from the source certificate directory: %w", err)
+		}
+	}
+	if s.insecure() {
+		tlsc.InsecureSkipVerify = true //nolint:gosec // user passed --src-tls-verify=false
+	}
+	tr.TLSClientConfig = tlsc
+	return tr, nil
 }
 
 // auth returns the explicit registry token if set, else the stored credentials

@@ -2,8 +2,11 @@ package generate
 
 import (
 	"context"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -136,5 +139,22 @@ func TestRegistrySourceEnumerationUsesRegistryToken(t *testing.T) {
 	sc := testSysCtx()
 	sc.DockerBearerRegistryToken = "secret"
 	_, err = (&RegistrySource{Host: host, SysCtx: sc}).Repositories(context.Background())
+	require.NoError(t, err)
+}
+
+// TestRegistrySourceEnumerationUsesCertDir checks a private CA in the source
+// certificate directory is trusted when listing repositories.
+func TestRegistrySourceEnumerationUsesCertDir(t *testing.T) {
+	srv := httptest.NewTLSServer(registry.New())
+	t.Cleanup(srv.Close)
+	host := strings.TrimPrefix(srv.URL, "https://")
+	dir := t.TempDir()
+	pemCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ca.crt"), pemCert, 0o600))
+
+	_, err := (&RegistrySource{Host: host, SysCtx: &types.SystemContext{}}).Repositories(context.Background())
+	require.Error(t, err, "an unknown CA must be rejected without the certificate directory")
+
+	_, err = (&RegistrySource{Host: host, SysCtx: &types.SystemContext{DockerCertPath: dir}}).Repositories(context.Background())
 	require.NoError(t, err)
 }
