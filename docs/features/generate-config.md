@@ -56,11 +56,13 @@ additionalImages:
 
 so that `oc-mirror -c imageset-config.yaml docker://registry.example.com:5000/mirror` writes to `mirror/ubi9/ubi`. Without a prefix, no target fields are set.
 
+The release collector always appends `openshift/release-images` to the destination, so releases can only be mirrored or deleted against the registry root that holds them. When the release repository is not at the destination root implied by `--prefix` (for example `--prefix=openshift` with `openshift/release-images`), the platform section is still generated and a warning names the destination to use.
+
 ## Warnings
 
 Tags that look like digests are skipped and counted in a warning: `sha256-<hex>` tags and any 12-character hex tag. The 12-hex rule can give false positives, for example a timestamp-like tag such as `202401011230`. Signature tags (`.sig`, `.att`, `.sbom`) are skipped silently and are not counted. Warning details are written only as header comments in the generated files; the log reports their count. CLI errors describe the failed operation without registry identifiers, remote error text, or output paths. Catalog download diagnostics are suppressed for this command, including at debug level.
 
-If probing a repository for the operator catalog label fails, the repository is treated as additional images and a warning is emitted. OCI artifacts such as Helm charts are not catalogs.
+Each tag is probed for the operator catalog label on its own, so a repository can hold both catalogs and ordinary images. If a probe fails, that tag is treated as an additional image and a warning is emitted. OCI artifacts such as Helm charts are not catalogs.
 
 Image references point at the mirror registry, not the original sources, but this is only partial: platform channels and the related images inside rebuilt operator catalogs still resolve to upstream registries when mirrored again.
 

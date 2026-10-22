@@ -45,6 +45,11 @@ func (g *Generator) Discover(ctx context.Context) (Content, error) {
 		}
 		if isRepo(repo, releaseImagesRepo) {
 			releaseTags = append(releaseTags, tags...)
+			if root := strings.TrimSuffix(strings.TrimSuffix(repo, releaseImagesRepo), "/"); root != strings.TrimSuffix(g.Prefix, "/") {
+				// The release collector appends openshift/release-images to the destination.
+				c.Warnings = append(c.Warnings, fmt.Sprintf(
+					"release repository %q is not at the destination root; mirror and delete releases against docker://%s%s", repo, g.Host, rootPath(root)))
+			}
 			continue
 		}
 		if err := g.classify(ctx, &c, repo, tags, &skippedDigests); err != nil {
@@ -81,35 +86,34 @@ func (g *Generator) targetPath(repo string) string {
 	return strings.TrimPrefix(repo, p+"/")
 }
 
-// classify adds repo to c as an operator catalog (one operator per tag) or as
-// additional images. A failed catalog probe is recorded as a warning and the
-// repository is treated as additional images. Digest-derived tags are added to skipped.
+// rootPath returns root as a URL path suffix: "" or "/root".
+func rootPath(root string) string {
+	if root == "" {
+		return ""
+	}
+	return "/" + root
+}
+
+// classify adds every tag of repo to c, as an operator (one per catalog tag) or
+// as an additional image. Each tag is probed on its own, so a repository can mix
+// catalogs and ordinary images. A failed probe is recorded as a warning and the
+// tag is treated as an additional image. Digest-derived tags are added to skipped.
 func (g *Generator) classify(ctx context.Context, c *Content, repo string, tags []string, skipped *int) error {
-	var candidates []string
-	for _, t := range slices.Sorted(slices.Values(tags)) {
-		if !isSignatureTag(t) {
-			candidates = append(candidates, t)
-		}
-	}
-	if len(candidates) == 0 {
-		return nil
-	}
-	isCatalog, err := g.Source.IsCatalog(ctx, repo, candidates[0])
-	if err != nil {
-		c.Warnings = append(c.Warnings, fmt.Sprintf(
-			"could not tell whether %s:%s is an operator catalog, treating %s as additional images: %v", repo, candidates[0], repo, err))
-	}
 	target := g.targetPath(repo)
-	if err != nil || !isCatalog {
-		imgs, n := buildAdditional(g.Host, repo, candidates)
-		for i := range imgs {
-			imgs[i].TargetRepo = target
+	var images []string
+	for _, tag := range slices.Sorted(slices.Values(tags)) {
+		if isSignatureTag(tag) {
+			continue
 		}
-		c.AdditionalImages = append(c.AdditionalImages, imgs...)
-		*skipped += n
-		return nil
-	}
-	for _, tag := range candidates {
+		isCatalog, err := g.Source.IsCatalog(ctx, repo, tag)
+		if err != nil {
+			c.Warnings = append(c.Warnings, fmt.Sprintf(
+				"could not tell whether %s:%s is an operator catalog, treating it as an additional image: %v", repo, tag, err))
+		}
+		if err != nil || !isCatalog {
+			images = append(images, tag)
+			continue
+		}
 		m, err := g.Source.CatalogModel(ctx, repo, tag)
 		if err != nil {
 			return fmt.Errorf("reading catalog %s:%s: %w", repo, tag, err)
@@ -118,5 +122,11 @@ func (g *Generator) classify(ctx context.Context, c *Content, repo string, tags 
 		op.TargetCatalog = target
 		c.Operators = append(c.Operators, op)
 	}
+	imgs, n := buildAdditional(g.Host, repo, images)
+	for i := range imgs {
+		imgs[i].TargetRepo = target
+	}
+	c.AdditionalImages = append(c.AdditionalImages, imgs...)
+	*skipped += n
 	return nil
 }

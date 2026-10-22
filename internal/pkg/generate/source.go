@@ -70,8 +70,12 @@ func (s *RegistrySource) Repositories(ctx context.Context) ([]string, error) {
 	return repos, nil
 }
 
-// auth returns the stored credentials for Host, or anonymous when none exist.
+// auth returns the explicit registry token if set, else the stored credentials
+// for Host, or anonymous when none exist.
 func (s *RegistrySource) auth() authn.Authenticator { //nolint:ireturn // remote.WithAuth requires the interface
+	if s.SysCtx != nil && s.SysCtx.DockerBearerRegistryToken != "" {
+		return authn.FromConfig(authn.AuthConfig{RegistryToken: s.SysCtx.DockerBearerRegistryToken})
+	}
 	creds, err := dockerconfig.GetCredentials(s.SysCtx, s.Host)
 	if err != nil || creds == (types.DockerAuthConfig{}) {
 		return authn.Anonymous

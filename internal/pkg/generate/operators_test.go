@@ -24,7 +24,7 @@ func TestBuildOperator(t *testing.T) {
 	op := buildOperator("reg.example.com/redhat/redhat-operator-index:v4.16", model.Model{"foo": pkg})
 
 	assert.Equal(t, "reg.example.com/redhat/redhat-operator-index:v4.16", op.Catalog)
-	assert.True(t, op.Full)
+	assert.False(t, op.Full, "Full cannot be combined with version bounds")
 	assert.Equal(t, []v2alpha1.IncludePackage{{
 		Name: "foo",
 		Channels: []v2alpha1.IncludeChannel{
