@@ -8,6 +8,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
+// TestBuildAdditional checks tag ordering and separate handling of digest and signature tags.
 func TestBuildAdditional(t *testing.T) {
 	imgs, skipped := buildAdditional("reg.example.com", "ubi9/ubi", []string{
 		"latest", "9.4",
@@ -22,6 +23,7 @@ func TestBuildAdditional(t *testing.T) {
 	assert.Equal(t, 2, skipped, "digest-derived tags counted, signatures not")
 }
 
+// hex64 returns a deterministic digest-shaped tag fixture.
 func hex64() string {
 	s := ""
 	for len(s) < 64 {

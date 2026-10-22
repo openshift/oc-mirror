@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/operator-framework/operator-registry/alpha/model"
@@ -68,7 +70,7 @@ func (o *generateOptions) validate(args []string) (string, error) {
 	switch generate.OutputType(o.outputType) {
 	case generate.OutputISC, generate.OutputDISC, generate.OutputBoth:
 	default:
-		return "", fmt.Errorf("invalid --output-type %q, must be isc, disc or both", o.outputType)
+		return "", errors.New("invalid --output-type, must be isc, disc or both")
 	}
 	if len(args) < 1 {
 		return "", errors.New("the registry argument is required, for example docker://registry.example.com:5000")
@@ -91,19 +93,25 @@ func (o *generateOptions) validate(args []string) (string, error) {
 func (o *generateOptions) run(ctx context.Context, log clog.PluggableLoggerInterface, host string) error {
 	sysCtx, err := o.globalOpts.SrcImage.NewSystemContext()
 	if err != nil {
-		return err
+		return errors.New("could not configure registry access; check source authentication and TLS options")
 	}
 	src := &generate.RegistrySource{
 		Host:   host,
 		Repos:  o.repos,
 		SysCtx: sysCtx,
 		LoadCatalog: func(ctx context.Context, ref string) (model.Model, error) {
-			return list.DownloadCatalog(ctx, log, ref, *o.globalOpts)
+			opts := *o.globalOpts
+			opts.Stdout = io.Discard
+			// The copy layer also creates a logger from Global.LogLevel.
+			global := *opts.Global
+			global.LogLevel = "info"
+			opts.Global = &global
+			return list.DownloadCatalog(ctx, generateCatalogLogger{log}, ref, opts)
 		},
 	}
 	content, err := (&generate.Generator{Source: src, Host: host, Prefix: o.prefix}).Discover(ctx)
 	if err != nil {
-		return err
+		return errors.New("could not discover registry content; check registry access, catalog availability, and --repos")
 	}
 	// Warnings embed repository names and registry error text, so they go to the
 	// generated files only, not to the logs.
@@ -112,10 +120,30 @@ func (o *generateOptions) run(ctx context.Context, log clog.PluggableLoggerInter
 	}
 	paths, err := generate.WriteFiles(o.outputDir, content, generate.OutputType(o.outputType))
 	if err != nil {
-		return err
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("generated configuration already exists; use another --output-dir: %w", os.ErrExist)
+		}
+		return errors.New("could not write generated configuration; check --output-dir exists and is writable")
 	}
-	for _, p := range paths {
-		log.Info("wrote %s", p)
-	}
+	log.Info("wrote %d configuration files to --output-dir", len(paths))
 	return nil
 }
+
+// generateCatalogLogger suppresses catalog diagnostics containing registry identifiers.
+// The command reports discovery failures and warning counts separately.
+type generateCatalogLogger struct{ clog.PluggableLoggerInterface }
+
+// Error suppresses raw catalog errors.
+func (generateCatalogLogger) Error(string, ...interface{}) {}
+
+// Warn suppresses catalog warnings containing bundle identifiers.
+func (generateCatalogLogger) Warn(string, ...interface{}) {}
+
+// Info suppresses catalog progress containing image references.
+func (generateCatalogLogger) Info(string, ...interface{}) {}
+
+// Debug suppresses catalog paths and image references.
+func (generateCatalogLogger) Debug(string, ...interface{}) {}
+
+// Trace suppresses detailed catalog diagnostics.
+func (generateCatalogLogger) Trace(string, ...interface{}) {}

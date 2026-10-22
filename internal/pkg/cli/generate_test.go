@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
+// TestGenerateValidate checks accepted registry arguments and invalid flag combinations.
 func TestGenerateValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -103,4 +105,74 @@ func TestGenerateCommandArgs(t *testing.T) {
 		cmd.SilenceUsage, cmd.SilenceErrors = true, true
 		assert.ErrorContains(t, cmd.Execute(), "accepts 1 arg", "args %v", args)
 	}
+}
+
+// TestGenerateErrorsHideIdentifiers checks the CLI boundary does not expose input values.
+func TestGenerateErrorsHideIdentifiers(t *testing.T) {
+	o := &generateOptions{outputType: "private-customer-value"}
+	_, err := o.validate([]string{"docker://host"})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "private-customer-value")
+	global := &mirror.GlobalOptions{}
+	_, shared := mirror.SharedImageFlags()
+	_, dep := mirror.DeprecatedTLSVerifyFlags()
+	_, src := mirror.ImageSrcFlags(global, shared, dep, "src-", "screds")
+	o.globalOpts = &mirror.CopyOptions{Global: global, DeprecatedTLSVerify: dep, SrcImage: src}
+	err = o.run(context.Background(), clog.New("trace"), "private-customer/invalid")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "private-customer")
+}
+
+// generateRecordingLogger captures CLI diagnostics while retaining the logger interface.
+type generateRecordingLogger struct {
+	clog.PluggableLoggerInterface
+	messages []string
+}
+
+// Info records a formatted progress message.
+func (l *generateRecordingLogger) Info(msg string, args ...interface{}) {
+	l.messages = append(l.messages, fmt.Sprintf(msg, args...))
+}
+
+// Warn records a formatted warning count.
+func (l *generateRecordingLogger) Warn(msg string, args ...interface{}) {
+	l.messages = append(l.messages, fmt.Sprintf(msg, args...))
+}
+
+// TestGenerateOutputDiagnostics checks successful and failed writes hide output paths.
+func TestGenerateOutputDiagnostics(t *testing.T) {
+	t.Setenv("REGISTRY_AUTH_FILE", filepath.Join(t.TempDir(), "no-auth.json"))
+	srv := httptest.NewServer(registry.New())
+	defer srv.Close()
+	global := &mirror.GlobalOptions{}
+	_, shared := mirror.SharedImageFlags()
+	_, dep := mirror.DeprecatedTLSVerifyFlags()
+	flags, src := mirror.ImageSrcFlags(global, shared, dep, "src-", "screds")
+	require.NoError(t, flags.Set("src-tls-verify", "false"))
+	o := &generateOptions{outputType: "both", outputDir: t.TempDir(), globalOpts: &mirror.CopyOptions{Global: global, DeprecatedTLSVerify: dep, SrcImage: src}}
+	log := &generateRecordingLogger{PluggableLoggerInterface: clog.New("trace")}
+	host := strings.TrimPrefix(srv.URL, "http://")
+	require.NoError(t, o.run(context.Background(), log, host))
+	assert.NotContains(t, strings.Join(log.messages, "\n"), o.outputDir)
+	assert.NotContains(t, strings.Join(log.messages, "\n"), host)
+	err := o.run(context.Background(), log, host)
+	require.ErrorIs(t, err, os.ErrExist)
+	assert.NotContains(t, err.Error(), o.outputDir)
+	o.outputDir = filepath.Join(o.outputDir, "missing-private-directory")
+	err = o.run(context.Background(), log, host)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "missing-private-directory")
+}
+
+// TestGenerateCatalogLoggerSuppressesDetails checks all catalog log levels discard messages.
+func TestGenerateCatalogLoggerSuppressesDetails(t *testing.T) {
+	// A nil delegate would panic if any diagnostic were forwarded.
+	log := generateCatalogLogger{}
+	require.NotPanics(t, func() {
+		log.Error("private %s", "value")
+		log.Warn("private %s", "value")
+		log.Info("private %s", "value")
+		log.Debug("private %s", "value")
+		log.Trace("private %s", "value")
+	})
 }
