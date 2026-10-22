@@ -115,3 +115,26 @@ func TestInspectCtxDefaultsOSWithoutMutating(t *testing.T) {
 	assert.Equal(t, "windows", s.inspectCtx().OSChoice)
 	assert.Equal(t, "linux", (&RegistrySource{}).inspectCtx().OSChoice)
 }
+
+// TestRegistrySourceEnumerationUsesRegistryToken checks the explicit source
+// token is sent when listing repositories, not only for tag listing.
+func TestRegistrySourceEnumerationUsesRegistryToken(t *testing.T) {
+	inner := registry.New()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/_catalog" && r.Header.Get("Authorization") != "Bearer secret" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	host := strings.TrimPrefix(srv.URL, "http://")
+
+	_, err := (&RegistrySource{Host: host, SysCtx: testSysCtx()}).Repositories(context.Background())
+	require.Error(t, err, "without a token the registry refuses enumeration")
+
+	sc := testSysCtx()
+	sc.DockerBearerRegistryToken = "secret"
+	_, err = (&RegistrySource{Host: host, SysCtx: sc}).Repositories(context.Background())
+	require.NoError(t, err)
+}
