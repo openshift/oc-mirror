@@ -236,3 +236,13 @@ func TestDiscoverSkipsExactPrefix(t *testing.T) {
 		}
 	}
 }
+
+// TestDiscoverKeepsReleaseImagesWhenEqualToPrefix ensures release tags are still
+// collected when the prefix is the release-images repository itself.
+func TestDiscoverKeepsReleaseImagesWhenEqualToPrefix(t *testing.T) {
+	src := &fakeSource{tags: map[string][]string{"openshift/release-images": {"4.16.3-x86_64"}}}
+	c, err := (&Generator{Source: src, Host: "h", Prefix: "openshift/release-images"}).Discover(context.Background())
+	require.NoError(t, err)
+	require.Len(t, c.Platform.Channels, 1)
+	assert.Equal(t, "stable-4.16", c.Platform.Channels[0].Name)
+}
