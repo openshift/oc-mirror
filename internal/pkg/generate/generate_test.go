@@ -246,3 +246,52 @@ func TestDiscoverKeepsReleaseImagesWhenEqualToPrefix(t *testing.T) {
 	require.Len(t, c.Platform.Channels, 1)
 	assert.Equal(t, "stable-4.16", c.Platform.Channels[0].Name)
 }
+
+// TestDiscoverMixedTagsInOneRepository checks each tag is classified on its own:
+// a catalog must not be lost because another tag in the repository is an ordinary image.
+func TestDiscoverMixedTagsInOneRepository(t *testing.T) {
+	pkg := &model.Package{Name: "foo"}
+	pkg.Channels = map[string]*model.Channel{"stable": {Name: "stable", Package: pkg,
+		Bundles: map[string]*model.Bundle{"foo.v1": {Name: "foo.v1", Version: semver.MustParse("1.0.0")}}}}
+	src := &fakeSource{
+		tags:     map[string][]string{"team/idx": {"0-bundle", "v4.16"}},
+		catalogs: map[string]model.Model{"team/idx:v4.16": {"foo": pkg}},
+	}
+	c, err := (&Generator{Source: src, Host: "h"}).Discover(context.Background())
+	require.NoError(t, err)
+	require.Len(t, c.Operators, 1)
+	assert.Equal(t, "h/team/idx:v4.16", c.Operators[0].Catalog)
+	require.Len(t, c.AdditionalImages, 1)
+	assert.Equal(t, "h/team/idx:0-bundle", c.AdditionalImages[0].Name)
+}
+
+// TestDiscoverReleaseRootWarning checks a release repository that is not at the
+// destination root is flagged, because the release collector appends
+// openshift/release-images to the destination.
+func TestDiscoverReleaseRootWarning(t *testing.T) {
+	tests := []struct {
+		name, prefix, repo string
+		wantWarning        bool
+	}{
+		{"root matches prefix", "mirror", "mirror/openshift/release-images", false},
+		{"no prefix at registry root", "", "openshift/release-images", false},
+		{"partial prefix", "openshift", "openshift/release-images", true},
+		{"prefix above release root", "a", "a/b/openshift/release-images", true},
+		{"no prefix, nested root", "", "a/openshift/release-images", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := &fakeSource{tags: map[string][]string{tt.repo: {"4.14.1-x86_64"}}}
+			c, err := (&Generator{Source: src, Host: "h", Prefix: tt.prefix}).Discover(context.Background())
+			require.NoError(t, err)
+			require.Len(t, c.Platform.Channels, 1)
+			if tt.wantWarning {
+				assertWarningContaining(t, c.Warnings, "not at the destination root")
+				return
+			}
+			for _, w := range c.Warnings {
+				assert.NotContains(t, w, "destination root")
+			}
+		})
+	}
+}
