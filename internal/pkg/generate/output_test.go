@@ -14,6 +14,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 )
 
+// sampleContent returns representative release, operator, and additional-image content.
 func sampleContent() Content {
 	return Content{
 		Platform: v2alpha1.Platform{
@@ -30,6 +31,7 @@ func sampleContent() Content {
 	}
 }
 
+// TestWriteFilesRoundTrip checks both output kinds can be read back as configurations.
 func TestWriteFilesRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	paths, err := WriteFiles(dir, sampleContent(), OutputBoth)
@@ -58,6 +60,7 @@ func TestHeaderFlattensMultiLineWarnings(t *testing.T) {
 	assert.Contains(t, lines[1], "line one kind: Evil  line three")
 }
 
+// TestWriteFilesRefusesOverwrite checks an existing configuration remains untouched.
 func TestWriteFilesRefusesOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, ISCFileName)
@@ -69,6 +72,7 @@ func TestWriteFilesRefusesOverwrite(t *testing.T) {
 	assert.Equal(t, "mine", string(got), "user file must be untouched")
 }
 
+// TestWriteFilesBothLeavesNoPartialOutput checks an existing second target prevents writing the first.
 func TestWriteFilesBothLeavesNoPartialOutput(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, DISCFileName)
@@ -82,6 +86,7 @@ func TestWriteFilesBothLeavesNoPartialOutput(t *testing.T) {
 	assert.Equal(t, "mine", string(got), "user file must be untouched")
 }
 
+// TestWriteFilesEmptyContentStillParses checks empty discovery produces parseable configurations.
 func TestWriteFilesEmptyContentStillParses(t *testing.T) {
 	dir := t.TempDir()
 	paths, err := WriteFiles(dir, Content{}, OutputBoth)
@@ -92,6 +97,7 @@ func TestWriteFilesEmptyContentStillParses(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestWriteFilesExistsWrapsErrExist checks callers can identify output conflicts with errors.Is.
 func TestWriteFilesExistsWrapsErrExist(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ISCFileName), []byte("x"), 0o600))
