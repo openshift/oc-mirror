@@ -1,0 +1,18 @@
+---
+entries:
+- defaultChannel: beta
+  name: foo
+  schema: olm.package
+- entries:
+  - name: foo.v0.2.0
+    skipRange: <0.2.0
+    skips:
+    - foo.v0.1.1
+    - foo.v0.1.2
+  name: beta
+  package: foo
+  schema: olm.channel
+- image: localhost:5001/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0
+  schema: olm.bundle
+schema: olm.template.basic
+

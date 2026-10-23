@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"context"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,10 +31,8 @@ var _ = Describe("breakpoint resume", func() {
 		It("should complete successfully after being interrupted and resumed", SpecTimeout(5*time.Minute), func(specCtx SpecContext) {
 			iscPath := filepath.Join(iscDir, iscFile)
 
-			By("running mirrorToDisk with an early interruption")
-			interruptAfter := time.Duration(1+rand.Intn(2)) * time.Second // 1-2 seconds
-			GinkgoWriter.Printf("will interrupt after %v\n", interruptAfter)
-			interruptCtx, interruptCancel := context.WithTimeout(specCtx, interruptAfter)
+			By("running mirrorToDisk and interrupting it once it starts filling the cache")
+			interruptCtx, interruptCancel := interruptOnFirstCachedBlob(specCtx, cacheDir)
 			defer interruptCancel()
 
 			result, err := runner.MirrorToDisk(interruptCtx, iscPath, workDir, "--remove-signatures=true")
@@ -44,7 +41,7 @@ var _ = Describe("breakpoint resume", func() {
 			wasInterrupted := err != nil || result.ExitCode != 0
 			GinkgoWriter.Printf("first run interrupted: %v (err=%v, exitCode=%d)\n",
 				wasInterrupted, err, result.ExitCode)
-			Expect(wasInterrupted).To(BeTrue(), "expected the first run to be interrupted by the timeout")
+			Expect(wasInterrupted).To(BeTrue(), "expected the first run to be interrupted")
 
 			By("cleaning partial working directory state from the interrupted run")
 			entries, readErr := os.ReadDir(filepath.Join(workDir, dirWorkingDir))
@@ -116,3 +113,28 @@ var _ = Describe("breakpoint resume", func() {
 		})
 	})
 })
+
+// interruptOnFirstCachedBlob returns a context that is canceled as soon as a blob is
+// written to the local cache in cacheDir, to interrupt an oc-mirror run while it
+// copies images. Mirroring the local test images takes well under a second, so a
+// fixed delay can't reliably interrupt it.
+func interruptOnFirstCachedBlob(parent context.Context, cacheDir string) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	blobs := filepath.Join(cacheDir, "docker", "registry", "v2", "blobs", "sha256", "*", "*", "data")
+	go func() {
+		ticker := time.NewTicker(2 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if matches, _ := filepath.Glob(blobs); len(matches) > 0 {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return ctx, cancel
+}

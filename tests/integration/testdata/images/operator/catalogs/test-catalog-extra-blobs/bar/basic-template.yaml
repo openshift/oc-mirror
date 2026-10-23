@@ -1,0 +1,33 @@
+---
+entries:
+- defaultChannel: stable
+  name: bar
+  schema: olm.package
+- entries:
+  - name: bar.v0.1.0
+    skipRange: <0.1.0
+  - name: bar.v0.2.0
+    replaces: bar.v0.1.0
+    skipRange: <0.2.0
+    skips:
+    - bar.v0.1.0
+  - name: bar.v1.0.0
+    replaces: bar.v0.2.0
+    skipRange: <1.0.0
+  name: alpha
+  package: bar
+  schema: olm.channel
+- entries:
+  - name: bar.v1.0.0
+    skipRange: <1.0.0
+  name: stable
+  package: bar
+  schema: olm.channel
+- image: localhost:5001/oc-mirror/oc-mirror-dev:bar-bundle-v0.1.0
+  schema: olm.bundle
+- image: localhost:5001/oc-mirror/oc-mirror-dev:bar-bundle-v0.2.0
+  schema: olm.bundle
+- image: localhost:5001/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0
+  schema: olm.bundle
+schema: olm.template.basic
+

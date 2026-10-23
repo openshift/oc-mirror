@@ -1,0 +1,26 @@
+---
+entries:
+- defaultChannel: stable
+  name: baz
+  schema: olm.package
+- entries:
+  - name: baz.v1.0.0
+    skipRange: <1.0.0
+  - name: baz.v1.0.1
+    skipRange: <1.0.1
+    skips:
+    - baz.v1.0.0
+  - name: baz.v1.1.0
+    replaces: baz.v1.0.1
+    skipRange: <1.1.0
+  name: stable
+  package: baz
+  schema: olm.channel
+- image: localhost:5001/oc-mirror/oc-mirror-dev:baz-bundle-v1.0.0
+  schema: olm.bundle
+- image: localhost:5001/oc-mirror/oc-mirror-dev:baz-bundle-v1.0.1
+  schema: olm.bundle
+- image: localhost:5001/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0
+  schema: olm.bundle
+schema: olm.template.basic
+

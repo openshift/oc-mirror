@@ -10,11 +10,11 @@ Convert a manual test case description into a Ginkgo v2 integration test for the
 
 ## Test Images
 
-These are minimal images we generated and host ourselves to keep tests fast and self-contained, avoiding dependencies on external images that might change frequently.
+These are minimal images built from the repository at the start of each test session and served by a local source registry, to keep tests fast and self-contained. Tests must not depend on remote registries: add any new image to `tests/integration/pkg/testimages` instead.
 
-- Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest`
-- Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
-- Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
+- Catalog: `localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest`, built from `tests/integration/testdata/images` and served by the suite's session-wide source registry (see `tests/integration/testdata/images/README.md`). To change test catalogs or bundles, edit their sources there.
+- Release: `localhost:5001/oc-mirror/release/test-release-index:v0.0.1` (built from `tests/integration/testdata/images/release`)
+- Additional: `localhost:5001/oc-mirror/multi-platform-image:latest` and the other synthetic images listed in `tests/integration/testdata/images/README.md`
 
 ## Step-by-step process
 

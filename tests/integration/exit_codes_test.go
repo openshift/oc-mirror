@@ -58,7 +58,7 @@ var _ = Describe("exit codes", func() {
 		expectOcMirrorExitCode(result, err, 8,
 			"some errors occurred during the mirroring",
 			"registry.invalid.example.com/nonexistent/image:latest",
-			"quay.io/nonexistent-org/nonexistent-image:v1.0.0",
+			"localhost:5001/nonexistent/image:v1.0.0",
 		)
 	})
 

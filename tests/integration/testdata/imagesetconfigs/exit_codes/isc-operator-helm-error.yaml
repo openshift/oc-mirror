@@ -6,7 +6,7 @@ mirror:
       packages:
         - name: nonexistent-operator
   additionalImages:
-    - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+    - name: localhost:5001/unsigned/docker-manifest-list@{{ digest "unsigned/docker-manifest-list:latest" }}
   helm:
     local:
       - name: nonexistent-chart
