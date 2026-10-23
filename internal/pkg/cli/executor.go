@@ -719,11 +719,36 @@ validation:
 		return &configuration.Configuration{}, fmt.Errorf("error parsing the config template %v", err)
 	}
 
-	config, err := configuration.Parse(bytes.NewReader(buff.Bytes()))
+	var config *configuration.Configuration
+	err = withoutRegistryAuthFile(func() error {
+		parsed, parseErr := configuration.Parse(bytes.NewReader(buff.Bytes()))
+		config = parsed
+		return parseErr
+	})
 	if err != nil {
 		return &configuration.Configuration{}, fmt.Errorf("error parsing local storage configuration : %v", err)
 	}
 	return config, nil
+}
+
+// withoutRegistryAuthFile unsets REGISTRY_AUTH_FILE while fn runs, then restores it.
+//
+// distribution/distribution configuration.Parse treats every REGISTRY_* environment
+// variable as a YAML override of the registry config. REGISTRY_AUTH_FILE is a
+// Podman/containers convention pointing at an auth.json path, not a distribution
+// setting; leaving it set causes YAML unmarshal to fail and the local registry
+// to panic with "StorageDriver not registered".
+func withoutRegistryAuthFile(fn func() error) error {
+	authFile, hadAuthFile := os.LookupEnv("REGISTRY_AUTH_FILE")
+	if hadAuthFile {
+		if err := os.Unsetenv("REGISTRY_AUTH_FILE"); err != nil {
+			return fmt.Errorf("unable to unset REGISTRY_AUTH_FILE for local registry config: %w", err)
+		}
+		defer func() {
+			_ = os.Setenv("REGISTRY_AUTH_FILE", authFile)
+		}()
+	}
+	return fn()
 }
 
 // setupLocalStorage - private function that sets up
@@ -732,6 +757,7 @@ func (o *ExecutorSchema) setupLocalStorage(ctx context.Context) error {
 	config, err := o.setupLocalRegistryConfig()
 	if err != nil {
 		o.Log.Error("parsing config %v", err)
+		return fmt.Errorf("parsing local storage configuration: %w", err)
 	}
 	// prepare the logger
 	registryLogPath := filepath.Join(o.LogsDir, fmt.Sprintf("registry-%s.log", o.MirrorStartTimeStamp))
