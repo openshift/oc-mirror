@@ -1,11 +1,49 @@
 package mirror
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"go.podman.io/common/pkg/flag"
 )
+
+func TestCommandTimeoutContextUsesParentCancellation(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	ctx, cancelTimeout := (&GlobalOptions{}).CommandTimeoutContext(parent)
+	defer cancelTimeout()
+
+	cancelParent()
+	if err := ctx.Err(); err != context.Canceled {
+		t.Fatalf("expected parent cancellation, got %v", err)
+	}
+}
+
+func TestCommandTimeoutContextPreservesTimeout(t *testing.T) {
+	ctx, cancelTimeout := (&GlobalOptions{CommandTimeout: 10 * time.Millisecond}).CommandTimeoutContext(context.Background())
+	defer cancelTimeout()
+
+	select {
+	case <-ctx.Done():
+		if err := ctx.Err(); err != context.DeadlineExceeded {
+			t.Fatalf("expected timeout cancellation, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("command timeout did not expire")
+	}
+}
+
+func TestCommandTimeoutContextWithoutTimeoutUsesParent(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	ctx, cancelTimeout := (&GlobalOptions{}).CommandTimeoutContext(parent)
+	defer cancelTimeout()
+
+	cancelParent()
+	if err := ctx.Err(); err != context.Canceled {
+		t.Fatalf("expected parent cancellation without timeout, got %v", err)
+	}
+}
 
 func TestOptionsNewContext(t *testing.T) {
 

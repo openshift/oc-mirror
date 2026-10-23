@@ -165,6 +165,14 @@ func TestMirrorCheck(t *testing.T) {
 		_, err := m.Check(context.Background(), "broken", &opts, false)
 		assert.Equal(t, "invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
+
+	t.Run("Testing Mirror : canceled check should return cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := m.Check(ctx, dest, &opts, false)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 // TestMirrorDelete
