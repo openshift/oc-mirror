@@ -78,6 +78,10 @@ type Delete struct {
 	AdditionalImages []AdditionalImage `json:"additionalImages,omitempty"`
 	// Helm define the configuration for Helm content types.
 	Helm Helm `json:"helm,omitempty,omitzero"`
+	// BlockedImages define a list of images that will be blocked
+	// from the delete generation process if they exist in other content
+	// types in the configuration.
+	BlockedImages []BlockedImage `json:"blockedImages,omitempty"`
 	// Samples defines the configuration for Sample content types.
 	// This is currently not implemented.
 	Samples []SampleImage `json:"samples,omitempty"`
