@@ -38,6 +38,7 @@ type DeleteImages struct {
 	Config           v2alpha1.ImageSetConfiguration
 	Manifest         manifest.ManifestInterface
 	SigHandler       signature.SignatureInterface
+	DestSigHandler   signature.SignatureInterface
 	LocalStorageDisk string
 	LocalStorageFQDN string
 }
@@ -169,28 +170,12 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			continue
 		}
 		deleteDestBase := name[1]
-		// Release content is always mirrored to standardized paths and Platform type does not support targetRepo/tag.
-		// For these types, we use strict equality checking with the expected paths.
-		// For other types that support targetRepo/targetTag, we only verify the image is under the correct
-		// registry tree for flexibility needed with targetRepo/targetTag.
-		switch img.Type {
-		case v2alpha1.TypeOCPReleaseContent:
-			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		case v2alpha1.TypeOCPRelease:
-			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		default:
-			if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
-				continue
-			}
+		// Phase two uses the references recorded in phase one, without the original
+		// configuration. All image types can use custom repositories, so validate
+		// that each reference stays inside the requested registry/namespace tree.
+		if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
+			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
+			continue
 		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
@@ -272,6 +257,11 @@ func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImage
 	}
 
 	sigs, err := o.SigHandler.GetSignatureTag(ctx, img.Source)
+	if err != nil && o.DestSigHandler != nil {
+		// m2m does not cache release images. Inspect the mirrored image so tagged
+		// payloads and components still have their signature tags discovered.
+		sigs, err = o.DestSigHandler.GetSignatureTag(ctx, img.Destination)
+	}
 	if err != nil {
 		item := o.getSignatureTagWithoutCache(img)
 		if item != nil {
