@@ -6,14 +6,22 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
 )
+
+// GraphImageReference returns the graph image reference for a destination registry
+// and optional namespace, without a transport prefix.
+func GraphImageReference(destination string) string {
+	return path.Join(destination, graphImageName) + ":" + graphImageTag
+}
 
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
@@ -55,7 +63,15 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 	cmd := []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", buildGraphDataDir, graphDataMountPath)}
 
 	// update a ubi9 image with this new graphLayer and new cmd
-	graphImageRef := filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
+	graphImageRef := GraphImageReference(o.destinationRegistry())
+	// This push happens before batch processing, so apply the destination limit here.
+	// The mirror-to-disk cache path must remain unchanged for disk-to-mirror.
+	if o.Opts.IsMirrorToMirror() && o.Opts.Global.MaxNestedPaths > 0 {
+		graphImageRef, err = image.WithMaxNestedPaths(graphImageRef, o.Opts.Global.MaxNestedPaths)
+		if err != nil {
+			return "", err
+		}
+	}
 	_, err = o.ImageBuilder.BuildAndPush(ctx, graphImageRef, layoutPath, cmd, graphLayer)
 	if err != nil {
 		return "", err

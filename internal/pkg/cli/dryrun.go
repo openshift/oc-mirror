@@ -69,7 +69,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 
 	// Generate cluster resources in dry-run mode (skip for mirror-to-disk since target registry is unknown)
 	if !o.Opts.IsMirrorToDisk() {
-		if err := o.generateClusterResources(ctx, allImages); err != nil {
+		if err := o.generateClusterResources(allImages); err != nil {
 			o.Log.Warn("Cluster resources generation failed (dry-run mode): %v", err)
 		}
 	}

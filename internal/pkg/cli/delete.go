@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -207,7 +208,7 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
-	o.Opts.LocalStorageFQDN = localStorageHost + ":" + strconv.Itoa(int(o.Opts.Global.Port))
+	o.Opts.LocalStorageFQDN = net.JoinHostPort(localStorageHost, strconv.Itoa(int(o.Opts.Global.Port)))
 
 	// ensure mirror and batch worker use delete logic
 	o.Opts.Function = string(mirror.DeleteMode)

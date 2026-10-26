@@ -18,7 +18,7 @@ type (
 
 var (
 	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
-	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
+	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete, validateReleaseTargetRepoDelete}
 )
 
 // Validate will check an ImagesetConfiguration for input errors.
@@ -142,9 +142,12 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 	return nil
 }
 
-// validateReleasePlatformFields ensures that platform.platforms and platform.architectures
-// are not used together — they are mutually exclusive.
+// validateReleasePlatformFields validates the destination repository and ensures
+// that platform.platforms and platform.architectures are mutually exclusive.
 func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
+	if err := validatePlatformTargetRepo(cfg.Mirror.Platform.TargetRepo); err != nil {
+		return []error{err}
+	}
 	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity
 	if len(cfg.Mirror.Platform.Platforms) > 0 && len(cfg.Mirror.Platform.Architectures) > 0 {
 		return []error{fmt.Errorf(
@@ -153,6 +156,17 @@ func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error 
 		)}
 	}
 	return nil
+}
+
+func validatePlatformTargetRepo(repo string) error {
+	if repo != "" && (len(repo) > 255 || !v2alpha1.IsValidPathComponent(repo)) {
+		return fmt.Errorf("platform.targetRepo %q must be a lowercase repository path of at most 255 characters without a transport, tag, or digest", repo)
+	}
+	return nil
+}
+
+func validateReleaseTargetRepoDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
+	return validatePlatformTargetRepo(cfg.Delete.Platform.TargetRepo)
 }
 
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {
