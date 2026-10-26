@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vbauerster/mpb/v8"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"

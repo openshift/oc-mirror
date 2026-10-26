@@ -59,37 +59,56 @@ func excludeRelatedImagesSharedWithSiblingBundles(
 		return deleteRelated
 	}
 
-	deleteBundles := make(map[string]struct{}, len(deleteDC.Bundles))
-	deleteBundleImages := make(map[string]struct{}, len(deleteDC.Bundles))
-	for _, b := range deleteDC.Bundles {
-		deleteBundles[b.Name] = struct{}{}
-		deleteBundleImages[b.Image] = struct{}{}
+	deleteBundles, deleteBundleImages := deleteBundleIdentity(deleteDC)
+	keepImages := siblingKeepImages(packageWideDC, deleteBundles)
+	if len(keepImages) == 0 {
+		return deleteRelated
 	}
+	return filterSharedRelatedImages(log, deleteRelated, deleteBundleImages, keepImages)
+}
 
-	keepImages := make(map[string]struct{})
+func deleteBundleIdentity(dc *declcfg.DeclarativeConfig) (names, images map[string]struct{}) {
+	names = make(map[string]struct{}, len(dc.Bundles))
+	images = make(map[string]struct{}, len(dc.Bundles))
+	for _, b := range dc.Bundles {
+		names[b.Name] = struct{}{}
+		images[b.Image] = struct{}{}
+	}
+	return names, images
+}
+
+func siblingKeepImages(packageWideDC *declcfg.DeclarativeConfig, deleteBundles map[string]struct{}) map[string]struct{} {
+	keep := make(map[string]struct{})
 	for _, b := range packageWideDC.Bundles {
 		if _, deleting := deleteBundles[b.Name]; deleting {
 			continue
 		}
 		for _, ri := range b.RelatedImages {
-			keepImages[ri.Image] = struct{}{}
+			keep[ri.Image] = struct{}{}
 		}
 	}
-	if len(keepImages) == 0 {
-		return deleteRelated
-	}
+	return keep
+}
 
+func mustKeepInDeleteSet(img v2alpha1.RelatedImage, deleteBundleImages map[string]struct{}) bool {
+	if img.Type == v2alpha1.TypeOperatorBundle || img.Image == "" {
+		return true
+	}
+	_, isBundleImg := deleteBundleImages[img.Image]
+	return isBundleImg
+}
+
+func filterSharedRelatedImages(
+	log clog.PluggableLoggerInterface,
+	deleteRelated map[string][]v2alpha1.RelatedImage,
+	deleteBundleImages, keepImages map[string]struct{},
+) map[string][]v2alpha1.RelatedImage {
 	filtered := make(map[string][]v2alpha1.RelatedImage, len(deleteRelated))
 	skipped := 0
 	for bundleName, images := range deleteRelated {
 		kept := make([]v2alpha1.RelatedImage, 0, len(images))
 		for _, img := range images {
-			// Always delete the bundle manifest for the targeted version.
-			if img.Type == v2alpha1.TypeOperatorBundle || img.Image == "" {
-				kept = append(kept, img)
-				continue
-			}
-			if _, isBundleImg := deleteBundleImages[img.Image]; isBundleImg {
+			if mustKeepInDeleteSet(img, deleteBundleImages) {
 				kept = append(kept, img)
 				continue
 			}
