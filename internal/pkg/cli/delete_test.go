@@ -184,7 +184,7 @@ func TestExecutorCompleteDelete(t *testing.T) {
 		deleteDirPath := filepath.Join(workingDirPath, deleteSubDir)
 		assert.NoError(t, os.MkdirAll(deleteDirPath, 0o755))
 		deleteYamlPath := filepath.Join(deleteDirPath, "delete-images.yaml")
-		assert.NoError(t, os.WriteFile(deleteYamlPath, []byte("kind: DeleteImageList\n"), 0o644))
+		assert.NoError(t, os.WriteFile(deleteYamlPath, []byte("kind: DeleteImageList\n"), 0o600))
 
 		opts.Global.DeleteGenerate = false
 		opts.Global.DeleteYaml = deleteYamlPath
@@ -213,7 +213,7 @@ func TestWorkingDirFromDeleteYaml(t *testing.T) {
 		root := t.TempDir()
 		yamlPath := filepath.Join(root, "workspace", workingDir, deleteSubDir, "delete-images.yaml")
 		assert.NoError(t, os.MkdirAll(filepath.Dir(yamlPath), 0o755))
-		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o644))
+		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o600))
 
 		got, err := workingDirFromDeleteYaml(yamlPath)
 		assert.NoError(t, err)
@@ -224,7 +224,7 @@ func TestWorkingDirFromDeleteYaml(t *testing.T) {
 		root := t.TempDir()
 		yamlPath := filepath.Join(root, workingDir, deleteSubDir, "delete-images-delete1-test.yaml")
 		assert.NoError(t, os.MkdirAll(filepath.Dir(yamlPath), 0o755))
-		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o644))
+		assert.NoError(t, os.WriteFile(yamlPath, []byte("x"), 0o600))
 
 		got, err := workingDirFromDeleteYaml(yamlPath)
 		assert.NoError(t, err)
