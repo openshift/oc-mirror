@@ -373,6 +373,12 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 	}
 	testCases := []testCase{
 		{
+			caseName:       "WithMaxNestedPaths(1) : should pass",
+			imgRef:         "docker://mirror.example.com/openshift/graph-image:latest",
+			maxNestedPaths: 1,
+			expectedOutRef: "docker://mirror.example.com/openshift-graph-image:latest",
+		},
+		{
 			caseName:       "WithMaxNestedPaths(2) : should pass",
 			imgRef:         "myregistry.mydomain/ocpbugs-11922/mirror-release/gitlab-org/ci-cd/gitlab-runner-ubi-images/gitlab-runner-helper-ocp@sha256:db870970ba330193164dacc88657df261d75bce1552ea474dbc7cf08b2fae2ed",
 			maxNestedPaths: 2,
@@ -434,6 +440,8 @@ func TestImage_TestWithMaxNestedPaths(t *testing.T) {
 				}
 			} else {
 				require.Equal(t, aTestCase.expectedOutRef, outRef)
+				_, err = ParseRef(outRef)
+				require.NoError(t, err)
 			}
 		})
 	}

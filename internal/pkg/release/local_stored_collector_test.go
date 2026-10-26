@@ -272,7 +272,7 @@ func TestGraphImage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("should pass")
 		}
-		assert.Equal(t, ex.Opts.Destination+"/"+graphImageName+":latest", res)
+		assert.Equal(t, ex.Opts.Destination+"/openshift/graph-image:latest", res)
 	})
 }
 
