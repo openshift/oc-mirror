@@ -12,13 +12,16 @@ import (
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-// imageTimeoutHint clarifies that context deadline exceeded during mirroring
-// is often resolved by raising --image-timeout (OCPBUGS-111840).
-const imageTimeoutHint = " hint: image mirroring timed out (context deadline exceeded). " +
-	"Large images often need a higher --image-timeout " +
-	"(default 10m0s)."
+// imageTimeoutHint is built from DefaultImageTimeout so the hint stays
+// aligned with the --image-timeout flag default (OCPBUGS-111840).
+func imageTimeoutHint() string {
+	return " hint: image mirroring timed out (context deadline exceeded). " +
+		"Retry with a higher --image-timeout (default " +
+		mirror.DefaultImageTimeout.String() + ")."
+}
 
 type BatchError struct {
 	source                 error
@@ -95,7 +98,7 @@ func annotateImageTimeoutError(err error) string {
 	}
 	if errors.Is(err, context.DeadlineExceeded) ||
 		strings.Contains(strings.ToLower(msg), "context deadline exceeded") {
-		return msg + imageTimeoutHint
+		return msg + imageTimeoutHint()
 	}
 	return msg
 }

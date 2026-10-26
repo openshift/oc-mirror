@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
 func TestAnnotateImageTimeoutError(t *testing.T) {
@@ -20,7 +21,8 @@ func TestAnnotateImageTimeoutError(t *testing.T) {
 		got := annotateImageTimeoutError(context.DeadlineExceeded)
 		assert.Contains(t, got, "context deadline exceeded")
 		assert.Contains(t, got, "--image-timeout")
-		assert.Contains(t, got, "10m0s")
+		assert.Contains(t, got, mirror.DefaultImageTimeout.String())
+		assert.NotContains(t, got, "Large images")
 	})
 
 	t.Run("wrapped writing blob deadline exceeded gets hint", func(t *testing.T) {
@@ -30,7 +32,8 @@ func TestAnnotateImageTimeoutError(t *testing.T) {
 			context.DeadlineExceeded)
 		got := annotateImageTimeoutError(err)
 		assert.Contains(t, got, "--image-timeout")
-		assert.Contains(t, got, "10m0s")
+		assert.Contains(t, got, mirror.DefaultImageTimeout.String())
+		assert.NotContains(t, got, "Large images")
 	})
 
 	t.Run("unrelated errors unchanged", func(t *testing.T) {
@@ -41,7 +44,7 @@ func TestAnnotateImageTimeoutError(t *testing.T) {
 
 	t.Run("already annotated errors are not doubled", func(t *testing.T) {
 		t.Parallel()
-		msg := "context deadline exceeded" + imageTimeoutHint
+		msg := "context deadline exceeded" + imageTimeoutHint()
 		got := annotateImageTimeoutError(errors.New(msg))
 		assert.Equal(t, msg, got)
 	})
