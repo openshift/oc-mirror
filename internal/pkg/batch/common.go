@@ -16,14 +16,10 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
-// unauthorizedBlobUploadHint clarifies that destination unauthorized during blob
-// upload can mean either push auth/permissions or nested-path limits — distinct remediations.
-const unauthorizedBlobUploadHint = " hint: destination registry returned unauthorized while uploading a blob. " +
-	"This commonly means missing or insufficient push credentials/permissions for the destination repository path — " +
-	"verify destination auth and push rights (not only source pull credentials). " +
-	"Separately, some destination registries reject deep nested repository paths with the same unauthorized response; " +
-	"that case is unrelated to credentials and is addressed with --max-nested-paths. " +
-	"Treat push auth/permissions and nested-path limits as separate remediations."
+// unauthorizedBlobUploadHint is a short per-image note. Destination unauthorized
+// during blob upload can mean missing push credentials/permissions or a nested-path
+// limit; those need different remediations.
+const unauthorizedBlobUploadHint = " hint: check destination push credentials/permissions, or use --max-nested-paths for deep paths."
 
 type BatchError struct {
 	source                 error
@@ -128,6 +124,7 @@ func isUnauthorizedOrDenied(err error, lower string) bool {
 func isBlobUploadFailure(lower string) bool {
 	return strings.Contains(lower, "unable to upload blob") ||
 		strings.Contains(lower, "uploading blob") ||
+		strings.Contains(lower, "writing blob") ||
 		strings.Contains(lower, "pushing blob") ||
 		strings.Contains(lower, "error uploading layer")
 }

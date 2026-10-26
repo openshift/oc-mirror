@@ -20,7 +20,9 @@ func TestAnnotateUnauthorizedUploadError(t *testing.T) {
 	assert.Contains(t, annotated, blobUnauthorized.Error())
 	assert.Contains(t, annotated, "push credentials/permissions")
 	assert.Contains(t, annotated, "--max-nested-paths")
-	assert.Contains(t, annotated, "separate remediations")
+
+	writingBlob := errors.New("error writing blob sha256:deadbeef: unauthorized: access to the requested resource is not authorized")
+	assert.Contains(t, annotateUnauthorizedUploadError(writingBlob), "--max-nested-paths")
 
 	plainUnauthorized := errors.New("unauthorized: unauthorized")
 	assert.Equal(t, plainUnauthorized.Error(), annotateUnauthorizedUploadError(plainUnauthorized))

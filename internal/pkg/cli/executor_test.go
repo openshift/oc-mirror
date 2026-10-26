@@ -1125,10 +1125,9 @@ func TestExecutorCheckRegistryAccess(t *testing.T) {
 	})
 }
 
-func TestCheckRegistryPushAccess(t *testing.T) {
-	var seen []string
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = append(seen, r.Method+" "+r.URL.Path)
+func recordRegistryProbe(seen *[]string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.Method+" "+r.URL.Path)
 		switch {
 		case r.URL.Path == "/v2/" || r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -1142,7 +1141,12 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
-	}))
+	})
+}
+
+func TestCheckRegistryPushAccess(t *testing.T) {
+	var seen []string
+	ts := httptest.NewServer(recordRegistryProbe(&seen))
 	t.Cleanup(ts.Close)
 
 	host := strings.TrimPrefix(ts.URL, "http://")
@@ -1163,7 +1167,7 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 	joined := strings.Join(seen, "\n")
 	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
 		"push check should probe with HEAD or POST, got:\n%s", joined)
-	assert.Contains(t, joined, "/oc-mirror")
+	assert.Contains(t, joined, "/"+pushAccessProbeRepo)
 }
 
 // setup mocks

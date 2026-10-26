@@ -468,18 +468,23 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 
 	o.Log.Info("Verified we can authenticate against registry %q", registry)
 
-	if err := o.checkRegistryPushAccess(ctx, authConfig, registry); err != nil {
+	if err := o.checkRegistryPushAccess(ctx, authConfig, reg); err != nil {
 		return err
 	}
 	return nil
 }
 
+// pushAccessProbeRepo is a dummy single-path repository used only for
+// go-containerregistry CheckPushPermission. It is not created or mirrored.
+// A shallow probe distinguishes missing push auth from later unauthorized
+// errors on deep nested destination repositories.
+const pushAccessProbeRepo = "oc-mirror"
+
 // checkRegistryPushAccess confirms destination push rights with a HEAD-based
 // probe on a shallow repository. If this succeeds, later unauthorized blob
 // uploads on deep repository paths are nested-path limits, not missing push auth.
-func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, registry string) error {
-	host := strings.SplitN(registry, "/", 2)[0]
-	probe := host + "/oc-mirror"
+func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, registryHost string) error {
+	probe := registryHost + "/" + pushAccessProbeRepo
 
 	var nameOpts []name.Option
 	rt := remote.DefaultTransport
@@ -502,7 +507,7 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
 	}
 
-	o.Log.Info("Verified we can push to registry %q", host)
+	o.Log.Info("Verified we can push to registry %q", registryHost)
 	return nil
 }
 
@@ -510,6 +515,7 @@ type pushAccessKeychain struct {
 	cfg authn.AuthConfig
 }
 
+//nolint:ireturn // authn.Keychain.Resolve must return authn.Authenticator
 func (k pushAccessKeychain) Resolve(_ authn.Resource) (authn.Authenticator, error) {
 	if k.cfg.Username == "" && k.cfg.Password == "" && k.cfg.IdentityToken == "" && k.cfg.RegistryToken == "" {
 		return authn.Anonymous, nil
