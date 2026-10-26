@@ -3,10 +3,14 @@ package release
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -17,6 +21,72 @@ import (
 
 type mockImageBuilder struct {
 	Fail bool
+}
+
+func TestGraphImageReference(t *testing.T) {
+	for _, tc := range []struct {
+		destination, expected string
+	}{
+		{"mirror.example.com", "mirror.example.com/openshift/graph-image:latest"},
+		{"mirror.example.com/team", "mirror.example.com/team/openshift/graph-image:latest"},
+		{"localhost:55000", "localhost:55000/openshift/graph-image:latest"},
+	} {
+		t.Run(tc.destination, func(t *testing.T) {
+			if got := GraphImageReference(tc.destination); got != tc.expected {
+				t.Errorf("GraphImageReference(%q) = %q, want %q", tc.destination, got, tc.expected)
+			}
+		})
+	}
+}
+
+type recordingGraphImageBuilder struct {
+	mockImageBuilder
+	targetRef string
+}
+
+func (b *recordingGraphImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layoutPath layout.Path, cmd []string, layers ...v1.Layer) (string, error) {
+	b.targetRef = targetRef
+	return b.mockImageBuilder.BuildAndPush(ctx, targetRef, layoutPath, cmd, layers...)
+}
+
+func TestCreateGraphImageDestinations(t *testing.T) {
+	data, err := os.ReadFile(consts.TestFolder + "graph-assets/graph-data.tar.gz")
+	require.NoError(t, err)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+
+	for _, tc := range []struct {
+		name, mode, expected string
+		limit                int
+	}{
+		{"unlimited", mirror.MirrorToMirror, "mirror.example.com/team/openshift/graph-image:latest", 0},
+		{"within limit", mirror.MirrorToMirror, "mirror.example.com/team/openshift/graph-image:latest", 3},
+		{"flattened graph", mirror.MirrorToMirror, "mirror.example.com/team/openshift-graph-image:latest", 2},
+		{"single component", mirror.MirrorToMirror, "mirror.example.com/team-openshift-graph-image:latest", 1},
+		{"unflattened cache", mirror.MirrorToDisk, "localhost:55000/openshift/graph-image:latest", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := &recordingGraphImageBuilder{}
+			o := LocalStorageCollector{
+				ImageBuilder:     builder,
+				LocalStorageFQDN: "localhost:55000",
+				Opts: mirror.CopyOptions{
+					Mode:        tc.mode,
+					Destination: "docker://mirror.example.com/team",
+					Global:      &mirror.GlobalOptions{WorkingDir: t.TempDir(), MaxNestedPaths: tc.limit},
+				},
+			}
+			if tc.mode == mirror.MirrorToDisk {
+				o.Opts.Destination = "file://" + o.Opts.Global.WorkingDir
+			}
+			ref, err := o.CreateGraphImage(context.Background(), server.URL)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, builder.targetRef)
+			require.Equal(t, "docker://"+tc.expected, ref)
+		})
+	}
 }
 
 func TestCreateGraphImage(t *testing.T) {

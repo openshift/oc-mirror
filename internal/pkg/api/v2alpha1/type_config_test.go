@@ -6,6 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestPlatformDeepCopyTargetRepo(t *testing.T) {
+	for _, repo := range []string{"", "ocp-release", "openshift4/ocp-release", "team/release_images.v4/release--repo"} {
+		t.Run("repo="+repo, func(t *testing.T) {
+			platform := Platform{TargetRepo: repo}
+			assert.Equal(t, repo, platform.DeepCopy().TargetRepo)
+		})
+	}
+}
+
 func TestIsValidPathComponent(t *testing.T) {
 	tests := []struct {
 		name           string

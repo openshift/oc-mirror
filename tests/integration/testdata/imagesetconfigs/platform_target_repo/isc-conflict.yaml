@@ -1,0 +1,10 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    targetRepo: releases
+    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+  additionalImages:
+    - name: quay.io/oc-mirror/release/test-image:v0.0.1
+      targetRepo: releases
+      targetTag: v0.0.1
