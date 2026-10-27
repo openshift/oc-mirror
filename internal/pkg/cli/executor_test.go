@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1125,9 +1126,11 @@ func TestExecutorCheckRegistryAccess(t *testing.T) {
 	})
 }
 
-func recordRegistryProbe(seen *[]string) http.Handler {
+func recordRegistryProbe(mu *sync.Mutex, seen *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		*seen = append(*seen, r.Method+" "+r.URL.Path)
+		mu.Unlock()
 		switch {
 		case r.URL.Path == "/v2/" || r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -1145,8 +1148,11 @@ func recordRegistryProbe(seen *[]string) http.Handler {
 }
 
 func TestCheckRegistryPushAccess(t *testing.T) {
-	var seen []string
-	ts := httptest.NewServer(recordRegistryProbe(&seen))
+	var (
+		mu   sync.Mutex
+		seen []string
+	)
+	ts := httptest.NewServer(recordRegistryProbe(&mu, &seen))
 	t.Cleanup(ts.Close)
 
 	host := strings.TrimPrefix(ts.URL, "http://")
@@ -1163,8 +1169,11 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 
 	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, host)
 	assert.NoError(t, err)
+	ts.Close()
 
+	mu.Lock()
 	joined := strings.Join(seen, "\n")
+	mu.Unlock()
 	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
 		"push check should probe with HEAD or POST, got:\n%s", joined)
 	assert.Contains(t, joined, "/"+pushAccessProbeRepo)
