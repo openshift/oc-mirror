@@ -283,7 +283,7 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 		}
 	}
 
-	ctx, cancel := opts.Global.CommandTimeoutContext()
+	ctx, cancel := opts.Global.CommandTimeoutContextFrom(ctx)
 	defer cancel()
 
 	err = retry.IfNecessary(ctx, func() error {
