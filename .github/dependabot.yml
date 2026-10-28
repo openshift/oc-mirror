@@ -17,6 +17,11 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    # Exclude the test modules from this entry's manifest discovery so they
+    # are not updated with default (ungrouped) settings. They are managed by
+    # the dedicated entry below.
+    exclude-paths:
+      - "tests/**"
     open-pull-requests-limit: 10
     groups:
       k8s:
@@ -34,5 +39,29 @@ updates:
           - "sigs.k8s.io/*"
           - "github.com/openshift/*"
       oc-mirror-v2-security-updates:
+        applies-to: security-updates
+        patterns: [ "*" ]
+
+  # Configuration for the oc-mirror test modules (monthly updates).
+  # /tests/e2e and /tests/integration share the same groups so both modules'
+  # updates land together in one predictable PR per update type (version or
+  # security) instead of the default ungrouped "go_modules group across 2
+  # directories" updates.
+  - package-ecosystem: "gomod"
+    directories:
+      - "/tests/e2e"
+      - "/tests/integration"
+    schedule:
+      interval: "monthly"
+    # tests/integration/image-builders/release is a dependency-free fixture
+    # module; exclude it so nested manifest discovery never picks it up.
+    exclude-paths:
+      - "image-builders/release"
+    open-pull-requests-limit: 5
+    groups:
+      oc-mirror-tests-version-updates:
+        applies-to: version-updates
+        patterns: [ "*" ]
+      oc-mirror-tests-security-updates:
         applies-to: security-updates
         patterns: [ "*" ] 
