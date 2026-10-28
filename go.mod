@@ -7,7 +7,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/distribution/distribution/v3 v3.1.2
 	github.com/distribution/reference v0.6.0
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect; OCPBUGS-51217 - CVE-2025-27144, OCPBUGS-84389 - CVE-2026-34986
+	github.com/go-jose/go-jose/v4 v4.1.6 // indirect; OCPBUGS-51217 - CVE-2025-27144, OCPBUGS-84389 - CVE-2026-34986
 	github.com/google/go-containerregistry v0.22.0
 	github.com/google/uuid v1.6.0
 	github.com/microlib/simple v1.0.2
