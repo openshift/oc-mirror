@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/docker/distribution/registry/api/errcode"
+	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
@@ -105,6 +107,11 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		return fmt.Errorf("invalid destination name %s: %v", dest, err)
 	}
 
+	// Docker-to-docker copies keep GPG lookaside, but copy sha256-*.sig tags as
+	// ordinary images so PutSignatures cannot rebuild them (OCPBUGS-129492).
+	copySigstoreAttachments := !opts.RemoveSignatures &&
+		srcRef.DockerReference() != nil && destRef.DockerReference() != nil
+
 	sourceCtx, err := opts.SrcImage.NewSystemContext()
 	if err != nil {
 		return err
@@ -114,7 +121,9 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	if !opts.RemoveSignatures {
-		sourceCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.SrcImage.global.WorkingDir)
+		if err := applySignatureRegistriesDir(sourceCtx, opts.SrcImage.global.WorkingDir, copySigstoreAttachments); err != nil {
+			return err
+		}
 	}
 
 	destinationCtx, err := opts.DestImage.NewSystemContext()
@@ -127,7 +136,9 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	if !opts.RemoveSignatures {
-		destinationCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.DestImage.global.WorkingDir)
+		if err := applySignatureRegistriesDir(destinationCtx, opts.DestImage.global.WorkingDir, copySigstoreAttachments); err != nil {
+			return err
+		}
 	}
 
 	var manifestType string
@@ -229,8 +240,168 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
 			}
 		}
+		if copySigstoreAttachments {
+			if err := o.copySigstoreAttachmentTags(ctx, srcRef, destRef, manifestBytes, co); err != nil {
+				return err
+			}
+		}
 		return nil
 	}, retryOptionsFrom(opts))
+}
+
+// applySignatureRegistriesDir sets registries.d on ctx. When copySigstoreAttachments
+// is true the parent copy must not enable use-sigstore-attachments, or
+// PutSignatures rewrites sha256-*.sig (new config digest, dropped history).
+// Lookaside/GPG configuration is kept. See OCPBUGS-129492 / oc-mirror#1478.
+func applySignatureRegistriesDir(ctx *types.SystemContext, workingDir string, copySigstoreAttachments bool) error {
+	if copySigstoreAttachments {
+		dir, err := registriesd.PrepareLookasideOnlyDir(workingDir)
+		if err != nil {
+			return err
+		}
+		ctx.RegistriesDirPath = dir
+		return nil
+	}
+	ctx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(workingDir)
+	return nil
+}
+
+// copySigstoreAttachmentTags copies sha256-<digest>.sig tags from src to dest as
+// ordinary image copies (PreserveDigests), skipping digests with no attachment.
+//
+// Attachment tags are the signatures themselves and are not nested-signed, so a
+// SecurePolicy / sigstoreSigned PolicyContext would reject them. Copies use
+// insecureAcceptAnything while the parent image copy still uses the caller policy.
+func (o *Mirror) copySigstoreAttachmentTags(ctx context.Context, srcRef, destRef types.ImageReference, manifestBytes []byte, base *copy.Options) (retErr error) {
+	tags, err := sigstoreAttachmentTagsFromManifest(manifestBytes)
+	if err != nil {
+		return fmt.Errorf("listing sigstore attachment tags: %w", err)
+	}
+	if len(tags) == 0 {
+		return nil
+	}
+
+	attachmentPolicy := &signature.Policy{Default: []signature.PolicyRequirement{signature.NewPRInsecureAcceptAnything()}}
+	attachmentPolicyContext, err := signature.NewPolicyContext(attachmentPolicy)
+	if err != nil {
+		return fmt.Errorf("creating policy context for signature attachments: %w", err)
+	}
+	defer func() {
+		if err := attachmentPolicyContext.Destroy(); err != nil {
+			retErr = NoteCloseFailure(retErr, "tearing down attachment policy context", err)
+		}
+	}()
+
+	sigOpts := *base
+	sigOpts.RemoveSignatures = true
+	sigOpts.PreserveDigests = true
+	sigOpts.SignBy = ""
+	sigOpts.SignBySigstorePrivateKeyFile = ""
+	sigOpts.SignIdentity = nil
+	sigOpts.ForceManifestMIMEType = ""
+	sigOpts.ImageListSelection = copy.CopySystemImage
+	sigOpts.InstancePlatforms = nil
+	sigOpts.Instances = nil
+
+	for _, tag := range tags {
+		if err := o.copyOneSigstoreAttachment(ctx, attachmentPolicyContext, srcRef, destRef, tag, &sigOpts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copyOneSigstoreAttachment copies a single .sig tag. Missing attachments are skipped.
+func (o *Mirror) copyOneSigstoreAttachment(ctx context.Context, policyContext *signature.PolicyContext, srcRef, destRef types.ImageReference, tag string, sigOpts *copy.Options) error {
+	srcSig, err := dockerTaggedReference(srcRef, tag)
+	if err != nil {
+		return err
+	}
+	destSig, err := dockerTaggedReference(destRef, tag)
+	if err != nil {
+		return err
+	}
+	srcSigRef, err := alltransports.ParseImageName(srcSig)
+	if err != nil {
+		return fmt.Errorf("invalid signature source name %s: %w", srcSig, err)
+	}
+	destSigRef, err := alltransports.ParseImageName(destSig)
+	if err != nil {
+		return fmt.Errorf("invalid signature destination name %s: %w", destSig, err)
+	}
+	if _, err := o.mc.CopyImage(ctx, policyContext, destSigRef, srcSigRef, sigOpts); err != nil {
+		if isManifestUnknownError(err) {
+			return nil
+		}
+		return fmt.Errorf("copying signature attachment %s: %w", tag, err)
+	}
+	return nil
+}
+
+func sigstoreAttachmentTagsFromManifest(manifestBytes []byte) ([]string, error) {
+	if len(manifestBytes) == 0 {
+		return nil, nil
+	}
+	mimeType := manifest.GuessMIMEType(manifestBytes)
+	topDigest, err := manifest.Digest(manifestBytes)
+	if err != nil {
+		return nil, fmt.Errorf("digest of manifest: %w", err)
+	}
+	tags := []string{sigstoreAttachmentTag(topDigest)}
+	if !manifest.MIMETypeIsMultiImage(mimeType) {
+		return tags, nil
+	}
+	manifestList, err := manifest.ListFromBlob(manifestBytes, mimeType)
+	if err != nil {
+		return nil, fmt.Errorf("parse manifest list: %w", err)
+	}
+	for _, instanceDigest := range manifestList.Instances() {
+		tags = append(tags, sigstoreAttachmentTag(instanceDigest))
+	}
+	return tags, nil
+}
+
+func sigstoreAttachmentTag(d digest.Digest) string {
+	return strings.Replace(d.String(), ":", "-", 1) + ".sig"
+}
+
+func dockerTaggedReference(ref types.ImageReference, tag string) (string, error) {
+	dockerRef := ref.DockerReference()
+	if dockerRef == nil {
+		return "", fmt.Errorf("reference %q is not a docker reference", ref.StringWithinTransport())
+	}
+	tagged, err := reference.WithTag(reference.TrimNamed(dockerRef), tag)
+	if err != nil {
+		return "", fmt.Errorf("tag %q on %s: %w", tag, dockerRef.Name(), err)
+	}
+	return "docker://" + tagged.String(), nil
+}
+
+func isManifestUnknownError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ec errcode.ErrorCoder
+	if errors.As(err, &ec) && ec.ErrorCode() == errcodev2.ErrorCodeManifestUnknown {
+		return true
+	}
+	// registry.redhat.io (October 2022) and Harbor v2.10.2 return ErrorCodeUnknown
+	// instead of MANIFEST_UNKNOWN for a missing tag. Match the same shapes as
+	// containers/image docker.isManifestUnknownError so unsigned images from
+	// those registries still mirror.
+	var e errcode.Error
+	if errors.As(err, &e) && e.ErrorCode() == errcode.ErrorCodeUnknown {
+		if e.Message == "Not Found" || strings.Contains(strings.ToLower(e.Message), "not found") {
+			return true
+		}
+	}
+	var httpErr docker.UnexpectedHTTPStatusError
+	if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+		return true
+	}
+	// Narrow text fallback to the registry "manifest unknown" wording only.
+	// Broader "not found"+"manifest" matching can hide auth/path failures.
+	return strings.Contains(strings.ToLower(err.Error()), "manifest unknown")
 }
 
 // retryOptionsFrom returns a copy of the caller's retry options with oc-mirror's

@@ -72,6 +72,69 @@ func GetWorkingDirRegistrydConfigPath(workingDir string) string {
 	return filepath.Join(workingDir, containersSubPath, registriesDSubPath)
 }
 
+// GetWorkingDirLookasideOnlyRegistrydConfigPath is a sibling of the working-dir
+// registries.d that keeps lookaside/GPG settings but turns off sigstore
+// attachment handling.
+func GetWorkingDirLookasideOnlyRegistrydConfigPath(workingDir string) string {
+	return filepath.Join(workingDir, containersSubPath, registriesDSubPath+"-lookaside")
+}
+
+// PrepareLookasideOnlyDir writes a registries.d clone of the working-dir config
+// with use-sigstore-attachments forced off so copy.Image will not rebuild
+// sha256-*.sig tags via PutSignatures. Lookaside (GPG) entries are preserved.
+func PrepareLookasideOnlyDir(workingDir string) (string, error) {
+	src := GetWorkingDirRegistrydConfigPath(workingDir)
+	dst := GetWorkingDirLookasideOnlyRegistrydConfigPath(workingDir)
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return "", fmt.Errorf("error creating lookaside-only registries.d: %w", err)
+	}
+	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+		return dst, nil
+	} else if err != nil {
+		return "", fmt.Errorf("error reading registries.d %s: %w", src, err)
+	}
+
+	files, err := os.ReadDir(src)
+	if err != nil {
+		return "", fmt.Errorf("error reading registries.d %s: %w", src, err)
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		name := file.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		srcPath := filepath.Join(src, name)
+		cfg, err := parser.ParseYamlFile[registryConfiguration](srcPath)
+		if err != nil {
+			return "", fmt.Errorf("error parsing %s: %w", srcPath, err)
+		}
+		disableSigstoreAttachments(&cfg)
+		body, err := yaml.Marshal(cfg)
+		if err != nil {
+			return "", fmt.Errorf("error marshaling %s: %w", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dst, name), body, 0644); err != nil {
+			return "", fmt.Errorf("error writing %s: %w", name, err)
+		}
+	}
+	return dst, nil
+}
+
+func disableSigstoreAttachments(cfg *registryConfiguration) {
+	if cfg.DefaultDocker != nil {
+		ns := *cfg.DefaultDocker
+		ns.UseSigstoreAttachments = boolPtr(false)
+		cfg.DefaultDocker = &ns
+	}
+	for name, ns := range cfg.Docker {
+		ns.UseSigstoreAttachments = boolPtr(false)
+		cfg.Docker[name] = ns
+	}
+}
+
 func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydConfigPath string) error {
 	if err := os.MkdirAll(filepath.Dir(customRegistrydConfigPath), 0755); err != nil {
 		return fmt.Errorf("error creating folder %s %w", filepath.Dir(customRegistrydConfigPath), err)
