@@ -79,18 +79,6 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Destination: "docker://localhost:8888/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://curlimages/curl:7.69.0",
-					Destination: "docker://localhost:8888/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
 					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -110,12 +98,6 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-				{
-					Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Destination: consts.DockerProtocol + "localhost:8888/ingress-nginx/kube-webhook-certgen:sha256-e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
 					Destination: consts.DockerProtocol + "localhost:8888/ingress-nginx/kube-webhook-certgen:sha256-e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
@@ -143,18 +125,6 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Destination: "docker://localhost:8888/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://curlimages/curl:7.69.0",
-					Destination: "docker://localhost:8888/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
 					Origin:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -175,21 +145,9 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -199,21 +157,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -223,21 +169,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -247,21 +181,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -271,21 +193,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Destination: "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -308,18 +218,6 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-				{
-					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://curlimages/curl:7.69.0",
-					Destination: "docker://myreg:5000/test/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
@@ -347,12 +245,6 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Destination: "docker://myreg:5000/test/ingress-nginx/kube-webhook-certgen:v1.5.2",
-					Origin:      "docker://registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://registry.k8s.io/ingress-nginx/controller@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Destination: "docker://myreg:5000/test/ingress-nginx/controller:v1.12.1",
 					Origin:      "docker://registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
@@ -372,18 +264,6 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-				{
-					Source:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://curlimages/curl:7.69.0",
-					Destination: "docker://myreg:5000/test/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      "docker://ghcr.io/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
@@ -405,21 +285,9 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -429,21 +297,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -453,21 +309,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -477,21 +321,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -501,21 +333,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -539,18 +359,6 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-				{
-					Source:      "docker://localhost:8888/grpc_health_probe:v0.3.0",
-					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/curl:7.69.0",
-					Destination: "docker://myreg:5000/test/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
@@ -579,12 +387,6 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/kube-webhook-certgen:sha256-e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Destination: testDest + "/ingress-nginx/kube-webhook-certgen:v1.5.2",
-					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.5.2@sha256:e8825994b7a2c7497375a9b945f386506ca6a3eda80b89b74ef2db743f66a5ea",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/ingress-nginx/controller:sha256-d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
 					Destination: testDest + "/ingress-nginx/controller:v1.12.1",
 					Origin:      consts.DockerProtocol + "registry.k8s.io/ingress-nginx/controller:v1.12.1@sha256:d2fbc4ec70d8aa2050dd91a91506e998765e86c96f32cffb56c503c9c34eed5b",
@@ -605,18 +407,6 @@ func TestHelmImageCollector(t *testing.T) {
 			},
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
-				{
-					Source:      "docker://localhost:8888/grpc_health_probe:v0.3.0",
-					Destination: "docker://myreg:5000/test/grpc_health_probe:v0.3.0",
-					Origin:      "docker://stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/curl:7.69.0",
-					Destination: "docker://myreg:5000/test/curl:7.69.0",
-					Origin:      "docker://curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      "docker://localhost:8888/stefanprodan/podinfo:5.0.0",
 					Destination: "docker://myreg:5000/test/stefanprodan/podinfo:5.0.0",
@@ -639,21 +429,9 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: false,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -663,21 +441,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -687,21 +453,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -711,21 +465,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -735,21 +477,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -774,21 +504,9 @@ func TestHelmImageCollector(t *testing.T) {
 			generateV1DestTags: true,
 			expectedResult: []v2alpha1.CopyImageSchema{
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:16286ac84ddd521897d92472dae857a4c18479f255b725dfb683bc72df6e0865",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -798,21 +516,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:e4259939a496f292a31b5e57760196d63a8182b999164d93a446da48c4ea24eb",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -822,21 +528,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:67c2a2502f59fac1e7ded9ed19b59bbd4e50f5559a13978a87ecd2283b81e067",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -846,21 +540,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:f79f6999a15534dbe56e658caf94fc4b7afb5ceeb7b49f32a60ead06fbd7c3fc",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -870,21 +552,9 @@ func TestHelmImageCollector(t *testing.T) {
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      "docker://localhost:8888/redhat-developer/servicebinding-operator:sha256-cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
 					Destination: "docker://myreg:5000/test/redhat-developer/servicebinding-operator:latest",
 					Origin:      "docker://quay.io/redhat-developer/servicebinding-operator@sha256:cc5aab01ddd3744510c480eb4f58b834936a833d36bec5c9c13fb40bbb06c663",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      "docker://localhost:8888/service-binding/helm-chart-test:sha256-c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
-					Destination: "docker://myreg:5000/test/service-binding/helm-chart-test:latest",
-					Origin:      "docker://quay.io/service-binding/helm-chart-test@sha256:c050d71294c14b1a61ba9b71122bc82dd5f5cbf20a68c7ac07677e781a0b69a0",
 					Type:        v2alpha1.TypeHelmImage,
 				},
 				{
@@ -1305,18 +975,6 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 			diskVersion:   "v5.0.0",
 			expectedImages: []v2alpha1.CopyImageSchema{
 				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/grpc_health_probe:v0.3.0",
-					Destination: testDest + "/grpc_health_probe:v0.3.0",
-					Origin:      consts.DockerProtocol + "stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/curl:7.69.0",
-					Destination: testDest + "/curl:7.69.0",
-					Origin:      consts.DockerProtocol + "curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
 					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",
 					Origin:      consts.DockerProtocol + "ghcr.io/stefanprodan/podinfo:5.0.0",
@@ -1329,18 +987,6 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 			configVersion: "v5.0.0",
 			diskVersion:   "5.0.0",
 			expectedImages: []v2alpha1.CopyImageSchema{
-				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/grpc_health_probe:v0.3.0",
-					Destination: testDest + "/grpc_health_probe:v0.3.0",
-					Origin:      consts.DockerProtocol + "stefanprodan/grpc_health_probe:v0.3.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
-				{
-					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/curl:7.69.0",
-					Destination: testDest + "/curl:7.69.0",
-					Origin:      consts.DockerProtocol + "curlimages/curl:7.69.0",
-					Type:        v2alpha1.TypeHelmImage,
-				},
 				{
 					Source:      consts.DockerProtocol + testLocalStorageFQDN + "/stefanprodan/podinfo:5.0.0",
 					Destination: testDest + "/stefanprodan/podinfo:5.0.0",

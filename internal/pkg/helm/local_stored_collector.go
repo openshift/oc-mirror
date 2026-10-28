@@ -21,6 +21,7 @@ import (
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/releaseutil"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 	"k8s.io/client-go/util/jsonpath"
@@ -504,7 +505,20 @@ func getImages(path string, imagePaths ...string) (images []v2alpha1.RelatedImag
 		images = append(images, imgs...)
 	}
 
-	return images, nil
+	return uniqueRelatedImages(images), nil
+}
+
+func uniqueRelatedImages(images []v2alpha1.RelatedImage) []v2alpha1.RelatedImage {
+	seen := make(map[string]struct{}, len(images))
+	out := make([]v2alpha1.RelatedImage, 0, len(images))
+	for _, img := range images {
+		if _, ok := seen[img.Image]; ok {
+			continue
+		}
+		seen[img.Image] = struct{}{}
+		out = append(out, img)
+	}
+	return out
 }
 
 // getImagesPath returns known jsonpaths and user defined jsonpaths where images are found
@@ -567,12 +581,24 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 		return out.String(), err
 	}
 	for _, h := range hooks {
+		if isHelmTestHook(h) {
+			continue
+		}
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", h.Path, h.Manifest)
 	}
 	for _, m := range manifests {
 		fmt.Fprintf(out, "---\n# Source: %s\n%s\n", m.Name, m.Content)
 	}
 	return out.String(), nil
+}
+
+func isHelmTestHook(h *release.Hook) bool {
+	for _, e := range h.Events {
+		if e == release.HookTest {
+			return true
+		}
+	}
+	return false
 }
 
 // findImages will return images from parsed object
