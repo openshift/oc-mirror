@@ -593,12 +593,15 @@ func getHelmTemplates(ch *helmchart.Chart) (string, error) {
 }
 
 func isHelmTestHook(h *release.Hook) bool {
+	if h == nil || len(h.Events) == 0 {
+		return false
+	}
 	for _, e := range h.Events {
-		if e == release.HookTest {
-			return true
+		if e != release.HookTest {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // findImages will return images from parsed object

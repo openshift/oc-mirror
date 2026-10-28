@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/release"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -1346,6 +1347,34 @@ spec:
           image: quay.io/example/app:1.0
 `), 0o600))
 
+	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "test.yaml"), []byte(`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-test
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test
+      image: quay.io/example/test:1.0
+`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(chartDir, "templates", "mixed.yaml"), []byte(`
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: my-mixed
+  annotations:
+    "helm.sh/hook": test,pre-install
+spec:
+  template:
+    spec:
+      containers:
+        - name: mixed
+          image: quay.io/example/mixed:1.0
+      restartPolicy: Never
+`), 0o600))
+
 	ch, err := loader.Load(chartDir)
 	require.NoError(t, err)
 
@@ -1353,4 +1382,14 @@ spec:
 	require.NoError(t, err)
 	assert.Contains(t, rendered, "quay.io/example/postgresql:16", "images from helm.sh/hook templates must be included")
 	assert.Contains(t, rendered, "quay.io/example/app:1.0")
+	assert.NotContains(t, rendered, "quay.io/example/test:1.0", "test-only hooks must be skipped")
+	assert.Contains(t, rendered, "quay.io/example/mixed:1.0", "hooks that also have lifecycle events must be kept")
+}
+
+func TestIsHelmTestHook(t *testing.T) {
+	assert.False(t, isHelmTestHook(nil))
+	assert.False(t, isHelmTestHook(&release.Hook{}))
+	assert.True(t, isHelmTestHook(&release.Hook{Events: []release.HookEvent{release.HookTest}}))
+	assert.False(t, isHelmTestHook(&release.Hook{Events: []release.HookEvent{release.HookPreInstall}}))
+	assert.False(t, isHelmTestHook(&release.Hook{Events: []release.HookEvent{release.HookTest, release.HookPreInstall}}))
 }
