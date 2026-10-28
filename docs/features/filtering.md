@@ -184,6 +184,45 @@ mirror:
     - catalog: oci:///path/to/local/catalog
 ```
 
+### Architecture selection for operators
+
+Restrict an operator catalog to specific platforms with the `platforms` field:
+
+```yaml
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.22
+      packages:
+        - name: kubevirt-hyperconverged
+          channels:
+            - name: stable
+      platforms:
+        - os: linux
+          architecture: amd64
+```
+
+A bundle's `relatedImages` holds both the images the operator runs and the
+**operands** it deploys. They are treated differently, because the catalog
+chooses that list, not you:
+
+| image with no instance for any requested platform | result |
+|---|---|
+| one the operator runs | mirroring fails: `operator "kubevirt-hyperconverged" does not support linux/ppc64le` |
+| an operand | skipped with a warning and listed under `=== Skipped images ===`; the operator is still mirrored in full |
+| one you named in `additionalImages` or a release | mirroring fails: the platform is missing from your configuration |
+
+Telling the two apart means reading the bundle's ClusterServiceVersion, so
+oc-mirror does it only after a copy has already failed on a platform mismatch,
+and caches the answer per bundle. A catalog whose images all mirror cleanly
+pulls no bundles. Nothing is skipped unless it is proven to be an operand.
+
+OLM's `operatorframework.io/arch.<arch>` labels are deliberately not used:
+setting them is optional, so their absence proves nothing and a stale value
+would block a mirror that works.
+
+In mirror-to-disk, skipped operands are recorded in the archive so the
+disk-to-mirror run makes the same decision.
+
 ## Additional images
 
 Individual container images can be mirrored by specifying their full reference. If no tag is specified, `latest` is assumed:

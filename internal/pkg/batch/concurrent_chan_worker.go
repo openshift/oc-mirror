@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +24,8 @@ import (
 )
 
 const (
-	skippingMsg = "skipping operator bundle %s because one of its related images failed to mirror"
+	skippingMsg              = "skipping operator bundle %s because one of its related images failed to mirror"
+	noMatchingPlatformReason = "no instance for the requested platform(s)"
 
 	errMsgHeader = "%ssome errors occurred during the mirroring"
 	errMsg       = errMsgHeader + ".\n" +
@@ -39,12 +42,16 @@ type ChannelConcurrentBatch struct {
 	Mirror           mirror.MirrorInterface
 	MaxGoroutines    uint
 	SynchedTimeStamp string
+	OperandResolver  OperandResolver
 }
 
 type GoroutineResult struct {
 	err     *mirrorErrorSchema
 	imgType v2alpha1.ImageType
 	img     v2alpha1.CopyImageSchema
+	// skipped means intentionally not mirrored: neither copied nor failed. It
+	// must stay out of errArray, which would drop the bundle listing it.
+	skipped *v2alpha1.SkippedImage
 }
 
 // Worker - the main batch processor
@@ -57,6 +64,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	}
 
 	var errArray []mirrorErrorSchema
+	var skippedImages []v2alpha1.SkippedImage
 
 	var m sync.RWMutex
 	var wg sync.WaitGroup
@@ -160,14 +168,57 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 							// for manifest lists (multi-arch indexes) when none of the instances
 							// match the requested InstancePlatforms. The error itself confirms the
 							// source is a manifest list, so retrying without the filter would mirror
-							// all platforms and contradict the user's configuration. Return the
-							// original error so the user can correct their ImageSetConfiguration.
+							// all platforms and contradict the user's configuration.
 							if err != nil && len(options.InstancePlatforms) > 0 && strings.Contains(err.Error(), "no instances found for platform") {
-								o.Log.Warn("Requested platform(s) not found in source manifest list for %s; verify the platforms field in your ISC", img.Origin)
-								// err stays as "no instances found for platform"; do not retry.
+								requested := strings.Join(options.InstancePlatforms, ", ")
+
+								// Only worth asking now: the answer costs a bundle pull.
+								var class v2alpha1.ImageType
+								var resolveErr error
+								if img.Type.IsOperator() {
+									class, resolveErr = o.classifyOperand(timeoutCtx, img, collectorSchema, opts) //nolint:contextcheck
+								}
+
+								switch {
+								case class == v2alpha1.TypeOperatorOperand:
+									// The catalog lists this, not the user. Operators ship
+									// optional operands for other architectures that this
+									// cluster never pulls, so skip rather than fail the operator.
+									img.Type = class
+									result.img = img
+									result.imgType = img.Type
+									o.Log.Warn("Skipping operand %s: no instance for the requested platform(s) %s", img.Origin, requested)
+									result.skipped = &v2alpha1.SkippedImage{
+										Origin:    img.Origin,
+										Type:      img.Type,
+										Reason:    noMatchingPlatformReason,
+										Platforms: options.InstancePlatforms,
+									}
+									err = nil
+
+								case resolveErr != nil:
+									// Unclassified: keep the original error rather than claim
+									// a lack of support we have not shown.
+									o.Log.Warn("Unable to tell whether %s is an operand: %v. Treating it as an image the operator runs, so it will not be skipped.", img.Origin, resolveErr)
+
+								case class == v2alpha1.TypeOperatorRelatedImage:
+									// An image the operator runs itself having no matching
+									// instance is the proof that it cannot run here. No catalog
+									// annotation tells us this reliably.
+									if operators := operatorNames(collectorSchema.CopyImageSchemaMap.OperatorsByImage[img.Origin]); operators != "" {
+										err = fmt.Errorf("operator %s does not support %s: %w", operators, requested, err)
+									}
+
+								case !img.Type.IsOperator():
+									// The user named this image explicitly, so a platform miss is
+									// a configuration mistake.
+									o.Log.Warn("Requested platform(s) not found in source manifest list for %s; verify the platforms field in your ISC", img.Origin)
+								}
 							}
 
 							switch {
+							case result.skipped != nil:
+								spinner.Increment()
 							case err == nil:
 								spinner.Increment()
 							case img.Type.IsOperator():
@@ -195,14 +246,22 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
 	completed := 0
+collect:
 	for completed < len(collectorSchema.AllImages) {
 		res := <-results
 		err := res.err
-		if err == nil {
+		switch {
+		case res.skipped != nil:
+			// Out of both copiedImages and errArray, so the batch still
+			// succeeds and the bundle listing it is still mirrored.
+			m.Lock()
+			skippedImages = append(skippedImages, *res.skipped)
+			m.Unlock()
+		case err == nil:
 			logImageSuccess(o.Log, &res.img, &opts)
 			copiedImages.AllImages = append(copiedImages.AllImages, res.img)
 			incrementTotals(res.imgType, &copiedImages)
-		} else {
+		default:
 			m.Lock()
 			errArray = append(errArray, *err)
 			m.Unlock()
@@ -210,7 +269,8 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			logImageError(o.Log, &res.img, &opts)
 			if res.imgType.IsRelease() {
 				cancel()
-				break
+				// Labelled: plain break would leave only the switch.
+				break collect
 			}
 		}
 
@@ -221,7 +281,10 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	p.Wait()
 
-	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
+	copiedImages.SkippedImages = skippedImages
+
+	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema, skippedImages)
+	logSkipped(o.Log, skippedImages)
 
 	if len(errArray) > 0 {
 		batchErr := &BatchError{
@@ -240,6 +303,44 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	}
 	o.Log.Debug("concurrent channel worker time     : %v", time.Since(startTime))
 	return copiedImages, nil
+}
+
+// classifyOperand returns TypeInvalid when nothing classified the image, so an
+// unanswered question is never mistaken for proof the operator runs it.
+//
+// Disk-to-mirror and delete cannot reach the bundle's registry, and do not need
+// to: the executor drops operands recorded during mirror-to-disk.
+func (o *ChannelConcurrentBatch) classifyOperand(ctx context.Context, img v2alpha1.CopyImageSchema, collectorSchema v2alpha1.CollectorSchema, opts mirror.CopyOptions) (v2alpha1.ImageType, error) {
+	if o.OperandResolver == nil || opts.IsDiskToMirror() || opts.IsDeleteMode() {
+		return v2alpha1.TypeInvalid, nil
+	}
+	bundles := collectorSchema.CopyImageSchemaMap.BundlesByImage[img.Origin]
+	if len(bundles) == 0 {
+		return v2alpha1.TypeInvalid, nil
+	}
+
+	operand, err := o.OperandResolver.IsOperand(ctx, img.Origin, bundles)
+	switch {
+	case err != nil:
+		return v2alpha1.TypeInvalid, err
+	case operand:
+		return v2alpha1.TypeOperatorOperand, nil
+	default:
+		return v2alpha1.TypeOperatorRelatedImage, nil
+	}
+}
+
+// operatorNames renders an image's operators, sorted so the message is stable.
+func operatorNames(operators map[string]struct{}) string {
+	if len(operators) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(operators))
+	for name := range operators {
+		names = append(names, strconv.Quote(name))
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func hostNamespace(input string) string {
@@ -262,7 +363,7 @@ func hostNamespace(input string) string {
 	}
 }
 
-func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages, collectorSchema *v2alpha1.CollectorSchema) {
+func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages, collectorSchema *v2alpha1.CollectorSchema, skipped []v2alpha1.SkippedImage) {
 	log.Info("=== Results ===")
 
 	var copyModeMsg string
@@ -272,18 +373,39 @@ func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages
 		copyModeMsg = "deleted"
 	}
 
-	logResult(log, copyModeMsg, "release", copiedImages.TotalReleaseImages, collectorSchema.TotalReleaseImages)
-	logResult(log, copyModeMsg, "operator", copiedImages.TotalOperatorImages, collectorSchema.TotalOperatorImages)
-	logResult(log, copyModeMsg, "additional", copiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
-	logResult(log, copyModeMsg, "helm", copiedImages.TotalHelmImages, collectorSchema.TotalHelmImages)
+	// Skipped images are only ever operands, counted in the operator totals.
+	logResult(log, copyModeMsg, "release", copiedImages.TotalReleaseImages, collectorSchema.TotalReleaseImages, 0)
+	logResult(log, copyModeMsg, "operator", copiedImages.TotalOperatorImages, collectorSchema.TotalOperatorImages, len(skipped))
+	logResult(log, copyModeMsg, "additional", copiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages, 0)
+	logResult(log, copyModeMsg, "helm", copiedImages.TotalHelmImages, collectorSchema.TotalHelmImages, 0)
 }
 
-func logResult(log clog.PluggableLoggerInterface, copyMode, imageType string, copied, total int) {
-	if total != 0 {
-		if copied == total {
-			log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully", copied, total, imageType, copyMode)
+func logResult(log clog.PluggableLoggerInterface, copyMode, imageType string, copied, total, skipped int) {
+	if total == 0 {
+		return
+	}
+	switch {
+	case copied == total:
+		log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully", copied, total, imageType, copyMode)
+	case copied+skipped == total:
+		// Nothing failed: the remainder was intentionally skipped.
+		log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully (%d skipped)", copied, total, imageType, copyMode, skipped)
+	default:
+		log.Info(emoji.SpinnerCrossMark+" %d / %d %s images %s: Some %s images failed to be %s - please check the logs", copied, total, imageType, copyMode, imageType, copyMode)
+	}
+}
+
+// logSkipped reports what was intentionally left out, and why.
+func logSkipped(log clog.PluggableLoggerInterface, skipped []v2alpha1.SkippedImage) {
+	if len(skipped) == 0 {
+		return
+	}
+	log.Info("=== Skipped images ===")
+	for _, img := range skipped {
+		if len(img.Platforms) > 0 {
+			log.Info("%s: %s %s", img.Origin, img.Reason, strings.Join(img.Platforms, ", "))
 		} else {
-			log.Info(emoji.SpinnerCrossMark+" %d / %d %s images %s: Some %s images failed to be %s - please check the logs", copied, total, imageType, copyMode, imageType, copyMode)
+			log.Info("%s: %s", img.Origin, img.Reason)
 		}
 	}
 }
@@ -376,7 +498,7 @@ func incrementTotals(imgType v2alpha1.ImageType, copiedImages *v2alpha1.Collecto
 		copiedImages.TotalReleaseImages++
 	case v2alpha1.TypeGeneric:
 		copiedImages.TotalAdditionalImages++
-	case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage:
+	case v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorOperand:
 		copiedImages.TotalOperatorImages++
 	case v2alpha1.TypeHelmImage:
 		copiedImages.TotalHelmImages++

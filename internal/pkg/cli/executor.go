@@ -57,6 +57,7 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/operator"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/skipped"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/spinners"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 )
@@ -613,7 +614,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
 	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
 	o.ClusterResources = clusterresources.New(o.Log, o.Opts.Global.WorkingDir, o.Config, o.Opts.LocalStorageFQDN)
-	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages, o.MirrorStartTimeStamp)
+	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages, o.MirrorStartTimeStamp, operator.NewOperandResolver(o.Log, o.Opts, o.Mirror, o.Manifest))
 
 	if o.Opts.IsMirrorToDisk() {
 		if err := archive.RemovePastArchives(rootDir); err != nil {
@@ -949,6 +950,13 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 		o.Log.Debug("wrote version metadata: %s", version.Get().GitVersion)
 	}
 
+	// Written on every run: a reused workspace may hold an earlier record, and
+	// disk-to-mirror would then exclude images this run copied.
+	if err := skipped.WriteSkippedImages(o.Opts.Global.WorkingDir, copiedSchema.SkippedImages); err != nil {
+		return fmt.Errorf("unable to record skipped images: %w", err)
+	}
+	o.Log.Debug("recorded %d skipped images", len(copiedSchema.SkippedImages))
+
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	// The registry is stopped via callback once BuildArchive no longer needs it (see
 	// BuildArchive's doc comment), and before it archives working-dir/logs/registry-*.log.
@@ -1032,6 +1040,12 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	// The catalog still lists operands that mirror-to-disk skipped, so drop
+	// them rather than failing to find them in the cache.
+	if err := o.excludeSkippedImages(&collectorSchema); err != nil {
+		return err
+	}
+
 	regs := mandatoryRegistries(o.Opts)
 
 	if !o.Opts.RemoveSignatures {
@@ -1061,6 +1075,52 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	return batchError
+}
+
+// excludeSkippedImages drops images the mirror-to-disk run recorded as skipped
+// and adjusts the totals, so the report does not count them as failures.
+func (o *ExecutorSchema) excludeSkippedImages(collectorSchema *v2alpha1.CollectorSchema) error {
+	skippedImages, err := skipped.ReadSkippedImages(o.Opts.Global.WorkingDir)
+	if err != nil {
+		return err
+	}
+	if len(skippedImages) == 0 {
+		return nil
+	}
+
+	origins := skipped.Origins(skippedImages)
+	kept := make([]v2alpha1.CopyImageSchema, 0, len(collectorSchema.AllImages))
+	excluded := 0
+	for _, img := range collectorSchema.AllImages {
+		if _, isSkipped := origins[img.Origin]; isSkipped {
+			o.Log.Debug("excluding %s: skipped during mirror to disk", img.Origin)
+			decrementTotals(img.Type, collectorSchema)
+			excluded++
+			continue
+		}
+		kept = append(kept, img)
+	}
+	collectorSchema.AllImages = kept
+
+	if excluded > 0 {
+		o.Log.Info("Excluding %d image(s) that were intentionally skipped during mirror to disk", excluded)
+	}
+
+	return nil
+}
+
+// TODO this would be better placed on a pkg responsible to handle console output
+func decrementTotals(imgType v2alpha1.ImageType, schema *v2alpha1.CollectorSchema) {
+	switch {
+	case imgType.IsRelease():
+		schema.TotalReleaseImages--
+	case imgType.IsOperator():
+		schema.TotalOperatorImages--
+	case imgType.IsAdditionalImage():
+		schema.TotalAdditionalImages--
+	case imgType.IsHelmImage():
+		schema.TotalHelmImages--
+	}
 }
 
 // generateClusterResources generates the following cluster resources:

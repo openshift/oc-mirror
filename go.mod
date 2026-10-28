@@ -41,6 +41,7 @@ require (
 require (
 	github.com/docker/cli v29.7.2+incompatible
 	github.com/docker/distribution v2.8.3+incompatible
+	github.com/operator-framework/api v0.45.0
 	k8s.io/klog v1.0.0
 )
 
@@ -149,7 +150,6 @@ require (
 	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/opencontainers/selinux v1.15.1 // indirect
 	github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda // indirect
-	github.com/operator-framework/api v0.45.0 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
