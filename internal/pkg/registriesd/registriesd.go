@@ -126,26 +126,28 @@ func writeLookasideOnlyFile(srcDir, dstDir, name string) error {
 	return writeFileAtomic(filepath.Join(dstDir, name), body)
 }
 
-func writeFileAtomic(path string, body []byte) error {
+func writeFileAtomic(path string, body []byte) (err error) {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("error creating temp file for %s: %w", path, err)
 	}
 	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if err := tmp.Chmod(0644); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("error setting permissions on %s: %w", path, err)
+	defer func() {
+		if rmErr := os.Remove(tmpName); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("error removing temp file %s: %w", tmpName, rmErr))
+		}
+	}()
+	if chmodErr := tmp.Chmod(0o600); chmodErr != nil {
+		return errors.Join(fmt.Errorf("error setting permissions on %s: %w", path, chmodErr), tmp.Close())
 	}
-	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("error writing %s: %w", path, err)
+	if _, writeErr := tmp.Write(body); writeErr != nil {
+		return errors.Join(fmt.Errorf("error writing %s: %w", path, writeErr), tmp.Close())
 	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("error closing %s: %w", path, err)
+	if closeErr := tmp.Close(); closeErr != nil {
+		return fmt.Errorf("error closing %s: %w", path, closeErr)
 	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("error writing %s: %w", path, err)
+	if renameErr := os.Rename(tmpName, path); renameErr != nil {
+		return fmt.Errorf("error writing %s: %w", path, renameErr)
 	}
 	return nil
 }

@@ -61,10 +61,14 @@ func TestPrepareLookasideOnlyDir(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, GetWorkingDirLookasideOnlyRegistrydConfigPath(testFolder), dir)
 
-	cloned, err := parser.ParseYamlFile[registryConfiguration](filepath.Join(dir, "mymirror.com.yaml"))
+	clonedPath := filepath.Join(dir, "mymirror.com.yaml")
+	cloned, err := parser.ParseYamlFile[registryConfiguration](clonedPath)
 	assert.NoError(t, err)
 	assert.Equal(t, "file:///var/lib/oc-mirror/signatures", cloned.Docker["mymirror.com"].Lookaside)
 	assert.Equal(t, boolPtr(false), cloned.Docker["mymirror.com"].UseSigstoreAttachments)
+	info, err := os.Stat(clonedPath)
+	assert.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 
 	_, err = PrepareLookasideOnlyDir(testFolder)
 	assert.NoError(t, err)
