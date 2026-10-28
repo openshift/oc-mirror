@@ -1,0 +1,7 @@
+apiVersion: v2
+name: blocked-images
+description: >-
+  Minimal local chart used by tests/integration/blocked_images_test.go to verify
+  that mirror.blockedImages excludes helm-referenced images. Not a real workload
+  chart - do not use outside of this test.
+version: 0.1.0
