@@ -24,6 +24,13 @@ func findTarArchives(workDir string) []string {
 	return matches
 }
 
+// findSingleMirrorTar returns the single mirror_*.tar in dir, failing if there is not exactly one.
+func findSingleMirrorTar(dir, phase string) string {
+	matches := findTarArchives(dir)
+	Expect(matches).To(HaveLen(1), "%s expected exactly one tar archive, got: %v", phase, matches)
+	return matches[0]
+}
+
 // countBlobEntriesInArchives counts the number of blob entries (under docker/registry/v2/blobs/)
 // in the given tar archives. This represents actual image layer data stored in the archive.
 func countBlobEntriesInArchives(tarFiles []string) int {
