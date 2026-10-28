@@ -102,25 +102,52 @@ func PrepareLookasideOnlyDir(workingDir string) (string, error) {
 		if file.IsDir() {
 			continue
 		}
-		name := file.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-		srcPath := filepath.Join(src, name)
-		cfg, err := parser.ParseYamlFile[registryConfiguration](srcPath)
-		if err != nil {
-			return "", fmt.Errorf("error parsing %s: %w", srcPath, err)
-		}
-		disableSigstoreAttachments(&cfg)
-		body, err := yaml.Marshal(cfg)
-		if err != nil {
-			return "", fmt.Errorf("error marshaling %s: %w", name, err)
-		}
-		if err := os.WriteFile(filepath.Join(dst, name), body, 0644); err != nil {
-			return "", fmt.Errorf("error writing %s: %w", name, err)
+		if err := writeLookasideOnlyFile(src, dst, file.Name()); err != nil {
+			return "", err
 		}
 	}
 	return dst, nil
+}
+
+func writeLookasideOnlyFile(srcDir, dstDir, name string) error {
+	if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+		return nil
+	}
+	srcPath := filepath.Join(srcDir, name)
+	cfg, err := parser.ParseYamlFile[registryConfiguration](srcPath)
+	if err != nil {
+		return fmt.Errorf("error parsing %s: %w", srcPath, err)
+	}
+	disableSigstoreAttachments(&cfg)
+	body, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("error marshaling %s: %w", name, err)
+	}
+	return writeFileAtomic(filepath.Join(dstDir, name), body)
+}
+
+func writeFileAtomic(path string, body []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("error creating temp file for %s: %w", path, err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0644); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("error setting permissions on %s: %w", path, err)
+	}
+	if _, err := tmp.Write(body); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("error writing %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("error closing %s: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("error writing %s: %w", path, err)
+	}
+	return nil
 }
 
 func disableSigstoreAttachments(cfg *registryConfiguration) {
