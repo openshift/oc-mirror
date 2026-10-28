@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1085,4 +1086,37 @@ func TestBuildReleasePlatformFilters(t *testing.T) {
 	// Graph images must always be excluded — they are not platform-filtered.
 	_, graphPresent := filters["docker://registry/graph:latest"]
 	assert.False(t, graphPresent, "TypeCincinnatiGraph images must not appear in platform filters")
+}
+
+// OCPBUGS-77670: an interrupted run leaves release-images/<release>/ with blobs
+// and no index.json. The next run must copy the release again, not reuse the dir.
+func TestEnsureReleaseInOCIFormat(t *testing.T) {
+	release := v2alpha1.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.20.13-x86_64"}
+	collector := func(failCopy bool) *LocalStorageCollector {
+		return &LocalStorageCollector{Log: clog.New("trace"), Mirror: &MockMirror{Fail: failCopy}}
+	}
+
+	t.Run("directory with blobs and no index.json is copied again", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "4.20.13-x86_64")
+		stale := filepath.Join(dir, "blobs", "sha256", "stale")
+		assert.NoError(t, os.MkdirAll(filepath.Dir(stale), 0o755))
+		assert.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+		// the forced copy failure proves that the copy was attempted
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+		assert.NoFileExists(t, stale)
+	})
+
+	t.Run("directory with a truncated index.json is copied again", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[`), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+	})
+
+	t.Run("directory with index.json is kept", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte("{}"), 0o600))
+		assert.NoError(t, collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir))
+	})
 }
