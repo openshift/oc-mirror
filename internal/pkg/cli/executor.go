@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -468,7 +469,7 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 
 	o.Log.Info("Verified we can authenticate against registry %q", registry)
 
-	if err := o.checkRegistryPushAccess(ctx, authConfig, reg); err != nil {
+	if err := o.checkRegistryPushAccess(ctx, authConfig, registry, sctx); err != nil {
 		return err
 	}
 	return nil
@@ -480,17 +481,33 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 // errors on deep nested destination repositories.
 const pushAccessProbeRepo = "oc-mirror"
 
+func pushAccessProbe(dest string) string {
+	dest = strings.TrimSuffix(dest, "/")
+	host, rest, found := strings.Cut(dest, "/")
+	if !found || rest == "" {
+		return host + "/" + pushAccessProbeRepo
+	}
+	ns, _, _ := strings.Cut(rest, "/")
+	if ns == "" {
+		return host + "/" + pushAccessProbeRepo
+	}
+	return host + "/" + ns + "/" + pushAccessProbeRepo
+}
+
 // checkRegistryPushAccess confirms destination push rights with a HEAD-based
 // probe on a shallow repository. If this succeeds, later unauthorized blob
 // uploads on deep repository paths are nested-path limits, not missing push auth.
-func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, registryHost string) error {
-	probe := registryHost + "/" + pushAccessProbeRepo
+func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, dest string, sctx *types.SystemContext) error {
+	probe := pushAccessProbe(dest)
 
 	var nameOpts []name.Option
-	rt := remote.DefaultTransport
-	if o.Opts.DestImage != nil && !o.Opts.DestImage.TlsVerify {
+	insecure := o.Opts.DestImage != nil && !o.Opts.DestImage.TlsVerify
+	if insecure {
 		nameOpts = append(nameOpts, name.Insecure)
-		rt = insecureRegistryTransport()
+	}
+	rt, err := registryProbeTransport(ctx, sctx, insecure)
+	if err != nil {
+		return err
 	}
 
 	imgRef, err := name.ParseReference(probe, nameOpts...)
@@ -507,7 +524,74 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
 	}
 
-	o.Log.Info("Verified we can push to registry %q", registryHost)
+	o.Log.Info("Verified we can push to registry %q", dest)
+	return nil
+}
+
+type contextRoundTripper struct {
+	base http.RoundTripper
+	ctx  context.Context
+}
+
+func (t contextRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.base.RoundTrip(req.Clone(t.ctx))
+}
+
+func registryProbeTransport(ctx context.Context, sctx *types.SystemContext, insecure bool) (http.RoundTripper, error) {
+	base, ok := remote.DefaultTransport.(*http.Transport)
+	if !ok {
+		base = http.DefaultTransport.(*http.Transport)
+	}
+	t := base.Clone()
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	} else {
+		t.TLSClientConfig = t.TLSClientConfig.Clone()
+	}
+	if insecure {
+		t.TLSClientConfig.InsecureSkipVerify = true
+	}
+	if sctx != nil && sctx.DockerCertPath != "" {
+		if err := applyDockerCertDir(t.TLSClientConfig, sctx.DockerCertPath); err != nil {
+			return nil, err
+		}
+	}
+	return contextRoundTripper{base: t, ctx: ctx}, nil
+}
+
+func applyDockerCertDir(tlsCfg *tls.Config, certDir string) error {
+	entries, err := os.ReadDir(certDir)
+	if err != nil {
+		return fmt.Errorf("read dest cert dir %s: %w", certDir, err)
+	}
+	pool := x509.NewCertPool()
+	loadedCA := false
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		p := filepath.Join(certDir, name)
+		switch {
+		case strings.HasSuffix(name, ".crt"):
+			pemBytes, err := os.ReadFile(p)
+			if err != nil {
+				return fmt.Errorf("read dest CA %s: %w", p, err)
+			}
+			if pool.AppendCertsFromPEM(pemBytes) {
+				loadedCA = true
+			}
+		case strings.HasSuffix(name, ".cert"):
+			cert, err := tls.LoadX509KeyPair(p, strings.TrimSuffix(p, ".cert")+".key")
+			if err != nil {
+				return fmt.Errorf("load dest client certificate %s: %w", name, err)
+			}
+			tlsCfg.Certificates = append(tlsCfg.Certificates, cert)
+		}
+	}
+	if loadedCA {
+		tlsCfg.RootCAs = pool
+	}
 	return nil
 }
 
@@ -521,21 +605,6 @@ func (k pushAccessKeychain) Resolve(_ authn.Resource) (authn.Authenticator, erro
 		return authn.Anonymous, nil
 	}
 	return authn.FromConfig(k.cfg), nil
-}
-
-func insecureRegistryTransport() http.RoundTripper {
-	base, ok := remote.DefaultTransport.(*http.Transport)
-	if !ok {
-		base = http.DefaultTransport.(*http.Transport)
-	}
-	t := base.Clone()
-	if t.TLSClientConfig == nil {
-		t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-	} else {
-		t.TLSClientConfig = t.TLSClientConfig.Clone()
-	}
-	t.TLSClientConfig.InsecureSkipVerify = true
-	return t
 }
 
 // See containers/common/pkg/auth.parseCredentialsKey

@@ -1167,7 +1167,7 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
 	}
 
-	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, host)
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, host, nil)
 	assert.NoError(t, err)
 	ts.Close()
 
@@ -1177,6 +1177,43 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
 		"push check should probe with HEAD or POST, got:\n%s", joined)
 	assert.Contains(t, joined, "/"+pushAccessProbeRepo)
+}
+
+func TestPushAccessProbe(t *testing.T) {
+	assert.Equal(t, "registry.example.com/oc-mirror", pushAccessProbe("registry.example.com"))
+	assert.Equal(t, "registry.example.com/team/oc-mirror", pushAccessProbe("registry.example.com/team"))
+	assert.Equal(t, "registry.example.com/team/oc-mirror", pushAccessProbe("registry.example.com/team/mirrors"))
+	assert.Equal(t, "localhost:5000/oc-mirror", pushAccessProbe("localhost:5000"))
+}
+
+func TestCheckRegistryPushAccessNamespaced(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		seen []string
+	)
+	ts := httptest.NewServer(recordRegistryProbe(&mu, &seen))
+	t.Cleanup(ts.Close)
+
+	host := strings.TrimPrefix(ts.URL, "http://")
+	global := &mirror.GlobalOptions{SecurePolicy: false, Force: true, WorkingDir: t.TempDir()}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	fsDest, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	assert.NoError(t, fsDest.Set("dest-tls-verify", "false"))
+
+	ex := &ExecutorSchema{
+		Log:  clog.New("debug"),
+		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
+	}
+
+	dest := host + "/team"
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, dest, nil)
+	assert.NoError(t, err)
+
+	mu.Lock()
+	joined := strings.Join(seen, "\n")
+	mu.Unlock()
+	assert.Contains(t, joined, "/team/"+pushAccessProbeRepo)
 }
 
 // setup mocks
