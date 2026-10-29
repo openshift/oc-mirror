@@ -505,7 +505,7 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 	if insecure {
 		nameOpts = append(nameOpts, name.Insecure)
 	}
-	rt, err := registryProbeTransport(ctx, sctx, insecure)
+	rt, err := registryProbeTransport(sctx, insecure)
 	if err != nil {
 		return err
 	}
@@ -520,7 +520,7 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 		Password:      authConfig.Password,
 		IdentityToken: authConfig.IdentityToken,
 	}}
-	if err := remote.CheckPushPermission(imgRef, kc, rt); err != nil {
+	if err := checkPushPermission(ctx, imgRef, kc, rt); err != nil {
 		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
 	}
 
@@ -528,16 +528,20 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 	return nil
 }
 
-type contextRoundTripper struct {
-	base http.RoundTripper
-	ctx  context.Context
+func checkPushPermission(ctx context.Context, imgRef name.Reference, kc authn.Keychain, rt http.RoundTripper) error {
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- remote.CheckPushPermission(imgRef, kc, rt)
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
 }
 
-func (t contextRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return t.base.RoundTrip(req.Clone(t.ctx))
-}
-
-func registryProbeTransport(ctx context.Context, sctx *types.SystemContext, insecure bool) (http.RoundTripper, error) {
+func registryProbeTransport(sctx *types.SystemContext, insecure bool) (http.RoundTripper, error) {
 	base, ok := remote.DefaultTransport.(*http.Transport)
 	if !ok {
 		base = http.DefaultTransport.(*http.Transport)
@@ -556,7 +560,7 @@ func registryProbeTransport(ctx context.Context, sctx *types.SystemContext, inse
 			return nil, err
 		}
 	}
-	return contextRoundTripper{base: t, ctx: ctx}, nil
+	return t, nil
 }
 
 func applyDockerCertDir(tlsCfg *tls.Config, certDir string) error {
