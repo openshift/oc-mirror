@@ -17,6 +17,7 @@ approve the design.
 |---|---|---|
 | 1 | 2026-10-29 | Initial proposal |
 | 2 | 2026-10-29 | Adversarial review incorporated: registry-published records moved into phase 1; failure-path/incremental record writes; tag+digest reference semantics; explicit legacy-vs-record flow selection; m2d excluded from record writing; selection provenance in the schema; reviewed-plan execution; record validation/trust boundary; delta-archive invariant; auth-vs-missing preflight rule |
+| 3 | 2026-10-29 | Second adversarial review: **digest-confirmation rule replaces "tag first" deletion** (revision 2 would have destroyed re-pointed tags); record the digest actually written; refcount identity is `(repository, digest)`; registry-capability analysis and `--registry-records` policy; OCI 1.1 / referrers assessment (container-libs gap, oras-go availability, referrer cleanup on delete); worked example for updating an operator then deleting the old version; superseded-digest pruning; "use cases that could break" matrix |
 
 ## Background: the delete workflow today
 
@@ -252,9 +253,11 @@ Design notes:
   immutable OCI artifact in a configurable repository (default:
   `<registry>/oc-mirror/records:<runId>`). Publication is best-effort: on
   failure the run logs a prominent warning, marks the record `published: false`,
-  and the delete flow warns when registry records cannot be listed. The exact
-  repository name, auth model, tag scheme and listing fallback are open
-  questions.
+  and the delete flow warns when registry records cannot be listed. Publication
+  is **not guaranteed on every registry** — see
+  [Registry capability](#registry-capability-can-record-publication-be-guaranteed)
+  for the risk analysis, the artifact shape chosen for compatibility, and the
+  `--registry-records` policy flag.
 - **Why registry storage matters:** it is the only mechanism that protects
   images shared between *different workspaces* feeding the same central registry
   (issue 3), and it lets a user delete content after losing the original
@@ -305,19 +308,21 @@ existing `DeleteImageList` format without being interchangeable with it.
 3. REFCOUNT  subtract images that appear in any *non-selected* record
              (workspace or registry) for the same destination
              → "skipped-shared" classification (escape hatch: --ignore-shared)
-4. PREFLIGHT per candidate, concurrently: existence check against the target
-             → present | manifest-unknown (already deleted) | fatal error
+4. PREFLIGHT per candidate, concurrently: existence + *digest confirmation*
+             against the target (see "Tag re-pointing", below)
+             → present | manifest-unknown (already deleted) | superseded
+               (tag now points elsewhere) | fatal error
              (auth/network errors are fatal, never "already deleted")
 5. PLAN      print the classified plan and write
              working-dir/delete/delete-plan-<ts>.yaml (kind: DeletePlan);
              --dry-run exits here;
              otherwise prompt for confirmation on TTY (--yes required when
              non-interactive)
-6. EXECUTE   delete the recorded reference(s) for each present image:
-             tag form first (removes tag + manifest), then the digest only if
-             the manifest is still present afterwards (a 404 at that point is
-             expected and treated as success); via the existing batch worker
-             (DeleteMode); signature tags come from the record when available
+6. EXECUTE   delete per the digest-confirmation rule (below): by tag when the
+             tag still resolves to the recorded digest, by digest only when it
+             does not; via the existing batch worker (DeleteMode); then remove
+             the image's attachments (signature tags from the record, plus
+             referrers when the registry exposes them)
 7. REPORT    summary (deleted / already-deleted / shared-skipped / failed)
              + report file; append deletions to the workspace records;
              optionally publish deletion markers (open question)
@@ -359,6 +364,49 @@ Step-by-step notes:
 - **Report (step 7):** the report is always written, including on `--dry-run`,
   so reviewed plans and executed reports can be diffed.
 
+#### Tag re-pointing: the digest-confirmation rule
+
+Revision 1 of this document proposed "delete the tag first, then the digest".
+That is **unsafe**, because destination tags are reused across runs:
+
+- a catalog referenced by tag keeps its tag at the destination — pinning sets
+  `TargetTag` to the original tag (`pinSingleCatalogDigest`), so run 2 pushes
+  the updated catalog to the *same* destination tag as run 1;
+- the Cincinnati graph image is pushed to a fixed `:latest` tag;
+- additional images with mutable tags (`:latest`, `:stable`) are re-pushed to
+  the same destination tag on every run.
+
+Deleting run 1 by tag would therefore delete the tag that now resolves to run
+2's content — destroying current, wanted content. The rule is:
+
+| Recorded tag resolves to | Action |
+|---|---|
+| nothing (404) | tag already gone; check the recorded digest, delete it if present |
+| the **recorded** digest | safe: delete by tag (removes tag **and** manifest) |
+| a **different** digest | tag belongs to a newer run: **never touch the tag**; delete the recorded digest only |
+
+The third row is also a feature: it identifies **superseded digests** — the
+previous rebuilt catalog, the previous graph image, the previous `:latest` —
+which are untagged leftovers of earlier runs that no DISC-driven delete could
+ever express. The plan classifies them explicitly so users can reclaim that
+space (see [worked example](#worked-example-updating-an-operator-then-deleting-the-old-version)).
+
+Note that content-derived destination tags are not affected: filtered catalogs
+are pushed to `sha256-<catalog-digest>` / `sha256-<filtered-digest>` tags
+(`TagRebuiltCatalogByDigestOnly`, `FilteredCatalogDigest`), so each run's
+rebuilt catalog lands on its own tag.
+
+#### Recording the digest that was actually written
+
+The record must store the digest **as written to the destination**, not the
+source digest. They differ whenever the copy rewrites the manifest list — for
+example when `InstancePlatforms` filtering selects a subset of instances, or
+when attestation instances are filtered out (`filterAttestationInstances`).
+The batch worker currently discards the copy result, so this requires
+surfacing the resulting manifest digest from `Mirror.Run`/`copy.Image` into the
+record journal. Recording the source digest instead would produce records that
+never match the registry.
+
 **Locked-in UX decisions** (from the design review):
 
 | Decision | Choice |
@@ -383,6 +431,12 @@ Reference counting happens at two granularities, both derived from record data:
    this workspace or in the registry — is classified `shared-skipped` and
    protected. This covers "one central registry, several enclaves" for every
    run made by a record-publishing version.
+   **Identity for refcounting is `(repository, digest)`**, never the digest
+   alone and never the registry host alone: the same digest mirrored into
+   `reg/enclave-a/ubi` and `reg/enclave-b/ubi` are two independent manifests,
+   and deleting one must not be blocked by the other. Keying on the digest
+   alone would over-protect to the point where nothing in a multi-enclave
+   registry is ever deletable.
 2. **Within a selection (intra-record, via associations):** when the user asks
    to delete "operator package X", images whose associations include X but also
    another package/catalog/additionalImage entry are surfaced in the plan as
@@ -402,6 +456,67 @@ mirrored catalog's FBC will reference missing images (whether delete should
 trigger a catalog rebuild is an [open question](#open-questions)). The record
 knows both sides of this relationship (catalog digest, `rebuiltTag`,
 per-bundle associations).
+
+### Worked example: updating an operator, then deleting the old version
+
+This is the most common real-world delete request, and it is worth walking
+through because the answer differs depending on what the *current* mirror still
+needs. Setup: catalog `C` (referenced by tag `v4.17`), package `P`.
+
+- **Run 1** mirrors `P` 1.0 → record R1: rebuilt catalog `C@dA`, bundle `P1.0`,
+  related images `{r1, r2, shared}`.
+- **Run 2** mirrors `P` 2.0 → record R2: rebuilt catalog `C@dB`, bundle `P2.0`,
+  related images `{r3, shared}`.
+
+**Case A — run 2's ISC selects only 2.0 (the user genuinely moved on).**
+`oc-mirror delete --config disc.yaml docker://reg` with a DISC selecting
+package `P`, `maxVersion: 1.0`:
+
+- SELECT matches `P1.0` and the images associated with that bundle version
+  (`associations[].bundleVersion`), i.e. `{P1.0, r1, r2, shared}`;
+- REFCOUNT removes `shared` (present in R2) → `shared-skipped`;
+- the catalog image is **not** selected (its associations carry no
+  `bundleVersion`; catalogs are only selected when the catalog itself, or the
+  whole run, is selected);
+- PREFLIGHT finds `C@dA` superseded (the `v4.17` tag now resolves to `dB`) and
+  offers it as an orphaned digest;
+- result: `P1.0`, `r1`, `r2` deleted; `shared` kept; the current catalog and
+  2.0 content untouched. **This works, and it is exactly what the old design
+  could not do reliably** — a DISC-driven collection would have re-resolved
+  `C:v4.17` to the *new* catalog and never found 1.0's images.
+
+**Case B — run 2's ISC still includes 1.0 (range 1.0–2.0).**
+Everything in `{P1.0, r1, r2}` is also in R2, so the whole selection is
+classified `shared-skipped` and **nothing is deleted**. That is correct: the
+current rebuilt catalog's FBC still references 1.0, and deleting it would break
+installs/upgrades for those versions. But it is also the single most likely
+source of "delete is broken" bug reports, so the plan must say so explicitly,
+naming the record that still needs the images, e.g.:
+
+```
+skipped (still referenced): registry/.../p-operator@sha256:…
+  required by run 7f3c… (m2m, 2026-11-02) — narrow the version range in your
+  ImageSetConfiguration and re-mirror, or re-run with --ignore-shared
+```
+
+**Case C — filtered vs. unfiltered catalogs.** The record never has to parse
+the rebuilt FBC to know whether 1.0 is still needed: "still needed" is simply
+"present in a non-selected record". Filtering therefore needs no special
+handling, and a catalog that was *not* filtered behaves identically.
+
+**Case D — two enclaves disagree.** Enclave A (workspace A) still mirrors 1.0;
+enclave B wants it gone. Because run A published its record to the registry,
+B's delete sees it and protects 1.0. Without registry-published records this
+case silently corrupts enclave A — which is why publication is in phase 1.
+
+**Orphaned/superseded content.** Re-mirroring a tag-referenced catalog leaves
+the previous rebuilt catalog manifest untagged in the registry; the same is
+true for the graph image and any mutable-tag additional image. These
+accumulate with every run and are invisible to a DISC-driven delete. Records
+make them addressable: the plan can classify "recorded digest no longer
+referenced by its tag, superseded by a newer record" and offer them for
+pruning. Whether this should be opt-in (`--prune-superseded`) or part of the
+default plan is an open question.
 
 ### Pinning interplay (issue 5)
 
@@ -451,6 +566,96 @@ deletions. The design therefore validates before acting:
   atomically, and never followed blindly: the rendered plan is the human review
   gate, and `--plan-file` re-validates.
 
+### Registry capability: can record publication be guaranteed?
+
+**No — and the design must not pretend otherwise.** Publishing an artifact to
+an arbitrary disconnected registry is best-effort, for several independent
+reasons:
+
+| Risk | Effect |
+|---|---|
+| **Artifact-type gating** — some registries (notably Red Hat Quay, historically via `FEATURE_GENERAL_OCI_SUPPORT` / `ALLOWED_OCI_ARTIFACT_TYPES`) only accept an allow-list of OCI artifact types | push rejected |
+| **No repository auto-creation** — e.g. AWS ECR requires the repository to exist before push; some registries require explicit namespace creation or an admin-owned namespace | push rejected |
+| **Credentials scoped to mirrored repositories** — the mirroring robot account may have no write access outside the content namespaces | push rejected |
+| **Tag listing restricted/absent** — record discovery relies on listing tags of the records repository | records invisible at delete time |
+| **Tag immutability / retention policies** (Harbor, Artifactory, ECR) | per-run tags are unique so pushes are fine, but any mutable index tag or deletion-marker update fails |
+| **DELETE disabled** (`storage.delete.enabled=false` on distribution, RBAC elsewhere) | the delete itself fails — a pre-existing constraint, unchanged by this design |
+| **Read-only mirrors / pull-through caches** | publication impossible |
+| **Scanners, quotas, policy engines** | an unexpected `oc-mirror/records` repository may be flagged, quota-charged, or garbage-collected |
+
+Consequences for the design:
+
+1. **Maximum-compatibility artifact shape.** The record is pushed as a plain
+   **OCI image manifest** with a tiny config blob and a single layer holding
+   the record document — the shape cosign/ORAS use for broad compatibility —
+   *not* the deprecated OCI 1.1 `artifact.manifest` media type, which older
+   registries reject. `artifactType` is set when supported but is never
+   required for correctness.
+2. **Capability detection, not assumption.** The mirror run probes
+   publication once and records the outcome (`published: true|false`); the
+   delete command probes list/read access and reports the result in the plan
+   header. The plan states, in plain words, whether cross-workspace protection
+   is in effect:
+   `registry records: unavailable (tag listing denied) — shared-image protection is limited to this workspace`.
+3. **Explicit policy flags.** `--registry-records=auto|off|require`
+   (default `auto`): `off` for registries/policies that forbid it,
+   `require` for shared central registries where silently losing protection is
+   unacceptable (the mirror run fails if publication fails). The records
+   repository path is configurable.
+4. **A conformance matrix is required before GA**, validated empirically
+   rather than assumed: distribution 2.8/3.x, Red Hat Quay and
+   `mirror-registry`, quay.io, Harbor, Artifactory, Nexus, ECR, ACR, GAR, plus
+   a "DELETE disabled" and a "tag listing denied" configuration. Each entry
+   must record: artifact push, tag listing, per-tag pull, manifest delete by
+   tag, manifest delete by digest, referrers API support.
+   *(This matrix could not be filled in from this sandbox — no outbound
+   network access — so it is explicitly listed as pre-implementation work.)*
+
+Because publication can fail, registry records are an **enhancement of**, not
+a replacement for, workspace records: the workspace remains the primary store,
+and the delete flow degrades to workspace-only protection with a loud warning.
+
+### What OCI 1.1 could give us
+
+**Current state of the dependency.** `go.podman.io/image/v5` (container-libs)
+does **not** implement OCI 1.1 referrers today: there is no referrers client in
+the docker transport, and oc-mirror already carries a workaround for OCI 1.1
+attestation manifests (`filterAttestationInstances` in
+`internal/pkg/mirror/mirror_attestation.go`, with a `TODO ... when OCI1.1 is
+supported by containers-libs [OCPNODE-2018]` in `mirror.go`). So nothing in the
+current transport stack can be relied on for referrers.
+
+**But a client is already in the dependency graph.** `oras.land/oras-go/v2`
+(v2.6.2) is present as an indirect dependency (pulled in by Helm's registry
+client) and implements `Repository.Referrers()` **with automatic fallback to
+the referrers tag schema** when a registry does not support the Referrers API.
+Promoting it to a direct dependency is therefore a small step, and it is the
+pragmatic path for both record publication and referrer handling without
+waiting for OCPNODE-2018.
+
+Two distinct opportunities, with very different cost/benefit:
+
+1. **Referrer-based provenance (optional, evaluate later).** Instead of (or in
+   addition to) a per-run record artifact, attach a small provenance referrer
+   to each mirrored image (`subject` = the image manifest). Reference counting
+   then becomes a registry-native query — "who refers to this image?" — which
+   is exact across workspaces and needs no tag listing.
+   *Cost:* one extra manifest + blob per image per run; for a 10k-image
+   operator mirror that is a very large request amplification, and on
+   registries without the Referrers API the fallback writes a tag per subject
+   (tag pollution, update races, breakage under tag immutability). A sensible
+   middle ground is to attach referrers only to *roots* (catalogs, release
+   payloads, additional images) and keep per-image provenance in the per-run
+   record.
+2. **Referrer cleanup on delete (recommended regardless of records).** Deleting
+   a manifest does **not** delete artifacts that reference it. oc-mirror today
+   only knows the cosign *tag* scheme (`SigstoreAttachmentTag`), so any
+   referrer-attached signature, SBOM or attestation in the destination registry
+   is orphaned by a delete. The delete flow should enumerate referrers of each
+   deleted manifest (API when available, fallback tag otherwise) and remove
+   them as part of the same operation. This is a correctness fix that stands on
+   its own merits.
+
 ### CLI surface
 
 ```bash
@@ -470,7 +675,12 @@ oc-mirror delete --plan-file delete-plan-<ts>.yaml docker://reg
 ```
 
 New flags: `--from-run`, `--all`, `--dry-run`, `--yes`, `--strict`
-(alias `--fail-on-missing`), `--ignore-shared`, `--plan-file`.
+(alias `--fail-on-missing`), `--ignore-shared`, `--plan-file`,
+`--prune-superseded` (include orphaned digests whose tag has moved on).
+
+New mirror-side flag: `--registry-records=auto|off|require` (also meaningful
+for `delete`, where it controls whether missing registry records are a warning
+or an error).
 
 Unchanged flags: `--workspace`, `--delete-signatures`, `--force-cache-delete`,
 `--delete-v1-images`.
@@ -539,6 +749,28 @@ Migration and degradation:
   on the embedded registry, as today; blob-level safety in the cache is
   inherited from the registry's GC.
 
+### Use cases that could break under this design
+
+These are the failure modes reviewers should attack; each needs a test.
+
+| # | Use case | Risk | Mitigation in this design |
+|---|---|---|---|
+| 1 | Catalog/graph/additional image re-mirrored to the **same destination tag** | deleting an old run by tag destroys current content | digest-confirmation rule (tag deleted only when it still resolves to the recorded digest) |
+| 2 | **Platform-filtered** or attestation-filtered copies | destination manifest digest ≠ source digest; records would never match the registry | record the digest actually written, surfaced from the copy result |
+| 3 | Same digest mirrored into **several repositories/enclaves** | refcount keyed on digest alone makes everything undeletable | refcount identity is `(repository, digest)` |
+| 4 | `--max-nested-paths` rewriting destinations | records could store pre-rewrite references | records are written from the post-rewrite `copiedSchema` |
+| 5 | Registry that **rejects artifact push** (ECR without pre-created repo, gated Quay, read-only mirror) | cross-workspace protection silently absent | capability probe, `published: false`, plan header states the degradation, `--registry-records=require` for strict environments |
+| 6 | Registry with **tag listing denied** | records exist but cannot be discovered | explicit warning; workspace records still used; conformance matrix entry |
+| 7 | **Mixed-version content** (mirrored before records existed) | unprotected and unselectable | legacy flow retained; reconstruct path; the plan flags unrecorded repositories |
+| 8 | Archives applied from **separate directories/invocations** | disjoint record sets | documented invariant; d2m imports records from every archive it processes |
+| 9 | Users deleting via the **registry UI** or an external GC | records stale | staleness only over-protects; preflight reconciles actual existence |
+| 10 | **Signatures/SBOMs attached as referrers** by other tooling | orphaned attachments after delete | enumerate and delete referrers (see OCI 1.1 section) |
+| 11 | Operator version still referenced by the **current** catalog (Case B) | user expects deletion, gets a no-op | plan explains which record still requires each image and what to do |
+| 12 | Concurrent mirrors to one registry from different workspaces | record publication races | per-run immutable tags; no mutable index tag in phase 1 |
+| 13 | Registries with **DELETE disabled** | delete fails (pre-existing) | unchanged; detected in preflight as a fatal, clearly-reported error |
+| 14 | Quay time-machine / deferred GC | space not reclaimed immediately; tags recoverable | documentation; out of oc-mirror's control |
+| 15 | Deleting content that was **promoted/copied** to another repository by the user | the promoted copy survives (separate manifest), shared blobs survive GC | no action needed; documented |
+
 ## Alternatives considered
 
 - **A. Per-run `DeleteImageList` generated after m2m/d2m** — i.e. literally
@@ -569,6 +801,17 @@ Migration and degradation:
 1. **Registry record details:** repository location/naming, auth model, tag
    scheme, tag-listing fallback for registries without `/tags/list`, retention
    and compaction of per-run artifacts.
+1. **Referrers adoption level:** keep per-run record artifacts only (proposed),
+   or additionally attach per-image provenance referrers for registry-native
+   refcounting? If the latter, roots-only or all images, and behind which flag?
+1. **Promote `oras.land/oras-go/v2` to a direct dependency** for artifact
+   push/pull and referrer handling, or wait for container-libs OCI 1.1
+   (OCPNODE-2018) and ship records workspace-only until then?
+1. **Referrer cleanup on delete:** adopt in phase 1b (recommended) or defer?
+1. **Superseded digests:** opt-in `--prune-superseded`, or part of the default
+   plan with explicit classification?
+1. **Default for `--registry-records`:** `auto` (degrade with a warning) or
+   `require` when the destination is known to host several enclaves?
 2. **Deletion markers in the registry:** keep deletion history workspace-only
    (current proposal — staleness only over-protects), or publish immutable
    deletion-marker artifacts?
@@ -601,21 +844,30 @@ Migration and degradation:
 | `internal/pkg/cli/executor.go` | Journal init at batch start and finalize in a `defer` for m2m and d2m; publish records after the batch; m2m currently writes pinned configs even on batch errors while m2d returns early — the record path must be explicit and consistent |
 | `internal/pkg/delete` | New flow: load/merge records (workspace + registry), select, refcount, preflight, plan (`DeletePlan`), confirm/plan-file execution, report; append deletions to workspace records |
 | `internal/pkg/cli/delete.go` | New flags (`--from-run`, `--all`, `--dry-run`, `--yes`, `--strict`, `--ignore-shared`, `--plan-file`); explicit flow selection; plan-kind validation in the legacy path; deprecation warnings |
-| `internal/pkg/mirror` | Expose `Mirror.Check` through the interface used by the delete preflight |
-| Batch worker | Largely unchanged (DeleteMode already exists); optional hook to append journal entries as copies succeed |
+| `internal/pkg/mirror` | Expose `Mirror.Check` through the interface used by the delete preflight; surface the **digest actually written** by `Mirror.Run` so records match the registry when manifest lists are rewritten (platform/attestation filtering) |
+| Registry artifact client | Record push/list/pull and referrer enumeration via `oras.land/oras-go/v2` (already an indirect dependency through Helm; container-libs has no OCI 1.1 referrers support — OCPNODE-2018), using the compatibility-first image-manifest artifact shape |
+| Batch worker | Largely unchanged (DeleteMode already exists); hook to append journal entries (including written digests) as copies succeed |
 | Association assembly | Join `collectorSchema.CopyImageSchemaMap` with `copiedSchema` (the worker does not return the maps today) and merge associations for images collapsed by `removeDuplicatedImages` |
 | Tests | Unit: records (journal, publish, validation), delete flow (select/refcount/preflight/plan/plan-file), CLI flow selection. Integration: extend `tests/integration/delete_test.go` (record-based delete, missing-image classifications, shared-image protection across two workspaces sharing a registry, legacy fallback, plan/DeleteImageList rejection). E2E: record round-trip m2m → registry; m2d → archive → d2m → registry → delete; lost-workspace delete from registry records |
 
 ## Rollout plan
 
+- **Phase 0 — registry conformance matrix.** Validate artifact push, tag
+  listing, per-tag pull, delete by tag, delete by digest and referrers support
+  across the target registries before committing to the publication design.
+  This gates the phase-1a scope (it may demote registry records to `auto`-only
+  on some platforms).
 - **Phase 1a — record writing and publication (additive, existing behavior
   unchanged).** m2m and d2m journal and finalize records into the workspace and
-  publish them to the registry. Shippable independently; the sooner it ships,
-  the sooner registries start accruing delete capability.
+  publish them to the registry (capability-probed, `--registry-records`).
+  Requires surfacing written digests from the copy path. Shippable
+  independently; the sooner it ships, the sooner registries start accruing
+  delete capability.
 - **Phase 1b — record-based single-stage delete.** New flow as opt-in via the
   new flags (`--from-run`, `--all`, `--config` without `--generate`,
-  `--plan-file`); legacy two-stage flow untouched; reconstruct path for
-  pre-record workspaces; deprecation warnings (no removal).
+  `--plan-file`); digest-confirmation deletion; referrer cleanup of deleted
+  manifests; legacy two-stage flow untouched; reconstruct path for pre-record
+  workspaces; deprecation warnings (no removal).
 - **Phase 2 (follow-ups, each independently valuable).** Catalog rebuild on
   delete; cluster-resources awareness; v1 reconstruct tooling beyond the
   existing `--delete-v1-images` flag; record compaction/retention automation.
