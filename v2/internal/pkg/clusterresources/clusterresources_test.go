@@ -12,6 +12,7 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	cm "github.com/openshift/oc-mirror/v2/internal/pkg/api/kubernetes/core"
 	ofv1 "github.com/openshift/oc-mirror/v2/internal/pkg/api/operator-framework/v1"
@@ -817,6 +818,8 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			},
 		}
 
+		delete(expectedCS.Annotations, "createdAt")
+		delete(actualCS.Annotations, "createdAt")
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
 	})
 
@@ -1009,8 +1012,223 @@ func TestCatalogSourceGenerator(t *testing.T) {
 			},
 		}
 
+		delete(expectedCS.Annotations, "createdAt")
+		delete(actualCS.Annotations, "createdAt")
 		assert.Equal(t, expectedCS, actualCS, "contents of catalogSource file incorrect")
 	})
+
+	// OCPBUGS-69908: truncating targetTag "logging-clo-v6.2.7-coo-v1.3.1" to 12 chars
+	// produced suffix "logging-clo-" which fails DNS-1035 (must not end with '-').
+	t.Run("Testing GenerateCatalogSource with targetTag truncated mid-hyphen : should pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetCatalog: "redhat/redhat-operator-index-logging",
+								TargetTag:     "logging-clo-v6.2.7-coo-v1.3.1",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		assert.NoError(t, err)
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		assert.NoError(t, err)
+		assert.Len(t, csFiles, 1)
+
+		expectedCSName := "cs-redhat-operator-index-logging-logging-clov"
+		customResourceName := strings.TrimSuffix(csFiles[0].Name(), ".yaml")
+		assert.True(t, isValidRFC1123(customResourceName), "name %q must be RFC1123", customResourceName)
+		assert.Empty(t, validation.IsDNS1035Label(customResourceName), "name %q must be DNS-1035", customResourceName)
+		assert.Equal(t, expectedCSName, customResourceName)
+		assert.False(t, strings.HasSuffix(customResourceName, "-"))
+	})
+
+	t.Run("distinct catalog tags do not overwrite the same CatalogSource file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index-logging:logging-clo",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index-logging:logging-clo",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index-logging:logging-clo-v6.2.7-coo-v1.3.1",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetCatalog: "redhat/redhat-operator-index-logging",
+								TargetTag:     "logging-clo",
+							},
+							{
+								Catalog:       "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetCatalog: "redhat/redhat-operator-index-logging",
+								TargetTag:     "logging-clo-v6.2.7-coo-v1.3.1",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		assert.NoError(t, err)
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		assert.NoError(t, err)
+		assert.Len(t, csFiles, 2)
+		names := []string{
+			strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
+			strings.TrimSuffix(csFiles[1].Name(), ".yaml"),
+		}
+		assert.ElementsMatch(t, []string{
+			"cs-redhat-operator-index-logging-logging-clo",
+			"cs-redhat-operator-index-logging-logging-clov",
+		}, names)
+		assert.NotEqual(t, sanitizeRFC1035Suffix("logging-clo"), sanitizeRFC1035Suffix("logging-clo-v6.2.7-coo-v1.3.1"))
+	})
+
+	t.Run("repeated internal hyphens stay distinct CatalogSource files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		workingDir := filepath.Join(tmpDir, "working-dir")
+		imageList := []v2alpha1.CopyImageSchema{
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index:v1-0",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:v1-0",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+			{
+				Source:      "docker://localhost:5000/redhat/redhat-operator-index:v1--0",
+				Destination: "docker://myregistry/mynamespace/redhat/redhat-operator-index:v1--0",
+				Origin:      "docker://registry.redhat.io/redhat/redhat-operator-index:v4.20",
+				Type:        v2alpha1.TypeOperatorCatalog,
+			},
+		}
+		cr := &ClusterResourcesGenerator{
+			Log:              log,
+			WorkingDir:       workingDir,
+			LocalStorageFQDN: "localhost:55000",
+			Config: v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Operators: []v2alpha1.Operator{
+							{
+								Catalog:   "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetTag: "v1-0",
+							},
+							{
+								Catalog:   "registry.redhat.io/redhat/redhat-operator-index:v4.20",
+								TargetTag: "v1--0",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := cr.CatalogSourceGenerator(imageList)
+		assert.NoError(t, err)
+
+		csFiles, err := os.ReadDir(filepath.Join(workingDir, clusterResourcesDir))
+		assert.NoError(t, err)
+		assert.Len(t, csFiles, 2)
+		names := []string{
+			strings.TrimSuffix(csFiles[0].Name(), ".yaml"),
+			strings.TrimSuffix(csFiles[1].Name(), ".yaml"),
+		}
+		assert.ElementsMatch(t, []string{
+			"cs-redhat-operator-index-v1-0",
+			"cs-redhat-operator-index-v1--0",
+		}, names)
+		assert.NotEqual(t, sanitizeRFC1035Suffix("v1-0"), sanitizeRFC1035Suffix("v1--0"))
+	})
+}
+
+func TestRFC1035NameSuffix(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "OCPBUGS-69908 truncation skips trailing hyphen and keeps later chars",
+			raw:  "logging-clo-v6.2.7-coo-v1.3.1",
+			want: "logging-clov",
+		},
+		{
+			name: "shorter sibling tag stays distinct from the truncated long tag",
+			raw:  "logging-clo",
+			want: "logging-clo",
+		},
+		{
+			name: "short tag unchanged when already valid",
+			raw:  "v4.20",
+			want: "v4-20",
+		},
+		{
+			name: "digest prefix stays alphanumeric",
+			raw:  "7c4ef7434c97c8aaf6cd310874790b915b3c61fc902eea255f9177058ea9aff3",
+			want: "7c4ef7434c97",
+		},
+		{
+			name: "leading hyphens are skipped so leftover content is used",
+			raw:  "------------extra",
+			want: "extra",
+		},
+		{
+			name: "only hyphens falls back to 0",
+			raw:  "------------",
+			want: "0",
+		},
+		{
+			name: "repeated internal hyphens are kept",
+			raw:  "v1--0",
+			want: "v1--0",
+		},
+		{
+			name: "single internal hyphen stays distinct from doubled hyphen sibling",
+			raw:  "v1-0",
+			want: "v1-0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, sanitizeRFC1035Suffix(tt.raw))
+		})
+	}
 }
 
 func TestClusterCatalogGenerator(t *testing.T) {
