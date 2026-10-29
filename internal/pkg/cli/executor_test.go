@@ -1282,6 +1282,10 @@ func (o *Collector) ReleaseImageCollector(ctx context.Context) (v2alpha1.Collect
 		{Source: "docker://registry/name/namespace/sometestimage-e@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 		{Source: "docker://registry/name/namespace/sometestimage-f@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", Destination: "oci:test"},
 	}
+	test[0].Type = v2alpha1.TypeOCPRelease
+	test[0].Destination, _ = o.ReleaseImage(ctx)
+	test[5].Type = v2alpha1.TypeCincinnatiGraph
+	test[5].Destination, _ = o.GraphImage()
 	return v2alpha1.CollectorSchema{AllImages: test}, nil
 }
 

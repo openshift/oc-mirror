@@ -551,6 +551,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		o.Log.Error("unable to determine the mode (the destination must be either file:// or docker://)")
 	}
 	o.Opts.Destination = args[0]
+	if err := o.validatePlatformDestination(); err != nil {
+		return err
+	}
 	if o.Opts.Global.WorkingDir == "" { // this can already be set by using flag --workspace in mirror to mirror workflow
 		o.Opts.Global.WorkingDir = filepath.Join(rootDir, workingDir)
 	} else {
@@ -582,7 +585,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
-	o.Opts.LocalStorageFQDN = localStorageHost + ":" + strconv.Itoa(int(o.Opts.Global.Port))
+	o.Opts.LocalStorageFQDN = net.JoinHostPort(localStorageHost, strconv.Itoa(int(o.Opts.Global.Port)))
 
 	err = o.setupWorkingDir()
 	if err != nil {
@@ -905,6 +908,9 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
+	if err := o.validatePlatformImageDestinations(collectorSchema.AllImages); err != nil {
+		return err
+	}
 
 	regs := mandatoryRegistries(o.Opts)
 
@@ -983,6 +989,9 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
+	if err := o.validatePlatformImageDestinations(collectorSchema.AllImages); err != nil {
+		return err
+	}
 
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
@@ -1001,7 +1010,11 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 
 	o.createConfigsWithPinnedCatalogs()
 
-	if err := o.generateClusterResources(cmd.Context(), copiedSchema.AllImages); err != nil {
+	if err := o.generateClusterResources(copiedSchema.AllImages); err != nil {
+		if batchError != nil {
+			o.Log.Warn("Cluster resources generation failed after mirroring errors: %v", err)
+			return batchError
+		}
 		return err
 	}
 
@@ -1047,6 +1060,9 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 			return err
 		}
 	}
+	if err := o.validatePlatformImageDestinations(collectorSchema.AllImages); err != nil {
+		return err
+	}
 
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
@@ -1056,7 +1072,11 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	// NOTE: we will check for batch errors at the end
 	copiedSchema, batchError := o.Batch.Worker(cmd.Context(), collectorSchema, *o.Opts)
 
-	if err := o.generateClusterResources(cmd.Context(), copiedSchema.AllImages); err != nil {
+	if err := o.generateClusterResources(copiedSchema.AllImages); err != nil {
+		if batchError != nil {
+			o.Log.Warn("Cluster resources generation failed after mirroring errors: %v", err)
+			return batchError
+		}
 		return err
 	}
 
@@ -1065,7 +1085,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 
 // generateClusterResources generates the following cluster resources:
 // IDMS/ITMS, CatalogSource, ClusterCatalog, UpdateService and SignatureConfigMap.
-func (o *ExecutorSchema) generateClusterResources(ctx context.Context, images []v2alpha1.CopyImageSchema) error {
+func (o *ExecutorSchema) generateClusterResources(images []v2alpha1.CopyImageSchema) error {
 	if o.ClusterResources == nil {
 		return fmt.Errorf("cluster resources generator is not initialized")
 	}
@@ -1083,7 +1103,7 @@ func (o *ExecutorSchema) generateClusterResources(ctx context.Context, images []
 		o.Log.Warn("Failed to generate signature ConfigMap: %v", err)
 	}
 
-	if err := o.generateUpdateServiceResource(ctx); err != nil {
+	if err := o.generateUpdateServiceResource(images); err != nil {
 		return err
 	}
 
@@ -1110,25 +1130,95 @@ func (o *ExecutorSchema) generateCatalogResources(images []v2alpha1.CopyImageSch
 	return nil
 }
 
-func (o *ExecutorSchema) generateUpdateServiceResource(ctx context.Context) error {
+func (o *ExecutorSchema) generateUpdateServiceResource(images []v2alpha1.CopyImageSchema) error {
 	if !o.Config.Mirror.Platform.Graph {
 		return nil
 	}
 
-	graphImage, err := o.Release.GraphImage()
+	var graphImage, releaseImage string
+	for _, img := range images {
+		if img.Type == v2alpha1.TypeCincinnatiGraph {
+			graphImage = img.Destination
+		}
+		if img.Type == v2alpha1.TypeOCPRelease {
+			// UpdateService only needs the repository, so any mirrored payload suffices.
+			releaseImage = img.Destination
+		}
+	}
+	if graphImage == "" || releaseImage == "" {
+		return fmt.Errorf("cannot generate UpdateService: mirrored release and graph image destinations are required")
+	}
+
+	return o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
+}
+
+// validatePlatformDestination validates the complete repository name and preserves
+// the requested path when a registry nesting limit is set.
+func (o *ExecutorSchema) validatePlatformDestination() error {
+	repo := o.Config.Mirror.Platform.TargetRepo
+	if repo == "" {
+		return nil
+	}
+	destination := strings.TrimPrefix(o.Opts.Destination, consts.DockerProtocol)
+	if o.Opts.IsMirrorToDisk() {
+		// The final registry namespace is not known until diskToMirror.
+		destination = net.JoinHostPort(localStorageHost, strconv.Itoa(int(o.Opts.Global.Port)))
+	}
+	ref, err := reference.WithName(destination + "/" + repo)
+	if err != nil {
+		return fmt.Errorf("platform.targetRepo %q with destination %q is invalid: %w", repo, destination, err)
+	}
+	if limit := o.Opts.Global.MaxNestedPaths; limit > 0 && strings.Count(reference.Path(ref), "/")+1 > limit {
+		return fmt.Errorf("platform.targetRepo %q with destination %q exceeds --max-nested-paths=%d; choose a repository and destination namespace that fit the limit", repo, o.Opts.Destination, limit)
+	}
+	if o.Config.Mirror.Platform.Graph {
+		return o.validatePlatformGraphRepository(destination, ref.Name())
+	}
+	return nil
+}
+
+// The graph image can be pushed during collection, before batch validation.
+// Reserve its repository so that it cannot overwrite release images.
+func (o *ExecutorSchema) validatePlatformGraphRepository(destination, releaseRepository string) error {
+	graphRef := consts.DockerProtocol + release.GraphImageReference(destination)
+	if !o.Opts.IsMirrorToDisk() && o.Opts.Global.MaxNestedPaths > 0 {
+		var err error
+		graphRef, err = image.WithMaxNestedPaths(graphRef, o.Opts.Global.MaxNestedPaths)
+		if err != nil {
+			return err
+		}
+	}
+	graphSpec, err := image.ParseRef(graphRef)
 	if err != nil {
 		return err
 	}
-
-	releaseImage, err := o.Release.ReleaseImage(ctx)
-	if err != nil {
-		return err
+	if releaseRepository == graphSpec.Name {
+		return fmt.Errorf("platform.targetRepo %q conflicts with the Cincinnati graph repository %q", o.Config.Mirror.Platform.TargetRepo, graphSpec.Name)
 	}
+	return nil
+}
 
-	if err := o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage); err != nil {
-		return err
+// validatePlatformImageDestinations prevents repository overrides from assigning
+// different images to the same tag. Identical digest-pinned images may share it.
+func (o *ExecutorSchema) validatePlatformImageDestinations(images []v2alpha1.CopyImageSchema) error {
+	if o.Config.Mirror.Platform.TargetRepo == "" {
+		return nil
 	}
-
+	origins := make(map[string]string, len(images))
+	for _, img := range images {
+		origin := strings.TrimPrefix(img.Origin, consts.DockerProtocol)
+		previous, exists := origins[img.Destination]
+		if exists && previous != origin {
+			previousSpec, previousErr := image.ParseRef(previous)
+			currentSpec, currentErr := image.ParseRef(origin)
+			if previousErr == nil && currentErr == nil && previousSpec.Digest != "" &&
+				previousSpec.Digest == currentSpec.Digest && previousSpec.Algorithm == currentSpec.Algorithm {
+				continue
+			}
+			return fmt.Errorf("platform.targetRepo %q produces conflicting destination %q for %q and %q", o.Config.Mirror.Platform.TargetRepo, img.Destination, previous, origin)
+		}
+		origins[img.Destination] = origin
+	}
 	return nil
 }
 
