@@ -1,14 +1,21 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 )
 
 // releaseImagesRepo is the destination repository for the pinned platform release image
@@ -84,14 +91,23 @@ var _ = Describe("secure policy", func() {
 		additionalImageRepo := extractRepositoryName(cfg.Mirror.AdditionalImages[0].Name)
 		policyPath := writeSigstoreSignedPolicy(workDir, filepath.Join(keysDir, "cosign.pub"), "quay.io/oc-mirror")
 
+		By("resolving expected operator images independently from the source catalog")
+		expectedImages := sourceCatalogImageDigests(ctx, cfg.Mirror.Operators[0].Catalog)
+
 		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for quay.io/oc-mirror")
 		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, isc), workDir,
 			"--secure-policy=true", "--policy", policyPath)
-		expectOcMirrorExitCode(result, err, 8, "2 / 2 operator images mirrored successfully")
+		expectOcMirrorExitCode(result, err, 8, "is rejected by policy")
 
 		By("verifying the signed operator catalog was actually written to the local cache")
 		Expect(localCacheHasTag(cacheDir, catalogRepo, catalogTag)).To(BeTrue(),
 			"expected signed catalog %s:%s to be present in the local cache", catalogRepo, catalogTag)
+		Expect(localCacheTagDigest(cacheDir, catalogRepo, catalogTag)).To(Equal(expectedImages[0].DigestStr()))
+
+		By("verifying every signed catalog, bundle, and related image is complete in the local cache")
+		for _, ref := range expectedImages {
+			expectImageInLocalCache(cacheDir, ref)
+		}
 
 		By("verifying the unsigned additional image was never written to the local cache")
 		expectNoRepositoryInLocalCache(cacheDir, additionalImageRepo)
@@ -100,6 +116,43 @@ var _ = Describe("secure policy", func() {
 		expectNoTarArchive(workDir)
 	})
 })
+
+// sourceCatalogImageDigests resolves the catalog first, followed by all of its
+// bundles and related images, so expectations do not depend on mirror output.
+func sourceCatalogImageDigests(ctx context.Context, catalog string) []name.Digest {
+	GinkgoHelper()
+	ref, err := name.ParseReference(catalog)
+	Expect(err).NotTo(HaveOccurred())
+	img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+	Expect(err).NotTo(HaveOccurred())
+	digest, err := img.Digest()
+	Expect(err).NotTo(HaveOccurred())
+	expected := []name.Digest{ref.Context().Digest(digest.String())}
+
+	configsDir := extractCatalogImageConfigs(img)
+	DeferCleanup(func() {
+		Expect(os.RemoveAll(configsDir)).To(Succeed())
+	})
+	cfg, err := declcfg.LoadFS(ctx, os.DirFS(configsDir))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg.Bundles).NotTo(BeEmpty(), "source catalog has no bundles")
+	images := make(map[string]struct{})
+	for _, bundle := range cfg.Bundles {
+		Expect(bundle.Image).NotTo(BeEmpty())
+		images[bundle.Image] = struct{}{}
+		for _, related := range bundle.RelatedImages {
+			images[related.Image] = struct{}{}
+		}
+	}
+	for _, image := range slices.Sorted(maps.Keys(images)) {
+		ref, err := name.ParseReference(image)
+		Expect(err).NotTo(HaveOccurred())
+		manifest, err := remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+		Expect(err).NotTo(HaveOccurred(), "failed to resolve source image %s", image)
+		expected = append(expected, ref.Context().Digest(manifest.Digest.String()))
+	}
+	return expected
+}
 
 // expectSignatureTagInLocalCache verifies that the given repo/tag in the local oc-mirror
 // cache has a corresponding <digest>.sig tag, proving a signature was fetched and cached.
