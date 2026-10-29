@@ -31,6 +31,7 @@ Tests that focus on verifying the core logic, behavior and external dependencies
 These are black-box tests that do not have direct access to the `oc-mirror` internal code.
 
 All the images used in these tests are built by us, in order to control their content and size.
+They are built from the sources in `tests/integration/testdata/images` at the start of each test session and served by a local source registry, so a pull request that changes them is tested with its own version (see `tests/integration/testdata/images/README.md`).
 
 In these tests we assert the tangible outputs of `oc-mirror`: archive contents, mirrored images present on the target registry, etc.
 

@@ -6,4 +6,4 @@ mirror:
       - multi
       - amd64
   additionalImages:
-    - name: quay.io/rh_ee_aguidi/multi-platform-container:latest
+    - name: localhost:5001/oc-mirror/multi-platform-image:latest
