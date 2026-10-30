@@ -535,7 +535,7 @@ func checkPushPermission(ctx context.Context, imgRef name.Reference, kc authn.Ke
 	}()
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("push permission check canceled: %w", ctx.Err())
 	case err := <-errCh:
 		return err
 	}
